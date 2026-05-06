@@ -1,0 +1,127 @@
+/* globals.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+
+:root {
+  --color-black: #000000;
+  --color-yellow: #FFD700;
+  --color-yellow-hover: #E5C100;
+  --color-gray-dark: #1A1A1A;
+  --color-gray-light: #CCCCCC;
+  --color-text: #FFFFFF;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-black);
+  color: var(--color-text);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-weight: 800;
+}
+
+p {
+  margin: 0;
+  color: var(--color-gray-light);
+}
+
+a {
+  color: var(--color-yellow);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: var(--color-yellow-hover);
+}
+
+/* Responsive Utilities */
+.grid-1-to-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .grid-1-to-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.flex-col-to-row {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .flex-col-to-row {
+    flex-direction: row;
+  }
+}
+
+/* Base button styles */
+button, .btn {
+  background-color: var(--color-yellow);
+  color: var(--color-black);
+  border: none;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.1s ease;
+  font-family: 'Inter', sans-serif;
+  text-align: center;
+  display: inline-block;
+}
+
+button:hover, .btn:hover {
+  background-color: var(--color-yellow-hover);
+}
+
+button:active, .btn:active {
+  transform: scale(0.98);
+}
+
+button:disabled, .btn:disabled {
+  background-color: var(--color-gray-dark);
+  color: var(--color-gray-light);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Card container for High-Contrast Luxury feel */
+.card {
+  background-color: var(--color-gray-dark);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* Inputs */
+input, select, textarea {
+  width: 100%;
+  padding: 12px;
+  background-color: var(--color-black);
+  border: 1px solid #333;
+  color: var(--color-text);
+  border-radius: 4px;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.3s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--color-yellow);
+}

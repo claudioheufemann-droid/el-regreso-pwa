@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")      // Connection pooler for Vercel Serverless
+  directUrl = env("DIRECT_URL")        // Direct connection for Prisma Migrate
+}
+
+model User {
+  id         String      @id @default(cuid())
+  name       String
+  email      String      @unique
+  role       Role        @default(SELLER)
+  hourlyRate Float       @default(0)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  visits       Visit[]
+  salesGoals   SalesGoal[]
+  salesTargets SalesTarget[]
+}
+
+model SalesGoal {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  weeklyTarget    Float
+  monthlyTarget   Float
+  currentProgress Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SalesTarget {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  category     String   // e.g., "Bar", "Supermercado"
+  targetLiters Float    // Goal in liters (L)
+  timePeriod   String   // e.g., "May-Week2"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  ANALYST
+  SELLER
+}
+
+model Client {
+  id                String       @id @default(cuid())
+  name              String
+  rut               String       @unique
+  ownerName         String?
+  lat               Float
+  lng               Float
+  email             String?
+  channel           Channel
+  lastVisitDate     DateTime?
+  purchaseFrequency String?
+  preferredCategory ProductType?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  visits            Visit[]
+}
+
+enum Channel {
+  HORECA
+  RETAIL
+}
+
+model Product {
+  id               String      @id @default(cuid())
+  name             String
+  type             ProductType // CERVEZA, KOMBUCHA
+  style            String?
+  volumeMl         Int
+  
+  // Extended Catalog Metadata
+  ingredients      String?
+  abv              Float?
+  ibu              Int?
+  phLevel          Float?
+  tastingNotes     String?
+  dimensions       String?
+  origin           String?     @default("Valdivia, Chile")
+  conservation     String?
+  imageUrl         String?     // DAM strict protocol path
+  
+  // Pricing
+  netPrice         Float
+  grossPrice       Float
+  marginHoreca     Float
+  marginRetail     Float
+  
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  orderItems       OrderItem[]
+}
+
+enum ProductType {
+  CERVEZA
+  KOMBUCHA
+}
+
+model Visit {
+  id                 String       @id @default(cuid())
+  userId             String
+  user               User         @relation(fields: [userId], references: [id])
+  clientId           String
+  client             Client       @relation(fields: [clientId], references: [id])
+  startTime          DateTime     @default(now())
+  endTime            DateTime?
+  durationMinutes    Int?
+  
+  // Tracking & Logistics
+  kmStart            Float?
+  kmEnd              Float?
+  fuelCostEstimate   Float?
+  
+  frontisPhotoUrl    String?
+  exhibitionPhotoUrl String?
+  visitStatus        VisitStatus
+  noSaleReason       String?
+  visitCost          Float?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  order              Order?
+}
+
+enum VisitStatus {
+  SUCCESS
+  FOLLOW_UP
+  NO_SALE
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  visitId       String      @unique
+  visit         Visit       @relation(fields: [visitId], references: [id])
+  totalNet      Float
+  totalGross    Float
+  totalDiscount Float
+  items         OrderItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Float
+  discount  Float
+}
