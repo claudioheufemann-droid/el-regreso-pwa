@@ -1,76 +1,96 @@
 "use client";
 
-import { AlertTriangle, Clock, DollarSign, History, Leaf, Beer } from "lucide-react";
+import { AlertTriangle, ChevronRight, FileText, CheckCircle2 } from "lucide-react";
+
+interface DebtDetail {
+  product: string;
+  quantity: number;
+  amount: number;
+}
 
 interface OrderHistory {
   date: string;
-  product: string;
   total: number;
 }
 
 interface ClientHealthCardProps {
   debt: number;
   daysLate: number;
+  debtDetails: DebtDetail[];
   recentOrders: OrderHistory[];
 }
 
-export function ClientHealthCard({ debt, daysLate, recentOrders }: ClientHealthCardProps) {
+export function ClientHealthCard({ debt, daysLate, debtDetails, recentOrders }: ClientHealthCardProps) {
   const hasDebt = debt > 0;
-  const isCriticalDebt = daysLate >= 30;
-
+  
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       
-      {/* Módulo de Deuda (Alerta Visual) */}
-      <div style={{ 
-        padding: "16px", 
-        backgroundColor: hasDebt ? (isCriticalDebt ? "rgba(255, 77, 77, 0.15)" : "rgba(255, 170, 0, 0.15)") : "rgba(37, 211, 102, 0.1)", 
-        border: `1px solid ${hasDebt ? (isCriticalDebt ? "#FF4D4D" : "#FFAA00") : "#25D366"}`, 
-        borderRadius: "12px" 
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-          {hasDebt ? <AlertTriangle size={20} color={isCriticalDebt ? "#FF4D4D" : "#FFAA00"} /> : <DollarSign size={20} color="#25D366" />}
-          <h4 style={{ margin: 0, color: "white", fontSize: "1.05rem" }}>Estado Financiero</h4>
-        </div>
+      {/* 1. Estado Financiero */}
+      <div>
+        <h3 style={{ fontSize: "1.1rem", color: "white", margin: "0 0 12px 0", borderBottom: "1px solid #333", paddingBottom: "8px" }}>Estado Financiero</h3>
         
         {hasDebt ? (
-          <div>
-            <p style={{ margin: 0, fontSize: "1.8rem", fontWeight: "bold", color: isCriticalDebt ? "#FF4D4D" : "#FFAA00" }}>
-              ${debt.toLocaleString("es-CL")}
-            </p>
-            <p style={{ margin: "4px 0 0 0", color: "#ccc", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
-              <Clock size={14} /> {daysLate} días de mora en facturación.
-            </p>
+          <div style={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: "12px", overflow: "hidden" }}>
+            <div style={{ padding: "16px", backgroundColor: "rgba(220, 38, 38, 0.1)", borderBottom: "1px solid #333" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                <AlertTriangle size={18} color="#DC2626" />
+                <span style={{ color: "#DC2626", fontWeight: "bold", fontSize: "0.9rem" }}>DEUDA VENCIDA ({daysLate} días)</span>
+              </div>
+              <p style={{ margin: 0, fontSize: "2rem", fontWeight: "bold", color: "#DC2626" }}>
+                ${debt.toLocaleString("es-CL")}
+              </p>
+            </div>
+
+            {/* Panel de Detalle de Deuda */}
+            {debtDetails.length > 0 && (
+              <div style={{ padding: "12px 16px", backgroundColor: "#1a1a1a" }}>
+                <p style={{ margin: "0 0 12px 0", fontSize: "0.85rem", color: "#888", textTransform: "uppercase", fontWeight: "bold" }}>Detalle de facturas impagas</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {debtDetails.map((item, idx) => (
+                    <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.9rem" }}>
+                      <div style={{ display: "flex", gap: "8px", color: "white" }}>
+                        <span style={{ color: "#888", width: "24px" }}>{item.quantity}x</span>
+                        <span>{item.product}</span>
+                      </div>
+                      <span style={{ color: "#DC2626", fontWeight: "bold" }}>${item.amount.toLocaleString("es-CL")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
-          <p style={{ margin: 0, color: "#25D366", fontWeight: "bold" }}>Cliente al día. Sin deuda vigente.</p>
+          <div style={{ padding: "16px", backgroundColor: "rgba(37, 211, 102, 0.1)", border: "1px solid #25D366", borderRadius: "12px" }}>
+             <p style={{ margin: 0, color: "#25D366", fontWeight: "bold", display: "flex", alignItems: "center", gap: "8px" }}><CheckCircle2 size={18} /> Cliente al día. Sin deuda vigente.</p>
+          </div>
         )}
       </div>
 
-      {/* Historial Reciente (Smart History Carousel) */}
-      <div style={{ padding: "16px", backgroundColor: "#111", border: "1px solid #333", borderRadius: "12px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-          <History size={18} color="var(--color-gray-light)" />
-          <h4 style={{ margin: 0, color: "white", fontSize: "0.95rem" }}>Smart History (Últimas compras)</h4>
-        </div>
+      {/* 2. Historial de Compras */}
+      <div>
+        <h3 style={{ fontSize: "1.1rem", color: "white", margin: "0 0 12px 0", borderBottom: "1px solid #333", paddingBottom: "8px" }}>Historial de Compras</h3>
         
         {recentOrders.length > 0 ? (
-          <div style={{ display: "flex", overflowX: "auto", gap: "12px", paddingBottom: "8px", snapType: "x mandatory" }}>
-            {recentOrders.map((order, idx) => {
-              const isKombucha = order.product.toLowerCase().includes("kombucha");
-              return (
-                <div key={idx} style={{ minWidth: "200px", padding: "16px", backgroundColor: "#1a1a1a", border: "1px solid #444", borderRadius: "8px", snapAlign: "start", flexShrink: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                    {isKombucha ? <Leaf size={16} color="var(--color-yellow)" /> : <Beer size={16} color="#4D90FE" />}
-                    <span style={{ color: "#888", fontSize: "0.75rem", fontWeight: "bold" }}>{order.date}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {recentOrders.map((order, idx) => (
+              <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", backgroundColor: "#111", border: "1px solid #333", borderRadius: "12px", cursor: "pointer" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div style={{ padding: "10px", backgroundColor: "#222", borderRadius: "8px" }}>
+                    <FileText size={20} color="var(--color-gray-light)" />
                   </div>
-                  <span style={{ color: "white", fontWeight: "bold", fontSize: "1rem", display: "block", marginBottom: "8px" }}>{order.product}</span>
-                  <span style={{ color: "var(--color-yellow)", fontWeight: "bold", fontSize: "0.95rem", display: "block" }}>
-                    ${order.total.toLocaleString("es-CL")}
-                  </span>
+                  <div>
+                    <span style={{ color: "white", fontWeight: "bold", fontSize: "1rem", display: "block" }}>{order.date}</span>
+                    <span style={{ color: "var(--color-yellow)", fontWeight: "bold", fontSize: "0.95rem" }}>
+                      ${order.total.toLocaleString("es-CL")}
+                    </span>
+                  </div>
                 </div>
-              );
-            })}
+                <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#888", fontSize: "0.85rem", fontWeight: "bold" }}>
+                  Ver Detalle <ChevronRight size={16} />
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <p style={{ margin: 0, color: "#888", fontSize: "0.85rem", fontStyle: "italic" }}>No hay historial de compras reciente.</p>
