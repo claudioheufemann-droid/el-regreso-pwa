@@ -13,14 +13,21 @@ interface OrderHistory {
   total: number;
 }
 
+interface RecommendedSale {
+  product: string;
+  quantity: number;
+  reason: string;
+}
+
 interface ClientHealthCardProps {
   debt: number;
   daysLate: number;
   debtDetails: DebtDetail[];
   recentOrders: OrderHistory[];
+  recommendedSale?: RecommendedSale;
 }
 
-export function ClientHealthCard({ debt, daysLate, debtDetails, recentOrders }: ClientHealthCardProps) {
+export function ClientHealthCard({ debt, daysLate, debtDetails, recentOrders, recommendedSale }: ClientHealthCardProps) {
   const hasDebt = debt > 0;
   
   return (
@@ -66,6 +73,27 @@ export function ClientHealthCard({ debt, daysLate, debtDetails, recentOrders }: 
           </div>
         )}
       </div>
+
+      {/* 1.5 Sugerencia Inteligente (Cross-sell/Up-sell) */}
+      {recommendedSale && (
+        <div>
+          <h3 style={{ fontSize: "1.1rem", color: "var(--color-yellow)", margin: "0 0 12px 0", borderBottom: "1px solid #333", paddingBottom: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+            💡 Venta Recomendada
+          </h3>
+          <div style={{ backgroundColor: "#111", border: "1px solid var(--color-yellow)", borderRadius: "12px", padding: "16px", boxShadow: "0 0 15px rgba(255, 204, 0, 0.1)" }}>
+            <p style={{ margin: "0 0 8px 0", fontSize: "0.85rem", color: "#aaa" }}>Basado en su comportamiento:</p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <strong style={{ color: "white", fontSize: "1.1rem" }}>{recommendedSale.product}</strong>
+              <span style={{ backgroundColor: "var(--color-yellow)", color: "black", fontWeight: "bold", padding: "4px 8px", borderRadius: "12px", fontSize: "0.85rem" }}>
+                Sugerido: {recommendedSale.quantity}u
+              </span>
+            </div>
+            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-yellow)", fontStyle: "italic" }}>
+              "{recommendedSale.reason}"
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 2. Historial de Compras */}
       <div>

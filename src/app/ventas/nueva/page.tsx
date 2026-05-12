@@ -21,17 +21,20 @@ const MOCK_CLIENTS = [
       { date: "28 Abr", total: 90000 },
       { date: "15 Abr", total: 30000 },
       { date: "01 Abr", total: 45000 }
-    ] 
+    ],
+    recommendedSale: { product: "Arboretum (Kölsch)", quantity: 4, reason: "Compra frecuente cada 2 semanas." }
   },
   { 
     id: "2", name: "Botillería El Paso", address: "Av. Siempre Viva 742", rut: "77.987.654-3", 
     debt: 0, daysLate: 0, debtDetails: [],
-    recentOrders: [ { date: "10 May", total: 80000 } ] 
+    recentOrders: [ { date: "10 May", total: 80000 } ],
+    recommendedSale: { product: "Kombucha Mix", quantity: 6, reason: "Aumento de demanda en zona." }
   },
   { 
     id: "3", name: "Cafetería Central", address: "Plaza de Armas 100", rut: "78.111.222-1", 
     debt: 25000, daysLate: 15, debtDetails: [{ product: "Descenso (West Coast IPA)", quantity: 1, amount: 25000 }], 
-    recentOrders: [] 
+    recentOrders: [],
+    recommendedSale: { product: "Descenso (West Coast IPA)", quantity: 2, reason: "Quiebre de stock probable." }
   },
 ];
 
@@ -231,6 +234,7 @@ export default function NuevaVentaSteper() {
                     daysLate={selectedClient.daysLate} 
                     debtDetails={selectedClient.debtDetails}
                     recentOrders={selectedClient.recentOrders} 
+                    recommendedSale={selectedClient.recommendedSale}
                   />
                 </div>
               )}
