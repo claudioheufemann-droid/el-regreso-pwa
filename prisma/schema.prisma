@@ -18,7 +18,34 @@ model User {
   updatedAt    DateTime      @updatedAt
   visits       Visit[]
   salesGoals   SalesGoal[]
-  salesTargets SalesTarget[]
+  salesTargets     SalesTarget[]
+  salesPerformance SalesPerformance[]
+  transactionLogs  TransactionLog[]
+}
+
+model SalesPerformance {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  dailyTotal   Float    @default(0)
+  weeklyTotal  Float    @default(0)
+  monthlyTotal Float    @default(0)
+  salesNewClients Float @default(0)
+  salesExisting   Float @default(0)
+  date         DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model TransactionLog {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  clientName    String
+  clientType    String   // "NEW" or "EXISTING"
+  totalAmount   Float
+  emailSentTo   String?
+  status        String   // "SUCCESS" or "FAILED"
+  createdAt     DateTime @default(now())
 }
 
 model SalesGoal {

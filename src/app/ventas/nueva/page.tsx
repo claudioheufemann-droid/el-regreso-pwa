@@ -92,17 +92,44 @@ export default function NuevaVentaSteper() {
     return total;
   };
 
-  const handleCheckout = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => console.log("Silent GPS:", pos.coords),
-        (err) => console.log("GPS Denied")
-      );
-    }
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [performanceMetrics, setPerformanceMetrics] = useState<any>(null);
+
+  const handleCheckout = async () => {
+    setIsProcessing(true);
     
     const clientName = clientType === "EXISTING" ? selectedClient?.name : newClient.name;
+    const clientEmail = "cliente@ejemplo.cl"; // Simulado
     const total = calculateTotal();
     
+    // Llamada API Transaccional (No-blocking UX)
+    try {
+      const res = await fetch("/api/sales/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientType,
+          clientName,
+          totalAmount: total,
+          email: clientEmail,
+          cartItems: cart
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPerformanceMetrics(data.performance);
+        setStep(5); // Pantalla de Éxito
+      }
+    } catch (e) {
+      alert("Error de conexión. Reintentando...");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const openWhatsApp = () => {
+    const clientName = clientType === "EXISTING" ? selectedClient?.name : newClient.name;
+    const total = calculateTotal();
     let itemsText = "";
     Object.keys(cart).forEach(id => {
       if (cart[id] > 0) {
@@ -111,12 +138,8 @@ export default function NuevaVentaSteper() {
         itemsText += `%0A- ${cart[id]}x ${p?.name} ($${subtotal.toLocaleString("es-CL")})`;
       }
     });
-
     const msg = `*NUEVO PEDIDO - EL REGRESO*%0ACliente: ${clientName}%0A${itemsText}%0A%0A*TOTAL: $${total.toLocaleString("es-CL")}*`;
-    
-    alert(`Pedido confirmado en el sistema por $${total.toLocaleString("es-CL")}. Redirigiendo a WhatsApp...`);
     window.open(`https://wa.me/?text=${msg}`, "_blank");
-    router.push('/ventas');
   };
 
   const renderStepContent = () => {
@@ -369,14 +392,73 @@ export default function NuevaVentaSteper() {
             }}>
               <div>
                 <p style={{ margin: "0 0 4px 0", fontSize: "0.85rem", color: "var(--color-gray-light)", textTransform: "uppercase" }}>Total a Cobrar</p>
-                <p style={{ margin: 0, fontSize: "1.8rem", fontWeight: "bold", color: "#00FF00" }}>${calculateTotal().toLocaleString("es-CL")}</p>
+                <p style={{ margin: 0, fontSize: "1.8rem", fontWeight: "bold", color: "#00FF00", whiteSpace: "nowrap" }}>${calculateTotal().toLocaleString("es-CL")}</p>
               </div>
               <button 
                 onClick={handleCheckout} 
-                disabled={calculateTotal() === 0}
-                style={{ padding: "16px 24px", backgroundColor: calculateTotal() === 0 ? "#555" : "#25D366", color: "white", fontWeight: "bold", borderRadius: "8px", border: "none", display: "flex", alignItems: "center", gap: "8px", fontSize: "1.1rem", boxShadow: calculateTotal() > 0 ? "0 4px 15px rgba(37, 211, 102, 0.3)" : "none", cursor: calculateTotal() > 0 ? "pointer" : "not-allowed" }}
+                disabled={calculateTotal() === 0 || isProcessing}
+                style={{ padding: "16px 24px", backgroundColor: calculateTotal() === 0 || isProcessing ? "#555" : "#25D366", color: "white", fontWeight: "bold", borderRadius: "8px", border: "none", display: "flex", alignItems: "center", gap: "8px", fontSize: "1.1rem", boxShadow: calculateTotal() > 0 && !isProcessing ? "0 4px 15px rgba(37, 211, 102, 0.3)" : "none", cursor: calculateTotal() > 0 && !isProcessing ? "pointer" : "not-allowed" }}
               >
-                <span>✅ Confirmar</span>
+                <span>{isProcessing ? "Procesando..." : "✅ Confirmar Venta"}</span>
+              </button>
+            </div>
+          </div>
+        );
+
+      case 5:
+        if (!performanceMetrics) return null;
+        const p = performanceMetrics;
+        const dailyPercent = Math.min(100, (p.dailyCurrent / p.dailyGoal) * 100);
+        const weeklyPercent = Math.min(100, (p.weeklyCurrent / p.weeklyGoal) * 100);
+        
+        return (
+          <div style={{ display: "flex", flexDirection: "column", height: "100%", overflowY: "auto", padding: "20px", paddingBottom: "120px" }}>
+            <section className="card" style={{ animation: "fadeIn 0.5s ease", border: "1px solid #25D366" }}>
+              <div style={{ textAlign: "center", marginBottom: "24px" }}>
+                <div style={{ width: "64px", height: "64px", backgroundColor: "#25D366", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px auto", fontSize: "2rem" }}>✅</div>
+                <h2 style={{ margin: "0 0 8px 0", color: "white" }}>¡Venta Confirmada!</h2>
+                <p style={{ color: "#888", fontSize: "0.9rem" }}>Comprobantes enviados por email a cliente y vendedor.</p>
+              </div>
+
+              <h3 style={{ fontSize: "1rem", color: "white", marginBottom: "16px", borderBottom: "1px solid #333", paddingBottom: "8px" }}>Tus Metas de Venta</h3>
+
+              <div style={{ marginBottom: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", fontSize: "0.85rem" }}>
+                  <span style={{ color: "var(--color-gray-light)" }}>Meta Diaria</span>
+                  <span style={{ color: "white", fontWeight: "bold" }}>${p.dailyCurrent.toLocaleString()} / ${p.dailyGoal.toLocaleString()}</span>
+                </div>
+                <div style={{ width: "100%", height: "8px", backgroundColor: "#333", borderRadius: "4px", overflow: "hidden" }}>
+                  <div style={{ width: `${dailyPercent}%`, height: "100%", backgroundColor: dailyPercent >= 100 ? "#00FF00" : "var(--color-yellow)", transition: "width 1s ease-out" }} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "24px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", fontSize: "0.85rem" }}>
+                  <span style={{ color: "var(--color-gray-light)" }}>Meta Semanal</span>
+                  <span style={{ color: "white", fontWeight: "bold" }}>${p.weeklyCurrent.toLocaleString()} / ${p.weeklyGoal.toLocaleString()}</span>
+                </div>
+                <div style={{ width: "100%", height: "8px", backgroundColor: "#333", borderRadius: "4px", overflow: "hidden" }}>
+                  <div style={{ width: `${weeklyPercent}%`, height: "100%", backgroundColor: weeklyPercent >= 100 ? "#00FF00" : "#4D90FE", transition: "width 1s ease-out" }} />
+                </div>
+              </div>
+
+              <button 
+                onClick={() => router.push('/ventas')} 
+                style={{ width: "100%", padding: "16px", backgroundColor: "#222", color: "white", border: "1px solid #444", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
+              >
+                Volver al Panel
+              </button>
+            </section>
+
+            {/* STICKY BOTTOM BAR (Opcional WhatsApp) */}
+            <div style={{ 
+              position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", backgroundColor: "rgba(17, 17, 17, 0.95)", backdropFilter: "blur(10px)", borderTop: "1px solid #333", zIndex: 50
+            }}>
+              <button 
+                onClick={openWhatsApp} 
+                style={{ width: "100%", padding: "16px 24px", backgroundColor: "#25D366", color: "white", fontWeight: "bold", borderRadius: "8px", border: "none", fontSize: "1.1rem", cursor: "pointer" }}
+              >
+                Enviar PDF por WhatsApp
               </button>
             </div>
           </div>
@@ -398,7 +480,7 @@ export default function NuevaVentaSteper() {
         
         {/* Progress Bar */}
         <div style={{ width: "100%", height: "4px", backgroundColor: "#333", borderRadius: "2px", overflow: "hidden" }}>
-          <div style={{ width: `${(step / 4) * 100}%`, height: "100%", backgroundColor: "var(--color-yellow)", transition: "width 0.3s ease" }} />
+          <div style={{ width: `${(Math.min(step, 4) / 4) * 100}%`, height: "100%", backgroundColor: "var(--color-yellow)", transition: "width 0.3s ease" }} />
         </div>
       </header>
 
