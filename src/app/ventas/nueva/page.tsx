@@ -12,10 +12,14 @@ const MOCK_CLIENTS = [
 ];
 
 const MOCK_PRODUCTS = [
-  { id: "p1", name: "Cerveza Arboretum", price: 1500, type: "CERVEZA" },
-  { id: "p2", name: "Cerveza Descenso", price: 1600, type: "CERVEZA" },
-  { id: "p3", name: "Kombucha Lemon", price: 1200, type: "KOMBUCHA" },
-  { id: "p4", name: "Kombucha Maracuyá", price: 1250, type: "KOMBUCHA" },
+  { id: "c1", name: "Cerveza Arboretum", price: 1500, type: "CERVEZA" },
+  { id: "c2", name: "Cerveza Descenso", price: 1600, type: "CERVEZA" },
+  { id: "c3", name: "Cerveza Aguas Blancas", price: 1500, type: "CERVEZA" },
+  { id: "k1", name: "Kombucha Lemon", price: 1200, type: "KOMBUCHA" },
+  { id: "k2", name: "Kombucha Maracuyá", price: 1200, type: "KOMBUCHA" },
+  { id: "k3", name: "Kombucha Maqui", price: 1200, type: "KOMBUCHA" },
+  { id: "k4", name: "Kombucha Detox", price: 1300, type: "KOMBUCHA" },
+  { id: "k5", name: "Kombucha Natural", price: 1100, type: "KOMBUCHA" },
 ];
 
 export default function NuevaVentaSteper() {
@@ -84,7 +88,12 @@ export default function NuevaVentaSteper() {
     Object.keys(cart).forEach(id => {
       if (cart[id].quantity > 0) {
         const p = MOCK_PRODUCTS.find(x => x.id === id);
-        itemsText += `%0A- ${cart[id].quantity}x ${cart[id].unit} de ${p?.name}`;
+        let multiplier = 1;
+        if (cart[id].unit === "Six-pack") multiplier = 6;
+        if (cart[id].unit === "Caja") multiplier = 24;
+        if (cart[id].unit === "Barril") multiplier = 30;
+        const subtotal = (p?.price || 0) * multiplier * cart[id].quantity;
+        itemsText += `%0A- ${cart[id].quantity}x ${cart[id].unit} de ${p?.name} ($${subtotal.toLocaleString("es-CL")})`;
       }
     });
 
@@ -188,14 +197,27 @@ export default function NuevaVentaSteper() {
                 const unit = cart[p.id]?.unit || "Unidad";
                 const isSelected = qty > 0;
                 
+                let multiplier = 1;
+                if (unit === "Six-pack") multiplier = 6;
+                if (unit === "Caja") multiplier = 24;
+                if (unit === "Barril") multiplier = 30;
+                const subtotal = p.price * multiplier * qty;
+                
                 return (
                   <div key={p.id} style={{ borderBottom: "1px solid #333", paddingBottom: "20px", opacity: (productSearch && !isSelected) ? 0.8 : 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px", alignItems: "flex-start" }}>
                       <div>
-                        <span style={{ fontWeight: "bold", fontSize: "1.1rem", color: isSelected ? "white" : "var(--color-gray-light)" }}>{p.name}</span>
+                        <span style={{ fontWeight: "bold", fontSize: "1.05rem", color: isSelected ? "white" : "var(--color-gray-light)" }}>{p.name}</span>
                         <span style={{ display: "block", fontSize: "0.8rem", color: "#888", marginTop: "2px" }}>{p.type}</span>
                       </div>
-                      <span style={{ color: "var(--color-yellow)", fontWeight: "bold", fontSize: "1.1rem" }}>${p.price.toLocaleString("es-CL")}<span style={{fontSize:"0.8rem", color:"#888"}}>/u</span></span>
+                      <div style={{ textAlign: "right" }}>
+                        <span style={{ color: "var(--color-yellow)", fontWeight: "bold", fontSize: "1.05rem" }}>${p.price.toLocaleString("es-CL")}<span style={{fontSize:"0.8rem", color:"#888"}}>/u</span></span>
+                        {qty > 0 && (
+                          <div style={{ fontSize: "0.9rem", color: "#00FF00", marginTop: "4px", fontWeight: "bold", animation: "fadeIn 0.2s ease" }}>
+                            Subtotal: ${subtotal.toLocaleString("es-CL")}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     
                     <QuantitySelector 

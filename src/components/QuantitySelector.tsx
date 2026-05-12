@@ -15,17 +15,18 @@ export function QuantitySelector({ value, onChange, unit, onUnitChange }: Props)
         type="button"
         onClick={() => onChange(Math.max(0, value - 1))}
         style={{ 
-          width: "48px", 
-          height: "48px", 
+          width: "38px", 
+          height: "38px", 
           backgroundColor: "#222", 
           color: "white", 
-          borderRadius: "8px", 
-          fontSize: "1.5rem", 
+          borderRadius: "6px", 
+          fontSize: "1.2rem", 
           border: "1px solid #444",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          cursor: "pointer"
+          cursor: "pointer",
+          flexShrink: 0
         }}
       >-</button>
       
@@ -35,15 +36,16 @@ export function QuantitySelector({ value, onChange, unit, onUnitChange }: Props)
         value={value === 0 ? "" : value}
         onChange={(e) => onChange(e.target.value ? Number(e.target.value) : 0)}
         style={{ 
-          flex: 1, 
-          height: "48px", 
+          width: "60px", 
+          height: "38px", 
           textAlign: "center", 
           backgroundColor: "#111", 
           border: "1px solid #444", 
           color: "white", 
-          borderRadius: "8px", 
-          fontSize: "1.2rem",
-          fontWeight: "bold"
+          borderRadius: "6px", 
+          fontSize: "1.1rem",
+          fontWeight: "bold",
+          padding: 0
         }}
         placeholder="0"
       />
@@ -53,18 +55,19 @@ export function QuantitySelector({ value, onChange, unit, onUnitChange }: Props)
         type="button"
         onClick={() => onChange(value + 1)}
         style={{ 
-          width: "48px", 
-          height: "48px", 
+          width: "38px", 
+          height: "38px", 
           backgroundColor: "var(--color-yellow)", 
           color: "black", 
-          borderRadius: "8px", 
-          fontSize: "1.5rem", 
+          borderRadius: "6px", 
+          fontSize: "1.2rem", 
           border: "none",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
           fontWeight: "bold",
-          cursor: "pointer"
+          cursor: "pointer",
+          flexShrink: 0
         }}
       >+</button>
 
@@ -73,14 +76,16 @@ export function QuantitySelector({ value, onChange, unit, onUnitChange }: Props)
         value={unit} 
         onChange={(e) => onUnitChange(e.target.value)}
         style={{ 
-          height: "48px", 
-          padding: "0 12px", 
+          flex: 1, 
+          height: "38px", 
+          padding: "0 8px", 
           backgroundColor: "#222", 
           border: "1px solid #444", 
           color: "white", 
-          borderRadius: "8px",
+          borderRadius: "6px",
           fontSize: "0.95rem",
-          outline: "none"
+          outline: "none",
+          cursor: "pointer"
         }}
       >
         <option value="Unidad">Ud.</option>
