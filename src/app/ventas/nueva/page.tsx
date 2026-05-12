@@ -17,7 +17,7 @@ const MOCK_PRODUCTS = [
   { id: "c3", name: "Fisura (Porter)", price: 2250, type: "CERVEZA", image: "/assets/catalogo/fisura.png" },
   { id: "c4", name: "La Barra (APA)", price: 2250, type: "CERVEZA", image: "/assets/catalogo/la-barra.png" },
   { id: "c5", name: "Descenso (West Coast IPA)", price: 2750, type: "CERVEZA", image: "/assets/catalogo/descenso.png" },
-  { id: "c6", name: "Hazy IPA", price: 3000, type: "CERVEZA", image: "/assets/catalogo/c3.jpg" },
+  { id: "c6", name: "Aguas Blancas (Hazy IPA)", price: 3000, type: "CERVEZA", image: "/assets/catalogo/aguas-blancas.png" },
   { id: "k1", name: "Kombucha Lemon", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },
   { id: "k2", name: "Kombucha Maracuyá", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },
   { id: "k3", name: "Kombucha Berry", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },
