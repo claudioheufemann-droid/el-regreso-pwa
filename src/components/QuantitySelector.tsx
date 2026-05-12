@@ -1,98 +1,45 @@
-"use client";
+import { Minus, Plus } from "lucide-react";
 
-interface Props {
-  value: number;
-  onChange: (val: number) => void;
-  unit: string;
-  onUnitChange: (unit: string) => void;
+interface QuantitySelectorProps {
+  quantity: number;
+  onChange: (newQuantity: number) => void;
 }
 
-export function QuantitySelector({ value, onChange, unit, onUnitChange }: Props) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%" }}>
-      {/* Botón Menos */}
-      <button 
-        type="button"
-        onClick={() => onChange(Math.max(0, value - 1))}
-        style={{ 
-          width: "38px", 
-          height: "38px", 
-          backgroundColor: "#222", 
-          color: "white", 
-          borderRadius: "6px", 
-          fontSize: "1.2rem", 
-          border: "1px solid #444",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          cursor: "pointer",
-          flexShrink: 0
-        }}
-      >-</button>
-      
-      {/* Input Numérico Directo */}
-      <input 
-        type="number" 
-        value={value === 0 ? "" : value}
-        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : 0)}
-        style={{ 
-          width: "60px", 
-          height: "38px", 
-          textAlign: "center", 
-          backgroundColor: "#111", 
-          border: "1px solid #444", 
-          color: "white", 
-          borderRadius: "6px", 
-          fontSize: "1.1rem",
-          fontWeight: "bold",
-          padding: 0
-        }}
-        placeholder="0"
-      />
-      
-      {/* Botón Más */}
-      <button 
-        type="button"
-        onClick={() => onChange(value + 1)}
-        style={{ 
-          width: "38px", 
-          height: "38px", 
-          backgroundColor: "var(--color-yellow)", 
-          color: "black", 
-          borderRadius: "6px", 
-          fontSize: "1.2rem", 
-          border: "none",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          fontWeight: "bold",
-          cursor: "pointer",
-          flexShrink: 0
-        }}
-      >+</button>
+export function QuantitySelector({ quantity, onChange }: QuantitySelectorProps) {
+  const handleDec = () => {
+    if (quantity > 0) onChange(quantity - 1);
+  };
+  const handleInc = () => {
+    onChange(quantity + 1);
+  };
 
-      {/* Selector de Unidad */}
-      <select 
-        value={unit} 
-        onChange={(e) => onUnitChange(e.target.value)}
-        style={{ 
-          flex: 1, 
-          height: "38px", 
-          padding: "0 8px", 
-          backgroundColor: "#222", 
-          border: "1px solid #444", 
-          color: "white", 
-          borderRadius: "6px",
-          fontSize: "0.95rem",
-          outline: "none",
-          cursor: "pointer"
-        }}
+  return (
+    <div style={{ display: "flex", alignItems: "center", backgroundColor: "#222", borderRadius: "8px", overflow: "hidden", border: "1px solid #444", flexShrink: 0 }}>
+      <button 
+        onClick={handleDec}
+        style={{ width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#333", border: "none", color: "white", cursor: "pointer" }}
       >
-        <option value="Unidad">Ud.</option>
-        <option value="Six-pack">6-Pack</option>
-        <option value="Caja">Caja</option>
-        <option value="Barril">Barril</option>
-      </select>
+        <Minus size={16} />
+      </button>
+      <input 
+        type="number"
+        value={quantity || ""}
+        onChange={(e) => {
+          const val = parseInt(e.target.value);
+          if (!isNaN(val) && val >= 0) {
+            onChange(val);
+          } else if (e.target.value === "") {
+            onChange(0);
+          }
+        }}
+        style={{ width: "40px", height: "36px", textAlign: "center", backgroundColor: "transparent", border: "none", color: "white", fontWeight: "bold", fontSize: "1.1rem", padding: 0 }}
+      />
+      <button 
+        onClick={handleInc}
+        style={{ width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "var(--color-yellow)", border: "none", color: "black", cursor: "pointer" }}
+      >
+        <Plus size={16} />
+      </button>
     </div>
   );
 }

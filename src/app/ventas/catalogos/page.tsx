@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { CatalogShare } from "@/components/CatalogShare";
+import { Beer, Jellyfish, LayoutGrid } from "lucide-react";
 
 // Catálogo Oficial 2026
 const CATALOGO_PRODUCTOS = [
@@ -28,9 +30,10 @@ export default function CatalogoPage() {
     : CATALOGO_PRODUCTOS.filter(p => p.type === filter);
 
   return (
-    <div style={{ padding: "20px", maxWidth: "800px", margin: "0 auto", paddingBottom: "60px", animation: "fadeIn 0.4s ease" }}>
-      {/* Header Secundario */}
-      <header style={{ marginBottom: "24px", display: "flex", alignItems: "center", gap: "12px", borderBottom: "1px solid #333", paddingBottom: "16px" }}>
+    <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", backgroundColor: "black" }}>
+      
+      {/* Header Fijo */}
+      <header style={{ flexShrink: 0, padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", borderBottom: "1px solid #333", backgroundColor: "black", zIndex: 10 }}>
         <button onClick={() => router.push("/ventas")} style={{ background: "none", border: "none", color: "var(--color-yellow)", fontSize: "1.5rem", cursor: "pointer", padding: 0 }}>←</button>
         <div>
           <h1 style={{ fontSize: "1.4rem", color: "white", margin: 0 }}>Catálogo de Productos</h1>
@@ -38,32 +41,32 @@ export default function CatalogoPage() {
         </div>
       </header>
 
-      {/* Botones de Filtro */}
-      <div style={{ display: "flex", gap: "12px", marginBottom: "24px", overflowX: "auto", paddingBottom: "8px" }}>
+      {/* Botones de Filtro Fijos */}
+      <div style={{ flexShrink: 0, display: "flex", gap: "12px", padding: "16px 20px 8px 20px", overflowX: "auto", backgroundColor: "black", zIndex: 10 }}>
         <button 
           onClick={() => setFilter("ALL")}
-          style={{ padding: "10px 20px", borderRadius: "20px", border: "none", backgroundColor: filter === "ALL" ? "var(--color-yellow)" : "#222", color: filter === "ALL" ? "black" : "white", fontWeight: "bold", whiteSpace: "nowrap" }}
+          style={{ padding: "10px 20px", borderRadius: "20px", border: "none", backgroundColor: filter === "ALL" ? "var(--color-yellow)" : "#222", color: filter === "ALL" ? "black" : "white", fontWeight: "bold", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
         >
-          Todos
+          <LayoutGrid size={16} /> Todos
         </button>
         <button 
           onClick={() => setFilter("CERVEZA")}
-          style={{ padding: "10px 20px", borderRadius: "20px", border: "none", backgroundColor: filter === "CERVEZA" ? "#4D90FE" : "#222", color: filter === "CERVEZA" ? "white" : "white", fontWeight: "bold", whiteSpace: "nowrap" }}
+          style={{ padding: "10px 20px", borderRadius: "20px", border: "none", backgroundColor: filter === "CERVEZA" ? "#4D90FE" : "#222", color: filter === "CERVEZA" ? "white" : "white", fontWeight: "bold", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
         >
-          🍺 Cervezas
+          <Beer size={16} /> Cervezas
         </button>
         <button 
           onClick={() => setFilter("KOMBUCHA")}
-          style={{ padding: "10px 20px", borderRadius: "20px", border: "none", backgroundColor: filter === "KOMBUCHA" ? "var(--color-yellow)" : "#222", color: filter === "KOMBUCHA" ? "black" : "white", fontWeight: "bold", whiteSpace: "nowrap" }}
+          style={{ padding: "10px 20px", borderRadius: "20px", border: "none", backgroundColor: filter === "KOMBUCHA" ? "var(--color-yellow)" : "#222", color: filter === "KOMBUCHA" ? "black" : "white", fontWeight: "bold", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
         >
-          🌿 Kombuchas
+          <Jellyfish size={16} /> Kombuchas
         </button>
       </div>
 
-      {/* Grilla de Catálogo */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "16px" }}>
+      {/* Listado de Productos Scrollable (Overflow-Y Auto) */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "16px", alignContent: "start", paddingBottom: "32px" }}>
         {filteredProducts.map(product => (
-          <div key={product.id} className="card" style={{ padding: "0", overflow: "hidden", border: "1px solid #333", backgroundColor: "#111", display: "flex", flexDirection: "column" }}>
+          <div key={product.id} style={{ padding: "0", overflow: "hidden", border: "1px solid #333", backgroundColor: "#111", display: "flex", flexDirection: "column", borderRadius: "8px" }}>
             <div style={{ position: "relative", width: "100%", paddingTop: "100%", backgroundColor: "#000" }}>
               <img 
                 src={product.image} 
@@ -89,12 +92,11 @@ export default function CatalogoPage() {
         ))}
       </div>
 
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}} />
+      {/* Footer Fijo con Formulario de WhatsApp */}
+      <div style={{ flexShrink: 0 }}>
+        <CatalogShare />
+      </div>
+
     </div>
   );
 }
