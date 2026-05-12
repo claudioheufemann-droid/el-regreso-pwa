@@ -58,6 +58,16 @@ model Client {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   visits            Visit[]
+  debt              Debt?
+}
+
+model Debt {
+  id        String   @id @default(cuid())
+  clientId  String   @unique
+  client    Client   @relation(fields: [clientId], references: [id])
+  amount    Float
+  daysLate  Int
+  updatedAt DateTime @updatedAt
 }
 
 model Product {
