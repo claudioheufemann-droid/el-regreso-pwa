@@ -18,7 +18,7 @@ export default function Home() {
     e.preventDefault();
     
     // --- TEMPORAL: Bypass directo para pruebas ---
-    router.push('/terreno');
+    router.push('/ventas');
     
     /* --- CÓDIGO ORIGINAL DE AUTENTICACIÓN (GUARDADO PARA DESPUÉS) ---
     setError('');
