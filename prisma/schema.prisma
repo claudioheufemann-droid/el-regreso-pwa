@@ -4,8 +4,7 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")      // Connection pooler for Vercel Serverless
-  directUrl = env("DIRECT_URL")        // Direct connection for Prisma Migrate
+  url       = env("DATABASE_URL")
 }
 
 model User {
@@ -126,6 +125,8 @@ model Visit {
   visitStatus        VisitStatus
   noSaleReason       String?
   visitCost          Float?
+  saleCervezaLiters  Float?
+  saleKombuchaLiters Float?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   order              Order?

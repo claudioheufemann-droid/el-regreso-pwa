@@ -161,6 +161,8 @@ export default function TerrenoDashboard() {
   const [visitOutcome, setVisitOutcome] = useState<"SUCCESS" | "FOLLOW_UP" | "NO_SALE" | "">("");
   const [noSaleReason, setNoSaleReason] = useState("");
   const [saleAmount, setSaleAmount] = useState<number | "">("");
+  const [saleCervezaLiters, setSaleCervezaLiters] = useState<number | "">("");
+  const [saleKombuchaLiters, setSaleKombuchaLiters] = useState<number | "">("");
   const FUEL_RATE_PER_KM = 120; // CLP per km, configurable
 
   // --- Estados Nuevo Prospecto ---
@@ -543,15 +545,45 @@ export default function TerrenoDashboard() {
                 )}
 
                 {visitOutcome === "SUCCESS" && (
-                  <div style={{ marginBottom: "16px", animation: "fadeIn 0.3s ease" }}>
-                    <label style={{ display: "block", fontSize: "0.9rem", color: "#00FF00", marginBottom: "8px" }}>Monto Total Vendido ($)</label>
-                    <input 
-                      type="number" 
-                      placeholder="Ej: 150000" 
-                      value={saleAmount}
-                      onChange={e => setSaleAmount(e.target.value ? Number(e.target.value) : "")}
-                      style={{ width: "100%", padding: "12px", backgroundColor: "#111", border: "1px solid #00FF00", color: "white", borderRadius: "4px" }}
-                    />
+                  <div style={{ marginBottom: "16px", animation: "fadeIn 0.3s ease", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.9rem", color: "#00FF00", marginBottom: "4px" }}>Monto Total Vendido ($)</label>
+                      <input 
+                        type="number" 
+                        placeholder="Ej: 150000" 
+                        value={saleAmount}
+                        onChange={e => setSaleAmount(e.target.value ? Number(e.target.value) : "")}
+                        style={{ width: "100%", padding: "12px", backgroundColor: "#111", border: "1px solid #00FF00", color: "white", borderRadius: "4px" }}
+                      />
+                    </div>
+                    
+                    <div className="grid-1-to-2">
+                      <div>
+                        <label style={{ display: "block", color: "var(--color-gray-light)", marginBottom: "4px", fontSize: "0.85rem" }}>Venta Cerveza (Litros)</label>
+                        <input 
+                          type="number" 
+                          placeholder="0"
+                          value={saleCervezaLiters}
+                          onChange={(e) => setSaleCervezaLiters(e.target.value ? Number(e.target.value) : "")}
+                          style={{ width: "100%", padding: "12px", backgroundColor: "#111", border: "1px solid #4D90FE", color: "white", borderRadius: "4px" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", color: "var(--color-gray-light)", marginBottom: "4px", fontSize: "0.85rem" }}>Venta Kombucha (Litros)</label>
+                        <input 
+                          type="number" 
+                          placeholder="0"
+                          value={saleKombuchaLiters}
+                          onChange={(e) => setSaleKombuchaLiters(e.target.value ? Number(e.target.value) : "")}
+                          style={{ width: "100%", padding: "12px", backgroundColor: "#111", border: "1px solid var(--color-yellow)", color: "white", borderRadius: "4px" }}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div style={{ padding: "12px", backgroundColor: "#111", borderRadius: "8px", border: "1px dashed #333", display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "var(--color-gray-light)" }}>Total Volumen Vendido:</span>
+                      <strong style={{ color: "white" }}>{(Number(saleCervezaLiters) || 0) + (Number(saleKombuchaLiters) || 0)} L</strong>
+                    </div>
                   </div>
                 )}
 
@@ -592,17 +624,36 @@ export default function TerrenoDashboard() {
                   <button style={{ width: "100%", backgroundColor: "var(--color-yellow)", color: "black", padding: "16px", fontSize: "1.1rem", fontWeight: "bold" }} onClick={() => {
                     alert("Check-out registrado. Venta agregada al Live Progress Bar.");
                     
-                    // Simulate live update
-                    const category = selectedClient?.channel === "HORECA" ? "Bar" : "Supermercado";
+                    // === ATOMIC TRANSACTION SIMULATION ===
+                    const totalCerveza = Number(saleCervezaLiters) || 0;
+                    const totalKombucha = Number(saleKombuchaLiters) || 0;
+                    
+                    // Prisma Transaction simulation (Step A, B, C)
+                    // 1. Prisma.visit.create({ saleCervezaLiters: totalCerveza, saleKombuchaLiters: totalKombucha })
+                    // 2. Prisma.salesTarget.update({ ... })
+                    
                     setSalesTargets(prev => prev.map(t => {
-                       if (t.category === category) return { ...t, currentLiters: t.currentLiters + 20 };
+                       if (t.category === "Bar" || t.category === "Supermercado") {
+                         return { ...t, currentLiters: t.currentLiters + totalCerveza };
+                       }
+                       if (t.category === "Minimarket") {
+                         return { ...t, currentLiters: t.currentLiters + totalKombucha };
+                       }
                        return t;
                     }));
+                    
+                    // Encontrar la meta actual para el mensaje
+                    const targetCategory = selectedClient?.channel === "HORECA" ? "Bar" : "Supermercado";
+                    const currentTarget = salesTargets.find(t => t.category === targetCategory);
+                    const remaining = currentTarget ? currentTarget.targetLiters - (currentTarget.currentLiters + totalCerveza) : 0;
+
+                    alert(`✅ Venta registrada:\n¡Te faltan solo ${Math.max(0, remaining)} litros para cumplir tu meta de la semana!`);
                     
                     setSelectedClient(null);
                     setSearchTerm("");
                     setGpsStatus("IDLE");
-                    setKmStart(""); setKmEnd(""); setVisitOutcome(""); setSaleAmount("");
+                    setKmStart(""); setKmEnd(""); setVisitOutcome(""); 
+                    setSaleCervezaLiters(""); setSaleKombuchaLiters("");
                     setActiveTab("GOALS");
                   }}>
                     🛒 Confirmar Check-out & Actualizar Metas
