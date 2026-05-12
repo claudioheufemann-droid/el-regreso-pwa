@@ -12,14 +12,18 @@ const MOCK_CLIENTS = [
 ];
 
 const MOCK_PRODUCTS = [
-  { id: "c1", name: "Cerveza Arboretum", price: 1500, type: "CERVEZA" },
-  { id: "c2", name: "Cerveza Descenso", price: 1600, type: "CERVEZA" },
-  { id: "c3", name: "Cerveza Aguas Blancas", price: 1500, type: "CERVEZA" },
-  { id: "k1", name: "Kombucha Lemon", price: 1200, type: "KOMBUCHA" },
-  { id: "k2", name: "Kombucha Maracuyá", price: 1200, type: "KOMBUCHA" },
-  { id: "k3", name: "Kombucha Maqui", price: 1200, type: "KOMBUCHA" },
-  { id: "k4", name: "Kombucha Detox", price: 1300, type: "KOMBUCHA" },
-  { id: "k5", name: "Kombucha Natural", price: 1100, type: "KOMBUCHA" },
+  { id: "c1", name: "Cerveza Kolsch", price: 2100, type: "CERVEZA", image: "/assets/catalogo/c1.jpg" },
+  { id: "c2", name: "Cerveza Red", price: 2100, type: "CERVEZA", image: "/assets/catalogo/c2.jpg" },
+  { id: "c3", name: "Cerveza Porter", price: 2250, type: "CERVEZA", image: "/assets/catalogo/c3.jpg" },
+  { id: "c4", name: "Cerveza APA", price: 2250, type: "CERVEZA", image: "/assets/catalogo/c1.jpg" },
+  { id: "c5", name: "West Coast IPA", price: 2750, type: "CERVEZA", image: "/assets/catalogo/c2.jpg" },
+  { id: "c6", name: "Hazy IPA", price: 3000, type: "CERVEZA", image: "/assets/catalogo/c3.jpg" },
+  { id: "k1", name: "Kombucha Lemon", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },
+  { id: "k2", name: "Kombucha Maracuyá", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },
+  { id: "k3", name: "Kombucha Berry", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },
+  { id: "k4", name: "Kombucha Maqui", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },
+  { id: "k5", name: "Kombucha Detox", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },
+  { id: "k6", name: "Kombucha Natural", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },
 ];
 
 export default function NuevaVentaSteper() {
@@ -206,9 +210,16 @@ export default function NuevaVentaSteper() {
                 return (
                   <div key={p.id} style={{ borderBottom: "1px solid #333", paddingBottom: "20px", opacity: (productSearch && !isSelected) ? 0.8 : 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px", alignItems: "flex-start" }}>
-                      <div>
-                        <span style={{ fontWeight: "bold", fontSize: "1.05rem", color: isSelected ? "white" : "var(--color-gray-light)" }}>{p.name}</span>
-                        <span style={{ display: "block", fontSize: "0.8rem", color: "#888", marginTop: "2px" }}>{p.type}</span>
+                      <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                        <img 
+                          src={p.image} 
+                          alt={p.name} 
+                          style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "8px", border: "1px solid #333" }} 
+                        />
+                        <div>
+                          <span style={{ fontWeight: "bold", fontSize: "1.05rem", color: isSelected ? "white" : "var(--color-gray-light)" }}>{p.name}</span>
+                          <span style={{ display: "block", fontSize: "0.8rem", color: "#888", marginTop: "2px" }}>{p.type}</span>
+                        </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <span style={{ color: "var(--color-yellow)", fontWeight: "bold", fontSize: "1.05rem" }}>${p.price.toLocaleString("es-CL")}<span style={{fontSize:"0.8rem", color:"#888"}}>/u</span></span>
