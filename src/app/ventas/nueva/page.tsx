@@ -8,7 +8,7 @@ import { ClientHealthCard } from "@/components/ClientHealthCard";
 
 // --- Mocks para UI Rápida ---
 const MOCK_CLIENTS = [
-  { id: "1", name: "Bar La Taberna", address: "Calle Falsa 123", rut: "76.123.456-7", debt: 150000, daysLate: 35, recentOrders: [ { date: "12 May", product: "Kombucha Lemon (Six-pack)", total: 45000 }, { date: "05 May", product: "Arboretum (Barril)", total: 50000 } ] },
+  { id: "1", name: "Bar La Taberna", address: "Calle Falsa 123", rut: "76.123.456-7", debt: 150000, daysLate: 35, recentOrders: [ { date: "12 May", product: "Kombucha Lemon (Six-pack)", total: 45000 }, { date: "05 May", product: "Arboretum (Barril)", total: 50000 }, { date: "28 Abr", product: "Kombucha Berry (Caja)", total: 90000 } ] },
   { id: "2", name: "Botillería El Paso", address: "Av. Siempre Viva 742", rut: "77.987.654-3", debt: 0, daysLate: 0, recentOrders: [ { date: "10 May", product: "Descenso (Caja)", total: 80000 } ] },
   { id: "3", name: "Cafetería Central", address: "Plaza de Armas 100", rut: "78.111.222-1", debt: 25000, daysLate: 15, recentOrders: [] },
 ];
@@ -34,17 +34,19 @@ export default function NuevaVentaSteper() {
   // --- Estados del Stepper ---
   const [step, setStep] = useState(1);
   
-  // --- Paso 2: Cliente ---
+  // --- Paso 1: Cliente ---
   const [clientType, setClientType] = useState<"EXISTING" | "NEW">("EXISTING");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [newClient, setNewClient] = useState({ name: "", rut: "", address: "" });
 
-  // --- Paso 3: Carrito (React State) ---
+  // --- Paso 2: Auditoría ---
+  const [isAuditValid, setIsAuditValid] = useState(false);
+
+  // --- Paso 3: Carrito ---
   const [cart, setCart] = useState<Record<string, { quantity: number; unit: string }>>({});
   const [productSearch, setProductSearch] = useState("");
 
-  // --- Lógica de Búsqueda ---
   const filteredClients = searchTerm.length > 0 
     ? MOCK_CLIENTS.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.rut.includes(searchTerm))
     : [];
@@ -53,12 +55,8 @@ export default function NuevaVentaSteper() {
     ? MOCK_PRODUCTS.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
     : MOCK_PRODUCTS;
 
-  // --- Manejo del Carrito ---
   const handleUpdateCart = (productId: string, quantity: number, unit: string) => {
-    setCart(prev => ({
-      ...prev,
-      [productId]: { quantity, unit }
-    }));
+    setCart(prev => ({ ...prev, [productId]: { quantity, unit } }));
   };
 
   const calculateTotal = () => {
@@ -75,15 +73,7 @@ export default function NuevaVentaSteper() {
     return total;
   };
 
-  // --- Cierre de Venta ---
   const handleCheckout = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => console.log("Silent GPS:", pos.coords),
-        (err) => console.log("GPS Denied")
-      );
-    }
-    
     const clientName = clientType === "EXISTING" ? selectedClient?.name : newClient.name;
     const total = calculateTotal();
     
@@ -106,32 +96,23 @@ export default function NuevaVentaSteper() {
     router.push('/ventas');
   };
 
-  // --- Renderizado Condicional del Contenido Principal ---
   const renderStepContent = () => {
     switch(step) {
       case 1:
         return (
           <section className="card" style={{ animation: "fadeIn 0.3s ease" }}>
-            <h2 style={{ marginBottom: "16px", fontSize: "1.2rem", color: "var(--color-yellow)" }}>1. Auditoría de Terreno</h2>
-            <FieldAudit onComplete={() => setStep(2)} />
-          </section>
-        );
-
-      case 2:
-        return (
-          <section className="card" style={{ animation: "fadeIn 0.3s ease" }}>
-            <h2 style={{ marginBottom: "16px", fontSize: "1.2rem", color: "var(--color-yellow)" }}>2. Identificación del Cliente</h2>
+            <h2 style={{ marginBottom: "16px", fontSize: "1.2rem", color: "var(--color-yellow)" }}>1. Identificación del Cliente</h2>
             
             <div style={{ display: "flex", marginBottom: "20px", backgroundColor: "#111", borderRadius: "8px", overflow: "hidden", border: "1px solid #333" }}>
               <button 
                 onClick={() => setClientType("EXISTING")} 
-                style={{ flex: 1, padding: "12px", fontSize: "0.95rem", backgroundColor: clientType === "EXISTING" ? "var(--color-yellow)" : "transparent", color: clientType === "EXISTING" ? "black" : "var(--color-gray-light)", fontWeight: clientType === "EXISTING" ? "bold" : "normal" }}
+                style={{ flex: 1, padding: "12px", fontSize: "0.95rem", backgroundColor: clientType === "EXISTING" ? "var(--color-yellow)" : "transparent", color: clientType === "EXISTING" ? "black" : "var(--color-gray-light)", fontWeight: clientType === "EXISTING" ? "bold" : "normal", cursor: "pointer" }}
               >
                 Cliente Existente
               </button>
               <button 
                 onClick={() => setClientType("NEW")} 
-                style={{ flex: 1, padding: "12px", fontSize: "0.95rem", backgroundColor: clientType === "NEW" ? "var(--color-yellow)" : "transparent", color: clientType === "NEW" ? "black" : "var(--color-gray-light)", fontWeight: clientType === "NEW" ? "bold" : "normal" }}
+                style={{ flex: 1, padding: "12px", fontSize: "0.95rem", backgroundColor: clientType === "NEW" ? "var(--color-yellow)" : "transparent", color: clientType === "NEW" ? "black" : "var(--color-gray-light)", fontWeight: clientType === "NEW" ? "bold" : "normal", cursor: "pointer" }}
               >
                 Nuevo Cliente
               </button>
@@ -163,17 +144,9 @@ export default function NuevaVentaSteper() {
                 )}
 
                 {selectedClient && (
-                  <div style={{ animation: "fadeIn 0.3s ease" }}>
-                    <div style={{ padding: "16px", backgroundColor: "rgba(0, 255, 0, 0.1)", border: "1px solid #00FF00", borderRadius: "8px", marginTop: "12px" }}>
-                      <strong style={{ color: "#00FF00" }}>✓ Cliente Seleccionado:</strong>
-                      <p style={{ margin: "4px 0 0 0", color: "white" }}>{selectedClient.name} ({selectedClient.rut})</p>
-                    </div>
-                    {/* Render Dashboard de Salud */}
-                    <ClientHealthCard 
-                      debt={selectedClient.debt} 
-                      daysLate={selectedClient.daysLate} 
-                      recentOrders={selectedClient.recentOrders} 
-                    />
+                  <div style={{ padding: "16px", backgroundColor: "rgba(0, 255, 0, 0.1)", border: "1px solid #00FF00", borderRadius: "8px", marginTop: "12px" }}>
+                    <strong style={{ color: "#00FF00" }}>✓ Cliente Seleccionado:</strong>
+                    <p style={{ margin: "4px 0 0 0", color: "white" }}>{selectedClient.name} ({selectedClient.rut})</p>
                   </div>
                 )}
               </div>
@@ -186,18 +159,55 @@ export default function NuevaVentaSteper() {
             )}
 
             <button 
-              onClick={() => setStep(3)} 
+              onClick={() => { setStep(2); setIsAuditValid(false); }} 
               disabled={clientType === "EXISTING" ? !selectedClient : !newClient.name || !newClient.address} 
-              style={{ width: "100%", padding: "18px", marginTop: "24px", backgroundColor: "var(--color-yellow)", color: "black", fontWeight: "bold", fontSize: "1.1rem", borderRadius: "8px", opacity: (clientType === "EXISTING" ? !selectedClient : (!newClient.name || !newClient.address)) ? 0.5 : 1, transition: "all 0.3s" }}
+              style={{ width: "100%", padding: "18px", marginTop: "24px", backgroundColor: "var(--color-yellow)", color: "black", fontWeight: "bold", fontSize: "1.1rem", borderRadius: "8px", opacity: (clientType === "EXISTING" ? !selectedClient : (!newClient.name || !newClient.address)) ? 0.5 : 1, transition: "all 0.3s", cursor: "pointer" }}
             >
-              Continuar a Productos ➔
+              Continuar a Auditoría ➔
             </button>
           </section>
         );
-      
+
+      case 2:
+        return (
+          <section style={{ animation: "fadeIn 0.3s ease", display: "flex", flexDirection: "column", gap: "24px" }}>
+            
+            {clientType === "EXISTING" && selectedClient && (
+              <div className="card">
+                <h2 style={{ marginBottom: "0px", fontSize: "1.2rem", color: "white" }}>Inteligencia de Cliente</h2>
+                <ClientHealthCard 
+                  debt={selectedClient.debt} 
+                  daysLate={selectedClient.daysLate} 
+                  recentOrders={selectedClient.recentOrders} 
+                />
+              </div>
+            )}
+
+            <div className="card">
+              <h2 style={{ marginBottom: "16px", fontSize: "1.2rem", color: "var(--color-yellow)" }}>2. Auditoría de Terreno</h2>
+              <FieldAudit type={clientType} onComplete={(isValid) => setIsAuditValid(isValid)} />
+            </div>
+
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button onClick={() => setStep(1)} style={{ flex: 1, padding: "16px", backgroundColor: "#333", color: "white", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Atrás</button>
+            </div>
+            
+            {/* STICKY ACTION BAR FOR AUDIT */}
+            <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", backgroundColor: "rgba(17, 17, 17, 0.95)", backdropFilter: "blur(10px)", borderTop: "1px solid #333", zIndex: 50 }}>
+              <button 
+                onClick={() => setStep(3)} 
+                disabled={!isAuditValid}
+                style={{ width: "100%", padding: "16px", backgroundColor: isAuditValid ? "#25D366" : "#555", color: "white", fontWeight: "bold", borderRadius: "8px", border: "none", fontSize: "1.1rem", transition: "all 0.3s", cursor: isAuditValid ? "pointer" : "not-allowed" }}
+              >
+                Continuar a Pedido ➔
+              </button>
+            </div>
+          </section>
+        );
+
       case 3:
         return (
-          <section className="card" style={{ animation: "fadeIn 0.3s ease" }}>
+          <section className="card" style={{ animation: "fadeIn 0.3s ease", paddingBottom: "100px" }}>
             <h2 style={{ marginBottom: "16px", fontSize: "1.2rem", color: "var(--color-yellow)" }}>3. El Carrito (Productos)</h2>
             
             <input 
@@ -255,15 +265,15 @@ export default function NuevaVentaSteper() {
             </div>
 
             <div style={{ display: "flex", gap: "12px", marginTop: "32px" }}>
-              <button onClick={() => setStep(2)} style={{ flex: 1, padding: "16px", backgroundColor: "#333", color: "white", borderRadius: "8px", fontWeight: "bold" }}>Atrás</button>
-              <button onClick={() => setStep(4)} style={{ flex: 2, padding: "16px", backgroundColor: "var(--color-yellow)", color: "black", fontWeight: "bold", borderRadius: "8px", fontSize: "1.1rem" }}>Ir al Resumen</button>
+              <button onClick={() => setStep(2)} style={{ flex: 1, padding: "16px", backgroundColor: "#333", color: "white", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Atrás</button>
+              <button onClick={() => setStep(4)} style={{ flex: 2, padding: "16px", backgroundColor: "var(--color-yellow)", color: "black", fontWeight: "bold", borderRadius: "8px", fontSize: "1.1rem", cursor: "pointer" }}>Ir al Resumen</button>
             </div>
           </section>
         );
 
       case 4:
         return (
-          <section className="card" style={{ animation: "fadeIn 0.3s ease" }}>
+          <section className="card" style={{ animation: "fadeIn 0.3s ease", paddingBottom: "100px" }}>
             <h2 style={{ marginBottom: "16px", fontSize: "1.2rem", color: "var(--color-yellow)" }}>4. Validación y Cierre</h2>
             
             <div style={{ marginBottom: "24px", padding: "16px", backgroundColor: "#222", borderRadius: "8px", borderLeft: "4px solid var(--color-yellow)" }}>
@@ -286,7 +296,6 @@ export default function NuevaVentaSteper() {
                   {Object.keys(cart).map(productId => {
                     if (cart[productId].quantity > 0) {
                       const product = MOCK_PRODUCTS.find(p => p.id === productId);
-                      
                       let multiplier = 1;
                       if (cart[productId].unit === "SIX") multiplier = 6;
                       if (cart[productId].unit === "CAJA") multiplier = 24;
@@ -314,7 +323,7 @@ export default function NuevaVentaSteper() {
             </div>
 
             <div style={{ display: "flex", gap: "12px" }}>
-              <button onClick={() => setStep(3)} style={{ width: "100%", padding: "16px", backgroundColor: "#333", color: "white", borderRadius: "8px", fontWeight: "bold" }}>Modificar Productos</button>
+              <button onClick={() => setStep(3)} style={{ width: "100%", padding: "16px", backgroundColor: "#333", color: "white", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>Modificar Productos</button>
             </div>
           </section>
         );
@@ -322,7 +331,7 @@ export default function NuevaVentaSteper() {
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "800px", margin: "0 auto", paddingBottom: "140px" }}>
+    <div style={{ padding: "20px", maxWidth: "800px", margin: "0 auto", paddingBottom: "120px" }}>
       {/* Header Secundario */}
       <header style={{ marginBottom: "24px", display: "flex", alignItems: "center", gap: "12px" }}>
         <button onClick={() => router.push("/ventas")} style={{ background: "none", border: "none", color: "var(--color-yellow)", fontSize: "1.5rem", cursor: "pointer", padding: 0 }}>←</button>
@@ -339,22 +348,10 @@ export default function NuevaVentaSteper() {
 
       {renderStepContent()}
 
-      {/* STICKY BOTTOM BAR */}
-      {step > 2 && (
+      {/* STICKY BOTTOM BAR (Checkout) */}
+      {step >= 3 && (
         <div style={{ 
-          position: "fixed", 
-          bottom: 0, 
-          left: 0, 
-          right: 0, 
-          padding: "16px 20px", 
-          backgroundColor: "rgba(17, 17, 17, 0.95)", 
-          backdropFilter: "blur(10px)",
-          borderTop: "1px solid #333", 
-          display: "flex", 
-          justifyContent: "space-between", 
-          alignItems: "center", 
-          zIndex: 50,
-          boxShadow: "0 -4px 20px rgba(0,0,0,0.5)"
+          position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 20px", backgroundColor: "rgba(17, 17, 17, 0.95)", backdropFilter: "blur(10px)", borderTop: "1px solid #333", display: "flex", justifyContent: "space-between", alignItems: "center", zIndex: 50, boxShadow: "0 -4px 20px rgba(0,0,0,0.5)"
         }}>
           <div>
             <p style={{ margin: "0 0 4px 0", fontSize: "0.85rem", color: "var(--color-gray-light)", textTransform: "uppercase" }}>Total a Cobrar</p>
@@ -364,20 +361,7 @@ export default function NuevaVentaSteper() {
             <button 
               onClick={handleCheckout} 
               disabled={calculateTotal() === 0}
-              style={{ 
-                padding: "16px 24px", 
-                backgroundColor: calculateTotal() === 0 ? "#555" : "#25D366", 
-                color: "white", 
-                fontWeight: "bold", 
-                borderRadius: "8px", 
-                border: "none", 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "8px",
-                fontSize: "1.1rem",
-                boxShadow: calculateTotal() > 0 ? "0 4px 15px rgba(37, 211, 102, 0.3)" : "none",
-                cursor: "pointer"
-              }}
+              style={{ padding: "16px 24px", backgroundColor: calculateTotal() === 0 ? "#555" : "#25D366", color: "white", fontWeight: "bold", borderRadius: "8px", border: "none", display: "flex", alignItems: "center", gap: "8px", fontSize: "1.1rem", boxShadow: calculateTotal() > 0 ? "0 4px 15px rgba(37, 211, 102, 0.3)" : "none", cursor: calculateTotal() > 0 ? "pointer" : "not-allowed" }}
             >
               <span>✅ Finalizar Venta</span>
             </button>
