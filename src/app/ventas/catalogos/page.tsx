@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CatalogShare } from "@/components/CatalogShare";
-import { Beer, Jellyfish, LayoutGrid } from "lucide-react";
+import { Beer, Leaf, LayoutGrid } from "lucide-react";
 
 // Catálogo Oficial 2026
 const CATALOGO_PRODUCTOS = [
@@ -59,37 +59,41 @@ export default function CatalogoPage() {
           onClick={() => setFilter("KOMBUCHA")}
           style={{ padding: "10px 20px", borderRadius: "20px", border: "none", backgroundColor: filter === "KOMBUCHA" ? "var(--color-yellow)" : "#222", color: filter === "KOMBUCHA" ? "black" : "white", fontWeight: "bold", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
         >
-          <Jellyfish size={16} /> Kombuchas
+          <Leaf size={16} /> Kombuchas
         </button>
       </div>
 
-      {/* Listado de Productos Scrollable (Overflow-Y Auto) */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "16px", alignContent: "start", paddingBottom: "32px" }}>
-        {filteredProducts.map(product => (
-          <div key={product.id} style={{ padding: "0", overflow: "hidden", border: "1px solid #333", backgroundColor: "#111", display: "flex", flexDirection: "column", borderRadius: "8px" }}>
-            <div style={{ position: "relative", width: "100%", paddingTop: "100%", backgroundColor: "#000" }}>
-              <img 
-                src={product.image} 
-                alt={product.name} 
-                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", padding: "12px" }}
-              />
-            </div>
-            <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
-              <span style={{ fontSize: "0.7rem", color: product.type === "CERVEZA" ? "#4D90FE" : "var(--color-yellow)", fontWeight: "bold", textTransform: "uppercase", marginBottom: "4px" }}>
-                {product.type}
-              </span>
-              <h3 style={{ fontSize: "1.1rem", color: "white", margin: "0 0 8px 0" }}>{product.name}</h3>
-              <p style={{ fontSize: "0.8rem", color: "#888", margin: "0 0 16px 0", flex: 1 }}>{product.desc}</p>
-              
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "auto" }}>
-                <span style={{ color: "white", fontWeight: "bold", fontSize: "1.2rem" }}>
-                  ${product.price.toLocaleString("es-CL")}
+      {/* Listado de Productos Scrollable */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", paddingBottom: "32px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "16px" }}>
+          {filteredProducts.map(product => (
+            <div key={product.id} style={{ border: "1px solid #333", backgroundColor: "#111", display: "flex", flexDirection: "column", borderRadius: "8px", overflow: "hidden" }}>
+              {/* Contenedor Imagen */}
+              <div style={{ position: "relative", width: "100%", aspectRatio: "1/1", backgroundColor: "#000" }}>
+                <img 
+                  src={product.image} 
+                  alt={product.name} 
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", padding: "12px" }}
+                />
+              </div>
+              {/* Textos */}
+              <div style={{ padding: "12px", display: "flex", flexDirection: "column", flex: 1 }}>
+                <span style={{ fontSize: "0.7rem", color: product.type === "CERVEZA" ? "#4D90FE" : "var(--color-yellow)", fontWeight: "bold", textTransform: "uppercase", marginBottom: "4px" }}>
+                  {product.type}
                 </span>
-                <span style={{ fontSize: "0.8rem", color: "#666" }}>/lata</span>
+                <h3 style={{ fontSize: "1rem", color: "white", margin: "0 0 6px 0", lineHeight: "1.2" }}>{product.name}</h3>
+                <p style={{ fontSize: "0.75rem", color: "#888", margin: "0 0 12px 0", flex: 1, lineHeight: "1.3" }}>{product.desc}</p>
+                
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "auto" }}>
+                  <span style={{ color: "white", fontWeight: "bold", fontSize: "1.1rem" }}>
+                    ${product.price.toLocaleString("es-CL")}
+                  </span>
+                  <span style={{ fontSize: "0.75rem", color: "#666" }}>/lata</span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* Footer Fijo con Formulario de WhatsApp */}
