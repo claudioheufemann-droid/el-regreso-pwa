@@ -18,13 +18,14 @@ export function SmartStepper({ value, onChange }: SmartStepperProps) {
     <div style={{ display: "flex", alignItems: "center", backgroundColor: "#1e1e1e", borderRadius: "12px", overflow: "hidden", border: "1px solid #333", flexShrink: 0, boxShadow: "0 4px 6px rgba(0,0,0,0.3)" }}>
       <button 
         onClick={handleDec}
-        style={{ width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#2a2a2a", border: "none", color: "white", cursor: "pointer", transition: "background-color 0.2s" }}
+        style={{ width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#2a2a2a", border: "none", color: "white", cursor: "pointer", fontSize: "28px", fontWeight: "bold", paddingBottom: "4px" }}
       >
-        <Minus size={24} />
+        -
       </button>
       <input 
         type="number"
-        value={value || ""}
+        placeholder="0"
+        value={value === 0 ? "" : value}
         onChange={(e) => {
           const val = parseInt(e.target.value);
           if (!isNaN(val) && val >= 0) {
@@ -37,9 +38,9 @@ export function SmartStepper({ value, onChange }: SmartStepperProps) {
       />
       <button 
         onClick={handleInc}
-        style={{ width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "var(--color-yellow)", border: "none", color: "black", cursor: "pointer", transition: "background-color 0.2s" }}
+        style={{ width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "var(--color-yellow)", border: "none", color: "black", cursor: "pointer", fontSize: "28px", fontWeight: "bold", paddingBottom: "4px" }}
       >
-        <Plus size={24} />
+        +
       </button>
     </div>
   );
