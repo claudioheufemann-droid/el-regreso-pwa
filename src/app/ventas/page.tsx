@@ -61,7 +61,8 @@ export default function VentasDashboard() {
           <span style={{ fontSize: "1.8rem" }}>+</span> Nueva Venta
         </Link>
         
-        <button 
+        <Link 
+          href="/ventas/catalogos"
           style={{ 
             width: "100%", 
             padding: "20px", 
@@ -75,11 +76,12 @@ export default function VentasDashboard() {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            gap: "12px"
+            gap: "12px",
+            textDecoration: "none"
           }}
         >
           <span>📦</span> Ver Catálogos
-        </button>
+        </Link>
       </div>
 
       <style dangerouslySetInnerHTML={{__html: `

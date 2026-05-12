@@ -1,0 +1,100 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+// Catálogo Oficial 2026
+const CATALOGO_PRODUCTOS = [
+  { id: "c1", name: "Cerveza Kolsch", price: 2100, type: "CERVEZA", image: "/assets/catalogo/c1.jpg", desc: "Suave, refrescante, dorada y ligera." },
+  { id: "c2", name: "Cerveza Red", price: 2100, type: "CERVEZA", image: "/assets/catalogo/c2.jpg", desc: "Notas a caramelo, cuerpo medio, ámbar." },
+  { id: "c3", name: "Cerveza Porter", price: 2250, type: "CERVEZA", image: "/assets/catalogo/c3.jpg", desc: "Oscura, notas a café y chocolate negro." },
+  { id: "c4", name: "Cerveza APA", price: 2250, type: "CERVEZA", image: "/assets/catalogo/c1.jpg", desc: "Amargor medio, aromas frutales y cítricos." },
+  { id: "c5", name: "West Coast IPA", price: 2750, type: "CERVEZA", image: "/assets/catalogo/c2.jpg", desc: "Amargor intenso, notas resinosas." },
+  { id: "c6", name: "Hazy IPA", price: 3000, type: "CERVEZA", image: "/assets/catalogo/c3.jpg", desc: "Sedosa, turbia, explosión de lúpulos frutales." },
+  { id: "k1", name: "Kombucha Lemon", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg", desc: "Kombucha cítrica refrescante." },
+  { id: "k2", name: "Kombucha Maracuyá", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg", desc: "Sabor tropical vibrante." },
+  { id: "k3", name: "Kombucha Berry", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg", desc: "Infusión de frutos rojos y antioxidantes." },
+  { id: "k4", name: "Kombucha Maqui", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg", desc: "Kombucha con superalimento del sur." },
+  { id: "k5", name: "Kombucha Detox", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg", desc: "Purificante con ingredientes activos." },
+  { id: "k6", name: "Kombucha Natural", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg", desc: "El sabor clásico y original." },
+];
+
+export default function CatalogoPage() {
+  const router = useRouter();
+  const [filter, setFilter] = useState<"ALL" | "CERVEZA" | "KOMBUCHA">("ALL");
+
+  const filteredProducts = filter === "ALL" 
+    ? CATALOGO_PRODUCTOS 
+    : CATALOGO_PRODUCTOS.filter(p => p.type === filter);
+
+  return (
+    <div style={{ padding: "20px", maxWidth: "800px", margin: "0 auto", paddingBottom: "60px", animation: "fadeIn 0.4s ease" }}>
+      {/* Header Secundario */}
+      <header style={{ marginBottom: "24px", display: "flex", alignItems: "center", gap: "12px", borderBottom: "1px solid #333", paddingBottom: "16px" }}>
+        <button onClick={() => router.push("/ventas")} style={{ background: "none", border: "none", color: "var(--color-yellow)", fontSize: "1.5rem", cursor: "pointer", padding: 0 }}>←</button>
+        <div>
+          <h1 style={{ fontSize: "1.4rem", color: "white", margin: 0 }}>Catálogo de Productos</h1>
+          <p style={{ color: "var(--color-gray-light)", fontSize: "0.85rem", margin: "4px 0 0 0" }}>Tarifado Oficial 2026 (HORECA)</p>
+        </div>
+      </header>
+
+      {/* Botones de Filtro */}
+      <div style={{ display: "flex", gap: "12px", marginBottom: "24px", overflowX: "auto", paddingBottom: "8px" }}>
+        <button 
+          onClick={() => setFilter("ALL")}
+          style={{ padding: "10px 20px", borderRadius: "20px", border: "none", backgroundColor: filter === "ALL" ? "var(--color-yellow)" : "#222", color: filter === "ALL" ? "black" : "white", fontWeight: "bold", whiteSpace: "nowrap" }}
+        >
+          Todos
+        </button>
+        <button 
+          onClick={() => setFilter("CERVEZA")}
+          style={{ padding: "10px 20px", borderRadius: "20px", border: "none", backgroundColor: filter === "CERVEZA" ? "#4D90FE" : "#222", color: filter === "CERVEZA" ? "white" : "white", fontWeight: "bold", whiteSpace: "nowrap" }}
+        >
+          🍺 Cervezas
+        </button>
+        <button 
+          onClick={() => setFilter("KOMBUCHA")}
+          style={{ padding: "10px 20px", borderRadius: "20px", border: "none", backgroundColor: filter === "KOMBUCHA" ? "var(--color-yellow)" : "#222", color: filter === "KOMBUCHA" ? "black" : "white", fontWeight: "bold", whiteSpace: "nowrap" }}
+        >
+          🌿 Kombuchas
+        </button>
+      </div>
+
+      {/* Grilla de Catálogo */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "16px" }}>
+        {filteredProducts.map(product => (
+          <div key={product.id} className="card" style={{ padding: "0", overflow: "hidden", border: "1px solid #333", backgroundColor: "#111", display: "flex", flexDirection: "column" }}>
+            <div style={{ position: "relative", width: "100%", paddingTop: "100%", backgroundColor: "#000" }}>
+              <img 
+                src={product.image} 
+                alt={product.name} 
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </div>
+            <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
+              <span style={{ fontSize: "0.7rem", color: product.type === "CERVEZA" ? "#4D90FE" : "var(--color-yellow)", fontWeight: "bold", textTransform: "uppercase", marginBottom: "4px" }}>
+                {product.type}
+              </span>
+              <h3 style={{ fontSize: "1.1rem", color: "white", margin: "0 0 8px 0" }}>{product.name}</h3>
+              <p style={{ fontSize: "0.8rem", color: "#888", margin: "0 0 16px 0", flex: 1 }}>{product.desc}</p>
+              
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "auto" }}>
+                <span style={{ color: "white", fontWeight: "bold", fontSize: "1.2rem" }}>
+                  ${product.price.toLocaleString("es-CL")}
+                </span>
+                <span style={{ fontSize: "0.8rem", color: "#666" }}>/lata</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}} />
+    </div>
+  );
+}
