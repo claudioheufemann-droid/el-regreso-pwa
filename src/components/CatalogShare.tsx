@@ -11,21 +11,19 @@ export function CatalogShare() {
   const [error, setError] = useState("");
 
   const handleSend = () => {
-    try {
-      phoneSchema.parse(phone);
-      setError("");
-      
-      const nameText = clientName ? `Hola ${clientName}, ` : `Hola, `;
-      const message = `${nameText}te envío nuestro catálogo actualizado de Cervezas y Kombuchas El Regreso. ¡Quedo atento a tu pedido!`;
-      const encodedMessage = encodeURIComponent(message);
-      const waLink = `https://wa.me/56${phone}?text=${encodedMessage}`;
-      
-      window.open(waLink, "_blank");
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        setError(err.errors[0].message);
-      }
+    const result = phoneSchema.safeParse(phone);
+    if (!result.success) {
+      setError("El número debe tener exactamente 9 dígitos");
+      return;
     }
+    
+    setError("");
+    const nameText = clientName ? `Hola ${clientName}, ` : `Hola, `;
+    const message = `${nameText}te envío nuestro catálogo actualizado de Cervezas y Kombuchas El Regreso. ¡Quedo atento a tu pedido!`;
+    const encodedMessage = encodeURIComponent(message);
+    const waLink = `https://wa.me/56${phone}?text=${encodedMessage}`;
+    
+    window.open(waLink, "_blank");
   };
 
   return (
