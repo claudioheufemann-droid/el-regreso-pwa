@@ -37,7 +37,7 @@ export function ClientHealthCard({ debt, daysLate, debtDetails, recentOrders }: 
                 <AlertTriangle size={18} color="#DC2626" />
                 <span style={{ color: "#DC2626", fontWeight: "bold", fontSize: "0.9rem" }}>DEUDA VENCIDA ({daysLate} días)</span>
               </div>
-              <p style={{ margin: 0, fontSize: "2rem", fontWeight: "bold", color: "#DC2626" }}>
+              <p style={{ margin: 0, fontSize: "2rem", fontWeight: "bold", color: "#DC2626", whiteSpace: "nowrap" }}>
                 ${debt.toLocaleString("es-CL")}
               </p>
             </div>
@@ -53,7 +53,7 @@ export function ClientHealthCard({ debt, daysLate, debtDetails, recentOrders }: 
                         <span style={{ color: "#888", width: "24px" }}>{item.quantity}x</span>
                         <span>{item.product}</span>
                       </div>
-                      <span style={{ color: "#DC2626", fontWeight: "bold" }}>${item.amount.toLocaleString("es-CL")}</span>
+                      <span style={{ color: "#DC2626", fontWeight: "bold", whiteSpace: "nowrap" }}>${item.amount.toLocaleString("es-CL")}</span>
                     </div>
                   ))}
                 </div>
@@ -81,7 +81,7 @@ export function ClientHealthCard({ debt, daysLate, debtDetails, recentOrders }: 
                   </div>
                   <div>
                     <span style={{ color: "white", fontWeight: "bold", fontSize: "1rem", display: "block" }}>{order.date}</span>
-                    <span style={{ color: "var(--color-yellow)", fontWeight: "bold", fontSize: "0.95rem" }}>
+                    <span style={{ color: "var(--color-yellow)", fontWeight: "bold", fontSize: "0.95rem", whiteSpace: "nowrap" }}>
                       ${order.total.toLocaleString("es-CL")}
                     </span>
                   </div>

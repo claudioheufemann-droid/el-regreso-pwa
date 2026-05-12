@@ -265,9 +265,9 @@ export default function NuevaVentaSteper() {
                           </div>
                         </div>
                         <div style={{ textAlign: "right" }}>
-                          <span style={{ color: "var(--color-yellow)", fontWeight: "bold", fontSize: "1.05rem" }}>${p.price.toLocaleString("es-CL")}<span style={{fontSize:"0.8rem", color:"#888"}}>/u</span></span>
+                          <span style={{ color: "var(--color-yellow)", fontWeight: "bold", fontSize: "1.05rem", whiteSpace: "nowrap" }}>${p.price.toLocaleString("es-CL")}<span style={{fontSize:"0.8rem", color:"#888"}}>/u</span></span>
                           {qty > 0 && (
-                            <div style={{ fontSize: "0.9rem", color: "#00FF00", marginTop: "4px", fontWeight: "bold", animation: "fadeIn 0.2s ease" }}>
+                            <div style={{ fontSize: "0.9rem", color: "#00FF00", marginTop: "4px", fontWeight: "bold", animation: "fadeIn 0.2s ease", whiteSpace: "nowrap" }}>
                               Subtotal: ${subtotal.toLocaleString("es-CL")}
                             </div>
                           )}
@@ -346,7 +346,7 @@ export default function NuevaVentaSteper() {
                                 {cart[productId]} unidades
                               </div>
                             </div>
-                            <div style={{ fontWeight: "bold", color: "var(--color-yellow)" }}>
+                            <div style={{ fontWeight: "bold", color: "var(--color-yellow)", whiteSpace: "nowrap" }}>
                               ${subtotal.toLocaleString("es-CL")}
                             </div>
                           </div>
