@@ -20,7 +20,7 @@ export function CatalogShare() {
     setError("");
     const nameText = clientName ? `Hola ${clientName}, ` : `Hola, `;
     const pdfUrl = `${window.location.origin}/assets/catalogo/Catalogo-El-Regreso-2026.pdf`;
-    const message = `${nameText}te envío nuestro catálogo actualizado de Cervezas y Kombuchas El Regreso. Puedes verlo y descargarlo aquí: ${pdfUrl} \n\n¡Quedo atento a tu pedido!`;
+    const message = `${nameText}te envío nuestro catálogo actualizado de Cervezas y Kombuchas El Regreso.\n\nPuedes descargarlo directamente en este enlace:\n${pdfUrl}\n\n¡Quedo atento a tu pedido!`;
     const encodedMessage = encodeURIComponent(message);
     const waLink = `https://wa.me/56${phone}?text=${encodedMessage}`;
     
