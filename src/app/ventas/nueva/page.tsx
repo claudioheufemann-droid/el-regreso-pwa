@@ -214,7 +214,7 @@ export default function NuevaVentaSteper() {
                         <img 
                           src={p.image} 
                           alt={p.name} 
-                          style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "8px", border: "1px solid #333" }} 
+                          style={{ width: "48px", height: "48px", objectFit: "contain", backgroundColor: "#000", borderRadius: "8px", border: "1px solid #333", padding: "4px" }} 
                         />
                         <div>
                           <span style={{ fontWeight: "bold", fontSize: "1.05rem", color: isSelected ? "white" : "var(--color-gray-light)" }}>{p.name}</span>

@@ -68,7 +68,7 @@ export default function CatalogoPage() {
               <img 
                 src={product.image} 
                 alt={product.name} 
-                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", padding: "12px" }}
               />
             </div>
             <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
