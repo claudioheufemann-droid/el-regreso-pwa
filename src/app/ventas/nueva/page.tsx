@@ -12,11 +12,11 @@ const MOCK_CLIENTS = [
 ];
 
 const MOCK_PRODUCTS = [
-  { id: "c1", name: "Cerveza Kolsch", price: 2100, type: "CERVEZA", image: "/assets/catalogo/c1.jpg" },
-  { id: "c2", name: "Cerveza Red", price: 2100, type: "CERVEZA", image: "/assets/catalogo/c2.jpg" },
-  { id: "c3", name: "Cerveza Porter", price: 2250, type: "CERVEZA", image: "/assets/catalogo/c3.jpg" },
-  { id: "c4", name: "Cerveza APA", price: 2250, type: "CERVEZA", image: "/assets/catalogo/c1.jpg" },
-  { id: "c5", name: "West Coast IPA", price: 2750, type: "CERVEZA", image: "/assets/catalogo/c2.jpg" },
+  { id: "c1", name: "Arboretum (Kölsch)", price: 2100, type: "CERVEZA", image: "/assets/catalogo/arboretum.png" },
+  { id: "c2", name: "Mocho (Red Ale)", price: 2100, type: "CERVEZA", image: "/assets/catalogo/mocho.png" },
+  { id: "c3", name: "Fisura (Porter)", price: 2250, type: "CERVEZA", image: "/assets/catalogo/fisura.png" },
+  { id: "c4", name: "La Barra (APA)", price: 2250, type: "CERVEZA", image: "/assets/catalogo/la-barra.png" },
+  { id: "c5", name: "Descenso (West Coast IPA)", price: 2750, type: "CERVEZA", image: "/assets/catalogo/descenso.png" },
   { id: "c6", name: "Hazy IPA", price: 3000, type: "CERVEZA", image: "/assets/catalogo/c3.jpg" },
   { id: "k1", name: "Kombucha Lemon", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },
   { id: "k2", name: "Kombucha Maracuyá", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg" },

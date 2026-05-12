@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 
 // Catálogo Oficial 2026
 const CATALOGO_PRODUCTOS = [
-  { id: "c1", name: "Cerveza Kolsch", price: 2100, type: "CERVEZA", image: "/assets/catalogo/c1.jpg", desc: "Suave, refrescante, dorada y ligera." },
-  { id: "c2", name: "Cerveza Red", price: 2100, type: "CERVEZA", image: "/assets/catalogo/c2.jpg", desc: "Notas a caramelo, cuerpo medio, ámbar." },
-  { id: "c3", name: "Cerveza Porter", price: 2250, type: "CERVEZA", image: "/assets/catalogo/c3.jpg", desc: "Oscura, notas a café y chocolate negro." },
-  { id: "c4", name: "Cerveza APA", price: 2250, type: "CERVEZA", image: "/assets/catalogo/c1.jpg", desc: "Amargor medio, aromas frutales y cítricos." },
-  { id: "c5", name: "West Coast IPA", price: 2750, type: "CERVEZA", image: "/assets/catalogo/c2.jpg", desc: "Amargor intenso, notas resinosas." },
+  { id: "c1", name: "Arboretum (Kölsch)", price: 2100, type: "CERVEZA", image: "/assets/catalogo/arboretum.png", desc: "Suave, refrescante, dorada y ligera." },
+  { id: "c2", name: "Mocho (Red Ale)", price: 2100, type: "CERVEZA", image: "/assets/catalogo/mocho.png", desc: "Notas a caramelo, cuerpo medio, ámbar." },
+  { id: "c3", name: "Fisura (Porter)", price: 2250, type: "CERVEZA", image: "/assets/catalogo/fisura.png", desc: "Oscura, notas a café y chocolate negro." },
+  { id: "c4", name: "La Barra (APA)", price: 2250, type: "CERVEZA", image: "/assets/catalogo/la-barra.png", desc: "Amargor medio, aromas frutales y cítricos." },
+  { id: "c5", name: "Descenso (West Coast IPA)", price: 2750, type: "CERVEZA", image: "/assets/catalogo/descenso.png", desc: "Amargor intenso, notas resinosas." },
   { id: "c6", name: "Hazy IPA", price: 3000, type: "CERVEZA", image: "/assets/catalogo/c3.jpg", desc: "Sedosa, turbia, explosión de lúpulos frutales." },
   { id: "k1", name: "Kombucha Lemon", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg", desc: "Kombucha cítrica refrescante." },
   { id: "k2", name: "Kombucha Maracuyá", price: 1500, type: "KOMBUCHA", image: "/assets/catalogo/k1.jpg", desc: "Sabor tropical vibrante." },
