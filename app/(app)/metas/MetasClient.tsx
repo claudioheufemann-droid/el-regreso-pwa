@@ -153,7 +153,7 @@ export default function MetasClient({ metas, acumulado, acumuladoHoy, periodo, v
   const [tipoVista, setTipoVista] = useState<'mensual' | 'semanal'>('mensual')
 
   return (
-    <div className="px-4 pt-6 pb-4 max-w-lg mx-auto">
+    <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto">
       <div className="mb-5">
         <h1 className="text-2xl font-black text-white">Metas</h1>
         {periodo && (
@@ -193,7 +193,7 @@ export default function MetasClient({ metas, acumulado, acumuladoHoy, periodo, v
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {vendedores.map(vendedor => (
           <VendedorMetas
             key={vendedor}

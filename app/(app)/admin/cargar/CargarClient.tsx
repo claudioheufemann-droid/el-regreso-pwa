@@ -53,7 +53,7 @@ export default function CargarClient({ periodos }: Props) {
   const periodoActivo = periodos.find(p => p.activo)
 
   return (
-    <div className="px-4 pt-6 pb-4 max-w-lg mx-auto">
+    <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto lg:max-w-2xl">
       <div className="mb-6">
         <h1 className="text-2xl font-black text-white">Cargar Ventas</h1>
         <p className="text-sm mt-1" style={{ color: '#888' }}>Sube el informe diario en formato Excel (.xlsx)</p>

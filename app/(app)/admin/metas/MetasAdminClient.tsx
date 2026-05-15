@@ -78,7 +78,7 @@ export default function MetasAdminClient({ periodos, metas: initialMetas, vended
   const selectStyle = { background: '#2A2A2A', border: '1px solid #3A3A3A' }
 
   return (
-    <div className="px-4 pt-6 pb-4 max-w-lg mx-auto">
+    <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto lg:max-w-2xl">
       <div className="mb-5">
         <h1 className="text-2xl font-black text-white">Gestionar Metas</h1>
         <p className="text-sm mt-1" style={{ color: '#888' }}>Define metas por vendedor y categoría</p>

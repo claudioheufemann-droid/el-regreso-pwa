@@ -131,7 +131,7 @@ export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores
   }, 0)
 
   return (
-    <div className="px-4 pt-6 pb-4 max-w-lg mx-auto">
+    <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto">
       <div className="mb-5">
         <h1 className="text-2xl font-black text-white">Período Acumulado</h1>
         {periodo && (
@@ -186,7 +186,7 @@ export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores
       </div>
 
       {vista === 'categoria' && (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {vendedores.map(v => resumen[v] && (
             <VendedorAcumulado key={v} vendedor={v} categorias={resumen[v]} />
           ))}

@@ -203,7 +203,7 @@ export default function DashboardClient({ resumen, fechaHoy, periodo }: Props) {
   const totalPeriodo = resumen.reduce((s, v) => s + v.litrosPeriodo, 0)
 
   return (
-    <div className="px-4 pt-6 pb-4 max-w-lg mx-auto">
+    <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center justify-between mb-1">
@@ -222,22 +222,24 @@ export default function DashboardClient({ resumen, fechaHoy, periodo }: Props) {
       </div>
 
       {/* Total del día */}
-      <div className="rounded-2xl p-4 mb-5" style={{ background: 'linear-gradient(135deg, #1C1600 0%, #2A1F00 100%)', border: '1px solid #3D2E00' }}>
-        <p className="text-xs font-semibold mb-2 tracking-wider" style={{ color: '#F59E0B99' }}>TOTAL EQUIPO HOY</p>
-        <div className="flex items-end gap-4">
-          <div>
-            <span className="text-4xl font-black" style={{ color: '#F59E0B' }}>{totalHoy.toFixed(1)}</span>
-            <span className="text-lg font-bold ml-1" style={{ color: '#D97706' }}>L</span>
+      <div className="rounded-2xl p-4 mb-5 lg:flex lg:items-center lg:justify-between" style={{ background: 'linear-gradient(135deg, #1C1600 0%, #2A1F00 100%)', border: '1px solid #3D2E00' }}>
+        <div>
+          <p className="text-xs font-semibold mb-2 tracking-wider" style={{ color: '#F59E0B99' }}>TOTAL EQUIPO HOY</p>
+          <div className="flex items-end gap-4">
+            <div>
+              <span className="text-4xl font-black" style={{ color: '#F59E0B' }}>{totalHoy.toFixed(1)}</span>
+              <span className="text-lg font-bold ml-1" style={{ color: '#D97706' }}>L</span>
+            </div>
           </div>
-          <div className="mb-1">
-            <p className="text-sm" style={{ color: '#888' }}>Acum. período</p>
-            <p className="text-lg font-bold text-white">{totalPeriodo.toFixed(1)} L</p>
-          </div>
+        </div>
+        <div className="mt-2 lg:mt-0 lg:text-right">
+          <p className="text-sm" style={{ color: '#888' }}>Acum. período</p>
+          <p className="text-2xl font-bold text-white">{totalPeriodo.toFixed(1)} L</p>
         </div>
       </div>
 
       {/* Cards por vendedor */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {resumen.map(data => (
           <VendedorCard key={data.vendedor} data={data} />
         ))}

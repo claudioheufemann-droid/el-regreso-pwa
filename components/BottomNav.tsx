@@ -16,7 +16,7 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 flex items-center justify-around px-2 pb-safe z-50"
+      className="lg:hidden fixed bottom-0 left-0 right-0 flex items-center justify-around px-2 pb-safe z-50"
       style={{ background: '#111', borderTop: '1px solid #222', paddingTop: '0.5rem', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
     >
       {navItems.map(item => {
