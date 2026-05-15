@@ -114,7 +114,7 @@ const METAS = {
     },
   },
 
-  'Charly Urrejola': {
+  'Carlos Urrejola': {
     mayo: {
       mensual: {
         'Bar': 2710, 'Minimarket': 465, 'Supermercado': 136, 'Botillería': 425,
