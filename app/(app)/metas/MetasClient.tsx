@@ -19,6 +19,8 @@ import {
   type AnalyticsVendedor,
 } from '@/lib/metas-engine'
 
+type Vista = 'diario' | 'semanal' | 'mensual'
+
 interface VentaRow {
   vendedor_actual: string
   litros: number
@@ -36,6 +38,21 @@ interface MetaRow {
   fecha_fin: string
   categoria_negocio: string
   meta_litros: number
+}
+
+interface CanalDiario {
+  canal: string
+  realHoy: number
+  metaDiaria: number
+  semaforo: EstadoSemaforo
+  color: string
+}
+
+interface AnalyticsExtended extends AnalyticsVendedor {
+  realizadoHoy: number
+  metaDiaria: number
+  semaforoDiario: EstadoSemaforo
+  porCanalHoy: CanalDiario[]
 }
 
 interface Props {
@@ -64,8 +81,6 @@ function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 }
 
-// ─── Semáforo ────────────────────────────────────────────────────────────────
-
 function SemaforoDot({ estado }: { estado: EstadoSemaforo }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -80,8 +95,6 @@ function SemaforoDot({ estado }: { estado: EstadoSemaforo }) {
     </div>
   )
 }
-
-// ─── Barra dual: realizado + marcador de esperado ────────────────────────────
 
 function BarraDual({ meta, realizado, esperado, semaforo }: {
   meta: number; realizado: number; esperado: number; semaforo: EstadoSemaforo
@@ -106,21 +119,46 @@ function BarraDual({ meta, realizado, esperado, semaforo }: {
   )
 }
 
-// ─── Fila por canal ───────────────────────────────────────────────────────────
+function CanalRow({ c, vista, canalDiario }: { c: AnalyticsCanal; vista: Vista; canalDiario?: CanalDiario }) {
+  const color = CANAL_COLORS[c.canal] ?? '#6B7280'
 
-function CanalRow({ c, vista }: { c: AnalyticsCanal; vista: 'mensual' | 'semanal' }) {
+  if (vista === 'diario') {
+    if (!canalDiario || canalDiario.metaDiaria <= 0) return null
+    const pct = calcularCumplimiento(canalDiario.realHoy, canalDiario.metaDiaria)
+    return (
+      <div style={{
+        padding: '11px 14px', borderRadius: 12, background: 'var(--surface2)',
+        borderLeft: `3px solid ${SEMAFORO_COLORS[canalDiario.semaforo]}`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: color }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)' }}>{c.canal}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fmt(canalDiario.realHoy)} / {fmt(canalDiario.metaDiaria)} L</span>
+            <span style={{
+              fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 100,
+              background: SEMAFORO_BG[canalDiario.semaforo], color: SEMAFORO_COLORS[canalDiario.semaforo],
+              border: `1px solid ${SEMAFORO_COLORS[canalDiario.semaforo]}40`,
+            }}>{pct.toFixed(0)}%</span>
+          </div>
+        </div>
+        <BarraDual meta={canalDiario.metaDiaria} realizado={canalDiario.realHoy} esperado={canalDiario.metaDiaria} semaforo={canalDiario.semaforo} />
+      </div>
+    )
+  }
+
   const meta     = vista === 'mensual' ? c.metaMensual     : c.metaSemanal
   const real     = vista === 'mensual' ? c.realizadoMes    : c.realizadoSemana
   const esperado = vista === 'mensual' ? c.metaEsperadaMes : c.metaEsperadaSemana
   const pct      = vista === 'mensual' ? c.pctMes          : c.pctSemana
   const semaforo = vista === 'mensual' ? c.semaforoMes     : c.semaforoSemana
-  const color    = CANAL_COLORS[c.canal] ?? '#6B7280'
   if (meta <= 0) return null
 
   return (
     <div style={{
-      padding: '11px 14px', borderRadius: 12,
-      background: 'var(--surface2)',
+      padding: '11px 14px', borderRadius: 12, background: 'var(--surface2)',
       borderLeft: `3px solid ${SEMAFORO_COLORS[semaforo]}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
@@ -142,15 +180,20 @@ function CanalRow({ c, vista }: { c: AnalyticsCanal; vista: 'mensual' | 'semanal
   )
 }
 
-// ─── Card por vendedor ────────────────────────────────────────────────────────
-
-function VendedorCard({ analytics, vista }: { analytics: AnalyticsVendedor; vista: 'mensual' | 'semanal' }) {
+function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vista: Vista }) {
+  const isDiario  = vista === 'diario'
   const esMensual = vista === 'mensual'
-  const meta      = esMensual ? analytics.metaMensual           : analytics.metaSemanal
-  const real      = esMensual ? analytics.realizadoMes          : analytics.realizadoSemana
-  const esperado  = esMensual ? analytics.metaEsperadaMes       : analytics.metaEsperadaSemana
-  const pct       = esMensual ? analytics.pctCumplimientoMes    : analytics.pctCumplimientoSemana
-  const semaforo  = esMensual ? analytics.semaforoMes           : analytics.semaforoSemana
+
+  const meta      = isDiario  ? analytics.metaDiaria
+                  : esMensual ? analytics.metaMensual           : analytics.metaSemanal
+  const real      = isDiario  ? analytics.realizadoHoy
+                  : esMensual ? analytics.realizadoMes          : analytics.realizadoSemana
+  const esperado  = isDiario  ? analytics.metaDiaria
+                  : esMensual ? analytics.metaEsperadaMes       : analytics.metaEsperadaSemana
+  const pct       = isDiario  ? calcularCumplimiento(analytics.realizadoHoy, analytics.metaDiaria)
+                  : esMensual ? analytics.pctCumplimientoMes    : analytics.pctCumplimientoSemana
+  const semaforo  = isDiario  ? analytics.semaforoDiario
+                  : esMensual ? analytics.semaforoMes           : analytics.semaforoSemana
   const faltante  = esMensual ? analytics.faltanteMes           : analytics.faltanteSemana
   const diasRest  = esMensual ? analytics.diasRestantesMes      : analytics.diasRestantesSemana
   const diasTrans = esMensual ? analytics.diasTranscurridosMes  : analytics.diasTranscurridosSemana
@@ -164,10 +207,8 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsVendedor; vist
       border: `1px solid ${metaCumplida ? 'rgba(74,122,58,0.4)' : 'var(--border)'}`,
       borderRadius: 20, overflow: 'hidden',
     }}>
-      {/* Accent top */}
       <div style={{ height: 4, background: SEMAFORO_COLORS[semaforo] }} />
 
-      {/* Header */}
       <div style={{ padding: '18px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
@@ -191,7 +232,6 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsVendedor; vist
         </div>
       </div>
 
-      {/* Barra principal */}
       <div style={{ padding: '0 20px 14px' }}>
         <BarraDual meta={meta} realizado={real} esperado={esperado} semaforo={semaforo} />
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7 }}>
@@ -201,18 +241,19 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsVendedor; vist
           <span style={{ fontSize: 10, color: 'var(--muted)' }}>
             Meta: <strong style={{ color: 'var(--cream)' }}>{fmt(meta)} L</strong>
           </span>
-          <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-            Esperado: <strong style={{ color: 'var(--cream)' }}>{fmt(esperado)} L</strong>
-          </span>
+          {!isDiario && (
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>
+              Esperado: <strong style={{ color: 'var(--cream)' }}>{fmt(esperado)} L</strong>
+            </span>
+          )}
         </div>
       </div>
 
-      {/* KPIs rápidos */}
       <div style={{ padding: '0 20px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         {[
-          { label: 'Meta total', value: `${fmt(meta)} L` },
+          { label: 'Meta', value: `${fmt(meta)} L` },
           { label: 'Realizado', value: `${fmt(real)} L` },
-          { label: metaCumplida ? '✓ Logrado' : 'Faltante', value: metaCumplida ? `+${fmt(real - meta)} L` : `${fmt(faltante)} L` },
+          { label: metaCumplida ? '✓ Logrado' : 'Faltante', value: metaCumplida ? `+${fmt(real - meta)} L` : `${fmt(Math.max(0, meta - real))} L` },
         ].map(({ label, value }) => (
           <div key={label} style={{ background: 'var(--surface2)', borderRadius: 12, padding: '10px 12px', textAlign: 'center' }}>
             <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 4 }}>
@@ -225,23 +266,23 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsVendedor; vist
         ))}
       </div>
 
-      {/* Días hábiles */}
-      <div style={{ padding: '0 20px 14px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-          <span style={{ fontSize: 10, color: 'var(--muted)' }}>Días hábiles transcurridos</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{diasTrans} / {diasTotal}</span>
+      {!isDiario && (
+        <div style={{ padding: '0 20px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>Días hábiles transcurridos</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{diasTrans} / {diasTotal}</span>
+          </div>
+          <div style={{ height: 4, borderRadius: 4, background: 'rgba(255,255,255,0.06)' }}>
+            <div style={{
+              height: '100%', borderRadius: 4,
+              width: diasTotal > 0 ? `${(diasTrans / diasTotal) * 100}%` : '0%',
+              background: 'rgba(255,255,255,0.18)',
+            }} />
+          </div>
         </div>
-        <div style={{ height: 4, borderRadius: 4, background: 'rgba(255,255,255,0.06)' }}>
-          <div style={{
-            height: '100%', borderRadius: 4,
-            width: diasTotal > 0 ? `${(diasTrans / diasTotal) * 100}%` : '0%',
-            background: 'rgba(255,255,255,0.18)',
-          }} />
-        </div>
-      </div>
+      )}
 
-      {/* Proyección predictiva */}
-      {!metaCumplida && diasRest > 0 && (
+      {!isDiario && !metaCumplida && diasRest > 0 && (
         <div style={{
           margin: '0 20px 14px', padding: '10px 14px', borderRadius: 12,
           background: SEMAFORO_BG[semaforo], border: `1px solid ${SEMAFORO_COLORS[semaforo]}30`,
@@ -272,31 +313,38 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsVendedor; vist
         </div>
       )}
 
-      {/* Desglose por canal */}
       <div style={{ padding: '0 20px 20px' }}>
         <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 10 }}>
           Por canal · {vista}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {analytics.porCanal.map(c => (
-            <CanalRow key={c.canal} c={c} vista={vista} />
-          ))}
+          {isDiario
+            ? analytics.porCanalHoy.map(cd => (
+                <CanalRow
+                  key={cd.canal}
+                  c={analytics.porCanal.find(c => c.canal === cd.canal) ?? { canal: cd.canal } as AnalyticsCanal}
+                  vista={vista}
+                  canalDiario={cd}
+                />
+              ))
+            : analytics.porCanal.map(c => (
+                <CanalRow key={c.canal} c={c} vista={vista} />
+              ))
+          }
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Componente principal ─────────────────────────────────────────────────────
-
 export default function MetasClient({
   metasSemanales, metasMensuales, ventasMes, ventasSemana,
   fechaRef, mesInicio, mesFin, semanaInicio, semanaFin,
   periodo, vendedores,
 }: Props) {
-  const [vista, setVista] = useState<'mensual' | 'semanal'>('semanal')
+  const [vista, setVista] = useState<Vista>('semanal')
 
-  const analytics = useMemo<AnalyticsVendedor[]>(() => {
+  const analytics = useMemo<AnalyticsExtended[]>(() => {
     const fechaD = new Date(fechaRef + 'T12:00:00')
 
     return vendedores.map(vendedor => {
@@ -304,11 +352,13 @@ export default function MetasClient({
       const mMes = metasMensuales.filter(m => m.vendedor === vendedor)
       const vMes = ventasMes.filter(v => v.vendedor_actual === vendedor)
       const vSem = ventasSemana.filter(v => v.vendedor_actual === vendedor)
+      const vHoy = vMes.filter(v => v.fecha_pedido === fechaRef)
 
       const metaSemTotal = mSem.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
       const metaMesTotal = mMes.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
       const realMes = vMes.reduce((s, v) => s + (v.litros ?? 0), 0)
       const realSem = vSem.reduce((s, v) => s + (v.litros ?? 0), 0)
+      const realizadoHoy = vHoy.reduce((s, v) => s + (v.litros ?? 0), 0)
 
       const dhMes = getDiasHabiles(new Date(mesInicio), new Date(mesFin + 'T23:59:59'))
       const dhSem = getDiasHabiles(new Date(semanaInicio), new Date(semanaFin + 'T23:59:59'))
@@ -317,21 +367,35 @@ export default function MetasClient({
       const dhSemTotal = dhSem.length
       const dhMesTrans = getDiasHabilesTranscurridos(dhMes, fechaD)
       const dhSemTrans = getDiasHabilesTranscurridos(dhSem, fechaD)
-      const dhMesRest  = dhMesTotal - dhMesTrans
-      const dhSemRest  = dhSemTotal - dhSemTrans
 
       const espMes = getMetaEsperadaAFecha(metaMesTotal, dhMes, fechaD)
       const espSem = getMetaEsperadaAFecha(metaSemTotal, dhSem, fechaD)
       const faltMes = Math.max(0, metaMesTotal - realMes)
       const faltSem = Math.max(0, metaSemTotal - realSem)
 
-      const semMes = getEstadoSemaforo(realMes, espMes)
-      const semSem = getEstadoSemaforo(realSem, espSem)
+      const metaDiaria = dhSemTotal > 0
+        ? metaSemTotal / dhSemTotal
+        : dhMesTotal > 0 ? metaMesTotal / dhMesTotal : 0
+
+      const semaforoDiario = getEstadoSemaforo(realizadoHoy, metaDiaria)
 
       const allCanales = [...new Set([
         ...mMes.map(m => m.categoria_negocio),
         ...mSem.map(m => m.categoria_negocio),
       ])]
+
+      const porCanalHoy: CanalDiario[] = allCanales.map(canal => {
+        const metaS = mSem.find(m => m.categoria_negocio === canal)?.meta_litros ?? 0
+        const metaDiariaCanal = dhSemTotal > 0 ? metaS / dhSemTotal : 0
+        const rH = vHoy.filter(v => v.categoria_negocio === canal).reduce((s, v) => s + (v.litros ?? 0), 0)
+        return {
+          canal,
+          realHoy: rH,
+          metaDiaria: metaDiariaCanal,
+          semaforo: getEstadoSemaforo(rH, metaDiariaCanal),
+          color: CANAL_COLORS[canal] ?? '#6B7280',
+        }
+      }).filter(c => c.metaDiaria > 0).sort((a, b) => b.metaDiaria - a.metaDiaria)
 
       const porCanal: AnalyticsCanal[] = allCanales.map(canal => {
         const metaM = mMes.find(m => m.categoria_negocio === canal)?.meta_litros ?? 0
@@ -359,29 +423,36 @@ export default function MetasClient({
         vendedor, fecha: fechaRef,
         metaMensual: metaMesTotal, realizadoMes: realMes, metaEsperadaMes: espMes,
         pctCumplimientoMes: calcularCumplimiento(realMes, metaMesTotal),
-        semaforoMes: semMes,
-        diasHabilesMes: dhMesTotal, diasTranscurridosMes: dhMesTrans, diasRestantesMes: dhMesRest,
+        semaforoMes: getEstadoSemaforo(realMes, espMes),
+        diasHabilesMes: dhMesTotal, diasTranscurridosMes: dhMesTrans, diasRestantesMes: dhMesTotal - dhMesTrans,
         faltanteMes: faltMes,
-        promedioNecesarioDiarioMes: dhMesRest > 0 ? faltMes / dhMesRest : 0,
-        mensajeMes: getMensajePredictivo(faltMes, dhMesRest),
+        promedioNecesarioDiarioMes: (dhMesTotal - dhMesTrans) > 0 ? faltMes / (dhMesTotal - dhMesTrans) : 0,
+        mensajeMes: getMensajePredictivo(faltMes, dhMesTotal - dhMesTrans),
         semanaLabel: semLabel,
         metaSemanal: metaSemTotal, realizadoSemana: realSem, metaEsperadaSemana: espSem,
         pctCumplimientoSemana: calcularCumplimiento(realSem, metaSemTotal),
-        semaforoSemana: semSem,
-        diasHabilesSemana: dhSemTotal, diasTranscurridosSemana: dhSemTrans, diasRestantesSemana: dhSemRest,
+        semaforoSemana: getEstadoSemaforo(realSem, espSem),
+        diasHabilesSemana: dhSemTotal, diasTranscurridosSemana: dhSemTrans, diasRestantesSemana: dhSemTotal - dhSemTrans,
         faltanteSemana: faltSem,
-        promedioNecesarioDiarioSemana: dhSemRest > 0 ? faltSem / dhSemRest : 0,
-        mensajeSemana: getMensajePredictivo(faltSem, dhSemRest),
+        promedioNecesarioDiarioSemana: (dhSemTotal - dhSemTrans) > 0 ? faltSem / (dhSemTotal - dhSemTrans) : 0,
+        mensajeSemana: getMensajePredictivo(faltSem, dhSemTotal - dhSemTrans),
         porCanal,
+        realizadoHoy,
+        metaDiaria,
+        semaforoDiario,
+        porCanalHoy,
       }
     })
   }, [metasSemanales, metasMensuales, ventasMes, ventasSemana, fechaRef, mesInicio, mesFin, semanaInicio, semanaFin, vendedores])
 
   const sinMetas = analytics.every(a => a.metaMensual === 0 && a.metaSemanal === 0)
 
-  const totalMeta = analytics.reduce((s, a) => s + (vista === 'mensual' ? a.metaMensual : a.metaSemanal), 0)
-  const totalReal = analytics.reduce((s, a) => s + (vista === 'mensual' ? a.realizadoMes : a.realizadoSemana), 0)
-  const totalEsp  = analytics.reduce((s, a) => s + (vista === 'mensual' ? a.metaEsperadaMes : a.metaEsperadaSemana), 0)
+  const totalReal = analytics.reduce((s, a) =>
+    s + (vista === 'mensual' ? a.realizadoMes : vista === 'diario' ? a.realizadoHoy : a.realizadoSemana), 0)
+  const totalMeta = analytics.reduce((s, a) =>
+    s + (vista === 'mensual' ? a.metaMensual : vista === 'diario' ? a.metaDiaria : a.metaSemanal), 0)
+  const totalEsp = analytics.reduce((s, a) =>
+    s + (vista === 'mensual' ? a.metaEsperadaMes : vista === 'diario' ? a.metaDiaria : a.metaEsperadaSemana), 0)
   const pctEquipo = calcularCumplimiento(totalReal, totalMeta)
   const semEquipo = getEstadoSemaforo(totalReal, totalEsp)
 
@@ -390,10 +461,20 @@ export default function MetasClient({
     ? `${meses[parseInt(mesInicio.split('-')[1]) - 1]} ${mesInicio.split('-')[0]}`
     : ''
   const semanaLabel = analytics[0]?.semanaLabel ?? ''
+  const diaLabel = fmtFecha(fechaRef)
+
+  const equipoLabel = vista === 'diario' ? `Día · ${diaLabel}`
+    : vista === 'semanal' ? `Equipo · ${semanaLabel}`
+    : `Equipo · ${mesNombre}`
+
+  const tabs: { key: Vista; label: string }[] = [
+    { key: 'diario',  label: `Día · ${diaLabel}` },
+    { key: 'semanal', label: `Semana · ${semanaLabel}` },
+    { key: 'mensual', label: `Mes · ${mesNombre}` },
+  ]
 
   return (
     <div style={{ padding: '40px 48px 60px' }} className="px-4 pt-8 lg:px-12 lg:pt-10">
-      {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
           Metas Comerciales
@@ -436,7 +517,7 @@ export default function MetasClient({
           }}>
             <div>
               <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.6)', letterSpacing: '1.8px', textTransform: 'uppercase', marginBottom: 6 }}>
-                Equipo · {vista === 'mensual' ? mesNombre : semanaLabel}
+                {equipoLabel}
               </p>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <span style={{ fontSize: 40, fontWeight: 900, color: SEMAFORO_COLORS[semEquipo], letterSpacing: '-1.5px', lineHeight: 1 }}>
@@ -449,7 +530,7 @@ export default function MetasClient({
             {[
               { label: 'Realizado', value: `${fmt(totalReal)} L` },
               { label: 'Meta', value: `${fmt(totalMeta)} L` },
-              { label: 'Esperado', value: `${fmt(totalEsp)} L` },
+              ...(vista !== 'diario' ? [{ label: 'Esperado', value: `${fmt(totalEsp)} L` }] : []),
             ].map(({ label, value }) => (
               <div key={label}>
                 <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>{label}</p>
@@ -463,13 +544,10 @@ export default function MetasClient({
 
           {/* Tabs + leyenda */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-            <div style={{ display: 'flex', borderRadius: 12, padding: 4, background: 'var(--surface)' }}>
-              {[
-                { key: 'semanal', label: `Semana · ${semanaLabel}` },
-                { key: 'mensual', label: `Mes · ${mesNombre}` },
-              ].map(tab => (
+            <div style={{ display: 'flex', borderRadius: 12, padding: 4, background: 'var(--surface)', gap: 2 }}>
+              {tabs.map(tab => (
                 <button key={tab.key}
-                  onClick={() => setVista(tab.key as 'mensual' | 'semanal')}
+                  onClick={() => setVista(tab.key)}
                   style={{
                     padding: '8px 18px', borderRadius: 9, fontSize: 13, fontWeight: 600,
                     border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
@@ -492,19 +570,19 @@ export default function MetasClient({
             </div>
           </div>
 
-          {/* Leyenda barra */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 18, height: 7, borderRadius: 4, background: SEMAFORO_COLORS.verde }} />
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Realizado</span>
+          {vista !== 'diario' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 18, height: 7, borderRadius: 4, background: SEMAFORO_COLORS.verde }} />
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>Realizado</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 2, height: 14, borderRadius: 2, background: 'rgba(255,255,255,0.5)' }} />
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>Meta esperada a la fecha</span>
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 2, height: 14, borderRadius: 2, background: 'rgba(255,255,255,0.5)' }} />
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Meta esperada a la fecha</span>
-            </div>
-          </div>
+          )}
 
-          {/* Grid vendedores */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
             {analytics.map(a => (
               <VendedorCard key={a.vendedor} analytics={a} vista={vista} />
