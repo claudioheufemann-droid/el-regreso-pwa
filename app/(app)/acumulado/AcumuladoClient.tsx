@@ -12,15 +12,15 @@ interface Props {
 }
 
 const COLORES_CATEGORIA: Record<string, string> = {
-  'Bar': '#F59E0B',
+  'Bar': '#D4AF37',
   'Minimarket': '#60A5FA',
-  'Cafetería': '#34D399',
+  'Cafetería': '#4ADE80',
   'Botillería': '#A78BFA',
   'Almacén': '#FB923C',
   'Restaurante': '#F472B6',
   'Supermercado': '#38BDF8',
-  'Distribuidor': '#4ADE80',
-  'Actividades Turísticas': '#FACC15',
+  'Distribuidor': '#86EFAC',
+  'Actividades Turísticas': '#FCD34D',
   'Cliente Directo': '#E879F9',
   'Otros': '#6B7280',
 }
@@ -31,21 +31,18 @@ function formatPeso(n: number) { return '$' + Math.round(n).toLocaleString('es-C
 function CategoriaBar({ categoria, litros, total, color }: { categoria: string; litros: number; total: number; color: string }) {
   const pct = total > 0 ? Math.min(100, (litros / total) * 100) : 0
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
-          <span className="text-sm text-white">{categoria}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+          <span style={{ fontSize: 13, color: 'var(--cream)' }}>{categoria}</span>
         </div>
-        <span className="text-sm font-bold text-white">{formatLitros(litros)} L</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{formatLitros(litros)} L</span>
       </div>
-      <div className="h-2 rounded-full overflow-hidden" style={{ background: '#2A2A2A' }}>
-        <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, background: color }}
-        />
+      <div style={{ height: 6, borderRadius: 6, overflow: 'hidden', background: 'rgba(255,255,255,0.06)' }}>
+        <div className="animate-progress" style={{ height: '100%', borderRadius: 6, width: `${pct}%`, background: color }} />
       </div>
-      <p className="text-xs text-right" style={{ color: '#666' }}>{pct.toFixed(1)}%</p>
+      <p style={{ fontSize: 11, textAlign: 'right', color: 'var(--muted)' }}>{pct.toFixed(1)}%</p>
     </div>
   )
 }
@@ -54,20 +51,27 @@ function VendedorAcumulado({ vendedor, categorias }: { vendedor: string; categor
   const total = Object.values(categorias).reduce((s, c) => s + c.litros, 0)
   const totalVenta = Object.values(categorias).reduce((s, c) => s + c.venta, 0)
   const sorted = Object.entries(categorias).sort((a, b) => b[1].litros - a[1].litros)
-  const firstName = vendedor.split(' ')[0]
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: '#1A1A1A', border: '1px solid #2A2A2A' }}>
-      <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #242424' }}>
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-white text-base">{vendedor}</h3>
-          <div className="text-right">
-            <p className="text-xl font-black" style={{ color: '#F59E0B' }}>{formatLitros(total)} L</p>
-            <p className="text-xs" style={{ color: '#888' }}>{formatPeso(totalVenta)}</p>
-          </div>
+    <div className="card-hover animate-fade-in" style={{
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 20,
+      overflow: 'hidden',
+    }}>
+      <div style={{ height: 3, background: 'var(--gold)' }} />
+      <div style={{
+        padding: '16px 20px 14px',
+        borderBottom: '1px solid var(--border-subtle)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 16, letterSpacing: '-0.3px' }}>{vendedor}</h3>
+        <div style={{ textAlign: 'right' }}>
+          <p style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.8px' }}>{formatLitros(total)} L</p>
+          <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{formatPeso(totalVenta)}</p>
         </div>
       </div>
-      <div className="px-4 py-4 space-y-4">
+      <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {sorted.map(([cat, data]) => (
           <CategoriaBar
             key={cat}
@@ -87,31 +91,42 @@ function HistorialFechas({ porFecha, vendedores }: { porFecha: Record<string, Re
   const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
   function formatFecha(d: string) {
-    const [y, m, day] = d.split('-')
+    const [, m, day] = d.split('-')
     return `${parseInt(day)} ${meses[parseInt(m) - 1]}`
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: '#1A1A1A', border: '1px solid #2A2A2A' }}>
-      <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #242424' }}>
-        <h3 className="font-bold text-white">Historial de ventas</h3>
-        <p className="text-xs mt-0.5" style={{ color: '#888' }}>Últimos días del período</p>
+    <div style={{
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 20,
+      overflow: 'hidden',
+    }}>
+      <div style={{ height: 3, background: 'var(--gold)' }} />
+      <div style={{ padding: '16px 20px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 16 }}>Historial de ventas</h3>
+        <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Últimos días del período</p>
       </div>
-      <div className="divide-y" style={{ borderColor: '#242424' }}>
-        {fechas.map(fecha => {
+      <div>
+        {fechas.map((fecha, idx) => {
           const totales = vendedores.map(v => ({ vendedor: v, litros: porFecha[fecha]?.[v] ?? 0 }))
           const totalDia = totales.reduce((s, t) => s + t.litros, 0)
           return (
-            <div key={fecha} className="px-4 py-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-white">{formatFecha(fecha)}</span>
-                <span className="text-sm font-bold" style={{ color: '#F59E0B' }}>{totalDia.toFixed(1)} L total</span>
+            <div key={fecha} style={{
+              padding: '14px 20px',
+              borderBottom: idx < fechas.length - 1 ? '1px solid var(--row-sep)' : 'none',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)' }}>{formatFecha(fecha)}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>{totalDia.toFixed(1)} L total</span>
               </div>
-              <div className="flex gap-3">
+              <div style={{ display: 'flex', gap: 8 }}>
                 {totales.map(({ vendedor, litros }) => (
-                  <div key={vendedor} className="flex-1 rounded-lg px-3 py-2" style={{ background: '#242424' }}>
-                    <p className="text-xs mb-0.5" style={{ color: '#888' }}>{vendedor.split(' ')[0]}</p>
-                    <p className="text-sm font-bold text-white">{litros.toFixed(1)} L</p>
+                  <div key={vendedor} style={{
+                    flex: 1, borderRadius: 10, padding: '8px 12px', background: 'var(--surface2)',
+                  }}>
+                    <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>{vendedor.split(' ')[0]}</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)' }}>{litros.toFixed(1)} L</p>
                   </div>
                 ))}
               </div>
@@ -131,52 +146,69 @@ export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores
   }, 0)
 
   return (
-    <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto">
-      <div className="mb-5">
-        <h1 className="text-2xl font-black text-white">Período Acumulado</h1>
+    <div style={{ padding: '40px 48px 60px' }} className="px-4 pt-8 lg:px-12 lg:pt-10">
+      {/* Header */}
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
+          Período Acumulado
+        </h1>
         {periodo && (
-          <p className="text-sm mt-1" style={{ color: '#888' }}>{periodo.nombre}</p>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>{periodo.nombre}</p>
         )}
       </div>
 
-      {/* Total general del período */}
-      <div
-        className="rounded-2xl p-4 mb-5"
-        style={{ background: 'linear-gradient(135deg, #1C1600 0%, #2A1F00 100%)', border: '1px solid #3D2E00' }}
-      >
-        <p className="text-xs font-semibold mb-2 tracking-wider" style={{ color: '#F59E0B99' }}>TOTAL PERÍODO</p>
-        <div className="flex items-end gap-4">
-          <div>
-            <span className="text-4xl font-black" style={{ color: '#F59E0B' }}>{totalGeneral.toFixed(1)}</span>
-            <span className="text-lg font-bold ml-1" style={{ color: '#D97706' }}>L</span>
-          </div>
-          <div className="mb-1 flex gap-4">
-            {vendedores.map(v => {
-              const lt = Object.values(resumen[v] ?? {}).reduce((s, c) => s + c.litros, 0)
-              return (
-                <div key={v}>
-                  <p className="text-xs" style={{ color: '#888' }}>{v.split(' ')[0]}</p>
-                  <p className="text-base font-bold text-white">{lt.toFixed(1)} L</p>
-                </div>
-              )
-            })}
+      {/* KPI total */}
+      <div style={{
+        background: 'linear-gradient(135deg, #110D00 0%, #1C1500 100%)',
+        border: '1px solid rgba(212,175,55,0.25)',
+        borderRadius: 20,
+        padding: '24px 32px',
+        marginBottom: 28,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 48,
+        flexWrap: 'wrap',
+      }}>
+        <div>
+          <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.6)', letterSpacing: '1.8px', textTransform: 'uppercase', marginBottom: 8 }}>
+            Total período
+          </p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 48, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-2px', lineHeight: 1 }}>
+              {totalGeneral.toFixed(1)}
+            </span>
+            <span style={{ fontSize: 20, fontWeight: 700, color: '#A8870F' }}>L</span>
           </div>
         </div>
+        <div style={{ width: 1, height: 56, background: 'var(--border)', flexShrink: 0 }} />
+        {vendedores.map(v => {
+          const lt = Object.values(resumen[v] ?? {}).reduce((s, c) => s + c.litros, 0)
+          return (
+            <div key={v}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>{v.split(' ')[0]}</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.5px' }}>{lt.toFixed(1)} L</p>
+            </div>
+          )
+        })}
       </div>
 
       {/* Tabs */}
-      <div className="flex rounded-xl p-1 mb-5" style={{ background: '#1A1A1A' }}>
+      <div style={{ display: 'flex', borderRadius: 12, padding: 4, background: 'var(--surface)', marginBottom: 24, width: 'fit-content' }}>
         {[
-          { key: 'categoria', label: 'Por Categoría', icon: <TrendingUp size={14} /> },
-          { key: 'historial', label: 'Historial', icon: <Droplets size={14} /> },
+          { key: 'categoria', label: 'Por Categoría', icon: <TrendingUp size={13} /> },
+          { key: 'historial', label: 'Historial',     icon: <Droplets size={13} /> },
         ].map(tab => (
           <button
             key={tab.key}
             onClick={() => setVista(tab.key as 'categoria' | 'historial')}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all"
             style={{
-              background: vista === tab.key ? '#F59E0B' : 'transparent',
-              color: vista === tab.key ? '#000' : '#888',
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 18px', borderRadius: 9,
+              fontSize: 13, fontWeight: 600,
+              border: 'none', cursor: 'pointer',
+              background: vista === tab.key ? 'var(--gold)' : 'transparent',
+              color: vista === tab.key ? '#080808' : 'var(--muted)',
+              transition: 'all 0.15s',
             }}
           >
             {tab.icon}
@@ -186,7 +218,7 @@ export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores
       </div>
 
       {vista === 'categoria' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 20 }}>
           {vendedores.map(v => resumen[v] && (
             <VendedorAcumulado key={v} vendedor={v} categorias={resumen[v]} />
           ))}
@@ -194,7 +226,9 @@ export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores
       )}
 
       {vista === 'historial' && (
-        <HistorialFechas porFecha={porFecha} vendedores={vendedores} />
+        <div style={{ maxWidth: 760 }}>
+          <HistorialFechas porFecha={porFecha} vendedores={vendedores} />
+        </div>
       )}
     </div>
   )

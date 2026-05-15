@@ -1,25 +1,103 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 :root {
-  --background: #0F0F0F;
-  --foreground: #F5F5F5;
-}
-
-body {
-  background: #0F0F0F;
-  color: #F5F5F5;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  overscroll-behavior: none;
+  --bg: #080808;
+  --surface: #131313;
+  --surface2: #1C1C1C;
+  --gold: #D4AF37;
+  --gold-dim: rgba(212, 175, 55, 0.15);
+  --gold-hover: rgba(212, 175, 55, 0.07);
+  --cream: #F4EEDF;
+  --muted: #7A7268;
+  --border: rgba(212, 175, 55, 0.15);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-border: rgba(212, 175, 55, 0.18);
+  --row-sep: rgba(255, 255, 255, 0.05);
+  --spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --sidebar-w: 240px;
 }
 
 * {
   -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
 }
 
+body {
+  background: var(--bg);
+  color: var(--cream);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 500;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (min-width: 1024px) {
+  body {
+    font-weight: 550;
+    letter-spacing: 0.01em;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.4); }
+
+/* Global inputs */
+input, select, textarea {
+  background: var(--input-bg);
+  color: var(--cream);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: rgba(212, 175, 55, 0.5);
+  background: rgba(255, 255, 255, 0.07);
+}
+input::placeholder, textarea::placeholder {
+  color: #5A5248;
+}
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes progress-fill {
+  from { width: 0%; }
+}
+@keyframes pulse-opacity {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+.animate-fade-in  { animation: fade-in  0.2s ease-out both; }
+.animate-slide-up { animation: slide-up 0.28s var(--spring) both; }
+.animate-progress { animation: progress-fill 0.8s var(--spring) both; }
+.animate-pulse-opacity { animation: pulse-opacity 2s ease-in-out infinite; }
+
+/* Hover utilities */
+@media (hover: hover) {
+  .card-hover:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+}
+
+/* Safe area */
 .pb-safe {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
-
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }

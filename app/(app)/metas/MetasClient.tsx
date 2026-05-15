@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Target, Droplets } from 'lucide-react'
+import { Target } from 'lucide-react'
 import { Meta, Periodo } from '@/lib/types'
 
 interface Props {
@@ -13,104 +13,94 @@ interface Props {
 }
 
 const COLORES: Record<string, string> = {
-  'Bar': '#F59E0B',
+  'Bar': '#D4AF37',
   'Minimarket': '#60A5FA',
-  'Cafetería': '#34D399',
+  'Cafetería': '#4ADE80',
   'Botillería': '#A78BFA',
   'Almacén': '#FB923C',
   'Restaurante': '#F472B6',
   'Supermercado': '#38BDF8',
-  'Distribuidor': '#4ADE80',
-  'Actividades Turísticas': '#FACC15',
+  'Distribuidor': '#86EFAC',
+  'Actividades Turísticas': '#FCD34D',
   'Cliente Directo': '#E879F9',
-  'Total': '#F59E0B',
+  'Total': '#D4AF37',
   'Otros': '#6B7280',
 }
 
-function BarraMeta({
-  meta,
-  litrosAcum,
-  litrosHoy,
-}: {
-  meta: Meta
-  litrosAcum: number
-  litrosHoy: number
-}) {
-  const pctAcum = meta.meta_litros > 0 ? Math.min(100, (litrosAcum / meta.meta_litros) * 100) : 0
-  const pctHoy = meta.meta_litros > 0 ? Math.min(100 - pctAcum, (litrosHoy / meta.meta_litros) * 100) : 0
+function BarraMeta({ meta, litrosAcum, litrosHoy }: { meta: Meta; litrosAcum: number; litrosHoy: number }) {
+  const pctTotal = meta.meta_litros > 0 ? Math.min(100, (litrosAcum / meta.meta_litros) * 100) : 0
+  const pctHoy = meta.meta_litros > 0 ? Math.min(100 - pctTotal + (litrosHoy / meta.meta_litros * 100 > 0 ? litrosHoy / meta.meta_litros * 100 : 0), (litrosHoy / meta.meta_litros) * 100) : 0
+  const pctAcumSinHoy = Math.max(0, pctTotal - pctHoy)
   const falta = Math.max(0, meta.meta_litros - litrosAcum)
-  const color = COLORES[meta.categoria_negocio] ?? '#F59E0B'
+  const color = COLORES[meta.categoria_negocio] ?? '#D4AF37'
   const superada = litrosAcum >= meta.meta_litros
 
+  const barColor = pctTotal >= 80 ? '#4A7A3A' : pctTotal >= 50 ? color : color
+
   return (
-    <div
-      className="rounded-xl p-4"
-      style={{ background: '#242424', border: superada ? `1px solid ${color}40` : '1px solid transparent' }}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-          <span className="text-sm font-semibold text-white">{meta.categoria_negocio}</span>
+    <div style={{
+      background: 'var(--surface2)',
+      border: superada ? `1px solid ${color}40` : '1px solid transparent',
+      borderRadius: 14,
+      padding: '14px 16px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{meta.categoria_negocio}</span>
           {superada && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full font-bold" style={{ background: `${color}20`, color }}>
-              ✓ Meta
+            <span style={{
+              fontSize: 9, fontWeight: 700, padding: '3px 8px', borderRadius: 100,
+              background: `${color}20`, color, border: `1px solid ${color}40`,
+              letterSpacing: '0.3px',
+            }}>✓ META</span>
+          )}
+        </div>
+        <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Meta: {meta.meta_litros.toFixed(0)} L</span>
+      </div>
+
+      {/* Barra */}
+      <div style={{ height: 8, borderRadius: 8, overflow: 'hidden', background: 'rgba(255,255,255,0.06)', position: 'relative', marginBottom: 8 }}>
+        <div className="animate-progress" style={{
+          position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 8,
+          width: `${pctAcumSinHoy}%`, background: `${barColor}88`,
+        }} />
+        {pctHoy > 0 && (
+          <div className="animate-progress" style={{
+            position: 'absolute', top: 0, left: `${pctAcumSinHoy}%`, height: '100%', borderRadius: 8,
+            width: `${pctHoy}%`, background: barColor,
+          }} />
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+            Acum: <span style={{ color: 'var(--cream)', fontWeight: 700 }}>{litrosAcum.toFixed(1)} L</span>
+          </span>
+          {litrosHoy > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+              Hoy: <span style={{ color, fontWeight: 700 }}>+{litrosHoy.toFixed(1)} L</span>
             </span>
           )}
         </div>
-        <span className="text-xs font-medium" style={{ color: '#888' }}>Meta: {meta.meta_litros.toFixed(0)} L</span>
-      </div>
-
-      {/* Barra de progreso */}
-      <div className="h-5 rounded-full overflow-hidden relative mb-2" style={{ background: '#1A1A1A' }}>
-        {/* Acumulado anterior al día */}
-        <div
-          className="absolute top-0 left-0 h-full rounded-full transition-all"
-          style={{ width: `${pctAcum - pctHoy}%`, background: `${color}88` }}
-        />
-        {/* Aporte de hoy (se suma encima) */}
-        {pctHoy > 0 && (
-          <div
-            className="absolute top-0 h-full rounded-full transition-all"
-            style={{ left: `${pctAcum - pctHoy}%`, width: `${pctHoy}%`, background: color }}
-          />
-        )}
-        {/* Porcentaje dentro de la barra */}
-        <div className="absolute inset-0 flex items-center px-2">
-          <span className="text-xs font-bold" style={{ color: pctAcum > 15 ? '#000' : '#fff' }}>
-            {pctAcum.toFixed(0)}%
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: superada ? '#4A7A3A' : 'var(--muted)' }}>
+            {pctTotal.toFixed(0)}%
           </span>
-        </div>
-      </div>
-
-      {/* Leyenda */}
-      <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-sm" style={{ background: `${color}88` }} />
-            <span style={{ color: '#888' }}>Acum: <span className="text-white font-medium">{litrosAcum.toFixed(1)} L</span></span>
-          </div>
-          {litrosHoy > 0 && (
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm" style={{ background: color }} />
-              <span style={{ color: '#888' }}>Hoy: <span style={{ color }} className="font-medium">+{litrosHoy.toFixed(1)} L</span></span>
-            </div>
+          {!superada && (
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+              Falta: <span style={{ color: 'var(--cream)', fontWeight: 700 }}>{falta.toFixed(1)} L</span>
+            </span>
           )}
         </div>
-        {!superada && (
-          <span style={{ color: '#888' }}>Falta: <span className="text-white font-medium">{falta.toFixed(1)} L</span></span>
-        )}
       </div>
     </div>
   )
 }
 
 function VendedorMetas({
-  vendedor,
-  metas,
-  acumulado,
-  acumuladoHoy,
-  tipoVista,
+  vendedor, metas, acumulado, acumuladoHoy, tipoVista,
 }: {
   vendedor: string
   metas: Meta[]
@@ -122,20 +112,26 @@ function VendedorMetas({
 
   if (metasFiltradas.length === 0) {
     return (
-      <div className="rounded-2xl p-6 text-center" style={{ background: '#1A1A1A', border: '1px solid #2A2A2A' }}>
-        <Target size={32} className="mx-auto mb-2" style={{ color: '#444' }} />
-        <p className="text-sm" style={{ color: '#666' }}>Sin metas {tipoVista}es definidas</p>
-        <p className="text-xs mt-1" style={{ color: '#444' }}>Un admin puede agregarlas desde "Cargar"</p>
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20,
+        padding: '32px 24px', textAlign: 'center',
+      }}>
+        <Target size={30} style={{ color: 'var(--muted)', margin: '0 auto 10px' }} />
+        <p style={{ fontSize: 13, color: 'var(--muted)' }}>Sin metas {tipoVista}es definidas</p>
+        <p style={{ fontSize: 11, color: '#3A3530', marginTop: 4 }}>Un admin puede agregarlas desde "Cargar"</p>
       </div>
     )
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: '#1A1A1A', border: '1px solid #2A2A2A' }}>
-      <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #242424' }}>
-        <h3 className="font-bold text-white">{vendedor}</h3>
+    <div className="card-hover animate-fade-in" style={{
+      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, overflow: 'hidden',
+    }}>
+      <div style={{ height: 3, background: 'var(--gold)' }} />
+      <div style={{ padding: '16px 20px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 16, letterSpacing: '-0.3px' }}>{vendedor}</h3>
       </div>
-      <div className="px-4 py-4 space-y-3">
+      <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {metasFiltradas.map(meta => (
           <BarraMeta
             key={meta.id}
@@ -153,47 +149,56 @@ export default function MetasClient({ metas, acumulado, acumuladoHoy, periodo, v
   const [tipoVista, setTipoVista] = useState<'mensual' | 'semanal'>('mensual')
 
   return (
-    <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto">
-      <div className="mb-5">
-        <h1 className="text-2xl font-black text-white">Metas</h1>
+    <div style={{ padding: '40px 48px 60px' }} className="px-4 pt-8 lg:px-12 lg:pt-10">
+      {/* Header */}
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
+          Metas
+        </h1>
         {periodo && (
-          <p className="text-sm mt-1" style={{ color: '#888' }}>{periodo.nombre}</p>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>{periodo.nombre}</p>
         )}
       </div>
 
-      {/* Tabs mensual / semanal */}
-      <div className="flex rounded-xl p-1 mb-5" style={{ background: '#1A1A1A' }}>
-        {[
-          { key: 'mensual', label: 'Mensual' },
-          { key: 'semanal', label: 'Semanal' },
-        ].map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setTipoVista(tab.key as 'mensual' | 'semanal')}
-            className="flex-1 py-2 rounded-lg text-sm font-medium transition-all"
-            style={{
-              background: tipoVista === tab.key ? '#F59E0B' : 'transparent',
-              color: tipoVista === tab.key ? '#000' : '#888',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Controles */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderRadius: 12, padding: 4, background: 'var(--surface)' }}>
+          {[
+            { key: 'mensual', label: 'Mensual' },
+            { key: 'semanal', label: 'Semanal' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setTipoVista(tab.key as 'mensual' | 'semanal')}
+              style={{
+                padding: '8px 20px', borderRadius: 9, fontSize: 13, fontWeight: 600,
+                border: 'none', cursor: 'pointer',
+                background: tipoVista === tab.key ? 'var(--gold)' : 'transparent',
+                color: tipoVista === tab.key ? '#080808' : 'var(--muted)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Leyenda */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 12, height: 12, borderRadius: 4, background: 'rgba(212,175,55,0.5)' }} />
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>Acumulado período</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 12, height: 12, borderRadius: 4, background: 'var(--gold)' }} />
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>Aporte de hoy</span>
+          </div>
+        </div>
       </div>
 
-      {/* Leyenda */}
-      <div className="flex items-center gap-4 mb-4 px-1">
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm" style={{ background: '#F59E0B88' }} />
-          <span className="text-xs" style={{ color: '#888' }}>Acumulado período</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm" style={{ background: '#F59E0B' }} />
-          <span className="text-xs" style={{ color: '#888' }}>Aporte de hoy</span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Grid vendedores */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 20 }}>
         {vendedores.map(vendedor => (
           <VendedorMetas
             key={vendedor}

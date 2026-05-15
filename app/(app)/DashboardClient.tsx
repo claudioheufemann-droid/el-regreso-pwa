@@ -32,13 +32,8 @@ interface Props {
   periodo: Periodo | null
 }
 
-function formatLitros(n: number) {
-  return n.toFixed(1) + ' L'
-}
-
-function formatPeso(n: number) {
-  return '$' + Math.round(n).toLocaleString('es-CL')
-}
+function formatLitros(n: number) { return n.toFixed(1) + ' L' }
+function formatPeso(n: number) { return '$' + Math.round(n).toLocaleString('es-CL') }
 
 function formatFecha(dateStr: string) {
   const [y, m, d] = dateStr.split('-')
@@ -50,135 +45,147 @@ function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 }
 
+function StatBox({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
+  return (
+    <div style={{
+      background: 'var(--surface2)',
+      borderRadius: 12,
+      padding: '14px 16px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <span style={{ color }}>{icon}</span>
+        <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>{label}</span>
+      </div>
+      <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.5px' }}>{value}</p>
+    </div>
+  )
+}
+
 function VendedorCard({ data }: { data: VendedorResumen }) {
   const [showClientes, setShowClientes] = useState(false)
   const [clienteAbierto, setClienteAbierto] = useState<string | null>(null)
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: '#1A1A1A', border: '1px solid #2A2A2A' }}>
+    <div className="card-hover animate-fade-in" style={{
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 20,
+      overflow: 'hidden',
+    }}>
+      {/* Accent line */}
+      <div style={{ height: 3, background: 'var(--gold)', borderRadius: '20px 20px 0 0' }} />
+
       {/* Header vendedor */}
-      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-black flex-shrink-0" style={{ background: '#F59E0B' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px 14px' }}>
+        <div style={{
+          width: 42, height: 42, borderRadius: '50%',
+          background: 'var(--gold)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 14, fontWeight: 800, color: '#080808', flexShrink: 0,
+        }}>
           {getInitials(data.vendedor)}
         </div>
         <div>
-          <h2 className="font-bold text-white text-base leading-tight">{data.vendedor}</h2>
-          <p className="text-xs" style={{ color: '#888' }}>Vendedor Canal</p>
+          <h2 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 16, letterSpacing: '-0.3px' }}>{data.vendedor}</h2>
+          <p style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Vendedor Canal</p>
         </div>
       </div>
 
       {/* Stats hoy */}
-      <div className="px-4 pb-3">
-        <p className="text-xs font-medium mb-2" style={{ color: '#F59E0B' }}>HOY</p>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-xl p-3" style={{ background: '#242424' }}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <Droplets size={14} style={{ color: '#60A5FA' }} />
-              <span className="text-xs" style={{ color: '#888' }}>Litros</span>
-            </div>
-            <p className="text-xl font-bold text-white">{formatLitros(data.litrosHoy)}</p>
-          </div>
-          <div className="rounded-xl p-3" style={{ background: '#242424' }}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <DollarSign size={14} style={{ color: '#34D399' }} />
-              <span className="text-xs" style={{ color: '#888' }}>Venta s/imp</span>
-            </div>
-            <p className="text-lg font-bold text-white">{formatPeso(data.ventaHoy)}</p>
-          </div>
+      <div style={{ padding: '0 20px 16px' }}>
+        <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--gold)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 10 }}>
+          Hoy
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <StatBox icon={<Droplets size={13} />} label="Litros" value={formatLitros(data.litrosHoy)} color="#60A5FA" />
+          <StatBox icon={<DollarSign size={13} />} label="Venta s/imp" value={formatPeso(data.ventaHoy)} color="#4ADE80" />
+          {data.latasCervezaHoy > 0 && (
+            <StatBox icon={<Beer size={13} />} label="Latas cerveza" value={String(data.latasCervezaHoy)} color="var(--gold)" />
+          )}
+          {data.latasKombuchaHoy > 0 && (
+            <StatBox icon={<Leaf size={13} />} label="Latas kombucha" value={String(data.latasKombuchaHoy)} color="#4ADE80" />
+          )}
         </div>
-
-        {/* Latas */}
-        {(data.latasCervezaHoy > 0 || data.latasKombuchaHoy > 0) && (
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            {data.latasCervezaHoy > 0 && (
-              <div className="rounded-xl p-3" style={{ background: '#242424' }}>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Beer size={14} style={{ color: '#F59E0B' }} />
-                  <span className="text-xs" style={{ color: '#888' }}>Latas cerveza</span>
-                </div>
-                <p className="text-xl font-bold text-white">{data.latasCervezaHoy}</p>
-              </div>
-            )}
-            {data.latasKombuchaHoy > 0 && (
-              <div className="rounded-xl p-3" style={{ background: '#242424' }}>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Leaf size={14} style={{ color: '#34D399' }} />
-                  <span className="text-xs" style={{ color: '#888' }}>Latas kombucha</span>
-                </div>
-                <p className="text-xl font-bold text-white">{data.latasKombuchaHoy}</p>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
+      {/* Divider */}
+      <div style={{ height: 1, background: 'var(--border-subtle)', margin: '0 20px' }} />
+
       {/* Stats período */}
-      <div className="px-4 pb-3">
-        <p className="text-xs font-medium mb-2" style={{ color: '#A78BFA' }}>PERÍODO ACUMULADO</p>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-xl p-3" style={{ background: '#242424' }}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <Droplets size={14} style={{ color: '#60A5FA' }} />
-              <span className="text-xs" style={{ color: '#888' }}>Litros</span>
-            </div>
-            <p className="text-xl font-bold text-white">{formatLitros(data.litrosPeriodo)}</p>
-          </div>
-          <div className="rounded-xl p-3" style={{ background: '#242424' }}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <DollarSign size={14} style={{ color: '#34D399' }} />
-              <span className="text-xs" style={{ color: '#888' }}>Venta s/imp</span>
-            </div>
-            <p className="text-lg font-bold text-white">{formatPeso(data.ventaPeriodo)}</p>
-          </div>
+      <div style={{ padding: '14px 20px 16px' }}>
+        <p style={{ fontSize: 9, fontWeight: 700, color: '#A78BFA', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 10 }}>
+          Período acumulado
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <StatBox icon={<Droplets size={13} />} label="Litros" value={formatLitros(data.litrosPeriodo)} color="#60A5FA" />
+          <StatBox icon={<DollarSign size={13} />} label="Venta s/imp" value={formatPeso(data.ventaPeriodo)} color="#4ADE80" />
         </div>
       </div>
 
       {/* Clientes del día */}
-      <div className="px-4 pb-4">
+      <div style={{ padding: '0 20px 20px' }}>
         <button
           onClick={() => setShowClientes(!showClientes)}
-          className="w-full flex items-center justify-between py-2.5 px-3 rounded-xl transition-colors"
-          style={{ background: '#242424' }}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 14px', borderRadius: 12, background: 'var(--surface2)',
+            border: 'none', cursor: 'pointer', transition: 'background 0.12s',
+          }}
         >
-          <div className="flex items-center gap-2">
-            <Users size={15} style={{ color: '#F59E0B' }} />
-            <span className="text-sm font-medium text-white">Clientes hoy</span>
-            <span className="text-xs px-1.5 py-0.5 rounded-full font-bold" style={{ background: '#F59E0B20', color: '#F59E0B' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Users size={14} color="var(--gold)" />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)' }}>Clientes hoy</span>
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 100,
+              background: 'rgba(212,175,55,0.15)', color: 'var(--gold)',
+            }}>
               {data.clientesHoy.length}
             </span>
           </div>
-          {showClientes ? <ChevronUp size={16} style={{ color: '#666' }} /> : <ChevronDown size={16} style={{ color: '#666' }} />}
+          {showClientes
+            ? <ChevronUp size={15} color="var(--muted)" />
+            : <ChevronDown size={15} color="var(--muted)" />}
         </button>
 
         {showClientes && data.clientesHoy.length > 0 && (
-          <div className="mt-2 space-y-1">
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
             {data.clientesHoy.map((cliente) => (
               <div key={cliente.nombre}>
                 <button
-                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg"
-                  style={{ background: '#1E1E1E' }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 12px', borderRadius: 10, background: 'var(--bg)',
+                    border: 'none', cursor: 'pointer',
+                  }}
                   onClick={() => setClienteAbierto(clienteAbierto === cliente.nombre ? null : cliente.nombre)}
                 >
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#F59E0B' }} />
-                    <span className="text-sm text-white text-left">{cliente.nombre}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--gold)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, color: 'var(--cream)', textAlign: 'left' }}>{cliente.nombre}</span>
                   </div>
                   {cliente.productos.length > 0 && (
                     clienteAbierto === cliente.nombre
-                      ? <ChevronUp size={14} style={{ color: '#555' }} />
-                      : <ChevronDown size={14} style={{ color: '#555' }} />
+                      ? <ChevronUp size={13} color="var(--muted)" />
+                      : <ChevronDown size={13} color="var(--muted)" />
                   )}
                 </button>
 
                 {clienteAbierto === cliente.nombre && cliente.productos.length > 0 && (
-                  <div className="mx-2 mb-1 rounded-lg overflow-hidden" style={{ background: '#161616', border: '1px solid #2A2A2A' }}>
+                  <div style={{
+                    margin: '2px 8px 4px', borderRadius: 10, overflow: 'hidden',
+                    background: 'var(--bg)', border: '1px solid var(--border-subtle)',
+                  }}>
                     {cliente.productos.map((p, i) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-2" style={{ borderBottom: i < cliente.productos.length - 1 ? '1px solid #222' : 'none' }}>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-white truncate">{p.producto}</p>
-                          {p.envase && <p className="text-xs" style={{ color: '#555' }}>{p.envase}</p>}
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '8px 14px',
+                        borderBottom: i < cliente.productos.length - 1 ? '1px solid var(--row-sep)' : 'none',
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: 12, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.producto}</p>
+                          {p.envase && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{p.envase}</p>}
                         </div>
-                        <span className="text-xs font-semibold ml-2 flex-shrink-0" style={{ color: '#60A5FA' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, marginLeft: 8, color: '#60A5FA', flexShrink: 0 }}>
                           {p.litros.toFixed(2)} L
                         </span>
                       </div>
@@ -191,7 +198,9 @@ function VendedorCard({ data }: { data: VendedorResumen }) {
         )}
 
         {showClientes && data.clientesHoy.length === 0 && (
-          <p className="text-sm text-center py-3" style={{ color: '#666' }}>Sin ventas registradas hoy</p>
+          <p style={{ fontSize: 13, textAlign: 'center', padding: '12px 0', color: 'var(--muted)' }}>
+            Sin ventas registradas hoy
+          </p>
         )}
       </div>
     </div>
@@ -203,43 +212,70 @@ export default function DashboardClient({ resumen, fechaHoy, periodo }: Props) {
   const totalPeriodo = resumen.reduce((s, v) => s + v.litrosPeriodo, 0)
 
   return (
-    <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto">
+    <div style={{ padding: '40px 48px 60px', maxWidth: 1100 }} className="px-4 pt-8 lg:px-12 lg:pt-10">
       {/* Header */}
-      <div className="mb-5">
-        <div className="flex items-center justify-between mb-1">
-          <h1 className="text-2xl font-black text-white">Ventas del Día</h1>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Calendar size={13} style={{ color: '#888' }} />
-          <span className="text-sm" style={{ color: '#888' }}>{formatFecha(fechaHoy)}</span>
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
+          Ventas del Día
+        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <Calendar size={13} color="var(--muted)" />
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{formatFecha(fechaHoy)}</span>
           {periodo && (
             <>
-              <span style={{ color: '#444' }}>·</span>
-              <span className="text-sm" style={{ color: '#666' }}>{periodo.nombre}</span>
+              <span style={{ color: 'var(--border-subtle)' }}>·</span>
+              <span style={{ fontSize: 13, color: 'var(--muted)', opacity: 0.7 }}>{periodo.nombre}</span>
             </>
           )}
         </div>
       </div>
 
-      {/* Total del día */}
-      <div className="rounded-2xl p-4 mb-5 lg:flex lg:items-center lg:justify-between" style={{ background: 'linear-gradient(135deg, #1C1600 0%, #2A1F00 100%)', border: '1px solid #3D2E00' }}>
+      {/* KPI total */}
+      <div style={{
+        background: 'linear-gradient(135deg, #110D00 0%, #1C1500 100%)',
+        border: '1px solid rgba(212,175,55,0.25)',
+        borderRadius: 20,
+        padding: '24px 32px',
+        marginBottom: 32,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 48,
+      }}>
         <div>
-          <p className="text-xs font-semibold mb-2 tracking-wider" style={{ color: '#F59E0B99' }}>TOTAL EQUIPO HOY</p>
-          <div className="flex items-end gap-4">
-            <div>
-              <span className="text-4xl font-black" style={{ color: '#F59E0B' }}>{totalHoy.toFixed(1)}</span>
-              <span className="text-lg font-bold ml-1" style={{ color: '#D97706' }}>L</span>
-            </div>
+          <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.6)', letterSpacing: '1.8px', textTransform: 'uppercase', marginBottom: 8 }}>
+            Total equipo hoy
+          </p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 48, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-2px', lineHeight: 1 }}>
+              {totalHoy.toFixed(1)}
+            </span>
+            <span style={{ fontSize: 20, fontWeight: 700, color: '#A8870F' }}>L</span>
           </div>
         </div>
-        <div className="mt-2 lg:mt-0 lg:text-right">
-          <p className="text-sm" style={{ color: '#888' }}>Acum. período</p>
-          <p className="text-2xl font-bold text-white">{totalPeriodo.toFixed(1)} L</p>
+        <div style={{ width: 1, height: 56, background: 'var(--border)', flexShrink: 0 }} />
+        <div>
+          <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 8 }}>
+            Acum. período
+          </p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 32, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-1px' }}>
+              {totalPeriodo.toFixed(1)}
+            </span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--muted)' }}>L</span>
+          </div>
         </div>
+        {resumen.map(v => (
+          <div key={v.vendedor}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>
+              {v.vendedor.split(' ')[0]}
+            </p>
+            <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--cream)' }}>{v.litrosHoy.toFixed(1)} L</p>
+          </div>
+        ))}
       </div>
 
-      {/* Cards por vendedor */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Cards vendedores — 2 columnas en escritorio */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 20 }}>
         {resumen.map(data => (
           <VendedorCard key={data.vendedor} data={data} />
         ))}
