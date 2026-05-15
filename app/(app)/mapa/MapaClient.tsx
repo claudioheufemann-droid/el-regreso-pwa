@@ -237,7 +237,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
         background: '#0D0D0D',
       }}>
         <span style={{ fontSize: 11, color: '#555', fontWeight: 600 }}>LEYENDA</span>
-        <div style={{ display: 'flex', items: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#F59E0B', opacity: 0.8 }} />
             <span style={{ fontSize: 11, color: '#888' }}>Javier Badilla</span>
