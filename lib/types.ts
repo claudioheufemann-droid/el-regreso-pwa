@@ -64,3 +64,15 @@ export interface ResumenVendedor {
   clientes_hoy: string[]
   por_categoria: { categoria: string; litros: number }[]
 }
+
+export interface MetaSemana {
+  id: number
+  periodo_id: number | null
+  vendedor: string
+  tipo: 'mensual' | 'semanal'
+  semana_numero: number | null
+  fecha_inicio: string
+  fecha_fin: string
+  categoria_negocio: string
+  meta_litros: number
+}
