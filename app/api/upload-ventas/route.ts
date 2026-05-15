@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'El archivo no contiene datos' }, { status: 400 })
   }
 
-  const vendedoresValidos = ['Javier Badilla', 'Charly Urrejola']
+  const vendedoresValidos = ['Javier Badilla', 'Carlos Urrejola']
 
   const registros = rows
     .filter(row => {
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     .filter(Boolean) as Record<string, unknown>[]
 
   if (registros.length === 0) {
-    return NextResponse.json({ error: 'No se encontraron ventas de Javier Badilla o Charly Urrejola en el archivo' }, { status: 400 })
+    return NextResponse.json({ error: 'No se encontraron ventas de Javier Badilla o Carlos Urrejola en el archivo' }, { status: 400 })
   }
 
   // Obtener combinaciones únicas de (vendedor, fecha) presentes en el archivo

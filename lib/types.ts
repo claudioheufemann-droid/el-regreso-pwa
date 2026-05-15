@@ -1,6 +1,6 @@
-export type Vendedor = 'Javier Badilla' | 'Charly Urrejola'
+export type Vendedor = 'Javier Badilla' | 'Carlos Urrejola'
 
-export const VENDEDORES: Vendedor[] = ['Javier Badilla', 'Charly Urrejola']
+export const VENDEDORES: Vendedor[] = ['Javier Badilla', 'Carlos Urrejola']
 
 export const CATEGORIAS_NEGOCIO = [
   'Bar',
@@ -18,11 +18,11 @@ export const CATEGORIAS_NEGOCIO = [
 
 export const ADMINS = ['benja.alarcon@elregresobeer.com', 'claudio.heufemann@elregresobeer.com']
 
-export const CLIENTES_EXCLUIR = ['Cliente Ventas (Javier)', 'Cliente Ventas (Charly)', 'Cliente PDV', 'Cliente Merma PDV']
+export const CLIENTES_EXCLUIR = ['Cliente Ventas (Javier)', 'Cliente Ventas (Charly)', 'Cliente Ventas (Carlos)', 'Cliente PDV', 'Cliente Merma PDV']
 
 export interface Venta {
   id: number
-  fecha_entrega: string
+  fecha_pedido: string
   vendedor_actual: string
   nombre_fantasia: string | null
   categoria_producto: string | null
