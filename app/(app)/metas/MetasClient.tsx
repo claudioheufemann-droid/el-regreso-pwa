@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Target, Calendar, CheckCircle, Clock } from 'lucide-react'
+import { useMemo, useState, useCallback } from 'react'
+import { Target, Calendar, CheckCircle, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Periodo } from '@/lib/types'
 import {
   getDiasHabiles,
@@ -337,12 +337,79 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
   )
 }
 
+function navStep(fecha: string, vista: Vista, dir: 1 | -1): string {
+  const d = new Date(fecha + 'T12:00:00')
+  if (vista === 'diario') {
+    do { d.setDate(d.getDate() + dir) } while (d.getDay() === 0 || d.getDay() === 6)
+  } else if (vista === 'semanal') {
+    d.setDate(d.getDate() + dir * 7)
+  } else {
+    d.setMonth(d.getMonth() + dir)
+    d.setDate(1)
+  }
+  return d.toISOString().split('T')[0]
+}
+
 export default function MetasClient({
   metasSemanales, metasMensuales, ventasMes, ventasSemana,
   fechaRef, mesInicio, mesFin, semanaInicio, semanaFin,
   periodo, vendedores,
 }: Props) {
   const [vista, setVista] = useState<Vista>('semanal')
+  const [navDate, setNavDate] = useState<string>(fechaRef)
+  const [navAnalytics, setNavAnalytics] = useState<AnalyticsExtended[] | null>(null)
+  const [navMeta, setNavMeta] = useState<{ semanaLabel: string; mesNombre: string; fecha: string } | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const fetchForDate = useCallback(async (fecha: string) => {
+    if (fecha === fechaRef) {
+      setNavAnalytics(null)
+      setNavMeta(null)
+      setNavDate(fechaRef)
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/metas/analytics?fecha=${fecha}`)
+      const data = await res.json()
+      if (data.sinMetas || !data.analytics?.length) {
+        setNavAnalytics([])
+        setNavMeta({ semanaLabel: '', mesNombre: '', fecha })
+      } else {
+        const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+        const fechaD = new Date(fecha + 'T12:00:00')
+        const mesN = `${meses[fechaD.getMonth()]} ${fechaD.getFullYear()}`
+        const extendidos: AnalyticsExtended[] = data.analytics.map((a: AnalyticsVendedor) => {
+          const dhSemTotal = a.diasHabilesSemana
+          const metaDiaria = dhSemTotal > 0 ? a.metaSemanal / dhSemTotal
+            : a.diasHabilesMes > 0 ? a.metaMensual / a.diasHabilesMes : 0
+          const realizadoHoy = (a as AnalyticsVendedor).realizadoHoy ?? 0
+          const apiCanalesHoy: { canal: string; realHoy: number }[] = (a as AnalyticsVendedor).porCanalHoy ?? []
+          const porCanalHoy: CanalDiario[] = a.porCanal
+            .filter(c => c.metaSemanal > 0)
+            .map(c => {
+              const mD = dhSemTotal > 0 ? c.metaSemanal / dhSemTotal : 0
+              const rH = apiCanalesHoy.find(p => p.canal === c.canal)?.realHoy ?? 0
+              return { canal: c.canal, realHoy: rH, metaDiaria: mD, semaforo: getEstadoSemaforo(rH, mD), color: CANAL_COLORS[c.canal] ?? '#6B7280' }
+            })
+            .sort((a, b) => b.metaDiaria - a.metaDiaria)
+          return { ...a, realizadoHoy, metaDiaria, semaforoDiario: getEstadoSemaforo(realizadoHoy, metaDiaria), porCanalHoy }
+        })
+        setNavAnalytics(extendidos)
+        setNavMeta({ semanaLabel: data.analytics[0]?.semanaLabel ?? '', mesNombre: mesN, fecha })
+      }
+    } finally {
+      setLoading(false)
+    }
+    setNavDate(fecha)
+  }, [fechaRef])
+
+  function navigate(dir: 1 | -1) {
+    const base = navDate
+    const next = navStep(base, vista, dir)
+    fetchForDate(next)
+    setNavDate(next)
+  }
 
   const analytics = useMemo<AnalyticsExtended[]>(() => {
     const fechaD = new Date(fechaRef + 'T12:00:00')
@@ -445,23 +512,27 @@ export default function MetasClient({
     })
   }, [metasSemanales, metasMensuales, ventasMes, ventasSemana, fechaRef, mesInicio, mesFin, semanaInicio, semanaFin, vendedores])
 
-  const sinMetas = analytics.every(a => a.metaMensual === 0 && a.metaSemanal === 0)
+  const activeAnalytics = navAnalytics ?? analytics
+  const sinMetas = activeAnalytics.every(a => a.metaMensual === 0 && a.metaSemanal === 0)
 
-  const totalReal = analytics.reduce((s, a) =>
+  const totalReal = activeAnalytics.reduce((s, a) =>
     s + (vista === 'mensual' ? a.realizadoMes : vista === 'diario' ? a.realizadoHoy : a.realizadoSemana), 0)
-  const totalMeta = analytics.reduce((s, a) =>
+  const totalMeta = activeAnalytics.reduce((s, a) =>
     s + (vista === 'mensual' ? a.metaMensual : vista === 'diario' ? a.metaDiaria : a.metaSemanal), 0)
-  const totalEsp = analytics.reduce((s, a) =>
+  const totalEsp = activeAnalytics.reduce((s, a) =>
     s + (vista === 'mensual' ? a.metaEsperadaMes : vista === 'diario' ? a.metaDiaria : a.metaEsperadaSemana), 0)
   const pctEquipo = calcularCumplimiento(totalReal, totalMeta)
   const semEquipo = getEstadoSemaforo(totalReal, totalEsp)
 
   const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
-  const mesNombre = mesInicio
+  const mesNombreBase = mesInicio
     ? `${meses[parseInt(mesInicio.split('-')[1]) - 1]} ${mesInicio.split('-')[0]}`
     : ''
-  const semanaLabel = analytics[0]?.semanaLabel ?? ''
-  const diaLabel = fmtFecha(fechaRef)
+  const semanaLabelBase = analytics[0]?.semanaLabel ?? ''
+
+  const semanaLabel = navMeta?.semanaLabel ?? semanaLabelBase
+  const mesNombre    = navMeta?.mesNombre    ?? mesNombreBase
+  const diaLabel     = fmtFecha(navDate)
 
   const equipoLabel = vista === 'diario' ? `Día · ${diaLabel}`
     : vista === 'semanal' ? `Equipo · ${semanaLabel}`
@@ -542,21 +613,69 @@ export default function MetasClient({
             </div>
           </div>
 
-          {/* Tabs + leyenda */}
+          {/* Tabs + navegación + leyenda */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-            <div style={{ display: 'flex', borderRadius: 12, padding: 4, background: 'var(--surface)', gap: 2 }}>
-              {tabs.map(tab => (
-                <button key={tab.key}
-                  onClick={() => setVista(tab.key)}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* Tabs */}
+              <div style={{ display: 'flex', borderRadius: 12, padding: 4, background: 'var(--surface)', gap: 2 }}>
+                {tabs.map(tab => (
+                  <button key={tab.key}
+                    onClick={() => {
+                      setVista(tab.key)
+                      if (navDate !== fechaRef) fetchForDate(navDate)
+                    }}
+                    style={{
+                      padding: '8px 18px', borderRadius: 9, fontSize: 13, fontWeight: 600,
+                      border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                      background: vista === tab.key ? 'var(--gold)' : 'transparent',
+                      color: vista === tab.key ? '#080808' : 'var(--muted)',
+                      transition: 'all 0.15s',
+                    }}
+                  >{tab.label}</button>
+                ))}
+              </div>
+              {/* Flechas de navegación */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button
+                  onClick={() => navigate(-1)}
+                  disabled={loading}
                   style={{
-                    padding: '8px 18px', borderRadius: 9, fontSize: 13, fontWeight: 600,
-                    border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                    background: vista === tab.key ? 'var(--gold)' : 'transparent',
-                    color: vista === tab.key ? '#080808' : 'var(--muted)',
-                    transition: 'all 0.15s',
+                    width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border)',
+                    background: 'var(--surface)', color: loading ? 'var(--border)' : 'var(--muted)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
                   }}
-                >{tab.label}</button>
-              ))}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={() => navigate(1)}
+                  disabled={loading}
+                  style={{
+                    width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border)',
+                    background: 'var(--surface)', color: loading ? 'var(--border)' : 'var(--muted)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  <ChevronRight size={16} />
+                </button>
+                {navDate !== fechaRef && (
+                  <button
+                    onClick={() => { fetchForDate(fechaRef); setNavDate(fechaRef) }}
+                    style={{
+                      padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                      border: '1px solid var(--border)', background: 'transparent',
+                      color: 'var(--gold)', cursor: 'pointer',
+                    }}
+                  >
+                    Hoy
+                  </button>
+                )}
+                {loading && (
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>Cargando…</span>
+                )}
+              </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               {(['verde', 'amarillo', 'rojo'] as EstadoSemaforo[]).map(e => (
@@ -584,7 +703,7 @@ export default function MetasClient({
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
-            {analytics.map(a => (
+            {activeAnalytics.map(a => (
               <VendedorCard key={a.vendedor} analytics={a} vista={vista} />
             ))}
           </div>

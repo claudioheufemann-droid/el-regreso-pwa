@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
 
   const clientes_ex = CLIENTES_EXCLUIR
 
-  const [{ data: ventasMes }, { data: ventasSemana }] = await Promise.all([
+  const [{ data: ventasMes }, { data: ventasSemana }, { data: ventasDia }] = await Promise.all([
     mesActivo
       ? supabase
           .from('ventas')
@@ -94,12 +94,17 @@ export async function GET(req: NextRequest) {
           .lte('fecha_pedido', fechaStr)
           .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`)
       : Promise.resolve({ data: [] }),
+    supabase
+      .from('ventas')
+      .select('vendedor_actual, categoria_negocio, litros, nombre_fantasia')
+      .in('vendedor_actual', VENDEDORES)
+      .eq('fecha_pedido', fechaStr)
+      .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`),
   ])
 
   // ── Calcular analytics por vendedor ──────────────────────────────────────────
 
   const analytics: AnalyticsVendedor[] = VENDEDORES.map(vendedor => {
-    // Metas del vendedor
     const mSem = (metasSemanales ?? []).filter(m => m.vendedor === vendedor)
     const mMes = (metasMensuales ?? []).filter(m => m.vendedor === vendedor)
 
@@ -189,6 +194,14 @@ export async function GET(req: NextRequest) {
       }
     }).sort((a, b) => b.metaMensual - a.metaMensual)
 
+    // Ventas del día específico
+    const vDia = (ventasDia ?? []).filter(v => v.vendedor_actual === vendedor)
+    const realizadoHoy = vDia.reduce((s, v) => s + (v.litros ?? 0), 0)
+    const porCanalHoy = allCanales.map(canal => ({
+      canal,
+      realHoy: vDia.filter(v => v.categoria_negocio === canal).reduce((s, v) => s + (v.litros ?? 0), 0),
+    }))
+
     return {
       vendedor,
       fecha: fechaStr,
@@ -216,6 +229,8 @@ export async function GET(req: NextRequest) {
       promedioNecesarioDiarioSemana,
       mensajeSemana,
       porCanal,
+      realizadoHoy,
+      porCanalHoy,
     }
   })
 

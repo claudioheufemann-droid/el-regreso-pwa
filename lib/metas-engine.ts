@@ -50,6 +50,10 @@ export interface AnalyticsVendedor {
 
   // Por canal
   porCanal: AnalyticsCanal[]
+
+  // Diario (opcional, incluido cuando la API recibe una fecha específica)
+  realizadoHoy?: number
+  porCanalHoy?: { canal: string; realHoy: number }[]
 }
 
 /** Retorna un array con todas las fechas hábiles (L-V) en el rango [inicio, fin] inclusive. */
