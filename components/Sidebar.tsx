@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart2, TrendingUp, Target, Upload, Beer } from 'lucide-react'
+import { BarChart2, TrendingUp, Target, Upload, Beer, Map } from 'lucide-react'
 
 const navItems = [
-  { href: '/',            icon: BarChart2,   label: 'Hoy' },
-  { href: '/acumulado',   icon: TrendingUp,  label: 'Período' },
-  { href: '/metas',       icon: Target,      label: 'Metas' },
+  { href: '/',             icon: BarChart2,  label: 'Hoy' },
+  { href: '/acumulado',    icon: TrendingUp, label: 'Período' },
+  { href: '/mapa',         icon: Map,        label: 'Mapa' },
+  { href: '/metas',        icon: Target,     label: 'Metas' },
   { href: '/admin/cargar', icon: Upload,     label: 'Cargar' },
 ]
 
