@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
     mesActivo
       ? supabase
           .from('ventas')
-          .select('vendedor_actual, categoria_negocio, litros, nombre_fantasia')
+          .select('vendedor_actual, categoria_negocio, litros, nombre_fantasia, fecha_pedido')
           .in('vendedor_actual', VENDEDORES)
           .gte('fecha_pedido', mesActivo.inicio)
           .lte('fecha_pedido', fechaStr)
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
     semanaActiva
       ? supabase
           .from('ventas')
-          .select('vendedor_actual, categoria_negocio, litros, nombre_fantasia')
+          .select('vendedor_actual, categoria_negocio, litros, nombre_fantasia, fecha_pedido')
           .in('vendedor_actual', VENDEDORES)
           .gte('fecha_pedido', semanaActiva.inicio)
           .lte('fecha_pedido', fechaStr)
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
       : Promise.resolve({ data: [] }),
     supabase
       .from('ventas')
-      .select('vendedor_actual, categoria_negocio, litros, nombre_fantasia')
+      .select('vendedor_actual, categoria_negocio, litros, nombre_fantasia, fecha_pedido')
       .in('vendedor_actual', VENDEDORES)
       .eq('fecha_pedido', fechaStr)
       .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`),
@@ -202,6 +202,11 @@ export async function GET(req: NextRequest) {
       realHoy: vDia.filter(v => v.categoria_negocio === canal).reduce((s, v) => s + (v.litros ?? 0), 0),
     }))
 
+    // Datos crudos por día para gráficos
+    const ventasDiariasRaw = (ventasMes ?? [])
+      .filter(v => v.vendedor_actual === vendedor && v.fecha_pedido)
+      .map(v => ({ fecha: v.fecha_pedido as string, litros: v.litros ?? 0 }))
+
     return {
       vendedor,
       fecha: fechaStr,
@@ -231,6 +236,7 @@ export async function GET(req: NextRequest) {
       porCanal,
       realizadoHoy,
       porCanalHoy,
+      ventasDiariasRaw,
     }
   })
 

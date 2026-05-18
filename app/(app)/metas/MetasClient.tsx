@@ -48,11 +48,29 @@ interface CanalDiario {
   color: string
 }
 
+interface BarDia {
+  dia: string
+  label: string
+  litros: number
+  isToday: boolean
+  isFuture: boolean
+}
+
+interface PacingDia {
+  dia: string
+  label: string
+  realAcum: number
+  metaIdeal: number
+  isFuture: boolean
+}
+
 interface AnalyticsExtended extends AnalyticsVendedor {
   realizadoHoy: number
   metaDiaria: number
   semaforoDiario: EstadoSemaforo
   porCanalHoy: CanalDiario[]
+  barDataSemana: BarDia[]
+  pacingDataMes: PacingDia[]
 }
 
 interface PeriodoSemana {
@@ -93,6 +111,174 @@ function fmtFecha(d: string) {
 function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 }
+
+// ─── SVG Charts ──────────────────────────────────────────────────────────────
+
+function GaugeChart({ pct, semaforo, meta, realizado }: {
+  pct: number; semaforo: EstadoSemaforo; meta: number; realizado: number
+}) {
+  const color = SEMAFORO_COLORS[semaforo]
+  const r = 62, cx = 100, cy = 78
+  const clampedPct = Math.min(pct, 100)
+  const theta = Math.PI * (clampedPct / 100)
+  const ex = cx - r * Math.cos(theta)
+  const ey = cy - r * Math.sin(theta)
+  const largeArc = clampedPct > 50 ? 1 : 0
+
+  return (
+    <svg width="200" height="96" viewBox="0 0 200 96" style={{ display: 'block', margin: '0 auto' }}>
+      {/* Track */}
+      <path
+        d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`}
+        fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="13" strokeLinecap="round"
+      />
+      {/* Progress arc */}
+      {clampedPct > 0 && (
+        <path
+          d={`M ${cx - r} ${cy} A ${r} ${r} 0 ${largeArc} 0 ${ex.toFixed(2)} ${ey.toFixed(2)}`}
+          fill="none" stroke={color} strokeWidth="13" strokeLinecap="round"
+        />
+      )}
+      {/* Pct text */}
+      <text x={cx} y={cy - 6} textAnchor="middle" fill={color}
+        fontSize="26" fontWeight="900" fontFamily="inherit">
+        {pct.toFixed(0)}%
+      </text>
+      {/* Sub label */}
+      <text x={cx} y={cy + 12} textAnchor="middle" fill="rgba(255,255,255,0.4)"
+        fontSize="11" fontFamily="inherit">
+        {fmt(realizado)} / {fmt(meta)} L
+      </text>
+      {/* Ticks left/right */}
+      <text x={cx - r - 4} y={cy + 4} textAnchor="end" fill="rgba(255,255,255,0.25)" fontSize="9">0%</text>
+      <text x={cx + r + 4} y={cy + 4} textAnchor="start" fill="rgba(255,255,255,0.25)" fontSize="9">100%</text>
+    </svg>
+  )
+}
+
+function WeekBarChart({ data, metaDiaria, semaforo }: {
+  data: BarDia[]; metaDiaria: number; semaforo: EstadoSemaforo
+}) {
+  const color = SEMAFORO_COLORS[semaforo]
+  const W = 220, H = 80
+  const n = data.length || 5
+  const barW = Math.floor((W - (n - 1) * 8) / n)
+  const gap = 8
+  const totalW = n * barW + (n - 1) * gap
+  const offsetX = (W - totalW) / 2
+  const maxVal = Math.max(metaDiaria * 1.4, ...data.map(d => d.litros), 1)
+  const metaY = H - (metaDiaria / maxVal) * H
+
+  return (
+    <svg width={W} height={H + 28} viewBox={`0 0 ${W} ${H + 28}`} style={{ display: 'block', margin: '0 auto' }}>
+      {/* Meta benchmark line */}
+      {metaDiaria > 0 && (
+        <>
+          <line
+            x1={offsetX} y1={metaY} x2={offsetX + totalW} y2={metaY}
+            stroke="rgba(255,255,255,0.28)" strokeWidth="1.5" strokeDasharray="4 3"
+          />
+          <text x={offsetX + totalW + 3} y={metaY + 4} fill="rgba(255,255,255,0.3)" fontSize="9">meta</text>
+        </>
+      )}
+      {data.map((d, i) => {
+        const x = offsetX + i * (barW + gap)
+        const barH = d.litros > 0 ? Math.max(3, (d.litros / maxVal) * H) : 0
+        const y = H - barH
+        const barColor = d.isFuture
+          ? 'rgba(255,255,255,0.05)'
+          : d.isToday
+            ? color
+            : `${color}99`
+        const overMeta = !d.isFuture && metaDiaria > 0 && d.litros >= metaDiaria
+        return (
+          <g key={d.dia}>
+            <rect x={x} y={y} width={barW} height={Math.max(barH, 1)} rx={4} fill={barColor} />
+            {overMeta && (
+              <rect x={x} y={y - 2} width={barW} height={3} rx={2} fill={color} opacity={0.6} />
+            )}
+            {!d.isFuture && d.litros > 0 && (
+              <text
+                x={x + barW / 2} y={Math.max(y - 4, 10)} textAnchor="middle"
+                fill={d.isToday ? color : 'rgba(255,255,255,0.5)'}
+                fontSize="9" fontWeight={d.isToday ? '800' : '400'} fontFamily="inherit"
+              >
+                {d.litros.toFixed(0)}
+              </text>
+            )}
+            <text
+              x={x + barW / 2} y={H + 16} textAnchor="middle"
+              fill={d.isToday ? color : 'rgba(255,255,255,0.4)'}
+              fontSize="10" fontWeight={d.isToday ? '800' : '400'} fontFamily="inherit"
+            >
+              {d.label}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+function PacingLineChart({ data, meta, semaforo }: {
+  data: PacingDia[]; meta: number; semaforo: EstadoSemaforo
+}) {
+  const color = SEMAFORO_COLORS[semaforo]
+  const W = 220, H = 80
+  const n = data.length
+  if (n < 2) return null
+  const maxVal = Math.max(meta * 1.05, ...data.map(d => Math.max(d.realAcum, d.metaIdeal)), 1)
+
+  function px(i: number) { return (i / (n - 1)) * W }
+  function py(v: number) { return H - (v / maxVal) * H }
+
+  // Only draw real line up to last non-future point
+  const realPoints = data
+    .map((d, i) => ({ ...d, i }))
+    .filter(d => !d.isFuture)
+
+  const realPath = realPoints.length >= 2
+    ? realPoints.map((d, j) => `${j === 0 ? 'M' : 'L'} ${px(d.i).toFixed(1)} ${py(d.realAcum).toFixed(1)}`).join(' ')
+    : null
+
+  const idealPath = data
+    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${px(i).toFixed(1)} ${py(d.metaIdeal).toFixed(1)}`)
+    .join(' ')
+
+  // Last real point for dot
+  const lastReal = realPoints[realPoints.length - 1]
+
+  return (
+    <svg width={W} height={H + 28} viewBox={`0 0 ${W} ${H + 28}`} style={{ display: 'block', margin: '0 auto' }}>
+      {/* Ideal pacing dashed */}
+      <path d={idealPath} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" strokeDasharray="5 4" />
+      {/* Real line */}
+      {realPath && (
+        <path d={realPath} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+      {/* Current point dot */}
+      {lastReal && (
+        <circle
+          cx={px(lastReal.i)} cy={py(lastReal.realAcum)} r={4}
+          fill={color} stroke="var(--surface)" strokeWidth="2"
+        />
+      )}
+      {/* Labels */}
+      <text x={2} y={H + 16} fill="rgba(255,255,255,0.35)" fontSize="9" fontFamily="inherit">
+        {data[0]?.label}
+      </text>
+      <text x={W - 2} y={H + 16} textAnchor="end" fill="rgba(255,255,255,0.35)" fontSize="9" fontFamily="inherit">
+        {data[n - 1]?.label}
+      </text>
+      {/* Meta label on ideal line end */}
+      <text x={W - 2} y={py(meta) - 4} textAnchor="end" fill="rgba(255,255,255,0.28)" fontSize="9" fontFamily="inherit">
+        meta
+      </text>
+    </svg>
+  )
+}
+
+// ─── Semáforo, Barras ─────────────────────────────────────────────────────────
 
 function SemaforoDot({ estado }: { estado: EstadoSemaforo }) {
   return (
@@ -193,6 +379,8 @@ function CanalRow({ c, vista, canalDiario }: { c: AnalyticsCanal; vista: Vista; 
   )
 }
 
+// ─── VendedorCard ─────────────────────────────────────────────────────────────
+
 function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vista: Vista }) {
   const isDiario  = vista === 'diario'
   const esMensual = vista === 'mensual'
@@ -222,6 +410,7 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
     }}>
       <div style={{ height: 4, background: SEMAFORO_COLORS[semaforo] }} />
 
+      {/* Header */}
       <div style={{ padding: '18px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
@@ -245,6 +434,42 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
         </div>
       </div>
 
+      {/* Chart — reactive según vista */}
+      <div style={{ padding: '0 20px 4px' }}>
+        {isDiario && (
+          <GaugeChart pct={pct} semaforo={semaforo} meta={meta} realizado={real} />
+        )}
+        {vista === 'semanal' && analytics.barDataSemana.length > 0 && (
+          <WeekBarChart
+            data={analytics.barDataSemana}
+            metaDiaria={analytics.metaDiaria}
+            semaforo={semaforo}
+          />
+        )}
+        {esMensual && analytics.pacingDataMes.length >= 2 && (
+          <PacingLineChart
+            data={analytics.pacingDataMes}
+            meta={analytics.metaMensual}
+            semaforo={semaforo}
+          />
+        )}
+      </div>
+
+      {/* Leyenda del chart */}
+      {(vista === 'semanal' || esMensual) && (
+        <div style={{ padding: '0 20px 10px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 16, height: 6, borderRadius: 3, background: SEMAFORO_COLORS[semaforo] }} />
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>Realizado</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 16, height: 1.5, background: 'rgba(255,255,255,0.28)', borderTop: '1.5px dashed rgba(255,255,255,0.28)' }} />
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>{vista === 'semanal' ? 'Meta diaria' : 'Pacing ideal'}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Progress bar */}
       <div style={{ padding: '0 20px 14px' }}>
         <BarraDual meta={meta} realizado={real} esperado={esperado} semaforo={semaforo} />
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7 }}>
@@ -262,6 +487,7 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
         </div>
       </div>
 
+      {/* KPI chips */}
       <div style={{ padding: '0 20px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         {[
           { label: 'Meta', value: `${fmt(meta)} L` },
@@ -279,6 +505,7 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
         ))}
       </div>
 
+      {/* Días hábiles bar */}
       {!isDiario && (
         <div style={{ padding: '0 20px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -295,6 +522,7 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
         </div>
       )}
 
+      {/* Proyección */}
       {!isDiario && !metaCumplida && diasRest > 0 && (
         <div style={{
           margin: '0 20px 14px', padding: '10px 14px', borderRadius: 12,
@@ -314,6 +542,7 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
         </div>
       )}
 
+      {/* Meta cumplida */}
       {metaCumplida && (
         <div style={{
           margin: '0 20px 14px', padding: '10px 14px', borderRadius: 12,
@@ -326,6 +555,7 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
         </div>
       )}
 
+      {/* Canales */}
       <div style={{ padding: '0 20px 20px' }}>
         <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 10 }}>
           Por canal · {vista}
@@ -372,7 +602,6 @@ function PeriodDropdown({ options, value, onChange, placeholder }: {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Agrupa las opciones por group
   const groups: { name: string; items: DropOption[] }[] = []
   options.forEach(opt => {
     const g = opt.group ?? ''
@@ -421,8 +650,7 @@ function PeriodDropdown({ options, value, onChange, placeholder }: {
                     padding: '9px 14px', fontSize: 13, fontWeight: opt.value === value ? 700 : 400,
                     color: opt.value === value ? 'var(--gold)' : 'var(--cream)',
                     background: opt.value === value ? 'var(--gold-dim)' : 'transparent',
-                    border: 'none', cursor: 'pointer',
-                    transition: 'background 0.1s',
+                    border: 'none', cursor: 'pointer', transition: 'background 0.1s',
                   }}
                   onMouseEnter={e => (e.currentTarget.style.background = opt.value === value ? 'var(--gold-dim)' : 'rgba(255,255,255,0.04)')}
                   onMouseLeave={e => (e.currentTarget.style.background = opt.value === value ? 'var(--gold-dim)' : 'transparent')}
@@ -438,6 +666,8 @@ function PeriodDropdown({ options, value, onChange, placeholder }: {
   )
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function navStep(fecha: string, vista: Vista, dir: 1 | -1): string {
   const d = new Date(fecha + 'T12:00:00')
   if (vista === 'diario') {
@@ -451,6 +681,58 @@ function navStep(fecha: string, vista: Vista, dir: 1 | -1): string {
   return d.toISOString().split('T')[0]
 }
 
+const DIA_LABELS = ['L', 'M', 'X', 'J', 'V']
+const MESES_NOMBRE = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+const MESES_FULL   = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+
+/** Construye barDataSemana a partir de días hábiles y ventas crudas */
+function buildBarData(
+  dhSem: Date[],
+  ventasDiariasRaw: { fecha: string; litros: number }[],
+  fechaRef: string
+): BarDia[] {
+  return dhSem.map((d, i) => {
+    const dia = d.toISOString().split('T')[0]
+    const litros = ventasDiariasRaw
+      .filter(v => v.fecha === dia)
+      .reduce((s, v) => s + v.litros, 0)
+    return {
+      dia,
+      label: DIA_LABELS[i] ?? String(i + 1),
+      litros,
+      isToday: dia === fechaRef,
+      isFuture: dia > fechaRef,
+    }
+  })
+}
+
+/** Construye pacingDataMes a partir de días hábiles del mes y ventas crudas */
+function buildPacingData(
+  dhMes: Date[],
+  metaMensual: number,
+  ventasDiariasRaw: { fecha: string; litros: number }[],
+  fechaRef: string
+): PacingDia[] {
+  let acum = 0
+  const n = dhMes.length
+  return dhMes.map((d, i) => {
+    const dia = d.toISOString().split('T')[0]
+    const isFuture = dia > fechaRef
+    if (!isFuture) {
+      acum += ventasDiariasRaw.filter(v => v.fecha === dia).reduce((s, v) => s + v.litros, 0)
+    }
+    return {
+      dia,
+      label: fmtFecha(dia),
+      realAcum: acum,
+      metaIdeal: n > 0 ? metaMensual * (i + 1) / n : 0,
+      isFuture,
+    }
+  })
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function MetasClient({
   metasSemanales, metasMensuales, ventasMes, ventasSemana,
   fechaRef, mesInicio, mesFin, semanaInicio, semanaFin,
@@ -461,6 +743,14 @@ export default function MetasClient({
   const [navAnalytics, setNavAnalytics] = useState<AnalyticsExtended[] | null>(null)
   const [navMeta, setNavMeta] = useState<{ semanaLabel: string; mesNombre: string; fecha: string } | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Re-fetch when switching vista while on a non-default date
+  useEffect(() => {
+    if (navDate !== fechaRef && navAnalytics !== null) {
+      fetchForDate(navDate)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista])
 
   const fetchForDate = useCallback(async (fecha: string) => {
     if (fecha === fechaRef) {
@@ -477,15 +767,19 @@ export default function MetasClient({
         setNavAnalytics([])
         setNavMeta({ semanaLabel: '', mesNombre: '', fecha })
       } else {
-        const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
         const fechaD = new Date(fecha + 'T12:00:00')
-        const mesN = `${meses[fechaD.getMonth()]} ${fechaD.getFullYear()}`
+        const mesN = `${MESES_NOMBRE[fechaD.getMonth()]} ${fechaD.getFullYear()}`
+
         const extendidos: AnalyticsExtended[] = data.analytics.map((a: AnalyticsVendedor) => {
           const dhSemTotal = a.diasHabilesSemana
-          const metaDiaria = dhSemTotal > 0 ? a.metaSemanal / dhSemTotal
+          const metaDiaria = dhSemTotal > 0
+            ? a.metaSemanal / dhSemTotal
             : a.diasHabilesMes > 0 ? a.metaMensual / a.diasHabilesMes : 0
-          const realizadoHoy = (a as AnalyticsVendedor).realizadoHoy ?? 0
-          const apiCanalesHoy: { canal: string; realHoy: number }[] = (a as AnalyticsVendedor).porCanalHoy ?? []
+
+          const realizadoHoy = a.realizadoHoy ?? 0
+          const apiCanalesHoy: { canal: string; realHoy: number }[] = a.porCanalHoy ?? []
+          const ventasCrudas: { fecha: string; litros: number }[] = a.ventasDiariasRaw ?? []
+
           const porCanalHoy: CanalDiario[] = a.porCanal
             .filter(c => c.metaSemanal > 0)
             .map(c => {
@@ -493,9 +787,87 @@ export default function MetasClient({
               const rH = apiCanalesHoy.find(p => p.canal === c.canal)?.realHoy ?? 0
               return { canal: c.canal, realHoy: rH, metaDiaria: mD, semaforo: getEstadoSemaforo(rH, mD), color: CANAL_COLORS[c.canal] ?? '#6B7280' }
             })
-            .sort((a, b) => b.metaDiaria - a.metaDiaria)
-          return { ...a, realizadoHoy, metaDiaria, semaforoDiario: getEstadoSemaforo(realizadoHoy, metaDiaria), porCanalHoy }
+            .sort((x, y) => y.metaDiaria - x.metaDiaria)
+
+          // Build chart data from API's ventasDiariasRaw
+          // We need dhSem and dhMes ranges — use semanaLabel + mesActivo from API response
+          // Fallback: use the date +/- context to find period boundaries
+          const semIni = a.semanaLabel?.match(/(\d{4}-\d{2}-\d{2})/)
+            ? a.semanaLabel.match(/(\d{4}-\d{2}-\d{2})/)![1]
+            : fecha
+          // Build dhSem from the period info we have
+          // Since we don't have exact dhSem from API, derive from API analytics fields
+          const dhSemCount = a.diasHabilesSemana
+          const dhMesCount = a.diasHabilesMes
+
+          // Approximate: build from meta proportional data
+          // We use ventasCrudas grouped by week/month for bar + pacing
+          const barDataSemana: BarDia[] = (() => {
+            // Find unique working days in ventasCrudas that fall in [semanaInicio, semanaFin]
+            // Since we don't have exact week boundaries, use dias from ventas
+            // Build 5-slot array based on day-of-week
+            const ventasPorDia = new Map<string, number>()
+            ventasCrudas.forEach(v => {
+              const existing = ventasPorDia.get(v.fecha) ?? 0
+              ventasPorDia.set(v.fecha, existing + v.litros)
+            })
+            // Get week of fechaRef: Mon-Fri
+            const fD = new Date(fecha + 'T12:00:00')
+            const dow = fD.getDay() // 0=Sun,1=Mon,...
+            const mondayOffset = dow === 0 ? -6 : 1 - dow
+            const monday = new Date(fD)
+            monday.setDate(fD.getDate() + mondayOffset)
+            return Array.from({ length: 5 }, (_, i) => {
+              const day = new Date(monday)
+              day.setDate(monday.getDate() + i)
+              const dia = day.toISOString().split('T')[0]
+              return {
+                dia, label: DIA_LABELS[i],
+                litros: ventasPorDia.get(dia) ?? 0,
+                isToday: dia === fecha,
+                isFuture: dia > fecha,
+              }
+            })
+          })()
+
+          const pacingDataMes: PacingDia[] = (() => {
+            if (dhMesCount === 0) return []
+            // Group all ventasCrudas acumulativamente
+            const ventasPorDia = new Map<string, number>()
+            ventasCrudas.forEach(v => {
+              const existing = ventasPorDia.get(v.fecha) ?? 0
+              ventasPorDia.set(v.fecha, existing + v.litros)
+            })
+            // Get all unique days sorted
+            const allDias = [...ventasPorDia.keys()].sort()
+            if (allDias.length === 0) return []
+            // Build pacing from mesInicio to mesFin using dhMesCount
+            // We approximate using the sorted venta days
+            let acum = 0
+            const totalMeta = a.metaMensual
+            return allDias.map((dia, idx) => {
+              acum += ventasPorDia.get(dia) ?? 0
+              return {
+                dia,
+                label: fmtFecha(dia),
+                realAcum: acum,
+                metaIdeal: dhMesCount > 0 ? totalMeta * (idx + 1) / dhMesCount : 0,
+                isFuture: dia > fecha,
+              }
+            })
+          })()
+
+          return {
+            ...a,
+            realizadoHoy,
+            metaDiaria,
+            semaforoDiario: getEstadoSemaforo(realizadoHoy, metaDiaria),
+            porCanalHoy,
+            barDataSemana,
+            pacingDataMes,
+          }
         })
+
         setNavAnalytics(extendidos)
         setNavMeta({ semanaLabel: data.analytics[0]?.semanaLabel ?? '', mesNombre: mesN, fecha })
       }
@@ -506,14 +878,16 @@ export default function MetasClient({
   }, [fechaRef])
 
   function navigate(dir: 1 | -1) {
-    const base = navDate
-    const next = navStep(base, vista, dir)
+    const next = navStep(navDate, vista, dir)
     fetchForDate(next)
     setNavDate(next)
   }
 
+  // ── Compute base analytics from props ────────────────────────────────────────
   const analytics = useMemo<AnalyticsExtended[]>(() => {
     const fechaD = new Date(fechaRef + 'T12:00:00')
+    const dhMes = getDiasHabiles(new Date(mesInicio), new Date(mesFin + 'T23:59:59'))
+    const dhSem = getDiasHabiles(new Date(semanaInicio), new Date(semanaFin + 'T23:59:59'))
 
     return vendedores.map(vendedor => {
       const mSem = metasSemanales.filter(m => m.vendedor === vendedor)
@@ -527,9 +901,6 @@ export default function MetasClient({
       const realMes = vMes.reduce((s, v) => s + (v.litros ?? 0), 0)
       const realSem = vSem.reduce((s, v) => s + (v.litros ?? 0), 0)
       const realizadoHoy = vHoy.reduce((s, v) => s + (v.litros ?? 0), 0)
-
-      const dhMes = getDiasHabiles(new Date(mesInicio), new Date(mesFin + 'T23:59:59'))
-      const dhSem = getDiasHabiles(new Date(semanaInicio), new Date(semanaFin + 'T23:59:59'))
 
       const dhMesTotal = dhMes.length
       const dhSemTotal = dhSem.length
@@ -557,9 +928,7 @@ export default function MetasClient({
         const metaDiariaCanal = dhSemTotal > 0 ? metaS / dhSemTotal : 0
         const rH = vHoy.filter(v => v.categoria_negocio === canal).reduce((s, v) => s + (v.litros ?? 0), 0)
         return {
-          canal,
-          realHoy: rH,
-          metaDiaria: metaDiariaCanal,
+          canal, realHoy: rH, metaDiaria: metaDiariaCanal,
           semaforo: getEstadoSemaforo(rH, metaDiariaCanal),
           color: CANAL_COLORS[canal] ?? '#6B7280',
         }
@@ -583,6 +952,11 @@ export default function MetasClient({
           semaforoSemana: getEstadoSemaforo(rS, eS),
         }
       }).sort((a, b) => b.metaMensual - a.metaMensual)
+
+      // Chart data
+      const ventasCrudas = vMes.map(v => ({ fecha: v.fecha_pedido, litros: v.litros }))
+      const barDataSemana = buildBarData(dhSem, ventasCrudas, fechaRef)
+      const pacingDataMes = buildPacingData(dhMes, metaMesTotal, ventasCrudas, fechaRef)
 
       const semNum = mSem[0]?.semana_numero ?? 0
       const semLabel = semanaInicio ? `S${semNum} · ${fmtFecha(semanaInicio)} – ${fmtFecha(semanaFin)}` : ''
@@ -609,10 +983,13 @@ export default function MetasClient({
         metaDiaria,
         semaforoDiario,
         porCanalHoy,
+        barDataSemana,
+        pacingDataMes,
       }
     })
   }, [metasSemanales, metasMensuales, ventasMes, ventasSemana, fechaRef, mesInicio, mesFin, semanaInicio, semanaFin, vendedores])
 
+  // ── Derived display values ────────────────────────────────────────────────────
   const activeAnalytics = navAnalytics ?? analytics
   const sinMetas = activeAnalytics.every(a => a.metaMensual === 0 && a.metaSemanal === 0)
 
@@ -625,14 +1002,10 @@ export default function MetasClient({
   const pctEquipo = calcularCumplimiento(totalReal, totalMeta)
   const semEquipo = getEstadoSemaforo(totalReal, totalEsp)
 
-  const MESES_NOMBRE = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
-  const MESES_FULL   = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
-
   const mesNombreBase = mesInicio
     ? `${MESES_NOMBRE[parseInt(mesInicio.split('-')[1]) - 1]} ${mesInicio.split('-')[0]}`
     : ''
   const semanaLabelBase = analytics[0]?.semanaLabel ?? ''
-
   const semanaLabel = navMeta?.semanaLabel ?? semanaLabelBase
   const mesNombre   = navMeta?.mesNombre   ?? mesNombreBase
   const diaLabel    = fmtFecha(navDate)
@@ -647,7 +1020,6 @@ export default function MetasClient({
     { key: 'mensual', label: 'Mes' },
   ]
 
-  // Opciones del dropdown de semanas
   const opcionesSemanas: DropOption[] = periodosSemanas.map(s => {
     const mesIdx = parseInt(s.fecha_inicio.split('-')[1]) - 1
     const year   = s.fecha_inicio.split('-')[0]
@@ -656,14 +1028,12 @@ export default function MetasClient({
     return { value: s.fecha_inicio, label, group }
   })
 
-  // Opciones del dropdown de meses
   const opcionesMeses: DropOption[] = periodosMeses.map(m => {
     const mesIdx = parseInt(m.fecha_inicio.split('-')[1]) - 1
     const year   = m.fecha_inicio.split('-')[0]
     return { value: m.fecha_inicio, label: `${MESES_FULL[mesIdx]} ${year}` }
   })
 
-  // Valor activo en los dropdowns (fecha_inicio del período navegado)
   const activeSemanaValue = periodosSemanas.find(s =>
     navDate >= s.fecha_inicio && navDate <= s.fecha_fin
   )?.fecha_inicio ?? semanaInicio
@@ -672,6 +1042,7 @@ export default function MetasClient({
     navDate >= m.fecha_inicio && navDate <= m.fecha_fin
   )?.fecha_inicio ?? mesInicio
 
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: '40px 48px 60px' }} className="px-4 pt-8 lg:px-12 lg:pt-10">
       <div style={{ marginBottom: 28 }}>
@@ -741,10 +1112,10 @@ export default function MetasClient({
             </div>
           </div>
 
-          {/* Tabs + selectores de período + leyenda */}
+          {/* Tabs + selectores de período */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {/* Tabs vista */}
+              {/* Tabs */}
               <div style={{ display: 'flex', borderRadius: 12, padding: 4, background: 'var(--surface)', gap: 2 }}>
                 {tabs.map(tab => (
                   <button key={tab.key}
@@ -760,26 +1131,24 @@ export default function MetasClient({
                 ))}
               </div>
 
-              {/* Selector según vista */}
+              {/* Selector de período */}
               {vista === 'diario' && (
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="date"
-                    value={navDate}
-                    onChange={e => {
-                      const v = e.target.value
-                      if (v) { setNavDate(v); fetchForDate(v) }
-                    }}
-                    style={{
-                      padding: '8px 14px', borderRadius: 10,
-                      background: 'var(--surface)', border: '1px solid var(--border)',
-                      color: 'var(--cream)', fontSize: 13, fontWeight: 600,
-                      cursor: 'pointer', colorScheme: 'dark', outline: 'none',
-                    }}
-                    onFocus={e => (e.target.style.borderColor = 'var(--gold)')}
-                    onBlur={e => (e.target.style.borderColor = 'var(--border)')}
-                  />
-                </div>
+                <input
+                  type="date"
+                  value={navDate}
+                  onChange={e => {
+                    const v = e.target.value
+                    if (v) { setNavDate(v); fetchForDate(v) }
+                  }}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10,
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                    color: 'var(--cream)', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', colorScheme: 'dark', outline: 'none',
+                  }}
+                  onFocus={e => (e.target.style.borderColor = 'var(--gold)')}
+                  onBlur={e => (e.target.style.borderColor = 'var(--border)')}
+                />
               )}
 
               {vista === 'semanal' && opcionesSemanas.length > 0 && (
@@ -798,7 +1167,6 @@ export default function MetasClient({
                 />
               )}
 
-              {/* Indicadores */}
               {navDate !== fechaRef && (
                 <button
                   onClick={() => { fetchForDate(fechaRef); setNavDate(fechaRef) }}
@@ -813,6 +1181,8 @@ export default function MetasClient({
               )}
               {loading && <span style={{ fontSize: 11, color: 'var(--muted)' }}>Cargando…</span>}
             </div>
+
+            {/* Leyenda semáforos */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               {(['verde', 'amarillo', 'rojo'] as EstadoSemaforo[]).map(e => (
                 <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -825,19 +1195,7 @@ export default function MetasClient({
             </div>
           </div>
 
-          {vista !== 'diario' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 18, height: 7, borderRadius: 4, background: SEMAFORO_COLORS.verde }} />
-                <span style={{ fontSize: 11, color: 'var(--muted)' }}>Realizado</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 2, height: 14, borderRadius: 2, background: 'rgba(255,255,255,0.5)' }} />
-                <span style={{ fontSize: 11, color: 'var(--muted)' }}>Meta esperada a la fecha</span>
-              </div>
-            </div>
-          )}
-
+          {/* Grid de vendedores */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
             {activeAnalytics.map(a => (
               <VendedorCard key={a.vendedor} analytics={a} vista={vista} />

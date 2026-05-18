@@ -54,6 +54,9 @@ export interface AnalyticsVendedor {
   // Diario (opcional, incluido cuando la API recibe una fecha específica)
   realizadoHoy?: number
   porCanalHoy?: { canal: string; realHoy: number }[]
+
+  // Datos crudos por día para gráficos (opcional)
+  ventasDiariasRaw?: { fecha: string; litros: number }[]
 }
 
 /** Retorna un array con todas las fechas hábiles (L-V) en el rango [inicio, fin] inclusive. */
