@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState, useCallback } from 'react'
-import { Target, Calendar, CheckCircle, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
+import { Target, Calendar, CheckCircle, Clock, ChevronDown } from 'lucide-react'
 import { Periodo } from '@/lib/types'
 import {
   getDiasHabiles,
@@ -55,6 +55,17 @@ interface AnalyticsExtended extends AnalyticsVendedor {
   porCanalHoy: CanalDiario[]
 }
 
+interface PeriodoSemana {
+  semana_numero: number | null
+  fecha_inicio: string
+  fecha_fin: string
+}
+
+interface PeriodoMes {
+  fecha_inicio: string
+  fecha_fin: string
+}
+
 interface Props {
   metasSemanales: MetaRow[]
   metasMensuales: MetaRow[]
@@ -67,6 +78,8 @@ interface Props {
   semanaFin: string
   periodo: Periodo | null
   vendedores: string[]
+  periodosSemanas: PeriodoSemana[]
+  periodosMeses: PeriodoMes[]
 }
 
 function fmt(n: number) { return n.toFixed(1) }
@@ -337,6 +350,94 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
   )
 }
 
+// ─── Dropdown de período ──────────────────────────────────────────────────────
+
+interface DropOption { value: string; label: string; group?: string }
+
+function PeriodDropdown({ options, value, onChange, placeholder }: {
+  options: DropOption[]
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const selected = options.find(o => o.value === value)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // Agrupa las opciones por group
+  const groups: { name: string; items: DropOption[] }[] = []
+  options.forEach(opt => {
+    const g = opt.group ?? ''
+    let grp = groups.find(x => x.name === g)
+    if (!grp) { grp = { name: g, items: [] }; groups.push(grp) }
+    grp.items.push(opt)
+  })
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 14px', borderRadius: 10,
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          color: 'var(--cream)', fontSize: 13, fontWeight: 600,
+          cursor: 'pointer', whiteSpace: 'nowrap', transition: 'border-color 0.15s',
+          borderColor: open ? 'var(--gold)' : 'var(--border)',
+        }}
+      >
+        <span>{selected?.label ?? placeholder ?? '—'}</span>
+        <ChevronDown size={14} color="var(--muted)" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200,
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          borderRadius: 12, minWidth: 200, maxHeight: 300, overflowY: 'auto',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        }}>
+          {groups.map(grp => (
+            <div key={grp.name}>
+              {grp.name && (
+                <p style={{ padding: '8px 14px 4px', fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                  {grp.name}
+                </p>
+              )}
+              {grp.items.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => { onChange(opt.value); setOpen(false) }}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    padding: '9px 14px', fontSize: 13, fontWeight: opt.value === value ? 700 : 400,
+                    color: opt.value === value ? 'var(--gold)' : 'var(--cream)',
+                    background: opt.value === value ? 'var(--gold-dim)' : 'transparent',
+                    border: 'none', cursor: 'pointer',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = opt.value === value ? 'var(--gold-dim)' : 'rgba(255,255,255,0.04)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = opt.value === value ? 'var(--gold-dim)' : 'transparent')}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function navStep(fecha: string, vista: Vista, dir: 1 | -1): string {
   const d = new Date(fecha + 'T12:00:00')
   if (vista === 'diario') {
@@ -353,7 +454,7 @@ function navStep(fecha: string, vista: Vista, dir: 1 | -1): string {
 export default function MetasClient({
   metasSemanales, metasMensuales, ventasMes, ventasSemana,
   fechaRef, mesInicio, mesFin, semanaInicio, semanaFin,
-  periodo, vendedores,
+  periodo, vendedores, periodosSemanas, periodosMeses,
 }: Props) {
   const [vista, setVista] = useState<Vista>('semanal')
   const [navDate, setNavDate] = useState<string>(fechaRef)
@@ -524,25 +625,52 @@ export default function MetasClient({
   const pctEquipo = calcularCumplimiento(totalReal, totalMeta)
   const semEquipo = getEstadoSemaforo(totalReal, totalEsp)
 
-  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+  const MESES_NOMBRE = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+  const MESES_FULL   = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+
   const mesNombreBase = mesInicio
-    ? `${meses[parseInt(mesInicio.split('-')[1]) - 1]} ${mesInicio.split('-')[0]}`
+    ? `${MESES_NOMBRE[parseInt(mesInicio.split('-')[1]) - 1]} ${mesInicio.split('-')[0]}`
     : ''
   const semanaLabelBase = analytics[0]?.semanaLabel ?? ''
 
   const semanaLabel = navMeta?.semanaLabel ?? semanaLabelBase
-  const mesNombre    = navMeta?.mesNombre    ?? mesNombreBase
-  const diaLabel     = fmtFecha(navDate)
+  const mesNombre   = navMeta?.mesNombre   ?? mesNombreBase
+  const diaLabel    = fmtFecha(navDate)
 
   const equipoLabel = vista === 'diario' ? `Día · ${diaLabel}`
     : vista === 'semanal' ? `Equipo · ${semanaLabel}`
     : `Equipo · ${mesNombre}`
 
   const tabs: { key: Vista; label: string }[] = [
-    { key: 'diario',  label: `Día · ${diaLabel}` },
-    { key: 'semanal', label: `Semana · ${semanaLabel}` },
-    { key: 'mensual', label: `Mes · ${mesNombre}` },
+    { key: 'diario',  label: 'Día' },
+    { key: 'semanal', label: 'Semana' },
+    { key: 'mensual', label: 'Mes' },
   ]
+
+  // Opciones del dropdown de semanas
+  const opcionesSemanas: DropOption[] = periodosSemanas.map(s => {
+    const mesIdx = parseInt(s.fecha_inicio.split('-')[1]) - 1
+    const year   = s.fecha_inicio.split('-')[0]
+    const group  = `${MESES_FULL[mesIdx]} ${year}`
+    const label  = `S${s.semana_numero} · ${fmtFecha(s.fecha_inicio)} – ${fmtFecha(s.fecha_fin)}`
+    return { value: s.fecha_inicio, label, group }
+  })
+
+  // Opciones del dropdown de meses
+  const opcionesMeses: DropOption[] = periodosMeses.map(m => {
+    const mesIdx = parseInt(m.fecha_inicio.split('-')[1]) - 1
+    const year   = m.fecha_inicio.split('-')[0]
+    return { value: m.fecha_inicio, label: `${MESES_FULL[mesIdx]} ${year}` }
+  })
+
+  // Valor activo en los dropdowns (fecha_inicio del período navegado)
+  const activeSemanaValue = periodosSemanas.find(s =>
+    navDate >= s.fecha_inicio && navDate <= s.fecha_fin
+  )?.fecha_inicio ?? semanaInicio
+
+  const activeMesValue = periodosMeses.find(m =>
+    navDate >= m.fecha_inicio && navDate <= m.fecha_fin
+  )?.fecha_inicio ?? mesInicio
 
   return (
     <div style={{ padding: '40px 48px 60px' }} className="px-4 pt-8 lg:px-12 lg:pt-10">
@@ -613,17 +741,14 @@ export default function MetasClient({
             </div>
           </div>
 
-          {/* Tabs + navegación + leyenda */}
+          {/* Tabs + selectores de período + leyenda */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {/* Tabs */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {/* Tabs vista */}
               <div style={{ display: 'flex', borderRadius: 12, padding: 4, background: 'var(--surface)', gap: 2 }}>
                 {tabs.map(tab => (
                   <button key={tab.key}
-                    onClick={() => {
-                      setVista(tab.key)
-                      if (navDate !== fechaRef) fetchForDate(navDate)
-                    }}
+                    onClick={() => setVista(tab.key)}
                     style={{
                       padding: '8px 18px', borderRadius: 9, fontSize: 13, fontWeight: 600,
                       border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
@@ -634,48 +759,59 @@ export default function MetasClient({
                   >{tab.label}</button>
                 ))}
               </div>
-              {/* Flechas de navegación */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <button
-                  onClick={() => navigate(-1)}
-                  disabled={loading}
-                  style={{
-                    width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border)',
-                    background: 'var(--surface)', color: loading ? 'var(--border)' : 'var(--muted)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
-                  }}
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <button
-                  onClick={() => navigate(1)}
-                  disabled={loading}
-                  style={{
-                    width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border)',
-                    background: 'var(--surface)', color: loading ? 'var(--border)' : 'var(--muted)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
-                  }}
-                >
-                  <ChevronRight size={16} />
-                </button>
-                {navDate !== fechaRef && (
-                  <button
-                    onClick={() => { fetchForDate(fechaRef); setNavDate(fechaRef) }}
-                    style={{
-                      padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600,
-                      border: '1px solid var(--border)', background: 'transparent',
-                      color: 'var(--gold)', cursor: 'pointer',
+
+              {/* Selector según vista */}
+              {vista === 'diario' && (
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="date"
+                    value={navDate}
+                    onChange={e => {
+                      const v = e.target.value
+                      if (v) { setNavDate(v); fetchForDate(v) }
                     }}
-                  >
-                    Hoy
-                  </button>
-                )}
-                {loading && (
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>Cargando…</span>
-                )}
-              </div>
+                    style={{
+                      padding: '8px 14px', borderRadius: 10,
+                      background: 'var(--surface)', border: '1px solid var(--border)',
+                      color: 'var(--cream)', fontSize: 13, fontWeight: 600,
+                      cursor: 'pointer', colorScheme: 'dark', outline: 'none',
+                    }}
+                    onFocus={e => (e.target.style.borderColor = 'var(--gold)')}
+                    onBlur={e => (e.target.style.borderColor = 'var(--border)')}
+                  />
+                </div>
+              )}
+
+              {vista === 'semanal' && opcionesSemanas.length > 0 && (
+                <PeriodDropdown
+                  options={opcionesSemanas}
+                  value={activeSemanaValue}
+                  onChange={v => { setNavDate(v); fetchForDate(v) }}
+                />
+              )}
+
+              {vista === 'mensual' && opcionesMeses.length > 0 && (
+                <PeriodDropdown
+                  options={opcionesMeses}
+                  value={activeMesValue}
+                  onChange={v => { setNavDate(v); fetchForDate(v) }}
+                />
+              )}
+
+              {/* Indicadores */}
+              {navDate !== fechaRef && (
+                <button
+                  onClick={() => { fetchForDate(fechaRef); setNavDate(fechaRef) }}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                    border: '1px solid var(--gold)', background: 'transparent',
+                    color: 'var(--gold)', cursor: 'pointer',
+                  }}
+                >
+                  Hoy
+                </button>
+              )}
+              {loading && <span style={{ fontSize: 11, color: 'var(--muted)' }}>Cargando…</span>}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               {(['verde', 'amarillo', 'rojo'] as EstadoSemaforo[]).map(e => (
