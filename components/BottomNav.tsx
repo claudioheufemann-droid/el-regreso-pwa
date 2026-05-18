@@ -2,18 +2,20 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart2, TrendingUp, Target, Upload, Map } from 'lucide-react'
-
-const navItems = [
-  { href: '/', icon: <BarChart2 size={22} />, label: 'Hoy' },
-  { href: '/acumulado', icon: <TrendingUp size={22} />, label: 'Período' },
-  { href: '/mapa', icon: <Map size={22} />, label: 'Mapa' },
-  { href: '/metas', icon: <Target size={22} />, label: 'Metas' },
-  { href: '/admin/cargar', icon: <Upload size={22} />, label: 'Cargar' },
-]
+import { BarChart2, TrendingUp, Users, Map, Upload } from 'lucide-react'
+import { useUser } from '@/lib/userContext'
 
 export default function BottomNav() {
   const pathname = usePathname()
+  const { isAdmin } = useUser()
+
+  const navItems = [
+    { href: '/',         icon: <BarChart2 size={21} />, label: 'Hoy' },
+    { href: '/acumulado',icon: <TrendingUp size={21} />,label: 'Período' },
+    { href: '/clientes', icon: <Users size={21} />,     label: 'Clientes' },
+    { href: '/mapa',     icon: <Map size={21} />,       label: 'Mapa' },
+    ...(isAdmin ? [{ href: '/admin/cargar', icon: <Upload size={21} />, label: 'Cargar' }] : []),
+  ]
 
   return (
     <nav
