@@ -34,6 +34,43 @@ const FOTO_SLOTS: FotoSlot[] = [
   { label: 'Competencia', key: 'competencia', emoji: '🔍' },
 ]
 
+// Mapeo producto → imagen local (public/productos/kombucha/)
+const PRODUCTO_IMAGENES: Record<string, string> = {
+  'Kombucha Berry Menta':          '/productos/kombucha/berry-menta.png',
+  'Kombucha Detox':                '/productos/kombucha/detox.png',
+  'Kombucha Lemon':                '/productos/kombucha/lemon-fresh.png',
+  'Kombucha Mango':                '/productos/kombucha/mango-merken.png',
+  'Kombucha Maqui':                '/productos/kombucha/maqui-hops.png',
+  'Kombucha Maracuyá Cardamomo':   '/productos/kombucha/maracuya-cardamomo.png',
+}
+
+function ProductoThumb({ nombre, categoria, size = 44 }: { nombre: string; categoria: string; size?: number }) {
+  const src = PRODUCTO_IMAGENES[nombre]
+  const [imgOk, setImgOk] = useState(!!src)
+  const esKombucha = (categoria ?? '').toLowerCase().includes('kombucha')
+  const emoji = esKombucha ? '🫧' : '🍺'
+
+  if (src && imgOk) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src} alt={nombre} width={size} height={size}
+        onError={() => setImgOk(false)}
+        style={{ width: size, height: size, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
+      />
+    )
+  }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: 10, flexShrink: 0,
+      background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.5,
+    }}>
+      {emoji}
+    </div>
+  )
+}
+
 const MOTIVOS_SIN_VENTA = [
   'Ya compró esta semana',
   'No había encargado',
@@ -479,7 +516,7 @@ function Paso3Vista360({
                   borderBottom: i < stats.sugeridos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>{p.categoria.toLowerCase().includes('kombucha') ? '🫧' : '🍺'}</span>
+                    <ProductoThumb nombre={p.nombre} categoria={p.categoria} size={36} />
                     <div>
                       <p style={{ fontSize: 14, fontWeight: 600, color: '#F4EEDF' }}>{p.nombre}</p>
                       <p style={{ fontSize: 11, color: 'var(--muted)' }}>Comprado {p.veces}x</p>
@@ -679,10 +716,11 @@ function Paso4Catalogo({
                 <div key={p.producto} style={{
                   background: cant > 0 ? T_DIM : '#1C1C1C',
                   border: `1px solid ${cant > 0 ? T_BORDER : 'rgba(255,255,255,0.06)'}`,
-                  borderRadius: 12, padding: '14px 14px',
+                  borderRadius: 12, padding: '12px 14px',
                   display: 'flex', alignItems: 'center', gap: 10,
                   transition: 'all 0.15s',
                 }}>
+                  <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} size={44} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 14, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {p.producto}
