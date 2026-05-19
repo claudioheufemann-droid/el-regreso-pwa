@@ -83,6 +83,90 @@ function ProductoThumb({ nombre, categoria, size = 44 }: { nombre: string; categ
   )
 }
 
+// ─── Catálogo estático ────────────────────────────────────────
+
+interface CatalogoInfo {
+  estilo: string
+  precio_lata: number
+  precio_barril: number
+  descripcion: string
+  abv?: string
+  ibu?: string
+  dulzor?: string
+  acidez?: string
+  envase_ml: number
+}
+
+const CATALOGO_INFO: Record<string, CatalogoInfo> = {
+  // ── Cervezas ──
+  'Arboretum': {
+    estilo: 'Kölsch', precio_lata: 2100, precio_barril: 83000, envase_ml: 470,
+    descripcion: 'Color amarillo pajizo, aromas a grano, pan y notas florales. Super ligera y fácil de beber.',
+  },
+  'Mocho English': {
+    estilo: 'English Red Ale', precio_lata: 2100, precio_barril: 83000, envase_ml: 470,
+    abv: '5.5%', ibu: '25',
+    descripcion: 'Rojizo brillante con aromas a galleta, almendras y caramelo. Retrogusto semi dulce y tostado.',
+  },
+  'La Barra APA': {
+    estilo: 'American Pale Ale', precio_lata: 2250, precio_barril: 90000, envase_ml: 470,
+    descripcion: 'Dorado intenso y cítrico con lúpulos Citra y Cascade. Amargor medio y final seco.',
+  },
+  'Fisura': {
+    estilo: 'Robust Porter', precio_lata: 2250, precio_barril: 90000, envase_ml: 470,
+    descripcion: 'Negro intenso, notas a chocolate amargo, cacao y café. Cuerpo medio-alto con avena.',
+  },
+  'Descenso West Coast IPA': {
+    estilo: 'West Coast IPA', precio_lata: 2750, precio_barril: 110000, envase_ml: 470,
+    abv: '6.5%',
+    descripcion: 'Aromas resinosos a pino, mentol y pomelo. Sabor intenso con amargor potente.',
+  },
+  'Aguas Blancas': {
+    estilo: 'Hazy IPA', precio_lata: 3000, precio_barril: 125000, envase_ml: 470,
+    abv: '5.5%', ibu: '25',
+    descripcion: 'Turbia y tropical con Centennial, Mosaic y Citra. Notas a durazno, mango y maracuyá.',
+  },
+  // ── Kombucha ──
+  'Kombucha Berry Menta': {
+    estilo: 'Kombucha · Té Negro', precio_lata: 1500, precio_barril: 75000, envase_ml: 355,
+    dulzor: 'Medio', acidez: 'Media',
+    descripcion: 'Frambuesa y menta fresca. Equilibrio perfecto entre dulzor y acidez.',
+  },
+  'Kombucha Lemon': {
+    estilo: 'Kombucha · Té Verde', precio_lata: 1500, precio_barril: 75000, envase_ml: 355,
+    dulzor: 'Medio', acidez: 'Media-alta',
+    descripcion: 'Limón, jengibre y cilantro. Cítrica, especiada y muy refrescante.',
+  },
+  'Kombucha Maqui': {
+    estilo: 'Kombucha · Té Verde+Negro', precio_lata: 1500, precio_barril: 75000, envase_ml: 355,
+    dulzor: 'Medio', acidez: 'Media',
+    descripcion: 'Maqui, mora y lúpulos nobles. Frutal y terroso con toque herbal. Color púrpura.',
+  },
+  'Kombucha Maracuyá Cardamomo': {
+    estilo: 'Kombucha · Té Verde', precio_lata: 1500, precio_barril: 75000, envase_ml: 355,
+    dulzor: 'Alto', acidez: 'Baja',
+    descripcion: 'Maracuyá tropical con cardamomo verde. Dulce, aromático y floral.',
+  },
+  'Kombucha Detox': {
+    estilo: 'Kombucha · Té Verde', precio_lata: 1500, precio_barril: 75000, envase_ml: 355,
+    dulzor: 'Bajo', acidez: 'Media-alta',
+    descripcion: 'Arándano, manzanilla e hinojo. Fresco, limpio y con propiedades diuréticas.',
+  },
+  'Kombucha Natural': {
+    estilo: 'Kombucha · Té Verde', precio_lata: 1500, precio_barril: 75000, envase_ml: 355,
+    dulzor: 'Bajo', acidez: 'Media-alta',
+    descripcion: 'Esencia pura de fermentación. Notas a pera y florales. Para puristas.',
+  },
+  'Kombucha Mango': {
+    estilo: 'Kombucha', precio_lata: 1500, precio_barril: 75000, envase_ml: 355,
+    descripcion: 'Kombucha de mango con toque de merkén. Dulce y tropical.',
+  },
+}
+
+function fmtPrecioCLP(n: number) {
+  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
+}
+
 const MOTIVOS_SIN_VENTA = [
   'Ya compró esta semana',
   'No había encargado',
@@ -587,7 +671,7 @@ function Paso4Catalogo({
         categoria: prod.categoria_producto ?? '',
         envase: prod.envase ?? '',
         cantidad: nueva,
-        precio: 0,
+        precio: CATALOGO_INFO[prod.producto]?.precio_lata ?? 0,
       })
       return next
     })
@@ -627,10 +711,23 @@ function Paso4Catalogo({
                     {item.envase && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{item.envase}</p>}
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <p style={{ fontSize: 15, fontWeight: 900, color: C }}>×{item.cantidad}</p>
+                    <p style={{ fontSize: 14, fontWeight: 900, color: C }}>×{item.cantidad}</p>
+                    {item.precio > 0 && (
+                      <p style={{ fontSize: 11, color: 'var(--muted)' }}>
+                        {fmtPrecioCLP(item.precio * item.cantidad)}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
+              {items.some(i => i.precio > 0) && (
+                <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total pedido</p>
+                  <p style={{ fontSize: 16, fontWeight: 900, color: '#F4EEDF' }}>
+                    {fmtPrecioCLP(items.reduce((s, i) => s + i.precio * i.cantidad, 0))}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -766,7 +863,18 @@ function Paso4Catalogo({
                     <p style={{ fontSize: 14, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {p.producto}
                     </p>
-                    {p.envase && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{p.envase}</p>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {CATALOGO_INFO[p.producto]?.estilo && (
+                        <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {CATALOGO_INFO[p.producto].estilo}
+                        </p>
+                      )}
+                      {CATALOGO_INFO[p.producto]?.precio_lata && (
+                        <p style={{ fontSize: 11, fontWeight: 700, color: cant > 0 ? C : 'var(--muted)', flexShrink: 0 }}>
+                          {fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
                     <button onClick={() => ajustar(p, -1)} style={{
@@ -863,7 +971,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     if (!visitaId) return
     setGuardando(true)
     try {
-      const total = items.reduce((s, i) => s + i.cantidad * i.precio, 0)
+      const total = items.reduce((s, i) => s + i.cantidad * (i.precio || CATALOGO_INFO[i.producto]?.precio_lata || 0), 0)
       await supabase.from('visitas_terreno').update({
         tiene_venta: tienVenta,
         motivo_sin_venta: tienVenta ? null : motivo,
