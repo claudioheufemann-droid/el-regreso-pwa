@@ -34,8 +34,9 @@ const FOTO_SLOTS: FotoSlot[] = [
   { label: 'Competencia', key: 'competencia', emoji: '🔍' },
 ]
 
-// Mapeo producto → imagen local (public/productos/kombucha/)
+// Mapeo producto → imagen local
 const PRODUCTO_IMAGENES: Record<string, string> = {
+  // Kombucha La Ida
   'Kombucha Berry Menta':          '/productos/kombucha/berry-menta.png',
   'Kombucha Detox':                '/productos/kombucha/detox.png',
   'Kombucha Lemon':                '/productos/kombucha/lemon-fresh.png',
@@ -43,6 +44,13 @@ const PRODUCTO_IMAGENES: Record<string, string> = {
   'Kombucha Maqui':                '/productos/kombucha/maqui-hops.png',
   'Kombucha Maracuyá Cardamomo':   '/productos/kombucha/maracuya-cardamomo.png',
   'Kombucha Natural':              '/productos/kombucha/natural.png',
+  // Cerveza El Regreso
+  'Arboretum':                     '/productos/cerveza/arboretum.png',
+  'Mocho  English':                '/productos/cerveza/mocho.png',
+  'La Barra  APA':                 '/productos/cerveza/la-barra.png',
+  'Fisura':                        '/productos/cerveza/fisura.png',
+  'Descenso West Coast IPA':       '/productos/cerveza/descenso.png',
+  'Aguas Blancas':                 '/productos/cerveza/aguas-blancas.png',
 }
 
 function ProductoThumb({ nombre, categoria, size = 44 }: { nombre: string; categoria: string; size?: number }) {
