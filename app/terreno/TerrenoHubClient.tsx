@@ -117,18 +117,29 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
           ))}
         </div>
 
-        {/* CTA Nueva Visita */}
-        <Link href="/terreno/nueva-visita" style={{ textDecoration: 'none', display: 'block', marginBottom: 28 }}>
-          <div style={{
-            background: T, borderRadius: 16, padding: '18px 20px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          }}>
-            <Plus size={20} color="#080808" strokeWidth={2.5} />
-            <span style={{ fontSize: 16, fontWeight: 900, color: '#080808', letterSpacing: '-0.3px' }}>
-              Nueva Visita
-            </span>
-          </div>
-        </Link>
+        {/* CTAs */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, marginBottom: 28 }}>
+          <Link href="/terreno/nueva-visita" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: T, borderRadius: 16, padding: '18px 20px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            }}>
+              <Plus size={20} color="#080808" strokeWidth={2.5} />
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#080808', letterSpacing: '-0.3px' }}>
+                Nueva Visita
+              </span>
+            </div>
+          </Link>
+          <Link href="/terreno/historial" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: '#131313', border: `1px solid ${T_BORDER}`, borderRadius: 16, padding: '18px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              height: '100%',
+            }}>
+              <ChevronRight size={20} color={T} />
+            </div>
+          </Link>
+        </div>
 
         {/* Lista de visitas del día */}
         {visitas.length > 0 && (

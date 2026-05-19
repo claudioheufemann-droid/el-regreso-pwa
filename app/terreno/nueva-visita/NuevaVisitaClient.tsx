@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   MapPin, Camera, CheckCircle, XCircle, ChevronLeft,
-  Search, Plus, AlertTriangle, ShoppingCart, Minus, Package,
+  Search, Plus, ShoppingCart, Minus, Package,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
@@ -354,100 +354,145 @@ function Paso2Checkin({
 
 // ─── Paso 3: Vista 360° del cliente ──────────────────────────
 
+interface ClienteStats {
+  totalPedidos: number
+  totalLitros: number
+  totalFacturado: number
+  ultimaCompra: string | null
+  sugeridos: { nombre: string; categoria: string; veces: number }[]
+}
+
 function Paso3Vista360({
   clienteNombre, esNuevo, onContinuar,
 }: {
   clienteNombre: string; esNuevo: boolean; onContinuar: () => void
 }) {
-  // Mock financiero — en producción viene de una tabla de deudas/facturas
-  const deuda = { total: 124000, facturas: 3, diasAtraso: 15, ultimoPago: '30 Abr' }
-  const tienDeuda = deuda.total > 0
+  const [stats, setStats] = useState<ClienteStats | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  // Mock sugeridos — en producción: top 3 productos más comprados por este cliente
-  const sugeridos = [
-    { nombre: 'Lager 20L', categoria: 'Cerveza', veces: 8 },
-    { nombre: 'Hazy IPA 5L', categoria: 'Cerveza', veces: 5 },
-    { nombre: 'Kombucha Maqui 5L', categoria: 'Kombucha', veces: 3 },
-  ]
+  useEffect(() => {
+    if (esNuevo) { onContinuar(); return }
 
-  if (esNuevo) {
-    onContinuar()
-    return null
-  }
+    const supabase = createClient()
+    supabase
+      .from('ventas')
+      .select('producto, categoria_producto, total_sin_impuesto, litros, fecha_pedido')
+      .eq('nombre_fantasia', clienteNombre)
+      .order('fecha_pedido', { ascending: false })
+      .then(({ data }) => {
+        if (!data || data.length === 0) {
+          setStats({ totalPedidos: 0, totalLitros: 0, totalFacturado: 0, ultimaCompra: null, sugeridos: [] })
+          setLoading(false)
+          return
+        }
+
+        const totalFacturado = data.reduce((s, r) => s + (r.total_sin_impuesto ?? 0), 0)
+        const totalLitros    = data.reduce((s, r) => s + (r.litros ?? 0), 0)
+        const ultimaCompra   = data[0].fecha_pedido ?? null
+        const totalPedidos   = data.length
+
+        const prodCount: Record<string, { count: number; categoria: string }> = {}
+        for (const r of data) {
+          if (!r.producto) continue
+          if (!prodCount[r.producto]) prodCount[r.producto] = { count: 0, categoria: r.categoria_producto ?? '' }
+          prodCount[r.producto].count++
+        }
+        const sugeridos = Object.entries(prodCount)
+          .sort((a, b) => b[1].count - a[1].count)
+          .slice(0, 3)
+          .map(([nombre, v]) => ({ nombre, categoria: v.categoria, veces: v.count }))
+
+        setStats({ totalPedidos, totalLitros, totalFacturado, ultimaCompra, sugeridos })
+        setLoading(false)
+      })
+  }, [clienteNombre, esNuevo, onContinuar])
+
+  if (esNuevo) return null
+
+  const fmtFecha = (iso: string) =>
+    new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
 
-        {/* Salud financiera */}
+        {/* Historial de compras */}
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10 }}>
-          Salud financiera
+          Historial de compras
         </p>
-        <div style={{
-          borderRadius: 14, padding: '16px',
-          background: tienDeuda ? 'rgba(255,77,77,0.06)' : 'rgba(16,185,129,0.06)',
-          border: `1px solid ${tienDeuda ? 'rgba(255,77,77,0.3)' : T_BORDER}`,
-          marginBottom: 20,
-        }}>
-          {tienDeuda ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <AlertTriangle size={16} color="#FF4D4D" />
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#FF4D4D', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Deuda activa
-                </span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {[
-                  { label: 'Total deuda', value: `$${deuda.total.toLocaleString('es-CL')}`, red: true },
-                  { label: 'Facturas', value: `${deuda.facturas} vencidas`, red: false },
-                  { label: 'Días atraso', value: `${deuda.diasAtraso} días`, red: true },
-                  { label: 'Último pago', value: deuda.ultimoPago, red: false },
-                ].map(d => (
-                  <div key={d.label} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '10px 12px' }}>
-                    <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 3 }}>{d.label}</p>
-                    <p style={{ fontSize: 14, fontWeight: 800, color: d.red ? '#FF4D4D' : '#F4EEDF' }}>{d.value}</p>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <CheckCircle size={18} color={T} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: T }}>Al día — sin deuda pendiente</span>
+
+        {loading ? (
+          <div style={{ background: '#131313', borderRadius: 14, padding: '16px', marginBottom: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {[1,2,3,4].map(i => (
+              <div key={i} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: '10px 12px', height: 52 }} />
+            ))}
+          </div>
+        ) : stats && stats.totalPedidos > 0 ? (
+          <div style={{
+            borderRadius: 14, padding: '16px',
+            background: 'rgba(16,185,129,0.06)', border: `1px solid ${T_BORDER}`,
+            marginBottom: 20,
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[
+                { label: 'Última compra', value: stats.ultimaCompra ? fmtFecha(stats.ultimaCompra) : '—' },
+                { label: 'Total pedidos', value: `${stats.totalPedidos}` },
+                { label: 'Litros totales', value: `${stats.totalLitros.toLocaleString('es-CL')} L` },
+                { label: 'Total facturado', value: new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(stats.totalFacturado) },
+              ].map(d => (
+                <div key={d.label} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '10px 12px' }}>
+                  <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 3 }}>{d.label}</p>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: '#F4EEDF' }}>{d.value}</p>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div style={{
+            borderRadius: 14, padding: '16px', marginBottom: 20,
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+            textAlign: 'center',
+          }}>
+            <p style={{ fontSize: 13, color: 'var(--muted)' }}>Sin historial de compras registrado</p>
+          </div>
+        )}
 
         {/* Pedido sugerido */}
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10 }}>
-          Pedido sugerido
-        </p>
-        <div style={{
-          background: '#1C1C1C', border: '1px solid rgba(212,175,55,0.2)',
-          borderRadius: 14, overflow: 'hidden',
-        }}>
-          <div style={{ padding: '12px 14px 6px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-            <p style={{ fontSize: 12, color: '#D4AF37', fontWeight: 600 }}>
-              Basado en historial de compras de {clienteNombre}
+        {!loading && stats && stats.sugeridos.length > 0 && (
+          <>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10 }}>
+              Productos frecuentes
             </p>
-          </div>
-          {sugeridos.map((p, i) => (
-            <div key={p.nombre} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '12px 14px',
-              borderBottom: i < sugeridos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+            <div style={{
+              background: '#1C1C1C', border: '1px solid rgba(212,175,55,0.2)',
+              borderRadius: 14, overflow: 'hidden', marginBottom: 16,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 18 }}>{p.categoria === 'Cerveza' ? '🍺' : '🫧'}</span>
-                <div>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: '#F4EEDF' }}>{p.nombre}</p>
-                  <p style={{ fontSize: 11, color: 'var(--muted)' }}>Comprado {p.veces}x</p>
-                </div>
+              <div style={{ padding: '12px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <p style={{ fontSize: 12, color: '#D4AF37', fontWeight: 600 }}>
+                  Lo que más compra {clienteNombre}
+                </p>
               </div>
+              {stats.sugeridos.map((p, i) => (
+                <div key={p.nombre} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderBottom: i < stats.sugeridos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 18 }}>{p.categoria.toLowerCase().includes('kombucha') ? '🫧' : '🍺'}</span>
+                    <div>
+                      <p style={{ fontSize: 14, fontWeight: 600, color: '#F4EEDF' }}>{p.nombre}</p>
+                      <p style={{ fontSize: 11, color: 'var(--muted)' }}>Comprado {p.veces}x</p>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T, background: T_DIM, padding: '3px 8px', borderRadius: 6 }}>
+                    #{i + 1}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        )}
       </div>
 
       <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
