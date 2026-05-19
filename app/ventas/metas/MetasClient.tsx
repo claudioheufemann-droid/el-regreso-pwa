@@ -404,13 +404,18 @@ function BarraDual({ meta, realizado, esperado, semaforo }: {
         minWidth: pctReal > 0 ? 5 : 0,
         transition: 'width 0.6s cubic-bezier(0.16,1,0.3,1)',
       }} />
-      {/* Marcador línea esperado */}
+      {/* Marcador línea esperado + etiqueta */}
       {pctEsp > 0 && pctEsp <= 99 && (
-        <div style={{
-          position: 'absolute', top: -2, left: `${pctEsp}%`,
-          width: 2, height: 14, background: 'rgba(255,255,255,0.5)',
-          borderRadius: 2, transform: 'translateX(-50%)',
-        }} />
+        <div style={{ position: 'absolute', top: -2, left: `${pctEsp}%`, transform: 'translateX(-50%)' }}>
+          <div style={{ width: 2, height: 14, background: 'rgba(255,255,255,0.5)', borderRadius: 2 }} />
+          <span style={{
+            position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
+            fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.4)',
+            whiteSpace: 'nowrap', letterSpacing: '0.3px',
+          }}>
+            esperado hoy
+          </span>
+        </div>
       )}
     </div>
   )
@@ -593,7 +598,7 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
       {/* Progress bar */}
       <div style={{ padding: '0 20px 14px' }}>
         <BarraDual meta={meta} realizado={real} esperado={esperado} semaforo={semaforo} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
           <span style={{ fontSize: 10, color: 'var(--muted)' }}>
             Real: <strong style={{ color: 'var(--cream)' }}>{fmt(real)} L</strong>
           </span>
