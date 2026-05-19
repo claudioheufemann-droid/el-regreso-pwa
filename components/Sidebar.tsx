@@ -2,17 +2,17 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart2, TrendingUp, Target, Upload, Beer, Map, Users, BarChart, LogOut } from 'lucide-react'
+import { BarChart2, TrendingUp, Target, Upload, Beer, Map, Users, BarChart, LogOut, Home } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 
 const navItems = [
-  { href: '/ventas',             icon: BarChart2,  label: 'Hoy',       adminOnly: false },
-  { href: '/ventas/acumulado',   icon: TrendingUp, label: 'Período',   adminOnly: false },
-  { href: '/ventas/clientes',    icon: Users,      label: 'Clientes',  adminOnly: false },
-  { href: '/ventas/mapa',        icon: Map,        label: 'Mapa',      adminOnly: false },
-  { href: '/ventas/metas',       icon: Target,     label: 'Metas',     adminOnly: false },
-  { href: '/ventas/admin/cargar',   icon: Upload,  label: 'Cargar',    adminOnly: true  },
-  { href: '/ventas/admin/reportes', icon: BarChart,label: 'Reportes',  adminOnly: true  },
+  { href: '/ventas',                icon: BarChart2,  label: 'Hoy',       adminOnly: false },
+  { href: '/ventas/acumulado',      icon: TrendingUp, label: 'Período',   adminOnly: false },
+  { href: '/ventas/clientes',       icon: Users,      label: 'Clientes',  adminOnly: false },
+  { href: '/ventas/mapa',           icon: Map,        label: 'Mapa',      adminOnly: false },
+  { href: '/ventas/metas',          icon: Target,     label: 'Metas',     adminOnly: false },
+  { href: '/ventas/admin/cargar',   icon: Upload,     label: 'Cargar',    adminOnly: true  },
+  { href: '/ventas/admin/reportes', icon: BarChart,   label: 'Reportes',  adminOnly: true  },
 ]
 
 export default function Sidebar() {
@@ -31,15 +31,12 @@ export default function Sidebar() {
       position: 'sticky',
       top: 0,
     }}>
-      {/* Logo */}
-      <div style={{ padding: '28px 20px 24px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      {/* Logo + Back to Hub */}
+      <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <div style={{
-            width: 36, height: 36,
-            background: 'var(--gold)',
-            borderRadius: 10,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
+            width: 36, height: 36, background: 'var(--gold)', borderRadius: 10,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
             <Beer size={18} color="#080808" />
           </div>
@@ -52,6 +49,24 @@ export default function Sidebar() {
             </p>
           </div>
         </div>
+
+        {/* Botón Inicio / Cambiar módulo */}
+        <Link
+          href="/"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '7px 10px', borderRadius: 9,
+            background: 'rgba(212,175,55,0.06)',
+            border: '1px solid rgba(212,175,55,0.12)',
+            color: '#A08830', fontSize: 12, fontWeight: 600,
+            textDecoration: 'none', transition: 'background 0.12s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.12)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.06)')}
+        >
+          <Home size={13} />
+          Cambiar módulo
+        </Link>
       </div>
 
       {/* Navigation */}
@@ -83,7 +98,7 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Usuario actual + logout */}
+      {/* User + Logout */}
       <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
@@ -96,7 +111,7 @@ export default function Sidebar() {
           </div>
           <button
             onClick={logout}
-            title="Cambiar usuario"
+            title="Cerrar sesión"
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: 'var(--muted)', padding: 6, borderRadius: 8,

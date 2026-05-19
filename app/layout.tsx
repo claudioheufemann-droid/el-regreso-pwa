@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import Providers from '@/components/Providers'
+import { getServerUser } from '@/lib/auth'
 
 export const metadata: Metadata = {
-  title: 'El Regreso – Ventas',
-  description: 'Seguimiento de ventas El Regreso Beer',
+  title: 'El Regreso – Control',
+  description: 'Plataforma de gestión y ventas · Cervecería El Regreso',
 }
 
 export const viewport: Viewport = {
@@ -13,10 +15,16 @@ export const viewport: Viewport = {
   themeColor: '#0F0F0F',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await getServerUser()
+
   return (
     <html lang="es">
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen">
+        <Providers initialUser={user}>
+          {children}
+        </Providers>
+      </body>
     </html>
   )
 }

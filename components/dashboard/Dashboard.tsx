@@ -502,15 +502,28 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           display: 'flex', flexDirection: 'column',
           overflowY: 'auto',
         }}>
-          {/* Logo + título */}
-          <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(128,128,128,0.08)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Logo + título + back to hub */}
+          <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid rgba(128,128,128,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <Logo size={52} />
               <div>
                 <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.4 }}>El Regreso</div>
                 <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2 }}>GESTIÓN</div>
               </div>
             </div>
+            <a
+              href="/"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                padding: '7px 10px', borderRadius: 9,
+                background: 'rgba(91,138,168,0.06)',
+                border: '1px solid rgba(91,138,168,0.15)',
+                color: '#5B8AA8', fontSize: 11, fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              ← Cambiar módulo
+            </a>
           </div>
 
           {/* Nav */}
@@ -673,6 +686,10 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.5 }}>El Regreso Gestión</div>
           <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.4 }}>SISTEMA OPERATIVO EJECUTIVO</div>
         </div>
+        <a href="/" title="Volver al Inicio"
+          style={{ background: 'rgba(91,138,168,0.1)', border: '1px solid rgba(91,138,168,0.2)', borderRadius: 8, padding: '5px 9px', color: '#5B8AA8', fontSize: 10, fontWeight: 700, textDecoration: 'none', flexShrink: 0, letterSpacing: 0.3 }}>
+          ⌂
+        </a>
         <button onClick={refreshTasks} className="touch-active" title="Actualizar"
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>
           ↻

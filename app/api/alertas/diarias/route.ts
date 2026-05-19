@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { VENDEDORES, CLIENTES_EXCLUIR, ADMINS } from '@/lib/types'
+import { VENDEDORES, CLIENTES_EXCLUIR } from '@/lib/types'
 import {
   getDiasHabiles,
   getDiasHabilesTranscurridos,
@@ -119,6 +119,13 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = await createClient()
+
+  // Fetch admin emails from DB
+  const { data: adminUsers } = await supabase
+    .from('users')
+    .select('email')
+    .eq('is_admin', true)
+  const adminEmails = (adminUsers ?? []).map(u => u.email).filter(Boolean) as string[]
 
   const { data: ultima } = await supabase
     .from('ventas')
@@ -245,7 +252,7 @@ export async function GET(req: NextRequest) {
     },
     body: JSON.stringify({
       from: 'Ventas El Regreso <alertas@elregresobeer.com>',
-      to: ADMINS,
+      to: adminEmails,
       subject: `Reporte de Metas · ${fechaStr}`,
       html,
     }),

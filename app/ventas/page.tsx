@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getServerUser } from '@/lib/auth'
 import { VENDEDORES, CLIENTES_EXCLUIR } from '@/lib/types'
 import DashboardClient from './DashboardClient'
 
@@ -13,11 +14,17 @@ function contarLatas(litros: number, envase: string | null): number {
 
 export default async function DashboardPage() {
   const supabase = await createClient()
+  const appUser = await getServerUser()
+
+  // Scope: admin sees all vendors; user sees only their own data
+  const vendedoresScope = appUser?.isAdmin
+    ? VENDEDORES
+    : VENDEDORES.filter(v => v === appUser?.nombre)
 
   const { data: ultimaFecha } = await supabase
     .from('ventas')
     .select('fecha_pedido')
-    .in('vendedor_actual', VENDEDORES)
+    .in('vendedor_actual', vendedoresScope.length ? vendedoresScope : ['__none__'])
     .order('fecha_pedido', { ascending: false })
     .limit(1)
     .single()
@@ -27,7 +34,7 @@ export default async function DashboardPage() {
   const { data: ventasHoy } = await supabase
     .from('ventas')
     .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, categoria_producto, producto, envase')
-    .in('vendedor_actual', VENDEDORES)
+    .in('vendedor_actual', vendedoresScope.length ? vendedoresScope : ['__none__'])
     .eq('fecha_pedido', fechaHoy)
 
   const { data: periodo } = await supabase
@@ -39,11 +46,11 @@ export default async function DashboardPage() {
   const { data: ventasPeriodo } = await supabase
     .from('ventas')
     .select('vendedor_actual, litros, total_sin_impuesto, categoria_negocio, fecha_pedido')
-    .in('vendedor_actual', VENDEDORES)
+    .in('vendedor_actual', vendedoresScope.length ? vendedoresScope : ['__none__'])
     .gte('fecha_pedido', periodo?.fecha_inicio ?? '2026-04-24')
     .lte('fecha_pedido', periodo?.fecha_fin ?? '2026-05-23')
 
-  const resumen = VENDEDORES.map(vendedor => {
+  const resumen = vendedoresScope.map(vendedor => {
     const vHoy = (ventasHoy ?? []).filter(v => v.vendedor_actual === vendedor)
     const vPeriodo = (ventasPeriodo ?? []).filter(v => v.vendedor_actual === vendedor)
 
@@ -52,7 +59,6 @@ export default async function DashboardPage() {
     const litrosPeriodo = vPeriodo.reduce((s, v) => s + (v.litros ?? 0), 0)
     const ventaPeriodo = vPeriodo.reduce((s, v) => s + (v.total_sin_impuesto ?? 0), 0)
 
-    // Latas cerveza y kombucha del día
     const latasCervezaHoy = vHoy
       .filter(v => v.envase?.includes('Lata') && v.categoria_producto?.includes('Cerveza'))
       .reduce((s, v) => s + contarLatas(v.litros ?? 0, v.envase), 0)
@@ -61,25 +67,17 @@ export default async function DashboardPage() {
       .filter(v => v.envase?.includes('Lata') && v.categoria_producto?.includes('Kombucha'))
       .reduce((s, v) => s + contarLatas(v.litros ?? 0, v.envase), 0)
 
-    // Clientes con detalle de productos
     const clientesMap = new Map<string, { producto: string; envase: string | null; litros: number }[]>()
     for (const v of vHoy) {
       const nombre = v.nombre_fantasia
       if (!nombre || CLIENTES_EXCLUIR.some(ex => nombre.includes(ex))) continue
       if (!clientesMap.has(nombre)) clientesMap.set(nombre, [])
       if (v.producto) {
-        clientesMap.get(nombre)!.push({
-          producto: v.producto,
-          envase: v.envase ?? null,
-          litros: v.litros ?? 0,
-        })
+        clientesMap.get(nombre)!.push({ producto: v.producto, envase: v.envase ?? null, litros: v.litros ?? 0 })
       }
     }
 
-    const clientesHoy = Array.from(clientesMap.entries()).map(([nombre, productos]) => ({
-      nombre,
-      productos,
-    }))
+    const clientesHoy = Array.from(clientesMap.entries()).map(([nombre, productos]) => ({ nombre, productos }))
 
     return { vendedor, litrosHoy, ventaHoy, litrosPeriodo, ventaPeriodo, clientesHoy, latasCervezaHoy, latasKombuchaHoy }
   })

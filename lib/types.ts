@@ -16,8 +16,6 @@ export const CATEGORIAS_NEGOCIO = [
   'Otros',
 ] as const
 
-export const ADMINS = ['benja.alarcon@elregresobeer.com', 'claudio.heufemann@elregresobeer.com']
-
 export const CLIENTES_EXCLUIR = ['Cliente Ventas (Javier)', 'Cliente Ventas (Charly)', 'Cliente Ventas (Carlos)', 'Cliente PDV', 'Cliente Merma PDV']
 
 export interface Venta {

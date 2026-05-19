@@ -1,60 +1,49 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
+import type { AppUser } from '@/lib/auth'
 
-export type UserRole = 'admin' | 'vendedor'
-
-export interface AppUser {
-  nombre: string
-  role: UserRole
-}
+export type { AppUser }
+export type UserRole = 'admin' | 'user'
 
 interface UserContextType {
   user: AppUser | null
-  setUser: (u: AppUser) => void
-  logout: () => void
   isAdmin: boolean
-  isLoaded: boolean
+  logout: () => Promise<void>
 }
 
 const UserContext = createContext<UserContextType>({
   user: null,
-  setUser: () => {},
-  logout: () => {},
   isAdmin: false,
-  isLoaded: false,
+  logout: async () => {},
 })
 
-export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUserState] = useState<AppUser | null>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
+export function UserProvider({
+  children,
+  initialUser,
+}: {
+  children: ReactNode
+  initialUser: AppUser | null
+}) {
+  const router = useRouter()
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('elregreso_user')
-      if (stored) setUserState(JSON.parse(stored))
-    } catch {}
-    setIsLoaded(true)
-  }, [])
-
-  function setUser(u: AppUser) {
-    setUserState(u)
-    localStorage.setItem('elregreso_user', JSON.stringify(u))
-  }
-
-  function logout() {
-    setUserState(null)
-    localStorage.removeItem('elregreso_user')
+  async function logout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
   }
 
   return (
-    <UserContext.Provider value={{
-      user,
-      setUser,
-      logout,
-      isAdmin: user?.role === 'admin',
-      isLoaded,
-    }}>
+    <UserContext.Provider
+      value={{
+        user: initialUser,
+        isAdmin: initialUser?.isAdmin ?? false,
+        logout,
+      }}
+    >
       {children}
     </UserContext.Provider>
   )

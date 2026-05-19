@@ -45,15 +45,15 @@ function diasLabel(dias: number | null) {
 }
 
 export default function ReportesClient({ reporte }: Props) {
-  const { isAdmin, isLoaded } = useUser()
+  const { isAdmin } = useUser()
   const router = useRouter()
   const [busqueda, setBusqueda] = useState('')
   const [vendedorFiltro, setVendedorFiltro] = useState('all')
   const [tab, setTab] = useState<'todos' | 'criticos' | 'ok'>('todos')
 
   useEffect(() => {
-    if (isLoaded && !isAdmin) router.replace('/')
-  }, [isAdmin, isLoaded, router])
+    if (!isAdmin) router.replace('/')
+  }, [isAdmin, router])
 
   const filtrados = useMemo(() => {
     return reporte.filter(r => {
@@ -74,7 +74,7 @@ export default function ReportesClient({ reporte }: Props) {
   const aTiempo = reporte.filter(r => r.diasSinContacto !== null && r.diasSinContacto <= 7).length
   const totalContactos = reporte.reduce((s, r) => s + r.contactos90d, 0)
 
-  if (!isLoaded) return null
+  if (!isAdmin) return null
 
   return (
     <div style={{ padding: '24px 16px 60px', maxWidth: 1000, margin: '0 auto' }}>

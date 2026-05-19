@@ -16,14 +16,33 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
+
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    if (authError) {
       setError('Credenciales incorrectas')
       setLoading(false)
+      return
+    }
+
+    // Fetch role to decide where to redirect
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single()
+
+      if (profile?.is_admin) {
+        router.push('/')
+      } else {
+        router.push('/ventas')
+      }
     } else {
       router.push('/')
-      router.refresh()
     }
+
+    router.refresh()
   }
 
   const inputBase = {
@@ -35,7 +54,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: 'var(--bg)' }}>
       <div className="w-full max-w-sm">
-        {/* Logo / Header */}
         <div className="text-center mb-10">
           <div
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 text-3xl"
@@ -44,7 +62,7 @@ export default function LoginPage() {
             🍺
           </div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--cream)' }}>El Regreso Beer</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Seguimiento de ventas</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Plataforma de Control</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
