@@ -52,8 +52,8 @@ export default async function MetasPage() {
   const semFin    = metasSemanales?.[0]?.fecha_fin     ?? fechaRef
 
   const [{ data: ventasMes }, { data: ventasSemana }] = await Promise.all([
-    supabase.from('ventas').select('vendedor_actual, litros, categoria_negocio, fecha_pedido').in('vendedor_actual', VENDEDORES).gte('fecha_pedido', mesInicio).lte('fecha_pedido', fechaRef),
-    supabase.from('ventas').select('vendedor_actual, litros, categoria_negocio, fecha_pedido').in('vendedor_actual', VENDEDORES).gte('fecha_pedido', semInicio).lte('fecha_pedido', fechaRef),
+    supabase.from('ventas').select('vendedor_actual, litros, categoria_negocio, fecha_pedido, categoria_producto, producto').in('vendedor_actual', VENDEDORES).gte('fecha_pedido', mesInicio).lte('fecha_pedido', fechaRef),
+    supabase.from('ventas').select('vendedor_actual, litros, categoria_negocio, fecha_pedido, categoria_producto, producto').in('vendedor_actual', VENDEDORES).gte('fecha_pedido', semInicio).lte('fecha_pedido', fechaRef),
   ])
 
   return (

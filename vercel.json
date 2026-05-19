@@ -7,6 +7,18 @@
     {
       "path": "/api/alertas/diarias",
       "schedule": "0 11 * * 1-5"
+    },
+    {
+      "path": "/api/cron/weekly-report",
+      "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/daily-summary",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/task-alerts",
+      "schedule": "0 11 * * *"
     }
   ]
 }

@@ -26,7 +26,12 @@ interface VentaRow {
   litros: number
   categoria_negocio: string | null
   fecha_pedido: string
+  categoria_producto?: string | null
+  producto?: string | null
 }
+
+interface ProductoItem { nombre: string; litros: number }
+interface ProductoCategoria { categoria: string; total: number; productos: ProductoItem[] }
 
 interface MetaRow {
   id: number
@@ -666,6 +671,170 @@ function PeriodDropdown({ options, value, onChange, placeholder }: {
   )
 }
 
+// ─── Productos ───────────────────────────────────────────────────────────────
+
+const CAT_PRODUCTO: Record<string, { emoji: string; color: string }> = {
+  'Cerveza':        { emoji: '🍺', color: '#D4AF37' },
+  'Kombucha':       { emoji: '🫧', color: '#4ADE80' },
+  'Sin categoría':  { emoji: '📦', color: '#6B7280' },
+}
+
+function computeProductos(ventas: VentaRow[]): ProductoCategoria[] {
+  const map = new Map<string, Map<string, number>>()
+  for (const v of ventas) {
+    if (!v.litros) continue
+    const cat  = v.categoria_producto?.trim() || 'Sin categoría'
+    const prod = v.producto?.trim()           || 'Sin nombre'
+    if (!map.has(cat)) map.set(cat, new Map())
+    const pm = map.get(cat)!
+    pm.set(prod, (pm.get(prod) ?? 0) + v.litros)
+  }
+  return [...map.entries()]
+    .map(([categoria, pm]) => ({
+      categoria,
+      total: [...pm.values()].reduce((s, l) => s + l, 0),
+      productos: [...pm.entries()]
+        .map(([nombre, litros]) => ({ nombre, litros }))
+        .sort((a, b) => b.litros - a.litros),
+    }))
+    .filter(c => c.total > 0)
+    .sort((a, b) => b.total - a.total)
+}
+
+function ProductoBar({ nombre, litros, total, color }: {
+  nombre: string; litros: number; total: number; color: string
+}) {
+  const pct = total > 0 ? Math.min(100, (litros / total) * 100) : 0
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+        <span style={{
+          fontSize: 12, color: 'var(--cream)', flex: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 10,
+        }}>{nombre}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{litros.toFixed(1)} L</span>
+          <span style={{
+            fontSize: 10, color, fontWeight: 700,
+            background: `${color}18`, border: `1px solid ${color}30`,
+            padding: '1px 6px', borderRadius: 8,
+          }}>{pct.toFixed(0)}%</span>
+        </div>
+      </div>
+      <div style={{ height: 5, borderRadius: 5, background: 'rgba(255,255,255,0.06)' }}>
+        <div className="animate-progress" style={{
+          height: '100%', borderRadius: 5,
+          width: `${pct}%`, background: color, opacity: 0.75,
+        }} />
+      </div>
+    </div>
+  )
+}
+
+function CategoriaProductoCard({ cat }: { cat: ProductoCategoria }) {
+  const cfg = CAT_PRODUCTO[cat.categoria] ?? { emoji: '📦', color: '#6B7280' }
+  const [expanded, setExpanded] = useState(true)
+  const MAX_VISIBLE = 5
+
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderRadius: 20, overflow: 'hidden',
+    }}>
+      <div style={{ height: 3, background: cfg.color }} />
+      <div style={{ padding: '16px 20px 20px' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 22 }}>{cfg.emoji}</span>
+            <div>
+              <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--cream)' }}>{cat.categoria}</span>
+              <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
+                {cat.productos.length} {cat.productos.length === 1 ? 'producto' : 'productos'}
+              </p>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 24, fontWeight: 900, color: cfg.color, letterSpacing: '-0.5px', lineHeight: 1 }}>
+              {cat.total.toFixed(1)}
+            </p>
+            <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>litros</p>
+          </div>
+        </div>
+
+        {/* Products list */}
+        {cat.productos.slice(0, expanded ? undefined : MAX_VISIBLE).map(p => (
+          <ProductoBar key={p.nombre} nombre={p.nombre} litros={p.litros} total={cat.total} color={cfg.color} />
+        ))}
+
+        {cat.productos.length > MAX_VISIBLE && (
+          <button
+            onClick={() => setExpanded(v => !v)}
+            style={{
+              marginTop: 8, width: '100%', padding: '7px 0',
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              borderRadius: 10, fontSize: 11, fontWeight: 600,
+              color: 'var(--muted)', cursor: 'pointer',
+            }}
+          >
+            {expanded
+              ? `Mostrar menos`
+              : `Ver ${cat.productos.length - MAX_VISIBLE} más`}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProductosSection({ productos, vista, label }: {
+  productos: ProductoCategoria[]; vista: Vista; label: string
+}) {
+  if (!productos.length) return null
+  const totalLitros = productos.reduce((s, c) => s + c.total, 0)
+
+  return (
+    <div style={{ marginTop: 40 }}>
+      {/* Header */}
+      <div style={{ marginBottom: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>
+            Productos Vendidos
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>
+            {label} · {totalLitros.toFixed(1)} L totales
+          </p>
+        </div>
+        {/* Mini pie-like summary */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {productos.map(c => {
+            const cfg = CAT_PRODUCTO[c.categoria] ?? { emoji: '📦', color: '#6B7280' }
+            const pct = totalLitros > 0 ? (c.total / totalLitros) * 100 : 0
+            return (
+              <div key={c.categoria} style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 10, padding: '6px 12px',
+              }}>
+                <span style={{ fontSize: 14 }}>{cfg.emoji}</span>
+                <span style={{ fontSize: 12, color: 'var(--cream)', fontWeight: 600 }}>{c.categoria}</span>
+                <span style={{ fontSize: 12, color: cfg.color, fontWeight: 800 }}>{pct.toFixed(0)}%</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Cards grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }}>
+        {productos.map(cat => (
+          <CategoriaProductoCard key={cat.categoria} cat={cat} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function navStep(fecha: string, vista: Vista, dir: 1 | -1): string {
@@ -742,6 +911,7 @@ export default function MetasClient({
   const [navDate, setNavDate] = useState<string>(fechaRef)
   const [navAnalytics, setNavAnalytics] = useState<AnalyticsExtended[] | null>(null)
   const [navMeta, setNavMeta] = useState<{ semanaLabel: string; mesNombre: string; fecha: string } | null>(null)
+  const [navProductos, setNavProductos] = useState<{ mes: ProductoCategoria[]; semana: ProductoCategoria[]; dia: ProductoCategoria[] } | null>(null)
   const [loading, setLoading] = useState(false)
 
   // Re-fetch when switching vista while on a non-default date
@@ -756,6 +926,7 @@ export default function MetasClient({
     if (fecha === fechaRef) {
       setNavAnalytics(null)
       setNavMeta(null)
+      setNavProductos(null)
       setNavDate(fechaRef)
       return
     }
@@ -766,6 +937,7 @@ export default function MetasClient({
       if (data.sinMetas || !data.analytics?.length) {
         setNavAnalytics([])
         setNavMeta({ semanaLabel: '', mesNombre: '', fecha })
+        setNavProductos({ mes: [], semana: [], dia: [] })
       } else {
         const fechaD = new Date(fecha + 'T12:00:00')
         const mesN = `${MESES_NOMBRE[fechaD.getMonth()]} ${fechaD.getFullYear()}`
@@ -870,6 +1042,11 @@ export default function MetasClient({
 
         setNavAnalytics(extendidos)
         setNavMeta({ semanaLabel: data.analytics[0]?.semanaLabel ?? '', mesNombre: mesN, fecha })
+        setNavProductos({
+          mes:    data.productosMes    ?? [],
+          semana: data.productosSemana ?? [],
+          dia:    data.productosDia    ?? [],
+        })
       }
     } finally {
       setLoading(false)
@@ -989,8 +1166,19 @@ export default function MetasClient({
     })
   }, [metasSemanales, metasMensuales, ventasMes, ventasSemana, fechaRef, mesInicio, mesFin, semanaInicio, semanaFin, vendedores])
 
+  // ── Compute base product breakdown from props ────────────────────────────────
+  const baseProductos = useMemo(() => ({
+    mes:    computeProductos(ventasMes),
+    semana: computeProductos(ventasSemana),
+    dia:    computeProductos(ventasSemana.filter(v => v.fecha_pedido === fechaRef)),
+  }), [ventasMes, ventasSemana, fechaRef])
+
   // ── Derived display values ────────────────────────────────────────────────────
   const activeAnalytics = navAnalytics ?? analytics
+  const productosActivos = navProductos ?? baseProductos
+  const productosVista = vista === 'diario' ? productosActivos.dia
+    : vista === 'mensual' ? productosActivos.mes
+    : productosActivos.semana
   const sinMetas = activeAnalytics.every(a => a.metaMensual === 0 && a.metaSemanal === 0)
 
   const totalReal = activeAnalytics.reduce((s, a) =>
@@ -1201,6 +1389,13 @@ export default function MetasClient({
               <VendedorCard key={a.vendedor} analytics={a} vista={vista} />
             ))}
           </div>
+
+          {/* Sección de productos */}
+          <ProductosSection
+            productos={productosVista}
+            vista={vista}
+            label={equipoLabel}
+          />
         </>
       )}
     </div>

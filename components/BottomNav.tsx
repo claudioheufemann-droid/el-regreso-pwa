@@ -10,11 +10,11 @@ export default function BottomNav() {
   const { isAdmin } = useUser()
 
   const navItems = [
-    { href: '/',         icon: <BarChart2 size={21} />, label: 'Hoy' },
-    { href: '/acumulado',icon: <TrendingUp size={21} />,label: 'Período' },
-    { href: '/clientes', icon: <Users size={21} />,     label: 'Clientes' },
-    { href: '/mapa',     icon: <Map size={21} />,       label: 'Mapa' },
-    ...(isAdmin ? [{ href: '/admin/cargar', icon: <Upload size={21} />, label: 'Cargar' }] : []),
+    { href: '/ventas',         icon: <BarChart2 size={21} />, label: 'Hoy' },
+    { href: '/ventas/acumulado',icon: <TrendingUp size={21} />,label: 'Período' },
+    { href: '/ventas/clientes', icon: <Users size={21} />,     label: 'Clientes' },
+    { href: '/ventas/mapa',     icon: <Map size={21} />,       label: 'Mapa' },
+    ...(isAdmin ? [{ href: '/ventas/admin/cargar', icon: <Upload size={21} />, label: 'Cargar' }] : []),
   ]
 
   return (

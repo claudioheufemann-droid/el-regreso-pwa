@@ -6,13 +6,13 @@ import { BarChart2, TrendingUp, Target, Upload, Beer, Map, Users, BarChart, LogO
 import { useUser } from '@/lib/userContext'
 
 const navItems = [
-  { href: '/',             icon: BarChart2,  label: 'Hoy',       adminOnly: false },
-  { href: '/acumulado',    icon: TrendingUp, label: 'Período',   adminOnly: false },
-  { href: '/clientes',     icon: Users,      label: 'Clientes',  adminOnly: false },
-  { href: '/mapa',         icon: Map,        label: 'Mapa',      adminOnly: false },
-  { href: '/metas',        icon: Target,     label: 'Metas',     adminOnly: false },
-  { href: '/admin/cargar', icon: Upload,     label: 'Cargar',    adminOnly: true  },
-  { href: '/admin/reportes', icon: BarChart, label: 'Reportes',  adminOnly: true  },
+  { href: '/ventas',             icon: BarChart2,  label: 'Hoy',       adminOnly: false },
+  { href: '/ventas/acumulado',   icon: TrendingUp, label: 'Período',   adminOnly: false },
+  { href: '/ventas/clientes',    icon: Users,      label: 'Clientes',  adminOnly: false },
+  { href: '/ventas/mapa',        icon: Map,        label: 'Mapa',      adminOnly: false },
+  { href: '/ventas/metas',       icon: Target,     label: 'Metas',     adminOnly: false },
+  { href: '/ventas/admin/cargar',   icon: Upload,  label: 'Cargar',    adminOnly: true  },
+  { href: '/ventas/admin/reportes', icon: BarChart,label: 'Reportes',  adminOnly: true  },
 ]
 
 export default function Sidebar() {
@@ -60,7 +60,7 @@ export default function Sidebar() {
           Panel
         </p>
         {navItems.filter(item => !item.adminOnly || isAdmin).map(({ href, icon: Icon, label }) => {
-          const active = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
+          const active = href === '/ventas' ? pathname === '/ventas' : pathname === href || pathname.startsWith(href + '/')
           return (
             <Link
               key={href}
