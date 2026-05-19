@@ -123,7 +123,7 @@ function GaugeChart({ pct, semaforo, meta, realizado }: {
   pct: number; semaforo: EstadoSemaforo; meta: number; realizado: number
 }) {
   const color = SEMAFORO_COLORS[semaforo]
-  const r = 62, cx = 100, cy = 78
+  const W = 240, r = 82, cx = 120, cy = 102
   const clampedPct = Math.min(pct, 100)
   const theta = Math.PI * (clampedPct / 100)
   const ex = cx - r * Math.cos(theta)
@@ -131,32 +131,34 @@ function GaugeChart({ pct, semaforo, meta, realizado }: {
   const largeArc = clampedPct > 50 ? 1 : 0
 
   return (
-    <svg width="200" height="96" viewBox="0 0 200 96" style={{ display: 'block', margin: '0 auto' }}>
+    <svg width={W} height={112} viewBox={`0 0 ${W} 112`} style={{ display: 'block', margin: '0 auto' }}>
       {/* Track */}
       <path
         d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`}
-        fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="13" strokeLinecap="round"
+        fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="12" strokeLinecap="round"
       />
       {/* Progress arc */}
       {clampedPct > 0 && (
         <path
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 ${largeArc} 0 ${ex.toFixed(2)} ${ey.toFixed(2)}`}
-          fill="none" stroke={color} strokeWidth="13" strokeLinecap="round"
+          fill="none" stroke={color} strokeWidth="12" strokeLinecap="round"
         />
       )}
-      {/* Pct text */}
-      <text x={cx} y={cy - 6} textAnchor="middle" fill={color}
-        fontSize="26" fontWeight="900" fontFamily="inherit">
+      {/* % — centrado en el espacio interior del arco */}
+      <text x={cx} y={cy - 26} textAnchor="middle" fill={color}
+        fontSize="36" fontWeight="900" fontFamily="inherit">
         {pct.toFixed(0)}%
       </text>
-      {/* Sub label */}
-      <text x={cx} y={cy + 12} textAnchor="middle" fill="rgba(255,255,255,0.4)"
+      {/* Litros — debajo del % */}
+      <text x={cx} y={cy - 6} textAnchor="middle" fill="rgba(255,255,255,0.4)"
         fontSize="11" fontFamily="inherit">
         {fmt(realizado)} / {fmt(meta)} L
       </text>
-      {/* Ticks left/right */}
-      <text x={cx - r - 4} y={cy + 4} textAnchor="end" fill="rgba(255,255,255,0.25)" fontSize="9">0%</text>
-      <text x={cx + r + 4} y={cy + 4} textAnchor="start" fill="rgba(255,255,255,0.25)" fontSize="9">100%</text>
+      {/* Extremos del arco */}
+      <text x={cx - r + 2} y={cy + 14} textAnchor="middle"
+        fill="rgba(255,255,255,0.2)" fontSize="9" fontFamily="inherit">0</text>
+      <text x={cx + r - 2} y={cy + 14} textAnchor="middle"
+        fill="rgba(255,255,255,0.2)" fontSize="9" fontFamily="inherit">100</text>
     </svg>
   )
 }
