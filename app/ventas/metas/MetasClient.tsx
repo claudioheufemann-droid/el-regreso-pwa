@@ -164,63 +164,101 @@ function GaugeChart({ pct, semaforo, meta, realizado }: {
 function WeekBarChart({ data, metaDiaria, semaforo }: {
   data: BarDia[]; metaDiaria: number; semaforo: EstadoSemaforo
 }) {
-  const color = SEMAFORO_COLORS[semaforo]
-  const W = 220, H = 80
+  const W = 240, H = 96
   const n = data.length || 5
-  const barW = Math.floor((W - (n - 1) * 8) / n)
-  const gap = 8
+  const gap = 10
+  const barW = Math.floor((W - (n - 1) * gap) / n)
   const totalW = n * barW + (n - 1) * gap
   const offsetX = (W - totalW) / 2
-  const maxVal = Math.max(metaDiaria * 1.4, ...data.map(d => d.litros), 1)
-  const metaY = H - (metaDiaria / maxVal) * H
 
   return (
-    <svg width={W} height={H + 28} viewBox={`0 0 ${W} ${H + 28}`} style={{ display: 'block', margin: '0 auto' }}>
-      {/* Meta benchmark line */}
-      {metaDiaria > 0 && (
-        <>
-          <line
-            x1={offsetX} y1={metaY} x2={offsetX + totalW} y2={metaY}
-            stroke="rgba(255,255,255,0.28)" strokeWidth="1.5" strokeDasharray="4 3"
-          />
-          <text x={offsetX + totalW + 3} y={metaY + 4} fill="rgba(255,255,255,0.3)" fontSize="9">meta</text>
-        </>
-      )}
+    <svg width={W} height={H + 32} viewBox={`0 0 ${W} ${H + 32}`} style={{ display: 'block', margin: '0 auto' }}>
       {data.map((d, i) => {
         const x = offsetX + i * (barW + gap)
-        const barH = d.litros > 0 ? Math.max(3, (d.litros / maxVal) * H) : 0
-        const y = H - barH
-        const barColor = d.isFuture
-          ? 'rgba(255,255,255,0.05)'
-          : d.isToday
-            ? color
-            : `${color}99`
-        const overMeta = !d.isFuture && metaDiaria > 0 && d.litros >= metaDiaria
+        const isFuture = d.isFuture
+
+        // percentage vs daily meta (cap at 100% for bar fill, show real % as text)
+        const pct = metaDiaria > 0 ? Math.min(100, (d.litros / metaDiaria) * 100) : 0
+        const overPct = metaDiaria > 0 ? (d.litros / metaDiaria) * 100 : 0
+
+        // pick fill color by performance
+        const fillColor = isFuture ? 'rgba(255,255,255,0.04)'
+          : d.litros === 0 ? 'rgba(255,255,255,0.06)'
+          : overPct >= 95 ? SEMAFORO_COLORS.verde
+          : overPct >= 75 ? SEMAFORO_COLORS.amarillo
+          : SEMAFORO_COLORS.rojo
+
+        const trackH = H
+        const fillH = isFuture ? 0 : Math.max(pct > 0 ? 4 : 0, (pct / 100) * trackH)
+        const fillY = H - fillH
+
+        // extra cap bar for over-meta
+        const isOver = !isFuture && overPct > 100
+
         return (
           <g key={d.dia}>
-            <rect x={x} y={y} width={barW} height={Math.max(barH, 1)} rx={4} fill={barColor} />
-            {overMeta && (
-              <rect x={x} y={y - 2} width={barW} height={3} rx={2} fill={color} opacity={0.6} />
+            {/* Track (fondo = meta) */}
+            <rect x={x} y={0} width={barW} height={trackH} rx={6} fill="rgba(255,255,255,0.06)" />
+
+            {/* Fill (avance) */}
+            {!isFuture && fillH > 0 && (
+              <rect
+                x={x} y={fillY} width={barW} height={fillH} rx={6}
+                fill={fillColor} opacity={d.isToday ? 1 : 0.7}
+              />
             )}
-            {!d.isFuture && d.litros > 0 && (
+
+            {/* Over-meta crown */}
+            {isOver && (
+              <rect x={x} y={0} width={barW} height={3} rx={2} fill={fillColor} opacity={0.9} />
+            )}
+
+            {/* Percentage label inside bar */}
+            {!isFuture && d.litros > 0 && (
               <text
-                x={x + barW / 2} y={Math.max(y - 4, 10)} textAnchor="middle"
-                fill={d.isToday ? color : 'rgba(255,255,255,0.5)'}
-                fontSize="9" fontWeight={d.isToday ? '800' : '400'} fontFamily="inherit"
+                x={x + barW / 2}
+                y={Math.max(fillY + 14, 14)}
+                textAnchor="middle"
+                fill={d.isToday ? '#080808' : 'rgba(255,255,255,0.85)'}
+                fontSize="10" fontWeight="800" fontFamily="inherit"
               >
-                {d.litros.toFixed(0)}
+                {overPct.toFixed(0)}%
               </text>
             )}
+
+            {/* Litros below label (small) */}
+            {!isFuture && d.litros > 0 && (
+              <text
+                x={x + barW / 2} y={H + 14} textAnchor="middle"
+                fill={d.isToday ? fillColor : 'rgba(255,255,255,0.4)'}
+                fontSize="9" fontWeight={d.isToday ? '700' : '400'} fontFamily="inherit"
+              >
+                {d.litros.toFixed(0)}L
+              </text>
+            )}
+
+            {/* Day label */}
             <text
-              x={x + barW / 2} y={H + 16} textAnchor="middle"
-              fill={d.isToday ? color : 'rgba(255,255,255,0.4)'}
-              fontSize="10" fontWeight={d.isToday ? '800' : '400'} fontFamily="inherit"
+              x={x + barW / 2} y={H + 26} textAnchor="middle"
+              fill={d.isToday ? fillColor : 'rgba(255,255,255,0.35)'}
+              fontSize="11" fontWeight={d.isToday ? '800' : '500'} fontFamily="inherit"
             >
               {d.label}
             </text>
           </g>
         )
       })}
+
+      {/* Meta line at 100% */}
+      {metaDiaria > 0 && (
+        <>
+          <line x1={offsetX - 4} y1={0.5} x2={offsetX + totalW + 4} y2={0.5}
+            stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="3 3" />
+          <text x={offsetX + totalW + 6} y={4} fill="rgba(255,255,255,0.25)" fontSize="8" fontFamily="inherit">
+            meta
+          </text>
+        </>
+      )}
     </svg>
   )
 }
@@ -229,18 +267,27 @@ function PacingLineChart({ data, meta, semaforo }: {
   data: PacingDia[]; meta: number; semaforo: EstadoSemaforo
 }) {
   const color = SEMAFORO_COLORS[semaforo]
-  const W = 220, H = 80
+  const W = 240, H = 90
   const n = data.length
   if (n < 2) return null
+
   const maxVal = Math.max(meta * 1.05, ...data.map(d => Math.max(d.realAcum, d.metaIdeal)), 1)
 
   function px(i: number) { return (i / (n - 1)) * W }
   function py(v: number) { return H - (v / maxVal) * H }
 
-  // Only draw real line up to last non-future point
-  const realPoints = data
-    .map((d, i) => ({ ...d, i }))
-    .filter(d => !d.isFuture)
+  const realPoints = data.map((d, i) => ({ ...d, i })).filter(d => !d.isFuture)
+  const lastReal = realPoints[realPoints.length - 1]
+
+  // Build area path for filled region under real line
+  const areaPath = realPoints.length >= 2
+    ? [
+        `M ${px(0).toFixed(1)} ${H}`,
+        ...realPoints.map(d => `L ${px(d.i).toFixed(1)} ${py(d.realAcum).toFixed(1)}`),
+        `L ${px(realPoints[realPoints.length - 1].i).toFixed(1)} ${H}`,
+        'Z'
+      ].join(' ')
+    : null
 
   const realPath = realPoints.length >= 2
     ? realPoints.map((d, j) => `${j === 0 ? 'M' : 'L'} ${px(d.i).toFixed(1)} ${py(d.realAcum).toFixed(1)}`).join(' ')
@@ -250,33 +297,64 @@ function PacingLineChart({ data, meta, semaforo }: {
     .map((d, i) => `${i === 0 ? 'M' : 'L'} ${px(i).toFixed(1)} ${py(d.metaIdeal).toFixed(1)}`)
     .join(' ')
 
-  // Last real point for dot
-  const lastReal = realPoints[realPoints.length - 1]
+  // Current pct for annotation
+  const currentPct = meta > 0 && lastReal ? Math.round((lastReal.realAcum / meta) * 100) : 0
 
   return (
-    <svg width={W} height={H + 28} viewBox={`0 0 ${W} ${H + 28}`} style={{ display: 'block', margin: '0 auto' }}>
+    <svg width={W} height={H + 32} viewBox={`0 0 ${W} ${H + 32}`} style={{ display: 'block', margin: '0 auto' }}>
+      <defs>
+        <linearGradient id={`area-grad-${semaforo}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.03" />
+        </linearGradient>
+      </defs>
+
+      {/* Area fill under real line */}
+      {areaPath && (
+        <path d={areaPath} fill={`url(#area-grad-${semaforo})`} />
+      )}
+
       {/* Ideal pacing dashed */}
-      <path d={idealPath} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" strokeDasharray="5 4" />
+      <path d={idealPath} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeDasharray="5 4" />
+
       {/* Real line */}
       {realPath && (
         <path d={realPath} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       )}
-      {/* Current point dot */}
+
+      {/* Current point dot + pct label */}
       {lastReal && (
-        <circle
-          cx={px(lastReal.i)} cy={py(lastReal.realAcum)} r={4}
-          fill={color} stroke="var(--surface)" strokeWidth="2"
-        />
+        <>
+          <circle
+            cx={px(lastReal.i)} cy={py(lastReal.realAcum)} r={4.5}
+            fill={color} stroke="#0F0F0F" strokeWidth="2"
+          />
+          {/* Pct bubble near dot */}
+          <rect
+            x={px(lastReal.i) - 18} y={py(lastReal.realAcum) - 22}
+            width={36} height={16} rx={5}
+            fill={color} opacity={0.95}
+          />
+          <text
+            x={px(lastReal.i)} y={py(lastReal.realAcum) - 10}
+            textAnchor="middle" fill="#080808"
+            fontSize="10" fontWeight="900" fontFamily="inherit"
+          >
+            {currentPct}%
+          </text>
+        </>
       )}
-      {/* Labels */}
-      <text x={2} y={H + 16} fill="rgba(255,255,255,0.35)" fontSize="9" fontFamily="inherit">
+
+      {/* Start/End date labels */}
+      <text x={2} y={H + 14} fill="rgba(255,255,255,0.3)" fontSize="9" fontFamily="inherit">
         {data[0]?.label}
       </text>
-      <text x={W - 2} y={H + 16} textAnchor="end" fill="rgba(255,255,255,0.35)" fontSize="9" fontFamily="inherit">
+      <text x={W - 2} y={H + 14} textAnchor="end" fill="rgba(255,255,255,0.3)" fontSize="9" fontFamily="inherit">
         {data[n - 1]?.label}
       </text>
-      {/* Meta label on ideal line end */}
-      <text x={W - 2} y={py(meta) - 4} textAnchor="end" fill="rgba(255,255,255,0.28)" fontSize="9" fontFamily="inherit">
+
+      {/* Meta line label */}
+      <text x={W - 2} y={Math.max(py(meta) - 4, 10)} textAnchor="end" fill="rgba(255,255,255,0.25)" fontSize="9" fontFamily="inherit">
         meta
       </text>
     </svg>
@@ -462,15 +540,38 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
 
       {/* Leyenda del chart */}
       {(vista === 'semanal' || esMensual) && (
-        <div style={{ padding: '0 20px 10px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 16, height: 6, borderRadius: 3, background: SEMAFORO_COLORS[semaforo] }} />
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>Realizado</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 16, height: 1.5, background: 'rgba(255,255,255,0.28)', borderTop: '1.5px dashed rgba(255,255,255,0.28)' }} />
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>{vista === 'semanal' ? 'Meta diaria' : 'Pacing ideal'}</span>
-          </div>
+        <div style={{ padding: '0 20px 10px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          {vista === 'semanal' ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 3, background: SEMAFORO_COLORS.verde }} />
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>≥95% meta</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 3, background: SEMAFORO_COLORS.amarillo }} />
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>75–95%</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 3, background: SEMAFORO_COLORS.rojo }} />
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>&lt;75%</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 12, height: 6, borderRadius: 2, background: 'rgba(255,255,255,0.06)' }} />
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>Fondo = meta diaria</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 16, height: 6, borderRadius: 3, background: SEMAFORO_COLORS[semaforo], opacity: 0.5 }} />
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>Realizado acumulado</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 16, height: 1.5, borderTop: '1.5px dashed rgba(255,255,255,0.28)' }} />
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>Pacing ideal</span>
+              </div>
+            </>
+          )}
         </div>
       )}
 
