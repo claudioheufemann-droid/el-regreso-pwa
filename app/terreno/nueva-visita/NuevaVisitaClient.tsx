@@ -9,9 +9,12 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
-const T = '#10B981'
+const T = '#10B981'          // terreno identity (GPS, step bar, hub)
 const T_DIM = 'rgba(16,185,129,0.12)'
 const T_BORDER = 'rgba(16,185,129,0.25)'
+const C = '#4F46E5'          // catalog / cart accent (indigo)
+const C_DIM = 'rgba(79,70,229,0.12)'
+const C_BORDER = 'rgba(79,70,229,0.30)'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -46,8 +49,8 @@ const PRODUCTO_IMAGENES: Record<string, string> = {
   'Kombucha Natural':              '/productos/kombucha/natural.png',
   // Cerveza El Regreso
   'Arboretum':                     '/productos/cerveza/arboretum.png',
-  'Mocho  English':                '/productos/cerveza/mocho.png',
-  'La Barra  APA':                 '/productos/cerveza/la-barra.png',
+  'Mocho English':                 '/productos/cerveza/mocho.png',
+  'La Barra APA':                  '/productos/cerveza/la-barra.png',
   'Fisura':                        '/productos/cerveza/fisura.png',
   'Descenso West Coast IPA':       '/productos/cerveza/descenso.png',
   'Aguas Blancas':                 '/productos/cerveza/aguas-blancas.png',
@@ -326,12 +329,12 @@ function Paso2Checkin({
         </div>
 
         {/* Fotos */}
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10 }}>
           Fotos requeridas ({fotosListas} / 3)
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
           {FOTO_SLOTS.map(slot => (
-            <div key={slot.key}>
+            <div key={slot.key} style={{ flex: 1 }}>
               <input
                 ref={el => { fileRefs.current[slot.key] = el }}
                 type="file" accept="image/*" capture="environment"
@@ -341,7 +344,7 @@ function Paso2Checkin({
               <div
                 onClick={() => fileRefs.current[slot.key]?.click()}
                 style={{
-                  aspectRatio: '1', borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+                  height: 80, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
                   background: fotos[slot.key] ? 'transparent' : '#1C1C1C',
                   border: `2px solid ${fotos[slot.key] ? T : 'rgba(255,255,255,0.08)'}`,
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -353,10 +356,10 @@ function Paso2Checkin({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={fotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     <div style={{
-                      position: 'absolute', bottom: 4, right: 4, width: 20, height: 20,
+                      position: 'absolute', bottom: 3, right: 3, width: 18, height: 18,
                       background: T, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <CheckCircle size={13} color="#080808" />
+                      <CheckCircle size={11} color="#080808" />
                     </div>
                   </>
                 ) : (
@@ -597,10 +600,39 @@ function Paso4Catalogo({
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-          <p style={{ fontSize: 18, fontWeight: 900, color: '#F4EEDF', marginBottom: 4 }}>Cerrar visita</p>
-          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
-            {items.length > 0 ? `${totalItems} productos en carrito` : 'Carrito vacío'}
-          </p>
+          <p style={{ fontSize: 18, fontWeight: 900, color: '#F4EEDF', marginBottom: 16 }}>Cerrar visita</p>
+
+          {/* Resumen carrito */}
+          {items.length > 0 && (
+            <div style={{
+              background: '#131313', border: `1px solid ${C_BORDER}`,
+              borderRadius: 14, overflow: 'hidden', marginBottom: 16,
+            }}>
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: C, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                  Pedido
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--muted)' }}>{totalItems} ud.</p>
+              </div>
+              {items.map((item, i) => (
+                <div key={item.producto} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                  borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                }}>
+                  <ProductoThumb nombre={item.producto} categoria={item.categoria} size={36} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.producto}
+                    </p>
+                    {item.envase && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{item.envase}</p>}
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <p style={{ fontSize: 15, fontWeight: 900, color: C }}>×{item.cantidad}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Opción venta */}
           {items.length > 0 && (
@@ -682,8 +714,8 @@ function Paso4Catalogo({
             style={{
               width: '100%', padding: '17px 0', borderRadius: 14, border: 'none',
               cursor: sinVenta && !motivo ? 'not-allowed' : 'pointer',
-              background: sinVenta && !motivo ? 'rgba(255,255,255,0.06)' : T,
-              color: sinVenta && !motivo ? 'var(--muted)' : '#080808',
+              background: sinVenta && !motivo ? 'rgba(255,255,255,0.06)' : C,
+              color: sinVenta && !motivo ? 'var(--muted)' : '#fff',
               fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px',
             }}
           >
@@ -701,8 +733,8 @@ function Paso4Catalogo({
         {(['Cerveza', 'Kombucha'] as const).map(cat => (
           <button key={cat} onClick={() => setTabCat(cat)} style={{
             flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
-            background: tabCat === cat ? T : 'transparent',
-            color: tabCat === cat ? '#080808' : 'var(--muted)',
+            background: tabCat === cat ? C : 'transparent',
+            color: tabCat === cat ? '#fff' : 'var(--muted)',
             fontSize: 14, fontWeight: 700, transition: 'all 0.15s',
           }}>
             {cat === 'Cerveza' ? '🍺' : '🫧'} {cat}
@@ -723,8 +755,8 @@ function Paso4Catalogo({
               const cant = carrito.get(p.producto)?.cantidad ?? 0
               return (
                 <div key={p.producto} style={{
-                  background: cant > 0 ? T_DIM : '#1C1C1C',
-                  border: `1px solid ${cant > 0 ? T_BORDER : 'rgba(255,255,255,0.06)'}`,
+                  background: cant > 0 ? C_DIM : '#1C1C1C',
+                  border: `1px solid ${cant > 0 ? C_BORDER : 'rgba(255,255,255,0.06)'}`,
                   borderRadius: 12, padding: '12px 14px',
                   display: 'flex', alignItems: 'center', gap: 10,
                   transition: 'all 0.15s',
@@ -744,13 +776,13 @@ function Paso4Catalogo({
                     }}>
                       <Minus size={16} />
                     </button>
-                    <span style={{ width: 32, textAlign: 'center', fontSize: 15, fontWeight: 800, color: cant > 0 ? T : 'var(--muted)' }}>
+                    <span style={{ width: 32, textAlign: 'center', fontSize: 15, fontWeight: 800, color: cant > 0 ? C : 'var(--muted)' }}>
                       {cant}
                     </span>
                     <button onClick={() => ajustar(p, 1)} style={{
                       width: 36, height: 36, borderRadius: 10, cursor: 'pointer',
-                      background: T_DIM, border: `1px solid ${T_BORDER}`,
-                      color: T, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: C_DIM, border: `1px solid ${C_BORDER}`,
+                      color: C, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                       <Plus size={16} />
                     </button>
@@ -766,8 +798,8 @@ function Paso4Catalogo({
       <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
         <button onClick={() => setShowCierre(true)} style={{
           width: '100%', padding: '17px 20px', borderRadius: 14, border: 'none', cursor: 'pointer',
-          background: totalItems > 0 ? T : 'rgba(255,255,255,0.06)',
-          color: totalItems > 0 ? '#080808' : 'var(--muted)',
+          background: totalItems > 0 ? C : 'rgba(255,255,255,0.06)',
+          color: totalItems > 0 ? '#fff' : 'var(--muted)',
           fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           transition: 'all 0.2s',
         }}>
