@@ -1,4 +1,4 @@
-import { getServerUser } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import LogoutButton from '@/components/ui/LogoutButton'
@@ -6,8 +6,19 @@ import LogoutButton from '@/components/ui/LogoutButton'
 export const dynamic = 'force-dynamic'
 
 export default async function HubPage() {
-  const user = await getServerUser()
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  // Profile lookup — if it fails, show hub with limited access (no redirect loop)
+  const { data: profile } = await supabase
+    .from('users')
+    .select('nombre, is_admin, email')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  const isAdmin = profile?.is_admin ?? false
+  const nombre = profile?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
 
   return (
     <div
@@ -29,17 +40,16 @@ export default async function HubPage() {
             El Regreso Beer
           </h1>
           <p style={{ fontSize: 12, color: '#7A7268', marginTop: 4 }}>
-            Hola, <span style={{ color: '#D4AF37', fontWeight: 700 }}>{user.nombre.split(' ')[0]}</span>
+            Hola, <span style={{ color: '#D4AF37', fontWeight: 700 }}>{nombre.split(' ')[0]}</span>
           </p>
           <p style={{ fontSize: 10, color: '#3A3530', marginTop: 6, letterSpacing: 1.5 }}>
-            {user.isAdmin ? 'ADMINISTRADOR · ACCESO TOTAL' : 'ACCESO VENTAS'}
+            {isAdmin ? 'ADMINISTRADOR · ACCESO TOTAL' : 'ACCESO VENTAS'}
           </p>
         </div>
 
         {/* Module Cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Ventas — visible to all */}
           <Link href="/ventas" style={{ textDecoration: 'none' }}>
             <div
               style={{
@@ -54,16 +64,12 @@ export default async function HubPage() {
                 background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 22, flexShrink: 0,
-              }}>
-                📊
-              </div>
+              }}>📊</div>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>
-                  Ventas
-                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>Ventas</div>
                 <div style={{ fontSize: 12, color: '#7A7268', lineHeight: 1.4 }}>
                   Dashboard, metas, clientes y mapa
-                  {!user.isAdmin && (
+                  {!isAdmin && (
                     <span style={{ display: 'block', color: '#D4AF37', fontWeight: 600, marginTop: 2 }}>
                       Vista personalizada
                     </span>
@@ -74,8 +80,7 @@ export default async function HubPage() {
             </div>
           </Link>
 
-          {/* Gestión — admin only */}
-          {user.isAdmin ? (
+          {isAdmin ? (
             <Link href="/gestion" style={{ textDecoration: 'none' }}>
               <div
                 style={{
@@ -90,13 +95,9 @@ export default async function HubPage() {
                   background: 'rgba(91,138,168,0.12)', border: '1px solid rgba(91,138,168,0.25)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 22, flexShrink: 0,
-                }}>
-                  ⊞
-                </div>
+                }}>⊞</div>
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>
-                    Gestión
-                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>Gestión</div>
                   <div style={{ fontSize: 12, color: '#7A7268', lineHeight: 1.4 }}>
                     Tareas, áreas y sistema operativo ejecutivo
                   </div>
@@ -105,7 +106,6 @@ export default async function HubPage() {
               </div>
             </Link>
           ) : (
-            /* Locked card for non-admins */
             <div style={{
               background: '#0D0D0D', border: '1px solid rgba(255,255,255,0.04)',
               borderRadius: 20, padding: '24px 22px',
@@ -117,13 +117,9 @@ export default async function HubPage() {
                 background: 'rgba(255,255,255,0.03)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 22, flexShrink: 0,
-              }}>
-                🔒
-              </div>
+              }}>🔒</div>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#6A6460', marginBottom: 4 }}>
-                  Gestión
-                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#6A6460', marginBottom: 4 }}>Gestión</div>
                 <div style={{ fontSize: 12, color: '#3A3530', lineHeight: 1.4 }}>
                   Acceso restringido · Solo administradores
                 </div>

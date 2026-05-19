@@ -14,11 +14,12 @@ export async function getServerUser(): Promise<AppUser | null> {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
 
+    // maybeSingle() returns null instead of throwing when row not found
     const { data: profile } = await supabase
       .from('users')
       .select('nombre, iniciales, is_admin, email')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     if (!profile) return null
 
