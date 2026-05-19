@@ -42,6 +42,7 @@ const PRODUCTO_IMAGENES: Record<string, string> = {
   'Kombucha Mango':                '/productos/kombucha/mango-merken.png',
   'Kombucha Maqui':                '/productos/kombucha/maqui-hops.png',
   'Kombucha Maracuyá Cardamomo':   '/productos/kombucha/maracuya-cardamomo.png',
+  'Kombucha Natural':              '/productos/kombucha/natural.png',
 }
 
 function ProductoThumb({ nombre, categoria, size = 44 }: { nombre: string; categoria: string; size?: number }) {
