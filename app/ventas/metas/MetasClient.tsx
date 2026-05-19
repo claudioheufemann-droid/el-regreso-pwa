@@ -164,7 +164,8 @@ function GaugeChart({ pct, semaforo, meta, realizado }: {
 function WeekBarChart({ data, metaDiaria, semaforo }: {
   data: BarDia[]; metaDiaria: number; semaforo: EstadoSemaforo
 }) {
-  const W = 240, H = 96
+  const color = SEMAFORO_COLORS[semaforo]
+  const W = 240, H = 88
   const n = data.length || 5
   const gap = 10
   const barW = Math.floor((W - (n - 1) * gap) / n)
@@ -172,93 +173,79 @@ function WeekBarChart({ data, metaDiaria, semaforo }: {
   const offsetX = (W - totalW) / 2
 
   return (
-    <svg width={W} height={H + 32} viewBox={`0 0 ${W} ${H + 32}`} style={{ display: 'block', margin: '0 auto' }}>
+    <svg width={W} height={H + 38} viewBox={`0 0 ${W} ${H + 38}`} style={{ display: 'block', margin: '0 auto' }}>
+      {/* Meta line (top = 100%) */}
+      <line x1={offsetX} y1={1} x2={offsetX + totalW} y2={1}
+        stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="3 4" />
+
       {data.map((d, i) => {
         const x = offsetX + i * (barW + gap)
-        const isFuture = d.isFuture
-
-        // percentage vs daily meta (cap at 100% for bar fill, show real % as text)
-        const pct = metaDiaria > 0 ? Math.min(100, (d.litros / metaDiaria) * 100) : 0
         const overPct = metaDiaria > 0 ? (d.litros / metaDiaria) * 100 : 0
+        const fillPct  = Math.min(100, overPct)
 
-        // pick fill color by performance
-        const fillColor = isFuture ? 'rgba(255,255,255,0.04)'
-          : d.litros === 0 ? 'rgba(255,255,255,0.06)'
+        const fillColor = d.isFuture || d.litros === 0
+          ? null
           : overPct >= 95 ? SEMAFORO_COLORS.verde
           : overPct >= 75 ? SEMAFORO_COLORS.amarillo
           : SEMAFORO_COLORS.rojo
 
-        const trackH = H
-        const fillH = isFuture ? 0 : Math.max(pct > 0 ? 4 : 0, (pct / 100) * trackH)
+        const fillH = fillColor ? Math.max(4, (fillPct / 100) * H) : 0
         const fillY = H - fillH
-
-        // extra cap bar for over-meta
-        const isOver = !isFuture && overPct > 100
+        const isToday = d.isToday
+        const hasSales = !d.isFuture && d.litros > 0
 
         return (
           <g key={d.dia}>
-            {/* Track (fondo = meta) */}
-            <rect x={x} y={0} width={barW} height={trackH} rx={6} fill="rgba(255,255,255,0.06)" />
+            {/* Track */}
+            <rect x={x} y={0} width={barW} height={H} rx={5}
+              fill={isToday ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.05)'} />
 
-            {/* Fill (avance) */}
-            {!isFuture && fillH > 0 && (
-              <rect
-                x={x} y={fillY} width={barW} height={fillH} rx={6}
-                fill={fillColor} opacity={d.isToday ? 1 : 0.7}
-              />
+            {/* Fill */}
+            {fillH > 0 && fillColor && (
+              <rect x={x} y={fillY} width={barW} height={fillH} rx={5}
+                fill={fillColor} opacity={isToday ? 0.95 : 0.55} />
             )}
 
-            {/* Over-meta crown */}
-            {isOver && (
-              <rect x={x} y={0} width={barW} height={3} rx={2} fill={fillColor} opacity={0.9} />
+            {/* Over-meta cap */}
+            {overPct > 100 && fillColor && (
+              <rect x={x} y={0} width={barW} height={4} rx={2} fill={fillColor} />
             )}
 
-            {/* Percentage label inside bar */}
-            {!isFuture && d.litros > 0 && (
+            {/* % — texto simple arriba del fill, solo si hay ventas */}
+            {hasSales && (
               <text
                 x={x + barW / 2}
-                y={Math.max(fillY + 14, 14)}
+                y={Math.max(fillY - 5, 11)}
                 textAnchor="middle"
-                fill={d.isToday ? '#080808' : 'rgba(255,255,255,0.85)'}
-                fontSize="10" fontWeight="800" fontFamily="inherit"
+                fill={isToday ? (fillColor ?? color) : 'rgba(255,255,255,0.5)'}
+                fontSize="10" fontWeight={isToday ? '800' : '600'} fontFamily="inherit"
               >
-                {overPct.toFixed(0)}%
+                {Math.round(overPct)}%
               </text>
             )}
 
-            {/* Litros below label (small) */}
-            {!isFuture && d.litros > 0 && (
+            {/* Litros — pequeño, debajo de la barra */}
+            {hasSales && (
               <text
-                x={x + barW / 2} y={H + 14} textAnchor="middle"
-                fill={d.isToday ? fillColor : 'rgba(255,255,255,0.4)'}
-                fontSize="9" fontWeight={d.isToday ? '700' : '400'} fontFamily="inherit"
+                x={x + barW / 2} y={H + 13} textAnchor="middle"
+                fill="rgba(255,255,255,0.38)"
+                fontSize="9" fontFamily="inherit"
               >
-                {d.litros.toFixed(0)}L
+                {d.litros % 1 === 0 ? d.litros : d.litros.toFixed(1)}L
               </text>
             )}
 
-            {/* Day label */}
+            {/* Día — label inferior */}
             <text
-              x={x + barW / 2} y={H + 26} textAnchor="middle"
-              fill={d.isToday ? fillColor : 'rgba(255,255,255,0.35)'}
-              fontSize="11" fontWeight={d.isToday ? '800' : '500'} fontFamily="inherit"
+              x={x + barW / 2} y={H + 28} textAnchor="middle"
+              fill={isToday ? (fillColor ?? color) : 'rgba(255,255,255,0.3)'}
+              fontSize="11" fontWeight={isToday ? '800' : '500'} fontFamily="inherit"
             >
               {d.label}
             </text>
           </g>
         )
       })}
-
-      {/* Meta line at 100% */}
-      {metaDiaria > 0 && (
-        <>
-          <line x1={offsetX - 4} y1={0.5} x2={offsetX + totalW + 4} y2={0.5}
-            stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="3 3" />
-          <text x={offsetX + totalW + 6} y={4} fill="rgba(255,255,255,0.25)" fontSize="8" fontFamily="inherit">
-            meta
-          </text>
-        </>
-      )}
     </svg>
   )
 }
