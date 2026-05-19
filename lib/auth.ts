@@ -14,12 +14,22 @@ export async function getServerUser(): Promise<AppUser | null> {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
 
-    // maybeSingle() returns null instead of throwing when row not found
-    const { data: profile } = await supabase
+    // Primary lookup: by auth UUID
+    let { data: profile } = await supabase
       .from('users')
       .select('nombre, iniciales, is_admin, email')
       .eq('id', user.id)
       .maybeSingle()
+
+    // Fallback: by email (handles any future UUID drift)
+    if (!profile && user.email) {
+      const res = await supabase
+        .from('users')
+        .select('nombre, iniciales, is_admin, email')
+        .eq('email', user.email)
+        .maybeSingle()
+      profile = res.data
+    }
 
     if (!profile) return null
 
