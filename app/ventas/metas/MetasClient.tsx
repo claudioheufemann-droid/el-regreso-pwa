@@ -383,17 +383,32 @@ function BarraDual({ meta, realizado, esperado, semaforo }: {
 }) {
   const pctReal = meta > 0 ? Math.min(100, (realizado / meta) * 100) : 0
   const pctEsp  = meta > 0 ? Math.min(100, (esperado / meta) * 100) : 0
+  const color   = SEMAFORO_COLORS[semaforo]
 
   return (
     <div style={{ position: 'relative', height: 10, borderRadius: 10, background: 'rgba(255,255,255,0.06)' }}>
-      <div className="animate-progress" style={{
-        position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 10,
-        width: `${pctReal}%`, background: SEMAFORO_COLORS[semaforo],
-      }} />
-      {pctEsp > 0 && pctEsp <= 100 && (
+      {/* Zona esperada (tenue) — muestra cuánto debería estar hecho ahora */}
+      {pctEsp > 0 && (
         <div style={{
-          position: 'absolute', top: -3, left: `${pctEsp}%`,
-          width: 2, height: 16, background: 'rgba(255,255,255,0.55)',
+          position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 10,
+          width: `${pctEsp}%`,
+          background: `${color}28`,
+          transition: 'width 0.6s cubic-bezier(0.16,1,0.3,1)',
+        }} />
+      )}
+      {/* Avance real (sólido) */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: 10,
+        width: `${pctReal}%`,
+        background: color,
+        minWidth: pctReal > 0 ? 5 : 0,
+        transition: 'width 0.6s cubic-bezier(0.16,1,0.3,1)',
+      }} />
+      {/* Marcador línea esperado */}
+      {pctEsp > 0 && pctEsp <= 99 && (
+        <div style={{
+          position: 'absolute', top: -2, left: `${pctEsp}%`,
+          width: 2, height: 14, background: 'rgba(255,255,255,0.5)',
           borderRadius: 2, transform: 'translateX(-50%)',
         }} />
       )}
