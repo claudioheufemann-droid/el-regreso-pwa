@@ -9,9 +9,9 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
-const T = '#10B981'          // terreno identity (GPS, step bar, hub)
-const T_DIM = 'rgba(16,185,129,0.12)'
-const T_BORDER = 'rgba(16,185,129,0.25)'
+const T = '#D4AF37'          // terreno identity (GPS, step bar, hub)
+const T_DIM = 'rgba(212,175,55,0.12)'
+const T_BORDER = 'rgba(212,175,55,0.25)'
 const C = '#4F46E5'          // catalog / cart accent (indigo)
 const C_DIM = 'rgba(79,70,229,0.12)'
 const C_BORDER = 'rgba(79,70,229,0.30)'

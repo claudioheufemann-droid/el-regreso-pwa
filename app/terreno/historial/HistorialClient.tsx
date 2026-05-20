@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { MapPin, CheckCircle, XCircle, Clock, ChevronRight, Filter } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 
-const T = '#10B981'
-const T_DIM = 'rgba(16,185,129,0.12)'
-const T_BORDER = 'rgba(16,185,129,0.25)'
+const T = '#D4AF37'
+const T_DIM = 'rgba(212,175,55,0.12)'
+const T_BORDER = 'rgba(212,175,55,0.25)'
 
 interface Visita {
   id: string
@@ -85,28 +85,17 @@ export default function HistorialClient({ user, visitas, vendedores }: Props) {
   const hayFiltros = filtroVendedor !== 'todos' || filtroResultado !== 'todos'
 
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', paddingBottom: 80 }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 80 }}>
 
-      {/* Header */}
+      {/* Título de página */}
       <div style={{
-        background: '#0F0F0F', borderBottom: '1px solid rgba(16,185,129,0.15)',
-        padding: '16px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '32px 28px 20px',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link href="/terreno" style={{ color: T, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>← Terreno</Link>
-          <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.1)' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 8, background: T_DIM,
-              border: `1px solid ${T_BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <MapPin size={14} color={T} />
-            </div>
-            <span style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', letterSpacing: '-0.3px' }}>
-              Historial
-            </span>
-          </div>
-        </div>
+        <h1 style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>
+          Historial
+        </h1>
         <button
           onClick={() => setShowFiltros(f => !f)}
           style={{
@@ -124,8 +113,8 @@ export default function HistorialClient({ user, visitas, vendedores }: Props) {
       {/* Panel de filtros */}
       {showFiltros && (
         <div style={{
-          background: '#0F0F0F', borderBottom: '1px solid rgba(255,255,255,0.06)',
-          padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12,
+          background: 'var(--surface2)', borderBottom: '1px solid rgba(255,255,255,0.06)',
+          padding: '14px 28px', display: 'flex', flexDirection: 'column', gap: 12,
         }}>
           {user.isAdmin && (
             <div>
@@ -149,7 +138,7 @@ export default function HistorialClient({ user, visitas, vendedores }: Props) {
         </div>
       )}
 
-      <div style={{ padding: '16px', maxWidth: 480, margin: '0 auto' }}>
+      <div style={{ padding: '20px 28px', maxWidth: 700 }}>
 
         {/* KPIs resumen */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 20 }}>
