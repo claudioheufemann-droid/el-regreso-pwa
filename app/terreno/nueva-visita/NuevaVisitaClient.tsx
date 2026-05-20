@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   MapPin, Camera, CheckCircle, XCircle, ChevronLeft, ChevronDown,
@@ -377,6 +377,87 @@ interface Props {
   visitaRetomada?: VisitaRetomada | null
 }
 
+// ─── Selector de cantidad editable ───────────────────────────
+
+function CantidadInput({
+  value, onchange, accent, size = 'md',
+}: {
+  value: number
+  onchange: (n: number) => void
+  accent: string
+  size?: 'sm' | 'md'
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const btnW = size === 'sm' ? 34 : 36
+  const numW = size === 'sm' ? 30 : 34
+  const fontSize = size === 'sm' ? 15 : 16
+  const iconSize = size === 'sm' ? 14 : 15
+
+  const confirm = useCallback((raw: string) => {
+    const n = parseInt(raw, 10)
+    if (!isNaN(n) && n >= 0) onchange(n)
+    setEditing(false)
+  }, [onchange])
+
+  function startEdit() {
+    setDraft(value > 0 ? String(value) : '')
+    setEditing(true)
+    setTimeout(() => { inputRef.current?.select() }, 0)
+  }
+
+  const accentDim = accent === T ? T_DIM : 'rgba(212,175,55,0.12)'
+  const accentBorder = accent === T ? T_BORDER : 'rgba(212,175,55,0.25)'
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+      <button
+        onClick={() => onchange(Math.max(0, value - 1))}
+        style={{ width: btnW, height: btnW, borderRadius: 9, border: 'none', cursor: 'pointer', background: value > 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)', color: '#F4EEDF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Minus size={iconSize} />
+      </button>
+
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={e => setDraft(e.target.value.replace(/\D/g, ''))}
+          onBlur={() => confirm(draft)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') confirm(draft)
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          type="text"
+          inputMode="numeric"
+          style={{
+            width: numW + 12, height: btnW, textAlign: 'center', fontSize, fontWeight: 900,
+            background: accentDim, border: `1px solid ${accent}`, borderRadius: 9,
+            color: accent, outline: 'none', margin: '0 4px',
+          }}
+        />
+      ) : (
+        <span
+          onClick={startEdit}
+          style={{ width: numW, textAlign: 'center', fontSize, fontWeight: 900, color: value > 0 ? accent : 'var(--muted)', cursor: 'text', padding: '0 2px', margin: '0 2px' }}
+          title="Toca para escribir cantidad"
+        >
+          {value}
+        </span>
+      )}
+
+      <button
+        onClick={() => onchange(value + 1)}
+        style={{ width: btnW, height: btnW, borderRadius: 9, cursor: 'pointer', background: accentDim, border: `1px solid ${accentBorder}`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Plus size={iconSize} />
+      </button>
+    </div>
+  )
+}
+
 // ─── Step indicator ───────────────────────────────────────────
 
 function StepBar({ paso, total }: { paso: number; total: number }) {
@@ -623,10 +704,12 @@ function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
   const [carritoSug, setCarritoSug] = useState<Map<string, ItemCarrito>>(new Map())
 
   function ajustarSug(nombre: string, categoria: string, delta: number) {
+    setSugCant(nombre, categoria, (carritoSug.get(nombre)?.cantidad ?? 0) + delta)
+  }
+
+  function setSugCant(nombre: string, categoria: string, nueva: number) {
     setCarritoSug(prev => {
       const next = new Map(prev)
-      const actual = next.get(nombre)?.cantidad ?? 0
-      const nueva = actual + delta
       if (nueva <= 0) { next.delete(nombre); return next }
       next.set(nombre, { producto: nombre, categoria, envase: 'Lata', cantidad: nueva, precio: CATALOGO_INFO[nombre]?.precio_lata ?? 0 })
       return next
@@ -742,15 +825,11 @@ function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
                       )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                        <button onClick={() => ajustarSug(p.nombre, p.categoria, -1)} style={{ width: 34, height: 34, borderRadius: 9, border: 'none', cursor: 'pointer', background: cant > 0 ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)', color: '#F4EEDF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Minus size={15} />
-                        </button>
-                        <span style={{ width: 30, textAlign: 'center', fontSize: 16, fontWeight: 900, color: cant > 0 ? T : 'var(--muted)' }}>{cant}</span>
-                        <button onClick={() => ajustarSug(p.nombre, p.categoria, 1)} style={{ width: 34, height: 34, borderRadius: 9, cursor: 'pointer', background: T_DIM, border: `1px solid ${T_BORDER}`, color: T, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Plus size={15} />
-                        </button>
-                      </div>
+                      <CantidadInput
+                        value={cant}
+                        accent={T}
+                        onchange={n => setSugCant(p.nombre, p.categoria, n)}
+                      />
                       {cant > 0 && precio > 0 && (
                         <p style={{ fontSize: 12, fontWeight: 900, color: T, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
                           {fmtPrecioCLP(cant * precio)}
@@ -983,15 +1062,18 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
                     )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                      <button onClick={() => ajustar(p, -1)} style={{ width: 34, height: 34, borderRadius: 9, border: 'none', cursor: 'pointer', background: cant > 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)', color: '#F4EEDF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Minus size={15} />
-                      </button>
-                      <span style={{ width: 30, textAlign: 'center', fontSize: 16, fontWeight: 900, color: cant > 0 ? C : 'var(--muted)' }}>{cant}</span>
-                      <button onClick={() => ajustar(p, 1)} style={{ width: 34, height: 34, borderRadius: 9, cursor: 'pointer', background: C_DIM, border: `1px solid ${C_BORDER}`, color: C, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Plus size={15} />
-                      </button>
-                    </div>
+                    <CantidadInput
+                      value={cant}
+                      accent={C}
+                      onchange={n => {
+                        setCarrito(prev => {
+                          const next = new Map(prev)
+                          if (n <= 0) { next.delete(p.producto); return next }
+                          next.set(p.producto, { producto: p.producto, categoria: p.categoria_producto ?? '', envase: p.envase ?? '', cantidad: n, precio: CATALOGO_INFO[p.producto]?.precio_lata ?? 0 })
+                          return next
+                        })
+                      }}
+                    />
                     {cant > 0 && CATALOGO_INFO[p.producto]?.precio_lata && (
                       <p style={{ fontSize: 12, fontWeight: 900, color: C, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
                         {fmtPrecioCLP(cant * CATALOGO_INFO[p.producto].precio_lata)}
