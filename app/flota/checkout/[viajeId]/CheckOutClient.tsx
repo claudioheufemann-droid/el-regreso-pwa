@@ -37,6 +37,28 @@ function CombustibleSelector({ label, value, onChange }: { label: string; value:
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
+const ANGULOS_360 = [
+  { key: 'frente',    label: 'Frente',    emoji: '⬆️' },
+  { key: 'izquierdo', label: 'Izq.',      emoji: '◀️' },
+  { key: 'derecho',   label: 'Der.',      emoji: '▶️' },
+  { key: 'atras',     label: 'Atrás',     emoji: '⬇️' },
+] as const
+
+function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji: string; onCaptura: (url: string) => void; capturada: boolean }) {
+  const ref = useRef<HTMLInputElement>(null)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <input ref={ref} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(URL.createObjectURL(f)) }}
+      />
+      <div onClick={() => ref.current?.click()} style={{ width: '100%', aspectRatio: '1', borderRadius: 12, cursor: 'pointer', background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `2px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.1)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+        {capturada ? <CheckCircle size={22} color="#4ADE80" /> : <><span style={{ fontSize: 22 }}>{emoji}</span><Camera size={12} color="var(--muted)" /></>}
+      </div>
+      <p style={{ fontSize: 10, textAlign: 'center', color: capturada ? '#4ADE80' : 'var(--muted)', fontWeight: 700 }}>{label}</p>
+    </div>
+  )
+}
+
 const F = '#F97316'
 const F_BORDER = 'rgba(249,115,22,0.28)'
 
@@ -61,18 +83,20 @@ export default function CheckOutClient({ user, viaje }: Props) {
   const [guardando, setGuardando] = useState(false)
   const [fotoKmFin, setFotoKmFin] = useState('')
   const [kmFin, setKmFin] = useState('')
+  const [fotos360, setFotos360] = useState<Record<string, string>>({})
+  const [fotoMarcador, setFotoMarcador] = useState('')
   const [combustibleFin, setCombustibleFin] = useState(viaje.vehiculos?.combustible ?? '')
-  const [showCombustible, setShowCombustible] = useState(false)
+  const [showCargaComb, setShowCargaComb] = useState(false)
   const [litros, setLitros] = useState('')
   const [montoComb, setMontoComb] = useState('')
   const [fotoBoleta, setFotoBoleta] = useState('')
-  const fotoRef = useRef<HTMLInputElement>(null)
   const boletaRef = useRef<HTMLInputElement>(null)
 
   const kmRecorridos = kmFin ? parseInt(kmFin) - (viaje.km_inicio ?? 0) : null
   const desvio = kmRecorridos && viaje.km_teoricos ? kmRecorridos - viaje.km_teoricos : null
   const desvioPorc = desvio && viaje.km_teoricos ? (desvio / viaje.km_teoricos) * 100 : null
-  const listo = !!fotoKmFin && !!kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0) && !!combustibleFin
+  const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
+  const listo = !!fotoKmFin && !!kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0) && fotos360ok && !!fotoMarcador && !!combustibleFin
 
   async function cerrar() {
     if (!listo) return
@@ -133,15 +157,12 @@ export default function CheckOutClient({ user, viaje }: Props) {
           )}
         </div>
 
-        {/* Foto km final */}
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
+        {/* Foto odómetro */}
+        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
           Foto odómetro final *
         </p>
-        <input ref={fotoRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-          onChange={e => { const f = e.target.files?.[0]; if (f) setFotoKmFin(URL.createObjectURL(f)) }}
-        />
-        <div onClick={() => fotoRef.current?.click()} style={{ height: 88, borderRadius: 12, cursor: 'pointer', marginBottom: 16, background: fotoKmFin ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `2px solid ${fotoKmFin ? '#4ADE80' : 'rgba(255,255,255,0.08)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          {fotoKmFin ? <><CheckCircle size={24} color="#4ADE80" /><p style={{ fontSize: 11, color: '#4ADE80', fontWeight: 600 }}>Foto capturada</p></> : <><span style={{ fontSize: 28 }}>🔢</span><Camera size={14} color="var(--muted)" /></>}
+        <div style={{ marginBottom: 16 }}>
+          <FotoSlot label="Odómetro" emoji="🔢" onCaptura={setFotoKmFin} capturada={!!fotoKmFin} />
         </div>
 
         {/* KM final */}
@@ -178,15 +199,35 @@ export default function CheckOutClient({ user, viaje }: Props) {
           </div>
         )}
 
+        {/* Inspección 360° */}
+        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+          Inspección 360° *
+          <span style={{ fontSize: 10, fontWeight: 500, color: fotos360ok ? '#4ADE80' : 'var(--muted)', marginLeft: 8 }}>
+            {Object.keys(fotos360).length}/4
+          </span>
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+          {ANGULOS_360.map(a => (
+            <FotoSlot key={a.key} label={a.label} emoji={a.emoji}
+              onCaptura={url => setFotos360(prev => ({ ...prev, [a.key]: url }))}
+              capturada={!!fotos360[a.key]} />
+          ))}
+        </div>
+
+        {/* Combustible */}
+        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Marcador de combustible *</p>
+        <div style={{ marginBottom: 12 }}>
+          <FotoSlot label="Foto del tablero" emoji="⛽" onCaptura={setFotoMarcador} capturada={!!fotoMarcador} />
+        </div>
         <CombustibleSelector label="Nivel de combustible al llegar *" value={combustibleFin} onChange={setCombustibleFin} />
 
-        {/* Combustible (opcional) */}
-        <button onClick={() => setShowCombustible(s => !s)} style={{ width: '100%', padding: '13px 16px', borderRadius: 12, border: `1px solid ${showCombustible ? F_BORDER : 'rgba(255,255,255,0.08)'}`, background: showCombustible ? 'rgba(249,115,22,0.07)' : 'transparent', color: showCombustible ? F : 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, marginBottom: showCombustible ? 0 : 16 }}>
+        {/* Carga de combustible (opcional) */}
+        <button onClick={() => setShowCargaComb(s => !s)} style={{ width: '100%', padding: '13px 16px', borderRadius: 12, border: `1px solid ${showCargaComb ? F_BORDER : 'rgba(255,255,255,0.08)'}`, background: showCargaComb ? 'rgba(249,115,22,0.07)' : 'transparent', color: showCargaComb ? F : 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, marginBottom: showCargaComb ? 0 : 16 }}>
           <Fuel size={16} />
           Registrar carga de combustible (opcional)
         </button>
 
-        {showCombustible && (
+        {showCargaComb && (
           <div style={{ background: '#131313', border: '1px solid rgba(249,115,22,0.15)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 16px', marginBottom: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               <div>

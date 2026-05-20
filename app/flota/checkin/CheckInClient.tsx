@@ -63,23 +63,29 @@ function StepBar({ paso, total }: { paso: number; total: number }) {
   )
 }
 
-function FotoCaptura({ label, emoji, onCaptura, capturada }: { label: string; emoji: string; onCaptura: (url: string) => void; capturada: boolean }) {
+function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji: string; onCaptura: (url: string) => void; capturada: boolean }) {
   const ref = useRef<HTMLInputElement>(null)
   return (
-    <div style={{ flex: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
       <input ref={ref} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-        onChange={e => {
-          const f = e.target.files?.[0]
-          if (f) onCaptura(URL.createObjectURL(f))
-        }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(URL.createObjectURL(f)) }}
       />
-      <div onClick={() => ref.current?.click()} style={{ height: 88, borderRadius: 12, cursor: 'pointer', background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `2px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.08)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-        {capturada ? <CheckCircle size={24} color="#4ADE80" /> : <><span style={{ fontSize: 26 }}>{emoji}</span><Camera size={14} color="var(--muted)" /></>}
+      <div onClick={() => ref.current?.click()} style={{ width: '100%', aspectRatio: '1', borderRadius: 12, cursor: 'pointer', background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `2px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.1)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+        {capturada
+          ? <CheckCircle size={22} color="#4ADE80" />
+          : <><span style={{ fontSize: 22 }}>{emoji}</span><Camera size={12} color="var(--muted)" /></>}
       </div>
-      <p style={{ fontSize: 10, textAlign: 'center', color: capturada ? '#4ADE80' : 'var(--muted)', marginTop: 5, fontWeight: 600 }}>{label}</p>
+      <p style={{ fontSize: 10, textAlign: 'center', color: capturada ? '#4ADE80' : 'var(--muted)', fontWeight: 700 }}>{label}</p>
     </div>
   )
 }
+
+const ANGULOS_360 = [
+  { key: 'frente',    label: 'Frente',    emoji: '⬆️' },
+  { key: 'izquierdo', label: 'Izq.',      emoji: '◀️' },
+  { key: 'derecho',   label: 'Der.',      emoji: '▶️' },
+  { key: 'atras',     label: 'Atrás',     emoji: '⬇️' },
+] as const
 
 export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
   const router = useRouter()
@@ -92,13 +98,15 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
   const [rutaId, setRutaId] = useState<string | null>(null)
   const [motivo, setMotivo] = useState('')
   const [fotoOdo, setFotoOdo] = useState('')
-  const [fotoEstado, setFotoEstado] = useState('')
+  const [fotos360, setFotos360] = useState<Record<string, string>>({})
+  const [fotoMarcador, setFotoMarcador] = useState('')
   const [kmInicio, setKmInicio] = useState('')
   const [combustible, setCombustible] = useState('')
 
   const disponibles = vehiculos.filter(v => v.estado === 'disponible')
   const rutasVehiculo = vehiculo ? rutasHoy.filter(r => r.vehiculo_id === vehiculo.id) : []
-  const listo = !!fotoOdo && !!fotoEstado && !!kmInicio && !!combustible
+  const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
+  const listo = !!fotoOdo && fotos360ok && !!fotoMarcador && !!kmInicio && !!combustible
 
   async function confirmar() {
     if (!vehiculo || !tipoSalida || !listo) return
@@ -247,12 +255,32 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
               Documentación obligatoria
             </p>
 
-            {/* Fotos */}
-            <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-              <FotoCaptura label="Odómetro" emoji="🔢" onCaptura={setFotoOdo} capturada={!!fotoOdo} />
-              <FotoCaptura label="Estado vehículo" emoji="🚗" onCaptura={setFotoEstado} capturada={!!fotoEstado} />
+            {/* Odómetro */}
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Foto odómetro *</p>
+            <div style={{ marginBottom: 20 }}>
+              <FotoSlot label="Odómetro" emoji="🔢" onCaptura={setFotoOdo} capturada={!!fotoOdo} />
             </div>
 
+            {/* Inspección 360° */}
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+              Inspección 360° *
+              <span style={{ fontSize: 10, fontWeight: 500, color: fotos360ok ? '#4ADE80' : 'var(--muted)', marginLeft: 8 }}>
+                {Object.keys(fotos360).length}/4
+              </span>
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+              {ANGULOS_360.map(a => (
+                <FotoSlot key={a.key} label={a.label} emoji={a.emoji}
+                  onCaptura={url => setFotos360(prev => ({ ...prev, [a.key]: url }))}
+                  capturada={!!fotos360[a.key]} />
+              ))}
+            </div>
+
+            {/* Combustible */}
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Marcador de combustible *</p>
+            <div style={{ marginBottom: 12 }}>
+              <FotoSlot label="Foto del tablero" emoji="⛽" onCaptura={setFotoMarcador} capturada={!!fotoMarcador} />
+            </div>
             <CombustibleSelector value={combustible} onChange={setCombustible} />
 
             {/* KM inicio */}
@@ -275,7 +303,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
           </div>
           <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
             <button onClick={confirmar} disabled={!listo || guardando} style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed', background: listo && !guardando ? F : 'rgba(255,255,255,0.06)', color: listo && !guardando ? '#fff' : 'var(--muted)', fontSize: 16, fontWeight: 900 }}>
-              {guardando ? 'Registrando salida…' : listo ? 'Confirmar salida ✓' : `Faltan ${[!fotoOdo && 'foto odómetro', !fotoEstado && 'foto vehículo', !kmInicio && 'kilometraje'].filter(Boolean).join(', ')}`}
+              {guardando ? 'Registrando salida…' : listo ? 'Confirmar salida ✓' : `Faltan ${[!fotoOdo && 'odómetro', !fotos360ok && `360° (${Object.keys(fotos360).length}/4)`, !fotoMarcador && 'combustible', !combustible && 'nivel', !kmInicio && 'km'].filter(Boolean).join(', ')}`}
             </button>
           </div>
         </div>
