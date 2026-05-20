@@ -47,11 +47,11 @@ const ANGULOS_360 = [
 function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji: string; onCaptura: (url: string) => void; capturada: boolean }) {
   const ref = useRef<HTMLInputElement>(null)
   return (
-    <div onClick={() => ref.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, cursor: 'pointer', background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `1px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.08)'}` }}>
+    <div onClick={() => ref.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 12px', borderRadius: 10, cursor: 'pointer', flexShrink: 0, background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `1px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.08)'}` }}>
       <input ref={ref} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(URL.createObjectURL(f)) }}
       />
-      <span style={{ fontSize: 16 }}>{capturada ? '✅' : emoji}</span>
+      <span style={{ fontSize: 15 }}>{capturada ? '✅' : emoji}</span>
       <span style={{ fontSize: 12, fontWeight: 700, color: capturada ? '#4ADE80' : 'var(--muted)', flex: 1 }}>{label}</span>
       {!capturada && <Camera size={13} color="var(--muted)" />}
     </div>
