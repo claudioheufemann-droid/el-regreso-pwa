@@ -729,23 +729,33 @@ function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
                 const cant = carritoSug.get(p.nombre)?.cantidad ?? 0
                 const precio = CATALOGO_INFO[p.nombre]?.precio_lata ?? 0
                 return (
-                  <div key={p.nombre} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: i < stats.sugeridos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: cant > 0 ? T_DIM : 'transparent', transition: 'background 0.15s' }}>
-                    <ProductoThumb nombre={p.nombre} categoria={p.categoria} size={40} />
+                  <div key={p.nombre} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderBottom: i < stats.sugeridos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: cant > 0 ? T_DIM : 'transparent', transition: 'background 0.15s' }}>
+                    <ProductoThumb nombre={p.nombre} categoria={p.categoria} size={44} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
-                      <p style={{ fontSize: 11, color: cant > 0 ? T : 'var(--muted)' }}>
-                        {precio > 0 ? fmtPrecioCLP(precio) : '—'}
-                        {cant > 0 ? ` · Total: ${fmtPrecioCLP(precio * cant)}` : ` · Comprado ${p.veces}x`}
-                      </p>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{p.nombre}</p>
+                      <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 3 }}>Comprado {p.veces}x</p>
+                      {precio > 0 && (
+                        <p style={{ fontSize: 17, fontWeight: 900, color: T, letterSpacing: '-0.5px', lineHeight: 1 }}>
+                          {fmtPrecioCLP(precio)}
+                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>/ lata</span>
+                        </p>
+                      )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
-                      <button onClick={() => ajustarSug(p.nombre, p.categoria, -1)} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', cursor: 'pointer', background: cant > 0 ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)', color: '#F4EEDF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Minus size={14} />
-                      </button>
-                      <span style={{ width: 28, textAlign: 'center', fontSize: 14, fontWeight: 800, color: cant > 0 ? T : 'var(--muted)' }}>{cant}</span>
-                      <button onClick={() => ajustarSug(p.nombre, p.categoria, 1)} style={{ width: 32, height: 32, borderRadius: 8, cursor: 'pointer', background: T_DIM, border: `1px solid ${T_BORDER}`, color: T, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Plus size={14} />
-                      </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                        <button onClick={() => ajustarSug(p.nombre, p.categoria, -1)} style={{ width: 34, height: 34, borderRadius: 9, border: 'none', cursor: 'pointer', background: cant > 0 ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)', color: '#F4EEDF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Minus size={15} />
+                        </button>
+                        <span style={{ width: 30, textAlign: 'center', fontSize: 16, fontWeight: 900, color: cant > 0 ? T : 'var(--muted)' }}>{cant}</span>
+                        <button onClick={() => ajustarSug(p.nombre, p.categoria, 1)} style={{ width: 34, height: 34, borderRadius: 9, cursor: 'pointer', background: T_DIM, border: `1px solid ${T_BORDER}`, color: T, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Plus size={15} />
+                        </button>
+                      </div>
+                      {cant > 0 && precio > 0 && (
+                        <p style={{ fontSize: 12, fontWeight: 900, color: T, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+                          {fmtPrecioCLP(cant * precio)}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )
@@ -958,32 +968,35 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
             {prodsFiltrados.map(p => {
               const cant = carrito.get(p.producto)?.cantidad ?? 0
               return (
-                <div key={p.producto} style={{ background: cant > 0 ? C_DIM : '#1C1C1C', border: `1px solid ${cant > 0 ? C_BORDER : 'rgba(255,255,255,0.06)'}`, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, transition: 'all 0.15s' }}>
-                  <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} size={48} />
+                <div key={p.producto} style={{ background: cant > 0 ? C_DIM : '#1C1C1C', border: `1px solid ${cant > 0 ? C_BORDER : 'rgba(255,255,255,0.06)'}`, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}>
+                  <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} size={46} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.producto}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {CATALOGO_INFO[p.producto]?.estilo && <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{CATALOGO_INFO[p.producto].estilo}</p>}
-                      {CATALOGO_INFO[p.producto]?.precio_lata && (
-                        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>
-                          {fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)}/u
-                        </p>
-                      )}
-                    </div>
-                    {cant > 0 && CATALOGO_INFO[p.producto]?.precio_lata && (
-                      <p style={{ fontSize: 12, fontWeight: 800, color: C, marginTop: 2 }}>
-                        {cant} × {fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)} = {fmtPrecioCLP(cant * CATALOGO_INFO[p.producto].precio_lata)}
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{p.producto}</p>
+                    {CATALOGO_INFO[p.producto]?.estilo && (
+                      <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>{CATALOGO_INFO[p.producto].estilo}</p>
+                    )}
+                    {CATALOGO_INFO[p.producto]?.precio_lata && (
+                      <p style={{ fontSize: 17, fontWeight: 900, color: C, letterSpacing: '-0.5px', lineHeight: 1 }}>
+                        {fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)}
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>/ lata</span>
                       </p>
                     )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
-                    <button onClick={() => ajustar(p, -1)} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer', background: cant > 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)', color: '#F4EEDF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Minus size={16} />
-                    </button>
-                    <span style={{ width: 32, textAlign: 'center', fontSize: 15, fontWeight: 800, color: cant > 0 ? C : 'var(--muted)' }}>{cant}</span>
-                    <button onClick={() => ajustar(p, 1)} style={{ width: 36, height: 36, borderRadius: 10, cursor: 'pointer', background: C_DIM, border: `1px solid ${C_BORDER}`, color: C, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Plus size={16} />
-                    </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                      <button onClick={() => ajustar(p, -1)} style={{ width: 34, height: 34, borderRadius: 9, border: 'none', cursor: 'pointer', background: cant > 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)', color: '#F4EEDF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Minus size={15} />
+                      </button>
+                      <span style={{ width: 30, textAlign: 'center', fontSize: 16, fontWeight: 900, color: cant > 0 ? C : 'var(--muted)' }}>{cant}</span>
+                      <button onClick={() => ajustar(p, 1)} style={{ width: 34, height: 34, borderRadius: 9, cursor: 'pointer', background: C_DIM, border: `1px solid ${C_BORDER}`, color: C, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Plus size={15} />
+                      </button>
+                    </div>
+                    {cant > 0 && CATALOGO_INFO[p.producto]?.precio_lata && (
+                      <p style={{ fontSize: 12, fontWeight: 900, color: C, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+                        {fmtPrecioCLP(cant * CATALOGO_INFO[p.producto].precio_lata)}
+                      </p>
+                    )}
                   </div>
                 </div>
               )
