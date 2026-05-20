@@ -66,16 +66,13 @@ function StepBar({ paso, total }: { paso: number; total: number }) {
 function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji: string; onCaptura: (url: string) => void; capturada: boolean }) {
   const ref = useRef<HTMLInputElement>(null)
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+    <div onClick={() => ref.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, cursor: 'pointer', background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `1px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.08)'}` }}>
       <input ref={ref} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(URL.createObjectURL(f)) }}
       />
-      <div onClick={() => ref.current?.click()} style={{ width: '100%', aspectRatio: '1', borderRadius: 12, cursor: 'pointer', background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `2px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.1)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-        {capturada
-          ? <CheckCircle size={22} color="#4ADE80" />
-          : <><span style={{ fontSize: 22 }}>{emoji}</span><Camera size={12} color="var(--muted)" /></>}
-      </div>
-      <p style={{ fontSize: 10, textAlign: 'center', color: capturada ? '#4ADE80' : 'var(--muted)', fontWeight: 700 }}>{label}</p>
+      <span style={{ fontSize: 16 }}>{capturada ? '✅' : emoji}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: capturada ? '#4ADE80' : 'var(--muted)', flex: 1 }}>{label}</span>
+      {!capturada && <Camera size={13} color="var(--muted)" />}
     </div>
   )
 }
@@ -257,7 +254,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
 
             {/* Odómetro */}
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Foto odómetro *</p>
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 16 }}>
               <FotoSlot label="Odómetro" emoji="🔢" onCaptura={setFotoOdo} capturada={!!fotoOdo} />
             </div>
 
@@ -268,7 +265,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
                 {Object.keys(fotos360).length}/4
               </span>
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
               {ANGULOS_360.map(a => (
                 <FotoSlot key={a.key} label={a.label} emoji={a.emoji}
                   onCaptura={url => setFotos360(prev => ({ ...prev, [a.key]: url }))}
