@@ -1,11 +1,11 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, AlertTriangle, CheckCircle, TrendingUp, Truck, Clock, Fuel } from 'lucide-react'
 
-const F = '#3B82F6'
-const F_BORDER = 'rgba(59,130,246,0.28)'
+const F = '#F97316'
+const F_BORDER = 'rgba(249,115,22,0.28)'
 
 interface Viaje {
   id: string
@@ -116,7 +116,7 @@ function ViajeCard({ v }: { v: Viaje }) {
       )}
 
       {(v.litros_carga || v.monto_combustible) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(59,130,246,0.07)', borderRadius: 8, padding: '5px 10px', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(249,115,22,0.07)', borderRadius: 8, padding: '5px 10px', marginBottom: 6 }}>
           <Fuel size={11} color={F} />
           <span style={{ fontSize: 11, color: F, fontWeight: 600 }}>
             {v.litros_carga ? `${v.litros_carga}L` : ''}
@@ -167,7 +167,7 @@ export default function AdminFlotaClient({ viajes, vehiculos }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(59,130,246,0.15)', padding: '14px 16px' }}>
+      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(249,115,22,0.15)', padding: '14px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={() => router.push('/flota')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
             <ChevronLeft size={18} /> Flota
@@ -253,7 +253,7 @@ export default function AdminFlotaClient({ viajes, vehiculos }: Props) {
 
         {/* Resumen del tab actual */}
         {totalComb > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(59,130,246,0.07)', border: F_BORDER, borderRadius: 10, padding: '8px 12px', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(249,115,22,0.07)', border: F_BORDER, borderRadius: 10, padding: '8px 12px', marginBottom: 14 }}>
             <Fuel size={13} color={F} />
             <p style={{ fontSize: 12, color: F, fontWeight: 600 }}>
               Combustible total: <strong>${totalComb.toLocaleString('es-CL')}</strong>

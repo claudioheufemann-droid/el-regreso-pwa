@@ -1,10 +1,10 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Truck, Plus, Map, BarChart3 } from 'lucide-react'
 
-const F = '#3B82F6'
+const F = '#F97316'
 
 const items = [
   { href: '/flota',         icon: Truck,     label: 'Flota',    exact: true  },

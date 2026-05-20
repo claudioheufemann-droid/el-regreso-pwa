@@ -155,7 +155,7 @@ export default async function HubPage() {
           <Link href="/flota" style={{ textDecoration: 'none' }}>
             <div
               style={{
-                background: '#131313', border: '1px solid rgba(59,130,246,0.25)',
+                background: '#131313', border: '1px solid rgba(249,115,22,0.25)',
                 borderRadius: 20, padding: '24px 22px',
                 display: 'flex', alignItems: 'center', gap: 18, cursor: 'pointer',
               }}
@@ -163,7 +163,7 @@ export default async function HubPage() {
             >
               <div style={{
                 width: 52, height: 52, borderRadius: 16,
-                background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)',
+                background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.25)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 22, flexShrink: 0,
               }}>🚛</div>
@@ -173,7 +173,7 @@ export default async function HubPage() {
                   Bitácora, rutas y control de vehículos
                 </div>
               </div>
-              <div style={{ marginLeft: 'auto', color: '#3B82F6', fontSize: 18, flexShrink: 0 }}>→</div>
+              <div style={{ marginLeft: 'auto', color: '#F97316', fontSize: 18, flexShrink: 0 }}>→</div>
             </div>
           </Link>
 

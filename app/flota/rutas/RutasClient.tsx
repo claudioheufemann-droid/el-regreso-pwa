@@ -1,12 +1,12 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { Plus, Trash2, Zap, MapPin, ExternalLink, Save, ChevronDown, CheckCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
-const F = '#3B82F6'
-const F_DIM = 'rgba(59,130,246,0.12)'
-const F_BORDER = 'rgba(59,130,246,0.28)'
+const F = '#F97316'
+const F_DIM = 'rgba(249,115,22,0.12)'
+const F_BORDER = 'rgba(249,115,22,0.28)'
 const T = '#D4AF37'
 
 interface Vehiculo { id: string; nombre: string; tipo: string; patente: string | null }

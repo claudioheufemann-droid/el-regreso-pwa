@@ -1,12 +1,12 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Truck, Plus, Map, BarChart3, ArrowLeft } from 'lucide-react'
 
-const F = '#3B82F6'
-const F_DIM = 'rgba(59,130,246,0.12)'
-const F_BORDER = 'rgba(59,130,246,0.28)'
+const F = '#F97316'
+const F_DIM = 'rgba(249,115,22,0.12)'
+const F_BORDER = 'rgba(249,115,22,0.28)'
 
 const items = [
   { href: '/flota',        icon: Truck,    label: 'Vehículos', exact: true  },

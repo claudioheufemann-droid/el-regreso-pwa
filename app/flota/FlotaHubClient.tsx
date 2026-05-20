@@ -1,12 +1,12 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { Truck, Plus, AlertTriangle, CheckCircle, Clock, ChevronRight, Wrench } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 
-const F = '#3B82F6'
-const F_DIM = 'rgba(59,130,246,0.12)'
-const F_BORDER = 'rgba(59,130,246,0.28)'
+const F = '#F97316'
+const F_DIM = 'rgba(249,115,22,0.12)'
+const F_BORDER = 'rgba(249,115,22,0.28)'
 
 const NIVELES_COMB = [
   { value: 'lleno',        fill: 6, color: '#4ADE80' },
@@ -106,7 +106,7 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
       {/* CTA nueva salida */}
       <Link href="/flota/checkin" style={{ textDecoration: 'none' }}>
         <div style={{ background: F_DIM, border: `1px solid ${F_BORDER}`, borderRadius: 14, padding: '14px 18px', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(249,115,22,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Plus size={18} color={F} />
           </div>
           <div style={{ flex: 1 }}>
