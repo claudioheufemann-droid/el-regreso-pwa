@@ -75,27 +75,39 @@ async function calcularDistanciaOSRM(paradas: Parada[]): Promise<number> {
   return haversineTotal(paradas)
 }
 
-// Geocodificación acotada al área de Valdivia para evitar falsos positivos
+// Valdivia + alrededores inmediatos (Niebla, Corral, Mancera, etc.)
+const BBOX = { latMin: -39.98, latMax: -39.68, lngMin: -73.48, lngMax: -73.00 }
+
+function enValdivia(lat: number, lng: number) {
+  return lat >= BBOX.latMin && lat <= BBOX.latMax && lng >= BBOX.lngMin && lng <= BBOX.lngMax
+}
+
+// Geocodificación con viewbox estricto — rechaza coords fuera de Valdivia
 async function geocodificar(direccion: string): Promise<{ lat: number; lng: number } | null> {
   try {
-    // Bounding box de Valdivia: lng_min,lat_max,lng_max,lat_min
-    const viewbox = '-73.45,-39.70,-73.10,-39.98'
-    const addr = direccion.toLowerCase().includes('valdivia') ? direccion : direccion + ', Valdivia, Chile'
+    const viewbox = `${BBOX.lngMin},${BBOX.latMax},${BBOX.lngMax},${BBOX.latMin}`
+    const addr = direccion.toLowerCase().includes('valdivia') ? direccion : `${direccion}, Valdivia, Chile`
     const q = encodeURIComponent(addr)
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&viewbox=${viewbox}&bounded=1`,
+
+    // Intento 1: bounded=1 (solo dentro de Valdivia)
+    const r1 = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=3&viewbox=${viewbox}&bounded=1`,
       { headers: { 'Accept-Language': 'es', 'User-Agent': 'ElRegresoFlota/1.0' } },
     )
-    const data = await res.json()
-    if (data[0]) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
-    // Si no encuentra dentro del viewbox, reintenta sin bounded
-    const res2 = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&viewbox=${viewbox}`,
+    const d1 = await r1.json() as { lat: string; lon: string }[]
+    const hit1 = d1.find(r => enValdivia(parseFloat(r.lat), parseFloat(r.lon)))
+    if (hit1) return { lat: parseFloat(hit1.lat), lng: parseFloat(hit1.lon) }
+
+    // Intento 2: sin bounded (acepta fuera, pero valida coords)
+    const r2 = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=5&viewbox=${viewbox}`,
       { headers: { 'Accept-Language': 'es', 'User-Agent': 'ElRegresoFlota/1.0' } },
     )
-    const data2 = await res2.json()
-    if (!data2[0]) return null
-    return { lat: parseFloat(data2[0].lat), lng: parseFloat(data2[0].lon) }
+    const d2 = await r2.json() as { lat: string; lon: string }[]
+    const hit2 = d2.find(r => enValdivia(parseFloat(r.lat), parseFloat(r.lon)))
+    if (hit2) return { lat: parseFloat(hit2.lat), lng: parseFloat(hit2.lon) }
+
+    return null // no se encontró dentro de Valdivia
   } catch { return null }
 }
 
@@ -230,30 +242,30 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
     setExcelPreview([])
   }
 
-  // ── Geocodificación y optimización ────────────────────────────────────────────
-  async function geocodificarTodas() {
-    setGeocodificando(true)
-    const updated = await Promise.all(
-      paradas.map(async p => {
-        if (!p.direccion.trim() || (p.lat && p.lng)) return p
-        const coords = await geocodificar(p.direccion)
-        return coords ? { ...p, ...coords } : p
-      })
-    )
-    setParadas(updated)
-    setGeocodificando(false)
-  }
-
+  // ── Optimización ──────────────────────────────────────────────────────────────
   async function optimizar() {
     setOptimizando(true)
-    await geocodificarTodas()
-    // Snapshot después de geocodificar para pasarlo a OSRM
-    setParadas(prev => {
-      const opt = optimizarRuta(prev)
-      // Calcula distancia real por calles de forma async y actualiza el estado
-      calcularDistanciaOSRM(opt).then(km => setKmEst(km))
-      return opt
-    })
+    setKmEst(null)
+
+    // 1. Re-geocodifica TODAS desde cero (descarta coords previas que puedan ser incorrectas)
+    setGeocodificando(true)
+    const geocodificadas = await Promise.all(
+      paradas.map(async p => {
+        if (!p.direccion.trim()) return p
+        const coords = await geocodificar(p.direccion)
+        return coords ? { ...p, lat: coords.lat, lng: coords.lng } : { ...p, lat: null, lng: null }
+      })
+    )
+    setGeocodificando(false)
+
+    // 2. Reordena por menor distancia (greedy TSP)
+    const opt = optimizarRuta(geocodificadas)
+    setParadas(opt)
+
+    // 3. Distancia real por calles vía OSRM
+    const km = await calcularDistanciaOSRM(opt)
+    setKmEst(km > 0 ? km : null)
+
     setOptimizando(false)
   }
 
