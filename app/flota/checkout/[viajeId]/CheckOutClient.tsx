@@ -44,12 +44,12 @@ const ANGULOS_360 = [
   { key: 'atras',     label: 'Atrás',     emoji: '⬇️' },
 ] as const
 
-function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji: string; onCaptura: (url: string) => void; capturada: boolean }) {
+function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji: string; onCaptura: (url: string, file: File) => void; capturada: boolean }) {
   const ref = useRef<HTMLInputElement>(null)
   return (
     <div onClick={() => ref.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 12px', borderRadius: 10, cursor: 'pointer', flexShrink: 0, background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `1px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.08)'}` }}>
       <input ref={ref} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(URL.createObjectURL(f)) }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(URL.createObjectURL(f), f) }}
       />
       <span style={{ fontSize: 15 }}>{capturada ? '✅' : emoji}</span>
       <span style={{ fontSize: 12, fontWeight: 700, color: capturada ? '#4ADE80' : 'var(--muted)', flex: 1 }}>{label}</span>
@@ -85,11 +85,35 @@ export default function CheckOutClient({ user, viaje }: Props) {
   const [fotos360, setFotos360] = useState<Record<string, string>>({})
   const [fotoMarcador, setFotoMarcador] = useState('')
   const [combustibleFin, setCombustibleFin] = useState(viaje.vehiculos?.combustible ?? '')
+  const [analizando, setAnalizando] = useState(false)
+  const [nivelDetectado, setNivelDetectado] = useState<string | null>(null)
   const [showCargaComb, setShowCargaComb] = useState(false)
   const [litros, setLitros] = useState('')
   const [montoComb, setMontoComb] = useState('')
   const [fotoBoleta, setFotoBoleta] = useState('')
   const boletaRef = useRef<HTMLInputElement>(null)
+
+  async function analizarCombustible(file: File) {
+    setAnalizando(true)
+    setNivelDetectado(null)
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const res = await fetch('/api/analizar-combustible', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagen: base64, tipo: file.type }),
+      })
+      const { nivel } = await res.json()
+      if (nivel) { setCombustibleFin(nivel); setNivelDetectado(nivel) }
+    } catch { /* silently fail */ } finally {
+      setAnalizando(false)
+    }
+  }
 
   const kmRecorridos = kmFin ? parseInt(kmFin) - (viaje.km_inicio ?? 0) : null
   const desvio = kmRecorridos && viaje.km_teoricos ? kmRecorridos - viaje.km_teoricos : null
@@ -161,7 +185,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
           Foto odómetro final *
         </p>
         <div style={{ marginBottom: 16 }}>
-          <FotoSlot label="Odómetro" emoji="🔢" onCaptura={setFotoKmFin} capturada={!!fotoKmFin} />
+          <FotoSlot label="Odómetro" emoji="🔢" onCaptura={(url) => setFotoKmFin(url)} capturada={!!fotoKmFin} />
         </div>
 
         {/* KM final */}
@@ -208,16 +232,29 @@ export default function CheckOutClient({ user, viaje }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
           {ANGULOS_360.map(a => (
             <FotoSlot key={a.key} label={a.label} emoji={a.emoji}
-              onCaptura={url => setFotos360(prev => ({ ...prev, [a.key]: url }))}
+              onCaptura={(url) => setFotos360(prev => ({ ...prev, [a.key]: url }))}
               capturada={!!fotos360[a.key]} />
           ))}
         </div>
 
         {/* Combustible */}
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Marcador de combustible *</p>
-        <div style={{ marginBottom: 12 }}>
-          <FotoSlot label="Foto del tablero" emoji="⛽" onCaptura={setFotoMarcador} capturada={!!fotoMarcador} />
+        <div style={{ marginBottom: 6 }}>
+          <FotoSlot label="Foto del tablero" emoji="⛽"
+            onCaptura={(url, file) => { setFotoMarcador(url); analizarCombustible(file) }}
+            capturada={!!fotoMarcador} />
         </div>
+        {analizando && (
+          <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+            Analizando imagen con IA…
+          </p>
+        )}
+        {!analizando && nivelDetectado && (
+          <p style={{ fontSize: 11, color: '#4ADE80', marginBottom: 10 }}>
+            ✨ IA detectó: <strong>{NIVELES_COMB.find(n => n.value === nivelDetectado)?.label ?? nivelDetectado}</strong> · Puedes ajustar abajo
+          </p>
+        )}
         <CombustibleSelector label="Nivel de combustible al llegar *" value={combustibleFin} onChange={setCombustibleFin} />
 
         {/* Carga de combustible (opcional) */}
