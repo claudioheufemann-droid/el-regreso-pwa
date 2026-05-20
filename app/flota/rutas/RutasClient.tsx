@@ -42,7 +42,8 @@ function optimizarRuta(paradas: Parada[]): Parada[] {
   return [...ordered, ...withoutCoords].map((p, i) => ({ ...p, orden: i + 1 }))
 }
 
-function estimarKm(paradas: Parada[]): number {
+// Distancia lineal como fallback
+function haversineTotal(paradas: Parada[]): number {
   const withCoords = paradas.filter(p => p.lat && p.lng)
   let total = 0, prevLat = -39.8196, prevLng = -73.2452
   for (const p of withCoords) {
@@ -53,21 +54,58 @@ function estimarKm(paradas: Parada[]): number {
   return Math.round(total * 1.35)
 }
 
+// Distancia real por calles vía OSRM (Open Source Routing Machine, gratis)
+async function calcularDistanciaOSRM(paradas: Parada[]): Promise<number> {
+  const withCoords = paradas.filter(p => p.lat && p.lng)
+  if (withCoords.length === 0) return 0
+  // Origin + paradas + return to origin
+  const ORIGIN = { lat: -39.8196, lng: -73.2452 }
+  const puntos = [ORIGIN, ...withCoords, ORIGIN]
+  const coordStr = puntos.map(p => `${p.lng},${p.lat}`).join(';')
+  try {
+    const res = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=false&steps=false`,
+      { headers: { 'User-Agent': 'ElRegresoFlota/1.0' } },
+    )
+    const data = await res.json()
+    if (data.code === 'Ok' && data.routes?.[0]?.distance) {
+      return Math.round(data.routes[0].distance / 1000) // metros → km
+    }
+  } catch { /* fallback */ }
+  return haversineTotal(paradas)
+}
+
+// Geocodificación acotada al área de Valdivia para evitar falsos positivos
 async function geocodificar(direccion: string): Promise<{ lat: number; lng: number } | null> {
   try {
-    const q = encodeURIComponent(direccion + ', Valdivia, Chile')
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
-      headers: { 'Accept-Language': 'es', 'User-Agent': 'ElRegresoFlota/1.0' }
-    })
+    // Bounding box de Valdivia: lng_min,lat_max,lng_max,lat_min
+    const viewbox = '-73.45,-39.70,-73.10,-39.98'
+    const addr = direccion.toLowerCase().includes('valdivia') ? direccion : direccion + ', Valdivia, Chile'
+    const q = encodeURIComponent(addr)
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&viewbox=${viewbox}&bounded=1`,
+      { headers: { 'Accept-Language': 'es', 'User-Agent': 'ElRegresoFlota/1.0' } },
+    )
     const data = await res.json()
-    if (!data[0]) return null
-    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
+    if (data[0]) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
+    // Si no encuentra dentro del viewbox, reintenta sin bounded
+    const res2 = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&viewbox=${viewbox}`,
+      { headers: { 'Accept-Language': 'es', 'User-Agent': 'ElRegresoFlota/1.0' } },
+    )
+    const data2 = await res2.json()
+    if (!data2[0]) return null
+    return { lat: parseFloat(data2[0].lat), lng: parseFloat(data2[0].lon) }
   } catch { return null }
 }
 
 function generarURLGoogleMaps(paradas: Parada[]): string {
   const origin = encodeURIComponent('El Regreso Beer, Valdivia, Chile')
-  const waypoints = paradas.map(p => encodeURIComponent(p.direccion + ', Valdivia, Chile'))
+  // Usa la dirección tal cual — ya incluye ciudad desde el formulario manual
+  const waypoints = paradas.map(p => {
+    const dir = p.direccion.toLowerCase().includes('valdivia') ? p.direccion : p.direccion + ', Valdivia, Chile'
+    return encodeURIComponent(dir)
+  })
   return `https://www.google.com/maps/dir/${origin}/${waypoints.join('/')}/${origin}`
 }
 
@@ -209,9 +247,11 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
   async function optimizar() {
     setOptimizando(true)
     await geocodificarTodas()
+    // Snapshot después de geocodificar para pasarlo a OSRM
     setParadas(prev => {
       const opt = optimizarRuta(prev)
-      setKmEst(estimarKm(opt))
+      // Calcula distancia real por calles de forma async y actualiza el estado
+      calcularDistanciaOSRM(opt).then(km => setKmEst(km))
       return opt
     })
     setOptimizando(false)
@@ -431,7 +471,7 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <button onClick={optimizar} disabled={!puedeOptimizar || optimizando || geocodificando} style={{ width: '100%', padding: '13px', borderRadius: 12, border: `1px solid ${F_BORDER}`, background: F_DIM, color: F, fontSize: 14, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <Zap size={16} />
-                {geocodificando ? 'Geocodificando direcciones…' : optimizando ? 'Optimizando ruta…' : 'Optimizar ruta (mínimo combustible)'}
+                {geocodificando ? 'Geocodificando direcciones…' : optimizando ? 'Calculando distancia real…' : 'Optimizar ruta (mínimo combustible)'}
               </button>
 
               {kmEst !== null && (
