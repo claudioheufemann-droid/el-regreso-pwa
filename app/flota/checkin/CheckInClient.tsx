@@ -11,7 +11,38 @@ const F_DIM = 'rgba(59,130,246,0.12)'
 const F_BORDER = 'rgba(59,130,246,0.28)'
 const T = '#D4AF37'
 
-interface Vehiculo { id: string; nombre: string; tipo: string; patente: string | null; km_actual: number; estado: string }
+const NIVELES_COMB = [
+  { value: 'lleno',        label: 'Lleno',   fill: 6, color: '#4ADE80' },
+  { value: 'tres_cuartos', label: '3/4',     fill: 5, color: '#86EFAC' },
+  { value: 'medio',        label: '1/2',     fill: 4, color: '#FBBF24' },
+  { value: 'cuarto',       label: '1/4',     fill: 2, color: '#F97316' },
+  { value: 'reserva',      label: 'Reserva', fill: 1, color: '#EF4444' },
+  { value: 'vacio',        label: 'Vacío',   fill: 0, color: '#6B0000' },
+] as const
+
+function CombustibleSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 10 }}>
+        Nivel de combustible al salir
+      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+        {NIVELES_COMB.map(n => (
+          <div key={n.value} onClick={() => onChange(n.value)} style={{ cursor: 'pointer', borderRadius: 10, padding: '10px 4px 8px', background: value === n.value ? `rgba(${n.value === 'lleno' ? '74,222,128' : n.value === 'tres_cuartos' ? '134,239,172' : n.value === 'medio' ? '251,191,36' : n.value === 'cuarto' ? '249,115,22' : n.value === 'reserva' ? '239,68,68' : '107,0,0'},0.15)` : '#1C1C1C', border: `2px solid ${value === n.value ? n.color : 'rgba(255,255,255,0.06)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
+            <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 22 }}>
+              {[1,2,3,4,5,6].map(bar => (
+                <div key={bar} style={{ width: 5, height: 4 + bar * 2.8, borderRadius: 1.5, background: bar <= n.fill ? n.color : 'rgba(255,255,255,0.1)' }} />
+              ))}
+            </div>
+            <span style={{ fontSize: 9, fontWeight: 700, color: value === n.value ? n.color : 'var(--muted)', textAlign: 'center', lineHeight: 1.2 }}>{n.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+interface Vehiculo { id: string; nombre: string; tipo: string; patente: string | null; km_actual: number; estado: string; combustible: string | null }
 interface Ruta { id: string; nombre: string | null; vehiculo_id: string; km_teoricos: number | null; estado: string }
 
 interface Props {
@@ -63,10 +94,11 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
   const [fotoOdo, setFotoOdo] = useState('')
   const [fotoEstado, setFotoEstado] = useState('')
   const [kmInicio, setKmInicio] = useState('')
+  const [combustible, setCombustible] = useState('')
 
   const disponibles = vehiculos.filter(v => v.estado === 'disponible')
   const rutasVehiculo = vehiculo ? rutasHoy.filter(r => r.vehiculo_id === vehiculo.id) : []
-  const listo = !!fotoOdo && !!fotoEstado && !!kmInicio
+  const listo = !!fotoOdo && !!fotoEstado && !!kmInicio && !!combustible
 
   async function confirmar() {
     if (!vehiculo || !tipoSalida || !listo) return
@@ -84,7 +116,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
         km_teoricos: rutaSeleccionada?.km_teoricos ?? null,
         estado: 'en_curso',
       })
-      await supabase.from('vehiculos').update({ estado: 'en_uso' }).eq('id', vehiculo.id)
+      await supabase.from('vehiculos').update({ estado: 'en_uso', combustible }).eq('id', vehiculo.id)
       if (rutaId) await supabase.from('rutas_reparto').update({ estado: 'en_curso' }).eq('id', rutaId)
       router.push('/flota')
     } finally {
@@ -220,6 +252,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
               <FotoCaptura label="Odómetro" emoji="🔢" onCaptura={setFotoOdo} capturada={!!fotoOdo} />
               <FotoCaptura label="Estado vehículo" emoji="🚗" onCaptura={setFotoEstado} capturada={!!fotoEstado} />
             </div>
+
+            <CombustibleSelector value={combustible} onChange={setCombustible} />
 
             {/* KM inicio */}
             <div>

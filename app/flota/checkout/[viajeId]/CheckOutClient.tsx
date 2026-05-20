@@ -3,6 +3,37 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, Camera, CheckCircle, Fuel, AlertTriangle } from 'lucide-react'
+
+const NIVELES_COMB = [
+  { value: 'lleno',        label: 'Lleno',   fill: 6, color: '#4ADE80' },
+  { value: 'tres_cuartos', label: '3/4',     fill: 5, color: '#86EFAC' },
+  { value: 'medio',        label: '1/2',     fill: 4, color: '#FBBF24' },
+  { value: 'cuarto',       label: '1/4',     fill: 2, color: '#F97316' },
+  { value: 'reserva',      label: 'Reserva', fill: 1, color: '#EF4444' },
+  { value: 'vacio',        label: 'Vacío',   fill: 0, color: '#6B0000' },
+] as const
+
+function CombustibleSelector({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 10 }}>
+        {label}
+      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+        {NIVELES_COMB.map(n => (
+          <div key={n.value} onClick={() => onChange(n.value)} style={{ cursor: 'pointer', borderRadius: 10, padding: '10px 4px 8px', background: value === n.value ? `rgba(${n.value === 'lleno' ? '74,222,128' : n.value === 'tres_cuartos' ? '134,239,172' : n.value === 'medio' ? '251,191,36' : n.value === 'cuarto' ? '249,115,22' : n.value === 'reserva' ? '239,68,68' : '107,0,0'},0.15)` : '#1C1C1C', border: `2px solid ${value === n.value ? n.color : 'rgba(255,255,255,0.06)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
+            <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 22 }}>
+              {[1,2,3,4,5,6].map(bar => (
+                <div key={bar} style={{ width: 5, height: 4 + bar * 2.8, borderRadius: 1.5, background: bar <= n.fill ? n.color : 'rgba(255,255,255,0.1)' }} />
+              ))}
+            </div>
+            <span style={{ fontSize: 9, fontWeight: 700, color: value === n.value ? n.color : 'var(--muted)', textAlign: 'center', lineHeight: 1.2 }}>{n.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
@@ -14,7 +45,7 @@ interface Props {
   viaje: {
     id: string; vehiculo_id: string; tipo: string; motivo: string | null
     km_inicio: number | null; km_teoricos: number | null; iniciado_at: string
-    vehiculos: { nombre: string; patente: string | null; km_actual: number } | null
+    vehiculos: { nombre: string; patente: string | null; km_actual: number; combustible: string | null } | null
   }
 }
 
@@ -30,6 +61,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
   const [guardando, setGuardando] = useState(false)
   const [fotoKmFin, setFotoKmFin] = useState('')
   const [kmFin, setKmFin] = useState('')
+  const [combustibleFin, setCombustibleFin] = useState(viaje.vehiculos?.combustible ?? '')
   const [showCombustible, setShowCombustible] = useState(false)
   const [litros, setLitros] = useState('')
   const [montoComb, setMontoComb] = useState('')
@@ -40,7 +72,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
   const kmRecorridos = kmFin ? parseInt(kmFin) - (viaje.km_inicio ?? 0) : null
   const desvio = kmRecorridos && viaje.km_teoricos ? kmRecorridos - viaje.km_teoricos : null
   const desvioPorc = desvio && viaje.km_teoricos ? (desvio / viaje.km_teoricos) * 100 : null
-  const listo = !!fotoKmFin && !!kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0)
+  const listo = !!fotoKmFin && !!kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0) && !!combustibleFin
 
   async function cerrar() {
     if (!listo) return
@@ -54,7 +86,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
         estado: 'completado',
         completado_at: new Date().toISOString(),
       }).eq('id', viaje.id)
-      await supabase.from('vehiculos').update({ estado: 'disponible', km_actual: km }).eq('id', viaje.vehiculo_id)
+      await supabase.from('vehiculos').update({ estado: 'disponible', km_actual: km, combustible: combustibleFin }).eq('id', viaje.vehiculo_id)
       router.push('/flota')
     } finally {
       setGuardando(false)
@@ -145,6 +177,8 @@ export default function CheckOutClient({ user, viaje }: Props) {
             )}
           </div>
         )}
+
+        <CombustibleSelector label="Nivel de combustible al llegar *" value={combustibleFin} onChange={setCombustibleFin} />
 
         {/* Combustible (opcional) */}
         <button onClick={() => setShowCombustible(s => !s)} style={{ width: '100%', padding: '13px 16px', borderRadius: 12, border: `1px solid ${showCombustible ? F_BORDER : 'rgba(255,255,255,0.08)'}`, background: showCombustible ? 'rgba(59,130,246,0.07)' : 'transparent', color: showCombustible ? F : 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, marginBottom: showCombustible ? 0 : 16 }}>

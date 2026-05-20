@@ -8,10 +8,34 @@ const F = '#3B82F6'
 const F_DIM = 'rgba(59,130,246,0.12)'
 const F_BORDER = 'rgba(59,130,246,0.28)'
 
+const NIVELES_COMB = [
+  { value: 'lleno',        fill: 6, color: '#4ADE80' },
+  { value: 'tres_cuartos', fill: 5, color: '#86EFAC' },
+  { value: 'medio',        fill: 4, color: '#FBBF24' },
+  { value: 'cuarto',       fill: 2, color: '#F97316' },
+  { value: 'reserva',      fill: 1, color: '#EF4444' },
+  { value: 'vacio',        fill: 0, color: '#6B0000' },
+]
+
+function CombustibleMini({ nivel }: { nivel: string | null }) {
+  const n = NIVELES_COMB.find(x => x.value === nivel) ?? NIVELES_COMB[2]
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{ display: 'flex', gap: 1.5, alignItems: 'flex-end', height: 14 }}>
+        {[1,2,3,4,5,6].map(bar => (
+          <div key={bar} style={{ width: 4, height: 2 + bar * 1.8, borderRadius: 1, background: bar <= n.fill ? n.color : 'rgba(255,255,255,0.12)' }} />
+        ))}
+      </div>
+      <span style={{ fontSize: 10, color: n.color, fontWeight: 700 }}>{nivel === 'lleno' ? 'Lleno' : nivel === 'tres_cuartos' ? '3/4' : nivel === 'medio' ? '1/2' : nivel === 'cuarto' ? '1/4' : nivel === 'reserva' ? 'Reserva' : nivel === 'vacio' ? 'Vacío' : '—'}</span>
+    </div>
+  )
+}
+
 interface Vehiculo {
   id: string; nombre: string; tipo: string; patente: string | null
   anio: number | null; km_actual: number; estado: string
   marca: string | null; modelo: string | null; color: string | null
+  combustible: string | null
 }
 interface ViajeActivo {
   id: string; vehiculo_id: string; tipo: string; motivo: string | null
@@ -108,17 +132,23 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
                   <Truck size={20} color={F} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                    <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>{v.nombre}</p>
-                    {v.patente && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', padding: '2px 7px', borderRadius: 5 }}>{v.patente}</span>}
-                  </div>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF', marginBottom: 2 }}>{v.nombre}</p>
                   {v.modelo && (
-                    <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>{v.modelo}{v.color ? ` · ${v.color}` : ''}</p>
+                    <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{v.modelo}{v.color ? ` · ${v.color}` : ''}</p>
                   )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{v.anio ?? ''} · {TIPO_LABEL[v.tipo] ?? v.tipo}</span>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {v.km_actual.toLocaleString('es-CL')} km</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                    {v.patente && (
+                      <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 7, padding: '4px 10px', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase' }}>Patente</span>
+                        <span style={{ fontSize: 14, fontWeight: 900, color: '#F4EEDF', letterSpacing: '1.5px' }}>{v.patente}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: 10, color: 'var(--muted)' }}>{v.anio ?? ''} · {TIPO_LABEL[v.tipo] ?? v.tipo}</span>
+                      <span style={{ fontSize: 10, color: 'var(--muted)' }}>{v.km_actual.toLocaleString('es-CL')} km</span>
+                    </div>
                   </div>
+                  <CombustibleMini nivel={v.combustible} />
                   {viaje && (
                     <p style={{ fontSize: 11, color: '#F59E0B', marginTop: 4 }}>
                       {conductor?.nombre?.split(' ')[0] ?? 'En uso'} · {viaje.tipo === 'reparto' ? 'Reparto' : 'Trámite'} · {tiempoTranscurrido(viaje.iniciado_at)}

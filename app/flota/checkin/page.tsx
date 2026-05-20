@@ -13,7 +13,7 @@ export default async function CheckInPage() {
 
   const { data: vehiculos } = await supabase
     .from('vehiculos')
-    .select('id, nombre, tipo, patente, km_actual, estado')
+    .select('id, nombre, tipo, patente, km_actual, estado, combustible')
     .order('nombre')
 
   const hoy = new Date().toISOString().split('T')[0]
