@@ -606,13 +606,25 @@ interface ClienteStats {
 const EXCLUIR_SUGERIDOS = ['empaque', 'distribuci']
 
 function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
-  clienteNombre: string; esNuevo: boolean; onContinuar: () => void
+  clienteNombre: string; esNuevo: boolean; onContinuar: (items: ItemCarrito[]) => void
 }) {
   const [stats, setStats] = useState<ClienteStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [carritoSug, setCarritoSug] = useState<Map<string, ItemCarrito>>(new Map())
+
+  function ajustarSug(nombre: string, categoria: string, delta: number) {
+    setCarritoSug(prev => {
+      const next = new Map(prev)
+      const actual = next.get(nombre)?.cantidad ?? 0
+      const nueva = actual + delta
+      if (nueva <= 0) { next.delete(nombre); return next }
+      next.set(nombre, { producto: nombre, categoria, envase: 'Lata', cantidad: nueva, precio: CATALOGO_INFO[nombre]?.precio_lata ?? 0 })
+      return next
+    })
+  }
 
   useEffect(() => {
-    if (esNuevo) { onContinuar(); return }
+    if (esNuevo) { onContinuar([]); return }
     const supabase = createClient()
     supabase
       .from('ventas')
@@ -688,36 +700,54 @@ function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
           </div>
         )}
 
-        {/* Productos frecuentes */}
+        {/* Productos frecuentes — interactivo */}
         {!loading && stats && stats.sugeridos.length > 0 && (
           <>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10 }}>
-              Productos frecuentes
+              Compra recomendada
             </p>
-            <div style={{ background: '#1C1C1C', border: '1px solid rgba(212,175,55,0.2)', borderRadius: 14, overflow: 'hidden', marginBottom: 16 }}>
-              <div style={{ padding: '12px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <p style={{ fontSize: 12, color: T, fontWeight: 600 }}>Lo que más compra {clienteNombre}</p>
+            <div style={{ background: '#1C1C1C', border: `1px solid ${T_BORDER}`, borderRadius: 14, overflow: 'hidden', marginBottom: 16 }}>
+              <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ fontSize: 12, color: T, fontWeight: 600 }}>Lo que más compra {clienteNombre.split(' ')[0]}</p>
+                {carritoSug.size > 0 && (
+                  <p style={{ fontSize: 11, fontWeight: 700, color: T }}>
+                    {Array.from(carritoSug.values()).reduce((s, i) => s + i.cantidad, 0)} ud. · {fmtPrecioCLP(Array.from(carritoSug.values()).reduce((s, i) => s + i.precio * i.cantidad, 0))}
+                  </p>
+                )}
               </div>
-              {stats.sugeridos.map((p, i) => (
-                <div key={p.nombre} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: i < stats.sugeridos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {stats.sugeridos.map((p, i) => {
+                const cant = carritoSug.get(p.nombre)?.cantidad ?? 0
+                const precio = CATALOGO_INFO[p.nombre]?.precio_lata ?? 0
+                return (
+                  <div key={p.nombre} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: i < stats.sugeridos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: cant > 0 ? T_DIM : 'transparent', transition: 'background 0.15s' }}>
                     <ProductoThumb nombre={p.nombre} categoria={p.categoria} size={40} />
-                    <div>
-                      <p style={{ fontSize: 14, fontWeight: 600, color: '#F4EEDF' }}>{p.nombre}</p>
-                      <p style={{ fontSize: 11, color: 'var(--muted)' }}>Comprado {p.veces}x</p>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
+                      <p style={{ fontSize: 11, color: cant > 0 ? T : 'var(--muted)' }}>
+                        {precio > 0 ? fmtPrecioCLP(precio) : '—'}
+                        {cant > 0 ? ` · Total: ${fmtPrecioCLP(precio * cant)}` : ` · Comprado ${p.veces}x`}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
+                      <button onClick={() => ajustarSug(p.nombre, p.categoria, -1)} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', cursor: 'pointer', background: cant > 0 ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)', color: '#F4EEDF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Minus size={14} />
+                      </button>
+                      <span style={{ width: 28, textAlign: 'center', fontSize: 14, fontWeight: 800, color: cant > 0 ? T : 'var(--muted)' }}>{cant}</span>
+                      <button onClick={() => ajustarSug(p.nombre, p.categoria, 1)} style={{ width: 32, height: 32, borderRadius: 8, cursor: 'pointer', background: T_DIM, border: `1px solid ${T_BORDER}`, color: T, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Plus size={14} />
+                      </button>
                     </div>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: T, background: T_DIM, padding: '3px 8px', borderRadius: 6 }}>#{i + 1}</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </>
         )}
       </div>
 
       <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
-        <button onClick={onContinuar} style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: 'pointer', background: T, color: '#080808', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}>
-          Ir al catálogo →
+        <button onClick={() => onContinuar(Array.from(carritoSug.values()))} style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: 'pointer', background: T, color: '#080808', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}>
+          {carritoSug.size > 0 ? `Ir a la Venta · ${Array.from(carritoSug.values()).reduce((s, i) => s + i.cantidad, 0)} ud. →` : 'Ir a la Venta →'}
         </button>
       </div>
     </div>
@@ -726,14 +756,19 @@ function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
 
 // ─── Paso 4: Catálogo + Carrito ───────────────────────────────
 
-function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, onCerrar }: {
+function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicial, onCerrar }: {
   productos: Producto[]
   clienteNombre: string
   vendedorNombre: string
+  carritoInicial?: ItemCarrito[]
   onCerrar: (carrito: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string) => void
 }) {
   const [tabCat, setTabCat] = useState<'Cerveza' | 'Kombucha'>('Cerveza')
-  const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(new Map())
+  const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(() => {
+    const m = new Map<string, ItemCarrito>()
+    for (const i of carritoInicial ?? []) m.set(i.producto, i)
+    return m
+  })
   const [showCierre, setShowCierre] = useState(false)
   const [sinVenta, setSinVenta] = useState(false)
   const [motivo, setMotivo] = useState('')
@@ -974,6 +1009,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
   const [cliente, setCliente] = useState<{ nombre: string; esNuevo: boolean; canal: string } | null>(null)
   const [visitaId, setVisitaId] = useState<string | null>(null)
   const [gps, setGps] = useState<{ lat: number; lng: number; addr: string } | null>(null)
+  const [carritoInicial, setCarritoInicial] = useState<ItemCarrito[]>([])
 
   const totalPasos = cliente?.esNuevo ? 3 : 4
 
@@ -992,7 +1028,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     setPaso(3)
   }
 
-  function onVista360Continuar() { setPaso(4) }
+  function onVista360Continuar(items: ItemCarrito[]) { setCarritoInicial(items); setPaso(4) }
 
   async function onCerrar(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string) {
     if (!visitaId) return
@@ -1041,6 +1077,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
           productos={catalogoProductos}
           clienteNombre={cliente?.nombre ?? ''}
           vendedorNombre={vendedor.nombre ?? ''}
+          carritoInicial={carritoInicial}
           onCerrar={onCerrar}
         />
       )}
