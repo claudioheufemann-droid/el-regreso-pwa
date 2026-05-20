@@ -5,34 +5,42 @@ import NuevaVisitaClient from './NuevaVisitaClient'
 
 export const dynamic = 'force-dynamic'
 
-// Normalize product display name for the catalog
 function normalizarNombre(nombre: string): string {
-  // Barril normalizations
   if (/barril.*30l.*local/i.test(nombre))         return 'Barril 30 Litros (Local)'
   if (/barril.*30l.*central/i.test(nombre))        return 'Barril 30 Litros (Zona Central)'
   if (/barril.*30l/i.test(nombre))                 return 'Barril 30 Litros'
-  // Strip double spaces
   return nombre.replace(/\s{2,}/g, ' ').trim()
 }
 
-// Products to exclude from catalog (logistics / meta entries)
 function esProductoCatalogable(nombre: string): boolean {
   if (!nombre) return false
-  const excluir = [
-    'empaque y distribución',
-    'empaque y distribucion',
-    'distribución lata',
-    'distribucion lata',
-  ]
+  const excluir = ['empaque y distribución', 'empaque y distribucion', 'distribución lata', 'distribucion lata']
   const n = nombre.toLowerCase()
   return !excluir.some(e => n.includes(e))
 }
 
-export default async function NuevaVisitaPage() {
+export default async function NuevaVisitaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ retomar?: string }>
+}) {
   const user = await getServerUser()
   if (!user) redirect('/login')
 
   const supabase = await createClient()
+  const { retomar } = await searchParams
+
+  // Si hay visita a retomar, cargarla
+  let visitaRetomada = null
+  if (retomar) {
+    const { data } = await supabase
+      .from('visitas_terreno')
+      .select('id, cliente_nombre, es_cliente_nuevo, lat, lng, direccion_gps, estado')
+      .eq('id', retomar)
+      .eq('estado', 'en_progreso')
+      .maybeSingle()
+    visitaRetomada = data ?? null
+  }
 
   // Clientes únicos de ventas para búsqueda
   const { data: clientesVentas } = await supabase
@@ -70,6 +78,7 @@ export default async function NuevaVisitaPage() {
       vendedor={user}
       clientesExistentes={clientes}
       catalogoProductos={productos}
+      visitaRetomada={visitaRetomada}
     />
   )
 }

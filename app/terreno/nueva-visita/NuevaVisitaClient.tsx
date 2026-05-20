@@ -361,10 +361,20 @@ const MOTIVOS_SIN_VENTA = [
 
 interface ItemCarrito { producto: string; categoria: string; envase: string; cantidad: number; precio: number }
 
+interface VisitaRetomada {
+  id: string
+  cliente_nombre: string
+  es_cliente_nuevo: boolean
+  lat: number | null
+  lng: number | null
+  direccion_gps: string | null
+}
+
 interface Props {
   vendedor: AppUser
   clientesExistentes: ClienteExistente[]
   catalogoProductos: Producto[]
+  visitaRetomada?: VisitaRetomada | null
 }
 
 // ─── Step indicator ───────────────────────────────────────────
@@ -1000,15 +1010,24 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
 
 // ─── Wizard principal ─────────────────────────────────────────
 
-export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos }: Props) {
+export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos, visitaRetomada }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
-  const [paso, setPaso] = useState(1)
+  // Si retomamos visita, inicializar estado directamente en el paso correcto
+  const pasoInicial = visitaRetomada
+    ? (visitaRetomada.lat ? (visitaRetomada.es_cliente_nuevo ? 3 : 3) : 2)
+    : 1
+
+  const [paso, setPaso] = useState(pasoInicial)
   const [guardando, setGuardando] = useState(false)
-  const [cliente, setCliente] = useState<{ nombre: string; esNuevo: boolean; canal: string } | null>(null)
-  const [visitaId, setVisitaId] = useState<string | null>(null)
-  const [gps, setGps] = useState<{ lat: number; lng: number; addr: string } | null>(null)
+  const [cliente, setCliente] = useState<{ nombre: string; esNuevo: boolean; canal: string } | null>(
+    visitaRetomada ? { nombre: visitaRetomada.cliente_nombre, esNuevo: visitaRetomada.es_cliente_nuevo, canal: '' } : null
+  )
+  const [visitaId, setVisitaId] = useState<string | null>(visitaRetomada?.id ?? null)
+  const [gps, setGps] = useState<{ lat: number; lng: number; addr: string } | null>(
+    visitaRetomada?.lat ? { lat: visitaRetomada.lat, lng: visitaRetomada.lng!, addr: visitaRetomada.direccion_gps ?? '' } : null
+  )
   const [carritoInicial, setCarritoInicial] = useState<ItemCarrito[]>([])
 
   const totalPasos = cliente?.esNuevo ? 3 : 4
