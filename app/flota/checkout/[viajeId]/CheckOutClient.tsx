@@ -1,8 +1,13 @@
-﻿'use client'
+'use client'
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, Camera, CheckCircle, Fuel, AlertTriangle } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import type { AppUser } from '@/lib/auth'
+
+const F = '#F97316'
+const F_BORDER = 'rgba(249,115,22,0.28)'
 
 const NIVELES_COMB = [
   { value: 'lleno',        label: 'Lleno',   fill: 6, color: '#4ADE80' },
@@ -13,35 +18,51 @@ const NIVELES_COMB = [
   { value: 'vacio',        label: 'Vacío',   fill: 0, color: '#6B0000' },
 ] as const
 
-function CombustibleSelector({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function NivelDetectado({ nivel, onCorregir }: { nivel: string; onCorregir: () => void }) {
+  const n = NIVELES_COMB.find(x => x.value === nivel) ?? NIVELES_COMB[2]
+  return (
+    <div style={{ background: `${n.color}12`, border: `1px solid ${n.color}40`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 28, flexShrink: 0 }}>
+        {[1, 2, 3, 4, 5, 6].map(bar => (
+          <div key={bar} style={{ width: 7, height: 5 + bar * 3.2, borderRadius: 2, background: bar <= n.fill ? n.color : 'rgba(255,255,255,0.1)' }} />
+        ))}
+      </div>
+      <div style={{ flex: 1 }}>
+        <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 2 }}>Nivel detectado por IA</p>
+        <p style={{ fontSize: 22, fontWeight: 900, color: n.color, letterSpacing: '-0.5px' }}>{n.label}</p>
+      </div>
+      <button onClick={onCorregir} style={{ fontSize: 11, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', flexShrink: 0 }}>
+        Corregir
+      </button>
+    </div>
+  )
+}
+
+function SelectorManual({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 10 }}>
-        {label}
-      </label>
+      {label && <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 10 }}>{label}</label>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
         {NIVELES_COMB.map(n => (
-          <div key={n.value} onClick={() => onChange(n.value)} style={{ cursor: 'pointer', borderRadius: 10, padding: '10px 4px 8px', background: value === n.value ? `rgba(${n.value === 'lleno' ? '74,222,128' : n.value === 'tres_cuartos' ? '134,239,172' : n.value === 'medio' ? '251,191,36' : n.value === 'cuarto' ? '249,115,22' : n.value === 'reserva' ? '239,68,68' : '107,0,0'},0.15)` : '#1C1C1C', border: `2px solid ${value === n.value ? n.color : 'rgba(255,255,255,0.06)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
+          <div key={n.value} onClick={() => onChange(n.value)} style={{ cursor: 'pointer', borderRadius: 10, padding: '10px 4px 8px', background: value === n.value ? `${n.color}20` : '#1C1C1C', border: `2px solid ${value === n.value ? n.color : 'rgba(255,255,255,0.06)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
             <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 22 }}>
-              {[1,2,3,4,5,6].map(bar => (
+              {[1, 2, 3, 4, 5, 6].map(bar => (
                 <div key={bar} style={{ width: 5, height: 4 + bar * 2.8, borderRadius: 1.5, background: bar <= n.fill ? n.color : 'rgba(255,255,255,0.1)' }} />
               ))}
             </div>
-            <span style={{ fontSize: 9, fontWeight: 700, color: value === n.value ? n.color : 'var(--muted)', textAlign: 'center', lineHeight: 1.2 }}>{n.label}</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: value === n.value ? n.color : 'var(--muted)', textAlign: 'center' }}>{n.label}</span>
           </div>
         ))}
       </div>
     </div>
   )
 }
-import { createClient } from '@/lib/supabase/client'
-import type { AppUser } from '@/lib/auth'
 
 const ANGULOS_360 = [
-  { key: 'frente',    label: 'Frente',    emoji: '⬆️' },
-  { key: 'izquierdo', label: 'Izq.',      emoji: '◀️' },
-  { key: 'derecho',   label: 'Der.',      emoji: '▶️' },
-  { key: 'atras',     label: 'Atrás',     emoji: '⬇️' },
+  { key: 'frente',    label: 'Frente', emoji: '⬆️' },
+  { key: 'izquierdo', label: 'Izq.',   emoji: '◀️' },
+  { key: 'derecho',   label: 'Der.',   emoji: '▶️' },
+  { key: 'atras',     label: 'Atrás',  emoji: '⬇️' },
 ] as const
 
 function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji: string; onCaptura: (url: string, file: File) => void; capturada: boolean }) {
@@ -58,8 +79,14 @@ function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji
   )
 }
 
-const F = '#F97316'
-const F_BORDER = 'rgba(249,115,22,0.28)'
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
 
 interface Props {
   user: AppUser
@@ -80,46 +107,83 @@ export default function CheckOutClient({ user, viaje }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [guardando, setGuardando] = useState(false)
+
+  // Fotos
   const [fotoKmFin, setFotoKmFin] = useState('')
-  const [kmFin, setKmFin] = useState('')
   const [fotos360, setFotos360] = useState<Record<string, string>>({})
   const [fotoMarcador, setFotoMarcador] = useState('')
-  const [combustibleFin, setCombustibleFin] = useState(viaje.vehiculos?.combustible ?? '')
-  const [analizando, setAnalizando] = useState(false)
+
+  // KM final — auto-llenado por IA
+  const [kmFin, setKmFin] = useState('')
+  const [analizandoOdo, setAnalizandoOdo] = useState(false)
+  const [kmLeido, setKmLeido] = useState<string | null>(null)
+
+  // Combustible — determinado por IA
+  const [combustibleFin, setCombustibleFin] = useState('')
+  const [analizandoComb, setAnalizandoComb] = useState(false)
   const [nivelDetectado, setNivelDetectado] = useState<string | null>(null)
+  const [iaFalloComb, setIaFalloComb] = useState(false)
+  const [mostrarSelectorComb, setMostrarSelectorComb] = useState(false)
+
+  // Carga combustible
   const [showCargaComb, setShowCargaComb] = useState(false)
   const [litros, setLitros] = useState('')
   const [montoComb, setMontoComb] = useState('')
   const [fotoBoleta, setFotoBoleta] = useState('')
   const boletaRef = useRef<HTMLInputElement>(null)
 
-  async function analizarCombustible(file: File) {
-    setAnalizando(true)
-    setNivelDetectado(null)
+  const kmRecorridos = kmFin ? parseInt(kmFin) - (viaje.km_inicio ?? 0) : null
+  const desvio = kmRecorridos && viaje.km_teoricos ? kmRecorridos - viaje.km_teoricos : null
+  const desvioPorc = desvio && viaje.km_teoricos ? (desvio / viaje.km_teoricos) * 100 : null
+  const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
+  const listo = !!fotoKmFin && !!kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0) && fotos360ok && !!fotoMarcador && !!combustibleFin
+
+  // ── Análisis IA: Odómetro ────────────────────────────────────────────────────
+  async function analizarOdometro(file: File) {
+    setAnalizandoOdo(true)
+    setKmLeido(null)
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve((reader.result as string).split(',')[1])
-        reader.onerror = reject
-        reader.readAsDataURL(file)
+      const base64 = await fileToBase64(file)
+      const res = await fetch('/api/analizar-odometro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagen: base64, tipo: file.type }),
       })
+      const { km } = await res.json()
+      if (km && km > (viaje.km_inicio ?? 0)) { setKmFin(String(km)); setKmLeido(String(km)) }
+    } catch { /* silently fail */ } finally {
+      setAnalizandoOdo(false)
+    }
+  }
+
+  // ── Análisis IA: Combustible ─────────────────────────────────────────────────
+  async function analizarCombustible(file: File) {
+    setAnalizandoComb(true)
+    setNivelDetectado(null)
+    setIaFalloComb(false)
+    setMostrarSelectorComb(false)
+    try {
+      const base64 = await fileToBase64(file)
       const res = await fetch('/api/analizar-combustible', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imagen: base64, tipo: file.type }),
       })
       const { nivel } = await res.json()
-      if (nivel) { setCombustibleFin(nivel); setNivelDetectado(nivel) }
-    } catch { /* silently fail */ } finally {
-      setAnalizando(false)
+      if (nivel) {
+        setCombustibleFin(nivel)
+        setNivelDetectado(nivel)
+      } else {
+        setIaFalloComb(true)
+        setMostrarSelectorComb(true)
+      }
+    } catch {
+      setIaFalloComb(true)
+      setMostrarSelectorComb(true)
+    } finally {
+      setAnalizandoComb(false)
     }
   }
-
-  const kmRecorridos = kmFin ? parseInt(kmFin) - (viaje.km_inicio ?? 0) : null
-  const desvio = kmRecorridos && viaje.km_teoricos ? kmRecorridos - viaje.km_teoricos : null
-  const desvioPorc = desvio && viaje.km_teoricos ? (desvio / viaje.km_teoricos) * 100 : null
-  const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
-  const listo = !!fotoKmFin && !!kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0) && fotos360ok && !!fotoMarcador && !!combustibleFin
 
   async function cerrar() {
     if (!listo) return
@@ -157,7 +221,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
 
-        {/* Resumen del viaje */}
+        {/* Resumen */}
         <div style={{ background: '#131313', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>Resumen del viaje</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -180,26 +244,40 @@ export default function CheckOutClient({ user, viaje }: Props) {
           )}
         </div>
 
-        {/* Foto odómetro */}
+        {/* ── Odómetro final ────────────────────────────────────────────────── */}
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
           Foto odómetro final *
         </p>
-        <div style={{ marginBottom: 16 }}>
-          <FotoSlot label="Odómetro" emoji="🔢" onCaptura={(url) => setFotoKmFin(url)} capturada={!!fotoKmFin} />
+        <div style={{ marginBottom: 6 }}>
+          <FotoSlot label="Odómetro" emoji="🔢"
+            onCaptura={(url, file) => { setFotoKmFin(url); analizarOdometro(file) }}
+            capturada={!!fotoKmFin} />
         </div>
+        {analizandoOdo && (
+          <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+            Leyendo kilometraje…
+          </p>
+        )}
 
         {/* KM final */}
         <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 8 }}>
           Kilometraje final (odómetro) *
         </label>
         <input
-          value={kmFin} onChange={e => setKmFin(e.target.value.replace(/\D/g, ''))}
+          value={kmFin} onChange={e => { setKmFin(e.target.value.replace(/\D/g, '')); setKmLeido(null) }}
           placeholder="Ej: 45250"
           type="text" inputMode="numeric"
-          style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${kmFin ? F_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', marginBottom: 8 }}
+          style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${kmLeido ? '#4ADE80' : kmFin ? F_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', marginBottom: 4 }}
         />
+        {kmLeido && !analizandoOdo && (
+          <p style={{ fontSize: 11, color: '#4ADE80', marginBottom: 12, textAlign: 'center' }}>✨ Leído de la foto por IA · puedes corregir si es necesario</p>
+        )}
+        {!kmLeido && fotoKmFin && !analizandoOdo && (
+          <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, textAlign: 'center' }}>Ingresa el km manualmente</p>
+        )}
 
-        {/* Km recorridos + alerta desvío */}
+        {/* Km recorridos + desvío */}
         {kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0) && (
           <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)' }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: F }}>
@@ -222,7 +300,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
           </div>
         )}
 
-        {/* Inspección 360° */}
+        {/* ── Inspección 360° ───────────────────────────────────────────────── */}
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
           Inspección 360° *
           <span style={{ fontSize: 10, fontWeight: 500, color: fotos360ok ? '#4ADE80' : 'var(--muted)', marginLeft: 8 }}>
@@ -237,27 +315,42 @@ export default function CheckOutClient({ user, viaje }: Props) {
           ))}
         </div>
 
-        {/* Combustible */}
+        {/* ── Combustible ───────────────────────────────────────────────────── */}
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Marcador de combustible *</p>
-        <div style={{ marginBottom: 6 }}>
+        <div style={{ marginBottom: 8 }}>
           <FotoSlot label="Foto del tablero" emoji="⛽"
             onCaptura={(url, file) => { setFotoMarcador(url); analizarCombustible(file) }}
             capturada={!!fotoMarcador} />
         </div>
-        {analizando && (
-          <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
-            Analizando imagen con IA…
-          </p>
-        )}
-        {!analizando && nivelDetectado && (
-          <p style={{ fontSize: 11, color: '#4ADE80', marginBottom: 10 }}>
-            ✨ IA detectó: <strong>{NIVELES_COMB.find(n => n.value === nivelDetectado)?.label ?? nivelDetectado}</strong> · Puedes ajustar abajo
-          </p>
-        )}
-        <CombustibleSelector label="Nivel de combustible al llegar *" value={combustibleFin} onChange={setCombustibleFin} />
 
-        {/* Carga de combustible (opcional) */}
+        {analizandoComb && (
+          <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+            Leyendo nivel de estanque…
+          </p>
+        )}
+
+        {!analizandoComb && nivelDetectado && !mostrarSelectorComb && (
+          <NivelDetectado nivel={nivelDetectado} onCorregir={() => setMostrarSelectorComb(true)} />
+        )}
+
+        {!analizandoComb && (iaFalloComb || mostrarSelectorComb) && (
+          <div>
+            {iaFalloComb && (
+              <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
+                No se pudo leer el nivel automáticamente, selecciona manualmente:
+              </p>
+            )}
+            <SelectorManual label="" value={combustibleFin} onChange={v => { setCombustibleFin(v); setNivelDetectado(v) }} />
+            {nivelDetectado && mostrarSelectorComb && !iaFalloComb && (
+              <button onClick={() => setMostrarSelectorComb(false)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', marginBottom: 8 }}>
+                ← Volver al nivel detectado
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── Carga combustible (opcional) ─────────────────────────────────── */}
         <button onClick={() => setShowCargaComb(s => !s)} style={{ width: '100%', padding: '13px 16px', borderRadius: 12, border: `1px solid ${showCargaComb ? F_BORDER : 'rgba(255,255,255,0.08)'}`, background: showCargaComb ? 'rgba(249,115,22,0.07)' : 'transparent', color: showCargaComb ? F : 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, marginBottom: showCargaComb ? 0 : 16 }}>
           <Fuel size={16} />
           Registrar carga de combustible (opcional)

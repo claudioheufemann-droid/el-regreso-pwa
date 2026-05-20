@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -9,7 +9,6 @@ import type { AppUser } from '@/lib/auth'
 const F = '#F97316'
 const F_DIM = 'rgba(249,115,22,0.12)'
 const F_BORDER = 'rgba(249,115,22,0.28)'
-const T = '#D4AF37'
 
 const NIVELES_COMB = [
   { value: 'lleno',        label: 'Lleno',   fill: 6, color: '#4ADE80' },
@@ -20,36 +19,48 @@ const NIVELES_COMB = [
   { value: 'vacio',        label: 'Vacío',   fill: 0, color: '#6B0000' },
 ] as const
 
-function CombustibleSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+// Muestra el nivel detectado + botón para corregir manualmente
+function NivelDetectado({ nivel, onCorregir }: { nivel: string; onCorregir: () => void }) {
+  const n = NIVELES_COMB.find(x => x.value === nivel) ?? NIVELES_COMB[2]
   return (
-    <div style={{ marginBottom: 20 }}>
-      <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 10 }}>
-        Nivel de combustible al salir
-      </label>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
-        {NIVELES_COMB.map(n => (
-          <div key={n.value} onClick={() => onChange(n.value)} style={{ cursor: 'pointer', borderRadius: 10, padding: '10px 4px 8px', background: value === n.value ? `rgba(${n.value === 'lleno' ? '74,222,128' : n.value === 'tres_cuartos' ? '134,239,172' : n.value === 'medio' ? '251,191,36' : n.value === 'cuarto' ? '249,115,22' : n.value === 'reserva' ? '239,68,68' : '107,0,0'},0.15)` : '#1C1C1C', border: `2px solid ${value === n.value ? n.color : 'rgba(255,255,255,0.06)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
-            <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 22 }}>
-              {[1,2,3,4,5,6].map(bar => (
-                <div key={bar} style={{ width: 5, height: 4 + bar * 2.8, borderRadius: 1.5, background: bar <= n.fill ? n.color : 'rgba(255,255,255,0.1)' }} />
-              ))}
-            </div>
-            <span style={{ fontSize: 9, fontWeight: 700, color: value === n.value ? n.color : 'var(--muted)', textAlign: 'center', lineHeight: 1.2 }}>{n.label}</span>
-          </div>
+    <div style={{ background: `${n.color}12`, border: `1px solid ${n.color}40`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 28, flexShrink: 0 }}>
+        {[1, 2, 3, 4, 5, 6].map(bar => (
+          <div key={bar} style={{ width: 7, height: 5 + bar * 3.2, borderRadius: 2, background: bar <= n.fill ? n.color : 'rgba(255,255,255,0.1)' }} />
         ))}
       </div>
+      <div style={{ flex: 1 }}>
+        <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 2 }}>Nivel detectado por IA</p>
+        <p style={{ fontSize: 22, fontWeight: 900, color: n.color, letterSpacing: '-0.5px' }}>{n.label}</p>
+      </div>
+      <button onClick={onCorregir} style={{ fontSize: 11, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', flexShrink: 0 }}>
+        Corregir
+      </button>
+    </div>
+  )
+}
+
+// Selector manual de combustible (solo visible al corregir o si la IA falla)
+function SelectorManual({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6, marginBottom: 16 }}>
+      {NIVELES_COMB.map(n => (
+        <div key={n.value} onClick={() => onChange(n.value)} style={{ cursor: 'pointer', borderRadius: 10, padding: '10px 4px 8px', background: value === n.value ? `${n.color}20` : '#1C1C1C', border: `2px solid ${value === n.value ? n.color : 'rgba(255,255,255,0.06)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 22 }}>
+            {[1, 2, 3, 4, 5, 6].map(bar => (
+              <div key={bar} style={{ width: 5, height: 4 + bar * 2.8, borderRadius: 1.5, background: bar <= n.fill ? n.color : 'rgba(255,255,255,0.1)' }} />
+            ))}
+          </div>
+          <span style={{ fontSize: 9, fontWeight: 700, color: value === n.value ? n.color : 'var(--muted)', textAlign: 'center' }}>{n.label}</span>
+        </div>
+      ))}
     </div>
   )
 }
 
 interface Vehiculo { id: string; nombre: string; tipo: string; patente: string | null; km_actual: number; estado: string; combustible: string | null }
 interface Ruta { id: string; nombre: string | null; vehiculo_id: string; km_teoricos: number | null; estado: string }
-
-interface Props {
-  user: AppUser
-  vehiculos: Vehiculo[]
-  rutasHoy: Ruta[]
-}
+interface Props { user: AppUser; vehiculos: Vehiculo[]; rutasHoy: Ruta[] }
 
 const TIPO_LABEL: Record<string, string> = { camioneta: 'Camioneta', furgon: 'Furgón', camion_34: 'Camión 3/4' }
 
@@ -78,11 +89,20 @@ function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji
 }
 
 const ANGULOS_360 = [
-  { key: 'frente',    label: 'Frente',    emoji: '⬆️' },
-  { key: 'izquierdo', label: 'Izq.',      emoji: '◀️' },
-  { key: 'derecho',   label: 'Der.',      emoji: '▶️' },
-  { key: 'atras',     label: 'Atrás',     emoji: '⬇️' },
+  { key: 'frente',    label: 'Frente', emoji: '⬆️' },
+  { key: 'izquierdo', label: 'Izq.',   emoji: '◀️' },
+  { key: 'derecho',   label: 'Der.',   emoji: '▶️' },
+  { key: 'atras',     label: 'Atrás',  emoji: '⬇️' },
 ] as const
+
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
 
 export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
   const router = useRouter()
@@ -94,40 +114,75 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
   const [tipoSalida, setTipoSalida] = useState<'reparto' | 'tramite' | null>(null)
   const [rutaId, setRutaId] = useState<string | null>(null)
   const [motivo, setMotivo] = useState('')
+
+  // Fotos
   const [fotoOdo, setFotoOdo] = useState('')
   const [fotos360, setFotos360] = useState<Record<string, string>>({})
   const [fotoMarcador, setFotoMarcador] = useState('')
-  const [kmInicio, setKmInicio] = useState('')
-  const [combustible, setCombustible] = useState('')
-  const [analizando, setAnalizando] = useState(false)
-  const [nivelDetectado, setNivelDetectado] = useState<string | null>(null)
 
-  async function analizarCombustible(file: File) {
-    setAnalizando(true)
-    setNivelDetectado(null)
+  // KM — auto-llenado por IA
+  const [kmInicio, setKmInicio] = useState('')
+  const [analizandoOdo, setAnalizandoOdo] = useState(false)
+  const [kmLeido, setKmLeido] = useState<string | null>(null)
+
+  // Combustible — determinado por IA, sin selector visible por defecto
+  const [combustible, setCombustible] = useState('')
+  const [analizandoComb, setAnalizandoComb] = useState(false)
+  const [nivelDetectado, setNivelDetectado] = useState<string | null>(null)
+  const [iaFalloComb, setIaFalloComb] = useState(false)
+  const [mostrarSelectorComb, setMostrarSelectorComb] = useState(false)
+
+  const disponibles = vehiculos.filter(v => v.estado === 'disponible')
+  const rutasVehiculo = vehiculo ? rutasHoy.filter(r => r.vehiculo_id === vehiculo.id) : []
+  const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
+  const listo = !!fotoOdo && fotos360ok && !!fotoMarcador && !!kmInicio && !!combustible
+
+  // ── Análisis IA: Odómetro ────────────────────────────────────────────────────
+  async function analizarOdometro(file: File) {
+    setAnalizandoOdo(true)
+    setKmLeido(null)
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve((reader.result as string).split(',')[1])
-        reader.onerror = reject
-        reader.readAsDataURL(file)
+      const base64 = await fileToBase64(file)
+      const res = await fetch('/api/analizar-odometro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagen: base64, tipo: file.type }),
       })
+      const { km } = await res.json()
+      if (km) { setKmInicio(String(km)); setKmLeido(String(km)) }
+    } catch { /* silently fail */ } finally {
+      setAnalizandoOdo(false)
+    }
+  }
+
+  // ── Análisis IA: Combustible ─────────────────────────────────────────────────
+  async function analizarCombustible(file: File) {
+    setAnalizandoComb(true)
+    setNivelDetectado(null)
+    setIaFalloComb(false)
+    setMostrarSelectorComb(false)
+    try {
+      const base64 = await fileToBase64(file)
       const res = await fetch('/api/analizar-combustible', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imagen: base64, tipo: file.type }),
       })
       const { nivel } = await res.json()
-      if (nivel) { setCombustible(nivel); setNivelDetectado(nivel) }
-    } catch { /* silently fail */ } finally {
-      setAnalizando(false)
+      if (nivel) {
+        setCombustible(nivel)
+        setNivelDetectado(nivel)
+      } else {
+        setIaFalloComb(true)
+        setMostrarSelectorComb(true)
+      }
+    } catch {
+      setIaFalloComb(true)
+      setMostrarSelectorComb(true)
+    } finally {
+      setAnalizandoComb(false)
     }
   }
-
-  const disponibles = vehiculos.filter(v => v.estado === 'disponible')
-  const rutasVehiculo = vehiculo ? rutasHoy.filter(r => r.vehiculo_id === vehiculo.id) : []
-  const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
-  const listo = !!fotoOdo && fotos360ok && !!fotoMarcador && !!kmInicio && !!combustible
 
   async function confirmar() {
     if (!vehiculo || !tipoSalida || !listo) return
@@ -173,7 +228,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
         <StepBar paso={paso} total={totalPasos} />
       </div>
 
-      {/* Paso 1: Selección vehículo */}
+      {/* ── Paso 1: Selección vehículo ─────────────────────────────────────── */}
       {paso === 1 && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
@@ -186,7 +241,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {disponibles.map(v => (
-                  <div key={v.id} onClick={() => setVehiculo(v)} style={{ padding: '14px 16px', borderRadius: 14, cursor: 'pointer', background: vehiculo?.id === v.id ? F_DIM : '#1C1C1C', border: `1px solid ${vehiculo?.id === v.id ? F_BORDER : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}>
+                  <div key={v.id} onClick={() => setVehiculo(v)} style={{ padding: '14px 16px', borderRadius: 14, cursor: 'pointer', background: vehiculo?.id === v.id ? F_DIM : '#1C1C1C', border: `1px solid ${vehiculo?.id === v.id ? F_BORDER : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 40, height: 40, borderRadius: 10, background: F_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Truck size={18} color={F} />
                     </div>
@@ -208,13 +263,11 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
         </div>
       )}
 
-      {/* Paso 2: Tipo de salida */}
+      {/* ── Paso 2: Tipo de salida ─────────────────────────────────────────── */}
       {paso === 2 && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 }}>Tipo de salida</p>
-
-            {/* Opción A: Reparto planificado */}
             <div onClick={() => setTipoSalida('reparto')} style={{ padding: '16px', borderRadius: 14, cursor: 'pointer', marginBottom: 10, background: tipoSalida === 'reparto' ? F_DIM : '#1C1C1C', border: `2px solid ${tipoSalida === 'reparto' ? F : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: F_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <MapPin size={18} color={F} />
@@ -230,13 +283,10 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
                         {r.km_teoricos && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{r.km_teoricos} km estimados</p>}
                       </div>
                     ))}
-                    {rutasVehiculo.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>Sin rutas asignadas hoy para este vehículo</p>}
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Opción B: Trámite */}
             <div onClick={() => { setTipoSalida('tramite'); setRutaId(null) }} style={{ padding: '16px', borderRadius: 14, cursor: 'pointer', background: tipoSalida === 'tramite' ? 'rgba(245,158,11,0.08)' : '#1C1C1C', border: `2px solid ${tipoSalida === 'tramite' ? '#F59E0B' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Package size={18} color="#F59E0B" />
@@ -245,13 +295,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
                 <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF', marginBottom: 3 }}>B. Salida No Planificada</p>
                 <p style={{ fontSize: 12, color: 'var(--muted)' }}>Trámites o uso libre · Requiere motivo</p>
                 {tipoSalida === 'tramite' && (
-                  <textarea
-                    value={motivo} onChange={e => setMotivo(e.target.value)}
-                    onClick={e => e.stopPropagation()}
-                    placeholder="Describe el motivo del viaje..."
-                    rows={3}
-                    style={{ width: '100%', marginTop: 12, padding: '10px 12px', borderRadius: 10, background: '#131313', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 14, resize: 'none', outline: 'none' }}
-                  />
+                  <textarea value={motivo} onChange={e => setMotivo(e.target.value)} onClick={e => e.stopPropagation()} placeholder="Describe el motivo del viaje..." rows={3}
+                    style={{ width: '100%', marginTop: 12, padding: '10px 12px', borderRadius: 10, background: '#131313', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 14, resize: 'none', outline: 'none' }} />
                 )}
               </div>
             </div>
@@ -268,7 +313,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
         </div>
       )}
 
-      {/* Paso 3: Fotos + KM */}
+      {/* ── Paso 3: Fotos + KM ────────────────────────────────────────────── */}
       {paso === 3 && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
@@ -276,13 +321,43 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
               Documentación obligatoria
             </p>
 
-            {/* Odómetro */}
+            {/* ── Odómetro ─────────────────────────────────────────────────── */}
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Foto odómetro *</p>
-            <div style={{ marginBottom: 16 }}>
-              <FotoSlot label="Odómetro" emoji="🔢" onCaptura={(url) => setFotoOdo(url)} capturada={!!fotoOdo} />
+            <div style={{ marginBottom: 6 }}>
+              <FotoSlot label="Odómetro" emoji="🔢"
+                onCaptura={(url, file) => { setFotoOdo(url); analizarOdometro(file) }}
+                capturada={!!fotoOdo} />
             </div>
+            {analizandoOdo && (
+              <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+                Leyendo kilometraje…
+              </p>
+            )}
 
-            {/* Inspección 360° */}
+            {/* KM inicio — auto-llenado */}
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 8 }}>
+              Kilometraje actual (odómetro)
+            </label>
+            <input
+              value={kmInicio} onChange={e => { setKmInicio(e.target.value.replace(/\D/g, '')); setKmLeido(null) }}
+              placeholder={`Ej: ${vehiculo?.km_actual ?? 45000}`}
+              type="text" inputMode="numeric"
+              style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${kmLeido ? '#4ADE80' : kmInicio ? F_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', letterSpacing: '-0.5px', marginBottom: 4 }}
+            />
+            {kmLeido && !analizandoOdo && (
+              <p style={{ fontSize: 11, color: '#4ADE80', marginBottom: 12, textAlign: 'center' }}>✨ Leído de la foto por IA · puedes corregir si es necesario</p>
+            )}
+            {!kmLeido && fotoOdo && !analizandoOdo && (
+              <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, textAlign: 'center' }}>Ingresa el km manualmente</p>
+            )}
+            {vehiculo && kmInicio && parseInt(kmInicio) < vehiculo.km_actual && (
+              <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 12, textAlign: 'center' }}>
+                ⚠ El valor es menor al km registrado ({vehiculo.km_actual.toLocaleString('es-CL')} km)
+              </p>
+            )}
+
+            {/* ── Inspección 360° ───────────────────────────────────────────── */}
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
               Inspección 360° *
               <span style={{ fontSize: 10, fontWeight: 500, color: fotos360ok ? '#4ADE80' : 'var(--muted)', marginLeft: 8 }}>
@@ -297,44 +372,44 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
               ))}
             </div>
 
-            {/* Combustible */}
+            {/* ── Combustible ───────────────────────────────────────────────── */}
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Marcador de combustible *</p>
-            <div style={{ marginBottom: 6 }}>
+            <div style={{ marginBottom: 8 }}>
               <FotoSlot label="Foto del tablero" emoji="⛽"
                 onCaptura={(url, file) => { setFotoMarcador(url); analizarCombustible(file) }}
                 capturada={!!fotoMarcador} />
             </div>
-            {analizando && (
-              <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
-                Analizando imagen con IA…
-              </p>
-            )}
-            {!analizando && nivelDetectado && (
-              <p style={{ fontSize: 11, color: '#4ADE80', marginBottom: 10 }}>
-                ✨ IA detectó: <strong>{NIVELES_COMB.find(n => n.value === nivelDetectado)?.label ?? nivelDetectado}</strong> · Puedes ajustar abajo
-              </p>
-            )}
-            <CombustibleSelector value={combustible} onChange={setCombustible} />
 
-            {/* KM inicio */}
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 8 }}>
-                Kilometraje actual (odómetro)
-              </label>
-              <input
-                value={kmInicio} onChange={e => setKmInicio(e.target.value.replace(/\D/g, ''))}
-                placeholder={`Ej: ${vehiculo?.km_actual ?? 45000}`}
-                type="text" inputMode="numeric"
-                style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${kmInicio ? F_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', letterSpacing: '-0.5px' }}
-              />
-              {vehiculo && kmInicio && parseInt(kmInicio) < vehiculo.km_actual && (
-                <p style={{ fontSize: 11, color: '#F59E0B', marginTop: 6, textAlign: 'center' }}>
-                  ⚠ El valor es menor al km registrado ({vehiculo.km_actual.toLocaleString('es-CL')} km)
-                </p>
-              )}
-            </div>
+            {analizandoComb && (
+              <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+                Leyendo nivel de estanque…
+              </p>
+            )}
+
+            {/* Nivel detectado por IA */}
+            {!analizandoComb && nivelDetectado && !mostrarSelectorComb && (
+              <NivelDetectado nivel={nivelDetectado} onCorregir={() => setMostrarSelectorComb(true)} />
+            )}
+
+            {/* Fallback si IA falló o el usuario quiere corregir */}
+            {!analizandoComb && (iaFalloComb || mostrarSelectorComb) && (
+              <div style={{ marginBottom: 4 }}>
+                {iaFalloComb && (
+                  <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
+                    No se pudo leer el nivel automáticamente, selecciona manualmente:
+                  </p>
+                )}
+                <SelectorManual value={combustible} onChange={v => { setCombustible(v); setNivelDetectado(v) }} />
+                {nivelDetectado && mostrarSelectorComb && !iaFalloComb && (
+                  <button onClick={() => setMostrarSelectorComb(false)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', marginBottom: 8 }}>
+                    ← Volver al nivel detectado
+                  </button>
+                )}
+              </div>
+            )}
           </div>
+
           <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
             <button onClick={confirmar} disabled={!listo || guardando} style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed', background: listo && !guardando ? F : 'rgba(255,255,255,0.06)', color: listo && !guardando ? '#fff' : 'var(--muted)', fontSize: 16, fontWeight: 900 }}>
               {guardando ? 'Registrando salida…' : listo ? 'Confirmar salida ✓' : `Faltan ${[!fotoOdo && 'odómetro', !fotos360ok && `360° (${Object.keys(fotos360).length}/4)`, !fotoMarcador && 'combustible', !combustible && 'nivel', !kmInicio && 'km'].filter(Boolean).join(', ')}`}
