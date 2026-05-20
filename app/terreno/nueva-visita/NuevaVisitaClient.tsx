@@ -812,29 +812,31 @@ function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
                 const cant = carritoSug.get(p.nombre)?.cantidad ?? 0
                 const precio = CATALOGO_INFO[p.nombre]?.precio_lata ?? 0
                 return (
-                  <div key={p.nombre} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderBottom: i < stats.sugeridos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: cant > 0 ? T_DIM : 'transparent', transition: 'background 0.15s' }}>
-                    <ProductoThumb nombre={p.nombre} categoria={p.categoria} size={44} />
+                  <div key={p.nombre} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px', borderBottom: i < stats.sugeridos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: cant > 0 ? T_DIM : 'transparent', transition: 'background 0.15s' }}>
+                    <ProductoThumb nombre={p.nombre} categoria={p.categoria} size={64} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{p.nombre}</p>
-                      <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 3 }}>Comprado {p.veces}x</p>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{p.nombre}</p>
+                      <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6 }}>Comprado {p.veces}x</p>
                       {precio > 0 && (
-                        <p style={{ fontSize: 17, fontWeight: 900, color: T, letterSpacing: '-0.5px', lineHeight: 1 }}>
-                          {fmtPrecioCLP(precio)}
-                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>/ lata</span>
-                        </p>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                          <p style={{ fontSize: 17, fontWeight: 900, color: T, letterSpacing: '-0.5px', lineHeight: 1 }}>
+                            {fmtPrecioCLP(precio)}
+                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>/ lata</span>
+                          </p>
+                          {cant > 0 && (
+                            <p style={{ fontSize: 17, fontWeight: 900, color: T, letterSpacing: '-0.5px', lineHeight: 1, opacity: 0.65 }}>
+                              = {fmtPrecioCLP(cant * precio)}
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    <div style={{ flexShrink: 0 }}>
                       <CantidadInput
                         value={cant}
                         accent={T}
                         onchange={n => setSugCant(p.nombre, p.categoria, n)}
                       />
-                      {cant > 0 && precio > 0 && (
-                        <p style={{ fontSize: 12, fontWeight: 900, color: T, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
-                          {fmtPrecioCLP(cant * precio)}
-                        </p>
-                      )}
                     </div>
                   </div>
                 )
