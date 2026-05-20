@@ -780,6 +780,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
     return m
   })
   const [showCierre, setShowCierre] = useState(false)
+  const [showCartDetail, setShowCartDetail] = useState(false)
   const [sinVenta, setSinVenta] = useState(false)
   const [motivo, setMotivo] = useState('')
   const [obs, setObs] = useState('')
@@ -963,8 +964,17 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
                     <p style={{ fontSize: 14, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.producto}</p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {CATALOGO_INFO[p.producto]?.estilo && <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{CATALOGO_INFO[p.producto].estilo}</p>}
-                      {CATALOGO_INFO[p.producto]?.precio_lata && <p style={{ fontSize: 11, fontWeight: 700, color: cant > 0 ? C : 'var(--muted)', flexShrink: 0 }}>{fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)}</p>}
+                      {CATALOGO_INFO[p.producto]?.precio_lata && (
+                        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>
+                          {fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)}/u
+                        </p>
+                      )}
                     </div>
+                    {cant > 0 && CATALOGO_INFO[p.producto]?.precio_lata && (
+                      <p style={{ fontSize: 12, fontWeight: 800, color: C, marginTop: 2 }}>
+                        {cant} × {fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)} = {fmtPrecioCLP(cant * CATALOGO_INFO[p.producto].precio_lata)}
+                      </p>
+                    )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
                     <button onClick={() => ajustar(p, -1)} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer', background: cant > 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)', color: '#F4EEDF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -982,20 +992,58 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
         )}
       </div>
 
+      {/* Panel detalle carrito */}
+      <div style={{ padding: '0 16px', paddingBottom: showCartDetail && items.length > 0 ? 0 : 0 }}>
+        {showCartDetail && items.length > 0 && (
+          <div style={{ background: '#131313', border: `1px solid ${C_BORDER}`, borderRadius: '14px 14px 0 0', overflow: 'hidden', marginBottom: -1 }}>
+            {items.map((item, i) => (
+              <div key={item.producto} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+                <ProductoThumb nombre={item.producto} categoria={item.categoria} size={30} />
+                <p style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{item.producto}</p>
+                <span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>×{item.cantidad}</span>
+                {item.precio > 0 && (
+                  <span style={{ fontSize: 13, fontWeight: 800, color: C, flexShrink: 0, minWidth: 64, textAlign: 'right' }}>
+                    {fmtPrecioCLP(item.precio * item.cantidad)}
+                  </span>
+                )}
+              </div>
+            ))}
+            <div style={{ padding: '9px 14px', background: 'rgba(79,70,229,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total</span>
+              <span style={{ fontSize: 15, fontWeight: 900, color: '#F4EEDF' }}>{fmtPrecioCLP(totalPrecio)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Carrito flotante */}
       <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-        <button onClick={() => setShowCierre(true)} style={{
-          width: '100%', padding: '17px 20px', borderRadius: 14, border: 'none', cursor: 'pointer',
-          background: totalItems > 0 ? C : 'rgba(255,255,255,0.06)',
-          color: totalItems > 0 ? '#fff' : 'var(--muted)',
-          fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <ShoppingCart size={18} />
-            <span>{totalItems > 0 ? `${totalItems} producto${totalItems > 1 ? 's' : ''}` : 'Carrito vacío'}</span>
-          </div>
-          <span>{totalItems > 0 ? `${fmtPrecioCLP(totalPrecio)} →` : 'Sin venta →'}</span>
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {/* Botón ver detalle */}
+          {totalItems > 0 && (
+            <button
+              onClick={() => setShowCartDetail(s => !s)}
+              style={{
+                width: 52, borderRadius: 14, border: `1px solid ${C_BORDER}`, background: showCartDetail ? C_DIM : 'rgba(255,255,255,0.04)',
+                color: C, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
+              }}
+            >
+              <ChevronDown size={20} style={{ transform: showCartDetail ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            </button>
+          )}
+          <button onClick={() => setShowCierre(true)} style={{
+            flex: 1, padding: '17px 20px', borderRadius: 14, border: 'none', cursor: 'pointer',
+            background: totalItems > 0 ? C : 'rgba(255,255,255,0.06)',
+            color: totalItems > 0 ? '#fff' : 'var(--muted)',
+            fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ShoppingCart size={18} />
+              <span>{totalItems > 0 ? `${totalItems} producto${totalItems > 1 ? 's' : ''}` : 'Carrito vacío'}</span>
+            </div>
+            <span>{totalItems > 0 ? `${fmtPrecioCLP(totalPrecio)} →` : 'Sin venta →'}</span>
+          </button>
+        </div>
       </div>
 
       {waModal && (
