@@ -12,9 +12,9 @@ import type { AppUser } from '@/lib/auth'
 const T = '#D4AF37'
 const T_DIM = 'rgba(212,175,55,0.12)'
 const T_BORDER = 'rgba(212,175,55,0.25)'
-const C = '#4F46E5'
-const C_DIM = 'rgba(79,70,229,0.12)'
-const C_BORDER = 'rgba(79,70,229,0.30)'
+const C = '#D4AF37'
+const C_DIM = 'rgba(212,175,55,0.12)'
+const C_BORDER = 'rgba(212,175,55,0.28)'
 const WA = '#25D366'
 
 // ─── Types ────────────────────────────────────────────────────
@@ -903,7 +903,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           <button
             onClick={() => { if (sinVenta && !motivo) return; onCerrar(items, !sinVenta, motivo, obs) }}
             disabled={sinVenta && !motivo}
-            style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: sinVenta && !motivo ? 'not-allowed' : 'pointer', background: sinVenta && !motivo ? 'rgba(255,255,255,0.06)' : C, color: sinVenta && !motivo ? 'var(--muted)' : '#fff', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}
+            style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: sinVenta && !motivo ? 'not-allowed' : 'pointer', background: sinVenta && !motivo ? 'rgba(255,255,255,0.06)' : C, color: sinVenta && !motivo ? 'var(--muted)' : '#080808', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}
           >
             Confirmar y finalizar ✓
           </button>
@@ -1034,7 +1034,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           <button onClick={() => setShowCierre(true)} style={{
             flex: 1, padding: '17px 20px', borderRadius: 14, border: 'none', cursor: 'pointer',
             background: totalItems > 0 ? C : 'rgba(255,255,255,0.06)',
-            color: totalItems > 0 ? '#fff' : 'var(--muted)',
+            color: totalItems > 0 ? '#080808' : 'var(--muted)',
             fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
