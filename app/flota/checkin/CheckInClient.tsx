@@ -114,6 +114,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
   const [tipoSalida, setTipoSalida] = useState<'reparto' | 'tramite' | null>(null)
   const [rutaId, setRutaId] = useState<string | null>(null)
   const [motivo, setMotivo] = useState('')
+  const [destino, setDestino] = useState('')
 
   // Fotos
   const [fotoOdo, setFotoOdo] = useState('')
@@ -198,6 +199,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
         motivo: tipoSalida === 'tramite' ? motivo : null,
         km_inicio: km,
         km_teoricos: rutaSeleccionada?.km_teoricos ?? null,
+        destino_declarado: tipoSalida === 'tramite' ? destino.trim() || null : null,
         estado: 'en_curso',
       })
       await supabase.from('vehiculos').update({ estado: 'en_uso', combustible }).eq('id', vehiculo.id)
@@ -295,17 +297,34 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
                 <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF', marginBottom: 3 }}>B. Salida No Planificada</p>
                 <p style={{ fontSize: 12, color: 'var(--muted)' }}>Trámites o uso libre · Requiere motivo</p>
                 {tipoSalida === 'tramite' && (
-                  <textarea value={motivo} onChange={e => setMotivo(e.target.value)} onClick={e => e.stopPropagation()} placeholder="Describe el motivo del viaje..." rows={3}
-                    style={{ width: '100%', marginTop: 12, padding: '10px 12px', borderRadius: 10, background: '#131313', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 14, resize: 'none', outline: 'none' }} />
+                  <div onClick={e => e.stopPropagation()} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>
+                        Dirección de destino *
+                      </label>
+                      <input
+                        value={destino} onChange={e => setDestino(e.target.value)}
+                        placeholder="Ej: Arauco 215, Valdivia"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: '#131313', border: `1px solid ${destino.trim() ? 'rgba(249,115,22,0.4)' : 'rgba(255,255,255,0.1)'}`, color: '#F4EEDF', fontSize: 14, outline: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>
+                        Motivo del viaje *
+                      </label>
+                      <textarea value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Describe el motivo del viaje..." rows={2}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: '#131313', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 14, resize: 'none', outline: 'none' }} />
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
           </div>
           <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
             <button
-              onClick={() => (tipoSalida === 'reparto' || (tipoSalida === 'tramite' && motivo.trim())) && setPaso(3)}
-              disabled={!tipoSalida || (tipoSalida === 'tramite' && !motivo.trim())}
-              style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: 'pointer', background: (tipoSalida === 'reparto' || (tipoSalida === 'tramite' && motivo.trim())) ? F : 'rgba(255,255,255,0.06)', color: (tipoSalida === 'reparto' || (tipoSalida === 'tramite' && motivo.trim())) ? '#fff' : 'var(--muted)', fontSize: 16, fontWeight: 900 }}
+              onClick={() => (tipoSalida === 'reparto' || (tipoSalida === 'tramite' && motivo.trim() && destino.trim())) && setPaso(3)}
+              disabled={!tipoSalida || (tipoSalida === 'tramite' && (!motivo.trim() || !destino.trim()))}
+              style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: 'pointer', background: (tipoSalida === 'reparto' || (tipoSalida === 'tramite' && motivo.trim() && destino.trim())) ? F : 'rgba(255,255,255,0.06)', color: (tipoSalida === 'reparto' || (tipoSalida === 'tramite' && motivo.trim() && destino.trim())) ? '#fff' : 'var(--muted)', fontSize: 16, fontWeight: 900 }}
             >
               Continuar →
             </button>

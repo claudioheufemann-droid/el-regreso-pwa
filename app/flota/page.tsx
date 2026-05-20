@@ -18,7 +18,7 @@ export default async function FlotaPage() {
 
   const { data: viajesActivos } = await supabase
     .from('viajes_flota')
-    .select('id, vehiculo_id, tipo, motivo, km_inicio, iniciado_at, conductor_id')
+    .select('id, vehiculo_id, tipo, motivo, km_inicio, iniciado_at, conductor_id, destino_declarado, llegada_confirmada_at')
     .eq('estado', 'en_curso')
 
   const conductorIds = [...new Set((viajesActivos ?? []).map(v => v.conductor_id).filter(Boolean))]

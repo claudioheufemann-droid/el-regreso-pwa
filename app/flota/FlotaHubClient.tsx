@@ -40,6 +40,7 @@ interface Vehiculo {
 interface ViajeActivo {
   id: string; vehiculo_id: string; tipo: string; motivo: string | null
   km_inicio: number | null; iniciado_at: string; conductor_id: string | null
+  destino_declarado: string | null; llegada_confirmada_at: string | null
 }
 
 interface Props {
@@ -150,17 +151,32 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
                   </div>
                   <CombustibleMini nivel={v.combustible} />
                   {viaje && (
-                    <p style={{ fontSize: 11, color: '#F59E0B', marginTop: 4 }}>
-                      {conductor?.nombre?.split(' ')[0] ?? 'En uso'} · {viaje.tipo === 'reparto' ? 'Reparto' : 'Trámite'} · {tiempoTranscurrido(viaje.iniciado_at)}
-                    </p>
+                    <div style={{ marginTop: 4 }}>
+                      <p style={{ fontSize: 11, color: '#F59E0B' }}>
+                        {conductor?.nombre?.split(' ')[0] ?? 'En uso'} · {viaje.tipo === 'reparto' ? 'Reparto' : 'Trámite'} · {tiempoTranscurrido(viaje.iniciado_at)}
+                      </p>
+                      {viaje.tipo === 'tramite' && viaje.destino_declarado && (
+                        <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                          📍 {viaje.destino_declarado}
+                          {viaje.llegada_confirmada_at && <span style={{ color: '#4ADE80', marginLeft: 6 }}>✓ Llegada confirmada</span>}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
                   <EstadoChip estado={v.estado} />
                   {viaje && (
-                    <Link href={`/flota/checkout/${viaje.id}`} style={{ fontSize: 11, fontWeight: 700, color: F, textDecoration: 'none', background: F_DIM, padding: '4px 10px', borderRadius: 8 }}>
-                      Cerrar viaje
-                    </Link>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                      {viaje.tipo === 'tramite' && !viaje.llegada_confirmada_at && (
+                        <Link href={`/flota/llegada/${viaje.id}`} style={{ fontSize: 11, fontWeight: 700, color: '#4ADE80', textDecoration: 'none', background: 'rgba(74,222,128,0.1)', padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(74,222,128,0.25)' }}>
+                          📍 Confirmar llegada
+                        </Link>
+                      )}
+                      <Link href={`/flota/checkout/${viaje.id}`} style={{ fontSize: 11, fontWeight: 700, color: F, textDecoration: 'none', background: F_DIM, padding: '4px 10px', borderRadius: 8 }}>
+                        Cerrar viaje
+                      </Link>
+                    </div>
                   )}
                 </div>
               </div>
