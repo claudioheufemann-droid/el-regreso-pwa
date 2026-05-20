@@ -27,9 +27,9 @@ export default async function AdminFlotaPage() {
 
   const { data: vehiculos } = await supabase
     .from('vehiculos')
-    .select('id, nombre, tipo, patente, km_actual, estado')
+    .select('id, nombre, tipo, patente, anio, km_actual, estado, marca, modelo, color')
     .order('nombre')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <AdminFlotaClient viajes={(viajes ?? []) as any[]} vehiculos={vehiculos ?? []} />
+  return <AdminFlotaClient viajes={(viajes ?? []) as any[]} vehiculos={(vehiculos ?? []) as any[]} />
 }

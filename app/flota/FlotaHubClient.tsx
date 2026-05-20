@@ -11,6 +11,7 @@ const F_BORDER = 'rgba(59,130,246,0.28)'
 interface Vehiculo {
   id: string; nombre: string; tipo: string; patente: string | null
   anio: number | null; km_actual: number; estado: string
+  marca: string | null; modelo: string | null; color: string | null
 }
 interface ViajeActivo {
   id: string; vehiculo_id: string; tipo: string; motivo: string | null
@@ -111,8 +112,11 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
                     <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>{v.nombre}</p>
                     {v.patente && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', padding: '2px 7px', borderRadius: 5 }}>{v.patente}</span>}
                   </div>
+                  {v.modelo && (
+                    <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>{v.modelo}{v.color ? ` · ${v.color}` : ''}</p>
+                  )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{TIPO_LABEL[v.tipo] ?? v.tipo}</span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{v.anio ?? ''} · {TIPO_LABEL[v.tipo] ?? v.tipo}</span>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {v.km_actual.toLocaleString('es-CL')} km</span>
                   </div>
                   {viaje && (

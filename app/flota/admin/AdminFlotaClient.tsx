@@ -31,6 +31,10 @@ interface Vehiculo {
   patente: string | null
   km_actual: number
   estado: string
+  marca: string | null
+  modelo: string | null
+  color: string | null
+  anio: number | null
 }
 
 interface Props {
@@ -222,8 +226,9 @@ export default function AdminFlotaClient({ viajes, vehiculos }: Props) {
               const estadoLabel = v.estado === 'disponible' ? 'Disponible' : v.estado === 'en_uso' ? 'En uso' : 'Mantención'
               return (
                 <div key={v.id} style={{ background: '#131313', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '10px 12px' }}>
-                  <p style={{ fontSize: 12, fontWeight: 800, color: '#F4EEDF', marginBottom: 2 }}>{v.nombre}</p>
-                  <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6 }}>{v.km_actual.toLocaleString('es-CL')} km</p>
+                  <p style={{ fontSize: 12, fontWeight: 800, color: '#F4EEDF', marginBottom: 1 }}>{v.nombre}</p>
+                  {v.modelo && <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 1 }}>{v.modelo}{v.color ? ` · ${v.color}` : ''}</p>}
+                  <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6 }}>{v.patente} · {v.km_actual.toLocaleString('es-CL')} km</p>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: `${estadoColor}18`, borderRadius: 6, padding: '3px 7px' }}>
                     <div style={{ width: 5, height: 5, borderRadius: '50%', background: estadoColor }} />
                     <span style={{ fontSize: 10, color: estadoColor, fontWeight: 700 }}>{estadoLabel}</span>
