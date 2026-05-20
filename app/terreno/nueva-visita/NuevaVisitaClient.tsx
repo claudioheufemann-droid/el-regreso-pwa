@@ -1057,13 +1057,20 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
                       <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>{CATALOGO_INFO[p.producto].estilo}</p>
                     )}
                     {CATALOGO_INFO[p.producto]?.precio_lata && (
-                      <p style={{ fontSize: 17, fontWeight: 900, color: C, letterSpacing: '-0.5px', lineHeight: 1 }}>
-                        {fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)}
-                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>/ lata</span>
-                      </p>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                        <p style={{ fontSize: 17, fontWeight: 900, color: C, letterSpacing: '-0.5px', lineHeight: 1 }}>
+                          {fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)}
+                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>/ lata</span>
+                        </p>
+                        {cant > 0 && (
+                          <p style={{ fontSize: 17, fontWeight: 900, color: C, letterSpacing: '-0.5px', lineHeight: 1, opacity: 0.65 }}>
+                            = {fmtPrecioCLP(cant * CATALOGO_INFO[p.producto].precio_lata)}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                  <div style={{ flexShrink: 0 }}>
                     <CantidadInput
                       value={cant}
                       accent={C}
@@ -1076,11 +1083,6 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
                         })
                       }}
                     />
-                    {cant > 0 && CATALOGO_INFO[p.producto]?.precio_lata && (
-                      <p style={{ fontSize: 12, fontWeight: 900, color: C, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
-                        {fmtPrecioCLP(cant * CATALOGO_INFO[p.producto].precio_lata)}
-                      </p>
-                    )}
                   </div>
                 </div>
               )
