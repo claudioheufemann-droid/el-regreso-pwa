@@ -166,25 +166,19 @@ function abrirWhatsApp(phone: string, mensaje: string) {
 // ─── Modal WhatsApp ───────────────────────────────────────────
 
 interface WhatsAppModalProps {
-  tipo: 'catalogo' | 'pedido'
-  items?: ItemCarrito[]
+  tipo: 'catalogo'
   clienteNombre: string
   vendedorNombre: string
   onClose: () => void
 }
 
-function WhatsAppModal({ tipo, items, clienteNombre, vendedorNombre, onClose }: WhatsAppModalProps) {
+function WhatsAppModal({ onClose }: WhatsAppModalProps) {
   const [phone, setPhone] = useState('')
-  const titulo = tipo === 'catalogo' ? 'Enviar Catálogo' : 'Enviar Cotización'
-  const desc = tipo === 'catalogo'
-    ? 'Se enviará el catálogo completo con todos los productos y precios.'
-    : 'Se enviará el resumen del pedido armado para este cliente.'
 
   function enviar() {
     const t = phone.trim()
     if (!t) return
-    const msg = tipo === 'catalogo' ? generarMensajeCatalogo() : generarMensajePedido(items ?? [], clienteNombre, vendedorNombre)
-    abrirWhatsApp(t, msg)
+    abrirWhatsApp(t, generarMensajeCatalogo())
     onClose()
   }
 
@@ -203,11 +197,13 @@ function WhatsAppModal({ tipo, items, clienteNombre, vendedorNombre, onClose }: 
             <MessageCircle size={20} color={WA} />
           </div>
           <div>
-            <p style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF' }}>{titulo}</p>
+            <p style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF' }}>Enviar Catálogo</p>
             <p style={{ fontSize: 11, color: 'var(--muted)' }}>vía WhatsApp</p>
           </div>
         </div>
-        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20, paddingLeft: 52 }}>{desc}</p>
+        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20, paddingLeft: 52 }}>
+          Se enviará el catálogo completo con todos los productos y precios.
+        </p>
 
         <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 6 }}>
           Número de WhatsApp del cliente
@@ -238,6 +234,235 @@ function WhatsAppModal({ tipo, items, clienteNombre, vendedorNombre, onClose }: 
           }}>
             <MessageCircle size={16} />
             Abrir WhatsApp
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Imagen de venta (Canvas) ────────────────────────────────
+
+function loadImg(src: string): Promise<HTMLImageElement> {
+  return new Promise((res, rej) => {
+    const i = new Image()
+    i.onload = () => res(i)
+    i.onerror = rej
+    i.src = src
+  })
+}
+
+async function generarImagenVenta(
+  items: ItemCarrito[],
+  clienteNombre: string,
+  vendedorNombre: string,
+): Promise<Blob> {
+  const W = 600; const PAD = 28; const ROW = 76
+  const HEADER = 172; const TOTAL_ROW = 62; const FOOTER = 56
+  const H = HEADER + items.length * ROW + TOTAL_ROW + FOOTER
+  const DPR = 2
+  const canvas = document.createElement('canvas')
+  canvas.width = W * DPR; canvas.height = H * DPR
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(DPR, DPR)
+
+  // pre-cargar imágenes de productos
+  const imgs: Record<string, HTMLImageElement | null> = {}
+  await Promise.all(items.map(async it => {
+    const src = PRODUCTO_IMAGENES[it.producto]
+    imgs[it.producto] = src ? await loadImg(src).catch(() => null) : null
+  }))
+
+  // fondo general
+  ctx.fillStyle = '#0D0D0D'; ctx.fillRect(0, 0, W, H)
+
+  // barra dorada superior
+  ctx.fillStyle = '#D4AF37'; ctx.fillRect(0, 0, W, 5)
+
+  // zona header
+  ctx.fillStyle = '#131313'; ctx.fillRect(0, 5, W, HEADER - 5)
+
+  // logo / marca
+  ctx.font = `900 20px system-ui, sans-serif`
+  ctx.fillStyle = '#D4AF37'
+  ctx.fillText('EL REGRESO BEER CO.', PAD, 44)
+  ctx.font = `400 11px system-ui, sans-serif`
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'
+  ctx.fillText('Valdivia, Chile  ·  www.elregresobeer.com', PAD, 62)
+
+  // línea separadora interna
+  ctx.fillStyle = 'rgba(212,175,55,0.18)'; ctx.fillRect(PAD, 76, W - PAD * 2, 1)
+
+  // datos cliente / fecha
+  const fecha = new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
+  const cols = [
+    { label: 'FECHA',    value: fecha },
+    { label: 'CLIENTE',  value: clienteNombre },
+    { label: 'VENDEDOR', value: vendedorNombre.split(' ')[0] },
+  ]
+  cols.forEach((col, ci) => {
+    const x = PAD + ci * 186
+    ctx.font = '700 9px system-ui, sans-serif'
+    ctx.fillStyle = 'rgba(255,255,255,0.38)'
+    ctx.fillText(col.label, x, 100)
+    ctx.font = '700 13px system-ui, sans-serif'
+    ctx.fillStyle = '#F4EEDF'
+    ctx.fillText(col.value.slice(0, 22), x, 120)
+  })
+
+  // línea de cierre de header
+  ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(0, HEADER - 1, W, 1)
+
+  // filas de productos
+  items.forEach((item, idx) => {
+    const y = HEADER + idx * ROW
+    ctx.fillStyle = idx % 2 === 0 ? '#0F0F0F' : '#111111'
+    ctx.fillRect(0, y, W, ROW)
+
+    // foto producto
+    const IMG = 48; const imgX = PAD; const imgY = y + (ROW - IMG) / 2
+    if (imgs[item.producto]) {
+      ctx.save()
+      ctx.beginPath()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(ctx as any).roundRect?.(imgX, imgY, IMG, IMG, 8) ?? ctx.rect(imgX, imgY, IMG, IMG)
+      ctx.clip()
+      ctx.drawImage(imgs[item.producto]!, imgX, imgY, IMG, IMG)
+      ctx.restore()
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.06)'
+      ctx.beginPath()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(ctx as any).roundRect?.(imgX, imgY, IMG, IMG, 8) ?? ctx.rect(imgX, imgY, IMG, IMG)
+      ctx.fill()
+    }
+
+    // nombre
+    ctx.font = '700 14px system-ui, sans-serif'
+    ctx.fillStyle = '#F4EEDF'
+    ctx.fillText(item.producto.slice(0, 34), PAD + IMG + 12, y + 28)
+    // detalle
+    ctx.font = '400 11px system-ui, sans-serif'
+    ctx.fillStyle = 'rgba(255,255,255,0.38)'
+    ctx.fillText(`${item.cantidad} ud. × ${fmtPrecioCLP(item.precio)}`, PAD + IMG + 12, y + 48)
+
+    // subtotal (derecha)
+    const sub = fmtPrecioCLP(item.cantidad * item.precio)
+    ctx.font = '800 16px system-ui, sans-serif'
+    ctx.fillStyle = '#D4AF37'
+    ctx.textAlign = 'right'
+    ctx.fillText(sub, W - PAD, y + ROW / 2 + 6)
+    ctx.textAlign = 'left'
+
+    ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(0, y + ROW - 1, W, 1)
+  })
+
+  // fila total
+  const yT = HEADER + items.length * ROW
+  ctx.fillStyle = '#161616'; ctx.fillRect(0, yT, W, TOTAL_ROW)
+  ctx.fillStyle = 'rgba(212,175,55,0.2)'; ctx.fillRect(0, yT, W, 1)
+  ctx.font = '700 10px system-ui, sans-serif'
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'
+  ctx.fillText('TOTAL PEDIDO', PAD, yT + 38)
+  const total = items.reduce((s, i) => s + i.cantidad * i.precio, 0)
+  ctx.font = '900 22px system-ui, sans-serif'
+  ctx.fillStyle = '#F4EEDF'
+  ctx.textAlign = 'right'
+  ctx.fillText(fmtPrecioCLP(total), W - PAD, yT + 42)
+  ctx.textAlign = 'left'
+
+  // footer
+  const yF = yT + TOTAL_ROW
+  ctx.fillStyle = '#0A0A0A'; ctx.fillRect(0, yF, W, FOOTER)
+  ctx.fillStyle = '#D4AF37'; ctx.fillRect(0, yF, W, 3)
+  ctx.font = '400 11px system-ui, sans-serif'
+  ctx.fillStyle = 'rgba(255,255,255,0.28)'
+  ctx.textAlign = 'center'
+  ctx.fillText('El Regreso Beer Co. · Valdivia, Chile · www.elregresobeer.com', W / 2, yF + 34)
+  ctx.textAlign = 'left'
+
+  return new Promise(resolve => canvas.toBlob(b => resolve(b!), 'image/png'))
+}
+
+async function compartirImagen(blob: Blob) {
+  const file = new File([blob], 'pedido-el-regreso.png', { type: 'image/png' })
+  if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file], title: 'Pedido El Regreso Beer' })
+  } else {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'pedido-el-regreso.png'; a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+}
+
+// ─── Modal imagen de venta ────────────────────────────────────
+
+function VentaImageModal({ items, clienteNombre, vendedorNombre, onClose }: {
+  items: ItemCarrito[]; clienteNombre: string; vendedorNombre: string; onClose: () => void
+}) {
+  const [estado, setEstado] = useState<'generando' | 'listo' | 'error'>('generando')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const blobRef = useRef<Blob | null>(null)
+
+  useEffect(() => {
+    generarImagenVenta(items, clienteNombre, vendedorNombre)
+      .then(blob => {
+        blobRef.current = blob
+        setPreviewUrl(URL.createObjectURL(blob))
+        setEstado('listo')
+      })
+      .catch(() => setEstado('error'))
+    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function compartir() {
+    if (blobRef.current) await compartirImagen(blobRef.current)
+    onClose()
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1C1C1C', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px', width: '100%', maxWidth: 520 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: T_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <MessageCircle size={20} color={T} />
+          </div>
+          <div>
+            <p style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF' }}>Imagen del pedido</p>
+            <p style={{ fontSize: 11, color: 'var(--muted)' }}>Lista para compartir por WhatsApp</p>
+          </div>
+        </div>
+
+        {/* Preview */}
+        <div style={{ borderRadius: 12, overflow: 'hidden', marginBottom: 16, background: '#0D0D0D', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {estado === 'generando' && (
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <div style={{ width: 32, height: 32, border: `3px solid ${T_BORDER}`, borderTopColor: T, borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 10px' }} />
+              <p style={{ fontSize: 13, color: 'var(--muted)' }}>Generando imagen…</p>
+            </div>
+          )}
+          {estado === 'error' && <p style={{ fontSize: 13, color: '#FF5555', padding: 24 }}>Error al generar la imagen</p>}
+          {estado === 'listo' && previewUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewUrl} alt="Pedido" style={{ width: '100%', display: 'block' }} />
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: '14px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', background: 'transparent', color: 'var(--muted)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+            Cancelar
+          </button>
+          <button onClick={compartir} disabled={estado !== 'listo'} style={{
+            flex: 2, padding: '14px', borderRadius: 12, border: 'none',
+            background: estado === 'listo' ? WA : 'rgba(37,211,102,0.12)',
+            color: estado === 'listo' ? '#fff' : 'rgba(37,211,102,0.35)',
+            fontSize: 14, fontWeight: 800, cursor: estado === 'listo' ? 'pointer' : 'not-allowed',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}>
+            <MessageCircle size={16} />
+            Compartir imagen
           </button>
         </div>
       </div>
@@ -875,7 +1100,8 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   const [sinVenta, setSinVenta] = useState(false)
   const [motivo, setMotivo] = useState('')
   const [obs, setObs] = useState('')
-  const [waModal, setWaModal] = useState<null | 'catalogo' | 'pedido'>(null)
+  const [waModal, setWaModal] = useState<null | 'catalogo'>(null)
+  const [showImagenModal, setShowImagenModal] = useState(false)
 
   const prodsFiltrados = productos
     .filter(p => (p.categoria_producto ?? '').toLowerCase().includes(tabCat.toLowerCase()))
@@ -934,10 +1160,10 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
             </div>
           )}
 
-          {/* Botón enviar cotización */}
+          {/* Botón enviar venta como imagen */}
           {items.length > 0 && (
             <button
-              onClick={() => setWaModal('pedido')}
+              onClick={() => setShowImagenModal(true)}
               style={{
                 width: '100%', padding: '12px 16px', borderRadius: 12, marginBottom: 16,
                 border: `1px solid rgba(37,211,102,0.3)`, background: 'rgba(37,211,102,0.07)',
@@ -946,7 +1172,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
               }}
             >
               <MessageCircle size={16} color={WA} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: WA }}>Enviar cotización por WhatsApp</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: WA }}>Enviar venta por WhatsApp</span>
             </button>
           )}
 
@@ -1002,8 +1228,14 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
 
         {waModal && (
           <WhatsAppModal
-            tipo={waModal} items={items} clienteNombre={clienteNombre} vendedorNombre={vendedorNombre}
+            tipo={waModal} clienteNombre={clienteNombre} vendedorNombre={vendedorNombre}
             onClose={() => setWaModal(null)}
+          />
+        )}
+        {showImagenModal && (
+          <VentaImageModal
+            items={items} clienteNombre={clienteNombre} vendedorNombre={vendedorNombre}
+            onClose={() => setShowImagenModal(false)}
           />
         )}
       </div>
@@ -1147,7 +1379,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
 
       {waModal && (
         <WhatsAppModal
-          tipo={waModal} items={items} clienteNombre={clienteNombre} vendedorNombre={vendedorNombre}
+          tipo={waModal} clienteNombre={clienteNombre} vendedorNombre={vendedorNombre}
           onClose={() => setWaModal(null)}
         />
       )}
