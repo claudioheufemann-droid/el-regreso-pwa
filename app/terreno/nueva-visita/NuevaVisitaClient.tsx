@@ -441,7 +441,7 @@ function CantidadInput({
       ) : (
         <span
           onClick={startEdit}
-          style={{ width: numW, textAlign: 'center', fontSize, fontWeight: 900, color: value > 0 ? accent : 'var(--muted)', cursor: 'text', padding: '0 2px', margin: '0 2px' }}
+          style={{ width: numW + 8, height: btnW, textAlign: 'center', fontSize, fontWeight: 900, color: value > 0 ? accent : 'var(--muted)', cursor: 'text', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 9, border: `1px dashed ${value > 0 ? accent : 'rgba(255,255,255,0.18)'}`, margin: '0 3px', flexShrink: 0 }}
           title="Toca para escribir cantidad"
         >
           {value}
