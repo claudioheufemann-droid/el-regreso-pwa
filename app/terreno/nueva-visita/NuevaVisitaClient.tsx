@@ -68,7 +68,7 @@ function ProductoThumb({ nombre, categoria, size = 44 }: { nombre: string; categ
       <img
         src={src} alt={nombre} width={size} height={size}
         onError={() => setImgOk(false)}
-        style={{ width: size, height: size, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
+        style={{ width: size, height: size, borderRadius: 10, objectFit: 'contain', flexShrink: 0, background: 'rgba(255,255,255,0.03)' }}
       />
     )
   }
@@ -657,6 +657,7 @@ function Paso4Catalogo({
 
   const prodsFiltrados = productos
     .filter(p => (p.categoria_producto ?? '').toLowerCase().includes(tabCat.toLowerCase()))
+    .filter(p => !!PRODUCTO_IMAGENES[p.producto])
     .sort((a, b) => (a.producto ?? '').localeCompare(b.producto ?? ''))
 
   function ajustar(prod: Producto, delta: number) {
