@@ -152,6 +152,31 @@ export default async function HubPage() {
             </div>
           </Link>
 
+          <Link href="/flota" style={{ textDecoration: 'none' }}>
+            <div
+              style={{
+                background: '#131313', border: '1px solid rgba(59,130,246,0.25)',
+                borderRadius: 20, padding: '24px 22px',
+                display: 'flex', alignItems: 'center', gap: 18, cursor: 'pointer',
+              }}
+              className="card-hover"
+            >
+              <div style={{
+                width: 52, height: 52, borderRadius: 16,
+                background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 22, flexShrink: 0,
+              }}>🚛</div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>Flota</div>
+                <div style={{ fontSize: 12, color: '#7A7268', lineHeight: 1.4 }}>
+                  Bitácora, rutas y control de vehículos
+                </div>
+              </div>
+              <div style={{ marginLeft: 'auto', color: '#3B82F6', fontSize: 18, flexShrink: 0 }}>→</div>
+            </div>
+          </Link>
+
         </div>
 
         <LogoutButton />
