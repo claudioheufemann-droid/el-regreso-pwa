@@ -75,59 +75,53 @@ async function calcularDistanciaOSRM(paradas: Parada[]): Promise<number> {
   return haversineTotal(paradas)
 }
 
-// Valdivia commune bounding box
+// Centro de Valdivia — todo lo que esté a más de 20 km se descarta
+const VALDIVIA = { lat: -39.8196, lng: -73.2452 }
 const BBOX = { latMin: -39.98, latMax: -39.68, lngMin: -73.48, lngMax: -73.00 }
 const VIEWBOX = `${BBOX.lngMin},${BBOX.latMax},${BBOX.lngMax},${BBOX.latMin}`
 const GEO_HEADERS = { 'Accept-Language': 'es', 'User-Agent': 'ElRegresoFlota/1.0' }
 
-function enValdivia(lat: number, lng: number) {
-  return lat >= BBOX.latMin && lat <= BBOX.latMax && lng >= BBOX.lngMin && lng <= BBOX.lngMax
+function distanciaAlCentro(lat: number, lng: number) {
+  return haversine(VALDIVIA.lat, VALDIVIA.lng, lat, lng)
 }
 
 function primeraCoordValida(results: { lat: string; lon: string }[]) {
-  const hit = results.find(r => enValdivia(parseFloat(r.lat), parseFloat(r.lon)))
+  const hit = results.find(r => distanciaAlCentro(parseFloat(r.lat), parseFloat(r.lon)) <= 20)
   return hit ? { lat: parseFloat(hit.lat), lng: parseFloat(hit.lon) } : null
 }
 
-// Extrae "calle + número" separados de una dirección ya formateada como "Calle 123, Ciudad"
-function parsearCalle(dir: string): { street: string; city: string } {
-  // Quita ", Ciudad" si viene al final
-  const sinCiudad = dir.replace(/,\s*valdivia.*$/i, '').trim()
-  return { street: sinCiudad, city: 'Valdivia' }
-}
-
 async function geocodificar(direccion: string): Promise<{ lat: number; lng: number } | null> {
+  // Normaliza: quita ", Valdivia..." si ya viene incluido, luego agrega limpio
+  const base = direccion.replace(/,\s*valdivia.*$/i, '').trim()
+  const query = encodeURIComponent(`${base}, Valdivia, Chile`)
+
+  // Intento 1: Photon (Komoot) — mejor cobertura que Nominatim, sesgo hacia Valdivia
   try {
-    const { street, city } = parsearCalle(direccion)
+    const r1 = await fetch(
+      `https://photon.komoot.io/api/?q=${query}&lat=${VALDIVIA.lat}&lon=${VALDIVIA.lng}&limit=5`,
+      { headers: { 'User-Agent': 'ElRegresoFlota/1.0' } },
+    )
+    if (r1.ok) {
+      const d1 = await r1.json()
+      for (const f of (d1.features ?? [])) {
+        const [lon, lat] = f.geometry.coordinates as [number, number]
+        if (distanciaAlCentro(lat, lon) <= 20) return { lat, lng: lon }
+      }
+    }
+  } catch { /* sigue */ }
 
-    // Intento 1: búsqueda estructurada (más precisa para calles chilenas)
-    const structured = new URLSearchParams({
-      street, city, country: 'Chile', format: 'json', limit: '5',
-      viewbox: VIEWBOX, bounded: '1',
-    })
-    const r1 = await fetch(`https://nominatim.openstreetmap.org/search?${structured}`, { headers: GEO_HEADERS })
-    const d1 = await r1.json() as { lat: string; lon: string }[]
-    const hit1 = primeraCoordValida(d1)
-    if (hit1) return hit1
-
-    // Intento 2: texto libre con viewbox bounded
-    const freeQ = encodeURIComponent(`${street}, ${city}, Chile`)
+  // Intento 2: Nominatim texto libre con viewbox acotado a Valdivia
+  try {
     const r2 = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${freeQ}&format=json&limit=5&viewbox=${VIEWBOX}&bounded=1`,
+      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5&viewbox=${VIEWBOX}&bounded=1`,
       { headers: GEO_HEADERS },
     )
     const d2 = await r2.json() as { lat: string; lon: string }[]
     const hit2 = primeraCoordValida(d2)
     if (hit2) return hit2
+  } catch { /* sigue */ }
 
-    // Intento 3: texto libre sin bounded, pero validando coords
-    const r3 = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${freeQ}&format=json&limit=10`,
-      { headers: GEO_HEADERS },
-    )
-    const d3 = await r3.json() as { lat: string; lon: string }[]
-    return primeraCoordValida(d3)
-  } catch { return null }
+  return null
 }
 
 function generarURLGoogleMaps(paradas: Parada[]): string {
