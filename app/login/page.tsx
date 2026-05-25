@@ -62,8 +62,8 @@ export default function LoginPage() {
           <Image
             src="/logo.png"
             alt="El Regreso Beer Co."
-            width={160}
-            height={160}
+            width={200}
+            height={200}
             style={{ filter: 'invert(1)', objectFit: 'contain' }}
             priority
           />
