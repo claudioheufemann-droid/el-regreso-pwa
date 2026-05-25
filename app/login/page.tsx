@@ -56,11 +56,6 @@ export default function LoginPage() {
     >
       <div style={{ width: '100%', maxWidth: 480 }}>
 
-        {/* Badge Logo */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
-          <BadgeLogo />
-        </div>
-
         {/* Title */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <h1 style={{
@@ -197,98 +192,5 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
-  )
-}
-
-function BadgeLogo() {
-  const r = 72
-  const cx = r + 8
-  const cy = r + 8
-  const size = (r + 8) * 2
-
-  // Arc text helper
-  const arcText = (text: string, radius: number, startAngle: number, fontSize: number, color: string) => {
-    const chars = text.split('')
-    const angleStep = (Math.PI * 0.82) / (chars.length - 1)
-    return chars.map((char, i) => {
-      const angle = startAngle + i * angleStep
-      const x = cx + radius * Math.cos(angle)
-      const y = cy + radius * Math.sin(angle)
-      const rotation = (angle * 180) / Math.PI + 90
-      return (
-        <text
-          key={i}
-          x={x}
-          y={y}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          transform={`rotate(${rotation}, ${x}, ${y})`}
-          style={{ fontSize, fontWeight: 800, fill: color, fontFamily: 'system-ui', letterSpacing: 1 }}
-        >
-          {char}
-        </text>
-      )
-    })
-  }
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ filter: 'drop-shadow(0 4px 16px rgba(212,175,55,0.25))' }}>
-      {/* Outer ring */}
-      <circle cx={cx} cy={cy} r={r} fill="#1A1410" stroke="#D4AF37" strokeWidth="2" />
-      {/* Inner ring decoration */}
-      <circle cx={cx} cy={cy} r={r - 10} fill="none" stroke="rgba(212,175,55,0.3)" strokeWidth="1" />
-      <circle cx={cx} cy={cy} r={r - 14} fill="none" stroke="rgba(212,175,55,0.15)" strokeWidth="0.5" strokeDasharray="3 4" />
-
-      {/* Top arc text: EL REGRESO */}
-      {arcText('EL REGRESO', r - 7, -Math.PI * 0.91, 9, '#D4AF37')}
-
-      {/* Bottom arc text: BEER CO. */}
-      {(() => {
-        const text = 'BEER CO.'
-        const chars = text.split('')
-        const totalAngle = Math.PI * 0.55
-        const startAngle = Math.PI - totalAngle / 2
-        const angleStep = totalAngle / (chars.length - 1)
-        return chars.map((char, i) => {
-          const angle = startAngle + i * angleStep
-          const rad = r - 7
-          const x = cx + rad * Math.cos(angle)
-          const y = cy + rad * Math.sin(angle)
-          const rotation = (angle * 180) / Math.PI + 90
-          return (
-            <text
-              key={i}
-              x={x}
-              y={y}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              transform={`rotate(${rotation}, ${x}, ${y})`}
-              style={{ fontSize: 9, fontWeight: 800, fill: '#D4AF37', fontFamily: 'system-ui' }}
-            >
-              {char}
-            </text>
-          )
-        })
-      })()}
-
-      {/* Decorative dots at sides */}
-      <circle cx={cx - r + 4} cy={cy} r="2" fill="#D4AF37" opacity="0.8" />
-      <circle cx={cx + r - 4} cy={cy} r="2" fill="#D4AF37" opacity="0.8" />
-
-      {/* Mountain silhouette */}
-      <polygon
-        points={`${cx},${cy - 28} ${cx - 24},${cy + 10} ${cx + 24},${cy + 10}`}
-        fill="#D4AF37" opacity="0.9"
-      />
-      <polygon
-        points={`${cx + 14},${cy - 14} ${cx},${cy + 10} ${cx + 28},${cy + 10}`}
-        fill="#8A6A1A" opacity="0.7"
-      />
-
-      {/* Hop/leaf accent */}
-      <ellipse cx={cx - 6} cy={cy + 20} rx="6" ry="4" fill="#4A7A3A" opacity="0.8" transform={`rotate(-20, ${cx - 6}, ${cy + 20})`} />
-      <ellipse cx={cx + 6} cy={cy + 20} rx="6" ry="4" fill="#4A7A3A" opacity="0.8" transform={`rotate(20, ${cx + 6}, ${cy + 20})`} />
-      <ellipse cx={cx} cy={cy + 18} rx="4" ry="6" fill="#5A9A4A" opacity="0.7" />
-    </svg>
   )
 }
