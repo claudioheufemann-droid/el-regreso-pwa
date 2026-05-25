@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { Truck, Plus, AlertTriangle, CheckCircle, Clock, ChevronRight, Wrench } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 
-const F = '#F97316'
-const F_DIM = 'rgba(249,115,22,0.12)'
-const F_BORDER = 'rgba(249,115,22,0.28)'
+const F = 'var(--gold)'
+const F_DIM = 'var(--gold-dim)'
+const F_BORDER = 'var(--border)'
 
 const NIVELES_COMB = [
   { value: 'lleno',        fill: 6, color: '#4ADE80' },
@@ -79,13 +79,13 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
   const enUso = vehiculos.filter(v => v.estado === 'en_uso').length
 
   return (
-    <div style={{ padding: '28px 24px', maxWidth: 800 }}>
+    <div style={{ padding: 'var(--sp-3)', maxWidth: 800 }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
           {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
-        <h1 style={{ fontSize: 26, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', marginBottom: 0 }}>
+        <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', marginBottom: 0 }}>
           Bitácora de Flota
         </h1>
       </div>
@@ -107,7 +107,7 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
       {/* CTA nueva salida */}
       <Link href="/flota/checkin" style={{ textDecoration: 'none' }}>
         <div style={{ background: F_DIM, border: `1px solid ${F_BORDER}`, borderRadius: 14, padding: '14px 18px', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(249,115,22,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--gold-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Plus size={18} color={F} />
           </div>
           <div style={{ flex: 1 }}>

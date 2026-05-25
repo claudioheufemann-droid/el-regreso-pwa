@@ -212,10 +212,10 @@ export default function DashboardClient({ resumen, fechaHoy, periodo }: Props) {
   const totalPeriodo = resumen.reduce((s, v) => s + v.litrosPeriodo, 0)
 
   return (
-    <div style={{ padding: '40px 48px 60px', maxWidth: 1100 }} className="px-4 pt-8 lg:px-12 lg:pt-10">
+    <div style={{ padding: 'var(--sp-3) var(--sp-3) 60px', maxWidth: 1100 }}>
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
+        <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
           Ventas del Día
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>

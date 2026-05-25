@@ -39,14 +39,14 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
   const router = useRouter()
 
   return (
-    <div style={{ padding: '32px 28px', maxWidth: 600 }}>
+    <div style={{ padding: 'var(--sp-3)', maxWidth: 600 }}>
 
       {/* Título de página */}
       <div style={{ marginBottom: 28 }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
           {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
-        <h1 style={{ fontSize: 26, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', lineHeight: 1 }}>
+        <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', lineHeight: 1 }}>
           Hola, {vendedor.nombre?.split(' ')[0]}.
         </h1>
       </div>
