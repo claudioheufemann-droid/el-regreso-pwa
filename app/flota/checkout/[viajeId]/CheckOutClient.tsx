@@ -6,8 +6,8 @@ import { ChevronLeft, Camera, CheckCircle, Fuel, AlertTriangle } from 'lucide-re
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
-const F = 'var(--gold)'
-const F_BORDER = 'var(--border)'
+const F = '#F97316'
+const F_BORDER = 'rgba(249,115,22,0.28)'
 
 const NIVELES_COMB = [
   { value: 'lleno',        label: 'Lleno',   fill: 6, color: '#4ADE80' },
@@ -207,7 +207,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid var(--border)', padding: '14px 16px' }}>
+      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(249,115,22,0.15)', padding: '14px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={() => router.push('/flota')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
             <ChevronLeft size={18} /> Flota
@@ -279,7 +279,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
 
         {/* Km recorridos + desvío */}
         {kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0) && (
-          <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, background: 'var(--gold-dim)', border: '1px solid var(--border)' }}>
+          <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)' }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: F }}>
               Recorrido: {kmRecorridos?.toLocaleString('es-CL')} km
             </p>
@@ -351,13 +351,13 @@ export default function CheckOutClient({ user, viaje }: Props) {
         )}
 
         {/* ── Carga combustible (opcional) ─────────────────────────────────── */}
-        <button onClick={() => setShowCargaComb(s => !s)} style={{ width: '100%', padding: '13px 16px', borderRadius: 12, border: `1px solid ${showCargaComb ? F_BORDER : 'rgba(255,255,255,0.08)'}`, background: showCargaComb ? 'var(--gold-hover)' : 'transparent', color: showCargaComb ? F : 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, marginBottom: showCargaComb ? 0 : 16 }}>
+        <button onClick={() => setShowCargaComb(s => !s)} style={{ width: '100%', padding: '13px 16px', borderRadius: 12, border: `1px solid ${showCargaComb ? F_BORDER : 'rgba(255,255,255,0.08)'}`, background: showCargaComb ? 'rgba(249,115,22,0.07)' : 'transparent', color: showCargaComb ? F : 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, marginBottom: showCargaComb ? 0 : 16 }}>
           <Fuel size={16} />
           Registrar carga de combustible (opcional)
         </button>
 
         {showCargaComb && (
-          <div style={{ background: '#131313', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 16px', marginBottom: 16 }}>
+          <div style={{ background: '#131313', border: '1px solid rgba(249,115,22,0.15)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 16px', marginBottom: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               <div>
                 <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>Litros</label>

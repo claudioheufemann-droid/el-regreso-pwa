@@ -6,9 +6,9 @@ import { Truck, Camera, CheckCircle, ChevronLeft, MapPin, Package, AlertTriangle
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
-const F = 'var(--gold)'
-const F_DIM = 'var(--gold-dim)'
-const F_BORDER = 'var(--border)'
+const F = '#F97316'
+const F_DIM = 'rgba(249,115,22,0.12)'
+const F_BORDER = 'rgba(249,115,22,0.28)'
 
 const NIVELES_COMB = [
   { value: 'lleno',        label: 'Lleno',   fill: 6, color: '#4ADE80' },
@@ -216,7 +216,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid var(--border)', padding: '14px 16px 10px' }}>
+      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(249,115,22,0.15)', padding: '14px 16px 10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <button onClick={() => paso > 1 ? setPaso(paso - 1) : router.push('/flota')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
             <ChevronLeft size={18} /> {paso === 1 ? 'Cancelar' : 'Atrás'}
@@ -280,7 +280,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
                 {rutasVehiculo.length > 0 && tipoSalida === 'reparto' && (
                   <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {rutasVehiculo.map(r => (
-                      <div key={r.id} onClick={e => { e.stopPropagation(); setRutaId(r.id) }} style={{ padding: '10px 12px', borderRadius: 10, background: rutaId === r.id ? 'var(--gold-dim)' : 'rgba(0,0,0,0.3)', border: `1px solid ${rutaId === r.id ? F : 'rgba(255,255,255,0.08)'}`, cursor: 'pointer' }}>
+                      <div key={r.id} onClick={e => { e.stopPropagation(); setRutaId(r.id) }} style={{ padding: '10px 12px', borderRadius: 10, background: rutaId === r.id ? 'rgba(249,115,22,0.15)' : 'rgba(0,0,0,0.3)', border: `1px solid ${rutaId === r.id ? F : 'rgba(255,255,255,0.08)'}`, cursor: 'pointer' }}>
                         <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>{r.nombre ?? 'Ruta del día'}</p>
                         {r.km_teoricos && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{r.km_teoricos} km estimados</p>}
                       </div>

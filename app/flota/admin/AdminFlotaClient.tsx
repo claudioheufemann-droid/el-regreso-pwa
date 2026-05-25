@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, AlertTriangle, CheckCircle, TrendingUp, Truck, Clock, Fuel } from 'lucide-react'
 
-const F = 'var(--gold)'
-const F_BORDER = 'var(--border)'
+const F = '#F97316'
+const F_BORDER = 'rgba(249,115,22,0.28)'
 
 interface Viaje {
   id: string
