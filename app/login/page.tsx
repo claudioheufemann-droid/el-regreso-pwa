@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
@@ -55,6 +56,18 @@ export default function LoginPage() {
       }}
     >
       <div style={{ width: '100%', maxWidth: 480 }}>
+
+        {/* Logo */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+          <Image
+            src="/logo.png"
+            alt="El Regreso Beer Co."
+            width={160}
+            height={160}
+            style={{ filter: 'invert(1)', objectFit: 'contain' }}
+            priority
+          />
+        </div>
 
         {/* Title */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
