@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { Home, LogOut, LucideIcon } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { ReactNode } from 'react'
+import Logo from '@/components/ui/Logo'
 
 export interface SidebarNavItem {
   href: string
@@ -16,13 +17,12 @@ export interface SidebarNavItem {
 
 interface SidebarShellProps {
   moduleName: string
-  ModuleIcon: LucideIcon
   sectionLabel: string
   navItems: SidebarNavItem[]
   cta?: ReactNode
 }
 
-export default function SidebarShell({ moduleName, ModuleIcon, sectionLabel, navItems, cta }: SidebarShellProps) {
+export default function SidebarShell({ moduleName, sectionLabel, navItems, cta }: SidebarShellProps) {
   const pathname = usePathname()
   const { user, isAdmin, logout } = useUser()
 
@@ -43,12 +43,7 @@ export default function SidebarShell({ moduleName, ModuleIcon, sectionLabel, nav
       {/* Header */}
       <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <div style={{
-            width: 36, height: 36, background: 'var(--gold)', borderRadius: 10,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>
-            <ModuleIcon size={18} color="#080808" />
-          </div>
+          <Logo size={36} />
           <div>
             <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>
               El Regreso

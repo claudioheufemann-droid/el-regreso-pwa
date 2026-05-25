@@ -1,6 +1,6 @@
 'use client'
 
-import { BarChart2, TrendingUp, Target, Upload, Beer, Map, Users, BarChart } from 'lucide-react'
+import { BarChart2, TrendingUp, Target, Upload, Map, Users, BarChart } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
 const navItems: SidebarNavItem[] = [
@@ -17,7 +17,6 @@ export default function Sidebar() {
   return (
     <SidebarShell
       moduleName="Ventas"
-      ModuleIcon={Beer}
       sectionLabel="Panel"
       navItems={navItems}
     />

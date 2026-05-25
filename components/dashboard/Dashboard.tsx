@@ -496,33 +496,36 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
         {/* Sidebar */}
         <aside style={{
-          width: 230, flexShrink: 0,
+          width: 'var(--sidebar-w)', minWidth: 'var(--sidebar-w)', flexShrink: 0,
           background: 'var(--surface)',
           borderRight: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column',
           overflowY: 'auto',
         }}>
           {/* Logo + título + back to hub */}
-          <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid rgba(128,128,128,0.08)' }}>
+          <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <Logo size={52} />
+              <Logo size={36} />
               <div>
-                <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.4 }}>El Regreso</div>
-                <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2 }}>GESTIÓN</div>
+                <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>El Regreso</p>
+                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>Gestión</p>
               </div>
             </div>
             <a
               href="/"
               style={{
-                display: 'flex', alignItems: 'center', gap: 7,
+                display: 'flex', alignItems: 'center', gap: 8,
                 padding: '7px 10px', borderRadius: 9,
-                background: 'rgba(91,138,168,0.06)',
-                border: '1px solid rgba(91,138,168,0.15)',
-                color: '#5B8AA8', fontSize: 11, fontWeight: 600,
+                background: 'rgba(212,175,55,0.06)',
+                border: '1px solid rgba(212,175,55,0.12)',
+                color: '#A08830', fontSize: 12, fontWeight: 600,
                 textDecoration: 'none',
               }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.12)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.06)')}
             >
-              ← Cambiar módulo
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              Cambiar módulo
             </a>
           </div>
 

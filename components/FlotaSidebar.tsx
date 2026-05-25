@@ -1,6 +1,6 @@
 'use client'
 
-import { Truck, Plus, Map, BarChart3 } from 'lucide-react'
+import { Plus, Map, BarChart3, Truck } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
 const navItems: SidebarNavItem[] = [
@@ -14,7 +14,6 @@ export default function FlotaSidebar() {
   return (
     <SidebarShell
       moduleName="Flota"
-      ModuleIcon={Truck}
       sectionLabel="Flota"
       navItems={navItems}
     />

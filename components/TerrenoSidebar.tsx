@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { MapPin, History, Plus } from 'lucide-react'
+import { History, MapPin, Plus } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
 const navItems: SidebarNavItem[] = [
@@ -33,7 +33,6 @@ export default function TerrenoSidebar() {
   return (
     <SidebarShell
       moduleName="Terreno"
-      ModuleIcon={MapPin}
       sectionLabel="Navegación"
       navItems={navItems}
       cta={cta}
