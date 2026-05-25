@@ -2,6 +2,13 @@ import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import TerrenoSidebar from '@/components/TerrenoSidebar'
 import TerrenoBottomNav from '@/components/TerrenoBottomNav'
+import PageTabs from '@/components/PageTabs'
+import type { PageTab } from '@/components/PageTabs'
+
+const TABS: PageTab[] = [
+  { href: '/terreno',           label: 'Hub',      exact: true  },
+  { href: '/terreno/historial', label: 'Historial'              },
+]
 
 export default async function TerrenoLayout({ children }: { children: React.ReactNode }) {
   const user = await getServerUser()
@@ -13,6 +20,7 @@ export default async function TerrenoLayout({ children }: { children: React.Reac
         <TerrenoSidebar />
       </div>
       <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-24 lg:pb-0">
+        <PageTabs tabs={TABS} />
         {children}
       </main>
       <div className="lg:hidden">
