@@ -21,6 +21,7 @@ interface Props {
   isAdmin: boolean
   currentUserId: string
   currentMacroArea: string | null   // null = admin global (ve todo)
+  backHref?: string                 // where "Cambiar módulo" navigates
 }
 
 function toLocalDateStr(d: Date): string {
@@ -163,7 +164,7 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
 type View = 'home' | 'mis-tareas' | 'calendar' | 'filter' | 'analytics'
 type FilterKey = 'activas' | 'en-proceso' | 'aprobar' | 'atraso'
 
-export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId, currentMacroArea }: Props) {
+export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId, currentMacroArea, backHref = '/' }: Props) {
   const router = useRouter()
   const isDesktop = useIsDesktop()
   const [tasks, setTasks] = useState(initialTasks)
@@ -512,7 +513,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
               </div>
             </div>
             <a
-              href="/"
+              href={backHref}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '7px 10px', borderRadius: 9,
@@ -525,7 +526,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
               onMouseLeave={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.06)')}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-              Cambiar módulo
+              {backHref === '/' ? 'Cambiar módulo' : '← Volver'}
             </a>
           </div>
 

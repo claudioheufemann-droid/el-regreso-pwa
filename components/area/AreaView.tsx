@@ -192,8 +192,8 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
               </button>
             </div>
           ) : (
-            <button onClick={() => router.push('/')} className="touch-active" style={{ width: '100%', padding: '10px 14px', borderRadius: 12, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, fontWeight: 600, color: 'var(--muted)', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 15 }}>←</span> Cambiar módulo
+            <button onClick={() => router.push('/gestion')} className="touch-active" style={{ width: '100%', padding: '10px 14px', borderRadius: 12, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, fontWeight: 600, color: 'var(--muted)', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 15 }}>←</span> Volver a Gestión
             </button>
           )}
         </div>
