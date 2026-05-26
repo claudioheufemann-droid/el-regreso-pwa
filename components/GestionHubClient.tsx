@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { ChevronRight, Lock } from 'lucide-react'
+import { ChevronRight, Lock, Home } from 'lucide-react'
 
 interface AreaCard {
   key: string
@@ -55,9 +55,27 @@ export default function GestionHubClient({ userName, taskCounts }: Props) {
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
           {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
-        <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>
-          Gestión
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>
+            Gestión
+          </h1>
+          <button
+            onClick={() => router.push('/')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'var(--gold)', border: 'none', borderRadius: 10,
+              padding: '8px 14px', cursor: 'pointer',
+              fontSize: 11, fontWeight: 800, color: '#0A0A0A',
+              letterSpacing: '0.5px', textTransform: 'uppercase',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#C9A430'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--gold)'}
+          >
+            <Home size={13} />
+            Módulos
+          </button>
+        </div>
       </div>
 
       {/* Area cards */}
