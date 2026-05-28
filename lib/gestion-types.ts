@@ -8,7 +8,7 @@ export interface RcUser {
   area: string
   email: string
   is_admin?: boolean
-  macro_area?: string | null   // 'comercial' | 'administracion' | null (global admin)
+  macro_area?: string | null   // 'comercial' | 'administracion' | 'produccion' | null (global admin)
 }
 
 export interface RcTask {
@@ -36,31 +36,36 @@ export interface RcTask {
   started_at?: string
 }
 
-// ── Macro categorías ──────────────────────────────────────
+// -- Macro categorias --
 export const MACRO_AREAS = {
   comercial: {
-    label: 'Área Comercial',
+    label: 'Area Comercial',
     color: '#E67E22',
     code: 'AC',
-    areas: ['Ventas', 'Marketing', 'Logística', 'Control de Gestión'] as const,
+    areas: ['Ventas', 'Marketing', 'Logistica', 'Control de Gestion'] as const,
   },
   administracion: {
-    label: 'Administración',
+    label: 'Administracion',
     color: '#5B8AA8',
     code: 'AD',
     areas: ['R. Humanos', 'Contabilidad', 'Finanzas'] as const,
+  },
+  produccion: {
+    label: 'Area de Produccion',
+    color: '#C8542A',
+    code: 'PR',
+    areas: ['Produccion'] as const,
   },
 } as const
 
 export type MacroKey = keyof typeof MACRO_AREAS
 
-/** Devuelve la macro categoría a la que pertenece un área */
 export function getMacroKey(area: string): MacroKey {
   if ((MACRO_AREAS.administracion.areas as readonly string[]).includes(area)) return 'administracion'
+  if ((MACRO_AREAS.produccion.areas as readonly string[]).includes(area)) return 'produccion'
   return 'comercial'
 }
 
-/** Usuarios elegibles para asignar en una tarea de cierta área */
 export function eligibleUsers(users: RcUser[], area: string): RcUser[] {
   const macro = getMacroKey(area)
   return users.filter(u => u.macro_area === macro || !u.macro_area)
@@ -69,6 +74,7 @@ export function eligibleUsers(users: RcUser[], area: string): RcUser[] {
 export const AREAS = [
   ...MACRO_AREAS.comercial.areas,
   ...MACRO_AREAS.administracion.areas,
+  ...MACRO_AREAS.produccion.areas,
 ] as const
 export const CEREBRO_AREA = 'Mi Cerebro'
 export const ALL_AREAS = [...AREAS, CEREBRO_AREA] as const
@@ -78,15 +84,20 @@ export const STATUS_LIST: TaskStatus[] = [
 ]
 
 export const AREA_CFG: Record<string, { color: string; dim: string; code: string }> = {
-  // Área Comercial
+  // Area Comercial
   'Ventas':               { color: '#E67E22', dim: '#1A110A', code: 'VT' },
   'Marketing':            { color: '#5B8AA8', dim: '#0A0F14', code: 'MK' },
+  'Logistica':            { color: '#C8542A', dim: '#180D0A', code: 'LG' },
   'Logística':            { color: '#C8542A', dim: '#180D0A', code: 'LG' },
+  'Control de Gestion':   { color: '#D4AF37', dim: '#141007', code: 'CG' },
   'Control de Gestión':   { color: '#D4AF37', dim: '#141007', code: 'CG' },
-  // Administración
+  // Administracion
   'R. Humanos':           { color: '#8E44AD', dim: '#120A16', code: 'RH' },
   'Contabilidad':         { color: '#16A085', dim: '#061210', code: 'CT' },
   'Finanzas':             { color: '#27AE60', dim: '#081409', code: 'FZ' },
+  // Produccion
+  'Produccion':           { color: '#C8542A', dim: '#180D0A', code: 'PR' },
+  'Producción':           { color: '#C8542A', dim: '#180D0A', code: 'PR' },
   // Personal
   'Mi Cerebro':           { color: '#9B59B6', dim: '#100A14', code: 'MC' },
 }

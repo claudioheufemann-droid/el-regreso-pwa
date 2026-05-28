@@ -34,10 +34,10 @@ const AREAS: AreaCard[] = [
   {
     key: 'produccion',
     label: 'Área de Producción',
-    description: 'Estructura base — en desarrollo',
-    color: '#4A4A4A',
+    description: 'Producción · Calidad · Procesos',
+    color: '#C8542A',
     code: 'PR',
-    disabled: true,
+    href: '/gestion/produccion',
   },
 ]
 

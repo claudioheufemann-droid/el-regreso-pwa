@@ -178,8 +178,9 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   const availableTaskAreas: string[] = (() => {
     if (currentMacroArea === 'administracion') return [...MACRO_AREAS.administracion.areas]
     if (currentMacroArea === 'comercial')      return [...MACRO_AREAS.comercial.areas]
+    if (currentMacroArea === 'produccion')     return [...MACRO_AREAS.produccion.areas]
     // admin global: todas las áreas
-    return [...MACRO_AREAS.comercial.areas, ...MACRO_AREAS.administracion.areas]
+    return [...MACRO_AREAS.comercial.areas, ...MACRO_AREAS.administracion.areas, ...MACRO_AREAS.produccion.areas]
   })()
   const defaultNewTaskArea = availableTaskAreas[0] ?? 'Ventas'
   // Collapsible macro sections — default: all expanded
@@ -530,7 +531,16 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
           {/* ── ANALYTICS VIEW ── */}
           {view === 'analytics' && isAdmin && (
-            <GestionPanel tasks={tasks} />
+            <GestionPanel
+              tasks={tasks}
+              users={users}
+              isAdmin={isAdmin}
+              userName={userName}
+              currentUserId={currentUserId}
+              onTaskClick={setSelectedTask}
+              onTaskCreated={t => setTasks(prev => [t, ...prev])}
+              filterMacro={currentMacroArea as MacroKey | null}
+            />
           )}
 
         </div>
