@@ -44,9 +44,10 @@ const AREAS: AreaCard[] = [
 interface Props {
   userName: string
   taskCounts: Record<string, number>
+  userMacroArea: string | null   // null = admin global, ve todas las áreas
 }
 
-export default function GestionHubClient({ userName, taskCounts }: Props) {
+export default function GestionHubClient({ userName, taskCounts, userMacroArea }: Props) {
   const isDesktop = useIsDesktop()
   const router = useRouter()
 
@@ -80,9 +81,30 @@ export default function GestionHubClient({ userName, taskCounts }: Props) {
         </div>
       </div>
 
+      {/* Área activa badge — solo para no-admins */}
+      {userMacroArea && (() => {
+        const mac = AREAS.find(a => a.key === userMacroArea)
+        if (!mac) return null
+        return (
+          <div style={{
+            borderRadius: 12, padding: '10px 16px', marginBottom: 16,
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: `${mac.color}10`, border: `1px solid ${mac.color}30`,
+          }}>
+            <div style={{ width: 28, height: 28, borderRadius: 9, background: `${mac.color}18`, border: `1px solid ${mac.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, color: mac.color, flexShrink: 0 }}>
+              {mac.code}
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: mac.color, letterSpacing: '0.8px', textTransform: 'uppercase' }}>Tu área</p>
+              <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginTop: 1 }}>{mac.label}</p>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Area cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {AREAS.map(area => (
+        {AREAS.filter(area => userMacroArea === null || area.key === userMacroArea).map(area => (
           <div
             key={area.key}
             onClick={() => !area.disabled && area.href && router.push(area.href)}

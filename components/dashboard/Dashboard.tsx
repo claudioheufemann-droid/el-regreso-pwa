@@ -532,13 +532,24 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
         }}>
           {/* Logo + título + back to hub */}
           <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: currentMacroArea ? 8 : 10 }}>
               <Logo size={28} />
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>El Regreso</p>
                 <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>Gestión</p>
               </div>
             </div>
+            {currentMacroArea && (() => {
+              const mac = Object.entries(MACRO_AREAS).find(([k]) => k === currentMacroArea)
+              if (!mac) return null
+              const [, macData] = mac
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 8, background: `${macData.color}10`, border: `1px solid ${macData.color}28`, marginBottom: 10 }}>
+                  <div style={{ width: 18, height: 18, borderRadius: 5, background: `${macData.color}20`, border: `1px solid ${macData.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 900, color: macData.color, flexShrink: 0 }}>{macData.code}</div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: macData.color, letterSpacing: '0.6px' }}>{macData.label}</span>
+                </div>
+              )
+            })()}
             <a
               href={backHref}
               style={{
@@ -704,7 +715,17 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
         <Logo size={30} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--cream)', letterSpacing: 0.2, lineHeight: 1.1 }}>Gestión</div>
-          <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 0.3 }}>El Regreso</div>
+          {currentMacroArea ? (() => {
+            const mac = Object.entries(MACRO_AREAS).find(([k]) => k === currentMacroArea)
+            if (!mac) return <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 0.3 }}>El Regreso</div>
+            const [, macData] = mac
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 3, background: macData.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 9, fontWeight: 700, color: macData.color, letterSpacing: 0.5 }}>{macData.label}</span>
+              </div>
+            )
+          })() : <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 0.3 }}>El Regreso</div>}
         </div>
         {(atrasadas + porAprobar) > 0 && (
           <div className="pulse" style={{ flexShrink: 0, padding: '3px 8px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}>

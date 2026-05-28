@@ -18,6 +18,12 @@ export default async function ComercialPage() {
   const userName = userProfile?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
   const isAdmin = userProfile?.is_admin === true
   const currentUserId = userProfile?.id ?? ''
+  const userMacroArea = userProfile?.macro_area ?? null
+
+  // Bloquear acceso si el usuario pertenece a otra macro-área
+  if (!isAdmin && userMacroArea !== null && userMacroArea !== 'comercial') {
+    redirect('/gestion')
+  }
 
   return (
     <div className="h-screen flex flex-col">

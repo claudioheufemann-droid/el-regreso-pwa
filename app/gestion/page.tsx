@@ -12,11 +12,18 @@ export default async function GestionPage() {
 
   const [{ data: tasks }, { data: users }] = await Promise.all([
     supabase.from('tasks').select('area, estado').not('estado', 'in', '("Completada","Rechazada")'),
-    supabase.from('users').select('id, nombre, email'),
+    supabase.from('users').select('id, nombre, email, is_admin, macro_area'),
   ])
 
   const userProfile = users?.find(u => u.email === user.email)
   const userName = userProfile?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
+  const isAdmin = userProfile?.is_admin === true
+  const userMacroArea: string | null = userProfile?.macro_area ?? null
+
+  // Non-admin users with a macro_area go directly to their own dashboard
+  if (!isAdmin && userMacroArea) {
+    redirect(`/gestion/${userMacroArea}`)
+  }
 
   const taskCounts: Record<string, number> = {}
   for (const [key, macro] of Object.entries(MACRO_AREAS)) {
@@ -25,5 +32,5 @@ export default async function GestionPage() {
     ).length
   }
 
-  return <GestionHubClient userName={userName} taskCounts={taskCounts} />
+  return <GestionHubClient userName={userName} taskCounts={taskCounts} userMacroArea={userMacroArea} />
 }
