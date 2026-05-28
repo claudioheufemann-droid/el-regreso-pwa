@@ -473,7 +473,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
                                   <span className="font-semibold">Días Promedio Pago:</span> {deudor.dias_pago ? `${deudor.dias_pago} días` : '-'}
                                 </p>
                                 <p className="text-slate-600 text-xs mt-3 pt-3 border-t border-blue-200">
-                                  Fecha Alta: {new Date(deudor.fecha_alta).toLocaleDateString('es-CL')}
+                                  Fecha Alta: {deudor.fecha_alta ? new Date(deudor.fecha_alta).toLocaleDateString('es-CL') : '-'}
                                 </p>
                               </div>
                             </div>
