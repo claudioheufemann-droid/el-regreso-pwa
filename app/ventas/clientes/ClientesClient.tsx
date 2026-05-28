@@ -221,7 +221,7 @@ function CampanaWhatsApp({ seleccionados, onClose }: CampanaProps) {
           disabled={conTelefono.length === 0 || corriendo}
           style={{
             width: '100%', padding: '14px 0', borderRadius: 14, fontWeight: 800, fontSize: 15,
-            border: 'none', cursor: conTelefono.length === 0 || corriendo ? 'not-allowed' : 'pointer',
+            cursor: conTelefono.length === 0 || corriendo ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             background: corriendo ? '#1A1A1A' : 'rgba(37,211,102,0.15)',
             border: corriendo ? 'none' : '1px solid rgba(37,211,102,0.3)',

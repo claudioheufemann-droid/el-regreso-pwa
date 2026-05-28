@@ -54,7 +54,8 @@ export default async function ClientesPage() {
   }
 
   // Enriquecer clientes con datos de contacto y pedidos
-  const clientesEnriquecidos = (clientes ?? []).map(c => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clientesEnriquecidos = (clientes ?? []).map((c: any) => ({
     ...c,
     ultimoContacto: contactoMap.get(c.nombre_fantasia ?? '') ?? null,
     ultimoPedido: pedidoMap.get(c.nombre_fantasia ?? '') ?? null,
