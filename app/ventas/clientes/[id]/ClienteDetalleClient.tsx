@@ -54,10 +54,24 @@ interface Contacto {
   notas: string | null
 }
 
+interface Deudor {
+  deuda_vencida: number | null
+  saldo_total: number | null
+  barriles_adeudados: number | null
+  ultimo_pago: string | null
+  deuda_menor_14_dias: number | null
+  deuda_entre_15_29_dias: number | null
+  deuda_entre_30_44_dias: number | null
+  deuda_entre_45_59_dias: number | null
+  deuda_entre_60_89_dias: number | null
+  deuda_mas_90_dias: number | null
+}
+
 interface Props {
   cliente: Cliente
   ventas: Venta[]
   contactos: Contacto[]
+  deudor: Deudor | null
 }
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -84,7 +98,7 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   )
 }
 
-export default function ClienteDetalleClient({ cliente, ventas, contactos }: Props) {
+export default function ClienteDetalleClient({ cliente, ventas, contactos, deudor }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<'info' | 'ventas' | 'contactos'>('info')
 
@@ -225,6 +239,85 @@ export default function ClienteDetalleClient({ cliente, ventas, contactos }: Pro
         {/* INFO */}
         {tab === 'info' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* Deuda */}
+            {deudor && (
+              <div style={{
+                background: '#141414',
+                border: `1px solid ${(deudor.deuda_vencida ?? 0) > 0 ? 'rgba(239,68,68,0.4)' : '#222'}`,
+                borderTop: `3px solid ${(deudor.deuda_vencida ?? 0) > 0 ? '#EF4444' : '#555'}`,
+                borderRadius: 16,
+                padding: '16px',
+              }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#555', letterSpacing: '0.08em', marginBottom: 12 }}>CUENTA CORRIENTE</p>
+
+                {/* KPI row */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 14 }}>
+                  <div style={{
+                    background: (deudor.deuda_vencida ?? 0) > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${(deudor.deuda_vencida ?? 0) > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                    borderRadius: 10, padding: '10px 12px',
+                  }}>
+                    <p style={{ fontSize: 10, color: (deudor.deuda_vencida ?? 0) > 0 ? '#F87171' : '#666', fontWeight: 600, marginBottom: 4 }}>DEUDA VENCIDA</p>
+                    <p style={{ fontSize: 16, fontWeight: 900, color: (deudor.deuda_vencida ?? 0) > 0 ? '#EF4444' : '#aaa' }}>
+                      {formatPeso(deudor.deuda_vencida ?? 0)}
+                    </p>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px' }}>
+                    <p style={{ fontSize: 10, color: '#666', fontWeight: 600, marginBottom: 4 }}>SALDO TOTAL</p>
+                    <p style={{ fontSize: 16, fontWeight: 900, color: '#eee' }}>
+                      {formatPeso(deudor.saldo_total ?? 0)}
+                    </p>
+                  </div>
+                  <div style={{ background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.15)', borderRadius: 10, padding: '10px 12px' }}>
+                    <p style={{ fontSize: 10, color: '#D4AF37', fontWeight: 600, marginBottom: 4 }}>BARRILES ADEUDADOS</p>
+                    <p style={{ fontSize: 16, fontWeight: 900, color: '#eee' }}>
+                      {(deudor.barriles_adeudados ?? 0).toFixed(1)}
+                    </p>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px' }}>
+                    <p style={{ fontSize: 10, color: '#666', fontWeight: 600, marginBottom: 4 }}>ÚLTIMO PAGO</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#aaa' }}>
+                      {deudor.ultimo_pago ? formatFecha(deudor.ultimo_pago) : '—'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Aging breakdown */}
+                {[
+                  { label: '0–14 días', value: deudor.deuda_menor_14_dias },
+                  { label: '15–29 días', value: deudor.deuda_entre_15_29_dias },
+                  { label: '30–44 días', value: deudor.deuda_entre_30_44_dias },
+                  { label: '45–59 días', value: deudor.deuda_entre_45_59_dias },
+                  { label: '60–89 días', value: deudor.deuda_entre_60_89_dias },
+                  { label: '+90 días', value: deudor.deuda_mas_90_dias },
+                ].some(r => (r.value ?? 0) > 0) && (
+                  <div>
+                    <p style={{ fontSize: 10, color: '#444', fontWeight: 600, letterSpacing: '0.06em', marginBottom: 6 }}>ANTIGÜEDAD DE DEUDA</p>
+                    {[
+                      { label: '0–14 días', value: deudor.deuda_menor_14_dias },
+                      { label: '15–29 días', value: deudor.deuda_entre_15_29_dias },
+                      { label: '30–44 días', value: deudor.deuda_entre_30_44_dias },
+                      { label: '45–59 días', value: deudor.deuda_entre_45_59_dias },
+                      { label: '60–89 días', value: deudor.deuda_entre_60_89_dias },
+                      { label: '+90 días', value: deudor.deuda_mas_90_dias },
+                    ].map((row, i) => (
+                      (row.value ?? 0) > 0 && (
+                        <div key={i} style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '5px 0',
+                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                        }}>
+                          <span style={{ fontSize: 12, color: '#666' }}>{row.label}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#EF4444' }}>{formatPeso(row.value ?? 0)}</span>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Contacto */}
             <div style={{ background: '#141414', border: '1px solid #222', borderRadius: 16, padding: '16px' }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: '#555', letterSpacing: '0.08em', marginBottom: 10 }}>CONTACTO</p>
