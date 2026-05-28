@@ -11,7 +11,7 @@ function getAdminClient() {
 
 // Helper to parse Excel and extract deudores data
 function parseDeudoresFromExcel(buffer: ArrayBuffer) {
-  const workbook = XLSX.read(buffer, { type: 'array' })
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
 
   // Try "Datos" sheet first, then "Sheet1"
   let worksheet = workbook.Sheets['Datos'] || workbook.Sheets['Sheet1']
