@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Loader2, Settings, Calendar, Droplets, Copy, AlertTriangle, ShieldCheck } from 'lucide-react'
 import { Periodo } from '@/lib/types'
 import { useIsDesktop } from '@/lib/useIsDesktop'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 interface Props {
@@ -50,6 +51,7 @@ function formatFecha(dateStr: string) {
 
 export default function CargarClient({ periodos }: Props) {
   const isDesktop = useIsDesktop()
+  const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<PreviewResult | null>(null)
@@ -121,6 +123,8 @@ export default function CargarClient({ periodos }: Props) {
       setFile(null)
       setPreview(null)
       if (inputRef.current) inputRef.current.value = ''
+      // Invalida el router cache para que Hoy y Acumulado muestren datos frescos
+      router.refresh()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error desconocido')
     } finally {
@@ -469,16 +473,28 @@ export default function CargarClient({ periodos }: Props) {
               </div>
             )}
 
-            <button
-              onClick={handleReset}
-              style={{
-                width: '100%', padding: '11px 0', borderRadius: 12, fontWeight: 600, fontSize: 13,
-                border: '1px solid var(--border)', cursor: 'pointer',
-                background: 'var(--surface)', color: 'var(--muted)', marginTop: 8,
-              }}
-            >
-              Cargar otro archivo
-            </button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                onClick={handleReset}
+                style={{
+                  flex: 1, padding: '11px 0', borderRadius: 12, fontWeight: 600, fontSize: 13,
+                  border: '1px solid var(--border)', cursor: 'pointer',
+                  background: 'var(--surface)', color: 'var(--muted)',
+                }}
+              >
+                Cargar otro
+              </button>
+              <button
+                onClick={() => router.push('/ventas')}
+                style={{
+                  flex: 2, padding: '11px 0', borderRadius: 12, fontWeight: 700, fontSize: 13,
+                  border: 'none', cursor: 'pointer',
+                  background: 'var(--gold)', color: '#080808',
+                }}
+              >
+                Ver Hoy →
+              </button>
+            </div>
           </div>
         )}
 
