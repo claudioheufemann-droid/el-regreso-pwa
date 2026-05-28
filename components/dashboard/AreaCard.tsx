@@ -39,9 +39,20 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
         background: 'var(--surface)',
         border: `1px solid ${atrasadas > 0 ? 'rgba(255,77,77,0.22)' : cfg.color + '20'}`,
         borderRadius: 22,
-        padding: '22px 20px 18px',
+        padding: '22px 20px 16px',
         position: 'relative',
         overflow: 'hidden',
+        transition: 'border-color 0.15s, box-shadow 0.15s, transform 0.15s',
+      }}
+      onMouseEnter={e => {
+        const el = e.currentTarget as HTMLDivElement
+        el.style.borderColor = atrasadas > 0 ? 'rgba(255,77,77,0.5)' : `${cfg.color}55`
+        el.style.boxShadow = `0 4px 24px ${cfg.color}18`
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget as HTMLDivElement
+        el.style.borderColor = atrasadas > 0 ? 'rgba(255,77,77,0.22)' : `${cfg.color}20`
+        el.style.boxShadow = ''
       }}
     >
       {/* Accent top line */}
@@ -115,6 +126,12 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
           fontSize: 14, fontWeight: 900, letterSpacing: -0.5,
           color: pct > 0 ? barColor : 'rgba(128,128,128,0.2)',
         }}>{pct}%</span>
+      </div>
+
+      {/* CTA */}
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${cfg.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, opacity: 0.65, letterSpacing: 0.5 }}>Ver área</span>
+        <span style={{ fontSize: 12, color: cfg.color, opacity: 0.5 }}>→</span>
       </div>
     </div>
   )
