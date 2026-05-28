@@ -8,6 +8,7 @@ import { formatCurrency } from '@/lib/utils'
 interface Deudor {
   id: string
   nombre_fantasia: string
+  razon_social?: string
   saldo_total: number
   deuda_vencida: number
   barriles_adeudados: number
