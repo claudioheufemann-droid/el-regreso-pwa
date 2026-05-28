@@ -129,16 +129,27 @@ async function notifyClaudio(task: {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { data, error } = await supabase
+  // Soporte para filtrar por áreas: ?areas=Ventas,Marketing
+  const areasParam = req.nextUrl.searchParams.get('areas')
+
+  let query = supabase
     .from('tasks')
     .select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids')
     .order('created_at', { ascending: false })
 
+  if (areasParam) {
+    const areasList = areasParam.split(',').map(a => a.trim()).filter(Boolean)
+    if (areasList.length > 0) {
+      query = query.in('area', areasList) as typeof query
+    }
+  }
+
+  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }

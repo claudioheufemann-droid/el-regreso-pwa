@@ -28,12 +28,13 @@ export default async function ComercialPage() {
     redirect('/gestion')
   }
 
-  // Admin ve todo; usuarios del área ven solo su macro-área (+ Mi Cerebro)
-  const tasksQuery = isAdmin
-    ? supabase.from('tasks').select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids').order('created_at', { ascending: false })
-    : supabase.from('tasks').select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids').in('area', COMERCIAL_AREAS).order('created_at', { ascending: false })
-
-  const { data: tasks } = await tasksQuery
+  // Siempre filtrar a esta macro-área (incluso para admin)
+  // La vista global está disponible en el Panel KPIs dentro del módulo
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids')
+    .in('area', COMERCIAL_AREAS)
+    .order('created_at', { ascending: false })
 
   return (
     <div className="h-screen flex flex-col">

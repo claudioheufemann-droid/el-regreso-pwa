@@ -197,12 +197,15 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     })
   }
 
-  // Nombres de áreas visibles para este usuario (null = admin, ve todo)
-  const macroAreaNames: readonly string[] | null = currentMacroArea
-    ? (MACRO_AREAS[currentMacroArea as MacroKey]?.areas ?? null)
-    : null
+  // Derivar nombres de áreas de forma explícita y segura (sin "as" casts)
+  const macroAreaNames: string[] | null = (() => {
+    if (!currentMacroArea) return null
+    if (currentMacroArea === 'comercial') return [...MACRO_AREAS.comercial.areas]
+    if (currentMacroArea === 'administracion') return [...MACRO_AREAS.administracion.areas]
+    return null
+  })()
 
-  // activeTasks: excluye "Mi Cerebro" y restringe a la macro-área del usuario
+  // activeTasks: excluye "Mi Cerebro" y restringe a la macro-área activa
   const activeTasks = tasks.filter(t =>
     t.area !== CEREBRO_AREA &&
     (macroAreaNames === null || macroAreaNames.includes(t.area))
@@ -224,10 +227,14 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
   const refreshTasks = useCallback(async () => {
     try {
-      const res = await fetch('/api/tasks', { cache: 'no-store' })
+      // Incluir "Mi Cerebro" para tareas personales; pasar áreas para mantener el scope
+      const areasParam = macroAreaNames
+        ? `?areas=${[...macroAreaNames, 'Mi Cerebro'].map(encodeURIComponent).join(',')}`
+        : ''
+      const res = await fetch(`/api/tasks${areasParam}`, { cache: 'no-store' })
       if (res.ok) setTasks(await res.json())
     } catch { /* silencioso */ }
-  }, [])
+  }, [macroAreaNames])
 
   useEffect(() => {
     const onFocus = () => refreshTasks()
