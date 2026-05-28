@@ -11,8 +11,9 @@ const TABS: PageTab[] = [
   { href: '/ventas/clientes',       label: 'Clientes'               },
   { href: '/ventas/mapa',           label: 'Mapa'                   },
   { href: '/ventas/metas',          label: 'Metas'                  },
-  { href: '/ventas/admin/cargar',   label: 'Cargar',   adminOnly: true },
-  { href: '/ventas/admin/reportes', label: 'Reportes', adminOnly: true },
+  { href: '/ventas/admin/cargar',           label: 'Cargar',   adminOnly: true },
+  { href: '/ventas/admin/reportes',         label: 'Reportes', adminOnly: true },
+  { href: '/ventas/admin/clientes-upload',  label: 'Importar', adminOnly: true },
 ]
 
 export default async function VentasLayout({ children }: { children: React.ReactNode }) {
