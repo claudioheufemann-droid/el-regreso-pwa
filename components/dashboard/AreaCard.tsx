@@ -22,7 +22,7 @@ function getUrgency(tasks: RcTask[]): { label: string; color: string } | null {
   return null
 }
 
-export default function AreaCard({ area, tasks, onClick }: { area: string; tasks: RcTask[]; onClick: () => void }) {
+export default function AreaCard({ area, tasks, onClick, compact = false }: { area: string; tasks: RcTask[]; onClick: () => void; compact?: boolean }) {
   const cfg        = AREA_CFG[area] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
   const atrasadas  = tasks.filter(t => t.estado === 'Atrasada').length
   const activas    = tasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada').length
@@ -38,8 +38,8 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
       style={{
         background: 'var(--surface)',
         border: `1px solid ${atrasadas > 0 ? 'rgba(255,77,77,0.22)' : cfg.color + '20'}`,
-        borderRadius: 22,
-        padding: '22px 20px 16px',
+        borderRadius: compact ? 16 : 22,
+        padding: compact ? '14px 14px 10px' : '22px 20px 16px',
         position: 'relative',
         overflow: 'hidden',
         transition: 'border-color 0.15s, box-shadow 0.15s, transform 0.15s',
@@ -62,13 +62,13 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
       }} />
 
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: compact ? 10 : 18 }}>
         {/* Squircle icon */}
         <div style={{
-          width: 44, height: 44, borderRadius: 16,
+          width: compact ? 34 : 44, height: compact ? 34 : 44, borderRadius: compact ? 10 : 16,
           background: cfg.dim, border: `1px solid ${cfg.color}30`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 12, fontWeight: 900, color: cfg.color, flexShrink: 0,
+          fontSize: compact ? 9 : 12, fontWeight: 900, color: cfg.color, flexShrink: 0,
           letterSpacing: 0.5,
         }}>
           {cfg.code}
@@ -98,41 +98,43 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
       </div>
 
       {/* Area name + count */}
-      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 4, letterSpacing: -0.4 }}>
+      <div style={{ fontSize: compact ? 12 : 15, fontWeight: 800, color: 'var(--cream)', marginBottom: compact ? 2 : 4, letterSpacing: -0.4, lineHeight: 1.2 }}>
         {area}
       </div>
-      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>
-        {activas} activa{activas !== 1 ? 's' : ''} · {completadas} lista{completadas !== 1 ? 's' : ''}
+      <div style={{ fontSize: compact ? 10 : 11, color: 'var(--muted)', marginBottom: compact ? 8 : 16 }}>
+        {pct}% · {activas > 0 ? `${activas} activa${activas !== 1 ? 's' : ''}` : `${completadas} lista${completadas !== 1 ? 's' : ''}`}
       </div>
 
       {/* Progress strip */}
       <ProgressStrip tasks={tasks} />
 
       {/* Footer: dots + percentage */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: compact ? 6 : 12 }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {STATUS_DOTS.map(s => {
             const count = tasks.filter(t => t.estado === s).length
             if (count === 0) return null
             return (
               <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_CFG[s].color }} />
-                <span style={{ fontSize: 9, color: 'var(--muted)' }}>{count}</span>
+                <div style={{ width: compact ? 4 : 5, height: compact ? 4 : 5, borderRadius: '50%', background: STATUS_CFG[s].color }} />
+                {!compact && <span style={{ fontSize: 9, color: 'var(--muted)' }}>{count}</span>}
               </div>
             )
           })}
         </div>
         <span style={{
-          fontSize: 14, fontWeight: 900, letterSpacing: -0.5,
+          fontSize: compact ? 16 : 14, fontWeight: 900, letterSpacing: -0.5,
           color: pct > 0 ? barColor : 'rgba(128,128,128,0.2)',
         }}>{pct}%</span>
       </div>
 
       {/* CTA */}
-      <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${cfg.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, opacity: 0.65, letterSpacing: 0.5 }}>Ver área</span>
-        <span style={{ fontSize: 12, color: cfg.color, opacity: 0.5 }}>→</span>
-      </div>
+      {!compact && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${cfg.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, opacity: 0.65, letterSpacing: 0.5 }}>Ver área</span>
+          <span style={{ fontSize: 12, color: cfg.color, opacity: 0.5 }}>→</span>
+        </div>
+      )}
     </div>
   )
 }
