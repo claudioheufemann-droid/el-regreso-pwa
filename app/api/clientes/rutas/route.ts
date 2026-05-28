@@ -2,14 +2,18 @@ import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_KEY
+  if (!url || !key) throw new Error('Supabase no configurado')
   return createSupabaseClient(url, key)
 }
 
 // GET: lista de rutas con conteo y clientes
 export async function GET() {
-  const supabase = getAdminClient()
+  let supabase: ReturnType<typeof getAdminClient>
+  try { supabase = getAdminClient() } catch (e: unknown) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
 
   const { data, error } = await supabase
     .from('clientes')
@@ -56,7 +60,10 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: 'Faltan parámetros old_ruta y new_ruta' }, { status: 400 })
   }
 
-  const supabase = getAdminClient()
+  let supabase: ReturnType<typeof getAdminClient>
+  try { supabase = getAdminClient() } catch (e: unknown) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
   const { error, count } = await supabase
     .from('clientes')
     .update({ ruta_despacho: new_ruta.trim() })
@@ -75,7 +82,10 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'Faltan cliente_ids' }, { status: 400 })
   }
 
-  const supabase = getAdminClient()
+  let supabase: ReturnType<typeof getAdminClient>
+  try { supabase = getAdminClient() } catch (e: unknown) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
   const { error, count } = await supabase
     .from('clientes')
     .update({ ruta_despacho: ruta ?? null })
@@ -92,7 +102,10 @@ export async function DELETE(req: Request) {
 
   if (!ruta) return NextResponse.json({ error: 'Falta parámetro ruta' }, { status: 400 })
 
-  const supabase = getAdminClient()
+  let supabase: ReturnType<typeof getAdminClient>
+  try { supabase = getAdminClient() } catch (e: unknown) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
   const { error, count } = await supabase
     .from('clientes')
     .update({ ruta_despacho: null })
