@@ -48,8 +48,8 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
   // Get unique vendors and categories
-  const vendedores = Array.from(new Set(deudores.map(d => d.vendedor).filter(Boolean)))
-  const categorias = Array.from(new Set(deudores.map(d => d.categoria_cliente).filter(Boolean)))
+  const vendedores = Array.from(new Set(deudores.map(d => d.vendedor).filter((v): v is string => v !== null && v !== undefined)))
+  const categorias = Array.from(new Set(deudores.map(d => d.categoria_cliente).filter((c): c is string => c !== null && c !== undefined)))
 
   // Filter deudores
   const filteredDeudores = deudores.filter(d => {
