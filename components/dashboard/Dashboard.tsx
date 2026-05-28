@@ -11,6 +11,7 @@ import TaskRow from '@/components/area/TaskRow'
 import Logo from '@/components/ui/Logo'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import GestionPanel from '@/components/dashboard/GestionPanel'
+import HomeDashboard from '@/components/dashboard/HomeDashboard'
 import NewTaskModal from '@/components/modals/NewTaskModal'
 import { createClient } from '@/lib/supabase/client'
 
@@ -289,160 +290,29 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
         <div style={{
           padding: isDesktop ? '48px 56px 80px' : '16px 14px 100px',
-          maxWidth: isDesktop ? (view === 'calendar' ? 1200 : 860) : 600,
+          maxWidth: isDesktop ? (view === 'calendar' ? 1200 : view === 'home' ? 1300 : 860) : 600,
           margin: '0 auto',
           width: '100%',
         }}>
 
           {/* ── HOME VIEW ── */}
           {view === 'home' && (
-            <>
-              <div style={{ marginBottom: isDesktop ? 20 : 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isDesktop ? 6 : 3 }}>
-                  <div style={{ fontSize: isDesktop ? 10 : 9, color: 'var(--muted)', letterSpacing: isDesktop ? 2.2 : 1.5, textTransform: 'uppercase' }}>
-                    {dayName} {today.getDate()} de {monthName}
-                  </div>
-                  {isAdmin && (
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--gold)', letterSpacing: 1.2, background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.18)', borderRadius: 20, padding: '2px 8px' }}>★ Admin</span>
-                  )}
-                </div>
-                <div style={{ fontSize: isDesktop ? 32 : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: -1, lineHeight: 1 }}>
-                  Hola, {userName.split(' ')[0]}.
-                </div>
-              </div>
-
-              {/* KPI Semáforo */}
-              <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4,1fr)' : 'repeat(2,1fr)', gap: isDesktop ? 12 : 10, marginBottom: isDesktop ? 12 : 10 }}>
-                {([
-                  { key: 'activas',    label: 'Activas',    value: activas,    color: '#4A7A9B', bg: 'rgba(74,122,155,0.10)',  border: 'rgba(74,122,155,0.25)'  },
-                  { key: 'en-proceso', label: 'En Proceso', value: enProceso,  color: '#D4821A', bg: 'rgba(212,130,26,0.10)',  border: 'rgba(212,130,26,0.30)'  },
-                  { key: 'aprobar',    label: 'Aprobar',    value: porAprobar, color: '#B8941F', bg: 'rgba(184,148,31,0.10)',  border: 'rgba(184,148,31,0.30)'  },
-                  { key: 'atraso',     label: 'Atraso',     value: atrasadas,  color: '#C0392B', bg: 'rgba(192,57,43,0.10)',   border: 'rgba(192,57,43,0.30)'   },
-                ] as { key: FilterKey; label: string; value: number; color: string; bg: string; border: string }[]).map(s => {
-                  const active = s.value > 0
-                  return (
-                    <button key={s.key} onClick={() => { setFilterKey(s.key); setView('filter') }}
-                      className="touch-active"
-                      style={{
-                        background: active ? s.bg : 'var(--surface)',
-                        border: `1px solid ${active ? s.border : 'rgba(128,128,128,0.12)'}`,
-                        borderTop: `3px solid ${active ? s.color : 'rgba(128,128,128,0.15)'}`,
-                        borderRadius: isDesktop ? 16 : 14,
-                        padding: isDesktop ? '22px 14px 18px' : '18px 12px 16px',
-                        cursor: 'pointer', textAlign: 'center',
-                        boxShadow: active ? `0 2px 16px ${s.color}22` : 'none',
-                        transition: 'all 0.15s',
-                      }}>
-                      <div style={{
-                        fontSize: isDesktop ? 46 : 38, fontWeight: 900, lineHeight: 1,
-                        letterSpacing: -2,
-                        color: active ? s.color : 'rgba(128,128,128,0.22)',
-                      }}>{s.value}</div>
-                      <div style={{
-                        fontSize: isDesktop ? 9 : 10, letterSpacing: isDesktop ? 1.5 : 1.2, marginTop: isDesktop ? 8 : 7,
-                        textTransform: 'uppercase', fontWeight: 700,
-                        color: active ? s.color : 'rgba(128,128,128,0.35)',
-                        opacity: active ? 0.85 : 1,
-                      }}>{s.label}</div>
-                      {active && (
-                        <div style={{ fontSize: 8, marginTop: 5, color: s.color, opacity: 0.45, letterSpacing: 0.8 }}>ver →</div>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Quick actions */}
-              <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? 'repeat(3,1fr)' : 'repeat(2,1fr)', gap: isDesktop ? 10 : 8, marginBottom: isDesktop ? 32 : 20 }}>
-                <button onClick={() => setShowNewTask(true)} className="touch-active" style={{ padding: isDesktop ? '11px 14px' : '10px 10px', borderRadius: 12, border: '1px solid rgba(212,175,55,0.25)', background: 'rgba(212,175,55,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <span style={{ fontSize: isDesktop ? 15 : 13 }}>⚡</span>
-                  <span style={{ fontSize: isDesktop ? 12 : 11, fontWeight: 700, color: 'var(--gold)', lineHeight: 1.2 }}>{isDesktop ? 'Nueva tarea' : 'Nueva\ntarea'}</span>
-                </button>
-                <button onClick={() => { setFilterKey('aprobar'); setView('filter') }} className="touch-active" style={{ padding: isDesktop ? '11px 14px' : '10px 10px', borderRadius: 12, border: `1px solid ${porAprobar > 0 ? 'rgba(184,148,31,0.35)' : 'rgba(128,128,128,0.12)'}`, background: porAprobar > 0 ? 'rgba(184,148,31,0.07)' : 'rgba(128,128,128,0.03)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <span style={{ fontSize: isDesktop ? 15 : 13 }}>✓</span>
-                  <span style={{ fontSize: isDesktop ? 12 : 11, fontWeight: 700, color: porAprobar > 0 ? '#D4AF37' : 'var(--muted)', flex: 1, textAlign: 'left' }}>Pendientes</span>
-                  {porAprobar > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: '#D4AF37', background: 'rgba(212,175,55,0.15)', borderRadius: 10, padding: '1px 6px', flexShrink: 0 }}>{porAprobar}</span>}
-                </button>
-                {isAdmin && (
-                  <button onClick={() => setView('analytics')} className="touch-active" style={{ padding: isDesktop ? '11px 14px' : '10px 10px', borderRadius: 12, border: '1px solid rgba(91,138,168,0.25)', background: 'rgba(91,138,168,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <span style={{ fontSize: isDesktop ? 15 : 13 }}>◈</span>
-                    <span style={{ fontSize: isDesktop ? 12 : 11, fontWeight: 700, color: '#5B8AA8' }}>{isDesktop ? 'Panel KPIs' : 'Panel'}</span>
-                  </button>
-                )}
-              </div>
-
-              <TodayFocus tasks={activeTasks} onTaskClick={setSelectedTask} />
-
-              <MacroProgressBars tasks={tasks} macroFilter={currentMacroArea} />
-
-              {/* ── Macro categorías ── */}
-              {(Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][])
-                .filter(([key]) => currentMacroArea === null || currentMacroArea === key)
-                .map(([key, macro]) => {
-                  const macroTasks = tasks.filter(t => (macro.areas as readonly string[]).includes(t.area))
-                  const macroActivas = macroTasks.filter(t => t.estado !== 'Completada').length
-                  const macroAtraso = macroTasks.filter(t => t.estado === 'Atrasada').length
-                  const macroCompleted = macroTasks.filter(t => t.estado === 'Completada').length
-                  const macroTotal = macroTasks.length
-                  const macroPct = macroTotal > 0 ? Math.round((macroCompleted / macroTotal) * 100) : 0
-                  const isExpanded = expandedMacros.has(key)
-                  const isAdminView = currentMacroArea === null
-                  return (
-                    <div key={key} style={{ marginBottom: isDesktop ? 28 : 16 }}>
-                      {/* Header macro — solo visible para admins, clickable toggle */}
-                      {isAdminView && (
-                        <div
-                          onClick={() => toggleMacro(key)}
-                          className="touch-active cursor-pointer"
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isExpanded ? 14 : 0, padding: '8px 12px', borderRadius: 10, background: `${macro.color}08`, border: `1px solid ${macro.color}20`, transition: 'all 0.15s' }}
-                        >
-                          {/* Código + label */}
-                          <div style={{ width: 24, height: 24, borderRadius: 8, background: `${macro.color}20`, border: `1px solid ${macro.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: macro.color, flexShrink: 0 }}>{macro.code}</div>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: macro.color, letterSpacing: 1.5, flex: 1 }}>{macro.label.toUpperCase()}</span>
-                          {/* Badges */}
-                          {macroAtraso > 0 && <span style={{ fontSize: 9, color: '#FF6B6B', background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.25)', borderRadius: 8, padding: '2px 7px' }}>{macroAtraso} ⚠</span>}
-                          {macroActivas > 0 && <span style={{ fontSize: 9, color: macro.color, background: `${macro.color}12`, borderRadius: 8, padding: '2px 7px' }}>{macroActivas} activa{macroActivas > 1 ? 's' : ''}</span>}
-                          {/* Progress pct */}
-                          <span style={{ fontSize: 10, fontWeight: 700, color: macroPct >= 80 ? '#4A7A3A' : macroPct >= 50 ? '#D4AF37' : macro.color, minWidth: 30, textAlign: 'right' }}>{macroPct}%</span>
-                          {/* Chevron */}
-                          <span style={{ fontSize: 11, color: macro.color, transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▾</span>
-                        </div>
-                      )}
-                      {/* Áreas de esta macro — colapsable */}
-                      {(!isAdminView || isExpanded) && (
-                        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: isDesktop ? 12 : 8 }}>
-                          {macro.areas.map(area => (
-                            <AreaCard key={area} area={area} tasks={tasks.filter(t => t.area === area)} onClick={() => router.push(`/gestion/area/${encodeURIComponent(area)}`)} compact={!isDesktop} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
-              }
-
-              {cerebroTasks.length > 0 && (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: AREA_CFG[CEREBRO_AREA].color, letterSpacing: 2 }}>MI CEREBRO</span>
-                    <div style={{ flex: 1, height: 1, background: `${AREA_CFG[CEREBRO_AREA].color}18` }} />
-                  </div>
-                  <div style={{ border: `1px solid ${AREA_CFG[CEREBRO_AREA].color}18`, borderRadius: 12, overflow: 'hidden' }}>
-                    {cerebroTasks.map(t => (
-                      <div key={t.id} onClick={() => setSelectedTask(t)} className="touch-active cursor-pointer"
-                        style={{ padding: '14px 16px', borderBottom: '1px solid rgba(128,128,128,0.08)', display: 'flex', gap: 10, alignItems: 'center' }}>
-                        {t.sub_area && <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 10, background: 'rgba(155,89,182,0.15)', color: '#B07FD4', letterSpacing: 0.8 }}>{t.sub_area}</span>}
-                        <span style={{ flex: 1, fontSize: 14, color: 'var(--cream)' }}>{t.titulo}</span>
-                        {t.prioridad_maxima && <span>⚡</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+            <HomeDashboard
+              tasks={tasks}
+              users={users}
+              userName={userName}
+              isAdmin={isAdmin}
+              currentUserId={currentUserId}
+              currentMacroArea={currentMacroArea}
+              availableAreas={availableTaskAreas}
+              onTaskUpdated={handleUpdate}
+              onTaskDeleted={handleDelete}
+              onTaskCreated={t => setTasks(prev => [t, ...prev])}
+              onNavigate={(v) => setView(v as View)}
+            />
           )}
 
-          {/* ── MIS TAREAS VIEW ── */}
+                    {/* ── MIS TAREAS VIEW ── */}
           {view === 'mis-tareas' && (() => {
             const misTareas = tasks.filter(t =>
               t.responsable_id === currentUserId ||
