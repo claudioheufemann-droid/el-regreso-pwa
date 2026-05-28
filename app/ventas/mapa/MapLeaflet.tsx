@@ -108,50 +108,47 @@ export default function MapLeaflet({ puntos, vendedorFiltro }: Props) {
               opacity: 0.9,
             }}
           >
-            <Popup
-              closeButton={true}
-              maxWidth={280}
-            >
-              <div style={{ fontFamily: 'system-ui, sans-serif', minWidth: 220 }}>
+            <Popup closeButton={true} maxWidth={300}>
+              <div style={{ fontFamily: 'system-ui, sans-serif', minWidth: 240, color: '#F4EEDF' }}>
                 {/* Header */}
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: '#fff', marginBottom: 2 }}>
+                <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: '#fff', marginBottom: 3, lineHeight: 1.2 }}>
                     {p.nombre_fantasia}
                   </div>
-                  <div style={{ fontSize: 11, color: color, fontWeight: 600 }}>
-                    {p.vendedor_actual}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, color, fontWeight: 700 }}>{p.vendedor_actual.split(' ')[0]}</span>
+                    {p.categoria_negocio && (
+                      <span style={{ fontSize: 10, color: '#aaa', background: 'rgba(255,255,255,0.08)', padding: '1px 7px', borderRadius: 20 }}>
+                        {p.categoria_negocio}
+                      </span>
+                    )}
                   </div>
                   {p.localidad && (
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                      📍 {p.localidad}
-                      {p.categoria_negocio ? ` · ${p.categoria_negocio}` : ''}
-                    </div>
+                    <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>📍 {p.localidad}</div>
                   )}
                 </div>
 
                 {/* Métricas */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 10 }}>
-                  <div style={{ background: '#1a1a1a', borderRadius: 6, padding: '6px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 11, color: '#888' }}>Litros</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: '#60A5FA' }}>{p.litros_total.toFixed(1)}</div>
+                  <div style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: '#60A5FA', fontWeight: 600, marginBottom: 2 }}>LITROS</div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{p.litros_total.toFixed(1)}</div>
                   </div>
-                  <div style={{ background: '#1a1a1a', borderRadius: 6, padding: '6px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 11, color: '#888' }}>Pedidos</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: '#34D399' }}>{p.pedidos_count}</div>
+                  <div style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: '#34D399', fontWeight: 600, marginBottom: 2 }}>PEDIDOS</div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{p.pedidos_count}</div>
                   </div>
-                  <div style={{ background: '#1a1a1a', borderRadius: 6, padding: '6px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 11, color: '#888' }}>Venta</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#A78BFA' }}>{formatPeso(p.total_sin_impuesto)}</div>
+                  <div style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: '#A78BFA', fontWeight: 600, marginBottom: 2 }}>VENTA</div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#fff' }}>{formatPeso(p.total_sin_impuesto)}</div>
                   </div>
                 </div>
 
                 {/* Contacto */}
                 {(p.telefono || p.contacto || p.email) && (
-                  <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #2a2a2a' }}>
+                  <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                     {p.contacto && (
-                      <div style={{ fontSize: 11, color: '#aaa', marginBottom: 4 }}>
-                        👤 {p.contacto}
-                      </div>
+                      <div style={{ fontSize: 11, color: '#bbb', marginBottom: 6 }}>👤 {p.contacto}</div>
                     )}
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       {p.telefono && (
@@ -160,10 +157,10 @@ export default function MapLeaflet({ puntos, vendedorFiltro }: Props) {
                           target="_blank"
                           rel="noreferrer"
                           style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '4px 10px', borderRadius: 8, textDecoration: 'none',
-                            background: '#0A3D2B', color: '#25D366',
-                            fontSize: 11, fontWeight: 700,
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            padding: '6px 12px', borderRadius: 8, textDecoration: 'none',
+                            background: 'rgba(37,211,102,0.15)', border: '1px solid rgba(37,211,102,0.3)',
+                            color: '#25D366', fontSize: 12, fontWeight: 700,
                           }}
                         >
                           💬 WhatsApp
@@ -173,10 +170,10 @@ export default function MapLeaflet({ puntos, vendedorFiltro }: Props) {
                         <a
                           href={`mailto:${p.email}`}
                           style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '4px 10px', borderRadius: 8, textDecoration: 'none',
-                            background: '#1a1a2e', color: '#818cf8',
-                            fontSize: 11, fontWeight: 700,
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            padding: '6px 12px', borderRadius: 8, textDecoration: 'none',
+                            background: 'rgba(129,140,248,0.15)', border: '1px solid rgba(129,140,248,0.3)',
+                            color: '#818cf8', fontSize: 12, fontWeight: 700,
                           }}
                         >
                           ✉ Email
@@ -189,27 +186,27 @@ export default function MapLeaflet({ puntos, vendedorFiltro }: Props) {
                 {/* Productos */}
                 {prods.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#888', marginBottom: 5, letterSpacing: '0.05em' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#999', marginBottom: 6, letterSpacing: '0.08em' }}>
                       PRODUCTOS
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {prods.slice(0, 8).map((prod, j) => (
-                        <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 11, color: '#ddd', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: 12, color: '#eee', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {prod.producto}
                             </div>
                             {prod.envase && (
-                              <div style={{ fontSize: 10, color: '#666' }}>{prod.envase}</div>
+                              <div style={{ fontSize: 10, color: '#888' }}>{prod.envase}</div>
                             )}
                           </div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: '#60A5FA', marginLeft: 8, flexShrink: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: '#60A5FA', marginLeft: 10, flexShrink: 0 }}>
                             {prod.litros} L
                           </div>
                         </div>
                       ))}
                       {prods.length > 8 && (
-                        <div style={{ fontSize: 10, color: '#666', textAlign: 'center', paddingTop: 2 }}>
+                        <div style={{ fontSize: 10, color: '#777', textAlign: 'center', paddingTop: 4 }}>
                           +{prods.length - 8} productos más
                         </div>
                       )}
