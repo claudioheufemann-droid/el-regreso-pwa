@@ -6,13 +6,27 @@ const VENDEDORES_VALIDOS = ['Javier Badilla', 'Carlos Urrejola']
 
 function parseFecha(raw: unknown): string | null {
   if (raw instanceof Date) {
-    return raw.toISOString().split('T')[0]
+    // Usar métodos UTC para evitar desfase por zona horaria del servidor
+    const y = raw.getUTCFullYear()
+    const m = String(raw.getUTCMonth() + 1).padStart(2, '0')
+    const d = String(raw.getUTCDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
   }
   if (typeof raw === 'string') {
-    const part = raw.split('T')[0].split(' ')[0]
-    return part.match(/^\d{4}-\d{2}-\d{2}$/) ? part : null
+    // Acepta: "2024-05-15", "2024-05-15T...", "15/05/2024", "05/15/2024"
+    const iso = raw.split('T')[0].split(' ')[0]
+    if (iso.match(/^\d{4}-\d{2}-\d{2}$/)) return iso
+    // Formato dd/mm/yyyy o mm/dd/yyyy → intentar ambos
+    const parts = raw.split('/')
+    if (parts.length === 3) {
+      // Asumir dd/mm/yyyy (formato chileno)
+      const [dd, mm, yyyy] = parts
+      if (yyyy.length === 4) return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`
+    }
+    return null
   }
   if (typeof raw === 'number') {
+    // Serial de Excel — XLSX.SSF.parse_date_code es timezone-safe
     const d = XLSX.SSF.parse_date_code(raw)
     return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
   }
@@ -123,6 +137,13 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
     resumenVendedor[v].fechas.add(r.fecha_pedido as string)
   }
 
+  // Totales de litros por fecha (para verificación cruzada)
+  const litrosPorFecha: Record<string, number> = {}
+  for (const r of registros) {
+    const f = r.fecha_pedido as string
+    litrosPorFecha[f] = (litrosPorFecha[f] ?? 0) + (r.litros as number)
+  }
+
   const fechasOrdenadas = combinaciones.map(c => c.fecha).sort()
 
   return {
@@ -181,6 +202,15 @@ export async function POST(req: NextRequest) {
     litrosNegativos: d.litrosNegativos,
     filasSinLitros: d.filasSinLitros,
     fechas: d.fechas.size,
+    // Lista de fechas ordenadas con litros de ese día para verificación
+    detalleFechas: [...d.fechas].sort().map(f => ({
+      fecha: f,
+      litros: Math.round(
+        registros
+          .filter(r => r.vendedor_actual === nombre && r.fecha_pedido === f)
+          .reduce((s, r) => s + (r.litros as number), 0) * 10
+      ) / 10,
+    })),
   }))
 
   // MODO PREVIEW — sólo validar, no insertar

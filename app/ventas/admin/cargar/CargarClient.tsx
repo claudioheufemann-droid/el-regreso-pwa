@@ -11,6 +11,11 @@ interface Props {
   periodos: Periodo[]
 }
 
+interface DetalleFecha {
+  fecha: string
+  litros: number
+}
+
 interface VendedorResumen {
   nombre: string
   filas: number
@@ -18,6 +23,7 @@ interface VendedorResumen {
   litrosNegativos: number
   filasSinLitros: number
   fechas: number
+  detalleFechas: DetalleFecha[]
 }
 
 interface PreviewResult {
@@ -298,6 +304,28 @@ export default function CargarClient({ periodos }: Props) {
                             ↓ {v.litrosNegativos} devolución{v.litrosNegativos > 1 ? 'es' : ''}
                           </span>
                         )}
+                      </div>
+                    )}
+
+                    {/* Detalle de fechas detectadas */}
+                    {v.detalleFechas.length > 0 && (
+                      <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
+                        <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>
+                          FECHAS DETECTADAS (FechaPedido)
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          {v.detalleFechas.map(df => {
+                            const [y, m, d] = df.fecha.split('-')
+                            const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+                            const fechaLegible = `${parseInt(d)} ${meses[parseInt(m)-1]} ${y}`
+                            return (
+                              <div key={df.fecha} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 12, color: 'var(--cream)', fontWeight: 600 }}>{fechaLegible}</span>
+                                <span style={{ fontSize: 12, color: '#60A5FA', fontWeight: 700 }}>{df.litros.toFixed(1)} L</span>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
