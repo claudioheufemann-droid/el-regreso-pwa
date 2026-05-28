@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import {
   Upload, CheckCircle, AlertCircle, FileSpreadsheet, Loader2,
-  Users, RefreshCw, Download, Info,
+  Users, RefreshCw, Download, Info, MapPin,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -76,6 +76,10 @@ export default function ClientesUploadClient() {
   const [error, setError] = useState('')
   const [showSql, setShowSql] = useState(false)
   const [sqlCopied, setSqlCopied] = useState(false)
+  const [geocoding, setGeocoding] = useState(false)
+  const [geocodeResult, setGeocodeResult] = useState<Record<string, number> | null>(null)
+  const [geocodeError, setGeocodeError] = useState('')
+  const [coordsStatus, setCoordsStatus] = useState<{ con_coordenadas: number; sin_coordenadas: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   function handleDrop(e: React.DragEvent) {
@@ -136,6 +140,29 @@ export default function ClientesUploadClient() {
     navigator.clipboard.writeText(SQL_TABLA)
     setSqlCopied(true)
     setTimeout(() => setSqlCopied(false), 2000)
+  }
+
+  async function checkCoords() {
+    const res = await fetch('/api/clientes/geocode')
+    const data = await res.json()
+    setCoordsStatus(data)
+  }
+
+  async function handleGeocode() {
+    setGeocoding(true)
+    setGeocodeError('')
+    setGeocodeResult(null)
+    try {
+      const res = await fetch('/api/clientes/geocode', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al geocodificar')
+      setGeocodeResult(data)
+      await checkCoords()
+    } catch (e: unknown) {
+      setGeocodeError(e instanceof Error ? e.message : 'Error desconocido')
+    } finally {
+      setGeocoding(false)
+    }
   }
 
   return (
@@ -387,6 +414,91 @@ export default function ClientesUploadClient() {
           )}
         </div>
       )}
+
+      {/* Geocodificación */}
+      <div style={{
+        borderRadius: 16, padding: '18px 20px', marginBottom: 12,
+        background: 'var(--surface)', border: '1px solid var(--border)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <MapPin size={16} style={{ color: '#60A5FA' }} />
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>
+            Coordenadas para el mapa
+          </p>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+          Los clientes necesitan lat/lng para aparecer en el mapa. Geocodifica automáticamente usando sus ciudades (OpenStreetMap, gratis).
+        </p>
+
+        {coordsStatus && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+            <div style={{ borderRadius: 10, padding: '10px 14px', background: 'rgba(52,211,153,0.07)', textAlign: 'center' }}>
+              <p style={{ fontSize: 11, color: '#34D399', marginBottom: 4 }}>Con coordenadas</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: 'white' }}>{coordsStatus.con_coordenadas}</p>
+            </div>
+            <div style={{ borderRadius: 10, padding: '10px 14px', background: 'rgba(248,113,113,0.07)', textAlign: 'center' }}>
+              <p style={{ fontSize: 11, color: '#F87171', marginBottom: 4 }}>Sin coordenadas</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: 'white' }}>{coordsStatus.sin_coordenadas}</p>
+            </div>
+          </div>
+        )}
+
+        {geocodeResult && (
+          <div style={{ borderRadius: 10, padding: '12px 14px', background: 'rgba(52,211,153,0.07)', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <CheckCircle size={14} style={{ color: '#34D399' }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#34D399' }}>Geocodificación completada</span>
+            </div>
+            <p style={{ fontSize: 12, color: '#888' }}>
+              {geocodeResult.actualizados} clientes actualizados · {geocodeResult.ciudades_procesadas} ciudades procesadas
+              {geocodeResult.pendientes > 0 && ` · ${geocodeResult.pendientes} ciudades pendientes (vuelve a ejecutar)`}
+            </p>
+          </div>
+        )}
+
+        {geocodeError && (
+          <div style={{ borderRadius: 10, padding: '10px 14px', background: 'rgba(248,113,113,0.07)', marginBottom: 10 }}>
+            <p style={{ fontSize: 12, color: '#F87171' }}>{geocodeError}</p>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={checkCoords}
+            style={{
+              padding: '9px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600,
+              border: '1px solid var(--border)', cursor: 'pointer',
+              background: 'transparent', color: 'var(--muted)',
+            }}
+          >
+            Ver estado
+          </button>
+          <button
+            onClick={handleGeocode}
+            disabled={geocoding}
+            style={{
+              flex: 1, padding: '9px 16px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+              border: 'none', cursor: geocoding ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              background: geocoding ? 'var(--surface2)' : '#60A5FA',
+              color: geocoding ? 'var(--muted)' : '#000',
+              transition: 'all 0.15s',
+            }}
+          >
+            {geocoding ? (
+              <>
+                <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                Geocodificando... (puede tardar ~1 min)
+              </>
+            ) : (
+              <>
+                <MapPin size={14} />
+                Geocodificar clientes
+              </>
+            )}
+          </button>
+        </div>
+      </div>
 
       {/* Column reference */}
       <div style={{

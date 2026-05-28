@@ -4,11 +4,10 @@ import ClientesClient from './ClientesClient'
 export default async function ClientesPage() {
   const supabase = await createClient()
 
-  // Clientes con datos base
+  // Clientes con datos base — todos, sin filtro de vendedor
   const { data: clientes } = await supabase
     .from('clientes')
     .select('id, nombre_fantasia, razon_social, categoria, vendedor, localidad, localidad_entrega, ruta_despacho, telefono, lat, lng')
-    .in('vendedor', ['Javier Badilla', 'Carlos Urrejola'])
     .order('nombre_fantasia')
 
   // Último contacto por cliente

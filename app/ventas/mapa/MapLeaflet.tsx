@@ -15,6 +15,9 @@ interface Punto {
   total_sin_impuesto: number
   pedidos_count: number
   productos: { producto: string; envase: string | null; litros: number }[]
+  telefono: string | null
+  email: string | null
+  contacto: string | null
 }
 
 interface Props {
@@ -141,6 +144,47 @@ export default function MapLeaflet({ puntos, vendedorFiltro }: Props) {
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#A78BFA' }}>{formatPeso(p.total_sin_impuesto)}</div>
                   </div>
                 </div>
+
+                {/* Contacto */}
+                {(p.telefono || p.contacto || p.email) && (
+                  <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #2a2a2a' }}>
+                    {p.contacto && (
+                      <div style={{ fontSize: 11, color: '#aaa', marginBottom: 4 }}>
+                        👤 {p.contacto}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {p.telefono && (
+                        <a
+                          href={`https://wa.me/${p.telefono.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '4px 10px', borderRadius: 8, textDecoration: 'none',
+                            background: '#0A3D2B', color: '#25D366',
+                            fontSize: 11, fontWeight: 700,
+                          }}
+                        >
+                          💬 WhatsApp
+                        </a>
+                      )}
+                      {p.email && (
+                        <a
+                          href={`mailto:${p.email}`}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '4px 10px', borderRadius: 8, textDecoration: 'none',
+                            background: '#1a1a2e', color: '#818cf8',
+                            fontSize: 11, fontWeight: 700,
+                          }}
+                        >
+                          ✉ Email
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Productos */}
                 {prods.length > 0 && (

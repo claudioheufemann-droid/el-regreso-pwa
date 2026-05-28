@@ -27,6 +27,9 @@ interface Punto {
   total_sin_impuesto: number
   pedidos_count: number
   productos: { producto: string; envase: string | null; litros: number }[]
+  telefono: string | null
+  email: string | null
+  contacto: string | null
 }
 
 interface Props {

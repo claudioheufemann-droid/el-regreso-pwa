@@ -41,10 +41,10 @@ export async function GET(req: NextRequest) {
 
   const { data: clientes } = await supabase
     .from('clientes')
-    .select('nombre_fantasia, lat, lng, categoria, localidad_entrega, localidad')
+    .select('nombre_fantasia, lat, lng, categoria, localidad_entrega, localidad, telefono, email, contacto')
     .in('nombre_fantasia', nombresUnicos)
 
-  const coordsMap = new Map<string, { lat: number; lng: number; categoria: string; localidad: string }>()
+  const coordsMap = new Map<string, { lat: number; lng: number; categoria: string; localidad: string; telefono: string | null; email: string | null; contacto: string | null }>()
   for (const c of (clientes ?? [])) {
     if (c.lat && c.lng) {
       coordsMap.set(c.nombre_fantasia, {
@@ -52,6 +52,9 @@ export async function GET(req: NextRequest) {
         lng: c.lng,
         categoria: c.categoria ?? '',
         localidad: c.localidad_entrega ?? c.localidad ?? '',
+        telefono: c.telefono ?? null,
+        email: c.email ?? null,
+        contacto: c.contacto ?? null,
       })
     }
   }
@@ -68,6 +71,9 @@ export async function GET(req: NextRequest) {
     total_sin_impuesto: number
     pedidos: Set<string>
     productos: { producto: string; envase: string | null; litros: number }[]
+    telefono: string | null
+    email: string | null
+    contacto: string | null
   }>()
 
   for (const v of ventas) {
@@ -88,6 +94,9 @@ export async function GET(req: NextRequest) {
         total_sin_impuesto: 0,
         pedidos: new Set(),
         productos: [],
+        telefono: coords.telefono,
+        email: coords.email,
+        contacto: coords.contacto,
       })
     }
 
@@ -115,6 +124,9 @@ export async function GET(req: NextRequest) {
     total_sin_impuesto: Math.round(g.total_sin_impuesto),
     pedidos_count: g.pedidos.size,
     productos: g.productos,
+    telefono: g.telefono,
+    email: g.email,
+    contacto: g.contacto,
   }))
 
   return NextResponse.json(resultado)
