@@ -14,18 +14,18 @@ export default function PageHeader({ title, subtitle, actions }: Props) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      minHeight: 64,
-      padding: '0 var(--sp-3)',
+      minHeight: 52,
+      padding: '10px var(--sp-3)',
       borderBottom: '1px solid rgba(255,255,255,0.06)',
     }}>
       <div>
         {subtitle && (
-          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 3 }}>
+          <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 2 }}>
             {subtitle}
           </p>
         )}
         <h1 style={{
-          fontSize: 'clamp(20px, 4vw, var(--fs-title))',
+          fontSize: 'clamp(18px, 3.5vw, var(--fs-title))',
           fontWeight: 900,
           color: 'var(--cream)',
           letterSpacing: '-0.5px',

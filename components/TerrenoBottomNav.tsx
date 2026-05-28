@@ -33,7 +33,7 @@ export default function TerrenoBottomNav() {
             className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl"
             style={{ color: active ? G : 'var(--muted)' }}
           >
-            <Icon size={21} />
+            <Icon size={20} />
             <span className="text-xs font-medium">{label}</span>
           </Link>
         )
@@ -45,7 +45,7 @@ export default function TerrenoBottomNav() {
         className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl"
         style={{ color: pathname.startsWith('/terreno/nueva-visita') ? G : 'var(--muted)' }}
       >
-        <Plus size={21} />
+        <Plus size={20} />
         <span className="text-xs font-medium">Visita</span>
       </Link>
     </nav>

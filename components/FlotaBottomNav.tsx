@@ -27,7 +27,7 @@ export default function FlotaBottomNav() {
         const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
         return (
           <Link key={href} href={href} className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl" style={{ color: active ? 'var(--gold)' : 'var(--muted)' }}>
-            <Icon size={21} />
+            <Icon size={20} />
             <span className="text-xs font-medium">{label}</span>
           </Link>
         )

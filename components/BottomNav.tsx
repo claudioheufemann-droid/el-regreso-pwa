@@ -37,7 +37,7 @@ export default function BottomNav() {
             className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all"
             style={{ color: active ? 'var(--gold)' : 'var(--muted)' }}
           >
-            <Icon size={21} />
+            <Icon size={20} />
             <span className="text-xs font-medium">{label}</span>
           </Link>
         )

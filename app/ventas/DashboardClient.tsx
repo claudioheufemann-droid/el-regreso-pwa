@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Droplets, DollarSign, Users, ChevronDown, ChevronUp, Calendar, Beer, Leaf } from 'lucide-react'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import { Periodo } from '@/lib/types'
 
 interface ProductoDetalle {
@@ -61,7 +62,7 @@ function StatBox({ icon, label, value, color }: { icon: React.ReactNode; label: 
   )
 }
 
-function VendedorCard({ data }: { data: VendedorResumen }) {
+function VendedorCard({ data, compact = false }: { data: VendedorResumen; compact?: boolean }) {
   const [showClientes, setShowClientes] = useState(false)
   const [clienteAbierto, setClienteAbierto] = useState<string | null>(null)
 
@@ -76,7 +77,7 @@ function VendedorCard({ data }: { data: VendedorResumen }) {
       <div style={{ height: 3, background: 'var(--gold)', borderRadius: '20px 20px 0 0' }} />
 
       {/* Header vendedor */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: compact ? '12px 14px 10px' : '16px 20px 14px' }}>
         <div style={{
           width: 42, height: 42, borderRadius: '50%',
           background: 'var(--gold)',
@@ -208,23 +209,24 @@ function VendedorCard({ data }: { data: VendedorResumen }) {
 }
 
 export default function DashboardClient({ resumen, fechaHoy, periodo }: Props) {
+  const isDesktop = useIsDesktop()
   const totalHoy = resumen.reduce((s, v) => s + v.litrosHoy, 0)
   const totalPeriodo = resumen.reduce((s, v) => s + v.litrosPeriodo, 0)
 
   return (
-    <div style={{ padding: 'var(--sp-3) var(--sp-3) 60px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: isDesktop ? 'var(--sp-3) var(--sp-3) 60px' : '16px 14px 80px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
+      <div style={{ marginBottom: isDesktop ? 32 : 16 }}>
+        <h1 style={{ fontSize: isDesktop ? 'var(--fs-title)' : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
           Ventas del Día
         </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-          <Calendar size={13} color="var(--muted)" />
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{formatFecha(fechaHoy)}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+          <Calendar size={12} color="var(--muted)" />
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{formatFecha(fechaHoy)}</span>
           {periodo && (
             <>
               <span style={{ color: 'var(--border-subtle)' }}>·</span>
-              <span style={{ fontSize: 13, color: 'var(--muted)', opacity: 0.7 }}>{periodo.nombre}</span>
+              <span style={{ fontSize: 12, color: 'var(--muted)', opacity: 0.7 }}>{periodo.nombre}</span>
             </>
           )}
         </div>
@@ -235,49 +237,50 @@ export default function DashboardClient({ resumen, fechaHoy, periodo }: Props) {
         background: 'linear-gradient(135deg, #110D00 0%, #1C1500 100%)',
         border: '1px solid rgba(212,175,55,0.25)',
         borderRadius: 20,
-        padding: '24px 32px',
-        marginBottom: 32,
+        padding: isDesktop ? '24px 32px' : '16px 18px',
+        marginBottom: isDesktop ? 32 : 16,
         display: 'flex',
-        alignItems: 'center',
-        gap: 48,
+        flexWrap: isDesktop ? 'nowrap' : 'wrap',
+        alignItems: isDesktop ? 'center' : 'flex-start',
+        gap: isDesktop ? 48 : 16,
       }}>
-        <div>
-          <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.6)', letterSpacing: '1.8px', textTransform: 'uppercase', marginBottom: 8 }}>
+        <div style={{ minWidth: 100 }}>
+          <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.6)', letterSpacing: '1.8px', textTransform: 'uppercase', marginBottom: 6 }}>
             Total equipo hoy
           </p>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontSize: 48, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-2px', lineHeight: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+            <span style={{ fontSize: isDesktop ? 48 : 40, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-2px', lineHeight: 1 }}>
               {totalHoy.toFixed(1)}
             </span>
-            <span style={{ fontSize: 20, fontWeight: 700, color: '#A8870F' }}>L</span>
+            <span style={{ fontSize: isDesktop ? 20 : 16, fontWeight: 700, color: '#A8870F' }}>L</span>
           </div>
         </div>
-        <div style={{ width: 1, height: 56, background: 'var(--border)', flexShrink: 0 }} />
-        <div>
-          <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 8 }}>
+        {isDesktop && <div style={{ width: 1, height: 56, background: 'var(--border)', flexShrink: 0 }} />}
+        <div style={{ minWidth: 90 }}>
+          <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 6 }}>
             Acum. período
           </p>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontSize: 32, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-1px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+            <span style={{ fontSize: isDesktop ? 32 : 26, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-1px' }}>
               {totalPeriodo.toFixed(1)}
             </span>
-            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--muted)' }}>L</span>
+            <span style={{ fontSize: isDesktop ? 15 : 13, fontWeight: 600, color: 'var(--muted)' }}>L</span>
           </div>
         </div>
         {resumen.map(v => (
-          <div key={v.vendedor}>
+          <div key={v.vendedor} style={{ minWidth: 70 }}>
             <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>
               {v.vendedor.split(' ')[0]}
             </p>
-            <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--cream)' }}>{v.litrosHoy.toFixed(1)} L</p>
+            <p style={{ fontSize: isDesktop ? 18 : 16, fontWeight: 800, color: 'var(--cream)' }}>{v.litrosHoy.toFixed(1)} L</p>
           </div>
         ))}
       </div>
 
       {/* Cards vendedores — 2 columnas en escritorio */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(auto-fit, minmax(380px, 1fr))' : '1fr', gap: isDesktop ? 20 : 14 }}>
         {resumen.map(data => (
-          <VendedorCard key={data.vendedor} data={data} />
+          <VendedorCard key={data.vendedor} data={data} compact={!isDesktop} />
         ))}
       </div>
     </div>
