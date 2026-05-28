@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Loader2, Settings, Calendar, Droplets, Copy } from 'lucide-react'
 import { Periodo } from '@/lib/types'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import Link from 'next/link'
 
 interface Props {
@@ -34,6 +35,7 @@ function formatFecha(dateStr: string) {
 }
 
 export default function CargarClient({ periodos }: Props) {
+  const isDesktop = useIsDesktop()
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<UploadResult | null>(null)
@@ -83,10 +85,10 @@ export default function CargarClient({ periodos }: Props) {
   const periodoActivo = periodos.find(p => p.activo)
 
   return (
-    <div style={{ padding: '40px 48px 60px' }} className="px-4 pt-8 lg:px-12 lg:pt-10">
+    <div style={{ padding: isDesktop ? '40px 48px 60px' : '16px 14px 80px' }}>
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
+      <div style={{ marginBottom: isDesktop ? 32 : 16 }}>
+        <h1 style={{ fontSize: isDesktop ? 32 : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
           Cargar Ventas
         </h1>
         <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
