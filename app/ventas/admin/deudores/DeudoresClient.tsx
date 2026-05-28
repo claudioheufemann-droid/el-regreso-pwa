@@ -9,21 +9,30 @@ interface Deudor {
   id: string
   nombre_fantasia: string
   razon_social?: string
+  email?: string | null
+  telefono?: string | null
+  localidad?: string | null
   saldo_total: number
   deuda_vencida: number
   barriles_adeudados: number
-  ultimo_pago: string | null
-  vendedor: string | null
-  categoria_cliente: string | null
-  localidad: string | null
-  email: string | null
-  telefono: string | null
+  ultimo_pago?: string | null
+  categoria_cliente?: string | null
+  vendedor?: string | null
+  tipo_cliente?: string | null
+  fecha_ultima_compra?: string | null
+  fecha_alta?: string | null
+  limite_cta_cte?: number
   deuda_menor_14_dias: number
   deuda_entre_15_29_dias: number
   deuda_entre_30_44_dias: number
   deuda_entre_45_59_dias: number
   deuda_entre_60_89_dias: number
   deuda_mas_90_dias: number
+  dias_pago?: number
+  upload_batch_id?: string | null
+  external_remito_mas_antiguo?: number
+  external_fecha?: string | null
+  created_at?: string
   updated_at: string
 }
 
