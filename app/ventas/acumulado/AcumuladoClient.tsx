@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Droplets, TrendingUp } from 'lucide-react'
 import { Periodo } from '@/lib/types'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 
 interface Props {
   resumen: Record<string, Record<string, { litros: number; venta: number }>>
@@ -139,6 +140,7 @@ function HistorialFechas({ porFecha, vendedores }: { porFecha: Record<string, Re
 }
 
 export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores }: Props) {
+  const isDesktop = useIsDesktop()
   const [vista, setVista] = useState<'categoria' | 'historial'>('categoria')
 
   const totalGeneral = vendedores.reduce((s, v) => {
@@ -146,10 +148,10 @@ export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores
   }, 0)
 
   return (
-    <div style={{ padding: 'var(--sp-3) var(--sp-3) 60px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: isDesktop ? 'var(--sp-3) var(--sp-3) 60px' : '16px 14px 80px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
+      <div style={{ marginBottom: isDesktop ? 32 : 16 }}>
+        <h1 style={{ fontSize: isDesktop ? 'var(--fs-title)' : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
           Período Acumulado
         </h1>
         {periodo && (
@@ -162,11 +164,11 @@ export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores
         background: 'linear-gradient(135deg, #110D00 0%, #1C1500 100%)',
         border: '1px solid rgba(212,175,55,0.25)',
         borderRadius: 20,
-        padding: '24px 32px',
-        marginBottom: 28,
+        padding: isDesktop ? '24px 32px' : '16px 18px',
+        marginBottom: isDesktop ? 28 : 16,
         display: 'flex',
-        alignItems: 'center',
-        gap: 48,
+        alignItems: isDesktop ? 'center' : 'flex-start',
+        gap: isDesktop ? 48 : 16,
         flexWrap: 'wrap',
       }}>
         <div>
@@ -174,13 +176,13 @@ export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores
             Total período
           </p>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontSize: 48, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-2px', lineHeight: 1 }}>
+            <span style={{ fontSize: isDesktop ? 48 : 40, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-2px', lineHeight: 1 }}>
               {totalGeneral.toFixed(1)}
             </span>
-            <span style={{ fontSize: 20, fontWeight: 700, color: '#A8870F' }}>L</span>
+            <span style={{ fontSize: isDesktop ? 20 : 16, fontWeight: 700, color: '#A8870F' }}>L</span>
           </div>
         </div>
-        <div style={{ width: 1, height: 56, background: 'var(--border)', flexShrink: 0 }} />
+        {isDesktop && <div style={{ width: 1, height: 56, background: 'var(--border)', flexShrink: 0 }} />}
         {vendedores.map(v => {
           const lt = Object.values(resumen[v] ?? {}).reduce((s, c) => s + c.litros, 0)
           return (
@@ -218,7 +220,7 @@ export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores
       </div>
 
       {vista === 'categoria' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(auto-fit, minmax(380px, 1fr))' : '1fr', gap: isDesktop ? 20 : 12 }}>
           {vendedores.map(v => resumen[v] && (
             <VendedorAcumulado key={v} vendedor={v} categorias={resumen[v]} />
           ))}

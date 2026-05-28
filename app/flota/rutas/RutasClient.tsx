@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import { Plus, Trash2, Zap, MapPin, ExternalLink, Save, ChevronDown, CheckCircle, FileUp, PenLine } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 
 const F = '#F97316'
 const F_DIM = 'rgba(249,115,22,0.12)'
@@ -170,6 +171,7 @@ function parsearFilas(rows: Record<string, unknown>[]): Parada[] {
 
 // ── Componente principal ───────────────────────────────────────────────────────
 export default function RutasClient({ vehiculos, rutas }: Props) {
+  const isDesktop = useIsDesktop()
   const supabase = createClient()
   const [tab, setTab] = useState<'nueva' | 'historial'>('nueva')
   const [vehiculoId, setVehiculoId] = useState('')
@@ -310,8 +312,8 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
   const puedeGuardar = vehiculoId && paradas.length > 0 && paradas.every(p => p.cliente_nombre && p.direccion)
 
   return (
-    <div style={{ padding: '28px 24px', maxWidth: 800 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 900, color: 'var(--cream)', marginBottom: 24, letterSpacing: '-0.5px' }}>Planificación de Rutas</h1>
+    <div style={{ padding: isDesktop ? '28px 24px' : '16px 14px 80px', maxWidth: 800 }}>
+      <h1 style={{ fontSize: isDesktop ? 24 : 20, fontWeight: 900, color: 'var(--cream)', marginBottom: isDesktop ? 24 : 16, letterSpacing: '-0.5px' }}>Planificación de Rutas</h1>
 
       {/* Tabs */}
       <div style={{ display: 'flex', background: '#1C1C1C', borderRadius: 12, padding: 4, gap: 4, marginBottom: 24 }}>
