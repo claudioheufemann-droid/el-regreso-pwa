@@ -287,18 +287,29 @@ function ClienteCard({
       )}
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Name + days */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+        {/* Name + contact badge */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 5 }}>
           <p style={{ fontWeight: 700, fontSize: 13, color: '#fff', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {cliente.nombre_fantasia}
           </p>
-          <span style={{ fontSize: 12, fontWeight: 800, color: urgencyColor(diasContacto), flexShrink: 0 }}>
-            {diasContacto === null ? '—' : diasContacto === 0 ? 'Hoy' : diasContacto === 1 ? 'Ayer' : `${diasContacto}d`}
-          </span>
+          {/* Estado de contacto */}
+          {diasContacto === null ? (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, flexShrink: 0, background: 'rgba(248,113,113,0.12)', color: '#F87171', border: '1px solid rgba(248,113,113,0.25)' }}>
+              Sin contacto
+            </span>
+          ) : diasContacto <= 7 ? (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, flexShrink: 0, background: 'rgba(52,211,153,0.12)', color: '#34D399', border: '1px solid rgba(52,211,153,0.25)' }}>
+              {diasContacto === 0 ? 'Hoy' : diasContacto === 1 ? 'Ayer' : `${diasContacto}d`}
+            </span>
+          ) : (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, flexShrink: 0, background: 'rgba(245,158,11,0.1)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.2)' }}>
+              {diasContacto}d
+            </span>
+          )}
         </div>
 
-        {/* Badges */}
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 4 }}>
+        {/* Badges secundarios */}
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 5 }}>
           {cliente.categoria && (
             <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 20, background: '#1E1E1E', color: '#777', fontWeight: 600 }}>
               {cliente.categoria}
@@ -307,6 +318,12 @@ function ClienteCard({
           {cliente.vendedor && (
             <span style={{ fontSize: 10, fontWeight: 700, color: cliente.vendedor === 'Javier Badilla' ? '#F59E0B' : cliente.vendedor === 'Carlos Urrejola' ? '#60A5FA' : '#888' }}>
               {cliente.vendedor.split(' ')[0]}
+            </span>
+          )}
+          {/* Último contacto — tipo */}
+          {cliente.ultimoContacto && (
+            <span style={{ fontSize: 10, color: '#555', fontWeight: 500 }}>
+              {cliente.ultimoContacto.tipo}
             </span>
           )}
         </div>
@@ -419,11 +436,14 @@ function RutaSection({ ruta, clientes, isAdmin, modoSeleccion, seleccionados, on
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
+type FiltroContacto = 'todos' | 'reciente' | 'pendiente' | 'nunca'
+
 export default function ClientesClient({ clientes, periodo, totalesPorVendedor }: Props) {
   const isDesktop = useIsDesktop()
   const { user, isAdmin } = useUser()
   const [busqueda, setBusqueda] = useState('')
   const [vendedorFiltro, setVendedorFiltro] = useState<string>('all')
+  const [filtroContacto, setFiltroContacto] = useState<FiltroContacto>('todos')
   const [modoSeleccion, setModoSeleccion] = useState(false)
   const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set())
   const [showCampana, setShowCampana] = useState(false)
@@ -433,6 +453,12 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor }
   const clientesFiltrados = useMemo(() => {
     return clientes.filter(c => {
       if (vendedorEfectivo !== 'all' && c.vendedor !== vendedorEfectivo) return false
+      if (filtroContacto !== 'todos') {
+        const dias = diasDesde(c.ultimoContacto?.fecha)
+        if (filtroContacto === 'reciente'  && !(dias !== null && dias <= 7)) return false
+        if (filtroContacto === 'pendiente' && !(dias === null || dias > 7))  return false
+        if (filtroContacto === 'nunca'     && dias !== null)                  return false
+      }
       if (busqueda) {
         const b = busqueda.toLowerCase()
         return (
@@ -445,7 +471,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor }
       }
       return true
     })
-  }, [clientes, vendedorEfectivo, busqueda])
+  }, [clientes, vendedorEfectivo, filtroContacto, busqueda])
 
   // Agrupar por ruta
   const porRuta = useMemo(() => {
@@ -465,11 +491,17 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor }
     })
   }, [clientesFiltrados])
 
-  const sinContacto = clientesFiltrados.filter(c => !c.ultimoContacto).length
-  const contactoReciente = clientesFiltrados.filter(c => {
-    const dias = diasDesde(c.ultimoContacto?.fecha)
-    return dias !== null && dias <= 7
-  }).length
+  // Conteos sobre TODOS los clientes del vendedor (sin filtro de contacto, para los badges)
+  const clientesDelVendedor = useMemo(() =>
+    clientes.filter(c => vendedorEfectivo === 'all' || c.vendedor === vendedorEfectivo),
+    [clientes, vendedorEfectivo]
+  )
+  const cntReciente  = clientesDelVendedor.filter(c => { const d = diasDesde(c.ultimoContacto?.fecha); return d !== null && d <= 7 }).length
+  const cntPendiente = clientesDelVendedor.filter(c => { const d = diasDesde(c.ultimoContacto?.fecha); return d === null || d > 7 }).length
+  const cntNunca     = clientesDelVendedor.filter(c => !c.ultimoContacto).length
+
+  const sinContacto     = clientesFiltrados.filter(c => !c.ultimoContacto).length
+  const contactoReciente = clientesFiltrados.filter(c => { const d = diasDesde(c.ultimoContacto?.fecha); return d !== null && d <= 7 }).length
 
   function toggleSelect(id: number) {
     setSeleccionados(prev => {
@@ -572,7 +604,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor }
       )}
 
       {/* Filtros */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <div style={{
           flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 8,
           background: '#141414', border: '1px solid #222', borderRadius: 10, padding: '8px 12px',
@@ -608,6 +640,42 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor }
             ))}
           </div>
         )}
+      </div>
+
+      {/* Filtro de estado de contacto */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+        {([
+          { value: 'todos',     label: 'Todos',           count: clientesDelVendedor.length, bg: '#1A1A1A',                       color: '#777',    activeBg: '#2A2A2A',                  activeColor: '#fff'    },
+          { value: 'reciente',  label: '✓ Contactados',   count: cntReciente,                bg: 'rgba(52,211,153,0.08)',          color: '#34D399', activeBg: 'rgba(52,211,153,0.2)',      activeColor: '#34D399' },
+          { value: 'pendiente', label: '⚠ Pendientes',    count: cntPendiente,               bg: 'rgba(245,158,11,0.08)',          color: '#F59E0B', activeBg: 'rgba(245,158,11,0.2)',      activeColor: '#F59E0B' },
+          { value: 'nunca',     label: '✕ Sin contacto',  count: cntNunca,                   bg: 'rgba(248,113,113,0.08)',         color: '#F87171', activeBg: 'rgba(248,113,113,0.2)',     activeColor: '#F87171' },
+        ] as const).map(op => {
+          const active = filtroContacto === op.value
+          return (
+            <button
+              key={op.value}
+              onClick={() => setFiltroContacto(op.value)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                border: `1px solid ${active ? op.activeColor + '60' : 'transparent'}`,
+                cursor: 'pointer', transition: 'all 0.15s',
+                background: active ? op.activeBg : op.bg,
+                color: active ? op.activeColor : op.color,
+              }}
+            >
+              {op.label}
+              <span style={{
+                fontSize: 11, fontWeight: 800,
+                background: active ? op.activeColor + '30' : '#ffffff10',
+                padding: '1px 6px', borderRadius: 10,
+                color: active ? op.activeColor : '#666',
+              }}>
+                {op.count}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Result count */}
