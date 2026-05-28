@@ -28,42 +28,42 @@ export default async function HubPage() {
       <div className="w-full max-w-sm">
 
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+        <div className="hub-header" style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{
-            width: 64, height: 64, background: '#D4AF37', borderRadius: 20,
+            width: 52, height: 52, background: '#D4AF37', borderRadius: 16,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 16px', fontSize: 28,
+            margin: '0 auto 12px', fontSize: 24,
           }}>
             🍺
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-0.5px' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-0.5px' }}>
             El Regreso Beer
           </h1>
-          <p style={{ fontSize: 12, color: '#7A7268', marginTop: 4 }}>
+          <p style={{ fontSize: 12, color: '#7A7268', marginTop: 3 }}>
             Hola, <span style={{ color: '#D4AF37', fontWeight: 700 }}>{nombre.split(' ')[0]}</span>
           </p>
-          <p style={{ fontSize: 10, color: '#3A3530', marginTop: 6, letterSpacing: 1.5 }}>
+          <p style={{ fontSize: 9, color: '#3A3530', marginTop: 4, letterSpacing: 1.5 }}>
             {isAdmin ? 'ADMINISTRADOR · ACCESO TOTAL' : 'ACCESO VENTAS'}
           </p>
         </div>
 
         {/* Module Cards */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           <Link href="/ventas" style={{ textDecoration: 'none' }}>
             <div
               style={{
                 background: '#131313', border: '1px solid rgba(212,175,55,0.2)',
-                borderRadius: 20, padding: '24px 22px',
-                display: 'flex', alignItems: 'center', gap: 18, cursor: 'pointer',
+                borderRadius: 18, padding: '18px 18px',
+                display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer',
               }}
               className="card-hover"
             >
               <div style={{
-                width: 52, height: 52, borderRadius: 16,
+                width: 44, height: 44, borderRadius: 13,
                 background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 22, flexShrink: 0,
+                fontSize: 20, flexShrink: 0,
               }}>📊</div>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>Ventas</div>
@@ -85,16 +85,16 @@ export default async function HubPage() {
               <div
                 style={{
                   background: '#131313', border: '1px solid rgba(91,138,168,0.25)',
-                  borderRadius: 20, padding: '24px 22px',
+                  borderRadius: 18, padding: '18px 18px',
                   display: 'flex', alignItems: 'center', gap: 18, cursor: 'pointer',
                 }}
                 className="card-hover"
               >
                 <div style={{
-                  width: 52, height: 52, borderRadius: 16,
+                  width: 44, height: 44, borderRadius: 13,
                   background: 'rgba(91,138,168,0.12)', border: '1px solid rgba(91,138,168,0.25)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 22, flexShrink: 0,
+                  fontSize: 20, flexShrink: 0,
                 }}>⊞</div>
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>Gestión</div>
@@ -108,15 +108,15 @@ export default async function HubPage() {
           ) : (
             <div style={{
               background: '#0D0D0D', border: '1px solid rgba(255,255,255,0.04)',
-              borderRadius: 20, padding: '24px 22px',
-              display: 'flex', alignItems: 'center', gap: 18,
+              borderRadius: 18, padding: '18px 18px',
+              display: 'flex', alignItems: 'center', gap: 14,
               opacity: 0.4, cursor: 'not-allowed',
             }}>
               <div style={{
-                width: 52, height: 52, borderRadius: 16,
+                width: 44, height: 44, borderRadius: 13,
                 background: 'rgba(255,255,255,0.03)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 22, flexShrink: 0,
+                fontSize: 20, flexShrink: 0,
               }}>🔒</div>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#6A6460', marginBottom: 4 }}>Gestión</div>
@@ -131,16 +131,16 @@ export default async function HubPage() {
             <div
               style={{
                 background: '#131313', border: '1px solid rgba(16,185,129,0.25)',
-                borderRadius: 20, padding: '24px 22px',
-                display: 'flex', alignItems: 'center', gap: 18, cursor: 'pointer',
+                borderRadius: 18, padding: '18px 18px',
+                display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer',
               }}
               className="card-hover"
             >
               <div style={{
-                width: 52, height: 52, borderRadius: 16,
+                width: 44, height: 44, borderRadius: 13,
                 background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 22, flexShrink: 0,
+                fontSize: 20, flexShrink: 0,
               }}>📍</div>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>Terreno</div>
@@ -156,16 +156,16 @@ export default async function HubPage() {
             <div
               style={{
                 background: '#131313', border: '1px solid rgba(249,115,22,0.25)',
-                borderRadius: 20, padding: '24px 22px',
-                display: 'flex', alignItems: 'center', gap: 18, cursor: 'pointer',
+                borderRadius: 18, padding: '18px 18px',
+                display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer',
               }}
               className="card-hover"
             >
               <div style={{
-                width: 52, height: 52, borderRadius: 16,
+                width: 44, height: 44, borderRadius: 13,
                 background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.25)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 22, flexShrink: 0,
+                fontSize: 20, flexShrink: 0,
               }}>🚛</div>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>Flota</div>

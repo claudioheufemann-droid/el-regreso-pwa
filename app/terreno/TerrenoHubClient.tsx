@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import type { AppUser } from '@/lib/auth'
 
 const G = '#D4AF37'
@@ -37,16 +38,17 @@ function fmtPeso(n: number) {
 
 export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProgreso }: Props) {
   const router = useRouter()
+  const isDesktop = useIsDesktop()
 
   return (
-    <div style={{ padding: 'var(--sp-3)', maxWidth: 600, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: isDesktop ? 'var(--sp-3)' : '16px 14px', maxWidth: 600, margin: '0 auto', width: '100%' }}>
 
       {/* Título de página */}
-      <div style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
+      <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
+        <p style={{ fontSize: isDesktop ? 11 : 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: isDesktop ? 4 : 3 }}>
           {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
-        <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', lineHeight: 1 }}>
+        <h1 style={{ fontSize: isDesktop ? 'var(--fs-title)' : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', lineHeight: 1 }}>
           Hola, {vendedor.nombre?.split(' ')[0]}.
         </h1>
       </div>
@@ -57,7 +59,7 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
           onClick={() => router.push(`/terreno/nueva-visita?retomar=${visitaEnProgreso.id}`)}
           style={{
             background: 'rgba(212,175,55,0.07)', border: `1px solid ${G_BORDER}`,
-            borderRadius: 14, padding: '13px 16px', marginBottom: 24,
+            borderRadius: 14, padding: isDesktop ? '13px 16px' : '10px 14px', marginBottom: isDesktop ? 24 : 14,
             display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
           }}
         >
@@ -80,7 +82,7 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
       )}
 
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 28 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: isDesktop ? 10 : 8, marginBottom: isDesktop ? 28 : 16 }}>
         {[
           { label: 'Visitas hoy',  value: kpis.totalHoy,  color: 'var(--cream)' },
           { label: 'Con venta',    value: kpis.conVenta,  color: G },
@@ -88,9 +90,9 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
         ].map(k => (
           <div key={k.label} style={{
             background: 'var(--surface2)', border: '1px solid rgba(255,255,255,0.05)',
-            borderRadius: 12, padding: '18px 14px', textAlign: 'center',
+            borderRadius: 12, padding: isDesktop ? '18px 14px' : '18px 10px', textAlign: 'center',
           }}>
-            <p style={{ fontSize: 32, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: '-1.5px' }}>
+            <p style={{ fontSize: isDesktop ? 32 : 38, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: '-1.5px' }}>
               {k.value}
             </p>
             <p style={{ fontSize: 9, color: 'var(--muted)', marginTop: 6, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>

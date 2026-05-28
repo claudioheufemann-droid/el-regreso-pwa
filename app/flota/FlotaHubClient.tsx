@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Truck, Plus, AlertTriangle, CheckCircle, Clock, ChevronRight, Wrench } from 'lucide-react'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import type { AppUser } from '@/lib/auth'
 
 const F = '#F97316'
@@ -75,30 +76,31 @@ function EstadoChip({ estado }: { estado: string }) {
 }
 
 export default function FlotaHubClient({ user, vehiculos, viajesActivos, conductores }: Props) {
+  const isDesktop = useIsDesktop()
   const disponibles = vehiculos.filter(v => v.estado === 'disponible').length
   const enUso = vehiculos.filter(v => v.estado === 'en_uso').length
 
   return (
-    <div style={{ padding: 'var(--sp-3)', maxWidth: 800, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: isDesktop ? 'var(--sp-3)' : '16px 14px', maxWidth: 800, margin: '0 auto', width: '100%' }}>
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
+      <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
+        <p style={{ fontSize: isDesktop ? 11 : 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: isDesktop ? 4 : 3 }}>
           {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
-        <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', marginBottom: 0 }}>
+        <h1 style={{ fontSize: isDesktop ? 'var(--fs-title)' : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', marginBottom: 0 }}>
           Bitácora de Flota
         </h1>
       </div>
 
       {/* KPIs */}
-      <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 28 }}>
+      <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: isDesktop ? 10 : 8, marginBottom: isDesktop ? 28 : 16 }}>
         {[
           { label: 'Vehículos',   value: vehiculos.length, color: 'var(--cream)' },
           { label: 'Disponibles', value: disponibles,      color: '#4ADE80' },
           { label: 'En uso',      value: enUso,            color: '#F59E0B' },
         ].map(k => (
-          <div key={k.label} style={{ background: 'var(--surface2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 12, padding: '16px 14px', textAlign: 'center' }}>
-            <p style={{ fontSize: 30, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: '-1.5px' }}>{k.value}</p>
+          <div key={k.label} style={{ background: 'var(--surface2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 12, padding: isDesktop ? '16px 14px' : '18px 10px', textAlign: 'center' }}>
+            <p style={{ fontSize: isDesktop ? 30 : 38, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: '-1.5px' }}>{k.value}</p>
             <p style={{ fontSize: 9, color: 'var(--muted)', marginTop: 6, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>{k.label}</p>
           </div>
         ))}
@@ -106,7 +108,7 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
 
       {/* CTA nueva salida */}
       <Link href="/flota/checkin" style={{ textDecoration: 'none' }}>
-        <div style={{ background: F_DIM, border: `1px solid ${F_BORDER}`, borderRadius: 14, padding: '14px 18px', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+        <div style={{ background: F_DIM, border: `1px solid ${F_BORDER}`, borderRadius: 14, padding: isDesktop ? '14px 18px' : '12px 14px', marginBottom: isDesktop ? 28 : 16, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
           <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(249,115,22,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Plus size={18} color={F} />
           </div>
