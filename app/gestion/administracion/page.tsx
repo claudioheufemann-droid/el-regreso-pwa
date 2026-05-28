@@ -1,16 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Dashboard from '@/components/dashboard/Dashboard'
+import { MACRO_AREAS } from '@/lib/gestion-types'
 
 export const dynamic = 'force-dynamic'
+
+// Áreas que pertenecen a esta macro + tareas personales
+const ADMIN_AREAS = [...MACRO_AREAS.administracion.areas, 'Mi Cerebro']
 
 export default async function AdministracionPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: tasks }, { data: users }] = await Promise.all([
-    supabase.from('tasks').select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids').order('created_at', { ascending: false }),
+  const [{ data: users }] = await Promise.all([
     supabase.from('users').select('id, nombre, iniciales, rol, area, email, is_admin, macro_area'),
   ])
 
@@ -24,6 +27,13 @@ export default async function AdministracionPage() {
   if (!isAdmin && userMacroArea !== null && userMacroArea !== 'administracion') {
     redirect('/gestion')
   }
+
+  // Admin ve todo; usuarios del área ven solo su macro-área (+ Mi Cerebro)
+  const tasksQuery = isAdmin
+    ? supabase.from('tasks').select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids').order('created_at', { ascending: false })
+    : supabase.from('tasks').select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids').in('area', ADMIN_AREAS).order('created_at', { ascending: false })
+
+  const { data: tasks } = await tasksQuery
 
   return (
     <div className="h-screen flex flex-col">

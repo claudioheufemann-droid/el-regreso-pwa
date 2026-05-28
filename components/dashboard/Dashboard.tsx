@@ -197,7 +197,16 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     })
   }
 
-  const activeTasks = tasks.filter(t => t.area !== CEREBRO_AREA)
+  // Nombres de áreas visibles para este usuario (null = admin, ve todo)
+  const macroAreaNames: readonly string[] | null = currentMacroArea
+    ? (MACRO_AREAS[currentMacroArea as MacroKey]?.areas ?? null)
+    : null
+
+  // activeTasks: excluye "Mi Cerebro" y restringe a la macro-área del usuario
+  const activeTasks = tasks.filter(t =>
+    t.area !== CEREBRO_AREA &&
+    (macroAreaNames === null || macroAreaNames.includes(t.area))
+  )
   const cerebroTasks = tasks.filter(t => t.area === CEREBRO_AREA)
   const atrasadas = activeTasks.filter(t => t.estado === 'Atrasada').length
   const porAprobar = activeTasks.filter(t => t.estado === 'Por Aprobar').length
@@ -348,7 +357,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                 )}
               </div>
 
-              <TodayFocus tasks={tasks} onTaskClick={setSelectedTask} />
+              <TodayFocus tasks={activeTasks} onTaskClick={setSelectedTask} />
 
               <MacroProgressBars tasks={tasks} macroFilter={currentMacroArea} />
 
