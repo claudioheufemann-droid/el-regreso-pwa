@@ -35,6 +35,7 @@ interface UploadStats {
   total_procesados: number
   nuevos: number
   actualizados: number
+  eliminados: number
   duplicados_en_archivo: number
   batch_id: string
 }
@@ -197,7 +198,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
                 { label: 'Procesados', value: uploadStats.total_procesados, color: 'var(--cream)' },
                 { label: 'Nuevos', value: uploadStats.nuevos, color: '#60a5fa' },
                 { label: 'Actualizados', value: uploadStats.actualizados, color: 'var(--gold)' },
-                { label: 'Duplicados', value: uploadStats.duplicados_en_archivo, color: '#f87171' },
+                { label: 'Eliminados', value: uploadStats.eliminados, color: '#f87171' },
               ].map(({ label, value, color }) => (
                 <div key={label}>
                   <p style={{ fontSize: 20, fontWeight: 900, color }}>{value}</p>

@@ -126,20 +126,15 @@ export async function POST(req: Request) {
       }
     })
 
-    // Check which deudores already exist with these nombres_fantasia
+    // Get all existing nombres_fantasia before upsert (to calculate new vs updated)
     const nombresFantasia = recordsToInsert.map(r => (r as Record<string, unknown>).nombre_fantasia as string)
-    const { data: existentes, error: selectError } = await supabase
+    const { data: existentes } = await supabase
       .from('deudores')
       .select('nombre_fantasia')
-      .in('nombre_fantasia', nombresFantasia)
-
-    if (selectError && selectError.code !== 'PGRST116') {
-      return NextResponse.json({ error: selectError.message }, { status: 500 })
-    }
 
     const nombresExistentes = new Set((existentes || []).map(e => (e as Record<string, unknown>).nombre_fantasia as string))
 
-    // Upsert: Insert or update based on nombre_fantasia (will use newest data)
+    // Upsert: insert new, update existing by nombre_fantasia
     const { error: upsertError } = await supabase
       .from('deudores')
       .upsert(recordsToInsert as Record<string, unknown>[], {
@@ -150,9 +145,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: upsertError.message }, { status: 500 })
     }
 
-    // Get counts
-    const nuevos = recordsToInsert.length - nombresExistentes.size
-    const actualizados = nombresExistentes.size
+    // Delete records that were in the DB but are NOT in the new file
+    // (clients who paid off / no longer appear in the report)
+    const nombresEnArchivo = new Set(nombresFantasia)
+    const nombresAEliminar = [...nombresExistentes].filter(n => !nombresEnArchivo.has(n))
+
+    let eliminados = 0
+    if (nombresAEliminar.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('deudores')
+        .delete()
+        .in('nombre_fantasia', nombresAEliminar)
+
+      if (deleteError) {
+        return NextResponse.json({ error: deleteError.message }, { status: 500 })
+      }
+      eliminados = nombresAEliminar.length
+    }
+
+    const nuevos = nombresFantasia.filter(n => !nombresExistentes.has(n)).length
+    const actualizados = nombresFantasia.filter(n => nombresExistentes.has(n)).length
 
     return NextResponse.json({
       ok: true,
@@ -160,6 +172,7 @@ export async function POST(req: Request) {
       total_procesados: deudores.length,
       nuevos,
       actualizados,
+      eliminados,
       duplicados_en_archivo: duplicados.length,
     })
   } catch (error: unknown) {
