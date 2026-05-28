@@ -487,7 +487,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
         </div>
       )}
 
-      {showNew && <NewTaskModal area={area} users={users} onClose={() => setShowNew(false)} onCreated={handleCreated} />}
+      {showNew && <NewTaskModal defaultArea={area} availableAreas={[area]} users={users} onClose={() => setShowNew(false)} onCreated={handleCreated} />}
       {selectedTask && !selectMode && (
         <TaskDetailModal
           task={selectedTask}

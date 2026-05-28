@@ -1,20 +1,23 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { RcUser, RcTask, AREA_CFG, eligibleUsers } from '@/lib/gestion-types'
+import { RcUser, RcTask, AREA_CFG, eligibleUsers, MACRO_AREAS } from '@/lib/gestion-types'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
 
 interface Props {
-  area: string
+  defaultArea: string          // área pre-seleccionada
+  availableAreas: string[]     // áreas que puede elegir el usuario
   users: RcUser[]
   onClose: () => void
   onCreated: (task: RcTask) => void
 }
 
-export default function NewTaskModal({ area, users, onClose, onCreated }: Props) {
-  const cfg = AREA_CFG[area] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
-  const allUsers = eligibleUsers(users, area)
+export default function NewTaskModal({ defaultArea, availableAreas, users, onClose, onCreated }: Props) {
+  const [selectedArea, setSelectedArea] = useState(defaultArea)
+
+  const cfg = AREA_CFG[selectedArea] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
+  const allUsers = eligibleUsers(users, selectedArea)
 
   const [titulo, setTitulo] = useState('')
   const [descripcion, setDescripcion] = useState('')
@@ -32,6 +35,12 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
 
   const canSubmit = titulo.trim().length > 0 && plazo && selectedIds.length > 0
 
+  // Al cambiar área: resetear responsables (pueden no estar en la nueva área)
+  function handleAreaChange(area: string) {
+    setSelectedArea(area)
+    setSelectedIds([])
+  }
+
   async function handleRefPhoto(file: File) {
     setUploadingRef(true)
     try {
@@ -44,7 +53,6 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
       if (uploadErr) throw uploadErr
       const { data: { publicUrl } } = supabase.storage.from('task-evidence').getPublicUrl(path)
       setRefPhotoUrl(publicUrl)
-      // Local preview
       const reader = new FileReader()
       reader.onload = e => setRefPhotoPreview(e.target?.result as string)
       reader.readAsDataURL(file)
@@ -57,7 +65,7 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
   function toggleUser(id: string) {
     setSelectedIds(prev =>
       prev.includes(id)
-        ? prev.length > 1 ? prev.filter(x => x !== id) : prev // al menos 1
+        ? prev.length > 1 ? prev.filter(x => x !== id) : prev
         : [...prev, id]
     )
   }
@@ -74,7 +82,7 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
         body: JSON.stringify({
           titulo: titulo.trim(),
           descripcion: descripcion.trim(),
-          area,
+          area: selectedArea,
           responsable_id: selectedIds[0],
           responsable_ids: selectedIds,
           plazo,
@@ -98,6 +106,18 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
   }
   const minDate = new Date().toISOString().split('T')[0]
 
+  // Agrupar áreas disponibles por macro para el selector
+  const macroGroups = (Object.entries(MACRO_AREAS) as [string, typeof MACRO_AREAS[keyof typeof MACRO_AREAS]][])
+    .map(([key, macro]) => ({
+      key,
+      label: macro.label,
+      color: macro.color,
+      areas: macro.areas.filter(a => availableAreas.includes(a)),
+    }))
+    .filter(g => g.areas.length > 0)
+
+  const showAreaSelector = availableAreas.length > 1
+
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col justify-end"
@@ -114,27 +134,92 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
           <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(128,128,128,0.2)' }} />
         </div>
 
+        {/* Header */}
         <div style={{ padding: '8px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: cfg.color, letterSpacing: -0.2 }}>Nueva Tarea</div>
-            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{area}</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{selectedArea}</div>
           </div>
           <button onClick={onClose} style={{ background: 'rgba(128,128,128,0.1)', border: 'none', color: 'var(--cream)', cursor: 'pointer', fontSize: 16, padding: 8, borderRadius: '50%' }}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+          {/* ── Selector de área ── */}
+          {showAreaSelector && (
+            <div>
+              <label style={labelStyle}>Área *</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {macroGroups.map(group => (
+                  <div key={group.key}>
+                    {macroGroups.length > 1 && (
+                      <div style={{ fontSize: 9, fontWeight: 700, color: group.color, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6, paddingLeft: 2 }}>
+                        {group.label}
+                      </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+                      {group.areas.map(area => {
+                        const areaCfg = AREA_CFG[area] ?? { color: '#D4AF37', code: '??' }
+                        const isSelected = selectedArea === area
+                        return (
+                          <button
+                            key={area}
+                            type="button"
+                            onClick={() => handleAreaChange(area)}
+                            className="touch-active"
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 9,
+                              padding: '10px 12px', borderRadius: 12, cursor: 'pointer',
+                              background: isSelected ? `${areaCfg.color}15` : 'rgba(128,128,128,0.05)',
+                              border: `1.5px solid ${isSelected ? areaCfg.color + '60' : 'rgba(128,128,128,0.12)'}`,
+                              transition: 'all 0.15s', textAlign: 'left',
+                            }}
+                          >
+                            <div style={{
+                              width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                              background: isSelected ? `${areaCfg.color}25` : 'rgba(128,128,128,0.08)',
+                              border: `1px solid ${isSelected ? areaCfg.color + '40' : 'rgba(128,128,128,0.15)'}`,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 8, fontWeight: 900,
+                              color: isSelected ? areaCfg.color : 'var(--muted)',
+                            }}>
+                              {areaCfg.code}
+                            </div>
+                            <span style={{
+                              fontSize: 12, fontWeight: isSelected ? 700 : 500,
+                              color: isSelected ? areaCfg.color : 'var(--muted)',
+                              lineHeight: 1.2,
+                            }}>
+                              {area}
+                            </span>
+                            {isSelected && (
+                              <div style={{ marginLeft: 'auto', width: 16, height: 16, borderRadius: '50%', background: areaCfg.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <span style={{ fontSize: 9, color: '#0A0A0A', fontWeight: 900 }}>✓</span>
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Título */}
           <div>
             <label style={labelStyle}>Título *</label>
             <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="¿Qué hay que hacer?" required style={{ borderRadius: 12, fontSize: 15 }} />
           </div>
 
+          {/* Descripción */}
           <div>
             <label style={labelStyle}>Descripción</label>
             <textarea value={descripcion} onChange={e => setDescripcion(e.target.value)} rows={3} placeholder="Instrucciones detalladas (opcional)..." style={{ resize: 'none', borderRadius: 12 }} />
           </div>
 
-          {/* Responsables — multi-select */}
+          {/* Responsables */}
           <div>
             <label style={labelStyle}>
               Responsables *
@@ -143,6 +228,11 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
               </span>
             </label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {allUsers.length === 0 && (
+                <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(128,128,128,0.05)', border: '1px solid rgba(128,128,128,0.12)', fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+                  No hay usuarios en esta área
+                </div>
+              )}
               {allUsers.map(u => {
                 const selected = selectedIds.includes(u.id)
                 return (
@@ -158,7 +248,6 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
                       transition: 'all 0.15s',
                     }}
                   >
-                    {/* Checkbox */}
                     <div style={{
                       width: 20, height: 20, borderRadius: 6, flexShrink: 0,
                       background: selected ? cfg.color : 'transparent',
@@ -168,7 +257,6 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
                     }}>
                       {selected && '✓'}
                     </div>
-                    {/* Avatar */}
                     <div style={{
                       width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
                       background: selected ? cfg.color + '30' : 'rgba(128,128,128,0.12)',
@@ -216,14 +304,9 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
             />
             {refPhotoPreview || refPhotoUrl ? (
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', background: 'var(--surface2)', border: `1px solid ${cfg.color}25`, borderRadius: 12, padding: 10 }}>
-                {/* Thumbnail */}
                 <div style={{ width: 72, height: 72, borderRadius: 9, overflow: 'hidden', flexShrink: 0 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={refPhotoPreview ?? refPhotoUrl ?? ''}
-                    alt="Foto de referencia"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  />
+                  <img src={refPhotoPreview ?? refPhotoUrl ?? ''} alt="Foto de referencia" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', marginBottom: 6 }}>
@@ -242,51 +325,22 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => refInputRef.current?.click()}
-                disabled={uploadingRef}
-                className="touch-active"
-                style={{
-                  width: '100%', padding: '24px 20px', borderRadius: 14,
-                  border: `2px dashed ${cfg.color}35`,
-                  background: `${cfg.color}06`,
-                  cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                }}
-              >
+              <button type="button" onClick={() => refInputRef.current?.click()} disabled={uploadingRef} className="touch-active"
+                style={{ width: '100%', padding: '24px 20px', borderRadius: 14, border: `2px dashed ${cfg.color}35`, background: `${cfg.color}06`, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 30 }}>{uploadingRef ? '⏳' : '🖼️'}</span>
-                <span style={{ fontSize: 12, color: cfg.color, fontWeight: 700 }}>
-                  {uploadingRef ? 'Subiendo imagen...' : 'Agregar foto de referencia'}
-                </span>
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-                  Muestra a los responsables cómo hacer la tarea
-                </span>
+                <span style={{ fontSize: 12, color: cfg.color, fontWeight: 700 }}>{uploadingRef ? 'Subiendo imagen...' : 'Agregar foto de referencia'}</span>
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>Muestra a los responsables cómo hacer la tarea</span>
               </button>
             )}
           </div>
 
           {/* Priority toggle */}
-          <div
-            onClick={() => setPrioridad(!prioridad)}
-            className="touch-active cursor-pointer"
-            style={{
-              padding: '14px', display: 'flex', alignItems: 'center', gap: 12,
-              background: prioridad ? 'rgba(212,175,55,0.08)' : 'rgba(128,128,128,0.05)',
-              border: `1px solid ${prioridad ? 'rgba(212,175,55,0.3)' : 'rgba(128,128,128,0.12)'}`,
-              borderRadius: 12,
-            }}>
-            <div style={{
-              width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-              background: prioridad ? '#D4AF37' : 'transparent',
-              border: `1.5px solid ${prioridad ? '#D4AF37' : 'rgba(128,128,128,0.3)'}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, color: '#0A0A0A', fontWeight: 700,
-            }}>
+          <div onClick={() => setPrioridad(!prioridad)} className="touch-active cursor-pointer"
+            style={{ padding: '14px', display: 'flex', alignItems: 'center', gap: 12, background: prioridad ? 'rgba(212,175,55,0.08)' : 'rgba(128,128,128,0.05)', border: `1px solid ${prioridad ? 'rgba(212,175,55,0.3)' : 'rgba(128,128,128,0.12)'}`, borderRadius: 12 }}>
+            <div style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, background: prioridad ? '#D4AF37' : 'transparent', border: `1.5px solid ${prioridad ? '#D4AF37' : 'rgba(128,128,128,0.3)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#0A0A0A', fontWeight: 700 }}>
               {prioridad && '✓'}
             </div>
-            <span style={{ fontSize: 13, color: prioridad ? 'var(--gold)' : 'var(--muted)', fontWeight: 600 }}>
-              ⚡ Marcar como Prioridad Máxima
-            </span>
+            <span style={{ fontSize: 13, color: prioridad ? 'var(--gold)' : 'var(--muted)', fontWeight: 600 }}>⚡ Marcar como Prioridad Máxima</span>
           </div>
 
           {error && (
@@ -296,22 +350,14 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8 }}>
-            <button type="button" onClick={onClose} style={{
-              padding: '14px', borderRadius: 12, cursor: 'pointer',
-              background: 'rgba(128,128,128,0.07)', border: '1px solid rgba(128,128,128,0.15)',
-              fontSize: 13, color: 'var(--muted)',
-            }}>
+            <button type="button" onClick={onClose} style={{ padding: '14px', borderRadius: 12, cursor: 'pointer', background: 'rgba(128,128,128,0.07)', border: '1px solid rgba(128,128,128,0.15)', fontSize: 13, color: 'var(--muted)' }}>
               Cancelar
             </button>
-            <button type="submit" disabled={!canSubmit || loading} className="touch-active" style={{
-              padding: '14px', borderRadius: 12, cursor: canSubmit ? 'pointer' : 'not-allowed',
-              background: `${cfg.color}15`, border: `1px solid ${cfg.color}40`,
-              fontSize: 13, fontWeight: 700, color: cfg.color,
-              opacity: canSubmit && !loading ? 1 : 0.4,
-            }}>
+            <button type="submit" disabled={!canSubmit || loading} className="touch-active" style={{ padding: '14px', borderRadius: 12, cursor: canSubmit ? 'pointer' : 'not-allowed', background: `${cfg.color}15`, border: `1px solid ${cfg.color}40`, fontSize: 13, fontWeight: 700, color: cfg.color, opacity: canSubmit && !loading ? 1 : 0.4 }}>
               {loading ? 'Creando...' : `✉ Crear y Notificar${selectedIds.length > 1 ? ` (${selectedIds.length})` : ''}`}
             </button>
           </div>
+
         </form>
       </div>
     </div>

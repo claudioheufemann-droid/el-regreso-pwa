@@ -174,7 +174,14 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   const [filterKey, setFilterKey] = useState<FilterKey>('activas')
   const [showSettings, setShowSettings] = useState(false)
   const [showNewTask, setShowNewTask] = useState(false)
-  const defaultNewTaskArea = currentMacroArea === 'administracion' ? 'R. Humanos' : 'Ventas'
+  // Áreas disponibles para crear tareas según el módulo activo
+  const availableTaskAreas: string[] = (() => {
+    if (currentMacroArea === 'administracion') return [...MACRO_AREAS.administracion.areas]
+    if (currentMacroArea === 'comercial')      return [...MACRO_AREAS.comercial.areas]
+    // admin global: todas las áreas
+    return [...MACRO_AREAS.comercial.areas, ...MACRO_AREAS.administracion.areas]
+  })()
+  const defaultNewTaskArea = availableTaskAreas[0] ?? 'Ventas'
   // Collapsible macro sections — default: all expanded
   const [expandedMacros, setExpandedMacros] = useState<Set<MacroKey>>(
     () => new Set(Object.keys(MACRO_AREAS) as MacroKey[])
@@ -715,7 +722,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
         {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} />}
         {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
-        {showNewTask && <NewTaskModal area={defaultNewTaskArea} users={users} onClose={() => setShowNewTask(false)} onCreated={(t) => { setTasks(prev => [t, ...prev]); setShowNewTask(false) }} />}
+        {showNewTask && <NewTaskModal defaultArea={defaultNewTaskArea} availableAreas={availableTaskAreas} users={users} onClose={() => setShowNewTask(false)} onCreated={(t) => { setTasks(prev => [t, ...prev]); setShowNewTask(false) }} />}
       </div>
     )
   }
