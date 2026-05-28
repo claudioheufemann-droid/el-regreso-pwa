@@ -46,26 +46,10 @@ function deduplicarRegistros(registros: Record<string, unknown>[]) {
   return { unicos, duplicadosEnArchivo: dupCount.length }
 }
 
-export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-
-  const formData = await req.formData()
-  const file = formData.get('file') as File
-  if (!file) return NextResponse.json({ error: 'No se recibió archivo' }, { status: 400 })
-
-  const buffer = await file.arrayBuffer()
-  const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
-
-  const sheetName = wb.SheetNames.includes('Datos') ? 'Datos' : wb.SheetNames[0]
-  const ws = wb.Sheets[sheetName]
-  const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, { defval: null })
-
-  if (rows.length === 0) {
-    return NextResponse.json({ error: 'El archivo no contiene datos' }, { status: 400 })
-  }
-
-  // Mapear y filtrar filas
+function parseAndValidate(rows: Record<string, unknown>[]) {
   const erroresMapeo: string[] = []
+  const advertenciasLitros: string[] = []
+
   const registrosBrutos = rows
     .map((row, idx) => {
       const vendedor = String(
@@ -84,6 +68,16 @@ export async function POST(req: NextRequest) {
       }
 
       const categoriaRaw = String(row['Categoria'] ?? row['Categoría'] ?? '').trim() || null
+      const litrosRaw = row['Litros']
+      const litros = parseFloat(String(litrosRaw ?? '0')) || 0
+
+      if (litrosRaw === null || litrosRaw === undefined || litrosRaw === '') {
+        advertenciasLitros.push(`Fila ${idx + 2}: sin valor de litros (${row['NombreDeFantasia'] ?? ''})`)
+      } else if (litros === 0) {
+        advertenciasLitros.push(`Fila ${idx + 2}: litros = 0 (${row['Producto'] ?? ''} — ${row['NombreDeFantasia'] ?? ''})`)
+      } else if (litros < 0) {
+        advertenciasLitros.push(`Fila ${idx + 2}: litros negativos ${litros} (${row['Producto'] ?? ''})`)
+      }
 
       return {
         fecha_pedido: fechaPedido,
@@ -95,7 +89,7 @@ export async function POST(req: NextRequest) {
         categoria_negocio: categoriaRaw && categoriaRaw !== '-' ? categoriaRaw : null,
         producto: String(row['Producto'] ?? '').trim() || null,
         envase: String(row['Envase'] ?? '').trim() || null,
-        litros: parseFloat(String(row['Litros'] ?? '0')) || 0,
+        litros,
         total_sin_impuesto:
           parseFloat(String(row['TotalSImp$'] ?? row['Total s/imp $'] ?? '0')) || 0,
         pedido: String(row['Pedido'] ?? '').trim() || null,
@@ -107,17 +101,8 @@ export async function POST(req: NextRequest) {
     })
     .filter(Boolean) as Record<string, unknown>[]
 
-  if (registrosBrutos.length === 0) {
-    return NextResponse.json(
-      { error: 'No se encontraron ventas de Javier Badilla o Carlos Urrejola en el archivo' },
-      { status: 400 }
-    )
-  }
-
-  // Deduplicar dentro del archivo
   const { unicos: registros, duplicadosEnArchivo } = deduplicarRegistros(registrosBrutos)
 
-  // Combinaciones únicas (vendedor, fecha) presentes en el archivo
   const combinaciones = [
     ...new Map(
       registros.map(r => [
@@ -127,17 +112,92 @@ export async function POST(req: NextRequest) {
     ).values(),
   ]
 
-  // Resumen por vendedor
-  const resumenVendedor: Record<string, { filas: number; litros: number; fechas: Set<string> }> = {}
+  const resumenVendedor: Record<string, { filas: number; litros: number; litrosNegativos: number; filasSinLitros: number; fechas: Set<string> }> = {}
   for (const r of registros) {
     const v = r.vendedor_actual as string
-    if (!resumenVendedor[v]) resumenVendedor[v] = { filas: 0, litros: 0, fechas: new Set() }
+    if (!resumenVendedor[v]) resumenVendedor[v] = { filas: 0, litros: 0, litrosNegativos: 0, filasSinLitros: 0, fechas: new Set() }
     resumenVendedor[v].filas++
     resumenVendedor[v].litros += r.litros as number
+    if ((r.litros as number) < 0) resumenVendedor[v].litrosNegativos++
+    if ((r.litros as number) === 0) resumenVendedor[v].filasSinLitros++
     resumenVendedor[v].fechas.add(r.fecha_pedido as string)
   }
 
-  // Borrar filas existentes para esas combinaciones (vendedor + fecha)
+  const fechasOrdenadas = combinaciones.map(c => c.fecha).sort()
+
+  return {
+    registros,
+    combinaciones,
+    duplicadosEnArchivo,
+    erroresMapeo,
+    advertenciasLitros,
+    fechasOrdenadas,
+    resumenVendedor,
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const preview = searchParams.get('preview') === 'true'
+
+  const supabase = await createClient()
+
+  const formData = await req.formData()
+  const file = formData.get('file') as File
+  if (!file) return NextResponse.json({ error: 'No se recibió archivo' }, { status: 400 })
+
+  const buffer = await file.arrayBuffer()
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
+
+  const sheetName = wb.SheetNames.includes('Datos') ? 'Datos' : wb.SheetNames[0]
+  const ws = wb.Sheets[sheetName]
+  const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, { defval: null })
+
+  if (rows.length === 0) {
+    return NextResponse.json({ error: 'El archivo no contiene datos' }, { status: 400 })
+  }
+
+  const {
+    registros,
+    combinaciones,
+    duplicadosEnArchivo,
+    erroresMapeo,
+    advertenciasLitros,
+    fechasOrdenadas,
+    resumenVendedor,
+  } = parseAndValidate(rows)
+
+  if (registros.length === 0) {
+    return NextResponse.json(
+      { error: 'No se encontraron ventas de Javier Badilla o Carlos Urrejola en el archivo' },
+      { status: 400 }
+    )
+  }
+
+  const vendedoresResumen = Object.entries(resumenVendedor).map(([nombre, d]) => ({
+    nombre,
+    filas: d.filas,
+    litros: Math.round(d.litros * 10) / 10,
+    litrosNegativos: d.litrosNegativos,
+    filasSinLitros: d.filasSinLitros,
+    fechas: d.fechas.size,
+  }))
+
+  // MODO PREVIEW — sólo validar, no insertar
+  if (preview) {
+    return NextResponse.json({
+      preview: true,
+      totalFilas: registros.length,
+      duplicadosEnArchivo,
+      erroresMapeo: erroresMapeo.slice(0, 10),
+      advertenciasLitros: advertenciasLitros.slice(0, 20),
+      fechaMin: fechasOrdenadas[0],
+      fechaMax: fechasOrdenadas[fechasOrdenadas.length - 1],
+      vendedores: vendedoresResumen,
+    })
+  }
+
+  // MODO CONFIRMADO — borrar e insertar
   for (const { vendedor, fecha } of combinaciones) {
     const { error: deleteError } = await supabase
       .from('ventas')
@@ -153,7 +213,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Insertar en batches
   const BATCH = 200
   let insertadas = 0
 
@@ -172,23 +231,14 @@ export async function POST(req: NextRequest) {
     insertadas += data?.length ?? batch.length
   }
 
-  // Fechas únicas procesadas
-  const fechasOrdenadas = combinaciones
-    .map(c => c.fecha)
-    .sort()
-
   return NextResponse.json({
     insertadas,
     duplicadosEnArchivo,
     erroresMapeo: erroresMapeo.slice(0, 10),
+    advertenciasLitros: advertenciasLitros.slice(0, 20),
     fechas: fechasOrdenadas,
     fechaMin: fechasOrdenadas[0],
     fechaMax: fechasOrdenadas[fechasOrdenadas.length - 1],
-    vendedores: Object.entries(resumenVendedor).map(([nombre, d]) => ({
-      nombre,
-      filas: d.filas,
-      litros: Math.round(d.litros * 10) / 10,
-      fechas: d.fechas.size,
-    })),
+    vendedores: vendedoresResumen,
   })
 }
