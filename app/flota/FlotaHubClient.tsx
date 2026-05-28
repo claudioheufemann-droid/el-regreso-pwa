@@ -79,7 +79,7 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
   const enUso = vehiculos.filter(v => v.estado === 'en_uso').length
 
   return (
-    <div style={{ padding: 'var(--sp-3)', maxWidth: 800 }}>
+    <div style={{ padding: 'var(--sp-3)', maxWidth: 800, margin: '0 auto', width: '100%' }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
@@ -91,7 +91,7 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
       </div>
 
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 28 }}>
+      <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 28 }}>
         {[
           { label: 'Vehículos',   value: vehiculos.length, color: 'var(--cream)' },
           { label: 'Disponibles', value: disponibles,      color: '#4ADE80' },

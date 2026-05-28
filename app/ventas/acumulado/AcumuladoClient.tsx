@@ -146,7 +146,7 @@ export default function AcumuladoClient({ resumen, porFecha, periodo, vendedores
   }, 0)
 
   return (
-    <div style={{ padding: 'var(--sp-3) var(--sp-3) 60px', maxWidth: 1100 }}>
+    <div style={{ padding: 'var(--sp-3) var(--sp-3) 60px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>

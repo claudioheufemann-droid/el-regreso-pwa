@@ -1342,7 +1342,7 @@ export default function MetasClient({
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '40px 48px 60px' }} className="px-4 pt-8 lg:px-12 lg:pt-10">
+    <div className="px-4 pt-8 pb-16 lg:px-12 lg:pt-10" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
           Metas Comerciales

@@ -238,7 +238,15 @@ input::placeholder, textarea::placeholder { color: #5A5248; }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
 .safe-top    { padding-top: env(safe-area-inset-top, 0px); }
 
-/* Desktop */
+/* ── Mobile responsive helpers ── */
+@media (max-width: 639px) {
+  .kpi-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+  .kpi-grid-3 { grid-template-columns: repeat(2, 1fr) !important; }
+  .hide-on-mobile { display: none !important; }
+  .content-pad { padding-left: 16px !important; padding-right: 16px !important; }
+}
+
+/* ── Desktop ── */
 @media (min-width: 1024px) {
   body { font-weight: 550; letter-spacing: 0.01em; }
 

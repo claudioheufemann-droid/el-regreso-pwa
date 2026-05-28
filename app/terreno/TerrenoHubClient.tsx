@@ -39,7 +39,7 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
   const router = useRouter()
 
   return (
-    <div style={{ padding: 'var(--sp-3)', maxWidth: 600 }}>
+    <div style={{ padding: 'var(--sp-3)', maxWidth: 600, margin: '0 auto', width: '100%' }}>
 
       {/* Título de página */}
       <div style={{ marginBottom: 28 }}>

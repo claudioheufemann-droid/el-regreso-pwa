@@ -49,7 +49,7 @@ export default function GestionHubClient({ userName, taskCounts }: Props) {
   const router = useRouter()
 
   return (
-    <div style={{ padding: 'var(--sp-3)', maxWidth: 640 }}>
+    <div style={{ padding: 'var(--sp-3)', maxWidth: 640, margin: '0 auto', width: '100%' }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
