@@ -278,7 +278,10 @@ export default function ClienteDetalleClient({ cliente, ventas, contactos, deudo
                   <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px' }}>
                     <p style={{ fontSize: 10, color: '#666', fontWeight: 600, marginBottom: 4 }}>ÚLTIMO PAGO</p>
                     <p style={{ fontSize: 13, fontWeight: 700, color: '#aaa' }}>
-                      {deudor.ultimo_pago ? formatFecha(deudor.ultimo_pago) : '—'}
+                      {deudor.ultimo_pago ? (() => {
+                        const [y, m, d] = deudor.ultimo_pago!.substring(0, 10).split('-').map(Number)
+                        return `${d} ${MESES[m - 1]} ${y}`
+                      })() : '—'}
                     </p>
                   </div>
                 </div>
