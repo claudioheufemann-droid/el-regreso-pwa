@@ -21,14 +21,6 @@ interface Props {
   clientes: Cliente[]
 }
 
-const VENDEDOR_COLOR: Record<string, string> = {
-  'Javier Badilla': '#F59E0B',
-  'Carlos Urrejola': '#60A5FA',
-}
-function vendColor(v: string | null) {
-  return v ? (VENDEDOR_COLOR[v] ?? '#A78BFA') : '#666'
-}
-
 // ── API helpers ──────────────────────────────────────────────────────────────
 async function apiRenombrar(old_ruta: string, new_ruta: string): Promise<string | null> {
   const r = await fetch('/api/clientes/rutas', {
@@ -38,7 +30,7 @@ async function apiRenombrar(old_ruta: string, new_ruta: string): Promise<string 
   })
   if (!r.ok) {
     const body = await r.json().catch(() => ({}))
-    return body.error ?? `Error ${r.status}`
+    return (body as { error?: string }).error ?? `Error ${r.status}`
   }
   return null
 }
@@ -51,7 +43,7 @@ async function apiAsignar(cliente_ids: number[], ruta: string | null): Promise<s
   })
   if (!r.ok) {
     const body = await r.json().catch(() => ({}))
-    return body.error ?? `Error ${r.status}`
+    return (body as { error?: string }).error ?? `Error ${r.status}`
   }
   return null
 }
@@ -64,26 +56,25 @@ async function apiEliminar(ruta: string): Promise<string | null> {
   })
   if (!r.ok) {
     const body = await r.json().catch(() => ({}))
-    return body.error ?? `Error ${r.status}`
+    return (body as { error?: string }).error ?? `Error ${r.status}`
   }
   return null
 }
 
-// ── Inline editable route name ───────────────────────────────────────────────
+// ── EditableNombre ─────────────────────────────────────────────────────────
 function EditableNombre({ nombre, onSave, onCancel }: {
-  nombre: string
-  onSave: (n: string) => void
-  onCancel: () => void
+  nombre: string; onSave: (n: string) => void; onCancel: () => void
 }) {
   const [val, setVal] = useState(nombre)
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }} onClick={e => e.stopPropagation()}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}
+      onClick={e => e.stopPropagation()}>
       <input
         autoFocus
         value={val}
         onChange={e => setVal(e.target.value)}
         onKeyDown={e => {
-          if (e.key === 'Enter') onSave(val)
+          if (e.key === 'Enter') { e.preventDefault(); onSave(val) }
           if (e.key === 'Escape') onCancel()
         }}
         style={{
@@ -104,30 +95,82 @@ function EditableNombre({ nombre, onSave, onCancel }: {
   )
 }
 
-// ── Toast notification ───────────────────────────────────────────────────────
-function Toast({ message, type, onClose }: { message: string; type: 'error' | 'success'; onClose: () => void }) {
+// ── RutaItem — defined OUTSIDE main component to keep stable reference ──────
+interface RutaItemProps {
+  nombre: string
+  count: number
+  isSelected: boolean
+  isEditing: boolean
+  onSelect: () => void
+  onEdit: () => void
+  onSave: (n: string) => void
+  onCancel: () => void
+  onDelete: () => void
+}
+
+function RutaItem({ nombre, count, isSelected, isEditing, onSelect, onEdit, onSave, onCancel, onDelete }: RutaItemProps) {
   return (
-    <div style={{
-      position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
-      zIndex: 9999, display: 'flex', alignItems: 'center', gap: 10,
-      padding: '12px 20px', borderRadius: 12,
-      background: type === 'error' ? '#2A0A0A' : '#0A2A14',
-      border: `1px solid ${type === 'error' ? '#F87171' : '#34D399'}`,
-      color: type === 'error' ? '#F87171' : '#34D399',
-      fontSize: 13, fontWeight: 600,
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-      maxWidth: 420, whiteSpace: 'pre-line',
-    }}>
-      <AlertCircle size={16} style={{ flexShrink: 0 }} />
-      <span style={{ flex: 1 }}>{message}</span>
-      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 2 }}>
-        <X size={14} />
-      </button>
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '9px 12px', borderRadius: 10,
+        background: isSelected ? 'rgba(212,175,55,0.1)' : 'transparent',
+        border: `1px solid ${isSelected ? 'rgba(212,175,55,0.3)' : 'transparent'}`,
+        cursor: 'pointer', marginBottom: 2, transition: 'all 0.12s',
+      }}
+      onClick={() => { if (!isEditing) onSelect() }}
+    >
+      <Route size={13} style={{ color: isSelected ? '#D4AF37' : '#444', flexShrink: 0 }} />
+
+      {isEditing ? (
+        <EditableNombre nombre={nombre} onSave={onSave} onCancel={onCancel} />
+      ) : (
+        <>
+          <span style={{
+            flex: 1, fontSize: 13, fontWeight: 700,
+            color: isSelected ? '#D4AF37' : '#ccc',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            Ruta {nombre}
+          </span>
+          <span style={{
+            fontSize: 11, fontWeight: 800,
+            color: count === 0 ? '#555' : '#fff',
+            background: count === 0 ? '#1A1A1A' : isSelected ? 'rgba(212,175,55,0.2)' : '#2A2A2A',
+            padding: '1px 7px', borderRadius: 20, flexShrink: 0,
+          }}>{count}</span>
+          <div style={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+            <button
+              onClick={e => { e.stopPropagation(); onEdit() }}
+              title="Renombrar"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: '2px 4px', borderRadius: 4 }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#D4AF37')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#555')}
+            >
+              <Pencil size={11} />
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); onDelete() }}
+              title="Eliminar"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: '2px 4px', borderRadius: 4 }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#F87171')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#555')}
+            >
+              <Trash2 size={11} />
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
 
-// ── Client row in right panel ────────────────────────────────────────────────
+// ── ClienteRow ───────────────────────────────────────────────────────────────
+const VENDEDOR_COLOR: Record<string, string> = {
+  'Javier Badilla': '#F59E0B',
+  'Carlos Urrejola': '#60A5FA',
+}
+
 function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
   cliente: Cliente
   seleccionado: boolean
@@ -136,6 +179,7 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
   onMover: (ruta: string | null) => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const vc = cliente.vendedor ? (VENDEDOR_COLOR[cliente.vendedor] ?? '#A78BFA') : '#666'
 
   return (
     <div
@@ -148,7 +192,6 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
       }}
       onClick={onToggle}
     >
-      {/* Checkbox */}
       <div style={{
         width: 16, height: 16, borderRadius: 4, flexShrink: 0,
         border: `2px solid ${seleccionado ? '#D4AF37' : '#333'}`,
@@ -158,7 +201,6 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
         {seleccionado && <Check size={10} style={{ color: '#000' }} />}
       </div>
 
-      {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#eee', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {cliente.nombre_fantasia}
@@ -168,14 +210,13 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
             <span style={{ fontSize: 10, color: '#555' }}>📍 {cliente.localidad_entrega || cliente.localidad}</span>
           )}
           {cliente.vendedor && (
-            <span style={{ fontSize: 10, fontWeight: 700, color: vendColor(cliente.vendedor) }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: vc }}>
               {cliente.vendedor.split(' ')[0]}
             </span>
           )}
         </div>
       </div>
 
-      {/* Move dropdown */}
       <div style={{ position: 'relative', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
         <button
           onClick={() => setMenuOpen(m => !m)}
@@ -191,7 +232,6 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
 
         {menuOpen && (
           <>
-            {/* Backdrop */}
             <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setMenuOpen(false)} />
             <div style={{
               position: 'absolute', right: 0, top: '110%', zIndex: 100,
@@ -237,12 +277,34 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
   )
 }
 
-// ── Main component ───────────────────────────────────────────────────────────
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function Toast({ message, type, onClose }: { message: string; type: 'error' | 'success'; onClose: () => void }) {
+  return (
+    <div style={{
+      position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+      zIndex: 9999, display: 'flex', alignItems: 'center', gap: 10,
+      padding: '12px 20px', borderRadius: 12,
+      background: type === 'error' ? '#2A0A0A' : '#0A2A14',
+      border: `1px solid ${type === 'error' ? '#F87171' : '#34D399'}`,
+      color: type === 'error' ? '#F87171' : '#34D399',
+      fontSize: 13, fontWeight: 600,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      maxWidth: 420,
+    }}>
+      <AlertCircle size={16} style={{ flexShrink: 0 }} />
+      <span style={{ flex: 1 }}>{message}</span>
+      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 2 }}>
+        <X size={14} />
+      </button>
+    </div>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export default function RutasClientesClient({ clientes: initialClientes }: Props) {
   const isDesktop = useIsDesktop()
 
   const [clientes, setClientes] = useState(initialClientes)
-  // Extra routes created locally that have 0 clients (not yet in DB)
   const [emptyRoutes, setEmptyRoutes] = useState<string[]>([])
   const [selectedRuta, setSelectedRuta] = useState<string | '__sin_ruta__' | null>(null)
   const [busqueda, setBusqueda] = useState('')
@@ -259,7 +321,7 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
     setTimeout(() => setToast(null), 4000)
   }
 
-  // Route list derived from clientes + emptyRoutes
+  // Derived route list
   const { rutas, sinRuta } = useMemo(() => {
     const map = new Map<string, Cliente[]>()
     const sinRuta: Cliente[] = []
@@ -270,7 +332,6 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
         map.get(c.ruta_despacho)!.push(c)
       }
     }
-    // Add empty routes that don't yet have clients
     for (const r of emptyRoutes) {
       if (!map.has(r)) map.set(r, [])
     }
@@ -288,12 +349,10 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
 
   const allRutaNames = rutas.map(r => r.nombre)
 
-  // Clients shown in right panel for selected route
   const clientesEnRuta = useMemo(() => {
-    let list: Cliente[]
+    let list: Cliente[] = []
     if (selectedRuta === '__sin_ruta__') list = sinRuta
     else if (selectedRuta) list = rutas.find(r => r.nombre === selectedRuta)?.clientes ?? []
-    else list = []
     if (busqueda) {
       const b = busqueda.toLowerCase()
       list = list.filter(c =>
@@ -316,11 +375,10 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
 
   function updateLocal(ids: number[], ruta: string | null) {
     setClientes(prev => prev.map(c => ids.includes(c.id) ? { ...c, ruta_despacho: ruta } : c))
-    // Once clients are assigned, the route is no longer "empty"
     if (ruta) setEmptyRoutes(prev => prev.filter(r => r !== ruta))
   }
 
-  // ── Create new route ─────────────────────────────────────────────────────
+  // ── Handlers ────────────────────────────────────────────────────────────────
   function crearRuta() {
     const nombre = nuevaRuta.trim()
     if (!nombre) return
@@ -328,28 +386,24 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
       showToast(`La ruta "${nombre}" ya existe`)
       return
     }
-    // Add as empty route — it appears in the list immediately
     setEmptyRoutes(prev => [...prev, nombre])
     setSelectedRuta(nombre)
     setCreando(false)
     setNuevaRuta('')
-    showToast(`Ruta "${nombre}" creada. Asigna clientes desde "Sin ruta asignada".`, 'success')
   }
 
-  // ── Rename route ─────────────────────────────────────────────────────────
   async function renombrarRuta(oldName: string, newName: string) {
     const trimmed = newName.trim()
-    if (!trimmed || trimmed === oldName) { setEditingRuta(null); return }
-    setLoading(true)
-    // If this is an empty (local-only) route, just rename locally
-    const isEmpty = emptyRoutes.includes(oldName) && !rutas.find(r => r.nombre === oldName)?.clientes.length
-    if (isEmpty) {
+    setEditingRuta(null)
+    if (!trimmed || trimmed === oldName) return
+    // Empty (local-only) route → rename locally without API call
+    const isLocalOnly = emptyRoutes.includes(oldName)
+    if (isLocalOnly) {
       setEmptyRoutes(prev => prev.map(r => r === oldName ? trimmed : r))
       if (selectedRuta === oldName) setSelectedRuta(trimmed)
-      setEditingRuta(null)
-      setLoading(false)
       return
     }
+    setLoading(true)
     const err = await apiRenombrar(oldName, trimmed)
     if (err) {
       showToast(`Error al renombrar: ${err}`)
@@ -358,24 +412,20 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
         c.ruta_despacho === oldName ? { ...c, ruta_despacho: trimmed } : c
       ))
       if (selectedRuta === oldName) setSelectedRuta(trimmed)
-      showToast(`Ruta renombrada a "${trimmed}"`, 'success')
+      showToast(`Renombrada a "Ruta ${trimmed}"`, 'success')
     }
-    setEditingRuta(null)
     setLoading(false)
   }
 
-  // ── Delete route ─────────────────────────────────────────────────────────
   async function eliminarRuta(rutaNombre: string) {
     const count = rutas.find(r => r.nombre === rutaNombre)?.clientes.length ?? 0
-    const isEmptyRoute = count === 0
-    if (!isEmptyRoute && !confirm(`¿Eliminar "Ruta ${rutaNombre}"?\nLos ${count} clientes quedarán sin ruta asignada.`)) return
-    setLoading(true)
-    if (isEmptyRoute) {
+    if (count === 0) {
       setEmptyRoutes(prev => prev.filter(r => r !== rutaNombre))
       if (selectedRuta === rutaNombre) setSelectedRuta(null)
-      setLoading(false)
       return
     }
+    if (!confirm(`¿Eliminar "Ruta ${rutaNombre}"?\n${count} clientes quedarán sin ruta asignada.`)) return
+    setLoading(true)
     const err = await apiEliminar(rutaNombre)
     if (err) {
       showToast(`Error al eliminar: ${err}`)
@@ -389,7 +439,6 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
     setLoading(false)
   }
 
-  // ── Move single client ───────────────────────────────────────────────────
   async function moverCliente(clienteId: number, ruta: string | null) {
     setLoading(true)
     const err = await apiAsignar([clienteId], ruta)
@@ -398,7 +447,6 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
     setLoading(false)
   }
 
-  // ── Move selected clients ────────────────────────────────────────────────
   async function moverSeleccionados() {
     if (seleccionados.size === 0 || !moverDestino) return
     const destino = moverDestino === '__sin_ruta__' ? null : moverDestino
@@ -414,75 +462,21 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
     setLoading(false)
   }
 
-  // ── Route list item ──────────────────────────────────────────────────────
-  function RutaItem({ nombre, count, isSelected }: { nombre: string; count: number; isSelected: boolean }) {
-    const isEditing = editingRuta === nombre
-    return (
-      <div
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '9px 12px', borderRadius: 10,
-          background: isSelected ? 'rgba(212,175,55,0.1)' : 'transparent',
-          border: `1px solid ${isSelected ? 'rgba(212,175,55,0.3)' : 'transparent'}`,
-          cursor: 'pointer', marginBottom: 2, transition: 'all 0.12s',
-        }}
-        onClick={() => !isEditing && setSelectedRuta(nombre)}
-      >
-        <Route size={13} style={{ color: isSelected ? '#D4AF37' : '#444', flexShrink: 0 }} />
+  const currentRutaName = selectedRuta === '__sin_ruta__'
+    ? 'Sin ruta asignada'
+    : selectedRuta ? `Ruta ${selectedRuta}` : null
 
-        {isEditing ? (
-          <EditableNombre
-            nombre={nombre}
-            onSave={n => renombrarRuta(nombre, n)}
-            onCancel={() => setEditingRuta(null)}
-          />
-        ) : (
-          <>
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: isSelected ? '#D4AF37' : '#ccc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              Ruta {nombre}
-            </span>
-            <span style={{
-              fontSize: 11, fontWeight: 800, color: count === 0 ? '#555' : '#fff',
-              background: count === 0 ? '#1A1A1A' : isSelected ? 'rgba(212,175,55,0.2)' : '#2A2A2A',
-              padding: '1px 7px', borderRadius: 20, flexShrink: 0,
-            }}>{count}</span>
-            <div style={{ display: 'flex', gap: 1, flexShrink: 0 }}>
-              <button
-                onClick={e => { e.stopPropagation(); setEditingRuta(nombre) }}
-                title="Renombrar"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: '2px 4px', borderRadius: 4 }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#D4AF37')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#555')}
-              >
-                <Pencil size={11} />
-              </button>
-              <button
-                onClick={e => { e.stopPropagation(); eliminarRuta(nombre) }}
-                title="Eliminar"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: '2px 4px', borderRadius: 4 }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#F87171')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#555')}
-              >
-                <Trash2 size={11} />
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    )
-  }
-
-  // ── Left panel ───────────────────────────────────────────────────────────
-  const LeftPanel = (
+  // ── Render ───────────────────────────────────────────────────────────────────
+  const leftPanel = (
     <div style={{
       width: isDesktop ? 268 : '100%', flexShrink: 0,
-      background: '#111', border: '1px solid #1E1E1E', borderRadius: 14,
+      background: '#111', border: '1px solid #222', borderRadius: 14,
       display: 'flex', flexDirection: 'column',
       maxHeight: isDesktop ? 'calc(100vh - 130px)' : 420,
       overflow: 'hidden',
     }}>
       {/* Header */}
-      <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #1A1A1A' }}>
+      <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #1E1E1E' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <h2 style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>Rutas</h2>
           <button
@@ -497,45 +491,64 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
             <Plus size={12} /> Nueva
           </button>
         </div>
-        <p style={{ fontSize: 10, color: '#555' }}>
-          {rutas.length} rutas · {clientes.length} clientes
-        </p>
+        <p style={{ fontSize: 10, color: '#555' }}>{rutas.length} rutas · {clientes.length} clientes</p>
 
-        {/* New route input */}
+        {/* Crear ruta */}
         {creando && (
           <div style={{ marginTop: 10, display: 'flex', gap: 5 }}>
             <input
               autoFocus
               value={nuevaRuta}
               onChange={e => setNuevaRuta(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') crearRuta(); if (e.key === 'Escape') setCreando(false) }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); crearRuta() }
+                if (e.key === 'Escape') { setCreando(false); setNuevaRuta('') }
+              }}
               placeholder="Nombre de la ruta..."
               style={{
-                flex: 1, background: '#1A1A1A', border: '1px solid #D4AF37', borderRadius: 7,
-                padding: '6px 10px', color: '#fff', fontSize: 12, outline: 'none',
+                flex: 1, background: '#1A1A1A', border: '1px solid #D4AF37',
+                borderRadius: 7, padding: '6px 10px', color: '#fff', fontSize: 12, outline: 'none',
               }}
             />
-            <button onClick={crearRuta}
-              style={{ padding: '6px 9px', borderRadius: 7, background: '#D4AF37', border: 'none', color: '#000', cursor: 'pointer' }}>
+            <button
+              type="button"
+              onClick={() => crearRuta()}
+              style={{ padding: '6px 9px', borderRadius: 7, background: '#D4AF37', border: 'none', color: '#000', cursor: 'pointer' }}
+            >
               <Check size={13} />
             </button>
-            <button onClick={() => setCreando(false)}
-              style={{ padding: '6px 9px', borderRadius: 7, background: '#1A1A1A', border: '1px solid #333', color: '#666', cursor: 'pointer' }}>
+            <button
+              type="button"
+              onClick={() => { setCreando(false); setNuevaRuta('') }}
+              style={{ padding: '6px 9px', borderRadius: 7, background: '#1A1A1A', border: '1px solid #333', color: '#666', cursor: 'pointer' }}
+            >
               <X size={13} />
             </button>
           </div>
         )}
       </div>
 
-      {/* Route list */}
+      {/* Lista rutas */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-        {rutas.length === 0 && emptyRoutes.length === 0 && (
+        {rutas.length === 0 && (
           <p style={{ fontSize: 11, color: '#444', textAlign: 'center', padding: '16px 0' }}>
             Sin rutas — crea la primera
           </p>
         )}
+
         {rutas.map(r => (
-          <RutaItem key={r.nombre} nombre={r.nombre} count={r.clientes.length} isSelected={selectedRuta === r.nombre} />
+          <RutaItem
+            key={r.nombre}
+            nombre={r.nombre}
+            count={r.clientes.length}
+            isSelected={selectedRuta === r.nombre}
+            isEditing={editingRuta === r.nombre}
+            onSelect={() => setSelectedRuta(r.nombre)}
+            onEdit={() => setEditingRuta(r.nombre)}
+            onSave={n => renombrarRuta(r.nombre, n)}
+            onCancel={() => setEditingRuta(null)}
+            onDelete={() => eliminarRuta(r.nombre)}
+          />
         ))}
 
         {/* Sin ruta asignada */}
@@ -544,7 +557,7 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '9px 12px', borderRadius: 10, marginTop: 6,
             background: selectedRuta === '__sin_ruta__' ? 'rgba(248,113,113,0.08)' : 'transparent',
-            border: `1px solid ${selectedRuta === '__sin_ruta__' ? 'rgba(248,113,113,0.25)' : '#1A1A1A'}`,
+            border: `1px solid ${selectedRuta === '__sin_ruta__' ? 'rgba(248,113,113,0.25)' : '#1E1E1E'}`,
             cursor: 'pointer', transition: 'all 0.12s',
           }}
           onClick={() => setSelectedRuta('__sin_ruta__')}
@@ -563,61 +576,49 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
       </div>
 
       {loading && (
-        <div style={{ padding: '8px 14px', borderTop: '1px solid #1A1A1A', textAlign: 'center' }}>
+        <div style={{ padding: '7px 14px', borderTop: '1px solid #1E1E1E', textAlign: 'center' }}>
           <span style={{ fontSize: 10, color: '#D4AF37' }}>⏳ Guardando...</span>
         </div>
       )}
     </div>
   )
 
-  // ── Right panel ──────────────────────────────────────────────────────────
-  const currentRutaName = selectedRuta === '__sin_ruta__'
-    ? 'Sin ruta asignada'
-    : selectedRuta ? `Ruta ${selectedRuta}` : null
-
-  const RightPanel = (
+  const rightPanel = (
     <div style={{
       flex: 1, minWidth: 0,
-      background: '#111', border: '1px solid #1E1E1E', borderRadius: 14,
+      background: '#111', border: '1px solid #222', borderRadius: 14,
       display: 'flex', flexDirection: 'column',
-      maxHeight: isDesktop ? 'calc(100vh - 130px)' : 500,
+      maxHeight: isDesktop ? 'calc(100vh - 130px)' : 520,
       overflow: 'hidden',
     }}>
       {!selectedRuta ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <Route size={36} style={{ color: '#333' }} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <Route size={36} style={{ color: '#2A2A2A' }} />
           <p style={{ fontSize: 13, color: '#444' }}>Selecciona una ruta para ver sus clientes</p>
         </div>
       ) : (
         <>
-          {/* Right panel header */}
-          <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #1A1A1A' }}>
+          {/* Right header */}
+          <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #1E1E1E' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
               <div>
                 <h2 style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{currentRutaName}</h2>
                 <p style={{ fontSize: 10, color: '#555', marginTop: 2 }}>
                   {clientesEnRuta.length} clientes
-                  {seleccionados.size > 0 && (
-                    <span style={{ color: '#D4AF37', marginLeft: 6 }}>· {seleccionados.size} seleccionados</span>
-                  )}
+                  {seleccionados.size > 0 && <span style={{ color: '#D4AF37', marginLeft: 6 }}>· {seleccionados.size} seleccionados</span>}
                 </p>
               </div>
-              <div style={{ display: 'flex', gap: 5 }}>
-                {seleccionados.size > 0 ? (
-                  <button onClick={() => setSeleccionados(new Set())}
-                    style={{ padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, background: '#1A1A1A', border: '1px solid #333', color: '#888', cursor: 'pointer' }}>
-                    Quitar selección
-                  </button>
-                ) : (
-                  <button onClick={() => setSeleccionados(new Set(clientesEnRuta.map(c => c.id)))}
-                    style={{ padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, background: '#1A1A1A', border: '1px solid #333', color: '#888', cursor: 'pointer' }}>
-                    Seleccionar todos
-                  </button>
-                )}
-              </div>
+              <button
+                onClick={() => seleccionados.size > 0
+                  ? setSeleccionados(new Set())
+                  : setSeleccionados(new Set(clientesEnRuta.map(c => c.id)))
+                }
+                style={{ padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, background: '#1A1A1A', border: '1px solid #333', color: '#888', cursor: 'pointer' }}
+              >
+                {seleccionados.size > 0 ? 'Quitar selección' : 'Seleccionar todos'}
+              </button>
             </div>
 
-            {/* Search + bulk move */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <div style={{
                 flex: 1, minWidth: 140, display: 'flex', alignItems: 'center', gap: 7,
@@ -670,38 +671,35 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
             </div>
           </div>
 
-          {/* Clients list */}
+          {/* Clients */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {clientesEnRuta.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                <Users size={26} style={{ color: '#333', margin: '0 auto 8px' }} />
+                <Users size={26} style={{ color: '#2A2A2A', margin: '0 auto 8px' }} />
                 <p style={{ fontSize: 12, color: '#444' }}>
                   {busqueda
                     ? 'Sin resultados'
                     : selectedRuta !== '__sin_ruta__'
-                      ? 'Sin clientes — usa "Sin ruta asignada" para mover clientes aquí'
-                      : 'Todos los clientes tienen ruta asignada'}
+                      ? 'Sin clientes. Selecciona "Sin ruta asignada" y muéve clientes aquí.'
+                      : 'Todos los clientes tienen ruta asignada ✓'}
                 </p>
               </div>
-            ) : (
-              clientesEnRuta.map(c => (
-                <ClienteRow
-                  key={c.id}
-                  cliente={c}
-                  seleccionado={seleccionados.has(c.id)}
-                  onToggle={() => toggleSelect(c.id)}
-                  allRutas={allRutaNames}
-                  onMover={ruta => moverCliente(c.id, ruta)}
-                />
-              ))
-            )}
+            ) : clientesEnRuta.map(c => (
+              <ClienteRow
+                key={c.id}
+                cliente={c}
+                seleccionado={seleccionados.has(c.id)}
+                onToggle={() => toggleSelect(c.id)}
+                allRutas={allRutaNames}
+                onMover={ruta => moverCliente(c.id, ruta)}
+              />
+            ))}
           </div>
         </>
       )}
     </div>
   )
 
-  // ── Page ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: '20px 20px 60px', maxWidth: 1400, margin: '0 auto' }}>
       <div style={{ marginBottom: 18 }}>
@@ -711,23 +709,17 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
 
       {isDesktop ? (
         <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-          {LeftPanel}
-          {RightPanel}
+          {leftPanel}
+          {rightPanel}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {LeftPanel}
-          {selectedRuta && RightPanel}
+          {leftPanel}
+          {selectedRuta && rightPanel}
         </div>
       )}
 
-      {toast && (
-        <Toast
-          message={toast.msg}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   )
 }
