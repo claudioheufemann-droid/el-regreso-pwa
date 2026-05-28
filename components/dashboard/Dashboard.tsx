@@ -11,6 +11,7 @@ import TaskRow from '@/components/area/TaskRow'
 import Logo from '@/components/ui/Logo'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import GestionPanel from '@/components/dashboard/GestionPanel'
+import NewTaskModal from '@/components/modals/NewTaskModal'
 import { createClient } from '@/lib/supabase/client'
 
 interface Props {
@@ -132,7 +133,7 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
         const barColor = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : macro.color
 
         return (
-          <div key={key} style={{ background: 'var(--surface)', border: `1px solid ${macro.color}22`, borderRadius: 20, padding: '20px 22px' }}>
+          <div key={key} style={{ background: 'var(--surface)', border: `1px solid ${macro.color}22`, borderRadius: 16, padding: '14px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <div style={{ width: 22, height: 22, borderRadius: 7, background: `${macro.color}18`, border: `1px solid ${macro.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: macro.color, flexShrink: 0 }}>{macro.code}</div>
               <span style={{ fontSize: 10, fontWeight: 700, color: macro.color, letterSpacing: 1.2, flex: 1 }}>{macro.label.toUpperCase()}</span>
@@ -172,6 +173,8 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   const [view, setView] = useState<View>('home')
   const [filterKey, setFilterKey] = useState<FilterKey>('activas')
   const [showSettings, setShowSettings] = useState(false)
+  const [showNewTask, setShowNewTask] = useState(false)
+  const defaultNewTaskArea = currentMacroArea === 'administracion' ? 'R. Humanos' : 'Ventas'
   // Collapsible macro sections — default: all expanded
   const [expandedMacros, setExpandedMacros] = useState<Set<MacroKey>>(
     () => new Set(Object.keys(MACRO_AREAS) as MacroKey[])
@@ -262,7 +265,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     return (
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
         <div style={{
-          padding: isDesktop ? '48px 56px 80px' : '32px 24px 100px',
+          padding: isDesktop ? '48px 56px 80px' : '16px 14px 100px',
           maxWidth: isDesktop ? (view === 'calendar' ? 1200 : 860) : 600,
           margin: '0 auto',
           width: '100%',
@@ -271,20 +274,22 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           {/* ── HOME VIEW ── */}
           {view === 'home' && (
             <>
-              <div style={{ marginBottom: 40 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 2.5, marginBottom: 12, textTransform: 'uppercase' }}>
-                  {dayName} {today.getDate()} de {monthName}
+              <div style={{ marginBottom: isDesktop ? 20 : 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isDesktop ? 6 : 3 }}>
+                  <div style={{ fontSize: isDesktop ? 10 : 9, color: 'var(--muted)', letterSpacing: isDesktop ? 2.2 : 1.5, textTransform: 'uppercase' }}>
+                    {dayName} {today.getDate()} de {monthName}
+                  </div>
+                  {isAdmin && (
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--gold)', letterSpacing: 1.2, background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.18)', borderRadius: 20, padding: '2px 8px' }}>★ Admin</span>
+                  )}
                 </div>
-                <div style={{ fontSize: isDesktop ? 44 : 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: -1.5, lineHeight: 1, marginBottom: 12 }}>
-                  Hola,<br />{userName.split(' ')[0]}.
+                <div style={{ fontSize: isDesktop ? 32 : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: -1, lineHeight: 1 }}>
+                  Hola, {userName.split(' ')[0]}.
                 </div>
-                {isAdmin && (
-                  <span style={{ fontSize: 10, color: 'var(--gold)', letterSpacing: 1.5, opacity: 0.7 }}>★ Administrador</span>
-                )}
               </div>
 
               {/* KPI Semáforo */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: isDesktop ? 12 : 8, marginBottom: 40 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4,1fr)' : 'repeat(2,1fr)', gap: isDesktop ? 12 : 10, marginBottom: isDesktop ? 12 : 10 }}>
                 {([
                   { key: 'activas',    label: 'Activas',    value: activas,    color: '#4A7A9B', bg: 'rgba(74,122,155,0.10)',  border: 'rgba(74,122,155,0.25)'  },
                   { key: 'en-proceso', label: 'En Proceso', value: enProceso,  color: '#D4821A', bg: 'rgba(212,130,26,0.10)',  border: 'rgba(212,130,26,0.30)'  },
@@ -299,26 +304,48 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                         background: active ? s.bg : 'var(--surface)',
                         border: `1px solid ${active ? s.border : 'rgba(128,128,128,0.12)'}`,
                         borderTop: `3px solid ${active ? s.color : 'rgba(128,128,128,0.15)'}`,
-                        borderRadius: 16,
-                        padding: isDesktop ? '20px 12px 16px' : '16px 8px 14px',
+                        borderRadius: isDesktop ? 16 : 14,
+                        padding: isDesktop ? '22px 14px 18px' : '18px 12px 16px',
                         cursor: 'pointer', textAlign: 'center',
-                        boxShadow: active ? `0 2px 12px ${s.color}18` : 'none',
+                        boxShadow: active ? `0 2px 16px ${s.color}22` : 'none',
                         transition: 'all 0.15s',
                       }}>
                       <div style={{
-                        fontSize: isDesktop ? 38 : 30, fontWeight: 900, lineHeight: 1,
-                        letterSpacing: -1.5,
+                        fontSize: isDesktop ? 46 : 38, fontWeight: 900, lineHeight: 1,
+                        letterSpacing: -2,
                         color: active ? s.color : 'rgba(128,128,128,0.22)',
                       }}>{s.value}</div>
                       <div style={{
-                        fontSize: 9, letterSpacing: 1.5, marginTop: 7,
+                        fontSize: isDesktop ? 9 : 10, letterSpacing: isDesktop ? 1.5 : 1.2, marginTop: isDesktop ? 8 : 7,
                         textTransform: 'uppercase', fontWeight: 700,
                         color: active ? s.color : 'rgba(128,128,128,0.35)',
-                        opacity: active ? 0.8 : 1,
+                        opacity: active ? 0.85 : 1,
                       }}>{s.label}</div>
+                      {active && (
+                        <div style={{ fontSize: 8, marginTop: 5, color: s.color, opacity: 0.45, letterSpacing: 0.8 }}>ver →</div>
+                      )}
                     </button>
                   )
                 })}
+              </div>
+
+              {/* Quick actions */}
+              <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? 'repeat(3,1fr)' : 'repeat(2,1fr)', gap: isDesktop ? 10 : 8, marginBottom: isDesktop ? 32 : 20 }}>
+                <button onClick={() => setShowNewTask(true)} className="touch-active" style={{ padding: isDesktop ? '11px 14px' : '10px 10px', borderRadius: 12, border: '1px solid rgba(212,175,55,0.25)', background: 'rgba(212,175,55,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ fontSize: isDesktop ? 15 : 13 }}>⚡</span>
+                  <span style={{ fontSize: isDesktop ? 12 : 11, fontWeight: 700, color: 'var(--gold)', lineHeight: 1.2 }}>{isDesktop ? 'Nueva tarea' : 'Nueva\ntarea'}</span>
+                </button>
+                <button onClick={() => { setFilterKey('aprobar'); setView('filter') }} className="touch-active" style={{ padding: isDesktop ? '11px 14px' : '10px 10px', borderRadius: 12, border: `1px solid ${porAprobar > 0 ? 'rgba(184,148,31,0.35)' : 'rgba(128,128,128,0.12)'}`, background: porAprobar > 0 ? 'rgba(184,148,31,0.07)' : 'rgba(128,128,128,0.03)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ fontSize: isDesktop ? 15 : 13 }}>✓</span>
+                  <span style={{ fontSize: isDesktop ? 12 : 11, fontWeight: 700, color: porAprobar > 0 ? '#D4AF37' : 'var(--muted)', flex: 1, textAlign: 'left' }}>Pendientes</span>
+                  {porAprobar > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: '#D4AF37', background: 'rgba(212,175,55,0.15)', borderRadius: 10, padding: '1px 6px', flexShrink: 0 }}>{porAprobar}</span>}
+                </button>
+                {isAdmin && (
+                  <button onClick={() => setView('analytics')} className="touch-active" style={{ padding: isDesktop ? '11px 14px' : '10px 10px', borderRadius: 12, border: '1px solid rgba(91,138,168,0.25)', background: 'rgba(91,138,168,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ fontSize: isDesktop ? 15 : 13 }}>◈</span>
+                    <span style={{ fontSize: isDesktop ? 12 : 11, fontWeight: 700, color: '#5B8AA8' }}>{isDesktop ? 'Panel KPIs' : 'Panel'}</span>
+                  </button>
+                )}
               </div>
 
               <TodayFocus tasks={tasks} onTaskClick={setSelectedTask} />
@@ -338,7 +365,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                   const isExpanded = expandedMacros.has(key)
                   const isAdminView = currentMacroArea === null
                   return (
-                    <div key={key} style={{ marginBottom: 28 }}>
+                    <div key={key} style={{ marginBottom: isDesktop ? 28 : 16 }}>
                       {/* Header macro — solo visible para admins, clickable toggle */}
                       {isAdminView && (
                         <div
@@ -360,9 +387,9 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                       )}
                       {/* Áreas de esta macro — colapsable */}
                       {(!isAdminView || isExpanded) && (
-                        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: isDesktop ? 12 : 10 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: isDesktop ? 12 : 8 }}>
                           {macro.areas.map(area => (
-                            <AreaCard key={area} area={area} tasks={tasks.filter(t => t.area === area)} onClick={() => router.push(`/gestion/area/${encodeURIComponent(area)}`)} />
+                            <AreaCard key={area} area={area} tasks={tasks.filter(t => t.area === area)} onClick={() => router.push(`/gestion/area/${encodeURIComponent(area)}`)} compact={!isDesktop} />
                           ))}
                         </div>
                       )}
@@ -504,35 +531,35 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           overflowY: 'auto',
         }}>
           {/* Logo + título + back to hub */}
-          <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <Logo size={36} />
+          <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <Logo size={28} />
               <div>
-                <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>El Regreso</p>
-                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>Gestión</p>
+                <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>El Regreso</p>
+                <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>Gestión</p>
               </div>
             </div>
             <a
               href={backHref}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
-                padding: '7px 10px', borderRadius: 9,
+                padding: '6px 10px', borderRadius: 9,
                 background: 'rgba(212,175,55,0.06)',
                 border: '1px solid rgba(212,175,55,0.12)',
-                color: '#A08830', fontSize: 12, fontWeight: 600,
+                color: '#A08830', fontSize: 11, fontWeight: 600,
                 textDecoration: 'none',
               }}
               onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.12)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.06)')}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
               {backHref === '/' ? 'Cambiar módulo' : '← Volver'}
             </a>
           </div>
 
           {/* Nav */}
-          <nav style={{ padding: '12px 10px', flex: 1 }}>
-            <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '4px 10px 8px', textTransform: 'uppercase' }}>Navegación</div>
+          <nav style={{ padding: '10px 8px', flex: 1 }}>
+            <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '2px 10px 6px', textTransform: 'uppercase' }}>Navegación</div>
             {visibleNavItems.map(item => {
               const isActive = view === item.key || (item.key === 'home' && view === 'filter')
               return (
@@ -541,20 +568,19 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                   onClick={() => setView(item.key)}
                   className={`sidebar-nav-item${isActive ? ' active' : ''}`}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    width: '100%', padding: '11px 14px', borderRadius: 10,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '9px 12px', borderRadius: 10,
                     border: 'none', cursor: 'pointer', marginBottom: 2,
                     background: isActive ? 'rgba(212,175,55,0.1)' : 'transparent',
                     textAlign: 'left', transition: 'background 0.15s',
                   }}
                 >
-                  <span style={{ fontSize: 16, lineHeight: 1 }}>{item.icon}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? 'var(--gold)' : 'var(--muted)' }}>
+                  <span style={{ fontSize: 15, lineHeight: 1 }}>{item.icon}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? 'var(--gold)' : 'var(--muted)' }}>
                     {item.label}
                   </span>
-                  {/* Badge alertas */}
                   {item.key === 'home' && (atrasadas + porAprobar) > 0 && (
-                    <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, color: '#FF7070', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 10, padding: '2px 6px' }}>
+                    <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, color: '#FF7070', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 10, padding: '1px 6px' }}>
                       {atrasadas + porAprobar}
                     </span>
                   )}
@@ -563,7 +589,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             })}
 
             {/* Filtros rápidos */}
-            <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '14px 10px 8px', textTransform: 'uppercase' }}>Filtros Rápidos</div>
+            <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '10px 10px 6px', textTransform: 'uppercase' }}>Filtros Rápidos</div>
             {([
               { key: 'activas',     label: 'Activas',    value: activas,    color: 'var(--cream)' },
               { key: 'en-proceso',  label: 'En Proceso', value: enProceso,  color: '#E67E22' },
@@ -575,15 +601,15 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                 onClick={() => { setFilterKey(s.key); setView('filter') }}
                 className="sidebar-nav-item touch-active"
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  width: '100%', padding: '9px 14px', borderRadius: 10,
+                  display: 'flex', alignItems: 'center', gap: 9,
+                  width: '100%', padding: '7px 12px', borderRadius: 10,
                   border: 'none', cursor: 'pointer', marginBottom: 2,
                   background: view === 'filter' && filterKey === s.key ? `${s.color}15` : 'transparent',
                   textAlign: 'left', transition: 'background 0.15s',
                 }}
               >
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{s.label}</span>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>{s.label}</span>
                 {s.value > 0 && (
                   <span style={{ fontSize: 10, fontWeight: 700, color: s.color }}>{s.value}</span>
                 )}
@@ -604,7 +630,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                         onClick={() => toggleSidebarMacro(key)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 6,
-                          width: '100%', padding: '14px 10px 6px', border: 'none',
+                          width: '100%', padding: '10px 10px 4px', border: 'none',
                           background: 'transparent', cursor: 'pointer', textAlign: 'left',
                         }}
                       >
@@ -612,19 +638,18 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                         <span style={{ fontSize: 10, color: macro.color, transition: 'transform 0.2s', display: 'inline-block', transform: isSidebarExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▾</span>
                       </button>
                     ) : (
-                      <div style={{ fontSize: 8, color: macro.color, letterSpacing: 1.8, padding: '14px 10px 6px', textTransform: 'uppercase', fontWeight: 700 }}>Áreas</div>
+                      <div style={{ fontSize: 8, color: macro.color, letterSpacing: 1.8, padding: '10px 10px 4px', textTransform: 'uppercase', fontWeight: 700 }}>Áreas</div>
                     )}
-                    {/* Area buttons — collapsible for admins */}
                     {(!isAdminView || isSidebarExpanded) && macro.areas.map(area => {
                       const areaCfg = AREA_CFG[area]
                       const count = tasks.filter(t => t.area === area && t.estado !== 'Completada').length
                       return (
                         <button key={area} onClick={() => router.push(`/gestion/area/${encodeURIComponent(area)}`)} className="sidebar-nav-item touch-active"
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', marginBottom: 2, background: 'transparent', textAlign: 'left', transition: 'background 0.15s' }}>
-                          <div style={{ width: 22, height: 22, borderRadius: 7, background: `${areaCfg.color}18`, border: `1px solid ${areaCfg.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: areaCfg.color, flexShrink: 0 }}>
+                          style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '7px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', marginBottom: 2, background: 'transparent', textAlign: 'left', transition: 'background 0.15s' }}>
+                          <div style={{ width: 20, height: 20, borderRadius: 6, background: `${areaCfg.color}18`, border: `1px solid ${areaCfg.color}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: areaCfg.color, flexShrink: 0 }}>
                             {areaCfg.code}
                           </div>
-                          <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{area}</span>
+                          <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{area}</span>
                           {count > 0 && <span style={{ fontSize: 10, color: areaCfg.color, fontWeight: 700 }}>{count}</span>}
                         </button>
                       )
@@ -636,34 +661,24 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           </nav>
 
           {/* Footer sidebar: usuario + acciones */}
-          <div style={{ borderTop: '1px solid rgba(128,128,128,0.1)', padding: '14px 16px' }}>
-            {/* Usuario */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <div style={{ width: 34, height: 34, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#0A0A0A', flexShrink: 0 }}>
+          <div style={{ borderTop: '1px solid rgba(128,128,128,0.1)', padding: '10px 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#0A0A0A', flexShrink: 0 }}>
                 {initials}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
-                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{isAdmin ? '★ Admin' : 'Usuario'}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
+                <div style={{ fontSize: 9, color: 'var(--muted)' }}>{isAdmin ? '★ Admin' : 'Usuario'}</div>
               </div>
-              <button onClick={refreshTasks} className="touch-active" title="Actualizar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 15, padding: 4 }}>↻</button>
+              <button onClick={refreshTasks} className="touch-active" title="Actualizar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 14, padding: 4 }}>↻</button>
             </div>
-            {/* Botones */}
-            <button
-              onClick={() => setShowSettings(true)}
-              className="touch-active"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 10, border: 'none', background: 'rgba(128,128,128,0.07)', cursor: 'pointer', marginBottom: 6 }}
-            >
-              <span style={{ fontSize: 14 }}>⚙</span>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>Configuración</span>
+            <button onClick={() => setShowSettings(true)} className="touch-active" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 10, border: 'none', background: 'rgba(128,128,128,0.07)', cursor: 'pointer', marginBottom: 5 }}>
+              <span style={{ fontSize: 13 }}>⚙</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Configuración</span>
             </button>
-            <button
-              onClick={handleLogout}
-              className="touch-active"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 10, border: 'none', background: 'rgba(255,68,68,0.06)', cursor: 'pointer' }}
-            >
-              <span style={{ fontSize: 14 }}>🚪</span>
-              <span style={{ fontSize: 12, color: '#FF6B6B' }}>Cerrar Sesión</span>
+            <button onClick={handleLogout} className="touch-active" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 10, border: 'none', background: 'rgba(255,68,68,0.06)', cursor: 'pointer' }}>
+              <span style={{ fontSize: 13 }}>🚪</span>
+              <span style={{ fontSize: 11, color: '#FF6B6B' }}>Cerrar Sesión</span>
             </button>
           </div>
         </aside>
@@ -673,6 +688,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
         {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} />}
         {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
+        {showNewTask && <NewTaskModal area={defaultNewTaskArea} users={users} onClose={() => setShowNewTask(false)} onCreated={(t) => { setTasks(prev => [t, ...prev]); setShowNewTask(false) }} />}
       </div>
     )
   }
@@ -684,33 +700,32 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
 
       {/* Topbar */}
-      <div className="safe-top" style={{ display: 'flex', alignItems: 'center', padding: '12px 20px', gap: 12, background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <Logo size={68} />
+      <div className="safe-top" style={{ display: 'flex', alignItems: 'center', padding: '8px 16px', gap: 10, background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <Logo size={30} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.5 }}>El Regreso Gestión</div>
-          <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.4 }}>SISTEMA OPERATIVO EJECUTIVO</div>
+          <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--cream)', letterSpacing: 0.2, lineHeight: 1.1 }}>Gestión</div>
+          <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 0.3 }}>El Regreso</div>
         </div>
-        <a href="/" title="Volver al Inicio"
-          style={{ background: 'rgba(91,138,168,0.1)', border: '1px solid rgba(91,138,168,0.2)', borderRadius: 8, padding: '5px 9px', color: '#5B8AA8', fontSize: 10, fontWeight: 700, textDecoration: 'none', flexShrink: 0, letterSpacing: 0.3 }}>
-          ⌂
-        </a>
-        <button onClick={refreshTasks} className="touch-active" title="Actualizar"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>
-          ↻
-        </button>
         {(atrasadas + porAprobar) > 0 && (
-          <div className="pulse" style={{ flexShrink: 0, padding: '4px 10px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#FF4444' }} />
+          <div className="pulse" style={{ flexShrink: 0, padding: '3px 8px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#FF4444' }} />
             <span style={{ fontSize: 10, fontWeight: 700, color: '#FF7070' }}>{atrasadas + porAprobar}</span>
           </div>
         )}
-        <button onClick={() => setShowSettings(true)} className="touch-active" title="Configuración"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', fontSize: 18, lineHeight: 1, flexShrink: 0 }}>
-          ⚙
+        <button onClick={refreshTasks} className="touch-active" title="Actualizar"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px 6px', color: 'var(--muted)', fontSize: 15, lineHeight: 1, flexShrink: 0 }}>
+          ↻
         </button>
-        <div style={{ width: 34, height: 34, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#0A0A0A', flexShrink: 0, position: 'relative' }}>
+        <a href="/" title="Módulos"
+          style={{ background: 'rgba(128,128,128,0.07)', border: '1px solid rgba(128,128,128,0.12)', borderRadius: 8, padding: '5px 8px', color: 'var(--muted)', fontSize: 13, textDecoration: 'none', flexShrink: 0, lineHeight: 1 }}>
+          ⌂
+        </a>
+        <div
+          onClick={() => setShowSettings(true)}
+          className="touch-active"
+          style={{ width: 32, height: 32, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#0A0A0A', flexShrink: 0, cursor: 'pointer', position: 'relative' }}>
           {initials}
-          {isAdmin && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 12, height: 12, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7 }}>★</div>}
+          {isAdmin && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 11, height: 11, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6 }}>★</div>}
         </div>
       </div>
 
@@ -721,7 +736,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
         {visibleNavItems.map(({ key, label }) => {
           const isActive = view === key || (key === 'home' && view === 'filter')
           return (
-            <button key={key} onClick={() => setView(key)} style={{ flex: 1, padding: '10px 4px 8px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--gold)' : 'var(--muted)', letterSpacing: 0.3, transition: 'color 0.15s' }}>
+            <button key={key} onClick={() => setView(key)} style={{ flex: 1, padding: '8px 4px 6px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--gold)' : 'var(--muted)', letterSpacing: 0.3, transition: 'color 0.15s' }}>
               <div>{label}</div>
               <div className={`nav-pill${isActive ? '' : ' inactive'}`} />
             </button>
