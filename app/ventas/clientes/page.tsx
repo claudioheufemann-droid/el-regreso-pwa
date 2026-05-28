@@ -1,10 +1,22 @@
 import { createClient } from '@/lib/supabase/server'
 import ClientesClient from './ClientesClient'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ClientesPage() {
   const supabase = await createClient()
 
-  // Clientes con datos base — todos, sin filtro de vendedor
+  // Período activo
+  const { data: periodo } = await supabase
+    .from('periodos')
+    .select('id, nombre, fecha_inicio, fecha_fin')
+    .eq('activo', true)
+    .single()
+
+  const fechaInicio = periodo?.fecha_inicio ?? '2000-01-01'
+  const fechaFin    = periodo?.fecha_fin    ?? new Date().toISOString().split('T')[0]
+
+  // Clientes con datos base
   const { data: clientes } = await supabase
     .from('clientes')
     .select('id, nombre_fantasia, razon_social, categoria, vendedor, localidad, localidad_entrega, ruta_despacho, telefono, lat, lng')
@@ -17,49 +29,79 @@ export default async function ClientesPage() {
     .order('fecha_hora', { ascending: false })
     .limit(5000)
 
-  // Último pedido + litros del período por cliente
-  const { data: ultimosPedidos } = await supabase
+  // Último pedido (histórico) — solo para mostrar "último pedido: X días"
+  const { data: ultimosPedidosHistorico } = await supabase
     .from('ventas')
-    .select('nombre_fantasia, fecha_pedido, litros, total_sin_impuesto')
+    .select('nombre_fantasia, fecha_pedido')
     .order('fecha_pedido', { ascending: false })
     .limit(10000)
 
-  // Construir mapa: último contacto por cliente
+  // Litros del PERÍODO ACTIVO por cliente
+  const { data: ventasPeriodo } = await supabase
+    .from('ventas')
+    .select('nombre_fantasia, vendedor_actual, litros, total_sin_impuesto, fecha_pedido')
+    .gte('fecha_pedido', fechaInicio)
+    .lte('fecha_pedido', fechaFin)
+
+  // Mapa: último contacto por cliente
   const contactoMap = new Map<string, { fecha: string; tipo: string; vendedor: string }>()
   for (const c of (ultimosContactos ?? [])) {
     if (!contactoMap.has(c.cliente_nombre_fantasia)) {
-      contactoMap.set(c.cliente_nombre_fantasia, {
-        fecha: c.fecha_hora,
-        tipo: c.tipo,
-        vendedor: c.vendedor,
-      })
+      contactoMap.set(c.cliente_nombre_fantasia, { fecha: c.fecha_hora, tipo: c.tipo, vendedor: c.vendedor })
     }
   }
 
-  // Construir mapa: último pedido + litros totales por cliente
-  const pedidoMap = new Map<string, { ultimaFecha: string; litrosTotal: number; ventaTotal: number }>()
-  for (const v of (ultimosPedidos ?? [])) {
+  // Mapa: última fecha de pedido por cliente (histórico)
+  const ultimaFechaMap = new Map<string, string>()
+  for (const v of (ultimosPedidosHistorico ?? [])) {
     if (!v.nombre_fantasia) continue
-    const existing = pedidoMap.get(v.nombre_fantasia)
-    if (!existing) {
-      pedidoMap.set(v.nombre_fantasia, {
-        ultimaFecha: v.fecha_pedido,
-        litrosTotal: v.litros ?? 0,
-        ventaTotal: v.total_sin_impuesto ?? 0,
-      })
-    } else {
-      existing.litrosTotal += v.litros ?? 0
-      existing.ventaTotal += v.total_sin_impuesto ?? 0
+    if (!ultimaFechaMap.has(v.nombre_fantasia)) {
+      ultimaFechaMap.set(v.nombre_fantasia, v.fecha_pedido)
     }
   }
 
-  // Enriquecer clientes con datos de contacto y pedidos
+  // Mapa: litros + venta del período por cliente
+  const periodoMap = new Map<string, { litrosPeriodo: number; ventaPeriodo: number }>()
+  for (const v of (ventasPeriodo ?? [])) {
+    if (!v.nombre_fantasia) continue
+    const existing = periodoMap.get(v.nombre_fantasia)
+    if (!existing) {
+      periodoMap.set(v.nombre_fantasia, { litrosPeriodo: v.litros ?? 0, ventaPeriodo: v.total_sin_impuesto ?? 0 })
+    } else {
+      existing.litrosPeriodo += v.litros ?? 0
+      existing.ventaPeriodo  += v.total_sin_impuesto ?? 0
+    }
+  }
+
+  // Totales del período por vendedor (para mostrar en el encabezado)
+  const totalesPorVendedor: Record<string, { litros: number; venta: number }> = {}
+  for (const v of (ventasPeriodo ?? [])) {
+    const vend = v.vendedor_actual
+    if (!vend) continue
+    if (!totalesPorVendedor[vend]) totalesPorVendedor[vend] = { litros: 0, venta: 0 }
+    totalesPorVendedor[vend].litros += v.litros ?? 0
+    totalesPorVendedor[vend].venta  += v.total_sin_impuesto ?? 0
+  }
+
+  // Enriquecer clientes
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clientesEnriquecidos = (clientes ?? []).map((c: any) => ({
     ...c,
     ultimoContacto: contactoMap.get(c.nombre_fantasia ?? '') ?? null,
-    ultimoPedido: pedidoMap.get(c.nombre_fantasia ?? '') ?? null,
+    ultimoPedido: ultimaFechaMap.has(c.nombre_fantasia ?? '')
+      ? {
+          ultimaFecha:   ultimaFechaMap.get(c.nombre_fantasia!)!,
+          litrosPeriodo: periodoMap.get(c.nombre_fantasia ?? '')?.litrosPeriodo ?? 0,
+          ventaPeriodo:  periodoMap.get(c.nombre_fantasia ?? '')?.ventaPeriodo  ?? 0,
+        }
+      : null,
   }))
 
-  return <ClientesClient clientes={clientesEnriquecidos} />
+  return (
+    <ClientesClient
+      clientes={clientesEnriquecidos}
+      periodo={periodo ? { nombre: periodo.nombre, fecha_inicio: fechaInicio, fecha_fin: fechaFin } : null}
+      totalesPorVendedor={totalesPorVendedor}
+    />
+  )
 }

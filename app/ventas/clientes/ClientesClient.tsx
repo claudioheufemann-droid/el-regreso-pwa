@@ -22,11 +22,13 @@ interface Cliente {
   lat: number | null
   lng: number | null
   ultimoContacto: { fecha: string; tipo: string; vendedor: string } | null
-  ultimoPedido: { ultimaFecha: string; litrosTotal: number; ventaTotal: number } | null
+  ultimoPedido: { ultimaFecha: string; litrosPeriodo: number; ventaPeriodo: number } | null
 }
 
 interface Props {
   clientes: Cliente[]
+  periodo: { nombre: string; fecha_inicio: string; fecha_fin: string } | null
+  totalesPorVendedor: Record<string, { litros: number; venta: number }>
 }
 
 function diasDesde(fechaStr: string | null | undefined): number | null {
@@ -417,7 +419,7 @@ function RutaSection({ ruta, clientes, isAdmin, modoSeleccion, seleccionados, on
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
-export default function ClientesClient({ clientes }: Props) {
+export default function ClientesClient({ clientes, periodo, totalesPorVendedor }: Props) {
   const isDesktop = useIsDesktop()
   const { user, isAdmin } = useUser()
   const [busqueda, setBusqueda] = useState('')
@@ -518,6 +520,38 @@ export default function ClientesClient({ clientes }: Props) {
           </button>
         </div>
       </div>
+
+      {/* Totales del período por vendedor */}
+      {periodo && Object.keys(totalesPorVendedor).length > 0 && (
+        <div style={{
+          borderRadius: 14, padding: '12px 16px', marginBottom: 14,
+          background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.18)',
+        }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#D4AF37', letterSpacing: '0.07em', marginBottom: 10 }}>
+            LITROS PERÍODO — {periodo.nombre}
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {Object.entries(totalesPorVendedor)
+              .filter(([vend]) => vendedorEfectivo === 'all' || vend === vendedorEfectivo)
+              .map(([vend, data]) => {
+                const color = vend === 'Javier Badilla' ? '#F59E0B' : vend === 'Carlos Urrejola' ? '#60A5FA' : '#A78BFA'
+                return (
+                  <div key={vend} style={{
+                    flex: 1, minWidth: 140,
+                    background: `${color}10`, border: `1px solid ${color}30`,
+                    borderRadius: 10, padding: '10px 14px',
+                  }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 4 }}>{vend.split(' ')[0].toUpperCase()}</p>
+                    <p style={{ fontSize: 22, fontWeight: 900, color: '#fff', lineHeight: 1 }}>
+                      {Math.round(data.litros * 10) / 10}
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#888', marginLeft: 4 }}>L</span>
+                    </p>
+                  </div>
+                )
+              })}
+          </div>
+        </div>
+      )}
 
       {/* Stats (solo admin) */}
       {isAdmin && (
