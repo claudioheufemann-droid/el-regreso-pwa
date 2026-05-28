@@ -14,6 +14,7 @@ const TABS: PageTab[] = [
   { href: '/ventas/admin/cargar',           label: 'Cargar',   adminOnly: true },
   { href: '/ventas/admin/reportes',         label: 'Reportes', adminOnly: true },
   { href: '/ventas/admin/clientes-upload',  label: 'Importar', adminOnly: true },
+  { href: '/ventas/admin/rutas-clientes',   label: 'Rutas',    adminOnly: true },
 ]
 
 export default async function VentasLayout({ children }: { children: React.ReactNode }) {
@@ -26,7 +27,9 @@ export default async function VentasLayout({ children }: { children: React.React
         <Sidebar />
       </div>
       <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-24 lg:pb-0">
-        <PageTabs tabs={TABS} />
+        <div className="lg:hidden">
+          <PageTabs tabs={TABS} />
+        </div>
         {children}
       </main>
       <div className="lg:hidden">
