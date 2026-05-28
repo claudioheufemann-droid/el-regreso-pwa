@@ -3,16 +3,33 @@ import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
 
 function getString(row: Record<string, unknown>, ...keys: string[]): string | null {
+  // First try exact matches
   for (const k of keys) {
     const v = row[k]
     if (v !== null && v !== undefined && String(v).trim() !== '') {
       return String(v).trim()
     }
   }
+
+  // Then try case-insensitive and with/without accents
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i').replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u')
+
+  const normalizedKeys = keys.map(normalize)
+  for (const [k, v] of Object.entries(row)) {
+    if (v !== null && v !== undefined && String(v).trim() !== '') {
+      const normalizedKey = normalize(k)
+      if (normalizedKeys.includes(normalizedKey)) {
+        return String(v).trim()
+      }
+    }
+  }
+
   return null
 }
 
 function getNumber(row: Record<string, unknown>, ...keys: string[]): number | null {
+  // First try exact matches
   for (const k of keys) {
     const v = row[k]
     if (v !== null && v !== undefined) {
@@ -20,6 +37,22 @@ function getNumber(row: Record<string, unknown>, ...keys: string[]): number | nu
       if (!isNaN(n)) return n
     }
   }
+
+  // Then try case-insensitive
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i').replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u')
+
+  const normalizedKeys = keys.map(normalize)
+  for (const [k, v] of Object.entries(row)) {
+    if (v !== null && v !== undefined) {
+      const normalizedKey = normalize(k)
+      if (normalizedKeys.includes(normalizedKey)) {
+        const n = parseFloat(String(v))
+        if (!isNaN(n)) return n
+      }
+    }
+  }
+
   return null
 }
 
@@ -54,13 +87,42 @@ export async function POST(req: NextRequest) {
 
   const sheetName = wb.SheetNames[0]
   const ws = wb.Sheets[sheetName]
-  const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, {
+
+  // Read all raw data to find header row
+  const allRawRows: unknown[][] = XLSX.utils.sheet_to_json(ws, {
     defval: null,
-    raw: false,
-  })
+    header: 1,
+  }) as unknown[][]
+
+  // Find header row (contains "nombre", "Nombre", etc.)
+  let headerRowIdx = 0
+  for (let i = 0; i < Math.min(allRawRows.length, 10); i++) {
+    const row = allRawRows[i]
+    if (Array.isArray(row) && row.some(v => v && String(v).toLowerCase().includes('nombre'))) {
+      headerRowIdx = i
+      break
+    }
+  }
+
+  // Extract headers and data rows
+  const headerRow = allRawRows[headerRowIdx] as unknown[]
+  const dataRows = allRawRows.slice(headerRowIdx + 1)
+
+  // Convert to objects with header names
+  const rows = dataRows
+    .map(row => {
+      if (!Array.isArray(row) || row.length === 0) return null
+      const obj: Record<string, unknown> = {}
+      for (let i = 0; i < headerRow.length; i++) {
+        const key = String(headerRow[i] ?? '').trim()
+        if (key) obj[key] = row[i] ?? null
+      }
+      return Object.keys(obj).length > 0 ? obj : null
+    })
+    .filter(Boolean) as Record<string, unknown>[]
 
   if (rows.length === 0) {
-    return NextResponse.json({ error: 'El archivo no contiene datos' }, { status: 400 })
+    return NextResponse.json({ error: 'El archivo no contiene datos. Verifica que tenga una columna "Nombre".' }, { status: 400 })
   }
 
   // Map Excel rows → clientes records
