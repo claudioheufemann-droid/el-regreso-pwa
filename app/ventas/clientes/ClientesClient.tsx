@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
   MessageCircle, Search, ChevronDown, ChevronUp, MapPin,
   Send, X, CheckSquare, Square, Clock, Zap, Users,
@@ -417,6 +418,7 @@ function RutaSection({ ruta, clientes, isAdmin, modoSeleccion, seleccionados, on
 
 // ── Main ───────────────────────────────────────────────────────────────────
 export default function ClientesClient({ clientes }: Props) {
+  const isDesktop = useIsDesktop()
   const { user, isAdmin } = useUser()
   const [busqueda, setBusqueda] = useState('')
   const [vendedorFiltro, setVendedorFiltro] = useState<string>('all')
@@ -483,7 +485,7 @@ export default function ClientesClient({ clientes }: Props) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>Clientes</h1>
+          <h1 style={{ fontSize: isDesktop ? 26 : 20, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>Clientes</h1>
           <p style={{ fontSize: 13, color: '#666', marginTop: 3 }}>Cartera por ruta de despacho</p>
         </div>
 

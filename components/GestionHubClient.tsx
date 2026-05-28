@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { ChevronRight, Lock, Home } from 'lucide-react'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 
 interface AreaCard {
   key: string
@@ -46,17 +47,18 @@ interface Props {
 }
 
 export default function GestionHubClient({ userName, taskCounts }: Props) {
+  const isDesktop = useIsDesktop()
   const router = useRouter()
 
   return (
-    <div style={{ padding: 'var(--sp-3)', maxWidth: 640, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: isDesktop ? 'var(--sp-3)' : '16px 14px 80px', maxWidth: 640, margin: '0 auto', width: '100%' }}>
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
+      <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
+        <p style={{ fontSize: isDesktop ? 11 : 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: isDesktop ? 4 : 3 }}>
           {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>
+          <h1 style={{ fontSize: isDesktop ? 'var(--fs-title)' : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>
             Gestión
           </h1>
           <button

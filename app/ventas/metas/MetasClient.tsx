@@ -3,6 +3,7 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { Target, Calendar, CheckCircle, Clock, ChevronDown } from 'lucide-react'
 import { Periodo } from '@/lib/types'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
   getDiasHabiles,
   getDiasHabilesTranscurridos,
@@ -1017,6 +1018,7 @@ export default function MetasClient({
   fechaRef, mesInicio, mesFin, semanaInicio, semanaFin,
   periodo, vendedores, periodosSemanas, periodosMeses,
 }: Props) {
+  const isDesktop = useIsDesktop()
   const [vista, setVista] = useState<Vista>('semanal')
   const [navDate, setNavDate] = useState<string>(fechaRef)
   const [navAnalytics, setNavAnalytics] = useState<AnalyticsExtended[] | null>(null)
@@ -1343,8 +1345,8 @@ export default function MetasClient({
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="px-4 pt-8 pb-16 lg:px-12 lg:pt-10" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
+      <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
+        <h1 style={{ fontSize: isDesktop ? 32 : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
           Metas Comerciales
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
@@ -1380,8 +1382,8 @@ export default function MetasClient({
           <div style={{
             background: 'linear-gradient(135deg, #110D00 0%, #1C1500 100%)',
             border: `1px solid ${SEMAFORO_COLORS[semEquipo]}40`,
-            borderRadius: 20, padding: '20px 28px', marginBottom: 24,
-            display: 'flex', alignItems: 'center', gap: 40, flexWrap: 'wrap',
+            borderRadius: 20, padding: isDesktop ? '20px 28px' : '16px 18px', marginBottom: isDesktop ? 24 : 14,
+            display: 'flex', alignItems: isDesktop ? 'center' : 'flex-start', gap: isDesktop ? 40 : 16, flexWrap: 'wrap',
           }}>
             <div>
               <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.6)', letterSpacing: '1.8px', textTransform: 'uppercase', marginBottom: 6 }}>
@@ -1394,7 +1396,7 @@ export default function MetasClient({
                 <span style={{ fontSize: 14, color: 'var(--muted)' }}>cumplimiento</span>
               </div>
             </div>
-            <div style={{ width: 1, height: 48, background: 'var(--border)', flexShrink: 0 }} />
+            {isDesktop && <div style={{ width: 1, height: 48, background: 'var(--border)', flexShrink: 0 }} />}
             {[
               { label: 'Realizado', value: `${fmt(totalReal)} L` },
               { label: 'Meta', value: `${fmt(totalMeta)} L` },
@@ -1494,7 +1496,7 @@ export default function MetasClient({
           </div>
 
           {/* Grid de vendedores */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(auto-fit, minmax(400px, 1fr))' : '1fr', gap: isDesktop ? 24 : 14 }}>
             {activeAnalytics.map(a => (
               <VendedorCard key={a.vendedor} analytics={a} vista={vista} />
             ))}

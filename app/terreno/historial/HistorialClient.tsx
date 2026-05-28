@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { MapPin, CheckCircle, XCircle, Clock, ChevronRight, Filter } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 
 const T = '#D4AF37'
 const T_DIM = 'rgba(212,175,55,0.12)'
@@ -59,6 +60,7 @@ function labelFecha(iso: string) {
 }
 
 export default function HistorialClient({ user, visitas, vendedores }: Props) {
+  const isDesktop = useIsDesktop()
   const [filtroVendedor, setFiltroVendedor] = useState<string>('todos')
   const [filtroResultado, setFiltroResultado] = useState<'todos' | 'con_venta' | 'sin_venta'>('todos')
   const [showFiltros, setShowFiltros] = useState(false)
@@ -89,11 +91,11 @@ export default function HistorialClient({ user, visitas, vendedores }: Props) {
 
       {/* Título de página */}
       <div style={{
-        padding: '32px 28px 20px',
+        padding: isDesktop ? '32px 28px 20px' : '16px 14px 14px',
         borderBottom: '1px solid rgba(255,255,255,0.05)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>
+        <h1 style={{ fontSize: isDesktop ? 22 : 18, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>
           Historial
         </h1>
         <button
@@ -114,7 +116,7 @@ export default function HistorialClient({ user, visitas, vendedores }: Props) {
       {showFiltros && (
         <div style={{
           background: 'var(--surface2)', borderBottom: '1px solid rgba(255,255,255,0.06)',
-          padding: '14px 28px', display: 'flex', flexDirection: 'column', gap: 12,
+          padding: isDesktop ? '14px 28px' : '12px 14px', display: 'flex', flexDirection: 'column', gap: 12,
         }}>
           {user.isAdmin && (
             <div>
@@ -138,10 +140,10 @@ export default function HistorialClient({ user, visitas, vendedores }: Props) {
         </div>
       )}
 
-      <div style={{ padding: '20px 28px', maxWidth: 700 }}>
+      <div style={{ padding: isDesktop ? '20px 28px' : '14px 14px', maxWidth: 700 }}>
 
         {/* KPIs resumen */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4,1fr)' : 'repeat(2,1fr)', gap: 8, marginBottom: isDesktop ? 20 : 14 }}>
           {[
             { label: 'Visitas', value: kpis.total, color: '#F4EEDF' },
             { label: 'Con venta', value: kpis.conVenta, color: T },
