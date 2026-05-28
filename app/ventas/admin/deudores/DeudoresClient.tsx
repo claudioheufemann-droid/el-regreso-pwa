@@ -1,8 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { useIsDesktop } from '@/lib/useIsDesktop'
-import { Upload, Filter, AlertTriangle, CheckCircle2, BarChart3, Mail, MapPin } from 'lucide-react'
+import { Upload, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 interface Deudor {
@@ -29,10 +28,6 @@ interface Deudor {
   deuda_entre_60_89_dias: number
   deuda_mas_90_dias: number
   dias_pago?: number
-  upload_batch_id?: string | null
-  external_remito_mas_antiguo?: number
-  external_fecha?: string | null
-  created_at?: string
   updated_at: string
 }
 
@@ -45,7 +40,6 @@ interface UploadStats {
 }
 
 export default function DeudoresClient({ initialDeudores }: { initialDeudores: Deudor[] }) {
-  const isDesktop = useIsDesktop()
   const [deudores, setDeudores] = useState<Deudor[]>(initialDeudores)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
@@ -57,11 +51,9 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
   const [searchText, setSearchText] = useState('')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
-  // Get unique vendors and categories
   const vendedores = Array.from(new Set(deudores.map(d => d.vendedor).filter((v): v is string => v !== null && v !== undefined)))
   const categorias = Array.from(new Set(deudores.map(d => d.categoria_cliente).filter((c): c is string => c !== null && c !== undefined)))
 
-  // Filter deudores
   const filteredDeudores = deudores.filter(d => {
     if (filterVendedor && d.vendedor !== filterVendedor) return false
     if (filterCategoria && d.categoria_cliente !== filterCategoria) return false
@@ -71,49 +63,32 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
     return true
   })
 
-  // Calculate totals
   const totals = {
     deudores: filteredDeudores.length,
-    saldo_total: filteredDeudores.reduce((sum, d) => sum + d.saldo_total, 0),
-    deuda_vencida: filteredDeudores.reduce((sum, d) => sum + d.deuda_vencida, 0),
-    barriles_adeudados: filteredDeudores.reduce((sum, d) => sum + d.barriles_adeudados, 0),
+    saldo_total: filteredDeudores.reduce((sum, d) => sum + (d.saldo_total || 0), 0),
+    deuda_vencida: filteredDeudores.reduce((sum, d) => sum + (d.deuda_vencida || 0), 0),
+    barriles_adeudados: filteredDeudores.reduce((sum, d) => sum + (d.barriles_adeudados || 0), 0),
   }
 
-  // Handle file upload
   const handleUpload = useCallback(async (file: File) => {
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
       setUploadError('Solo archivos Excel (.xlsx, .xls)')
       return
     }
-
     setUploading(true)
     setUploadError('')
     setUploadStats(null)
-
     try {
       const formData = new FormData()
       formData.append('file', file)
-
-      const response = await fetch('/api/deudores/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
+      const response = await fetch('/api/deudores/upload', { method: 'POST', body: formData })
       const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Error uploading file')
-      }
-
+      if (!response.ok) throw new Error(data.error || 'Error al subir')
       setUploadStats(data)
-      // Refresh deudores list
       const listResponse = await fetch('/api/deudores/list')
-      if (listResponse.ok) {
-        const newDeudores = await listResponse.json()
-        setDeudores(newDeudores)
-      }
+      if (listResponse.ok) setDeudores(await listResponse.json())
     } catch (error: unknown) {
-      setUploadError(error instanceof Error ? error.message : 'Error uploading file')
+      setUploadError(error instanceof Error ? error.message : 'Error al subir')
     } finally {
       setUploading(false)
     }
@@ -122,361 +97,328 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true)
-    } else if (e.type === 'dragleave') {
-      setDragActive(false)
-    }
+    setDragActive(e.type === 'dragenter' || e.type === 'dragover')
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-
     const files = e.dataTransfer.files
-    if (files && files[0]) {
-      handleUpload(files[0])
-    }
+    if (files?.[0]) handleUpload(files[0])
   }
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.currentTarget.files
-    if (files && files[0]) {
-      handleUpload(files[0])
-    }
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '8px 12px',
+    background: 'var(--bg)', border: '1px solid var(--border)',
+    borderRadius: 8, color: 'var(--cream)', fontSize: 13,
+    outline: 'none',
   }
 
-  if (!isDesktop) {
-    return (
-      <div className="p-4 text-center text-gray-600">
-        <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-yellow-500" />
-        <p>Esta sección está optimizada para pantalla de escritorio.</p>
-      </div>
-    )
+  const selectStyle: React.CSSProperties = {
+    ...inputStyle,
+    appearance: 'none',
+    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23888\' stroke-width=\'2\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 10px center',
+    paddingRight: 32,
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">Gestión de Deudores</h1>
-          <p className="text-slate-600">Carga y monitorea deuda vencida, barriles adeudados y últimos pagos</p>
+    <div style={{ maxWidth: 1400 }}>
+
+      {/* Upload zone */}
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 14, padding: '20px 24px', marginBottom: 20,
+      }}>
+        <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', marginBottom: 12 }}>
+          Cargar Informe de Deudores
+        </p>
+
+        <div
+          onDragEnter={handleDrag} onDragLeave={handleDrag}
+          onDragOver={handleDrag} onDrop={handleDrop}
+          style={{
+            border: `2px dashed ${dragActive ? 'var(--gold)' : 'var(--border)'}`,
+            borderRadius: 10, padding: '24px 20px', textAlign: 'center',
+            background: dragActive ? 'rgba(212,175,55,0.04)' : 'transparent',
+            transition: 'all 0.15s', cursor: 'pointer',
+          }}
+        >
+          <Upload size={28} style={{ margin: '0 auto 10px', color: dragActive ? 'var(--gold)' : 'var(--muted)' }} />
+          <p style={{ fontSize: 13, color: 'var(--cream)', fontWeight: 600, marginBottom: 4 }}>
+            Arrastra el Excel aquí
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+            o haz clic para seleccionar
+          </p>
+          <label>
+            <input
+              type="file" accept=".xlsx,.xls"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }}
+              disabled={uploading} style={{ display: 'none' }}
+            />
+            <span style={{
+              display: 'inline-block', padding: '7px 20px',
+              background: 'var(--gold)', color: '#1a1200',
+              borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}>
+              {uploading ? 'Cargando...' : 'Seleccionar archivo'}
+            </span>
+          </label>
+          <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10 }}>Solo .xlsx o .xls</p>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-blue-500">
-            <p className="text-slate-600 text-sm font-semibold mb-1">TOTAL DEUDORES</p>
-            <p className="text-3xl font-bold text-slate-900">{totals.deudores}</p>
-            <p className="text-xs text-slate-500 mt-2">Filtrados actualmente</p>
+        {uploadError && (
+          <div style={{
+            marginTop: 12, padding: '10px 14px', borderRadius: 8,
+            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+            display: 'flex', gap: 8, alignItems: 'flex-start',
+          }}>
+            <AlertTriangle size={15} style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }} />
+            <p style={{ fontSize: 13, color: '#F87171' }}>{uploadError}</p>
           </div>
+        )}
 
-          <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-red-500">
-            <p className="text-slate-600 text-sm font-semibold mb-1">DEUDA VENCIDA</p>
-            <p className="text-3xl font-bold text-red-600">{formatCurrency(totals.deuda_vencida)}</p>
-            <p className="text-xs text-slate-500 mt-2">A cobrar urgente</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-amber-500">
-            <p className="text-slate-600 text-sm font-semibold mb-1">SALDO TOTAL</p>
-            <p className="text-3xl font-bold text-amber-600">{formatCurrency(totals.saldo_total)}</p>
-            <p className="text-xs text-slate-500 mt-2">Toda deuda</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-purple-500">
-            <p className="text-slate-600 text-sm font-semibold mb-1">BARRILES ADEUDADOS</p>
-            <p className="text-3xl font-bold text-purple-600">{totals.barriles_adeudados}</p>
-            <p className="text-xs text-slate-500 mt-2">Unidades pendientes</p>
-          </div>
-        </div>
-
-        {/* Upload Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8 mb-8">
-          <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-            <Upload className="w-6 h-6 text-blue-600" />
-            Cargar Informe de Deudores
-          </h2>
-
-          <div
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
-              dragActive
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50'
-            }`}
-          >
-            <Upload className={`w-12 h-12 mx-auto mb-4 ${dragActive ? 'text-blue-600' : 'text-slate-400'}`} />
-            <p className="text-slate-900 font-semibold mb-1">Arrastra un archivo Excel aquí</p>
-            <p className="text-slate-600 text-sm mb-4">o haz clic para seleccionar</p>
-
-            <label className="inline-block">
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileInput}
-                disabled={uploading}
-                className="hidden"
-              />
-              <span className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold cursor-pointer hover:bg-blue-700 disabled:opacity-50">
-                {uploading ? 'Cargando...' : 'Seleccionar archivo'}
+        {uploadStats && (
+          <div style={{
+            marginTop: 12, padding: '12px 16px', borderRadius: 8,
+            background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)',
+          }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+              <CheckCircle2 size={15} style={{ color: '#4ade80' }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#4ade80' }}>
+                Carga exitosa
               </span>
-            </label>
-
-            <p className="text-xs text-slate-500 mt-4">Solo archivos Excel (.xlsx, .xls)</p>
-          </div>
-
-          {uploadError && (
-            <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-red-900">{uploadError}</p>
-              </div>
             </div>
-          )}
-
-          {uploadStats && (
-            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex gap-3 mb-3">
-                <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-green-900">Carga exitosa</p>
-                  <p className="text-sm text-green-700">Batch ID: {uploadStats.batch_id}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+              {[
+                { label: 'Procesados', value: uploadStats.total_procesados, color: 'var(--cream)' },
+                { label: 'Nuevos', value: uploadStats.nuevos, color: '#60a5fa' },
+                { label: 'Actualizados', value: uploadStats.actualizados, color: 'var(--gold)' },
+                { label: 'Duplicados', value: uploadStats.duplicados_en_archivo, color: '#f87171' },
+              ].map(({ label, value, color }) => (
+                <div key={label}>
+                  <p style={{ fontSize: 20, fontWeight: 900, color }}>{value}</p>
+                  <p style={{ fontSize: 11, color: 'var(--muted)' }}>{label}</p>
                 </div>
-              </div>
-              <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
-                <div>
-                  <p className="text-green-600 font-semibold">{uploadStats.total_procesados}</p>
-                  <p className="text-green-700">Procesados</p>
-                </div>
-                <div>
-                  <p className="text-blue-600 font-semibold">{uploadStats.nuevos}</p>
-                  <p className="text-blue-700">Nuevos</p>
-                </div>
-                <div>
-                  <p className="text-amber-600 font-semibold">{uploadStats.actualizados}</p>
-                  <p className="text-amber-700">Actualizados</p>
-                </div>
-                <div>
-                  <p className="text-red-600 font-semibold">{uploadStats.duplicados_en_archivo}</p>
-                  <p className="text-red-700">Duplicados</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mb-8">
-          <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Filter className="w-5 h-5 text-blue-600" />
-            Filtros
-          </h2>
-
-          <div className="grid grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Buscar cliente</label>
-              <input
-                type="text"
-                value={searchText}
-                onChange={e => setSearchText(e.target.value)}
-                placeholder="Nombre de fantasía..."
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Vendedor</label>
-              <select
-                value={filterVendedor}
-                onChange={e => setFilterVendedor(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Todos</option>
-                {vendedores.map(v => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Categoría</label>
-              <select
-                value={filterCategoria}
-                onChange={e => setFilterCategoria(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Todas</option>
-                {categorias.map(c => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Estado deuda</label>
-              <select
-                value={filterDeudaVencida}
-                onChange={e => setFilterDeudaVencida(e.target.value as typeof filterDeudaVencida)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="todos">Todos</option>
-                <option value="vencida">Con deuda vencida</option>
-                <option value="sin-vencida">Sin deuda vencida</option>
-              </select>
+              ))}
             </div>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-100 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-700">Cliente</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-700">Vendedor</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-700">Categoría</th>
-                  <th className="px-6 py-3 text-right font-semibold text-slate-700">Deuda Vencida</th>
-                  <th className="px-6 py-3 text-right font-semibold text-slate-700">Saldo Total</th>
-                  <th className="px-6 py-3 text-right font-semibold text-slate-700">Barriles</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-700">Último Pago</th>
-                  <th className="px-6 py-3 text-center font-semibold text-slate-700">Detalle</th>
+      {/* KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+        {[
+          { label: 'Total Deudores', value: totals.deudores, format: 'n', color: '#60a5fa' },
+          { label: 'Deuda Vencida', value: totals.deuda_vencida, format: '$', color: '#f87171' },
+          { label: 'Saldo Total', value: totals.saldo_total, format: '$', color: 'var(--gold)' },
+          { label: 'Barriles', value: totals.barriles_adeudados, format: 'n', color: '#c084fc' },
+        ].map(({ label, value, format, color }) => (
+          <div key={label} style={{
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderTop: `3px solid ${color}`, borderRadius: 12, padding: '16px 20px',
+          }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
+              {label}
+            </p>
+            <p style={{ fontSize: 22, fontWeight: 900, color }}>
+              {format === '$' ? formatCurrency(value) : value.toLocaleString('es-CL')}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 12, padding: '16px 20px', marginBottom: 16,
+        display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12,
+      }}>
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+            BUSCAR
+          </label>
+          <input
+            type="text" value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder="Nombre cliente..."
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+            VENDEDOR
+          </label>
+          <select value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)} style={selectStyle}>
+            <option value="">Todos</option>
+            {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+            CATEGORÍA
+          </label>
+          <select value={filterCategoria} onChange={e => setFilterCategoria(e.target.value)} style={selectStyle}>
+            <option value="">Todas</option>
+            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>
+            ESTADO
+          </label>
+          <select
+            value={filterDeudaVencida}
+            onChange={e => setFilterDeudaVencida(e.target.value as typeof filterDeudaVencida)}
+            style={selectStyle}
+          >
+            <option value="todos">Todos</option>
+            <option value="vencida">Con deuda vencida</option>
+            <option value="sin-vencida">Sin deuda vencida</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 12, overflow: 'hidden',
+      }}>
+        {filteredDeudores.length === 0 ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+            <p style={{ color: 'var(--muted)', fontSize: 14 }}>
+              {deudores.length === 0
+                ? 'Carga el informe de deudores para ver los datos'
+                : 'No hay deudores que coincidan con los filtros'}
+            </p>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  {['Cliente', 'Vendedor', 'Categoría', 'Deuda Vencida', 'Saldo Total', 'Barriles', 'Último Pago', ''].map(h => (
+                    <th key={h} style={{
+                      padding: '10px 14px', textAlign: h === 'Deuda Vencida' || h === 'Saldo Total' || h === 'Barriles' ? 'right' : 'left',
+                      fontSize: 11, fontWeight: 700, color: 'var(--muted)',
+                      letterSpacing: '0.5px', textTransform: 'uppercase',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filteredDeudores.map((deudor, idx) => (
+              <tbody>
+                {filteredDeudores.map((deudor) => (
                   <>
                     <tr
                       key={deudor.id}
-                      className={`hover:bg-blue-50 transition-colors cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}
                       onClick={() => setExpandedRow(expandedRow === deudor.id ? null : deudor.id)}
+                      style={{
+                        borderBottom: '1px solid var(--border)', cursor: 'pointer',
+                        background: expandedRow === deudor.id ? 'rgba(212,175,55,0.04)' : 'transparent',
+                        transition: 'background 0.1s',
+                      }}
+                      onMouseEnter={e => { if (expandedRow !== deudor.id) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)' }}
+                      onMouseLeave={e => { if (expandedRow !== deudor.id) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
-                      <td className="px-6 py-4 font-semibold text-slate-900">{deudor.nombre_fantasia}</td>
-                      <td className="px-6 py-4 text-slate-600">{deudor.vendedor || '-'}</td>
-                      <td className="px-6 py-4 text-slate-600">{deudor.categoria_cliente || '-'}</td>
-                      <td
-                        className={`px-6 py-4 text-right font-semibold ${
-                          deudor.deuda_vencida > 0 ? 'text-red-600' : 'text-green-600'
-                        }`}
-                      >
+                      <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--cream)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {deudor.nombre_fantasia}
+                      </td>
+                      <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{deudor.vendedor || '—'}</td>
+                      <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{deudor.categoria_cliente || '—'}</td>
+                      <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: deudor.deuda_vencida > 0 ? '#f87171' : '#4ade80' }}>
                         {formatCurrency(deudor.deuda_vencida)}
                       </td>
-                      <td className="px-6 py-4 text-right text-slate-900 font-semibold">
+                      <td style={{ padding: '11px 14px', textAlign: 'right', color: 'var(--cream)', fontWeight: 600 }}>
                         {formatCurrency(deudor.saldo_total)}
                       </td>
-                      <td className="px-6 py-4 text-right font-semibold text-slate-900">{deudor.barriles_adeudados}</td>
-                      <td className="px-6 py-4 text-slate-600">
-                        {deudor.ultimo_pago
-                          ? new Date(deudor.ultimo_pago).toLocaleDateString('es-CL')
-                          : 'Sin registros'}
+                      <td style={{ padding: '11px 14px', textAlign: 'right', color: deudor.barriles_adeudados > 0 ? '#c084fc' : 'var(--muted)', fontWeight: 600 }}>
+                        {deudor.barriles_adeudados}
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="text-blue-600 font-semibold text-xs">
-                          {expandedRow === deudor.id ? '▼' : '▶'}
-                        </span>
+                      <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>
+                        {deudor.ultimo_pago ? new Date(deudor.ultimo_pago).toLocaleDateString('es-CL') : '—'}
+                      </td>
+                      <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                        {expandedRow === deudor.id
+                          ? <ChevronDown size={14} style={{ color: 'var(--gold)' }} />
+                          : <ChevronRight size={14} style={{ color: 'var(--muted)' }} />}
                       </td>
                     </tr>
 
                     {expandedRow === deudor.id && (
-                      <tr className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                        <td colSpan={8} className="px-6 py-6 bg-blue-50 border-t border-blue-200">
-                          <div className="grid grid-cols-3 gap-8">
-                            {/* Contact Info */}
+                      <tr key={`${deudor.id}-detail`}>
+                        <td colSpan={8} style={{
+                          padding: '20px 24px',
+                          background: 'rgba(212,175,55,0.03)',
+                          borderBottom: '1px solid var(--border)',
+                          borderLeft: '3px solid var(--gold)',
+                        }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
+
+                            {/* Contacto */}
                             <div>
-                              <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                <Mail className="w-4 h-4" />
-                                Información de Contacto
-                              </h3>
-                              <div className="space-y-2 text-sm">
-                                {deudor.email && (
-                                  <p className="text-slate-700">
-                                    <span className="font-semibold">Email:</span> {deudor.email}
-                                  </p>
-                                )}
-                                {deudor.telefono && (
-                                  <p className="text-slate-700">
-                                    <span className="font-semibold">Teléfono:</span> {deudor.telefono}
-                                  </p>
-                                )}
-                                {deudor.localidad && (
-                                  <p className="text-slate-700">
-                                    <span className="font-semibold">Localidad:</span> {deudor.localidad}
-                                  </p>
-                                )}
-                                <p className="text-slate-600 text-xs mt-3 pt-3 border-t border-blue-200">
-                                  Razón Social: {deudor.razon_social || '-'}
-                                </p>
-                              </div>
+                              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
+                                Contacto
+                              </p>
+                              {[
+                                { label: 'Email', value: deudor.email },
+                                { label: 'Teléfono', value: deudor.telefono },
+                                { label: 'Localidad', value: deudor.localidad },
+                                { label: 'Razón Social', value: deudor.razon_social },
+                              ].map(({ label, value }) => (
+                                <div key={label} style={{ marginBottom: 6 }}>
+                                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{label}: </span>
+                                  <span style={{ fontSize: 12, color: 'var(--cream)' }}>{value || '—'}</span>
+                                </div>
+                              ))}
                             </div>
 
-                            {/* Debt Aging */}
+                            {/* Deuda por antigüedad */}
                             <div>
-                              <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                <BarChart3 className="w-4 h-4" />
+                              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
                                 Deuda por Antigüedad
-                              </h3>
-                              <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-slate-700">Menor a 14 días:</span>
-                                  <span className="font-semibold text-slate-900">{formatCurrency(deudor.deuda_menor_14_dias)}</span>
+                              </p>
+                              {[
+                                { label: '0–14 días', value: deudor.deuda_menor_14_dias },
+                                { label: '15–29 días', value: deudor.deuda_entre_15_29_dias },
+                                { label: '30–44 días', value: deudor.deuda_entre_30_44_dias },
+                                { label: '45–59 días', value: deudor.deuda_entre_45_59_dias },
+                                { label: '60–89 días', value: deudor.deuda_entre_60_89_dias },
+                                { label: '+90 días', value: deudor.deuda_mas_90_dias },
+                              ].map(({ label, value }) => (
+                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>{label}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: (value || 0) > 0 ? '#f87171' : 'var(--muted)' }}>
+                                    {formatCurrency(value || 0)}
+                                  </span>
                                 </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-700">15-29 días:</span>
-                                  <span className="font-semibold text-slate-900">{formatCurrency(deudor.deuda_entre_15_29_dias)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-700">30-44 días:</span>
-                                  <span className="font-semibold text-slate-900">{formatCurrency(deudor.deuda_entre_30_44_dias)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-700">45-59 días:</span>
-                                  <span className="font-semibold text-slate-900">{formatCurrency(deudor.deuda_entre_45_59_dias)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-700">60-89 días:</span>
-                                  <span className="font-semibold text-slate-900">{formatCurrency(deudor.deuda_entre_60_89_dias)}</span>
-                                </div>
-                                <div className="flex justify-between border-t border-blue-200 pt-2 mt-2">
-                                  <span className="text-slate-700 font-semibold">Más de 90 días:</span>
-                                  <span className="font-bold text-red-600">{formatCurrency(deudor.deuda_mas_90_dias)}</span>
-                                </div>
-                              </div>
+                              ))}
                             </div>
 
-                            {/* Account Info */}
+                            {/* Cuenta */}
                             <div>
-                              <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                <MapPin className="w-4 h-4" />
-                                Detalles de Cuenta
-                              </h3>
-                              <div className="space-y-2 text-sm">
-                                <p className="text-slate-700">
-                                  <span className="font-semibold">Tipo de Cliente:</span> {deudor.tipo_cliente || '-'}
-                                </p>
-                                <p className="text-slate-700">
-                                  <span className="font-semibold">Límite Cta. Cte:</span> {formatCurrency(deudor.limite_cta_cte)}
-                                </p>
-                                <p className="text-slate-700">
-                                  <span className="font-semibold">Última Compra:</span>{' '}
-                                  {deudor.fecha_ultima_compra ? new Date(deudor.fecha_ultima_compra).toLocaleDateString('es-CL') : '-'}
-                                </p>
-                                <p className="text-slate-700">
-                                  <span className="font-semibold">Días Promedio Pago:</span> {deudor.dias_pago ? `${deudor.dias_pago} días` : '-'}
-                                </p>
-                                <p className="text-slate-600 text-xs mt-3 pt-3 border-t border-blue-200">
-                                  Fecha Alta: {deudor.fecha_alta ? new Date(deudor.fecha_alta).toLocaleDateString('es-CL') : '-'}
-                                </p>
-                              </div>
+                              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
+                                Cuenta
+                              </p>
+                              {[
+                                { label: 'Tipo Cliente', value: deudor.tipo_cliente },
+                                { label: 'Límite Cta Cte', value: deudor.limite_cta_cte ? formatCurrency(deudor.limite_cta_cte) : null },
+                                { label: 'Días Pago', value: deudor.dias_pago ? `${deudor.dias_pago} días` : null },
+                                { label: 'Última Compra', value: deudor.fecha_ultima_compra ? new Date(deudor.fecha_ultima_compra).toLocaleDateString('es-CL') : null },
+                                { label: 'Fecha Alta', value: deudor.fecha_alta ? new Date(deudor.fecha_alta).toLocaleDateString('es-CL') : null },
+                              ].map(({ label, value }) => (
+                                <div key={label} style={{ marginBottom: 6 }}>
+                                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{label}: </span>
+                                  <span style={{ fontSize: 12, color: 'var(--cream)' }}>{value || '—'}</span>
+                                </div>
+                              ))}
                             </div>
+
                           </div>
                         </td>
                       </tr>
@@ -486,15 +428,12 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
               </tbody>
             </table>
           </div>
-
-          {filteredDeudores.length === 0 && (
-            <div className="p-8 text-center text-slate-600">
-              <p className="font-semibold mb-2">No se encontraron deudores</p>
-              <p className="text-sm">Ajusta los filtros e intenta nuevamente</p>
-            </div>
-          )}
-        </div>
+        )}
       </div>
+
+      <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, textAlign: 'right' }}>
+        Mostrando {filteredDeudores.length} de {deudores.length} deudores
+      </p>
     </div>
   )
 }
