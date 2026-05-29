@@ -88,7 +88,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   function toggleUser(id: string) {
     setSelectedIds(prev =>
       prev.includes(id)
-        ? prev.length > 1 ? prev.filter(x => x !== id) : prev
+        ? prev.filter(x => x !== id)
         : [...prev, id]
     )
   }
@@ -234,8 +234,8 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
 
         {/* ── PRIMERA FILA: 4 columnas ── */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1.4fr 1fr 1fr',
-          gap: 12, padding: '16px 28px 0', flexShrink: 0,
+          display: 'grid', gridTemplateColumns: '1fr 1.6fr 0.9fr 1.2fr',
+          gap: 10, padding: '16px 28px 0', flexShrink: 0,
         }}>
           {/* Área */}
           <div style={{ position: 'relative' }}>
@@ -416,14 +416,15 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                   type="button"
                   onClick={() => { setPriority(p.label); setPrioridad(p.label === 'Alta') }}
                   style={{
-                    flex: 1, padding: '9px 4px', borderRadius: 10, cursor: 'pointer', fontSize: 10, fontWeight: 700,
+                    flex: 1, padding: '9px 6px', borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 700,
                     background: priority === p.label ? `${p.color}18` : 'var(--surface2)',
                     border: `1.5px solid ${priority === p.label ? p.color + '60' : 'rgba(255,255,255,0.08)'}`,
                     color: priority === p.label ? p.color : 'var(--muted)',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                    display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    height: 42,
                   }}
                 >
-                  <span style={{ fontSize: 13 }}>{p.icon}</span>
+                  <span style={{ fontSize: 12, lineHeight: 1 }}>{p.icon}</span>
                   <span>{p.label}</span>
                 </button>
               ))}
