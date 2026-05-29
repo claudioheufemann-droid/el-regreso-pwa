@@ -374,8 +374,8 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
 
           </div>
 
-          {/* Fila 3 izquierda: Tareas atrasadas + Tareas por área */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+          {/* Fila 3 izquierda: Atrasadas + Por área + Actividad reciente */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.1fr', gap: 14, alignItems: 'stretch' }}>
 
             {/* Tareas atrasadas */}
             <div style={{
@@ -434,10 +434,41 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
               <button style={{ marginTop: 14, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todas las áreas →</button>
             </div>
 
+            {/* Actividad reciente — 3ra columna de fila 3, más alta */}
+            <div style={{ ...CARD, display: 'flex', flexDirection: 'column', minHeight: 260 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Actividad reciente</div>
+                <button style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                {recentActivity.map((item, idx) => {
+                  const c = actColor[item.type]
+                  const cfg = AREA_CFG[item.task.area] ?? { color: '#888' }
+                  return (
+                    <div key={item.task.id+idx} onClick={() => setSelectedTask(item.task)}
+                      style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: idx<recentActivity.length-1?'1px solid rgba(255,255,255,0.04)':'none', cursor: 'pointer', alignItems: 'flex-start' }}>
+                      <div style={{ width: 26, height: 26, borderRadius: 8, background: `${c}18`, border: `1px solid ${c}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: c, fontWeight: 900, flexShrink: 0, marginTop: 1 }}>
+                        {actIcon[item.type]}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
+                          <span style={{ fontWeight: 600, color: 'var(--cream)' }}>{item.who}</span>
+                          {' '}{actVerb[item.type]}{' '}
+                          <span style={{ fontWeight: 700, color: cfg.color }}>{item.task.titulo.length>24?item.task.titulo.slice(0,24)+'…':item.task.titulo}</span>
+                        </div>
+                        <div style={{ fontSize: 9, color: 'rgba(128,128,128,0.4)', marginTop: 2 }}>{item.time}</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <button style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda la actividad →</button>
+            </div>
+
           </div>
         </div>
 
-        {/* SIDEBAR DERECHO: Próximos + Actividad + Recordatorios — mismo ancho (280px) */}
+        {/* SIDEBAR DERECHO: Próximos + Recordatorios — mismo ancho (280px) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* Próximos vencimientos */}
@@ -479,37 +510,6 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
               })}
             </div>
             <button onClick={() => onNavigate('calendar')} style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos los vencimientos →</button>
-          </div>
-
-          {/* Actividad reciente */}
-          <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Actividad reciente</div>
-              <button style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {recentActivity.map((item, idx) => {
-                const c = actColor[item.type]
-                const cfg = AREA_CFG[item.task.area] ?? { color: '#888' }
-                return (
-                  <div key={item.task.id+idx} onClick={() => setSelectedTask(item.task)}
-                    style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: idx<recentActivity.length-1?'1px solid rgba(255,255,255,0.04)':'none', cursor: 'pointer', alignItems: 'flex-start' }}>
-                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${c}18`, border: `1px solid ${c}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: c, fontWeight: 900, flexShrink: 0, marginTop: 1 }}>
-                      {actIcon[item.type]}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
-                        <span style={{ fontWeight: 600, color: 'var(--cream)' }}>{item.who}</span>
-                        {' '}{actVerb[item.type]}{' '}
-                        <span style={{ fontWeight: 700, color: cfg.color }}>{item.task.titulo.length>22?item.task.titulo.slice(0,22)+'…':item.task.titulo}</span>
-                      </div>
-                      <div style={{ fontSize: 9, color: 'rgba(128,128,128,0.4)', marginTop: 2 }}>{item.time}</div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            <button style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda la actividad →</button>
           </div>
 
           {/* Recordatorios activos */}
