@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { RcTask, RcUser, AREA_CFG } from '@/lib/gestion-types'
 import { getSemaphore } from '@/lib/kpis'
-import useIsDesktop from '@/lib/useIsDesktop'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 
 interface Props {
   tasks: RcTask[]

@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { RcUser, RcTask, AREA_CFG, eligibleUsers, MACRO_AREAS } from '@/lib/gestion-types'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
-import useIsDesktop from '@/lib/useIsDesktop'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 
 interface AttachedFile {
   name: string; size: string; type: 'pdf' | 'image' | 'doc' | 'other'; preview?: string; url?: string

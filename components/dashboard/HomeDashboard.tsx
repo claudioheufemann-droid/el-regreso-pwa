@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { RcTask, RcUser, AREA_CFG, MACRO_AREAS, MacroKey, STATUS_CFG } from '@/lib/gestion-types'
 import NewTaskModal from '@/components/modals/NewTaskModal'
 import TaskDetailModal from '@/components/modals/TaskDetailModal'
-import useIsDesktop from '@/lib/useIsDesktop'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 
 interface Props {
   tasks: RcTask[]
