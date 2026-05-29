@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { RcTask, RcUser, AREA_CFG, MACRO_AREAS, MacroKey, STATUS_CFG } from '@/lib/gestion-types'
 import NewTaskModal from '@/components/modals/NewTaskModal'
 import TaskDetailModal from '@/components/modals/TaskDetailModal'
+import useIsDesktop from '@/lib/useIsDesktop'
 
 interface Props {
   tasks: RcTask[]
@@ -108,28 +109,30 @@ interface KpiCardProps {
   onClick?: () => void
 }
 function KpiCard({ value, label, sub, color, bg, border, glow, icon, up = true, onClick }: KpiCardProps) {
+  // isDesktop is not available here since this is outside the main component,
+  // so we pass compact via a data attribute workaround — instead we just use responsive values inline
   return (
     <div onClick={onClick} style={{
-      borderRadius: 20, padding: '20px 22px 16px', position: 'relative', overflow: 'hidden',
+      borderRadius: 16, padding: '16px 16px 12px', position: 'relative', overflow: 'hidden',
       background: bg, border: `1px solid ${border}`,
       boxShadow: `0 4px 28px ${glow}`,
-      cursor: onClick ? 'pointer' : 'default', minHeight: 170,
+      cursor: onClick ? 'pointer' : 'default', minHeight: 140,
       display: 'flex', flexDirection: 'column',
     }}>
       {/* top row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ width: 42, height: 42, borderRadius: 13, background: `${color}22`, border: `1px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 11, background: `${color}22`, border: `1px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {icon}
         </div>
-        <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>→</div>
+        <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>→</div>
       </div>
       {/* number */}
-      <div style={{ fontSize: 56, fontWeight: 900, color, lineHeight: 1, letterSpacing: -3, marginBottom: 8 }}>{value}</div>
+      <div style={{ fontSize: 42, fontWeight: 900, color, lineHeight: 1, letterSpacing: -2, marginBottom: 6 }}>{value}</div>
       {/* label */}
-      <div style={{ fontSize: 10, fontWeight: 800, color, letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 9, fontWeight: 800, color, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
       {/* sub */}
-      <div style={{ fontSize: 10, color: `${color}88`, display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      <div style={{ fontSize: 9, color: `${color}88`, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+        <span style={{ width: 4, height: 4, borderRadius: '50%', background: color, flexShrink: 0 }} />
         {sub}
       </div>
       {/* sparkline — en flujo, no superpuesta */}
@@ -141,6 +144,7 @@ function KpiCard({ value, label, sub, color, bg, border, glow, icon, up = true, 
 }
 
 export default function HomeDashboard({ tasks, users, userName, isAdmin, currentUserId, currentMacroArea, availableAreas, onTaskUpdated, onTaskDeleted, onTaskCreated, onNavigate }: Props) {
+  const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<TabKey>('todas')
   const [search, setSearch] = useState('')
   const [showNewTask, setShowNewTask] = useState(false)
@@ -249,29 +253,29 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* HEADER */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: isDesktop ? 'center' : 'flex-start', justifyContent: 'space-between', flexDirection: isDesktop ? 'row' : 'column', gap: isDesktop ? 0 : 10 }}>
         <div>
           {macroConfig && <div style={{ fontSize: 10, fontWeight: 700, color: macroConfig.color, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>{macroConfig.code} · {macroConfig.label}</div>}
-          <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5 }}>¡Buenos días, {firstName}! 👋</div>
+          <div style={{ fontSize: isDesktop ? 26 : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5 }}>¡Buenos días, {firstName}! 👋</div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, textTransform: 'capitalize' }}>{dateStr}</div>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 8, alignSelf: isDesktop ? 'auto' : 'flex-end' }}>
           <div style={{ position: 'relative' }}>
-            <button style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 16 }}>🔔</button>
+            <button style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 15 }}>🔔</button>
             {(kpiAtrasadas + kpiAprobar) > 0 && <span style={{ position: 'absolute', top: -4, right: -4, background: '#E74C3C', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 8, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{kpiAtrasadas + kpiAprobar}</span>}
           </div>
-          <button onClick={() => setShowNewTask(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: 'var(--gold)', color: '#0A0A0A', border: 'none', borderRadius: 12, cursor: 'pointer', fontSize: 13, fontWeight: 800 }}>+ Nueva tarea</button>
+          <button onClick={() => setShowNewTask(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: isDesktop ? '10px 20px' : '8px 14px', background: 'var(--gold)', color: '#0A0A0A', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: isDesktop ? 13 : 12, fontWeight: 800 }}>+ Nueva tarea</button>
         </div>
       </div>
 
       {/* ── LAYOUT MASTER: izquierda 1fr + sidebar derecho 280px (filas 1+2+3) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 14, alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 280px' : '1fr', gap: 14, alignItems: 'stretch' }}>
 
         {/* COLUMNA IZQUIERDA */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Fila 1 izquierda: 4 KPI cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+          {/* Fila 1 izquierda: 4 KPI cards (2x2 en mobile) */}
+          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: 14 }}>
             <KpiCard value={kpiAsignadas} label="Asignadas" sub="Requieren tu atención"
               color="#5B8AA8" bg="linear-gradient(145deg,#0d1e36,#091425)" border="rgba(91,138,168,0.28)" glow="rgba(91,138,168,0.1)"
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M3 6h18v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>}
@@ -291,7 +295,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           </div>
 
           {/* Fila 2 izquierda: 3 analytics */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(3, 1fr)' : '1fr', gap: 14 }}>
 
             {/* Resumen */}
             <div style={CARD}>
@@ -377,7 +381,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           </div>
 
           {/* Fila 3 izquierda: Atrasadas + Por área + Recordatorios (mismo grid 3 cols) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(3, 1fr)' : '1fr', gap: 14 }}>
 
             {/* Tareas atrasadas */}
             <div style={{
@@ -455,8 +459,8 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           </div>
         </div>
 
-        {/* SIDEBAR DERECHO: Próximos + Recordatorios — mismo ancho (280px) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* SIDEBAR DERECHO: Próximos + Recordatorios — oculto en mobile (se renderizan debajo) */}
+        <div style={{ display: isDesktop ? 'flex' : 'none', flexDirection: 'column', gap: 14 }}>
 
           {/* Próximos vencimientos */}
           <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
@@ -533,6 +537,81 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
         </div>
       </div>
 
+      {/* ── SIDEBAR CARDS EN MOBILE (Próximos vencimientos + Actividad reciente) ── */}
+      {!isDesktop && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Próximos vencimientos */}
+          <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Próximos vencimientos</div>
+              <button onClick={() => onNavigate('calendar')} style={{ fontSize: 10, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}>Ver calendario →</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {proximos.length === 0 && <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', padding: '20px 0' }}>Sin vencimientos próximos</div>}
+              {proximos.map(t => {
+                const { day, month: mn } = formatPlazoDay(t.plazo)
+                const vColor = vencimientoColor(t.plazo)
+                const cfg2 = AREA_CFG[t.area] ?? { color: '#888', code: '??' }
+                const resps = (t.responsables ?? [users.find(u => u.id === t.responsable_id)].filter(Boolean)) as RcUser[]
+                return (
+                  <div key={t.id} onClick={() => setSelectedTask(t)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', padding: '7px 8px', borderRadius: 10, transition: 'background 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background='rgba(128,128,128,0.07)')}
+                    onMouseLeave={e => (e.currentTarget.style.background='transparent')}>
+                    <div style={{ textAlign: 'center', minWidth: 40, background: `${vColor}14`, border: `1px solid ${vColor}28`, borderRadius: 9, padding: '5px 0', flexShrink: 0 }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: vColor, lineHeight: 1 }}>{day}</div>
+                      <div style={{ fontSize: 7, color: vColor, fontWeight: 700 }}>{mn}</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{t.titulo}</div>
+                      <div style={{ fontSize: 9, color: 'var(--muted)', marginBottom: 5 }}>Vence {daysLabel(t.plazo)} · {formatPlazo(t.plazo)}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 7, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#DC2626':'#D4AF37', fontWeight: 700 }}>{t.prioridad_maxima?'Alta':'Media'}</span>
+                        <div style={{ display: 'flex' }}>
+                          {resps.slice(0,3).map((u,i) => (
+                            <div key={u.id} style={{ width: 18, height: 18, borderRadius: '50%', background: `${cfg2.color}30`, border: `1.5px solid ${cfg2.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6, fontWeight: 800, color: cfg2.color, marginLeft: i>0?-5:0 }}>{u.iniciales}</div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={() => onNavigate('calendar')} style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos los vencimientos →</button>
+          </div>
+
+          {/* Actividad reciente */}
+          <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Actividad reciente</div>
+              <button style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {recentActivity.map((item, idx) => {
+                const c = actColor[item.type]
+                const cfg2 = AREA_CFG[item.task.area] ?? { color: '#888' }
+                return (
+                  <div key={item.task.id+idx} onClick={() => setSelectedTask(item.task)}
+                    style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: idx<recentActivity.length-1?'1px solid rgba(255,255,255,0.04)':'none', cursor: 'pointer', alignItems: 'flex-start' }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${c}18`, border: `1px solid ${c}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: c, fontWeight: 900, flexShrink: 0, marginTop: 1 }}>
+                      {actIcon[item.type]}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--cream)' }}>{item.who}</span>
+                        {' '}{actVerb[item.type]}{' '}
+                        <span style={{ fontWeight: 700, color: cfg2.color }}>{item.task.titulo.length>22?item.task.titulo.slice(0,22)+'…':item.task.titulo}</span>
+                      </div>
+                      <div style={{ fontSize: 9, color: 'rgba(128,128,128,0.4)', marginTop: 2 }}>{item.time}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── TABLA TAREAS ── */}
       <div style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, overflow: 'hidden' }}>
         <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
@@ -559,8 +638,12 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             ))}
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 90px 80px 120px 110px 110px 55px 45px', gap: 8, padding: '9px 24px', background: 'rgba(128,128,128,0.02)', borderBottom: '1px solid rgba(128,128,128,0.07)' }}>
-          {['TAREA','RESPONSABLE','ÁREA','PRIORIDAD','VENCE','ESTADO','PROGRESO','COM.','ARCH.'].map((h, i) => (
+        {/* Encabezados tabla */}
+        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '2fr 1fr 90px 80px 120px 110px 110px 55px 45px' : '2fr 1fr 100px 80px', gap: 8, padding: '9px 16px', background: 'rgba(128,128,128,0.02)', borderBottom: '1px solid rgba(128,128,128,0.07)' }}>
+          {(isDesktop
+            ? ['TAREA','RESPONSABLE','ÁREA','PRIORIDAD','VENCE','ESTADO','PROGRESO','COM.','ARCH.']
+            : ['TAREA','RESPONSABLE','VENCE','ESTADO']
+          ).map((h, i) => (
             <div key={i} style={{ fontSize: 8, fontWeight: 800, color: 'var(--muted)', letterSpacing: 1, textTransform: 'uppercase' }}>{h}</div>
           ))}
         </div>
@@ -579,9 +662,10 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             const stCfg = STATUS_CFG[t.estado as keyof typeof STATUS_CFG] ?? { color: '#888' }
             return (
               <div key={t.id} onClick={() => setSelectedTask(t)}
-                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 90px 80px 120px 110px 110px 55px 45px', gap: 8, padding: '11px 24px', borderBottom: idx<tableTasks.length-1?'1px solid rgba(128,128,128,0.05)':'none', cursor: 'pointer', transition: 'background 0.12s', alignItems: 'center' }}
+                style={{ display: 'grid', gridTemplateColumns: isDesktop ? '2fr 1fr 90px 80px 120px 110px 110px 55px 45px' : '2fr 1fr 100px 80px', gap: 8, padding: isDesktop ? '11px 24px' : '10px 16px', borderBottom: idx<tableTasks.length-1?'1px solid rgba(128,128,128,0.05)':'none', cursor: 'pointer', transition: 'background 0.12s', alignItems: 'center' }}
                 onMouseEnter={e => (e.currentTarget.style.background='rgba(128,128,128,0.04)')}
                 onMouseLeave={e => (e.currentTarget.style.background='transparent')}>
+                {/* TAREA */}
                 <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', minWidth: 0 }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: t.estado==='Atrasada'?'#E74C3C':t.estado==='En Proceso'?'#E67E22':t.estado==='Completada'?'#22C55E':'#5B8AA8', flexShrink: 0, marginTop: 4 }} />
                   <div style={{ minWidth: 0 }}>
@@ -589,41 +673,59 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                     {t.descripcion && <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>{t.descripcion}</div>}
                   </div>
                 </div>
+                {/* RESPONSABLE */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ width: 22, height: 22, borderRadius: '50%', background: cfg.color+'22', border: `1px solid ${cfg.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: cfg.color, flexShrink: 0 }}>{user?.iniciales??'??'}</div>
                   <span style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.nombre?.split(' ')[0]??'—'}</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, background: `${cfg.color}18`, border: `1px solid ${cfg.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 900, color: cfg.color }}>{cfg.code}</div>
-                  <span style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.area}</span>
-                </div>
-                <div>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#DC2626':'#D4AF37', border: `1px solid ${t.prioridad_maxima?'rgba(220,38,38,0.25)':'rgba(212,175,55,0.2)'}` }}>
-                    {t.prioridad_maxima?'Alta':'Media'}
-                  </span>
-                </div>
+                {/* ÁREA — solo desktop */}
+                {isDesktop && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, background: `${cfg.color}18`, border: `1px solid ${cfg.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 900, color: cfg.color }}>{cfg.code}</div>
+                    <span style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.area}</span>
+                  </div>
+                )}
+                {/* PRIORIDAD — solo desktop */}
+                {isDesktop && (
+                  <div>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#DC2626':'#D4AF37', border: `1px solid ${t.prioridad_maxima?'rgba(220,38,38,0.25)':'rgba(212,175,55,0.2)'}` }}>
+                      {t.prioridad_maxima?'Alta':'Media'}
+                    </span>
+                  </div>
+                )}
+                {/* VENCE */}
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 800, color: vColor }}>{formatPlazo(t.plazo)}</div>
                   <div style={{ fontSize: 9, color: vColor, opacity: 0.75, marginTop: 1 }}>{daysLabel(t.plazo)}</div>
-                  {t.created_at && <div style={{ fontSize: 8, color: 'rgba(128,128,128,0.4)', marginTop: 2 }}>Inicio {formatPlazo(t.created_at.split('T')[0])}</div>}
+                  {isDesktop && t.created_at && <div style={{ fontSize: 8, color: 'rgba(128,128,128,0.4)', marginTop: 2 }}>Inicio {formatPlazo(t.created_at.split('T')[0])}</div>}
                 </div>
+                {/* ESTADO */}
                 <div>
                   <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: `${stCfg.color}18`, color: stCfg.color, border: `1px solid ${stCfg.color}30`, whiteSpace: 'nowrap' }}>{t.estado}</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ flex: 1, height: 4, background: 'rgba(128,128,128,0.1)', borderRadius: 4, overflow: 'hidden', minWidth: 40 }}>
-                    <div style={{ height: '100%', width: `${progPct}%`, background: progPct>=80?'#22C55E':progPct>=40?'#D4AF37':'#5B8AA8', borderRadius: 4 }} />
+                {/* PROGRESO — solo desktop */}
+                {isDesktop && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ flex: 1, height: 4, background: 'rgba(128,128,128,0.1)', borderRadius: 4, overflow: 'hidden', minWidth: 40 }}>
+                      <div style={{ height: '100%', width: `${progPct}%`, background: progPct>=80?'#22C55E':progPct>=40?'#D4AF37':'#5B8AA8', borderRadius: 4 }} />
+                    </div>
+                    <span style={{ fontSize: 9, color: 'var(--muted)', flexShrink: 0 }}>{progPct}%</span>
                   </div>
-                  <span style={{ fontSize: 9, color: 'var(--muted)', flexShrink: 0 }}>{progPct}%</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <span style={{ fontSize: 10 }}>💬</span>
-                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>{commentCounts[t.id]??0}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <span style={{ fontSize: 10 }}>📎</span>
-                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>{t.evidencia_url||t.foto_antes_url?1:0}</span>
-                </div>
+                )}
+                {/* COM. — solo desktop */}
+                {isDesktop && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ fontSize: 10 }}>💬</span>
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>{commentCounts[t.id]??0}</span>
+                  </div>
+                )}
+                {/* ARCH. — solo desktop */}
+                {isDesktop && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ fontSize: 10 }}>📎</span>
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>{t.evidencia_url||t.foto_antes_url?1:0}</span>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -634,28 +736,30 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
       </div>
 
       {/* ── BOTTOM STATUS BAR ── */}
-      <div style={{ borderRadius: 20, padding: '20px 28px', background: 'linear-gradient(145deg,#0e0e14,#0a0a10)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1.6, paddingRight: 32, borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ borderRadius: 20, padding: isDesktop ? '20px 28px' : '16px 20px', background: 'linear-gradient(145deg,#0e0e14,#0a0a10)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: isDesktop ? 'row' : 'column', alignItems: isDesktop ? 'center' : 'stretch', gap: isDesktop ? 0 : 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: isDesktop ? 1.6 : undefined, paddingRight: isDesktop ? 32 : 0, paddingBottom: isDesktop ? 0 : 14, borderRight: isDesktop ? '1px solid rgba(255,255,255,0.06)' : 'none', borderBottom: isDesktop ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ width: 46, height: 46, borderRadius: 14, background: 'linear-gradient(135deg,#1a1060,#0a0830)', border: '1px solid rgba(91,138,168,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>⚡</div>
           <div>
             <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)' }}>Todo <span style={{ color: '#5B8AA8' }}>bajo control</span></div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>Mantén el ritmo, tu equipo va por buen camino.</div>
           </div>
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'none' : 'repeat(2, 1fr)', flex: isDesktop ? undefined : undefined, gap: isDesktop ? 0 : 10 }}>
         {[
           { icon: '📋', value: String(kpiTotal), label: 'Total tareas', color: 'var(--cream)' },
           { icon: '🕐', value: `${avgDays} días`, label: 'Tiempo promedio', color: 'var(--cream)' },
           { icon: '✓',  value: `${cumplimiento}%`, label: 'Cumplimiento', color: cumplimiento>=80?'#22C55E':cumplimiento>=50?'#D4AF37':'#E74C3C' },
           { icon: '📅', value: String(semanaVencen), label: 'Vencen esta semana', color: semanaVencen>0?'#E67E22':'var(--cream)' },
         ].map((stat, i) => (
-          <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 14, paddingLeft: 32, borderRight: i<3?'1px solid rgba(255,255,255,0.06)':'none' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 11, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>{stat.icon}</div>
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: isDesktop ? 14 : 10, paddingLeft: isDesktop ? 32 : 0, borderRight: isDesktop && i<3 ? '1px solid rgba(255,255,255,0.06)' : 'none', flex: isDesktop ? 1 : undefined }}>
+            <div style={{ width: isDesktop ? 38 : 32, height: isDesktop ? 38 : 32, borderRadius: 11, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: isDesktop ? 17 : 15, flexShrink: 0 }}>{stat.icon}</div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
+              <div style={{ fontSize: isDesktop ? 22 : 18, fontWeight: 900, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
               <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>{stat.label}</div>
             </div>
           </div>
         ))}
+        </div>
       </div>
 
       {showNewTask && (
