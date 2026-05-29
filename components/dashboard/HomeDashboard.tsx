@@ -181,7 +181,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
       const q = search.toLowerCase()
       list = list.filter(t => t.titulo.toLowerCase().includes(q) || t.area.toLowerCase().includes(q))
     }
-    return list.sort((a, b) => a.plazo.localeCompare(b.plazo))
+    return list.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
   }, [activeTasks, activeTab, search])
 
   function vencimientoColor(plazo: string): string {
@@ -490,8 +490,8 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 80px 100px 110px 110px 55px 45px', gap: 8, padding: '9px 20px', background: 'rgba(128,128,128,0.02)', borderBottom: '1px solid rgba(128,128,128,0.07)' }}>
-          {['TAREA','RESPONSABLE','PRIORIDAD','VENCE','ESTADO','PROGRESO','COM.','ARCH.'].map((h, i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 90px 80px 120px 110px 110px 55px 45px', gap: 8, padding: '9px 20px', background: 'rgba(128,128,128,0.02)', borderBottom: '1px solid rgba(128,128,128,0.07)' }}>
+          {['TAREA','RESPONSABLE','ÁREA','PRIORIDAD','VENCE','ESTADO','PROGRESO','COM.','ARCH.'].map((h, i) => (
             <div key={i} style={{ fontSize: 8, fontWeight: 800, color: 'var(--muted)', letterSpacing: 1, textTransform: 'uppercase' }}>{h}</div>
           ))}
         </div>
@@ -511,7 +511,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             const comments = commentCounts[t.id] ?? 0
             return (
               <div key={t.id} onClick={() => setSelectedTask(t)}
-                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 80px 100px 110px 110px 55px 45px', gap: 8, padding: '11px 20px', borderBottom: idx < tableTasks.length - 1 ? '1px solid rgba(128,128,128,0.06)' : 'none', cursor: 'pointer', transition: 'background 0.12s', alignItems: 'center' }}
+                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 90px 80px 120px 110px 110px 55px 45px', gap: 8, padding: '11px 20px', borderBottom: idx < tableTasks.length - 1 ? '1px solid rgba(128,128,128,0.06)' : 'none', cursor: 'pointer', transition: 'background 0.12s', alignItems: 'center' }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'rgba(128,128,128,0.04)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', minWidth: 0 }}>
@@ -521,18 +521,33 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                     {t.descripcion && <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>{t.descripcion}</div>}
                   </div>
                 </div>
+                {/* Responsable */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ width: 22, height: 22, borderRadius: '50%', background: cfg.color + '22', border: `1px solid ${cfg.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: cfg.color, flexShrink: 0 }}>{user?.iniciales ?? '??'}</div>
                   <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.nombre?.split(' ')[0] ?? '—'}</span>
                 </div>
+                {/* Área */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, background: `${cfg.color}18`, border: `1px solid ${cfg.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 900, color: cfg.color }}>
+                    {cfg.code}
+                  </div>
+                  <span style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.area}</span>
+                </div>
+                {/* Prioridad */}
                 <div>
                   <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: t.prioridad_maxima ? 'rgba(220,38,38,0.12)' : 'rgba(212,175,55,0.1)', color: t.prioridad_maxima ? '#DC2626' : '#D4AF37', border: `1px solid ${t.prioridad_maxima ? 'rgba(220,38,38,0.25)' : 'rgba(212,175,55,0.2)'}` }}>
                     {t.prioridad_maxima ? 'Alta' : 'Media'}
                   </span>
                 </div>
+                {/* Vence + Inicio */}
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: vColor }}>{formatPlazo(t.plazo)}</div>
-                  <div style={{ fontSize: 9, color: 'var(--muted)' }}>{daysLabel(t.plazo)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: vColor, lineHeight: 1.2 }}>{formatPlazo(t.plazo)}</div>
+                  <div style={{ fontSize: 9, color: vColor, opacity: 0.75, marginTop: 1 }}>{daysLabel(t.plazo)}</div>
+                  {t.created_at && (
+                    <div style={{ fontSize: 8, color: 'rgba(128,128,128,0.45)', marginTop: 3 }}>
+                      Inicio {formatPlazo(t.created_at.split('T')[0])}
+                    </div>
+                  )}
                 </div>
                 <div><StateBadge estado={t.estado} /></div>
                 <ProgressCell pct={progPct} />
