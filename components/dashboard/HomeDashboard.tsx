@@ -263,7 +263,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
       </div>
 
       {/* ── LAYOUT MASTER: izquierda 1fr + sidebar derecho 280px (filas 1+2+3) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 14, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 14, alignItems: 'stretch' }}>
 
         {/* COLUMNA IZQUIERDA */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
