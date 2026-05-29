@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, ChevronUp, Users, Calendar, X, MapPin } from 'lucide-react'
+import { ChevronDown, ChevronUp, Users, Calendar, X, MapPin, Target } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { Periodo } from '@/lib/types'
@@ -1376,6 +1376,102 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
   )
 }
 
+// ── MisionesWidgetCard ────────────────────────────────────────────────────────
+function MisionesWidgetCard({ planSemana }: { planSemana: PlanCliente[] }) {
+  const router = useRouter()
+  const criticos = planSemana.filter(c => c.alert_level === 'critico')
+  const vencidos  = planSemana.filter(c => c.alert_level === 'vencido')
+  const proximos  = planSemana.filter(c => c.alert_level === 'proximo')
+  const total = planSemana.length
+
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderRadius: 20, overflow: 'hidden',
+    }}>
+      <div style={{ padding: '16px 18px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Target size={15} color="var(--gold)" />
+            <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 14 }}>Misiones esta semana</h3>
+          </div>
+          <button
+            onClick={() => router.push('/ventas/misiones')}
+            style={{
+              fontSize: 11, fontWeight: 700, color: 'var(--gold)',
+              background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.2)',
+              borderRadius: 8, padding: '4px 10px', cursor: 'pointer',
+            }}
+          >
+            Ver plan →
+          </button>
+        </div>
+
+        {/* Contadores */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+          {[
+            { label: '🔴 Urgentes', count: criticos.length, color: '#EF4444', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.2)' },
+            { label: '⚠ Vencidos',  count: vencidos.length,  color: '#F87171', bg: 'rgba(248,113,113,0.06)', border: 'rgba(248,113,113,0.15)' },
+            { label: '⏰ Próximos', count: proximos.length,  color: '#F59E0B', bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.15)' },
+          ].map(s => (
+            <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
+              <p style={{ fontSize: 9, color: s.color, fontWeight: 700, marginBottom: 3 }}>{s.label}</p>
+              <p style={{ fontSize: 22, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.count}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Top 3 más urgentes */}
+        {total === 0 ? (
+          <div style={{ textAlign: 'center', padding: '8px 0' }}>
+            <p style={{ fontSize: 24, marginBottom: 4 }}>🎯</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>Sin contactos pendientes</p>
+          </div>
+        ) : (
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.07em', marginBottom: 8 }}>
+              PRÓXIMOS A CONTACTAR
+            </p>
+            {[...criticos, ...vencidos, ...proximos]
+              .slice(0, 4)
+              .map(c => {
+                const SEG_C: Record<string, string> = { A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171' }
+                const alertColor = c.alert_level === 'critico' ? '#EF4444' : c.alert_level === 'vencido' ? '#F87171' : '#F59E0B'
+                const segColor = SEG_C[c.segmento] ?? '#888'
+                return (
+                  <div
+                    key={`${c.vendedor_actual}|||${c.nombre_fantasia}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    }}
+                  >
+                    <span style={{
+                      fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 5,
+                      background: `${segColor}22`, color: segColor, border: `1px solid ${segColor}44`,
+                      flexShrink: 0,
+                    }}>{c.segmento} {c.score}</span>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.nombre_fantasia}
+                    </p>
+                    <p style={{ fontSize: 11, fontWeight: 800, color: alertColor, flexShrink: 0 }}>
+                      {c.dias_sin_compra}d
+                    </p>
+                  </div>
+                )
+              })}
+            {total > 4 && (
+              <p style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', paddingTop: 8, fontStyle: 'italic' }}>
+                +{total - 4} más en Misiones
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── DropSizeCard ─────────────────────────────────────────────────────────────
 function DropSizeCard({ resumen, colors }: { resumen: VendedorResumen[]; colors: Record<string, string> }) {
   return (
@@ -1584,14 +1680,12 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
       </div>
 
       {/* === RISK ROW === */}
-      <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 2fr' : '1fr', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 12, marginBottom: 12 }}>
         {/* Clientes en riesgo */}
         <RiesgoClientesCard clientes={riesgoClientes} colors={VEND_COLOR} />
 
-        {/* Placeholder para futuros cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 12 }}>
-          {/* espacio reservado para cards adicionales */}
-        </div>
+        {/* Misiones de la semana */}
+        <MisionesWidgetCard planSemana={planSemana} />
       </div>
     </div>
   )
