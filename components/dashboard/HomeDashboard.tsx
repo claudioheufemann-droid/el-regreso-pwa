@@ -336,7 +336,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             {/* Cumplimiento */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 18px 14px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)', marginBottom: 10, alignSelf: 'flex-start' }}>Cumplimiento</div>
-              <GaugeChart pct={cumplimiento} size={120} stroke={14} />
+              <GaugeChart pct={cumplimiento} />
             </div>
           </div>
 
