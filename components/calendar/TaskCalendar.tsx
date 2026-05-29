@@ -1,533 +1,558 @@
 'use client'
 
-import { useState } from 'react'
-import { RcTask, STATUS_CFG, AREA_CFG } from '@/lib/gestion-types'
+import { useState, useMemo } from 'react'
+import { RcTask, RcUser, AREA_CFG } from '@/lib/gestion-types'
 import { getSemaphore } from '@/lib/kpis'
-import { useIsDesktop } from '@/lib/useIsDesktop'
 
 interface Props {
   tasks: RcTask[]
   onTaskClick: (task: RcTask) => void
+  users?: RcUser[]
+  onNewTask?: () => void
 }
 
-type CalView = 'month' | 'week' | 'day'
+type CalView = 'month' | 'week' | 'day' | 'agenda'
 
-const MONTHS   = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
-const DAYS_S   = ['L','M','X','J','V','S','D']
-const DAYS_L   = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']
+const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const MONTHS_SHORT = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']
+const DAYS_L = ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM']
 
-function parsePlazo(plazo: string): { y: number; m: number; d: number } {
-  const [y, m, d] = plazo.slice(0, 10).split('-').map(Number)
-  return { y, m: m - 1, d }
+function toKey(y: number, m: number, d: number) {
+  return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
 }
 
-function semColor(task: RcTask): string {
-  return getSemaphore(task.plazo, task.estado).hex
+function semColor(t: RcTask): string {
+  return getSemaphore(t.plazo, t.estado).hex
+}
+function semLabel(t: RcTask): string {
+  return getSemaphore(t.plazo, t.estado).label
 }
 
-function taskPriority(t: RcTask): number {
-  if (t.estado === 'Atrasada')    return 0
-  if (t.estado === 'Por Aprobar') return 1
-  if (t.estado === 'En Proceso')  return 2
-  if (t.estado === 'Asignada')    return 3
-  return 4
+function taskIcon(t: RcTask): string {
+  if (t.estado === 'Completada') return '✅'
+  if (t.estado === 'Atrasada') return '🔴'
+  if (t.prioridad_maxima) return '⚡'
+  const icons: Record<string,string> = { 'Ventas':'📊','Marketing':'📣','Logística':'🚚','Control de Gestión':'📈','R. Humanos':'👥','Contabilidad':'🧾','Finanzas':'💰','Producción':'⚙','Calidad':'✅','Bodega':'📦' }
+  return icons[t.area] ?? '📋'
 }
 
-// ── Day modal ──────────────────────────────────────────────────
-function DayModal({
-  day, month, year, tasks, onTaskClick, onClose,
-}: {
-  day: number; month: number; year: number
-  tasks: RcTask[]; onTaskClick: (t: RcTask) => void; onClose: () => void
-}) {
-  const MONTH_NAMES = MONTHS
+function daysFromNow(plazo: string): number {
+  const diff = (new Date(plazo+'T12:00:00').getTime() - Date.now()) / 86400000
+  return Math.ceil(diff)
+}
+
+function relativeDate(plazo: string): string {
+  const d = daysFromNow(plazo)
+  if (d < 0) return `Hace ${Math.abs(d)} día${Math.abs(d)!==1?'s':''}`
+  if (d === 0) return 'Hoy'
+  if (d === 1) return 'Mañana'
+  if (d < 7) return `En ${d} días`
+  if (d < 14) return 'En 1 semana'
+  return `En ${Math.round(d/7)} semanas`
+}
+
+function formatDate(plazo: string): string {
+  const [,m,d] = plazo.split('-')
+  return `${parseInt(d)} ${MONTHS_SHORT[parseInt(m)-1]}`
+}
+
+function getTimeAgo(iso: string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000
+  if (diff < 3600) return `hace ${Math.floor(diff/60)} min`
+  if (diff < 86400) return `hace ${Math.floor(diff/3600)}h`
+  return `hace ${Math.floor(diff/86400)}d`
+}
+
+/* ── Mini task card inside calendar cell ── */
+function TaskCard({ task, onClick }: { task: RcTask; onClick: () => void }) {
+  const color = semColor(task)
+  const resp = task.responsable
   return (
     <div
-      onClick={onClose}
+      onClick={e => { e.stopPropagation(); onClick() }}
       style={{
-        position: 'fixed', inset: 0, zIndex: 9000,
-        background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 20,
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '4px 7px', borderRadius: 7, cursor: 'pointer',
+        background: `${color}14`, border: `1px solid ${color}35`,
+        borderLeft: `3px solid ${color}`,
+        flexShrink: 0, overflow: 'hidden',
+        transition: 'all 0.1s',
       }}
+      onMouseEnter={e => (e.currentTarget.style.background = `${color}25`)}
+      onMouseLeave={e => (e.currentTarget.style.background = `${color}14`)}
     >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 22, padding: '24px 22px', width: '100%', maxWidth: 440,
-          maxHeight: '80vh', overflowY: 'auto',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.4)',
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.8 }}>
-              {day} de {MONTH_NAMES[month]}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-              {tasks.length} tarea{tasks.length !== 1 ? 's' : ''}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--surface2)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 16, color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >×</button>
-        </div>
-
-        {tasks.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--muted)', fontSize: 13 }}>
-            Sin tareas este día
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {tasks.map(t => {
-              const sem = getSemaphore(t.plazo, t.estado)
-              const s   = STATUS_CFG[t.estado]
-              const a   = AREA_CFG[t.area]
-              return (
-                <div
-                  key={t.id}
-                  onClick={() => { onTaskClick(t); onClose() }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '13px 14px', borderRadius: 14, cursor: 'pointer',
-                    background: 'var(--surface2)', border: `1px solid ${sem.hex}30`,
-                    borderLeft: `4px solid ${sem.hex}`,
-                    transition: 'opacity 0.1s',
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.titulo}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                      <span style={{ fontSize: 9, color: a?.color ?? 'var(--muted)' }}>{t.area}</span>
-                      <span style={{ fontSize: 9, color: 'rgba(128,128,128,0.4)' }}>·</span>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: sem.hex }}>{sem.label}</span>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 9, padding: '3px 9px', borderRadius: 8, background: s.bg, color: s.color, fontWeight: 700, flexShrink: 0 }}>
-                    {t.estado}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Week view ─────────────────────────────────────────────────
-function WeekView({ year, month, weekStart, tasks, onTaskClick, isDesktop }: {
-  year: number; month: number; weekStart: Date
-  tasks: RcTask[]; onTaskClick: (t: RcTask) => void; isDesktop: boolean
-}) {
-  const today = new Date()
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart)
-    d.setDate(weekStart.getDate() + i)
-    return d
-  })
-
-  const tasksByDate: Record<string, RcTask[]> = {}
-  for (const t of tasks) {
-    const key = t.plazo.slice(0, 10)
-    if (!tasksByDate[key]) tasksByDate[key] = []
-    tasksByDate[key].push(t)
-  }
-  for (const key of Object.keys(tasksByDate)) {
-    tasksByDate[key].sort((a, b) => taskPriority(a) - taskPriority(b))
-  }
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderTop: '1px solid var(--border)' }}>
-      {days.map((date, col) => {
-        const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
-        const dayTasks = tasksByDate[key] ?? []
-        const isToday = date.toDateString() === today.toDateString()
-        const isWeekend = col >= 5
-
-        return (
-          <div key={key} style={{
-            borderRight: col < 6 ? '1px solid var(--border)' : 'none',
-            borderBottom: '1px solid var(--border)',
-            padding: isDesktop ? '10px 10px' : '6px 4px',
-            minHeight: 160,
-            background: isWeekend ? 'rgba(128,128,128,0.02)' : 'transparent',
-          }}>
-            {/* Day number */}
-            <div style={{ marginBottom: 8 }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: '50%',
-                background: isToday ? 'var(--gold)' : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: isToday ? 900 : 600,
-                color: isToday ? '#0A0A0A' : 'var(--cream)',
-              }}>{date.getDate()}</div>
-              <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2, letterSpacing: 0.8 }}>
-                {DAYS_L[col].toUpperCase()}
-              </div>
-            </div>
-            {/* Tasks */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {dayTasks.map(t => {
-                const color = semColor(t)
-                return (
-                  <div
-                    key={t.id}
-                    onClick={() => onTaskClick(t)}
-                    title={t.titulo}
-                    style={{
-                      fontSize: 10, fontWeight: 700, padding: '4px 8px',
-                      borderRadius: 7, cursor: 'pointer',
-                      background: `${color}18`, color,
-                      border: `1px solid ${color}35`,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}
-                  >{t.titulo}</div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Day view ──────────────────────────────────────────────────
-function DayView({ date, tasks, onTaskClick }: { date: Date; tasks: RcTask[]; onTaskClick: (t: RcTask) => void }) {
-  const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
-  const dayTasks = tasks
-    .filter(t => t.plazo.slice(0,10) === key)
-    .sort((a, b) => taskPriority(a) - taskPriority(b))
-
-  return (
-    <div style={{ padding: '20px 0' }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1.4, marginBottom: 16 }}>
-        {date.getDate()} DE {MONTHS[date.getMonth()].toUpperCase()} — {dayTasks.length} TAREA{dayTasks.length !== 1 ? 'S' : ''}
-      </div>
-      {dayTasks.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--muted)', fontSize: 13 }}>
-          Sin tareas para este día
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {dayTasks.map(t => {
-            const sem = getSemaphore(t.plazo, t.estado)
-            const s   = STATUS_CFG[t.estado]
-            const a   = AREA_CFG[t.area]
-            return (
-              <div key={t.id} onClick={() => onTaskClick(t)} style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
-                borderRadius: 14, cursor: 'pointer',
-                background: 'var(--surface2)', border: `1px solid ${sem.hex}30`,
-                borderLeft: `4px solid ${sem.hex}`,
-              }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)', marginBottom: 4 }}>{t.titulo}</div>
-                  <div style={{ fontSize: 10, color: a?.color ?? 'var(--muted)' }}>{t.area}</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
-                  <span style={{ fontSize: 9, padding: '3px 9px', borderRadius: 8, background: s.bg, color: s.color, fontWeight: 700 }}>{t.estado}</span>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: sem.hex }}>{sem.label}</span>
-                </div>
-              </div>
-            )
-          })}
+      <span style={{ fontSize: 9, flexShrink: 0 }}>{taskIcon(task)}</span>
+      <span style={{ fontSize: 9, fontWeight: 700, color: '#E5E7EB', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+        {task.titulo}
+      </span>
+      {resp && (
+        <div style={{ width: 14, height: 14, borderRadius: '50%', background: `${color}35`, border: `1px solid ${color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6, fontWeight: 800, color, flexShrink: 0 }}>
+          {resp.iniciales?.slice(0,2) ?? '??'}
         </div>
       )}
     </div>
   )
 }
 
-// ── Main component ────────────────────────────────────────────
-export default function TaskCalendar({ tasks, onTaskClick }: Props) {
-  const today     = new Date()
-  const isDesktop = useIsDesktop()
-  const [year, setYear]   = useState(today.getFullYear())
+/* ── Day modal ── */
+function DayModal({ day, month, year, tasks, onTaskClick, onClose }: { day: number; month: number; year: number; tasks: RcTask[]; onTaskClick: (t: RcTask) => void; onClose: () => void }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#111318', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: '22px 20px', width: '100%', maxWidth: 420, maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(0,0,0,0.6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#F4EEDF' }}>{day} de {MONTHS[month]}</div>
+            <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{tasks.length} tarea{tasks.length!==1?'s':''}</div>
+          </div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: 16, color: '#9CA3AF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+        </div>
+        {tasks.length === 0
+          ? <div style={{ textAlign: 'center', padding: '24px 0', color: '#6B7280', fontSize: 13 }}>Sin tareas este día</div>
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {tasks.map(t => {
+                const color = semColor(t)
+                const resp = t.responsable
+                return (
+                  <div key={t.id} onClick={() => { onTaskClick(t); onClose() }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, cursor: 'pointer', background: `${color}12`, border: `1px solid ${color}30`, borderLeft: `3px solid ${color}`, transition: 'opacity 0.1s' }}>
+                    <span style={{ fontSize: 16 }}>{taskIcon(t)}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>{t.titulo}</div>
+                      <div style={{ fontSize: 10, color, marginTop: 2 }}>{semLabel(t)} · {t.area}</div>
+                    </div>
+                    {resp && (
+                      <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${color}25`, border: `1.5px solid ${color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color, flexShrink: 0 }}>
+                        {resp.iniciales}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+        }
+      </div>
+    </div>
+  )
+}
+
+/* ── Main ── */
+export default function TaskCalendar({ tasks, onTaskClick, onNewTask }: Props) {
+  const today = new Date()
+  const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [calView, setCalView] = useState<CalView>('month')
-  const [modalDay, setModalDay]   = useState<number | null>(null)
-  const [weekBase, setWeekBase]   = useState<Date>(() => {
-    const d = new Date(today)
-    const off = (d.getDay() + 6) % 7
-    d.setDate(d.getDate() - off)
-    d.setHours(0,0,0,0)
-    return d
+  const [modalDay, setModalDay] = useState<number | null>(null)
+  const [weekBase, setWeekBase] = useState<Date>(() => {
+    const d = new Date(today); const off = (d.getDay()+6)%7; d.setDate(d.getDate()-off); d.setHours(0,0,0,0); return d
   })
   const [dayBase, setDayBase] = useState<Date>(() => new Date(today.getFullYear(), today.getMonth(), today.getDate()))
 
-  // ── Month helpers ──
   const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7
-  const daysInMonth  = new Date(year, month + 1, 0).getDate()
+  const daysInMonth = new Date(year, month+1, 0).getDate()
 
-  const tasksByDay: Record<number, RcTask[]> = {}
-  for (const t of tasks) {
-    const { y: py, m: pm, d: pd } = parsePlazo(t.plazo)
-    if (py === year && pm === month) {
-      if (!tasksByDay[pd]) tasksByDay[pd] = []
-      tasksByDay[pd].push(t)
+  const tasksByDay = useMemo(() => {
+    const map: Record<number, RcTask[]> = {}
+    for (const t of tasks) {
+      const [ty, tm, td] = t.plazo.slice(0,10).split('-').map(Number)
+      if (ty === year && tm === month+1) {
+        if (!map[td]) map[td] = []
+        map[td].push(t)
+      }
     }
-  }
-  for (const d of Object.keys(tasksByDay)) {
-    tasksByDay[+d].sort((a, b) => taskPriority(a) - taskPriority(b))
-  }
+    for (const d of Object.keys(map)) {
+      map[+d].sort((a,b) => {
+        const pri = (t: RcTask) => t.estado==='Atrasada'?0:t.estado==='Por Aprobar'?1:t.estado==='En Proceso'?2:3
+        return pri(a)-pri(b)
+      })
+    }
+    return map
+  }, [tasks, year, month])
 
-  const cells: (number | null)[] = [
-    ...Array(firstWeekday).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
+  const cells: (number|null)[] = [...Array(firstWeekday).fill(null), ...Array.from({length:daysInMonth},(_,i)=>i+1)]
   while (cells.length % 7 !== 0) cells.push(null)
 
-  const monthTaskCount = Object.values(tasksByDay).flat().length
+  const monthTasks = Object.values(tasksByDay).flat()
+  const kpiAtrasadas = monthTasks.filter(t => t.estado==='Atrasada').length
+  const kpiCompletadas = monthTasks.filter(t => t.estado==='Completada').length
+  const kpiProximas = monthTasks.filter(t => { const d = daysFromNow(t.plazo); return d>=0 && d<=3 && t.estado!=='Completada' }).length
+  const kpiTotal = monthTasks.length
 
-  // ── Navigation ──
-  function prevMonth()  { if (month === 0) { setYear(y => y-1); setMonth(11) } else setMonth(m => m-1) }
-  function nextMonth()  { if (month === 11) { setYear(y => y+1); setMonth(0) } else setMonth(m => m+1) }
-  function prevWeek()   { const d = new Date(weekBase); d.setDate(d.getDate()-7); setWeekBase(d) }
-  function nextWeek()   { const d = new Date(weekBase); d.setDate(d.getDate()+7); setWeekBase(d) }
-  function prevDay()    { const d = new Date(dayBase); d.setDate(d.getDate()-1); setDayBase(d) }
-  function nextDay()    { const d = new Date(dayBase); d.setDate(d.getDate()+1); setDayBase(d) }
+  // Sidebar data
+  const proxVenc = useMemo(() => [...tasks]
+    .filter(t => t.estado!=='Completada' && daysFromNow(t.plazo)>=0)
+    .sort((a,b)=>a.plazo.localeCompare(b.plazo))
+    .slice(0,3), [tasks])
 
-  function prev() { if (calView === 'month') prevMonth(); else if (calView === 'week') prevWeek(); else prevDay() }
-  function next() { if (calView === 'month') nextMonth(); else if (calView === 'week') nextWeek(); else nextDay() }
+  const criticas = useMemo(() => [...tasks]
+    .filter(t => t.prioridad_maxima && t.estado!=='Completada')
+    .sort((a,b)=>a.plazo.localeCompare(b.plazo))
+    .slice(0,3), [tasks])
 
-  function periodLabel() {
-    if (calView === 'month') return `${MONTHS[month]} ${year}`
-    if (calView === 'week') {
-      const end = new Date(weekBase); end.setDate(weekBase.getDate()+6)
-      return `${weekBase.getDate()} ${MONTHS[weekBase.getMonth()].slice(0,3)} — ${end.getDate()} ${MONTHS[end.getMonth()].slice(0,3)} ${end.getFullYear()}`
-    }
-    return `${dayBase.getDate()} de ${MONTHS[dayBase.getMonth()]} ${dayBase.getFullYear()}`
+  const recentActivity = useMemo(() => [...tasks]
+    .sort((a,b)=>(b.created_at??'').localeCompare(a.created_at??''))
+    .slice(0,5)
+    .map(t => {
+      const type = t.estado==='Completada'?'completada':t.estado==='En Proceso'?'proceso':'asignada'
+      const who = t.responsable?.nombre?.split(' ').slice(0,2).map((w,i)=>i===0?w:w[0]+'.').join(' ') ?? 'Alguien'
+      return { t, type, who, time: t.created_at ? getTimeAgo(t.created_at) : 'hace un momento' }
+    }), [tasks])
+
+  function prev() {
+    if (calView==='month') { if (month===0) { setYear(y=>y-1); setMonth(11) } else setMonth(m=>m-1) }
+    else if (calView==='week') { const d=new Date(weekBase); d.setDate(d.getDate()-7); setWeekBase(d) }
+    else { const d=new Date(dayBase); d.setDate(d.getDate()-1); setDayBase(d) }
+  }
+  function next() {
+    if (calView==='month') { if (month===11) { setYear(y=>y+1); setMonth(0) } else setMonth(m=>m+1) }
+    else if (calView==='week') { const d=new Date(weekBase); d.setDate(d.getDate()+7); setWeekBase(d) }
+    else { const d=new Date(dayBase); d.setDate(d.getDate()+1); setDayBase(d) }
   }
 
-  const CELL_H     = isDesktop ? 110 : 72
-  const PILLS_SHOW = isDesktop ? 3 : 1
+  const periodLabel = calView==='month' ? `${MONTHS[month]} ${year}`
+    : calView==='week' ? (() => { const end=new Date(weekBase); end.setDate(weekBase.getDate()+6); return `${weekBase.getDate()} ${MONTHS[weekBase.getMonth()].slice(0,3)} — ${end.getDate()} ${MONTHS[end.getMonth()].slice(0,3)}` })()
+    : `${dayBase.getDate()} de ${MONTHS[dayBase.getMonth()]} ${dayBase.getFullYear()}`
 
-  const modalTasks = modalDay ? (tasksByDay[modalDay] ?? []) : []
+  const actColor: Record<string,string> = { completada:'#22C55E', proceso:'#E67E22', asignada:'#5B8AA8' }
+  const actIcon: Record<string,string> = { completada:'✓', proceso:'↻', asignada:'↗' }
+  const actVerb: Record<string,string> = { completada:'completó', proceso:'inició', asignada:'asignó a' }
+
+  const CARD: React.CSSProperties = { background: '#111318', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16 }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, height: '100%' }}>
 
-      {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button onClick={prev} style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 16, color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>‹</button>
+      {/* ── HEADER ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, flexWrap: 'wrap' }}>
 
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: isDesktop ? 24 : 18, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.8, lineHeight: 1 }}>
-            {periodLabel()}
-          </div>
-          {calView === 'month' && monthTaskCount > 0 && (
-            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>
-              {monthTaskCount} tarea{monthTaskCount !== 1 ? 's' : ''} este mes
+        {/* Left: nav + title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <button onClick={prev} style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: 16, color: '#D1D5DB', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>‹</button>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 26, fontWeight: 900, color: '#F4EEDF', letterSpacing: -1, lineHeight: 1 }}>{periodLabel}</span>
+              <span style={{ fontSize: 14, color: '#6B7280', cursor: 'pointer' }}>▾</span>
             </div>
-          )}
+            <div style={{ fontSize: 10, color: '#6B7280', marginTop: 2 }}>{kpiTotal} tareas este mes</div>
+          </div>
         </div>
 
-        {/* View toggle */}
-        <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 3, gap: 2, flexShrink: 0 }}>
-          {(['month','week','day'] as CalView[]).map(v => {
-            const labels: Record<CalView,string> = { month: 'Mes', week: 'Semana', day: 'Día' }
-            return (
-              <button key={v} onClick={() => setCalView(v)} style={{
-                padding: isDesktop ? '6px 14px' : '5px 10px',
-                borderRadius: 9, border: 'none', cursor: 'pointer',
-                fontSize: isDesktop ? 11 : 10, fontWeight: 700,
-                background: calView === v ? 'var(--gold)' : 'transparent',
-                color: calView === v ? '#0A0A0A' : 'var(--muted)',
-                transition: 'all 0.15s',
-              }}>{labels[v]}</button>
-            )
-          })}
+        {/* Center: mini KPIs */}
+        <div style={{ display: 'flex', gap: 8, flex: 1, justifyContent: 'center' }}>
+          {[
+            { color: '#DC2626', bg: 'rgba(220,38,38,0.12)', border: 'rgba(220,38,38,0.3)', icon: '🔴', value: kpiAtrasadas, label: 'Atrasadas' },
+            { color: '#D97706', bg: 'rgba(217,119,6,0.12)',  border: 'rgba(217,119,6,0.3)',  icon: '🟡', value: kpiProximas,  label: 'Próximas\n(1-3 días)' },
+            { color: '#22C55E', bg: 'rgba(34,197,94,0.12)',  border: 'rgba(34,197,94,0.3)',  icon: '✅', value: kpiCompletadas, label: 'Completadas' },
+            { color: '#3B82F6', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.3)', icon: '🔵', value: kpiTotal,     label: 'Total tareas' },
+          ].map((k,i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 10, background: k.bg, border: `1px solid ${k.border}` }}>
+              <span style={{ fontSize: 13 }}>{k.icon}</span>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: k.color, lineHeight: 1 }}>{k.value}</div>
+                <div style={{ fontSize: 9, color: '#9CA3AF', lineHeight: 1.2, whiteSpace: 'pre' }}>{k.label}</div>
+              </div>
+            </div>
+          ))}
         </div>
 
-        <button onClick={next} style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 16, color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>›</button>
+        {/* Right: view tabs + CTA */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 11, padding: 3, gap: 2 }}>
+            {(['month','week','day','agenda'] as CalView[]).map(v => {
+              const labels: Record<CalView,string> = { month:'Mes', week:'Semana', day:'Día', agenda:'Agenda' }
+              return (
+                <button key={v} onClick={() => setCalView(v)} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: calView===v ? '#D4AF37' : 'transparent', color: calView===v ? '#0A0A0A' : '#9CA3AF', transition: 'all 0.15s' }}>
+                  {labels[v]}
+                </button>
+              )
+            })}
+          </div>
+          <button onClick={next} style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: 16, color: '#D1D5DB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+          <div style={{ display: 'flex', borderRadius: 11, overflow: 'hidden', border: '1px solid rgba(212,175,55,0.4)' }}>
+            <button onClick={onNewTask} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', background: '#D4AF37', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 800, color: '#0A0A0A' }}>
+              + Nueva tarea
+            </button>
+            <div style={{ width: 1, background: 'rgba(0,0,0,0.2)' }} />
+            <button style={{ padding: '10px 10px', background: '#D4AF37', border: 'none', cursor: 'pointer', fontSize: 12, color: '#0A0A0A' }}>▾</button>
+          </div>
+        </div>
       </div>
 
-      {/* ── Calendar card ── */}
-      <div style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 20,
-        overflow: 'hidden',
-        boxShadow: 'var(--card-shadow, 0 4px 32px rgba(0,0,0,0.18))',
-      }}>
+      {/* ── BODY: calendar + sidebar ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 16, flex: 1, alignItems: 'start' }}>
 
-        {/* Day headers — month & week only */}
-        {calView !== 'day' && (
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-            borderBottom: '2px solid var(--border)',
-            background: 'var(--surface2)',
-          }}>
-            {(isDesktop ? DAYS_L : DAYS_S).map((d, i) => (
-              <div key={d} style={{
-                padding: isDesktop ? '12px 14px' : '9px 0',
-                fontSize: isDesktop ? 11 : 9, fontWeight: 800,
-                color: i >= 5 ? 'var(--gold)' : 'var(--cream)',
-                textAlign: isDesktop ? 'left' : 'center',
-                letterSpacing: 1.4, textTransform: 'uppercase',
-                opacity: i >= 5 ? 0.55 : 1,
-              }}>{d}</div>
-            ))}
-          </div>
-        )}
+        {/* CALENDAR */}
+        <div style={{ background: '#0D0F14', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 18, overflow: 'hidden' }}>
 
-        {/* ── Month grid ── */}
-        {calView === 'month' && (
-          <div>
-            {Array.from({ length: cells.length / 7 }, (_, week) => (
-              <div key={week} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: week < cells.length/7 - 1 ? '1px solid var(--border)' : 'none' }}>
-                {cells.slice(week*7, week*7+7).map((day, col) => {
-                  if (!day) return (
-                    <div key={`e-${week}-${col}`} style={{
-                      height: CELL_H, borderRight: col < 6 ? '1px solid var(--border)' : 'none',
-                      background: col >= 5 ? 'rgba(128,128,128,0.015)' : 'transparent',
-                    }} />
-                  )
+          {/* Day headers */}
+          {calView !== 'day' && calView !== 'agenda' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', borderBottom: '1px solid rgba(255,255,255,0.07)', background: '#111318' }}>
+              {DAYS_L.map((d,i) => (
+                <div key={d} style={{ padding: '13px 10px', fontSize: 11, fontWeight: 800, color: i>=5 ? '#D4AF37' : '#9CA3AF', textAlign: 'center', letterSpacing: 1.2, opacity: i>=5 ? 0.7 : 1 }}>{d}</div>
+              ))}
+            </div>
+          )}
 
-                  const dayTasks   = tasksByDay[day] ?? []
-                  const isTod      = day === today.getDate() && month === today.getMonth() && year === today.getFullYear()
-                  const isPast     = new Date(year, month, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate())
-                  const isWknd     = col >= 5
-                  const visible    = dayTasks.slice(0, PILLS_SHOW)
-                  const overflow   = dayTasks.length - PILLS_SHOW
+          {/* ── Month view ── */}
+          {calView === 'month' && (
+            <div>
+              {Array.from({length: cells.length/7}, (_,week) => (
+                <div key={week} style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', borderBottom: week < cells.length/7-1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                  {cells.slice(week*7, week*7+7).map((day, col) => {
+                    if (!day) return (
+                      <div key={`e-${week}-${col}`} style={{ minHeight: 110, borderRight: col<6 ? '1px solid rgba(255,255,255,0.05)' : 'none', background: col>=5 ? 'rgba(255,255,255,0.008)' : 'transparent' }} />
+                    )
+                    const dayTasks = tasksByDay[day] ?? []
+                    const isToday = day===today.getDate() && month===today.getMonth() && year===today.getFullYear()
+                    const isPast = new Date(year,month,day) < new Date(today.getFullYear(),today.getMonth(),today.getDate())
+                    const isWknd = col >= 5
+                    const visible = dayTasks.slice(0,3)
+                    const overflow = dayTasks.length - 3
 
-                  return (
-                    <div
-                      key={day}
-                      onClick={() => setModalDay(day)}
-                      style={{
-                        height: CELL_H,
-                        borderRight: col < 6 ? '1px solid var(--border)' : 'none',
-                        padding: isDesktop ? '9px 10px' : '6px 5px',
-                        cursor: 'pointer',
-                        background: isTod
-                          ? 'rgba(212,175,55,0.07)'
-                          : isWknd
-                          ? 'rgba(128,128,128,0.02)'
-                          : 'transparent',
-                        display: 'flex', flexDirection: 'column', gap: 3,
-                        overflow: 'hidden',
-                        transition: 'background 0.1s',
-                        position: 'relative',
-                      }}
-                    >
-                      {/* Day number */}
-                      <div style={{
-                        width: isTod ? 26 : 'auto',
-                        height: isTod ? 26 : 'auto',
-                        borderRadius: isTod ? '50%' : 0,
-                        background: isTod ? 'var(--gold)' : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: isDesktop ? 'flex-start' : 'center',
-                        padding: isTod ? '0 0 0 0' : 0,
-                        justifySelf: 'flex-start',
-                        flexShrink: 0,
-                      }}>
-                        <span style={{
-                          fontSize: isDesktop ? 12 : 11, fontWeight: isTod ? 900 : 500,
-                          color: isTod ? '#0A0A0A' : isPast ? 'rgba(128,128,128,0.3)' : 'var(--cream)',
-                          width: isTod ? 26 : 'auto', textAlign: 'center',
-                          display: 'block',
-                        }}>{day}</span>
+                    return (
+                      <div key={day} onClick={() => setModalDay(day)}
+                        style={{ minHeight: 110, borderRight: col<6?'1px solid rgba(255,255,255,0.05)':'none', padding: '8px 7px', cursor: 'pointer', background: isToday ? 'rgba(212,175,55,0.06)' : isWknd ? 'rgba(255,255,255,0.01)' : 'transparent', display: 'flex', flexDirection: 'column', gap: 4, overflow: 'hidden', transition: 'background 0.1s', position: 'relative' }}
+                        onMouseEnter={e => { if (!isToday) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = isToday ? 'rgba(212,175,55,0.06)' : isWknd ? 'rgba(255,255,255,0.01)' : 'transparent' }}>
+
+                        {/* Day number */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: '50%', background: isToday ? '#D4AF37' : 'transparent', boxShadow: isToday ? '0 0 12px rgba(212,175,55,0.4)' : 'none', marginBottom: 2, flexShrink: 0 }}>
+                          <span style={{ fontSize: 12, fontWeight: isToday ? 900 : 500, color: isToday ? '#0A0A0A' : isPast ? 'rgba(156,163,175,0.35)' : '#E5E7EB', lineHeight: 1 }}>{day}</span>
+                        </div>
+
+                        {/* Task cards */}
+                        {visible.map(t => <TaskCard key={t.id} task={t} onClick={() => onTaskClick(t)} />)}
+
+                        {/* +N más */}
+                        {overflow > 0 && (
+                          <div style={{ fontSize: 9, color: '#9CA3AF', fontWeight: 700, paddingLeft: 3 }}>+{overflow} más</div>
+                        )}
+
+                        {/* Today dot */}
+                        {isToday && dayTasks.length === 0 && (
+                          <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#D4AF37', margin: '2px auto' }} />
+                        )}
                       </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
 
-                      {/* Task pills — desktop */}
-                      {isDesktop && visible.map(t => {
-                        const color = semColor(t)
-                        return (
-                          <div
-                            key={t.id}
-                            onClick={e => { e.stopPropagation(); onTaskClick(t) }}
-                            title={t.titulo}
-                            style={{
-                              fontSize: 9, fontWeight: 700, lineHeight: 1.2,
-                              padding: '3px 7px', borderRadius: 6,
-                              background: `${color}20`, color,
-                              border: `1px solid ${color}40`,
-                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                              flexShrink: 0,
-                            }}
-                          >{t.titulo}</div>
-                        )
-                      })}
-
-                      {/* Dots — mobile */}
-                      {!isDesktop && dayTasks.length > 0 && (
-                        <div style={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', marginTop: 2 }}>
-                          {dayTasks.slice(0, 5).map((t, i) => (
-                            <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: semColor(t) }} />
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Overflow */}
-                      {isDesktop && overflow > 0 && (
-                        <div style={{ fontSize: 8, color: 'var(--muted)', fontWeight: 700, paddingLeft: 2 }}>
-                          +{overflow} más
-                        </div>
-                      )}
-
-                      {/* Mobile count badge */}
-                      {!isDesktop && dayTasks.length > 0 && (
-                        <div style={{ fontSize: 7, color: 'var(--muted)', textAlign: 'center', fontWeight: 600 }}>
-                          {dayTasks.length}
-                        </div>
-                      )}
+          {/* ── Week view ── */}
+          {calView === 'week' && (() => {
+            const days = Array.from({length:7},(_,i) => { const d=new Date(weekBase); d.setDate(weekBase.getDate()+i); return d })
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
+                {days.map((date,col) => {
+                  const key = toKey(date.getFullYear(), date.getMonth(), date.getDate())
+                  const dayTasks = tasks.filter(t=>t.plazo.slice(0,10)===key)
+                  const isToday = date.toDateString()===today.toDateString()
+                  return (
+                    <div key={key} style={{ borderRight: col<6?'1px solid rgba(255,255,255,0.05)':'none', padding: '10px 8px', minHeight: 180, background: col>=5?'rgba(255,255,255,0.01)':'transparent' }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:'50%', background:isToday?'#D4AF37':'transparent', marginBottom:8, boxShadow:isToday?'0 0 10px rgba(212,175,55,0.4)':'none' }}>
+                        <span style={{ fontSize:12, fontWeight:isToday?900:500, color:isToday?'#0A0A0A':'#E5E7EB' }}>{date.getDate()}</span>
+                      </div>
+                      <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                        {dayTasks.map(t => <TaskCard key={t.id} task={t} onClick={()=>onTaskClick(t)} />)}
+                      </div>
                     </div>
                   )
                 })}
               </div>
-            ))}
-          </div>
-        )}
+            )
+          })()}
 
-        {/* ── Week grid ── */}
-        {calView === 'week' && (
-          <WeekView
-            year={year} month={month}
-            weekStart={weekBase}
-            tasks={tasks}
-            onTaskClick={onTaskClick}
-            isDesktop={isDesktop}
-          />
-        )}
+          {/* ── Day view ── */}
+          {calView === 'day' && (() => {
+            const key = toKey(dayBase.getFullYear(), dayBase.getMonth(), dayBase.getDate())
+            const dayTasks = tasks.filter(t=>t.plazo.slice(0,10)===key).sort((a,b)=>{ const p=(t:RcTask)=>t.estado==='Atrasada'?0:t.estado==='En Proceso'?1:2; return p(a)-p(b) })
+            return (
+              <div style={{ padding: '20px 22px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#9CA3AF', letterSpacing: 1.3, marginBottom: 16, textTransform: 'uppercase' }}>
+                  {dayBase.getDate()} DE {MONTHS[dayBase.getMonth()].toUpperCase()} — {dayTasks.length} TAREA{dayTasks.length!==1?'S':''}
+                </div>
+                {dayTasks.length === 0
+                  ? <div style={{ textAlign:'center', padding:'40px 0', color:'#6B7280', fontSize:13 }}>Sin tareas para este día</div>
+                  : <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                      {dayTasks.map(t => {
+                        const color = semColor(t)
+                        const resp = t.responsable
+                        return (
+                          <div key={t.id} onClick={()=>onTaskClick(t)} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:12, cursor:'pointer', background:`${color}12`, border:`1px solid ${color}30`, borderLeft:`3px solid ${color}` }}>
+                            <span style={{ fontSize:20 }}>{taskIcon(t)}</span>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:13, fontWeight:700, color:'#F4EEDF', marginBottom:3 }}>{t.titulo}</div>
+                              <div style={{ fontSize:10, color }}>{ semLabel(t) } · {t.area}</div>
+                            </div>
+                            {resp && <div style={{ width:28, height:28, borderRadius:'50%', background:`${color}25`, border:`1.5px solid ${color}50`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:800, color }}>{resp.iniciales}</div>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                }
+              </div>
+            )
+          })()}
 
-        {/* ── Day view ── */}
-        {calView === 'day' && (
-          <div style={{ padding: '4px 20px 20px' }}>
-            <DayView date={dayBase} tasks={tasks} onTaskClick={onTaskClick} />
+          {/* ── Agenda view ── */}
+          {calView === 'agenda' && (() => {
+            const upcoming = [...tasks].filter(t=>t.plazo>=toKey(year,month,1)).sort((a,b)=>a.plazo.localeCompare(b.plazo)).slice(0,20)
+            return (
+              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: 1.3, marginBottom: 8, textTransform: 'uppercase' }}>Agenda — Próximas tareas</div>
+                {upcoming.length === 0 ? <div style={{ textAlign:'center', padding:'32px 0', color:'#6B7280', fontSize:13 }}>Sin tareas próximas</div>
+                : upcoming.map(t => {
+                    const color = semColor(t); const resp = t.responsable
+                    return (
+                      <div key={t.id} onClick={()=>onTaskClick(t)} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:10, cursor:'pointer', background:`${color}10`, border:`1px solid ${color}25`, borderLeft:`3px solid ${color}` }}>
+                        <div style={{ textAlign:'center', minWidth:42, background:`${color}18`, borderRadius:8, padding:'5px 0', flexShrink:0 }}>
+                          <div style={{ fontSize:16, fontWeight:900, color, lineHeight:1 }}>{parseInt(t.plazo.split('-')[2])}</div>
+                          <div style={{ fontSize:7, color, fontWeight:700 }}>{MONTHS_SHORT[parseInt(t.plazo.split('-')[1])-1]}</div>
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:12, fontWeight:700, color:'#F4EEDF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.titulo}</div>
+                          <div style={{ fontSize:10, color:'#6B7280', marginTop:2 }}>{t.area} · {relativeDate(t.plazo)}</div>
+                        </div>
+                        {resp && <div style={{ width:24, height:24, borderRadius:'50%', background:`${color}25`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:8, fontWeight:800, color, flexShrink:0 }}>{resp.iniciales}</div>}
+                      </div>
+                    )
+                  })
+                }
+              </div>
+            )
+          })()}
+        </div>
+
+        {/* SIDEBAR */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* Próximos vencimientos */}
+          <div style={CARD}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
+              <span style={{ fontSize:11, fontWeight:800, color:'#F4EEDF', letterSpacing:1.2, textTransform:'uppercase' }}>Próximos vencimientos</span>
+              <button style={{ fontSize:11, color:'#D4AF37', background:'none', border:'none', cursor:'pointer', fontWeight:700 }}>Ver todos</button>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column' }}>
+              {proxVenc.length === 0 && <div style={{ padding:'16px', fontSize:11, color:'#6B7280', textAlign:'center' }}>Sin vencimientos próximos</div>}
+              {proxVenc.map((t,i) => {
+                const color = semColor(t)
+                const resp = t.responsable
+                const [,m,d] = t.plazo.split('-')
+                return (
+                  <div key={t.id} onClick={()=>onTaskClick(t)} style={{ padding:'12px 16px', cursor:'pointer', borderBottom:i<proxVenc.length-1?'1px solid rgba(255,255,255,0.04)':'none', transition:'background 0.1s' }}
+                    onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.03)')}
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                    <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                      <div style={{ textAlign:'center', minWidth:42, background:`${color}16`, border:`1px solid ${color}25`, borderRadius:8, padding:'5px 0', flexShrink:0 }}>
+                        <div style={{ fontSize:16, fontWeight:900, color, lineHeight:1 }}>{parseInt(d)}</div>
+                        <div style={{ fontSize:7, color, fontWeight:700, letterSpacing:0.5 }}>{MONTHS_SHORT[parseInt(m)-1]}</div>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:'#60A5FA', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:3 }}>{t.titulo}</div>
+                        <div style={{ fontSize:10, color:'#9CA3AF' }}>{relativeDate(t.plazo)}</div>
+                        {resp && (
+                          <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:5 }}>
+                            <div style={{ width:16, height:16, borderRadius:'50%', background:`${color}25`, border:`1px solid ${color}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:6, fontWeight:800, color }}>{resp.iniciales}</div>
+                            <span style={{ fontSize:10, color:'#9CA3AF' }}>{resp.nombre?.split(' ')[0]}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        )}
+
+          {/* Tareas críticas */}
+          <div style={CARD}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
+              <span style={{ fontSize:11, fontWeight:800, color:'#F4EEDF', letterSpacing:1.2, textTransform:'uppercase' }}>Tareas críticas</span>
+              <button style={{ fontSize:11, color:'#D4AF37', background:'none', border:'none', cursor:'pointer', fontWeight:700 }}>Ver todas</button>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column' }}>
+              {criticas.length === 0 && <div style={{ padding:'16px', fontSize:11, color:'#6B7280', textAlign:'center' }}>Sin tareas críticas</div>}
+              {criticas.map((t,i) => {
+                const color = semColor(t)
+                const [,m,d] = t.plazo.split('-')
+                return (
+                  <div key={t.id} onClick={()=>onTaskClick(t)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', cursor:'pointer', borderBottom:i<criticas.length-1?'1px solid rgba(255,255,255,0.04)':'none', transition:'background 0.1s' }}
+                    onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.03)')}
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                    <div style={{ width:28, height:28, borderRadius:8, background:'rgba(220,38,38,0.12)', border:'1px solid rgba(220,38,38,0.25)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, flexShrink:0 }}>🔴</div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:'#F87171', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:2 }}>{t.titulo}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                        <span style={{ fontSize:9, padding:'1px 6px', borderRadius:6, background:'rgba(220,38,38,0.12)', color:'#F87171', fontWeight:700 }}>Alta</span>
+                        <span style={{ fontSize:9, color:'#9CA3AF' }}>{parseInt(d)} {MONTHS_SHORT[parseInt(m)-1]}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Actividad reciente */}
+          <div style={CARD}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
+              <span style={{ fontSize:11, fontWeight:800, color:'#F4EEDF', letterSpacing:1.2, textTransform:'uppercase' }}>Actividad reciente</span>
+              <button style={{ fontSize:11, color:'#D4AF37', background:'none', border:'none', cursor:'pointer', fontWeight:700 }}>Ver toda</button>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column' }}>
+              {recentActivity.map(({t,type,who,time},idx) => {
+                const c = actColor[type]
+                const cfg = AREA_CFG[t.area]
+                return (
+                  <div key={t.id+idx} onClick={()=>onTaskClick(t)} style={{ display:'flex', gap:10, padding:'10px 16px', borderBottom:idx<recentActivity.length-1?'1px solid rgba(255,255,255,0.04)':'none', cursor:'pointer', transition:'background 0.1s', alignItems:'flex-start' }}
+                    onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.03)')}
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                    <div style={{ width:26, height:26, borderRadius:8, background:`${c}18`, border:`1px solid ${c}30`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color:c, fontWeight:900, flexShrink:0, marginTop:1 }}>
+                      {actIcon[type]}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:11, color:'#9CA3AF', lineHeight:1.4 }}>
+                        <span style={{ fontWeight:600, color:'#F4EEDF' }}>{who}</span>
+                        {' '}{actVerb[type]}{' '}
+                        <span style={{ fontWeight:700, color: cfg?.color ?? c }}>{t.titulo.length>22?t.titulo.slice(0,22)+'…':t.titulo}</span>
+                      </div>
+                      <div style={{ fontSize:9, color:'rgba(156,163,175,0.4)', marginTop:2 }}>{time}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+        </div>
       </div>
 
-      {/* ── Semaphore legend ── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 16 }}>
-        {[
-          { color: '#DC2626', label: 'Vencida / Urgente (< 24h)' },
-          { color: '#D97706', label: 'Próxima (1-3 días)' },
-          { color: '#16A34A', label: 'En tiempo (> 3 días)' },
-          { color: '#3B82F6', label: 'Completada' },
-        ].map(l => (
-          <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 3, background: l.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>{l.label}</span>
-          </div>
-        ))}
+      {/* ── FOOTER ── */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:16, flexWrap:'wrap', gap:12 }}>
+        <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
+          {[
+            { color:'#DC2626', label:'Vencida / Urgente (< 24h)' },
+            { color:'#D97706', label:'Próxima (1-3 días)' },
+            { color:'#16A34A', label:'En tiempo (> 3 días)' },
+            { color:'#3B82F6', label:'Completada' },
+          ].map(l => (
+            <div key={l.label} style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <div style={{ width:9, height:9, borderRadius:3, background:l.color, flexShrink:0 }} />
+              <span style={{ fontSize:10, color:'#6B7280' }}>{l.label}</span>
+            </div>
+          ))}
+        </div>
+        <button style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 16px', borderRadius:10, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.1)', cursor:'pointer', fontSize:12, color:'#9CA3AF', fontWeight:600 }}>
+          <span>↺</span> Sincronizar calendario <span style={{ opacity:0.5 }}>▾</span>
+        </button>
       </div>
 
-      {/* ── Day modal ── */}
+      {/* ── DAY MODAL ── */}
       {modalDay !== null && (
-        <DayModal
-          day={modalDay} month={month} year={year}
-          tasks={modalTasks}
-          onTaskClick={onTaskClick}
-          onClose={() => setModalDay(null)}
-        />
+        <DayModal day={modalDay} month={month} year={year} tasks={tasksByDay[modalDay]??[]} onTaskClick={onTaskClick} onClose={()=>setModalDay(null)} />
       )}
+
     </div>
   )
 }

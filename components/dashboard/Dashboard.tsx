@@ -395,7 +395,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
           {/* ── CALENDAR VIEW ── */}
           {view === 'calendar' && (
-            <TaskCalendar tasks={tasks} onTaskClick={setSelectedTask} />
+            <TaskCalendar tasks={tasks} onTaskClick={setSelectedTask} onNewTask={() => setShowNewTask(true)} />
           )}
 
           {/* ── ANALYTICS VIEW ── */}
