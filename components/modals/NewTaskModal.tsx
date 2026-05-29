@@ -433,15 +433,30 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
           <div>
             <label style={lbl}>Fecha vencimiento *</label>
             <div style={{ position: 'relative' }}>
+              {/* Botón visible */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 9,
+                padding: '9px 12px', borderRadius: 10,
+                background: plazo ? 'var(--input-bg)' : 'var(--surface2)',
+                border: `1.5px solid ${plazo ? 'var(--input-border)' : 'rgba(255,255,255,0.1)'}`,
+                fontSize: 13, color: plazo ? 'var(--cream)' : 'var(--muted)',
+                cursor: 'pointer', userSelect: 'none',
+              }}>
+                <span style={{ fontSize: 14 }}>📅</span>
+                <span>{plazo ? new Date(plazo + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' }) : 'Seleccionar fecha'}</span>
+              </div>
+              {/* Input date invisible encima */}
               <input
                 type="date"
                 value={plazo}
                 onChange={e => setPlazo(e.target.value)}
                 min={minDate}
                 required
-                style={{ borderRadius: 10, width: '100%', fontSize: 13, paddingLeft: 36 }}
+                style={{
+                  position: 'absolute', inset: 0, opacity: 0,
+                  cursor: 'pointer', width: '100%', height: '100%',
+                }}
               />
-              <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 14, pointerEvents: 'none' }}>📅</span>
             </div>
           </div>
         </div>
