@@ -10,6 +10,7 @@ import {
   PhoneOff, AlertTriangle, Zap, Bell, Activity, X, User,
 } from 'lucide-react'
 import type { ActividadItem } from './page'
+import WAModal, { type WATarget } from '@/components/ui/WAModal'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface FrequencyStat {
@@ -86,11 +87,7 @@ function getEstado(c: Cliente): EstadoDisplay {
   return { label:'Al día',          color:'#34D399', bg:'rgba(52,211,153,0.1)',  border:'rgba(52,211,153,0.2)'  }
 }
 
-function waUrl(nombre: string, tel?: string | null): string {
-  const base = tel ? `https://wa.me/${tel.replace(/\D/g,'')}` : 'https://wa.me/'
-  const msg  = encodeURIComponent(`Hola ${nombre}, te saluda El Regreso Beer Co. 🍺`)
-  return `${base}?text=${msg}`
-}
+// waUrl eliminado → se usa WAModal global
 
 const ROWS_PER_PAGE = 10
 
@@ -233,7 +230,7 @@ function Sidebar({ stats, actividad, onAlertaClick, onClienteClick }: {
 }
 
 // ── Fila de tabla ─────────────────────────────────────────────────────────────
-function ClienteRow({ c, onClick }: { c: Cliente; onClick: () => void }) {
+function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onWA: (t:WATarget)=>void }) {
   const estado    = getEstado(c)
   const seg       = c.frecuencia?.segmento ?? 'E'
   const score     = c.frecuencia?.score ?? 0
@@ -310,13 +307,12 @@ function ClienteRow({ c, onClick }: { c: Cliente; onClick: () => void }) {
       {/* WhatsApp */}
       <td style={{ padding:'10px 8px' }} onClick={e=>e.stopPropagation()}>
         <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-          <a href={waUrl(c.nombre_fantasia??'', c.telefono)}
-            target="_blank" rel="noreferrer"
+          <button onClick={()=>onWA({ nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'general', cicloPromedioDias:c.frecuencia?.ciclo_promedio_dias, siguienteCompra:c.frecuencia?.siguiente_compra_estimada, subtitulo:c.categoria??undefined })}
             style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:8,
               background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.2)',
-              color:'#25D366', fontSize:11, fontWeight:700, textDecoration:'none', width:'fit-content' }}>
+              color:'#25D366', fontSize:11, fontWeight:700, cursor:'pointer', width:'fit-content' }}>
             <MessageCircle size={13}/> WhatsApp
-          </a>
+          </button>
           <span style={{ fontSize:10, color: dcont !== null && dcont <= 7 ? '#34D399' : 'var(--muted)' }}>
             {c.ultimoContacto ? `Contactado ${fDias(dcont)}` : 'Sin contacto'}
           </span>
@@ -345,7 +341,7 @@ function ClienteRow({ c, onClick }: { c: Cliente; onClick: () => void }) {
 }
 
 // ── Card móvil ────────────────────────────────────────────────────────────────
-function ClienteCard({ c, onClick }: { c: Cliente; onClick: () => void }) {
+function ClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onWA: (t:WATarget)=>void }) {
   const estado   = getEstado(c)
   const seg      = c.frecuencia?.segmento ?? 'E'
   const score    = c.frecuencia?.score ?? 0
@@ -397,13 +393,12 @@ function ClienteCard({ c, onClick }: { c: Cliente; onClick: () => void }) {
         <span style={{ fontSize:10, color: dcont !== null && dcont <= 7 ? '#34D399' : 'var(--muted)' }}>
           {c.ultimoContacto ? `Contactado ${fDias(dcont)}` : 'Sin contacto'}
         </span>
-        <a href={waUrl(c.nombre_fantasia??'', c.telefono)} target="_blank" rel="noreferrer"
-          onClick={e=>e.stopPropagation()}
+        <button onClick={e=>{e.stopPropagation();onWA({ nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'general', cicloPromedioDias:c.frecuencia?.ciclo_promedio_dias, siguienteCompra:c.frecuencia?.siguiente_compra_estimada, subtitulo:c.categoria??undefined })}}
           style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:8,
             background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.2)',
-            color:'#25D366', fontSize:11, fontWeight:700, textDecoration:'none' }}>
+            color:'#25D366', fontSize:11, fontWeight:700, cursor:'pointer' }}>
           <MessageCircle size={12}/> WA
-        </a>
+        </button>
       </div>
     </div>
   )
@@ -411,6 +406,7 @@ function ClienteCard({ c, onClick }: { c: Cliente; onClick: () => void }) {
 
 // ── Modal Campaña WA ──────────────────────────────────────────────────────────
 function CampanaWAModal({ clientes, onClose }: { clientes: Cliente[]; onClose: () => void }) {
+  const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const conTelefono = clientes.filter(c => c.telefono)
   const sinTelefono = clientes.filter(c => !c.telefono)
 
@@ -435,19 +431,21 @@ function CampanaWAModal({ clientes, onClose }: { clientes: Cliente[]; onClose: (
 
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           {conTelefono.slice(0, 20).map(c => (
-            <a key={c.id} href={waUrl(c.nombre_fantasia??'', c.telefono)} target="_blank" rel="noreferrer"
+            <button key={c.id}
+              onClick={()=>setWaTarget({ nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'campana', subtitulo:c.categoria??undefined })}
               style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
                 padding:'10px 14px', background:'rgba(255,255,255,0.03)',
-                border:'1px solid var(--border)', borderRadius:10, textDecoration:'none', color:'inherit' }}>
+                border:'1px solid var(--border)', borderRadius:10, cursor:'pointer', width:'100%', textAlign:'left' }}>
               <div>
                 <p style={{ fontSize:12, fontWeight:600, color:'var(--cream)' }}>{c.nombre_fantasia}</p>
                 <p style={{ fontSize:10, color:'var(--muted)' }}>{c.telefono}</p>
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:5, color:'#25D366', fontSize:11, fontWeight:700 }}>
-                <MessageCircle size={14}/> Abrir WA
+                <MessageCircle size={14}/> Editar y enviar
               </div>
-            </a>
+            </button>
           ))}
+          {waTarget && <WAModal target={waTarget} onClose={()=>setWaTarget(null)}/>}
           {conTelefono.length > 20 && (
             <p style={{ fontSize:11, color:'var(--muted)', textAlign:'center', padding:8 }}>
               +{conTelefono.length-20} clientes más
@@ -477,6 +475,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   const [pagina,      setPagina]      = useState(1)
   const [showWA,      setShowWA]      = useState(false)
   const [showSort,    setShowSort]    = useState(false)
+  const [waTarget,    setWaTarget]    = useState<WATarget | null>(null)
 
   // Chips de filtro con conteos
   const FILTROS = [
@@ -706,7 +705,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
                       Sin resultados para los filtros aplicados
                     </td></tr>
                   ) : clientesPagina.map(c=>(
-                    <ClienteRow key={c.id} c={c} onClick={()=>router.push(`/ventas/clientes/${c.id}`)}/>
+                    <ClienteRow key={c.id} c={c} onClick={()=>router.push(`/ventas/clientes/${c.id}`)} onWA={setWaTarget}/>
                   ))}
                 </tbody>
               </table>
@@ -766,7 +765,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
                   <p style={{ fontSize:13, color:'var(--muted)' }}>Sin resultados</p>
                 </div>
               ) : clientesPagina.map(c=>(
-                <ClienteCard key={c.id} c={c} onClick={()=>router.push(`/ventas/clientes/${c.id}`)}/>
+                <ClienteCard key={c.id} c={c} onClick={()=>router.push(`/ventas/clientes/${c.id}`)} onWA={setWaTarget}/>
               ))}
               {totalPaginas > 1 && (
                 <div style={{ display:'flex', justifyContent:'center', gap:6, marginTop:12 }}>
@@ -827,6 +826,9 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
 
       {/* Modal Campaña WA */}
       {showWA && <CampanaWAModal clientes={clientesFiltrados} onClose={()=>setShowWA(false)}/>}
+
+      {/* Modal WA individual */}
+      {waTarget && <WAModal target={waTarget} onClose={()=>setWaTarget(null)}/>}
     </div>
   )
 }

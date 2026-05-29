@@ -7,6 +7,7 @@ import {
   ShoppingBag, Droplets, DollarSign, Clock, User, FileText,
   CreditCard, Calendar, CheckCircle2, XCircle, Sunset,
 } from 'lucide-react'
+import WAModal, { type WATarget } from '@/components/ui/WAModal'
 
 interface Cliente {
   id: number
@@ -368,6 +369,7 @@ function EstadoSelector({ nombreFantasia, estadoInicial, notaInicial }: {
 export default function ClienteDetalleClient({ cliente, ventas, contactos, deudor, frecuencia, estadoCliente = 'activo', notaEstado }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<'info' | 'ventas' | 'contactos'>('info')
+  const [waTarget, setWaTarget] = useState<WATarget | null>(null)
 
   // Agrupar ventas por fecha → pedidos
   const pedidosAgrupados = useMemo(() => {
@@ -393,6 +395,7 @@ export default function ClienteDetalleClient({ cliente, ventas, contactos, deudo
     : '#A78BFA'
 
   return (
+    <>
     <div style={{ padding: '0 0 60px', maxWidth: 720, margin: '0 auto', width: '100%' }}>
       {/* Header */}
       <div style={{ padding: '16px 16px 0', marginBottom: 16 }}>
@@ -454,20 +457,18 @@ export default function ClienteDetalleClient({ cliente, ventas, contactos, deudo
 
             {/* WhatsApp */}
             {cliente.telefono && (
-              <a
-                href={`https://wa.me/${cliente.telefono.replace(/\D/g, '')}`}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                onClick={()=>setWaTarget({ nombre:cliente.nombre_fantasia??'', telefono:cliente.telefono, contexto:'general', cicloPromedioDias:frecuencia?.ciclo_promedio_dias, siguienteCompra:frecuencia?.siguiente_compra_estimada??null, subtitulo:cliente.categoria??undefined })}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '10px 16px', borderRadius: 12, textDecoration: 'none',
+                  padding: '10px 16px', borderRadius: 12,
                   background: 'rgba(37,211,102,0.12)', border: '1px solid rgba(37,211,102,0.25)',
-                  color: '#25D366', fontSize: 13, fontWeight: 700, flexShrink: 0,
+                  color: '#25D366', fontSize: 13, fontWeight: 700, flexShrink: 0, cursor: 'pointer',
                 }}
               >
                 <MessageCircle size={16} />
                 WhatsApp
-              </a>
+              </button>
             )}
           </div>
 
@@ -739,5 +740,8 @@ export default function ClienteDetalleClient({ cliente, ventas, contactos, deudo
         )}
       </div>
     </div>
+
+    {waTarget && <WAModal target={waTarget} onClose={()=>setWaTarget(null)}/>}
+    </>
   )
 }

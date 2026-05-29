@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import WAModal, { type WATarget } from '@/components/ui/WAModal'
 
 interface Punto {
   nombre_fantasia: string
@@ -59,6 +60,7 @@ function RecenterMap({ puntos }: { puntos: Punto[] }) {
 }
 
 export default function MapLeaflet({ puntos, vendedorFiltro }: Props) {
+  const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const filtrados = vendedorFiltro === 'all'
     ? puntos
     : puntos.filter(p => p.vendedor_actual === vendedorFiltro)
@@ -79,6 +81,7 @@ export default function MapLeaflet({ puntos, vendedorFiltro }: Props) {
   }
 
   return (
+    <>
     <MapContainer
       center={[-40.2, -72.8]}
       zoom={8}
@@ -152,19 +155,17 @@ export default function MapLeaflet({ puntos, vendedorFiltro }: Props) {
                     )}
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       {p.telefono && (
-                        <a
-                          href={`https://wa.me/${p.telefono.replace(/\D/g, '')}`}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          onClick={()=>setWaTarget({ nombre:p.nombre_fantasia, telefono:p.telefono, contexto:'visita', subtitulo:p.categoria_negocio??undefined })}
                           style={{
                             display: 'inline-flex', alignItems: 'center', gap: 5,
-                            padding: '6px 12px', borderRadius: 8, textDecoration: 'none',
+                            padding: '6px 12px', borderRadius: 8,
                             background: 'rgba(37,211,102,0.15)', border: '1px solid rgba(37,211,102,0.3)',
-                            color: '#25D366', fontSize: 12, fontWeight: 700,
+                            color: '#25D366', fontSize: 12, fontWeight: 700, cursor: 'pointer',
                           }}
                         >
                           💬 WhatsApp
-                        </a>
+                        </button>
                       )}
                       {p.email && (
                         <a
@@ -221,5 +222,8 @@ export default function MapLeaflet({ puntos, vendedorFiltro }: Props) {
 
       {puntos.length > 0 && <RecenterMap puntos={filtrados.length > 0 ? filtrados : puntos} />}
     </MapContainer>
+
+    {waTarget && <WAModal target={waTarget} onClose={()=>setWaTarget(null)}/>}
+    </>
   )
 }

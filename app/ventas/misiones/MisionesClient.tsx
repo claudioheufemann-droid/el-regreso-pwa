@@ -6,9 +6,10 @@ import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
   CheckCircle2, Circle, MessageCircle, Target, ChevronRight, ChevronDown,
   RefreshCw, Zap, User, Filter, Phone, Clock, PhoneOff, Calendar,
-  Lightbulb, X, TrendingUp, Send, Edit3,
+  Lightbulb, X, TrendingUp,
 } from 'lucide-react'
 import type { MisionEnriquecida, ProximaPreview, HistorialSemana } from './page'
+import WAModal, { type WATarget, generarMensajeWA as _gen } from '@/components/ui/WAModal'
 
 // ── Paleta ────────────────────────────────────────────────────────────────────
 const SEG_COLOR: Record<string, string> = { A:'#D4AF37', B:'#34D399', C:'#60A5FA', D:'#F59E0B', E:'#F87171' }
@@ -38,105 +39,8 @@ function fPeso(n: number): string {
   if (n >= 1_000_000) return `$${(n/1_000_000).toFixed(1)}M`
   return `$${Math.round(n).toLocaleString('es-CL')}`
 }
-function waUrl(tel: string | null | undefined, msg: string): string {
-  const base = tel ? `https://wa.me/${tel.replace(/\D/g,'')}` : 'https://wa.me/'
-  return `${base}?text=${encodeURIComponent(msg)}`
-}
-
-function generarMensajeWA(m: MisionEnriquecida): string {
-  const nombre  = m.nombre_fantasia
-  const ciclo   = m.ciclo_promedio_dias ? `${m.ciclo_promedio_dias} días` : 'tu ciclo habitual'
-  const sigu    = m.siguiente_compra_estimada
-    ? ` para el ${fFecha(m.siguiente_compra_estimada)}`
-    : ' para la próxima semana'
-  return `Hola ${nombre} 👋
-
-Te saluda El Regreso Beer Co. 🍺
-
-Según tu historial, pedís cada ${ciclo} y estimamos que podrías necesitar reabastecer${sigu}.
-
-¿Te gustaría coordinar tu próximo pedido? Con gusto te preparo una propuesta con las novedades de la semana.
-
-¡Saludos!
-El Regreso Beer Co.`
-}
-
-// ── Modal WA ──────────────────────────────────────────────────────────────────
-function WAModal({ mision, onClose }: { mision: MisionEnriquecida; onClose: () => void }) {
-  const [msg, setMsg] = useState(() => generarMensajeWA(mision))
-  const charCount = msg.length
-
-  return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:1000,
-      display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-      <div style={{ background:'#141414', border:'1px solid rgba(255,255,255,0.1)', borderRadius:20,
-        padding:24, maxWidth:480, width:'100%', display:'flex', flexDirection:'column', gap:16 }}>
-
-        {/* Header */}
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-          <div>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-              <div style={{ width:32, height:32, borderRadius:8, background:'rgba(37,211,102,0.12)',
-                border:'1px solid rgba(37,211,102,0.25)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <MessageCircle size={16} color="#25D366"/>
-              </div>
-              <h2 style={{ fontSize:15, fontWeight:900, color:'var(--cream)' }}>Mensaje WhatsApp</h2>
-            </div>
-            <p style={{ fontSize:12, color:'var(--muted)' }}>
-              {mision.nombre_fantasia} · {mision.frecuencia_texto}
-              {mision.siguiente_compra_estimada && ` · Próximo: ${fFecha(mision.siguiente_compra_estimada)}`}
-            </p>
-          </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', padding:0 }}>
-            <X size={18}/>
-          </button>
-        </div>
-
-        {/* Textarea editable */}
-        <div>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-              <Edit3 size={12} color="var(--muted)"/>
-              <span style={{ fontSize:11, color:'var(--muted)', fontWeight:600 }}>Edita el mensaje antes de enviar</span>
-            </div>
-            <span style={{ fontSize:10, color:'#555' }}>{charCount} chars</span>
-          </div>
-          <textarea
-            value={msg}
-            onChange={e => setMsg(e.target.value)}
-            rows={10}
-            style={{ width:'100%', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.1)',
-              borderRadius:12, padding:'12px 14px', color:'var(--cream)', fontSize:13, lineHeight:1.6,
-              resize:'vertical', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }}
-          />
-        </div>
-
-        {/* Botón restablecer */}
-        <button onClick={() => setMsg(generarMensajeWA(mision))}
-          style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:11,
-            textDecoration:'underline', textAlign:'left', padding:0 }}>
-          Restablecer mensaje original
-        </button>
-
-        {/* Acciones */}
-        <div style={{ display:'flex', gap:10 }}>
-          <button onClick={onClose}
-            style={{ flex:1, padding:'11px', borderRadius:12, border:'1px solid var(--border)',
-              background:'transparent', color:'var(--muted)', fontSize:13, cursor:'pointer' }}>
-            Cancelar
-          </button>
-          <a href={waUrl(mision.telefono, msg)} target="_blank" rel="noreferrer"
-            onClick={onClose}
-            style={{ flex:2, padding:'11px', borderRadius:12, border:'none', cursor:'pointer',
-              background:'#25D366', color:'#fff', fontSize:13, fontWeight:800,
-              display:'flex', alignItems:'center', justifyContent:'center', gap:8, textDecoration:'none' }}>
-            <Send size={15}/> Abrir WhatsApp
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
+// waUrl, generarMensajeWA y WAModal → ahora vienen del componente compartido
+// @/components/ui/WAModal
 
 // ── Donut de progreso ──────────────────────────────────────────────────────────
 function ProgressDonut({ done, total, size=120 }: { done: number; total: number; size?: number }) {
@@ -242,7 +146,15 @@ export default function MisionesClient({
   const [prioFiltro,setPrioFiltro]= useState<'todas'|'Alta'|'Media'|'Baja'>('todas')
   const [showFiltro,setShowFiltro]= useState(false)
   const [vendorTab,  setVendorTab] = useState<string>('all')
-  const [waModal,    setWaModal]   = useState<MisionEnriquecida | null>(null)
+  const [waModal,    setWaModal]   = useState<WATarget | null>(null)
+  const misionToWA = (m: MisionEnriquecida): WATarget => ({
+    nombre: m.nombre_fantasia,
+    telefono: m.telefono,
+    contexto: 'mision',
+    cicloPromedioDias: m.ciclo_promedio_dias,
+    siguienteCompra: m.siguiente_compra_estimada,
+    subtitulo: m.frecuencia_texto,
+  })
 
   useEffect(() => { setMisiones(misionesProp) }, [misionesProp])
 
@@ -419,7 +331,7 @@ export default function MisionesClient({
             <>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {misionesMostradas.map(m=>(
-                  <MobileRow key={m.id} m={m} onToggle={handleToggle} toggling={toggling===m.id} canToggle={puedeToggle(m)} onOpen={()=>router.push('/ventas/clientes')} onWA={m=>setWaModal(m)}/>
+                  <MobileRow key={m.id} m={m} onToggle={handleToggle} toggling={toggling===m.id} canToggle={puedeToggle(m)} onOpen={()=>router.push('/ventas/clientes')} onWA={m=>setWaModal(misionToWA(m))}/>
                 ))}
               </div>
               {misionesVista.length > LIMITE && (
@@ -437,7 +349,7 @@ export default function MisionesClient({
       </div>
 
       {/* Modal WA móvil */}
-      {waModal && <WAModal mision={waModal} onClose={()=>setWaModal(null)}/>}
+      {waModal && <WAModal target={waModal} onClose={()=>setWaModal(null)}/>}
     </>
     )
   }
@@ -580,7 +492,7 @@ export default function MisionesClient({
                   </thead>
                   <tbody>
                     {misionesMostradas.map(m=>(
-                      <DesktopRow key={m.id} m={m} onToggle={handleToggle} toggling={toggling===m.id} canToggle={puedeToggle(m)} onOpen={()=>router.push('/ventas/clientes')} onWA={m=>setWaModal(m)}/>
+                      <DesktopRow key={m.id} m={m} onToggle={handleToggle} toggling={toggling===m.id} canToggle={puedeToggle(m)} onOpen={()=>router.push('/ventas/clientes')} onWA={m=>setWaModal(misionToWA(m))}/>
                     ))}
                   </tbody>
                 </table>
@@ -704,7 +616,7 @@ export default function MisionesClient({
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
 
       {/* Modal WhatsApp */}
-      {waModal && <WAModal mision={waModal} onClose={()=>setWaModal(null)}/>}
+      {waModal && <WAModal target={waModal} onClose={()=>setWaModal(null)}/>}
     </div>
   )
 }
