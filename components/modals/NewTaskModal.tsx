@@ -392,16 +392,16 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                   type="button"
                   onClick={() => setShowResponsablesDropdown(false)}
                   style={{
-                    width: '100%', padding: '10px 14px', border: 'none',
+                    width: '100%', padding: '11px 14px', border: 'none',
                     borderTop: '1px solid rgba(255,255,255,0.08)',
-                    background: selectedIds.length > 0 ? `${cfg.color}20` : 'rgba(255,255,255,0.04)',
-                    cursor: 'pointer', fontSize: 12, fontWeight: 700, borderRadius: '0 0 12px 12px',
-                    color: selectedIds.length > 0 ? cfg.color : 'var(--muted)',
+                    background: selectedIds.length > 0 ? cfg.color : 'rgba(255,255,255,0.06)',
+                    cursor: 'pointer', fontSize: 13, fontWeight: 800, borderRadius: '0 0 12px 12px',
+                    color: selectedIds.length > 0 ? '#0A0A0A' : 'var(--muted)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   }}
                 >
                   {selectedIds.length > 0
-                    ? `✓ Listo — ${selectedIds.length} seleccionado${selectedIds.length > 1 ? 's' : ''}`
+                    ? `✓ Confirmar (${selectedIds.length} seleccionado${selectedIds.length > 1 ? 's' : ''})`
                     : 'Cerrar'}
                 </button>
               </div>
@@ -638,47 +638,6 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
 
           {/* COLUMNA DERECHA */}
           <div style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-            {/* Detalles */}
-            <div style={{ background: 'var(--surface2)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1.4, textTransform: 'uppercase' }}>Detalles</div>
-
-              {/* Tiempo estimado */}
-              <div>
-                <label style={{ ...lbl, marginBottom: 5 }}>Tiempo estimado</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 14 }}>🕐</span>
-                  <input
-                    type="number" min="0" max="99" value={tiempoHoras}
-                    onChange={e => setTiempoHoras(e.target.value)}
-                    style={{ width: 48, borderRadius: 8, textAlign: 'center', fontSize: 13 }}
-                  />
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>h</span>
-                  <input
-                    type="number" min="0" max="59" step="15" value={tiempoMins}
-                    onChange={e => setTiempoMins(e.target.value.padStart(2, '0'))}
-                    style={{ width: 44, borderRadius: 8, textAlign: 'center', fontSize: 13 }}
-                  />
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>m</span>
-                  <button type="button" style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '4px 8px', cursor: 'pointer', fontSize: 10, color: 'var(--muted)' }}>
-                    ▾
-                  </button>
-                </div>
-              </div>
-
-              {/* Fecha inicio */}
-              <div>
-                <label style={{ ...lbl, marginBottom: 5 }}>Fecha inicio <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span></label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="date" value={fechaInicio}
-                    onChange={e => setFechaInicio(e.target.value)}
-                    style={{ borderRadius: 8, width: '100%', fontSize: 12, paddingLeft: 30 }}
-                  />
-                  <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 12, pointerEvents: 'none' }}>📅</span>
-                </div>
-              </div>
-            </div>
 
             {/* Recordatorios */}
             <div style={{ background: 'var(--surface2)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
