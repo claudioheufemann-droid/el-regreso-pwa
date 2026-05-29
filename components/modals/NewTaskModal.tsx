@@ -789,18 +789,6 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
             </button>
             <button
               type="button"
-              onClick={() => handleSubmit(true)}
-              disabled={savingDraft || loading}
-              style={{
-                padding: '10px 20px', borderRadius: 10, cursor: 'pointer',
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
-                fontSize: 13, color: 'var(--cream)', opacity: savingDraft ? 0.6 : 1,
-              }}
-            >
-              {savingDraft ? 'Guardando...' : 'Guardar borrador'}
-            </button>
-            <button
-              type="button"
               onClick={() => handleSubmit(false)}
               disabled={!canSubmit || loading || savingDraft}
               style={{
