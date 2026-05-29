@@ -126,8 +126,8 @@ export default async function AcumuladoPage() {
   const totalLitrosPrev = ventasPrev.reduce((s, v) => s + (v.litros ?? 0), 0)
   const totalVentaPrev  = ventasPrev.reduce((s, v) => s + (v.total_sin_impuesto ?? 0), 0)
 
-  const pedidos     = new Set(ventas.filter(v => v.pedido).map(v => v.pedido!)).size || 1
-  const pedidosPrev = new Set(ventasPrev.filter(v => v.pedido).map(v => (v as { pedido?: string }).pedido)).size || 1
+  const pedidos     = new Set(ventas.filter(v => (v as { pedido?: string }).pedido).map(v => (v as { pedido?: string }).pedido)).size || 1
+  const pedidosPrev = new Set(ventasPrev.filter(v => (v as { pedido?: string }).pedido).map(v => (v as { pedido?: string }).pedido)).size || 1
 
   const clientesActivos     = new Set(ventas.map(v => v.nombre_fantasia).filter(Boolean)).size
   const clientesActivosPrev = new Set(ventasPrev.map(v => v.nombre_fantasia).filter(Boolean)).size
