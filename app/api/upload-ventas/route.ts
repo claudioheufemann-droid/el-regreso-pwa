@@ -57,20 +57,28 @@ function parseFecha(raw: unknown): string | null {
 }
 
 function deduplicarRegistros(registros: Record<string, unknown>[]) {
+  // Contador de apariciones por clave base — permite 2 barriles idénticos
+  // del mismo cliente en el mismo pedido (e.g. El Growler: 2 × Barril 30L).
+  // Solo elimina filas que son 100% copias exactas del mismo archivo.
+  const contadorBase = new Map<string, number>()
   const seen = new Set<string>()
   const unicos: Record<string, unknown>[] = []
   const dupCount: number[] = []
 
   for (const r of registros) {
-    const key = [
+    const baseKey = [
       r.vendedor_actual,
       r.fecha_pedido,
       r.pedido,
+      r.nombre_fantasia,
       r.producto,
       r.envase,
       r.litros,
       r.total_sin_impuesto,
     ].join('|')
+    const n = (contadorBase.get(baseKey) ?? 0)
+    contadorBase.set(baseKey, n + 1)
+    const key = `${baseKey}|${n}`
 
     if (seen.has(key)) {
       dupCount.push(1)
