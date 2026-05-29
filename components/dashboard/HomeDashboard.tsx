@@ -53,37 +53,25 @@ function DonutChart({ segments, size = 110, stroke = 16, label, sub }: {
 }
 
 function GaugeChart({ pct }: { pct: number }) {
-  const size = 140, stroke = 14
+  const size = 110, stroke = 13
   const r = (size - stroke) / 2
-  const fullCirc = 2 * Math.PI * r
-  const halfCirc = Math.PI * r
-  const filled = (pct / 100) * halfCirc
+  const circ = 2 * Math.PI * r
+  const filled = (pct / 100) * circ
   const color = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : '#E74C3C'
-  const clipTop = size / 2 - stroke / 2
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: '100%' }}>
-      <div style={{ width: size, height: size / 2 + stroke / 2, overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
-        <svg width={size} height={size} style={{ position: 'absolute', top: -clipTop }}>
-          <circle cx={size/2} cy={size/2} r={r} fill="none"
-            stroke="rgba(128,128,128,0.12)" strokeWidth={stroke}
-            strokeDasharray={`${halfCirc} ${halfCirc}`}
-            strokeDashoffset={halfCirc}
-            strokeLinecap="round"
-          />
-          <circle cx={size/2} cy={size/2} r={r} fill="none"
-            stroke={color} strokeWidth={stroke}
-            strokeDasharray={`${filled} ${fullCirc - filled}`}
-            strokeDashoffset={halfCirc}
-            strokeLinecap="round"
-            style={{ transition: 'stroke-dasharray 0.6s ease' }}
-          />
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%' }}>
+      <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(128,128,128,0.12)" strokeWidth={stroke} />
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+            strokeDasharray={`${filled} ${circ - filled}`} strokeLinecap="round"
+            style={{ transition: 'stroke-dasharray 0.6s ease' }} />
         </svg>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 900, color, lineHeight: 1 }}>{pct}%</div>
+        </div>
       </div>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 30, fontWeight: 900, color, lineHeight: 1 }}>{pct}%</div>
-        <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4 }}>de tareas completadas</div>
-      </div>
+      <div style={{ fontSize: 9, color: 'var(--muted)', textAlign: 'center' }}>de tareas completadas</div>
     </div>
   )
 }
