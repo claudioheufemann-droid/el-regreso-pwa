@@ -338,64 +338,72 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
               <div style={{
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
                 background: 'var(--surface2)', border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 12, marginTop: 6, maxHeight: 220, overflowY: 'auto',
+                borderRadius: 12, marginTop: 6,
                 boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                display: 'flex', flexDirection: 'column',
               }}>
-                {allUsers.length === 0 ? (
-                  <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>No hay usuarios en esta área</div>
-                ) : allUsers.map(u => {
-                  const sel = selectedIds.includes(u.id)
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => toggleUser(u.id)}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '9px 14px', background: sel ? `${cfg.color}12` : 'transparent',
-                        border: 'none', cursor: 'pointer', textAlign: 'left',
-                      }}
-                    >
-                      <div style={{
-                        width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                        background: sel ? cfg.color : 'transparent',
-                        border: `1.5px solid ${sel ? cfg.color : 'rgba(128,128,128,0.3)'}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 10, color: '#0A0A0A', fontWeight: 700,
-                      }}>
-                        {sel && '✓'}
-                      </div>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                        background: sel ? `${cfg.color}30` : 'rgba(128,128,128,0.12)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 9, fontWeight: 800, color: sel ? cfg.color : '#5A5450',
-                      }}>
-                        {u.iniciales}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: sel ? 'var(--cream)' : 'var(--muted)' }}>{u.nombre}</div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{u.rol}</div>
-                      </div>
-                      {selectedIds[0] === u.id && (
-                        <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 8, background: `${cfg.color}20`, color: cfg.color }}>PRINCIPAL</span>
-                      )}
-                    </button>
-                  )
-                })}
-                {selectedIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowResponsablesDropdown(false)}
-                    style={{
-                      width: '100%', padding: '9px 14px', border: 'none', borderTop: '1px solid rgba(255,255,255,0.06)',
-                      background: `${cfg.color}15`, cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                      color: cfg.color, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    }}
-                  >
-                    ✓ Listo ({selectedIds.length} seleccionado{selectedIds.length > 1 ? 's' : ''})
-                  </button>
-                )}
+                {/* Lista scrolleable */}
+                <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                  {allUsers.length === 0 ? (
+                    <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>No hay usuarios en esta área</div>
+                  ) : allUsers.map(u => {
+                    const sel = selectedIds.includes(u.id)
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => toggleUser(u.id)}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '9px 14px', background: sel ? `${cfg.color}12` : 'transparent',
+                          border: 'none', cursor: 'pointer', textAlign: 'left',
+                        }}
+                      >
+                        <div style={{
+                          width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                          background: sel ? cfg.color : 'transparent',
+                          border: `1.5px solid ${sel ? cfg.color : 'rgba(128,128,128,0.3)'}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 10, color: '#0A0A0A', fontWeight: 700,
+                        }}>
+                          {sel && '✓'}
+                        </div>
+                        <div style={{
+                          width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                          background: sel ? `${cfg.color}30` : 'rgba(128,128,128,0.12)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 9, fontWeight: 800, color: sel ? cfg.color : '#5A5450',
+                        }}>
+                          {u.iniciales}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: sel ? 'var(--cream)' : 'var(--muted)' }}>{u.nombre}</div>
+                          <div style={{ fontSize: 10, color: 'var(--muted)' }}>{u.rol}</div>
+                        </div>
+                        {selectedIds[0] === u.id && (
+                          <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 8, background: `${cfg.color}20`, color: cfg.color }}>PRINCIPAL</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+                {/* Footer fijo siempre visible */}
+                <button
+                  type="button"
+                  onClick={() => setShowResponsablesDropdown(false)}
+                  style={{
+                    width: '100%', padding: '10px 14px', border: 'none',
+                    borderTop: '1px solid rgba(255,255,255,0.08)',
+                    background: selectedIds.length > 0 ? `${cfg.color}20` : 'rgba(255,255,255,0.04)',
+                    cursor: 'pointer', fontSize: 12, fontWeight: 700, borderRadius: '0 0 12px 12px',
+                    color: selectedIds.length > 0 ? cfg.color : 'var(--muted)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  }}
+                >
+                  {selectedIds.length > 0
+                    ? `✓ Listo — ${selectedIds.length} seleccionado${selectedIds.length > 1 ? 's' : ''}`
+                    : 'Cerrar'}
+                </button>
               </div>
             )}
           </div>
