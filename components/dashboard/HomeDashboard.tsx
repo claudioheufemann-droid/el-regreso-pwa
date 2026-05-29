@@ -374,8 +374,8 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
 
           </div>
 
-          {/* Fila 3 izquierda: Atrasadas + Por área + Actividad reciente */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.1fr', gap: 14, alignItems: 'stretch' }}>
+          {/* Fila 3 izquierda: Atrasadas + Por área + Recordatorios (mismo grid 3 cols) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
 
             {/* Tareas atrasadas */}
             <div style={{
@@ -434,35 +434,20 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
               <button style={{ marginTop: 14, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todas las áreas →</button>
             </div>
 
-            {/* Actividad reciente — 3ra columna de fila 3, más alta */}
-            <div style={{ ...CARD, display: 'flex', flexDirection: 'column', minHeight: 260 }}>
+            {/* Recordatorios activos — 3ra columna de fila 3, mismo porte que Cumplimiento */}
+            <div style={{ ...CARD, position: 'relative', overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Actividad reciente</div>
-                <button style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#5B8AA8' }}>Recordatorios activos</div>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(91,138,168,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                {recentActivity.map((item, idx) => {
-                  const c = actColor[item.type]
-                  const cfg = AREA_CFG[item.task.area] ?? { color: '#888' }
-                  return (
-                    <div key={item.task.id+idx} onClick={() => setSelectedTask(item.task)}
-                      style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: idx<recentActivity.length-1?'1px solid rgba(255,255,255,0.04)':'none', cursor: 'pointer', alignItems: 'flex-start' }}>
-                      <div style={{ width: 26, height: 26, borderRadius: 8, background: `${c}18`, border: `1px solid ${c}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: c, fontWeight: 900, flexShrink: 0, marginTop: 1 }}>
-                        {actIcon[item.type]}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
-                          <span style={{ fontWeight: 600, color: 'var(--cream)' }}>{item.who}</span>
-                          {' '}{actVerb[item.type]}{' '}
-                          <span style={{ fontWeight: 700, color: cfg.color }}>{item.task.titulo.length>24?item.task.titulo.slice(0,24)+'…':item.task.titulo}</span>
-                        </div>
-                        <div style={{ fontSize: 9, color: 'rgba(128,128,128,0.4)', marginTop: 2 }}>{item.time}</div>
-                      </div>
-                    </div>
-                  )
-                })}
+              <div style={{ fontSize: 52, fontWeight: 900, color: '#5B8AA8', lineHeight: 1, marginBottom: 8 }}>
+                {activeTasks.filter(t => ['Asignada','En Proceso'].includes(t.estado)).length}
               </div>
-              <button style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda la actividad →</button>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>Tareas con recordatorios programados</div>
+              <div style={{ position: 'absolute', bottom: -16, right: -10, fontSize: 100, opacity: 0.05, transform: 'rotate(12deg)', pointerEvents: 'none', lineHeight: 1 }}>🔔</div>
+              <button style={{ fontSize: 11, color: '#5B8AA8', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos →</button>
             </div>
 
           </div>
@@ -512,20 +497,35 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             <button onClick={() => onNavigate('calendar')} style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos los vencimientos →</button>
           </div>
 
-          {/* Recordatorios activos */}
-          <div style={{ ...CARD, position: 'relative', overflow: 'hidden' }}>
+          {/* Actividad reciente — sidebar, cubre más hacia abajo */}
+          <div style={{ ...CARD, display: 'flex', flexDirection: 'column', flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#5B8AA8' }}>Recordatorios activos</div>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(91,138,168,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Actividad reciente</div>
+              <button style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
             </div>
-            <div style={{ fontSize: 52, fontWeight: 900, color: '#5B8AA8', lineHeight: 1, marginBottom: 8 }}>
-              {activeTasks.filter(t => ['Asignada','En Proceso'].includes(t.estado)).length}
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+              {recentActivity.map((item, idx) => {
+                const c = actColor[item.type]
+                const cfg = AREA_CFG[item.task.area] ?? { color: '#888' }
+                return (
+                  <div key={item.task.id+idx} onClick={() => setSelectedTask(item.task)}
+                    style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: idx<recentActivity.length-1?'1px solid rgba(255,255,255,0.04)':'none', cursor: 'pointer', alignItems: 'flex-start' }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${c}18`, border: `1px solid ${c}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: c, fontWeight: 900, flexShrink: 0, marginTop: 1 }}>
+                      {actIcon[item.type]}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--cream)' }}>{item.who}</span>
+                        {' '}{actVerb[item.type]}{' '}
+                        <span style={{ fontWeight: 700, color: cfg.color }}>{item.task.titulo.length>22?item.task.titulo.slice(0,22)+'…':item.task.titulo}</span>
+                      </div>
+                      <div style={{ fontSize: 9, color: 'rgba(128,128,128,0.4)', marginTop: 2 }}>{item.time}</div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>Tareas con recordatorios programados</div>
-            <div style={{ position: 'absolute', bottom: -16, right: -10, fontSize: 100, opacity: 0.05, transform: 'rotate(12deg)', pointerEvents: 'none', lineHeight: 1 }}>🔔</div>
-            <button style={{ fontSize: 11, color: '#5B8AA8', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos →</button>
+            <button style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda la actividad →</button>
           </div>
 
         </div>
