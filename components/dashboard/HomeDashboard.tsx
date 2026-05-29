@@ -262,184 +262,194 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
         </div>
       </div>
 
-      {/* ── ROW 1: 4 KPI + Próximos vencimientos ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) 1.45fr', gap: 14 }}>
+      {/* ── FILAS 1+2: contenido izquierdo + sidebar derecho ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 14, alignItems: 'start' }}>
 
-        <KpiCard value={kpiAsignadas} label="Asignadas" sub="Requieren tu atención"
-          color="#5B8AA8" bg="linear-gradient(145deg,#0d1e36,#091425)" border="rgba(91,138,168,0.28)" glow="rgba(91,138,168,0.1)"
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M3 6h18v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>}
-          up onClick={() => setActiveTab('todas')} />
+        {/* COLUMNA IZQUIERDA */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-        <KpiCard value={kpiEnProceso} label="En Proceso" sub="En ejecución activa"
-          color="#E67E22" bg="linear-gradient(145deg,#261400,#170d00)" border="rgba(230,126,34,0.28)" glow="rgba(230,126,34,0.1)"
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E67E22" strokeWidth="2" strokeLinecap="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>}
-          up />
-
-        <KpiCard value={kpiCompletadas} label="Completadas" sub="Completadas exitosamente"
-          color="#22C55E" bg="linear-gradient(145deg,#081f0f,#041309)" border="rgba(34,197,94,0.28)" glow="rgba(34,197,94,0.08)"
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>}
-          up />
-
-        <KpiCard value={kpiAtrasadas} label="Atrasadas" sub="Requieren acción inmediata"
-          color="#E74C3C" bg={kpiAtrasadas>0 ? "linear-gradient(145deg,#250a0a,#160505)" : "linear-gradient(145deg,#181010,#100a0a)"} border="rgba(231,76,60,0.28)" glow="rgba(231,76,60,0.08)"
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" strokeWidth="2" strokeLinecap="round"><path d="m10.29 3.86-8.26 14.28A1 1 0 0 0 2.9 20h16.2a1 1 0 0 0 .87-1.5L11.71 3.86a1 1 0 0 0-1.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
-          up={false} />
-
-        {/* Próximos vencimientos */}
-        <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Próximos vencimientos</div>
-            <button onClick={() => onNavigate('calendar')} style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver calendario →</button>
+          {/* Fila 1 izquierda: 4 KPI cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+            <KpiCard value={kpiAsignadas} label="Asignadas" sub="Requieren tu atención"
+              color="#5B8AA8" bg="linear-gradient(145deg,#0d1e36,#091425)" border="rgba(91,138,168,0.28)" glow="rgba(91,138,168,0.1)"
+              icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M3 6h18v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>}
+              up onClick={() => setActiveTab('todas')} />
+            <KpiCard value={kpiEnProceso} label="En Proceso" sub="En ejecución activa"
+              color="#E67E22" bg="linear-gradient(145deg,#261400,#170d00)" border="rgba(230,126,34,0.28)" glow="rgba(230,126,34,0.1)"
+              icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E67E22" strokeWidth="2" strokeLinecap="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>}
+              up />
+            <KpiCard value={kpiCompletadas} label="Completadas" sub="Completadas exitosamente"
+              color="#22C55E" bg="linear-gradient(145deg,#081f0f,#041309)" border="rgba(34,197,94,0.28)" glow="rgba(34,197,94,0.08)"
+              icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>}
+              up />
+            <KpiCard value={kpiAtrasadas} label="Atrasadas" sub="Requieren acción inmediata"
+              color="#E74C3C" bg={kpiAtrasadas>0?"linear-gradient(145deg,#250a0a,#160505)":"linear-gradient(145deg,#181010,#100a0a)"} border="rgba(231,76,60,0.28)" glow="rgba(231,76,60,0.08)"
+              icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" strokeWidth="2" strokeLinecap="round"><path d="m10.29 3.86-8.26 14.28A1 1 0 0 0 2.9 20h16.2a1 1 0 0 0 .87-1.5L11.71 3.86a1 1 0 0 0-1.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
+              up={false} />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
-            {proximos.length === 0 && <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', padding: '24px 0' }}>Sin vencimientos próximos</div>}
-            {proximos.map(t => {
-              const { day, month } = formatPlazoDay(t.plazo)
-              const vColor = vencimientoColor(t.plazo)
-              const cfg = AREA_CFG[t.area] ?? { color: '#888', code: '??' }
-              const resps = (t.responsables ?? [users.find(u => u.id === t.responsable_id)].filter(Boolean)) as RcUser[]
-              return (
-                <div key={t.id} onClick={() => setSelectedTask(t)} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer', padding: '8px 10px', borderRadius: 12, transition: 'background 0.15s' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(128,128,128,0.07)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  <div style={{ textAlign: 'center', minWidth: 44, background: `${vColor}14`, border: `1px solid ${vColor}28`, borderRadius: 10, padding: '6px 0', flexShrink: 0 }}>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: vColor, lineHeight: 1 }}>{day}</div>
-                    <div style={{ fontSize: 8, color: vColor, fontWeight: 700, letterSpacing: 0.5 }}>{month}</div>
+
+          {/* Fila 2 izquierda: 3 analytics */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+
+            {/* Resumen */}
+            <div style={CARD}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 18 }}>Resumen de tareas</div>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <DonutChart size={110} stroke={15} label={String(kpiTotal)} sub="Total"
+                  segments={[
+                    { value: kpiCompletadas, color: '#22C55E' },
+                    { value: kpiEnProceso,   color: '#E67E22' },
+                    { value: kpiAtrasadas,   color: '#E74C3C' },
+                    { value: kpiAsignadas,   color: '#5B8AA8' },
+                    { value: kpiAprobar,     color: '#9B59B6' },
+                  ]} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, flex: 1 }}>
+                  {[
+                    { label: 'Completadas', n: kpiCompletadas, color: '#22C55E' },
+                    { label: 'En proceso',  n: kpiEnProceso,   color: '#E67E22' },
+                    { label: 'Atrasadas',   n: kpiAtrasadas,   color: '#E74C3C' },
+                    { label: 'Pendientes',  n: kpiAsignadas + kpiAprobar, color: '#5B8AA8' },
+                  ].map(s => (
+                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, color: 'var(--muted)', flex: 1 }}>{s.label}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--cream)' }}>{s.n}</span>
+                      <span style={{ fontSize: 9, color: 'var(--muted)', width: 28, textAlign: 'right' }}>{kpiTotal>0?Math.round(s.n/kpiTotal*100):0}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button style={{ marginTop: 14, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                Ver detalle completo →
+              </button>
+            </div>
+
+            {/* Prioridad */}
+            <div style={CARD}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Tareas por prioridad</div>
+                <span style={{ fontSize: 18, color: 'var(--muted)', cursor: 'pointer' }}>⋯</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {[
+                  { label: 'Alta',  value: priAlta,  color: '#E74C3C' },
+                  { label: 'Media', value: priMedia, color: '#E67E22' },
+                  { label: 'Baja',  value: priBaja,  color: '#22C55E' },
+                ].map(p => (
+                  <div key={p.label}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>{p.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: p.color }}>{p.value}</span>
+                    </div>
+                    <div style={{ height: 8, background: 'rgba(128,128,128,0.08)', borderRadius: 6, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${priMax>0?Math.round(p.value/priMax*100):0}%`, background: `linear-gradient(90deg,${p.color}55,${p.color})`, borderRadius: 6, transition: 'width 0.5s' }} />
+                    </div>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 6 }}>{t.titulo}</div>
-                    <div style={{ fontSize: 9, color: 'var(--muted)', marginBottom: 6 }}>Vence {daysLabel(t.plazo)} · {formatPlazo(t.plazo)}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 8, background: t.prioridad_maxima ? 'rgba(220,38,38,0.12)' : 'rgba(212,175,55,0.1)', color: t.prioridad_maxima ? '#DC2626' : '#D4AF37', fontWeight: 700, border: `1px solid ${t.prioridad_maxima ? 'rgba(220,38,38,0.2)' : 'rgba(212,175,55,0.2)'}` }}>{t.prioridad_maxima ? 'Alta' : 'Media'}</span>
-                      <div style={{ display: 'flex' }}>
-                        {resps.slice(0, 4).map((u, i) => (
-                          <div key={u.id} style={{ width: 20, height: 20, borderRadius: '50%', background: `${cfg.color}30`, border: `1.5px solid ${cfg.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: cfg.color, marginLeft: i > 0 ? -6 : 0 }}>{u.iniciales}</div>
-                        ))}
-                        {resps.length > 4 && <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'rgba(128,128,128,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: 'var(--muted)', marginLeft: -6 }}>+{resps.length-4}</div>}
+                ))}
+              </div>
+              <div style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>Total</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{kpiTotal} tareas</span>
+              </div>
+            </div>
+
+            {/* Cumplimiento */}
+            <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 14 }}>Cumplimiento general</div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <RingChart pct={cumplimiento} />
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>de tareas completadas</div>
+              </div>
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>Meta mensual</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{cumplimiento}% / 100%</span>
+                </div>
+                <div style={{ height: 6, background: 'rgba(128,128,128,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${cumplimiento}%`, background: cumplimiento>=80?'#22C55E':cumplimiento>=50?'#D4AF37':'#E74C3C', borderRadius: 4 }} />
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* COLUMNA DERECHA — sidebar con Próximos vencimientos + Actividad reciente */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* Próximos vencimientos */}
+          <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Próximos vencimientos</div>
+              <button onClick={() => onNavigate('calendar')} style={{ fontSize: 10, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}>Ver calendario →</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {proximos.length === 0 && <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', padding: '20px 0' }}>Sin vencimientos próximos</div>}
+              {proximos.map(t => {
+                const { day, month } = formatPlazoDay(t.plazo)
+                const vColor = vencimientoColor(t.plazo)
+                const cfg = AREA_CFG[t.area] ?? { color: '#888', code: '??' }
+                const resps = (t.responsables ?? [users.find(u => u.id === t.responsable_id)].filter(Boolean)) as RcUser[]
+                return (
+                  <div key={t.id} onClick={() => setSelectedTask(t)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', padding: '7px 8px', borderRadius: 10, transition: 'background 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background='rgba(128,128,128,0.07)')}
+                    onMouseLeave={e => (e.currentTarget.style.background='transparent')}>
+                    <div style={{ textAlign: 'center', minWidth: 40, background: `${vColor}14`, border: `1px solid ${vColor}28`, borderRadius: 9, padding: '5px 0', flexShrink: 0 }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: vColor, lineHeight: 1 }}>{day}</div>
+                      <div style={{ fontSize: 7, color: vColor, fontWeight: 700 }}>{month}</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{t.titulo}</div>
+                      <div style={{ fontSize: 9, color: 'var(--muted)', marginBottom: 5 }}>Vence {daysLabel(t.plazo)} · {formatPlazo(t.plazo)}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 7, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#DC2626':'#D4AF37', fontWeight: 700 }}>{t.prioridad_maxima?'Alta':'Media'}</span>
+                        <div style={{ display: 'flex' }}>
+                          {resps.slice(0,3).map((u,i) => (
+                            <div key={u.id} style={{ width: 18, height: 18, borderRadius: '50%', background: `${cfg.color}30`, border: `1.5px solid ${cfg.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6, fontWeight: 800, color: cfg.color, marginLeft: i>0?-5:0 }}>{u.iniciales}</div>
+                          ))}
+                          {resps.length>3 && <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(128,128,128,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6, color: 'var(--muted)', marginLeft: -5 }}>+{resps.length-3}</div>}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-          <button onClick={() => onNavigate('calendar')} style={{ marginTop: 8, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos los vencimientos →</button>
-        </div>
-      </div>
-
-      {/* ── ROW 2: 4 analytics panels ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-
-        {/* Resumen */}
-        <div style={CARD}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 18 }}>Resumen de tareas</div>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <DonutChart size={120} stroke={16} label={String(kpiTotal)} sub="Total"
-              segments={[
-                { value: kpiCompletadas, color: '#22C55E' },
-                { value: kpiEnProceso,   color: '#E67E22' },
-                { value: kpiAtrasadas,   color: '#E74C3C' },
-                { value: kpiAsignadas,   color: '#5B8AA8' },
-                { value: kpiAprobar,     color: '#9B59B6' },
-              ]} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-              {[
-                { label: 'Completadas', n: kpiCompletadas, color: '#22C55E' },
-                { label: 'En proceso',  n: kpiEnProceso,   color: '#E67E22' },
-                { label: 'Atrasadas',   n: kpiAtrasadas,   color: '#E74C3C' },
-                { label: 'Pendientes',  n: kpiAsignadas + kpiAprobar, color: '#5B8AA8' },
-              ].map(s => (
-                <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>{s.label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{s.n}</span>
-                  <span style={{ fontSize: 9, color: 'var(--muted)', width: 30, textAlign: 'right' }}>{kpiTotal>0?Math.round(s.n/kpiTotal*100):0}%</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
+            <button onClick={() => onNavigate('calendar')} style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos los vencimientos →</button>
           </div>
-          <button style={{ marginTop: 16, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            Ver detalle completo →
-          </button>
-        </div>
 
-        {/* Prioridad */}
-        <div style={CARD}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Tareas por prioridad</div>
-            <span style={{ fontSize: 18, color: 'var(--muted)', cursor: 'pointer' }}>⋯</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {[
-              { label: 'Alta',  value: priAlta,  color: '#E74C3C' },
-              { label: 'Media', value: priMedia, color: '#E67E22' },
-              { label: 'Baja',  value: priBaja,  color: '#22C55E' },
-            ].map(p => (
-              <div key={p.label}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{p.label}</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: p.color }}>{p.value}</span>
-                </div>
-                <div style={{ height: 8, background: 'rgba(128,128,128,0.08)', borderRadius: 6, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${priMax>0?Math.round(p.value/priMax*100):0}%`, background: `linear-gradient(90deg,${p.color}55,${p.color})`, borderRadius: 6, transition: 'width 0.5s' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 11, color: 'var(--muted)' }}>Total</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{kpiTotal} tareas</span>
-          </div>
-        </div>
-
-        {/* Cumplimiento */}
-        <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 16 }}>Cumplimiento general</div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <RingChart pct={cumplimiento} />
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>de tareas completadas</div>
-          </div>
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Meta mensual</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{cumplimiento}% / 100%</span>
+          {/* Actividad reciente */}
+          <div style={{ ...CARD, display: 'flex', flexDirection: 'column', flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Actividad reciente</div>
+              <button style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
             </div>
-            <div style={{ height: 6, background: 'rgba(128,128,128,0.08)', borderRadius: 4, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${cumplimiento}%`, background: cumplimiento>=80?'#22C55E':cumplimiento>=50?'#D4AF37':'#E74C3C', borderRadius: 4 }} />
-            </div>
-          </div>
-        </div>
-
-        {/* Actividad reciente */}
-        <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Actividad reciente</div>
-            <button style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-            {recentActivity.map((item, idx) => {
-              const c = actColor[item.type]
-              const cfg = AREA_CFG[item.task.area] ?? { color: '#888' }
-              return (
-                <div key={item.task.id+idx} onClick={() => setSelectedTask(item.task)}
-                  style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: idx < recentActivity.length-1 ? '1px solid rgba(255,255,255,0.04)' : 'none', cursor: 'pointer', alignItems: 'flex-start' }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, background: `${c}18`, border: `1px solid ${c}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: c, fontWeight: 900, flexShrink: 0, marginTop: 1 }}>
-                    {actIcon[item.type]}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
-                      <span style={{ fontWeight: 600, color: 'var(--cream)' }}>{item.who}</span>
-                      {' '}{actVerb[item.type]}{' '}
-                      <span style={{ fontWeight: 700, color: cfg.color }}>{item.task.titulo.length > 20 ? item.task.titulo.slice(0,20)+'…' : item.task.titulo}</span>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {recentActivity.map((item, idx) => {
+                const c = actColor[item.type]
+                const cfg = AREA_CFG[item.task.area] ?? { color: '#888' }
+                return (
+                  <div key={item.task.id+idx} onClick={() => setSelectedTask(item.task)}
+                    style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: idx<recentActivity.length-1?'1px solid rgba(255,255,255,0.04)':'none', cursor: 'pointer', alignItems: 'flex-start' }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${c}18`, border: `1px solid ${c}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: c, fontWeight: 900, flexShrink: 0, marginTop: 1 }}>
+                      {actIcon[item.type]}
                     </div>
-                    <div style={{ fontSize: 9, color: 'rgba(128,128,128,0.4)', marginTop: 2 }}>{item.time}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--cream)' }}>{item.who}</span>
+                        {' '}{actVerb[item.type]}{' '}
+                        <span style={{ fontWeight: 700, color: cfg.color }}>{item.task.titulo.length>22?item.task.titulo.slice(0,22)+'…':item.task.titulo}</span>
+                      </div>
+                      <div style={{ fontSize: 9, color: 'rgba(128,128,128,0.4)', marginTop: 2 }}>{item.time}</div>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
+            <button style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda la actividad →</button>
           </div>
-          <button style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda la actividad →</button>
+
         </div>
       </div>
 
