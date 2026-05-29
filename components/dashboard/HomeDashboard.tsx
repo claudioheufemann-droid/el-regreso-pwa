@@ -262,7 +262,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
         </div>
       </div>
 
-      {/* ── FILAS 1+2: contenido izquierdo + sidebar derecho ── */}
+      {/* ── LAYOUT MASTER: izquierda 1fr + sidebar derecho 280px (filas 1+2+3) ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 14, alignItems: 'start' }}>
 
         {/* COLUMNA IZQUIERDA */}
@@ -373,9 +373,71 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             </div>
 
           </div>
+
+          {/* Fila 3 izquierda: Tareas atrasadas + Tareas por área */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+
+            {/* Tareas atrasadas */}
+            <div style={{
+              ...CARD,
+              background: kpiAtrasadas>0 ? 'linear-gradient(145deg,#1e0909,#120505)' : 'var(--surface)',
+              border: `1px solid ${kpiAtrasadas>0 ? 'rgba(231,76,60,0.25)' : 'rgba(255,255,255,0.06)'}`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(231,76,60,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: kpiAtrasadas>0 ? '#E74C3C' : 'var(--muted)' }}>Tareas atrasadas</span>
+                </div>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: kpiAtrasadas>0 ? 'rgba(231,76,60,0.12)' : 'rgba(128,128,128,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
+                  {kpiAtrasadas > 0 ? '⚠' : '✓'}
+                </div>
+              </div>
+              <div style={{ fontSize: 48, fontWeight: 900, color: kpiAtrasadas>0 ? '#E74C3C' : '#22C55E', lineHeight: 1, marginBottom: 8 }}>{kpiAtrasadas}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>{kpiAtrasadas > 0 ? 'Requieren atención inmediata' : 'Sin atrasos activos'}</div>
+              {kpiAtrasadas > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <svg width="100%" height="32" viewBox="0 0 240 32" preserveAspectRatio="none">
+                    {Array.from({ length: 14 }, (_, i) => (
+                      <circle key={i} cx={8+i*17} cy={16+Math.sin(i*0.9)*8} r={2.5} fill="rgba(231,76,60,0.35)" />
+                    ))}
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            {/* Tareas por área */}
+            <div style={CARD}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Tareas por área</div>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(212,175,55,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>◈</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {areaStats.length === 0 && <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', padding: '14px 0' }}>Sin tareas activas</div>}
+                {areaStats.slice(0, 5).map(({ area, ac, total, done }) => {
+                  const pct = total > 0 ? Math.round(done/total*100) : 0
+                  return (
+                    <div key={area}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 5 }}>
+                        <div style={{ width: 24, height: 24, borderRadius: 7, flexShrink: 0, background: `${ac.color}18`, border: `1px solid ${ac.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 900, color: ac.color }}>{ac.code}</div>
+                        <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>{area}</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: ac.color }}>{total}</span>
+                      </div>
+                      <div style={{ height: 5, background: 'rgba(128,128,128,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg,${ac.color}55,${ac.color})`, borderRadius: 4, transition: 'width 0.4s' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <button style={{ marginTop: 14, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todas las áreas →</button>
+            </div>
+
+          </div>
         </div>
 
-        {/* COLUMNA DERECHA — sidebar con Próximos vencimientos + Actividad reciente */}
+        {/* SIDEBAR DERECHO: Próximos + Actividad + Recordatorios — mismo ancho (280px) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* Próximos vencimientos */}
@@ -420,7 +482,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           </div>
 
           {/* Actividad reciente */}
-          <div style={{ ...CARD, display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Actividad reciente</div>
               <button style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
@@ -450,84 +512,22 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             <button style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda la actividad →</button>
           </div>
 
-        </div>
-      </div>
-
-      {/* ── ROW 3: 3 operational panels ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-
-        {/* Tareas atrasadas */}
-        <div style={{
-          ...CARD,
-          background: kpiAtrasadas>0 ? 'linear-gradient(145deg,#1e0909,#120505)' : 'var(--surface)',
-          border: `1px solid ${kpiAtrasadas>0 ? 'rgba(231,76,60,0.25)' : 'rgba(255,255,255,0.06)'}`,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(231,76,60,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          {/* Recordatorios activos */}
+          <div style={{ ...CARD, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#5B8AA8' }}>Recordatorios activos</div>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(91,138,168,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
               </div>
-              <span style={{ fontSize: 13, fontWeight: 800, color: kpiAtrasadas>0 ? '#E74C3C' : 'var(--muted)' }}>Tareas atrasadas</span>
             </div>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: kpiAtrasadas>0 ? 'rgba(231,76,60,0.12)' : 'rgba(128,128,128,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
-              {kpiAtrasadas > 0 ? '⚠' : '✓'}
+            <div style={{ fontSize: 52, fontWeight: 900, color: '#5B8AA8', lineHeight: 1, marginBottom: 8 }}>
+              {activeTasks.filter(t => ['Asignada','En Proceso'].includes(t.estado)).length}
             </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>Tareas con recordatorios programados</div>
+            <div style={{ position: 'absolute', bottom: -16, right: -10, fontSize: 100, opacity: 0.05, transform: 'rotate(12deg)', pointerEvents: 'none', lineHeight: 1 }}>🔔</div>
+            <button style={{ fontSize: 11, color: '#5B8AA8', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos →</button>
           </div>
-          <div style={{ fontSize: 48, fontWeight: 900, color: kpiAtrasadas>0 ? '#E74C3C' : '#22C55E', lineHeight: 1, marginBottom: 8 }}>{kpiAtrasadas}</div>
-          <div style={{ fontSize: 11, color: 'var(--muted)' }}>{kpiAtrasadas > 0 ? 'Requieren atención inmediata' : 'Sin atrasos activos'}</div>
-          {kpiAtrasadas > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <svg width="100%" height="32" viewBox="0 0 240 32" preserveAspectRatio="none">
-                {Array.from({ length: 14 }, (_, i) => (
-                  <circle key={i} cx={8+i*17} cy={16+Math.sin(i*0.9)*8} r={2.5} fill="rgba(231,76,60,0.35)" />
-                ))}
-              </svg>
-            </div>
-          )}
-        </div>
 
-        {/* Tareas por área */}
-        <div style={CARD}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Tareas por área</div>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(212,175,55,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>◈</div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {areaStats.length === 0 && <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', padding: '14px 0' }}>Sin tareas activas</div>}
-            {areaStats.slice(0, 5).map(({ area, ac, total, done }) => {
-              const pct = total > 0 ? Math.round(done/total*100) : 0
-              return (
-                <div key={area}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 5 }}>
-                    <div style={{ width: 24, height: 24, borderRadius: 7, flexShrink: 0, background: `${ac.color}18`, border: `1px solid ${ac.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 900, color: ac.color }}>{ac.code}</div>
-                    <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>{area}</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: ac.color }}>{total}</span>
-                  </div>
-                  <div style={{ height: 5, background: 'rgba(128,128,128,0.08)', borderRadius: 4, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg,${ac.color}55,${ac.color})`, borderRadius: 4, transition: 'width 0.4s' }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          <button style={{ marginTop: 14, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todas las áreas →</button>
-        </div>
-
-        {/* Recordatorios */}
-        <div style={{ ...CARD, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#5B8AA8' }}>Recordatorios activos</div>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(91,138,168,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            </div>
-          </div>
-          <div style={{ fontSize: 52, fontWeight: 900, color: '#5B8AA8', lineHeight: 1, marginBottom: 8 }}>
-            {activeTasks.filter(t => ['Asignada','En Proceso'].includes(t.estado)).length}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>Tareas con recordatorios programados</div>
-          {/* 3D bell decoration */}
-          <div style={{ position: 'absolute', bottom: -16, right: -10, fontSize: 100, opacity: 0.05, transform: 'rotate(12deg)', pointerEvents: 'none', lineHeight: 1 }}>🔔</div>
-          <button style={{ fontSize: 11, color: '#5B8AA8', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos →</button>
         </div>
       </div>
 
