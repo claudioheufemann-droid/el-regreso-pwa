@@ -54,9 +54,16 @@ function MisionCard({
   // Vendedores solo pueden completar sus propias misiones
   const canToggle = isAdmin ? true : m.vendedor === vendedorActual
 
-  const overshootPct = m.ciclo_promedio_dias
-    ? Math.round((m.dias_sin_compra / m.ciclo_promedio_dias) * 100)
-    : 0
+  // Contexto de compra para el vendedor
+  const ciclo = m.ciclo_promedio_dias ?? 0
+  const diasRetraso = Math.max(0, m.dias_sin_compra - ciclo)
+  const diasFalta   = Math.max(0, ciclo - m.dias_sin_compra)
+  const motivoContacto =
+    m.alert_level === 'critico'
+      ? `${diasRetraso}d de retraso sobre su ciclo de ${ciclo}d`
+      : m.alert_level === 'vencido'
+      ? `Superó su ciclo de ${ciclo}d (lleva ${m.dias_sin_compra}d)`
+      : `Compra cada ${ciclo}d · faltan ~${diasFalta}d`
 
   return (
     <div style={{
@@ -109,19 +116,14 @@ function MisionCard({
             </div>
 
             {!done && (
-              <>
-                <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color }}>
-                  {m.dias_sin_compra}d sin comprar
-                </span>
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-                  · ciclo {m.ciclo_promedio_dias}d · {overshootPct}%
-                </span>
-                {m.siguiente_compra_estimada && (
-                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-                    · próx: {m.siguiente_compra_estimada}
-                  </span>
-                )}
-              </>
+              <span style={{
+                fontSize: 10, fontWeight: 600,
+                color: m.alert_level === 'critico' ? '#EF4444'
+                     : m.alert_level === 'vencido' ? '#F87171'
+                     : '#F59E0B',
+              }}>
+                {motivoContacto}
+              </span>
             )}
           </div>
         </div>

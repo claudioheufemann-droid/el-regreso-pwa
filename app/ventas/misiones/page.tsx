@@ -21,7 +21,7 @@ export interface Mision {
   score: number
   segmento: string
   dias_sin_compra: number
-  ciclo_promedio_dias: number
+  ciclo_promedio_dias: number | null
   siguiente_compra_estimada: string | null
   estado: 'pendiente' | 'completada'
   completado_at: string | null
