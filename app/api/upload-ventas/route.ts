@@ -11,7 +11,6 @@ const CLIENTES_INTERNOS = [
   'cliente ventas (javier)',
   'cliente ventas (charly)',
   'cliente ventas (carlos)',
-  'cliente directo javier',
   'cliente pdv',
   'cliente merma pdv',
   'cliente mermas producto terminado',

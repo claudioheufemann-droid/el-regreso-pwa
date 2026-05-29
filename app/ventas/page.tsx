@@ -94,6 +94,7 @@ export default async function DashboardPage({
     .in('vendedor_actual', scope)
     .gte('fecha_pedido', periodo?.fecha_inicio ?? '2026-04-24')
     .lte('fecha_pedido', periodo?.fecha_fin ?? '2026-05-23')
+    .limit(10000)
 
   // Metas
   const { data: metasData } = await supabase
@@ -110,7 +111,7 @@ export default async function DashboardPage({
   // Evolution: agrupar por fecha_pedido y vendedor
   const evolucionMap = new Map<string, Record<string, number>>()
   for (const v of ventasPeriodo ?? []) {
-    if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').includes(ex))) continue
+    if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))) continue
     const fecha = v.fecha_pedido
     if (!evolucionMap.has(fecha)) evolucionMap.set(fecha, {})
     const dayMap = evolucionMap.get(fecha)!
@@ -123,7 +124,7 @@ export default async function DashboardPage({
   // Product ranking top 5
   const prodMap = new Map<string, { litros: number; categoria: string }>()
   for (const v of ventasHoy ?? []) {
-    if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').includes(ex))) continue
+    if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))) continue
     if (!v.producto) continue
     const existing = prodMap.get(v.producto)
     prodMap.set(v.producto, {
@@ -139,7 +140,7 @@ export default async function DashboardPage({
   // Product detail: quién compró cada producto (agrupado por cliente)
   const productDetailMap: Record<string, ProductBuyer[]> = {}
   for (const v of ventasHoy ?? []) {
-    if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').includes(ex))) continue
+    if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))) continue
     if (!v.producto || !v.nombre_fantasia) continue
     if (!productDetailMap[v.producto]) productDetailMap[v.producto] = []
     const existing = productDetailMap[v.producto].find(d => d.nombre === v.nombre_fantasia)
@@ -162,8 +163,8 @@ export default async function DashboardPage({
     const vHoy = (ventasHoy ?? []).filter(v => v.vendedor_actual === vendedor)
     const vPeriodo = (ventasPeriodo ?? []).filter(v => v.vendedor_actual === vendedor)
 
-    const vHoyFiltrado = vHoy.filter(v => !CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').includes(ex)))
-    const vPeriodoFiltrado = vPeriodo.filter(v => !CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').includes(ex)))
+    const vHoyFiltrado = vHoy.filter(v => !CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase())))
+    const vPeriodoFiltrado = vPeriodo.filter(v => !CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase())))
 
     const litrosHoy = vHoyFiltrado.reduce((s, v) => s + (v.litros ?? 0), 0)
     const ventaHoy = vHoyFiltrado.reduce((s, v) => s + (v.total_sin_impuesto ?? 0), 0)

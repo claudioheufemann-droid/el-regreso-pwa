@@ -28,7 +28,7 @@ export type CatClientes = Record<string, Record<string, ClienteDet[]>>         /
 export type MixDetalle  = Record<string, ClienteDet[]>                         // cat→clientes
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const excluido = (n: string|null) => !n || CLIENTES_EXCLUIR.some(ex => n.includes(ex))
+const excluido = (n: string|null) => !n || CLIENTES_EXCLUIR.some(ex => n.toLowerCase().includes(ex.toLowerCase()))
 const getCat = (v: { categoria_negocio: string|null }) =>
   (v.categoria_negocio && v.categoria_negocio !== '-') ? v.categoria_negocio : 'Otros'
 
@@ -82,10 +82,12 @@ export default async function AcumuladoPage() {
   const [{ data: ventasRaw }, { data: ventasPrevRaw }, { data: metasData }, { data: riesgoRaw }] = await Promise.all([
     supabase.from('ventas')
       .select('vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,fecha_pedido,nombre_fantasia,pedido')
-      .in('vendedor_actual', scope).gte('fecha_pedido', fechaInicio).lte('fecha_pedido', fechaFin),
+      .in('vendedor_actual', scope).gte('fecha_pedido', fechaInicio).lte('fecha_pedido', fechaFin)
+      .limit(10000),
     supabase.from('ventas')
       .select('vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,fecha_pedido,nombre_fantasia')
-      .in('vendedor_actual', scope).gte('fecha_pedido', prev.inicio).lte('fecha_pedido', prev.fin),
+      .in('vendedor_actual', scope).gte('fecha_pedido', prev.inicio).lte('fecha_pedido', prev.fin)
+      .limit(10000),
     supabase.from('metas').select('vendedor,meta_litros,tipo').eq('periodo_id', periodo?.id??-1).eq('tipo','mensual'),
     supabase.rpc('get_pending_call_alerts', { p_vendedor: null, p_nivel_minimo: 'critico' }),
   ])
