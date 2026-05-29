@@ -52,23 +52,37 @@ function DonutChart({ segments, size = 110, stroke = 16, label, sub }: {
   )
 }
 
-function GaugeChart({ pct, size = 120, stroke = 14 }: { pct: number; size?: number; stroke?: number }) {
+function GaugeChart({ pct }: { pct: number }) {
+  const size = 140, stroke = 14
   const r = (size - stroke) / 2
-  const circ = Math.PI * r
-  const filled = (pct / 100) * circ
+  const fullCirc = 2 * Math.PI * r
+  const halfCirc = Math.PI * r
+  const filled = (pct / 100) * halfCirc
   const color = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : '#E74C3C'
+  const clipTop = size / 2 - stroke / 2
+
   return (
-    <div style={{ position: 'relative', width: size, height: size / 2 + stroke / 2 + 32 }}>
-      <svg width={size} height={size} style={{ marginTop: -size / 2 }}>
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(128,128,128,0.1)" strokeWidth={stroke}
-          strokeDasharray={`${circ} ${circ}`} style={{ transform: 'rotate(180deg)', transformOrigin: '50% 50%' }} />
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-          strokeDasharray={`${filled} ${circ}`} strokeLinecap="round"
-          style={{ transform: 'rotate(180deg)', transformOrigin: '50% 50%', transition: 'stroke-dasharray 0.6s ease' }} />
-      </svg>
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, textAlign: 'center' }}>
-        <div style={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1 }}>{pct}%</div>
-        <div style={{ fontSize: 9, color: '#4A7A3A', marginTop: 4, fontWeight: 700 }}>+{Math.max(0, pct - 59)}% vs semana pasada</div>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: '100%' }}>
+      <div style={{ width: size, height: size / 2 + stroke / 2, overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+        <svg width={size} height={size} style={{ position: 'absolute', top: -clipTop }}>
+          <circle cx={size/2} cy={size/2} r={r} fill="none"
+            stroke="rgba(128,128,128,0.12)" strokeWidth={stroke}
+            strokeDasharray={`${halfCirc} ${halfCirc}`}
+            strokeDashoffset={halfCirc}
+            strokeLinecap="round"
+          />
+          <circle cx={size/2} cy={size/2} r={r} fill="none"
+            stroke={color} strokeWidth={stroke}
+            strokeDasharray={`${filled} ${fullCirc - filled}`}
+            strokeDashoffset={halfCirc}
+            strokeLinecap="round"
+            style={{ transition: 'stroke-dasharray 0.6s ease' }}
+          />
+        </svg>
+      </div>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 30, fontWeight: 900, color, lineHeight: 1 }}>{pct}%</div>
+        <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4 }}>de tareas completadas</div>
       </div>
     </div>
   )
@@ -339,16 +353,39 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
               {kpiAtrasadas > 0 && <div style={{ marginTop: 10, fontSize: 11, color: '#E74C3C', fontWeight: 700 }}>Ver todas →</div>}
             </button>
 
-            <button onClick={() => setActiveTab('sin-iniciar')}
-              style={{ background: kpiSinIniciar > 0 ? 'rgba(212,175,55,0.06)' : 'var(--surface)', border: `1px solid ${kpiSinIniciar > 0 ? 'rgba(212,175,55,0.25)' : 'var(--border)'}`, borderRadius: 14, padding: '16px 18px', cursor: 'pointer', textAlign: 'left' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: kpiSinIniciar > 0 ? '#D4AF37' : 'var(--muted)' }}>Tareas sin iniciar</div>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(212,175,55,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🕐</div>
+            {/* Tareas por área */}
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>Tareas por área</div>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(212,175,55,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>◈</div>
               </div>
-              <div style={{ fontSize: 30, fontWeight: 900, color: kpiSinIniciar > 0 ? '#D4AF37' : 'var(--muted)', lineHeight: 1, marginBottom: 6 }}>{kpiSinIniciar}</div>
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>Aún no han sido iniciadas</div>
-              {kpiSinIniciar > 0 && <div style={{ marginTop: 10, fontSize: 11, color: '#D4AF37', fontWeight: 700 }}>Ver todas →</div>}
-            </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {Object.values(MACRO_AREAS).flatMap(m => [...m.areas])
+                  .filter(area => activeTasks.some(t => t.area === area))
+                  .map(area => {
+                    const ac = AREA_CFG[area]
+                    const total = activeTasks.filter(t => t.area === area).length
+                    const done  = activeTasks.filter(t => t.area === area && t.estado === 'Completada').length
+                    const pct   = total > 0 ? Math.round((done / total) * 100) : 0
+                    return (
+                      <div key={area}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <div style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, background: `${ac.color}18`, border: `1px solid ${ac.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 900, color: ac.color }}>
+                            {ac.code}
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>{area}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: ac.color }}>{total}</span>
+                        </div>
+                        <div style={{ height: 5, background: 'rgba(128,128,128,0.1)', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${pct}%`, background: ac.color, borderRadius: 4, transition: 'width 0.4s ease' }} />
+                        </div>
+                      </div>
+                    )
+                  })
+                }
+                {activeTasks.length === 0 && <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', padding: '8px 0' }}>Sin tareas activas</div>}
+              </div>
+            </div>
 
             <div style={{ background: 'rgba(91,138,168,0.06)', border: '1px solid rgba(91,138,168,0.2)', borderRadius: 14, padding: '16px 18px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
