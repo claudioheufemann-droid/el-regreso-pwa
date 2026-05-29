@@ -79,15 +79,50 @@ export default async function AcumuladoPage() {
   const fechaFin    = periodo?.fecha_fin    ?? new Date().toISOString().split('T')[0]
   const prev = prevPeriod(fechaInicio)
 
-  const [{ data: ventasRaw }, { data: ventasPrevRaw }, { data: metasData }, { data: riesgoRaw }] = await Promise.all([
-    supabase.from('ventas')
-      .select('vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,fecha_pedido,nombre_fantasia,pedido')
-      .in('vendedor_actual', scope).gte('fecha_pedido', fechaInicio).lte('fecha_pedido', fechaFin)
-      .limit(10000),
-    supabase.from('ventas')
-      .select('vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,fecha_pedido,nombre_fantasia')
-      .in('vendedor_actual', scope).gte('fecha_pedido', prev.inicio).lte('fecha_pedido', prev.fin)
-      .limit(10000),
+  // Paginación: PostgREST/Supabase limita a 1000 filas por request aunque se indique limit mayor.
+  // Usamos .range() en loop para obtener TODAS las filas sin truncar.
+  const PAGE = 1000
+  const ventasRaw: {
+    vendedor_actual: string; litros: number|null; total_sin_impuesto: number|null
+    categoria_negocio: string|null; categoria_producto: string|null
+    fecha_pedido: string; nombre_fantasia: string|null; pedido?: string|null
+  }[] = []
+  const ventasPrevRaw: {
+    vendedor_actual: string; litros: number|null; total_sin_impuesto: number|null
+    categoria_negocio: string|null; categoria_producto: string|null
+    fecha_pedido: string; nombre_fantasia: string|null
+  }[] = []
+
+  await Promise.all([
+    (async () => {
+      let off = 0
+      while (true) {
+        const { data } = await supabase.from('ventas')
+          .select('vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,fecha_pedido,nombre_fantasia,pedido')
+          .in('vendedor_actual', scope).gte('fecha_pedido', fechaInicio).lte('fecha_pedido', fechaFin)
+          .order('fecha_pedido', { ascending: true }).range(off, off + PAGE - 1)
+        if (!data || data.length === 0) break
+        ventasRaw.push(...data)
+        if (data.length < PAGE) break
+        off += PAGE
+      }
+    })(),
+    (async () => {
+      let off = 0
+      while (true) {
+        const { data } = await supabase.from('ventas')
+          .select('vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,fecha_pedido,nombre_fantasia')
+          .in('vendedor_actual', scope).gte('fecha_pedido', prev.inicio).lte('fecha_pedido', prev.fin)
+          .order('fecha_pedido', { ascending: true }).range(off, off + PAGE - 1)
+        if (!data || data.length === 0) break
+        ventasPrevRaw.push(...data)
+        if (data.length < PAGE) break
+        off += PAGE
+      }
+    })(),
+  ])
+
+  const [{ data: metasData }, { data: riesgoRaw }] = await Promise.all([
     supabase.from('metas').select('vendedor,meta_litros,tipo').eq('periodo_id', periodo?.id??-1).eq('tipo','mensual'),
     supabase.rpc('get_pending_call_alerts', { p_vendedor: null, p_nivel_minimo: 'critico' }),
   ])

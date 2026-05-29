@@ -88,13 +88,33 @@ export default async function DashboardPage({
     .in('vendedor_actual', scope)
     .eq('fecha_pedido', fechaHoy)
 
-  const { data: ventasPeriodo } = await supabase
-    .from('ventas')
-    .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, fecha_pedido, categoria_producto')
-    .in('vendedor_actual', scope)
-    .gte('fecha_pedido', periodo?.fecha_inicio ?? '2026-04-24')
-    .lte('fecha_pedido', periodo?.fecha_fin ?? '2026-05-23')
-    .limit(10000)
+  // Paginación: PostgREST limita a 1000 filas por request.
+  // Un período con muchas SKUs puede superar ese límite.
+  const ventasPeriodo: {
+    vendedor_actual: string; nombre_fantasia: string | null; litros: number | null
+    total_sin_impuesto: number | null; categoria_negocio: string | null
+    fecha_pedido: string; categoria_producto: string | null
+  }[] = []
+  {
+    const fechaIni = periodo?.fecha_inicio ?? '2026-04-24'
+    const fechaFin = periodo?.fecha_fin    ?? '2026-05-23'
+    let offset = 0
+    const PAGE = 1000
+    while (true) {
+      const { data: page } = await supabase
+        .from('ventas')
+        .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, fecha_pedido, categoria_producto')
+        .in('vendedor_actual', scope)
+        .gte('fecha_pedido', fechaIni)
+        .lte('fecha_pedido', fechaFin)
+        .order('fecha_pedido', { ascending: true })
+        .range(offset, offset + PAGE - 1)
+      if (!page || page.length === 0) break
+      ventasPeriodo.push(...page)
+      if (page.length < PAGE) break
+      offset += PAGE
+    }
+  }
 
   // Metas
   const { data: metasData } = await supabase
