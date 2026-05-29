@@ -25,7 +25,17 @@ export async function POST(req: Request) {
 
     const semana = getMondayOfWeek(new Date())
 
-    // Traer todas las alertas pendientes
+    // Ventana objetivo: clientes que deberían pedir en la semana sub siguiente
+    // Lógica: contactamos esta semana → cliente pide la semana que viene o la subsiguiente
+    // Ventana: desde hoy+7 hasta hoy+21 días (próximas 2 semanas)
+    const addDays = (d: Date, n: number) => {
+      const x = new Date(d); x.setDate(x.getDate() + n); return x.toISOString().split('T')[0]
+    }
+    const hoy         = new Date()
+    const ventanaDesde = addDays(hoy, 7)   // desde próxima semana
+    const ventanaHasta = addDays(hoy, 21)  // hasta 3 semanas (margen)
+
+    // Traer todas las alertas (proximo = aún en ciclo, no vencidos)
     const { data: alerts, error: alertErr } = await supabase.rpc('get_pending_call_alerts', {
       p_vendedor: null,
       p_nivel_minimo: 'proximo',
@@ -33,16 +43,26 @@ export async function POST(req: Request) {
     if (alertErr) return NextResponse.json({ error: alertErr.message }, { status: 500 })
     if (!alerts?.length) return NextResponse.json({ ok: true, insertadas: 0 })
 
-    const rows = (alerts as {
-      vendedor_actual: string
-      nombre_fantasia: string
-      alert_level: string
-      score: number
-      segmento: string
-      dias_sin_compra: number
-      ciclo_promedio_dias: number
-      siguiente_compra_estimada: string | null
-    }[]).map(a => ({
+    type AlertRow = {
+      vendedor_actual: string; nombre_fantasia: string; alert_level: string
+      score: number; segmento: string; dias_sin_compra: number
+      ciclo_promedio_dias: number; siguiente_compra_estimada: string | null
+    }
+
+    // Filtrar: solo clientes cuya próxima compra estimada cae en la ventana objetivo
+    // Si no tienen fecha estimada pero su alert_level es 'proximo', también incluir
+    const alertsFiltrados = (alerts as AlertRow[]).filter(a => {
+      if (a.siguiente_compra_estimada) {
+        return a.siguiente_compra_estimada >= ventanaDesde &&
+               a.siguiente_compra_estimada <= ventanaHasta
+      }
+      // Sin fecha estimada → incluir solo si es 'proximo' (dentro de su ciclo)
+      return a.alert_level === 'proximo'
+    })
+
+    if (!alertsFiltrados.length) return NextResponse.json({ ok: true, insertadas: 0, ventanaDesde, ventanaHasta })
+
+    const rows = alertsFiltrados.map(a => ({
       vendedor:                  a.vendedor_actual,
       nombre_fantasia:           a.nombre_fantasia,
       semana,

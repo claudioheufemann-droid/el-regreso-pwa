@@ -6,7 +6,7 @@ import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
   CheckCircle2, Circle, MessageCircle, Target, ChevronRight, ChevronDown,
   RefreshCw, Zap, User, Filter, Phone, Clock, PhoneOff, Calendar,
-  Lightbulb, X, TrendingUp,
+  Lightbulb, X, TrendingUp, Send, Edit3,
 } from 'lucide-react'
 import type { MisionEnriquecida, ProximaPreview, HistorialSemana } from './page'
 
@@ -38,9 +38,104 @@ function fPeso(n: number): string {
   if (n >= 1_000_000) return `$${(n/1_000_000).toFixed(1)}M`
   return `$${Math.round(n).toLocaleString('es-CL')}`
 }
-function waUrl(nombre: string, tel?: string | null): string {
+function waUrl(tel: string | null | undefined, msg: string): string {
   const base = tel ? `https://wa.me/${tel.replace(/\D/g,'')}` : 'https://wa.me/'
-  return `${base}?text=${encodeURIComponent(`Hola ${nombre}, te saluda El Regreso Beer Co. 🍺`)}`
+  return `${base}?text=${encodeURIComponent(msg)}`
+}
+
+function generarMensajeWA(m: MisionEnriquecida): string {
+  const nombre  = m.nombre_fantasia
+  const ciclo   = m.ciclo_promedio_dias ? `${m.ciclo_promedio_dias} días` : 'tu ciclo habitual'
+  const sigu    = m.siguiente_compra_estimada
+    ? ` para el ${fFecha(m.siguiente_compra_estimada)}`
+    : ' para la próxima semana'
+  return `Hola ${nombre} 👋
+
+Te saluda El Regreso Beer Co. 🍺
+
+Según tu historial, pedís cada ${ciclo} y estimamos que podrías necesitar reabastecer${sigu}.
+
+¿Te gustaría coordinar tu próximo pedido? Con gusto te preparo una propuesta con las novedades de la semana.
+
+¡Saludos!
+El Regreso Beer Co.`
+}
+
+// ── Modal WA ──────────────────────────────────────────────────────────────────
+function WAModal({ mision, onClose }: { mision: MisionEnriquecida; onClose: () => void }) {
+  const [msg, setMsg] = useState(() => generarMensajeWA(mision))
+  const charCount = msg.length
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:1000,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div style={{ background:'#141414', border:'1px solid rgba(255,255,255,0.1)', borderRadius:20,
+        padding:24, maxWidth:480, width:'100%', display:'flex', flexDirection:'column', gap:16 }}>
+
+        {/* Header */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+          <div>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+              <div style={{ width:32, height:32, borderRadius:8, background:'rgba(37,211,102,0.12)',
+                border:'1px solid rgba(37,211,102,0.25)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <MessageCircle size={16} color="#25D366"/>
+              </div>
+              <h2 style={{ fontSize:15, fontWeight:900, color:'var(--cream)' }}>Mensaje WhatsApp</h2>
+            </div>
+            <p style={{ fontSize:12, color:'var(--muted)' }}>
+              {mision.nombre_fantasia} · {mision.frecuencia_texto}
+              {mision.siguiente_compra_estimada && ` · Próximo: ${fFecha(mision.siguiente_compra_estimada)}`}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', padding:0 }}>
+            <X size={18}/>
+          </button>
+        </div>
+
+        {/* Textarea editable */}
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+              <Edit3 size={12} color="var(--muted)"/>
+              <span style={{ fontSize:11, color:'var(--muted)', fontWeight:600 }}>Edita el mensaje antes de enviar</span>
+            </div>
+            <span style={{ fontSize:10, color:'#555' }}>{charCount} chars</span>
+          </div>
+          <textarea
+            value={msg}
+            onChange={e => setMsg(e.target.value)}
+            rows={10}
+            style={{ width:'100%', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.1)',
+              borderRadius:12, padding:'12px 14px', color:'var(--cream)', fontSize:13, lineHeight:1.6,
+              resize:'vertical', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }}
+          />
+        </div>
+
+        {/* Botón restablecer */}
+        <button onClick={() => setMsg(generarMensajeWA(mision))}
+          style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:11,
+            textDecoration:'underline', textAlign:'left', padding:0 }}>
+          Restablecer mensaje original
+        </button>
+
+        {/* Acciones */}
+        <div style={{ display:'flex', gap:10 }}>
+          <button onClick={onClose}
+            style={{ flex:1, padding:'11px', borderRadius:12, border:'1px solid var(--border)',
+              background:'transparent', color:'var(--muted)', fontSize:13, cursor:'pointer' }}>
+            Cancelar
+          </button>
+          <a href={waUrl(mision.telefono, msg)} target="_blank" rel="noreferrer"
+            onClick={onClose}
+            style={{ flex:2, padding:'11px', borderRadius:12, border:'none', cursor:'pointer',
+              background:'#25D366', color:'#fff', fontSize:13, fontWeight:800,
+              display:'flex', alignItems:'center', justifyContent:'center', gap:8, textDecoration:'none' }}>
+            <Send size={15}/> Abrir WhatsApp
+          </a>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── Donut de progreso ──────────────────────────────────────────────────────────
@@ -147,6 +242,7 @@ export default function MisionesClient({
   const [prioFiltro,setPrioFiltro]= useState<'todas'|'Alta'|'Media'|'Baja'>('todas')
   const [showFiltro,setShowFiltro]= useState(false)
   const [vendorTab,  setVendorTab] = useState<string>('all')
+  const [waModal,    setWaModal]   = useState<MisionEnriquecida | null>(null)
 
   useEffect(() => { setMisiones(misionesProp) }, [misionesProp])
 
@@ -227,6 +323,7 @@ export default function MisionesClient({
   // ════════════════════════════════════════════════════════════════════════════
   if (!isDesktop) {
     return (
+      <>
       <div style={{ padding:'14px 14px 90px', maxWidth:520, margin:'0 auto' }}>
         {/* Header */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
@@ -322,7 +419,7 @@ export default function MisionesClient({
             <>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {misionesMostradas.map(m=>(
-                  <MobileRow key={m.id} m={m} onToggle={handleToggle} toggling={toggling===m.id} canToggle={puedeToggle(m)} onOpen={()=>router.push('/ventas/clientes')}/>
+                  <MobileRow key={m.id} m={m} onToggle={handleToggle} toggling={toggling===m.id} canToggle={puedeToggle(m)} onOpen={()=>router.push('/ventas/clientes')} onWA={m=>setWaModal(m)}/>
                 ))}
               </div>
               {misionesVista.length > LIMITE && (
@@ -338,6 +435,10 @@ export default function MisionesClient({
         {tab==='proxima' && <ProximaSemana proxima={proxima} semanaNext={semanaNext}/>}
         {tab==='historial' && <HistorialView historial={historial}/>}
       </div>
+
+      {/* Modal WA móvil */}
+      {waModal && <WAModal mision={waModal} onClose={()=>setWaModal(null)}/>}
+    </>
     )
   }
 
@@ -479,7 +580,7 @@ export default function MisionesClient({
                   </thead>
                   <tbody>
                     {misionesMostradas.map(m=>(
-                      <DesktopRow key={m.id} m={m} onToggle={handleToggle} toggling={toggling===m.id} canToggle={puedeToggle(m)} onOpen={()=>router.push('/ventas/clientes')}/>
+                      <DesktopRow key={m.id} m={m} onToggle={handleToggle} toggling={toggling===m.id} canToggle={puedeToggle(m)} onOpen={()=>router.push('/ventas/clientes')} onWA={m=>setWaModal(m)}/>
                     ))}
                   </tbody>
                 </table>
@@ -601,13 +702,16 @@ export default function MisionesClient({
       {tab==='historial'&& <HistorialView historial={historial}/>}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+
+      {/* Modal WhatsApp */}
+      {waModal && <WAModal mision={waModal} onClose={()=>setWaModal(null)}/>}
     </div>
   )
 }
 
 // ── Fila desktop ──────────────────────────────────────────────────────────────
-function DesktopRow({ m, onToggle, toggling, canToggle, onOpen }: {
-  m: MisionEnriquecida; onToggle: (m:MisionEnriquecida)=>void; toggling: boolean; canToggle: boolean; onOpen: ()=>void
+function DesktopRow({ m, onToggle, toggling, canToggle, onOpen, onWA }: {
+  m: MisionEnriquecida; onToggle: (m:MisionEnriquecida)=>void; toggling: boolean; canToggle: boolean; onOpen: ()=>void; onWA: (m:MisionEnriquecida)=>void
 }) {
   const seg = m.segmento ?? 'E'; const segColor = SEG_COLOR[seg]??'#888'
   const vendColor = VEND_COLOR[m.vendedor]??'#888'
@@ -671,11 +775,11 @@ function DesktopRow({ m, onToggle, toggling, canToggle, onOpen }: {
       {/* Acciones */}
       <td style={{ padding:'12px 10px', textAlign:'right' }}>
         <div style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
-          <a href={waUrl(m.nombre_fantasia, m.telefono)} target="_blank" rel="noreferrer"
+          <button onClick={()=>onWA(m)}
             style={{ width:30, height:30, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center',
-              background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.2)', color:'#25D366' }}>
+              background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.2)', color:'#25D366', cursor:'pointer' }}>
             <MessageCircle size={14}/>
-          </a>
+          </button>
           {canToggle && (
             <button onClick={()=>onToggle(m)} disabled={toggling}
               style={{ width:30, height:30, borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
@@ -692,8 +796,8 @@ function DesktopRow({ m, onToggle, toggling, canToggle, onOpen }: {
 }
 
 // ── Fila móvil ────────────────────────────────────────────────────────────────
-function MobileRow({ m, onToggle, toggling, canToggle, onOpen }: {
-  m: MisionEnriquecida; onToggle:(m:MisionEnriquecida)=>void; toggling:boolean; canToggle:boolean; onOpen:()=>void
+function MobileRow({ m, onToggle, toggling, canToggle, onOpen, onWA }: {
+  m: MisionEnriquecida; onToggle:(m:MisionEnriquecida)=>void; toggling:boolean; canToggle:boolean; onOpen:()=>void; onWA:(m:MisionEnriquecida)=>void
 }) {
   const seg = m.segmento??'E'; const segColor = SEG_COLOR[seg]??'#888'
   const vendColor = VEND_COLOR[m.vendedor]??'#888'
@@ -724,11 +828,11 @@ function MobileRow({ m, onToggle, toggling, canToggle, onOpen }: {
           {done?'Contactado':'Pendiente'}
         </span>
       )}
-      <a href={waUrl(m.nombre_fantasia, m.telefono)} target="_blank" rel="noreferrer"
+      <button onClick={()=>onWA(m)}
         style={{ width:34, height:34, borderRadius:9, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
-          background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.2)', color:'#25D366' }}>
+          background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.2)', color:'#25D366', cursor:'pointer' }}>
         <MessageCircle size={15}/>
-      </a>
+      </button>
     </div>
   )
 }
