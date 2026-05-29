@@ -226,7 +226,7 @@ export default async function DashboardPage({
     }
   })
 
-  // Plan semanal: incluye proximo + vencido + critico (para popup lunes y card de riesgo)
+  // Plan semanal (para popup lunes y card de riesgo)
   const p_vendedor = appUser?.isAdmin ? null : (appUser?.nombre ?? null)
   const { data: planRaw } = await supabase
     .rpc('get_pending_call_alerts', {
@@ -260,6 +260,25 @@ export default async function DashboardPage({
     c.alert_level === 'critico' || c.alert_level === 'vencido'
   )
 
+  // Resumen de misiones de la tabla persistente (para el widget del dashboard)
+  const semanaLunes = (() => {
+    const d = new Date(); const day = d.getDay()
+    d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
+    return d.toISOString().split('T')[0]
+  })()
+  const misionesScope = vendedoresScope.length ? vendedoresScope : ['__none__']
+  const { data: misionesRaw } = await supabase
+    .from('misiones')
+    .select('vendedor, alert_level, estado, score, segmento, nombre_fantasia, dias_sin_compra')
+    .eq('semana', semanaLunes)
+    .in('vendedor', misionesScope)
+
+  type MisionResumen = {
+    vendedor: string; alert_level: string; estado: string
+    score: number; segmento: string; nombre_fantasia: string; dias_sin_compra: number
+  }
+  const misionesResumen: MisionResumen[] = misionesRaw ?? []
+
   return (
     <DashboardClient
       resumen={resumen}
@@ -272,6 +291,7 @@ export default async function DashboardPage({
       vendedoresScope={vendedoresScope as string[]}
       riesgoClientes={riesgoClientes}
       planSemana={planSemana}
+      misionesResumen={misionesResumen}
     />
   )
 }

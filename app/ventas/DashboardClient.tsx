@@ -49,6 +49,16 @@ interface PlanCliente extends RiesgoCliente {
   siguiente_compra_estimada: string | null
 }
 
+interface MisionResumen {
+  vendedor: string
+  alert_level: string
+  estado: string
+  score: number
+  segmento: string
+  nombre_fantasia: string
+  dias_sin_compra: number
+}
+
 interface Props {
   resumen: VendedorResumen[]
   fechaHoy: string
@@ -60,6 +70,7 @@ interface Props {
   vendedoresScope: string[]
   riesgoClientes: PlanCliente[]
   planSemana: PlanCliente[]
+  misionesResumen: MisionResumen[]
 }
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
@@ -1377,12 +1388,17 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
 }
 
 // ── MisionesWidgetCard ────────────────────────────────────────────────────────
-function MisionesWidgetCard({ planSemana }: { planSemana: PlanCliente[] }) {
+function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
   const router = useRouter()
-  const criticos = planSemana.filter(c => c.alert_level === 'critico')
-  const vencidos  = planSemana.filter(c => c.alert_level === 'vencido')
-  const proximos  = planSemana.filter(c => c.alert_level === 'proximo')
-  const total = planSemana.length
+  const SEG_C: Record<string, string> = { A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171' }
+
+  const pendientes = misiones.filter(m => m.estado === 'pendiente')
+  const criticos   = pendientes.filter(m => m.alert_level === 'critico')
+  const vencidos   = pendientes.filter(m => m.alert_level === 'vencido')
+  const proximos   = pendientes.filter(m => m.alert_level === 'proximo')
+  const completadas = misiones.filter(m => m.estado === 'completada')
+  const total = misiones.length
+  const pct = total > 0 ? Math.round((completadas.length / total) * 100) : 0
 
   return (
     <div style={{
@@ -1390,7 +1406,7 @@ function MisionesWidgetCard({ planSemana }: { planSemana: PlanCliente[] }) {
       borderRadius: 20, overflow: 'hidden',
     }}>
       <div style={{ padding: '16px 18px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Target size={15} color="var(--gold)" />
             <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 14 }}>Misiones esta semana</h3>
@@ -1407,65 +1423,73 @@ function MisionesWidgetCard({ planSemana }: { planSemana: PlanCliente[] }) {
           </button>
         </div>
 
-        {/* Contadores */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
-          {[
-            { label: '🔴 Urgentes', count: criticos.length, color: '#EF4444', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.2)' },
-            { label: '⚠ Vencidos',  count: vencidos.length,  color: '#F87171', bg: 'rgba(248,113,113,0.06)', border: 'rgba(248,113,113,0.15)' },
-            { label: '⏰ Próximos', count: proximos.length,  color: '#F59E0B', bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.15)' },
-          ].map(s => (
-            <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
-              <p style={{ fontSize: 9, color: s.color, fontWeight: 700, marginBottom: 3 }}>{s.label}</p>
-              <p style={{ fontSize: 22, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.count}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Top 3 más urgentes */}
         {total === 0 ? (
-          <div style={{ textAlign: 'center', padding: '8px 0' }}>
-            <p style={{ fontSize: 24, marginBottom: 4 }}>🎯</p>
-            <p style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>Sin contactos pendientes</p>
+          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <p style={{ fontSize: 22, marginBottom: 4 }}>🎯</p>
+            <p style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Sin misiones generadas</p>
+            <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>El admin genera el plan cada lunes</p>
           </div>
         ) : (
-          <div>
+          <>
+            {/* Progreso */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 6, transition: 'width 0.4s',
+                  width: `${pct}%`,
+                  background: pct === 100 ? '#34D399' : pct > 60 ? '#F59E0B' : '#60A5FA',
+                }} />
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>
+                {completadas.length}/{total}
+              </span>
+            </div>
+
+            {/* Contadores */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+              {[
+                { label: '🔴 Urgentes', count: criticos.length,  color: '#EF4444', bg: 'rgba(239,68,68,0.08)',    border: 'rgba(239,68,68,0.2)'    },
+                { label: '⚠ Vencidos',  count: vencidos.length,  color: '#F87171', bg: 'rgba(248,113,113,0.06)', border: 'rgba(248,113,113,0.15)' },
+                { label: '⏰ Próximos', count: proximos.length,  color: '#F59E0B', bg: 'rgba(245,158,11,0.06)',  border: 'rgba(245,158,11,0.15)'  },
+              ].map(s => (
+                <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: '8px 6px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 9, color: s.color, fontWeight: 700, marginBottom: 2 }}>{s.label}</p>
+                  <p style={{ fontSize: 20, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.count}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Top pendientes */}
             <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.07em', marginBottom: 8 }}>
-              PRÓXIMOS A CONTACTAR
+              PENDIENTES DE CONTACTO
             </p>
-            {[...criticos, ...vencidos, ...proximos]
-              .slice(0, 4)
-              .map(c => {
-                const SEG_C: Record<string, string> = { A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171' }
-                const alertColor = c.alert_level === 'critico' ? '#EF4444' : c.alert_level === 'vencido' ? '#F87171' : '#F59E0B'
-                const segColor = SEG_C[c.segmento] ?? '#888'
-                return (
-                  <div
-                    key={`${c.vendedor_actual}|||${c.nombre_fantasia}`}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
-                    }}
-                  >
-                    <span style={{
-                      fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 5,
-                      background: `${segColor}22`, color: segColor, border: `1px solid ${segColor}44`,
-                      flexShrink: 0,
-                    }}>{c.segmento} {c.score}</span>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {c.nombre_fantasia}
-                    </p>
-                    <p style={{ fontSize: 11, fontWeight: 800, color: alertColor, flexShrink: 0 }}>
-                      {c.dias_sin_compra}d
-                    </p>
-                  </div>
-                )
-              })}
-            {total > 4 && (
+            {[...criticos, ...vencidos, ...proximos].slice(0, 4).map(c => {
+              const alertColor = c.alert_level === 'critico' ? '#EF4444' : c.alert_level === 'vencido' ? '#F87171' : '#F59E0B'
+              const segColor = SEG_C[c.segmento] ?? '#888'
+              return (
+                <div key={`${c.vendedor}|||${c.nombre_fantasia}`} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 5,
+                    background: `${segColor}22`, color: segColor, border: `1px solid ${segColor}44`, flexShrink: 0,
+                  }}>{c.segmento} {c.score}</span>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.nombre_fantasia}
+                  </p>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: alertColor, flexShrink: 0 }}>
+                    {c.dias_sin_compra}d
+                  </p>
+                </div>
+              )
+            })}
+            {pendientes.length > 4 && (
               <p style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', paddingTop: 8, fontStyle: 'italic' }}>
-                +{total - 4} más en Misiones
+                +{pendientes.length - 4} más en Misiones
               </p>
             )}
-          </div>
+          </>
         )}
       </div>
     </div>
@@ -1526,7 +1550,7 @@ function DropSizeCard({ resumen, colors }: { resumen: VendedorResumen[]; colors:
 }
 
 // ── Main Component ───────────────────────────────────────────────────────────
-export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, periodo, evolution, productRanking, productDetail, vendedoresScope, riesgoClientes, planSemana }: Props) {
+export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, periodo, evolution, productRanking, productDetail, vendedoresScope, riesgoClientes, planSemana, misionesResumen }: Props) {
   const isDesktop = useIsDesktop()
   const [showPlanModal, setShowPlanModal] = useState(false)
 
@@ -1685,7 +1709,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         <RiesgoClientesCard clientes={riesgoClientes} colors={VEND_COLOR} />
 
         {/* Misiones de la semana */}
-        <MisionesWidgetCard planSemana={planSemana} />
+        <MisionesWidgetCard misiones={misionesResumen} />
       </div>
     </div>
   )
