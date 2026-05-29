@@ -105,39 +105,41 @@ export async function GET(req: NextRequest) {
     ? { inicio: metasMensuales[0].fecha_inicio, fin: metasMensuales[0].fecha_fin }
     : null
 
-  const clientes_ex = CLIENTES_EXCLUIR
   const selectFields = 'vendedor_actual, categoria_negocio, litros, nombre_fantasia, fecha_pedido, categoria_producto, producto'
 
-  const [{ data: ventasMes }, { data: ventasSemana }, { data: ventasDia }] = await Promise.all([
-    mesActivo
-      ? supabase
-          .from('ventas')
-          .select(selectFields)
-          .in('vendedor_actual', VENDEDORES)
-          .gte('fecha_pedido', mesActivo.inicio)
-          .lte('fecha_pedido', fechaStr)
-          .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`)
-      : Promise.resolve({ data: [] as VentaAPI[] }),
-    semanaActiva
-      ? supabase
-          .from('ventas')
-          .select(selectFields)
-          .in('vendedor_actual', VENDEDORES)
-          .gte('fecha_pedido', semanaActiva.inicio)
-          .lte('fecha_pedido', fechaStr)
-          .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`)
-      : Promise.resolve({ data: [] as VentaAPI[] }),
-    supabase
-      .from('ventas')
-      .select(selectFields)
-      .in('vendedor_actual', VENDEDORES)
-      .eq('fecha_pedido', fechaStr)
-      .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`),
+  // Función de paginación con filtro case-insensitive de clientes internos
+  async function fetchVentasPaginado(fechaIni: string, fechaFin: string): Promise<VentaAPI[]> {
+    const rows: VentaAPI[] = []
+    let offset = 0
+    const PAGE = 1000
+    while (true) {
+      const { data } = await supabase.from('ventas').select(selectFields)
+        .in('vendedor_actual', VENDEDORES)
+        .gte('fecha_pedido', fechaIni).lte('fecha_pedido', fechaFin)
+        .order('fecha_pedido', { ascending: true })
+        .range(offset, offset + PAGE - 1)
+      if (!data || data.length === 0) break
+      rows.push(...(data as VentaAPI[]))
+      if (data.length < PAGE) break
+      offset += PAGE
+    }
+    // Filtro de clientes internos aplicado en código (case-insensitive, más confiable que PostgREST)
+    return rows.filter(v =>
+      !CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))
+    )
+  }
+
+  const [vMesArr, vSemArr] = await Promise.all([
+    mesActivo    ? fetchVentasPaginado(mesActivo.inicio, fechaStr)    : Promise.resolve([] as VentaAPI[]),
+    semanaActiva ? fetchVentasPaginado(semanaActiva.inicio, fechaStr) : Promise.resolve([] as VentaAPI[]),
   ])
 
-  const vMesArr = (ventasMes ?? []) as VentaAPI[]
-  const vSemArr = (ventasSemana ?? []) as VentaAPI[]
-  const vDiaArr = (ventasDia ?? []) as VentaAPI[]
+  // Día: query directa (un solo día = pocas filas, no necesita paginación)
+  const { data: vDiaRaw } = await supabase.from('ventas').select(selectFields)
+    .in('vendedor_actual', VENDEDORES).eq('fecha_pedido', fechaStr)
+  const vDiaArr = ((vDiaRaw ?? []) as VentaAPI[]).filter(v =>
+    !CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))
+  )
 
   // ── Productos a nivel equipo ─────────────────────────────────────────────────
 
