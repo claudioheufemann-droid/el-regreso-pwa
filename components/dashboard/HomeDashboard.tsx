@@ -128,12 +128,14 @@ function KpiCard({ value, label, sub, color, bg, border, glow, icon, up = true, 
       {/* label */}
       <div style={{ fontSize: 10, fontWeight: 800, color, letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
       {/* sub */}
-      <div style={{ fontSize: 10, color: `${color}88`, display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{ fontSize: 10, color: `${color}88`, display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
         <span style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0 }} />
         {sub}
       </div>
-      {/* sparkline */}
-      <div style={{ position: 'absolute', bottom: 10, right: 12 }}><Sparkline color={color} up={up} /></div>
+      {/* sparkline — en flujo, no superpuesta */}
+      <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'flex-end', pointerEvents: 'none' }}>
+        <Sparkline color={color} up={up} />
+      </div>
     </div>
   )
 }
