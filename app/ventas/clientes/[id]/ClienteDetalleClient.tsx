@@ -67,11 +67,29 @@ interface Deudor {
   deuda_mas_90_dias: number | null
 }
 
+interface FrequencyStat {
+  ultima_compra: string | null
+  dias_sin_compra: number | null
+  ciclo_promedio_dias: number | null
+  total_pedidos: number
+  alert_level: string
+  dias_para_siguiente: number | null
+  siguiente_compra_estimada: string | null
+  // Scoring fields (RFM model)
+  score?: number
+  segmento?: string
+  confianza_score?: string
+  litros_totales?: number
+  revenue_total?: number
+  pedidos_por_mes?: number
+}
+
 interface Props {
   cliente: Cliente
   ventas: Venta[]
   contactos: Contacto[]
   deudor: Deudor | null
+  frecuencia: FrequencyStat | null
 }
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -98,7 +116,127 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   )
 }
 
-export default function ClienteDetalleClient({ cliente, ventas, contactos, deudor }: Props) {
+const SEGMENTO_COLOR: Record<string, string> = {
+  A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171',
+}
+
+function FrecuenciaCard({ frecuencia }: { frecuencia: FrequencyStat }) {
+  const alertColors: Record<string, { bg: string; border: string; text: string; label: string }> = {
+    ok:           { bg: 'rgba(52,211,153,0.06)',  border: 'rgba(52,211,153,0.2)',  text: '#34D399', label: '✓ Al día'        },
+    proximo:      { bg: 'rgba(245,158,11,0.06)',  border: 'rgba(245,158,11,0.2)',  text: '#F59E0B', label: '⏰ Próximo'       },
+    vencido:      { bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.3)', text: '#F87171', label: '⚠ Vencido'       },
+    critico:      { bg: 'rgba(239,68,68,0.1)',    border: 'rgba(239,68,68,0.4)',   text: '#EF4444', label: '🔴 Crítico'      },
+    sin_historial:{ bg: 'rgba(120,120,120,0.06)', border: 'rgba(120,120,120,0.2)', text: '#888',    label: 'Sin historial'   },
+  }
+  const cfg = alertColors[frecuencia.alert_level] ?? alertColors.sin_historial
+  const cicloPct = frecuencia.ciclo_promedio_dias && frecuencia.dias_sin_compra != null
+    ? Math.min(100, Math.round((frecuencia.dias_sin_compra / frecuencia.ciclo_promedio_dias) * 100))
+    : null
+
+  const segColor = frecuencia.segmento ? (SEGMENTO_COLOR[frecuencia.segmento] ?? '#888') : null
+
+  return (
+    <div style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: 16, padding: '16px', marginBottom: 16 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <p style={{ fontSize: 11, fontWeight: 800, color: '#888', letterSpacing: '0.07em' }}>FRECUENCIA DE COMPRA</p>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {frecuencia.segmento && (
+            <span style={{
+              fontSize: 12, fontWeight: 900, padding: '3px 10px', borderRadius: 20,
+              background: `${segColor}20`, color: segColor!, border: `1px solid ${segColor}40`,
+            }}>
+              Seg. {frecuencia.segmento}
+            </span>
+          )}
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: cfg.border, color: cfg.text }}>
+            {cfg.label}
+          </span>
+        </div>
+      </div>
+
+      {/* Score row */}
+      {frecuencia.score != null && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+          <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '10px 12px' }}>
+            <p style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>SCORE CLIENTE</p>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{ fontSize: 28, fontWeight: 900, color: segColor ?? '#fff', lineHeight: 1 }}>
+                {frecuencia.score}
+              </span>
+              <span style={{ fontSize: 12, color: '#555' }}>/100</span>
+            </div>
+            {/* Score bar */}
+            <div style={{ height: 4, background: '#1A1A1A', borderRadius: 4, overflow: 'hidden', marginTop: 6 }}>
+              <div style={{
+                height: '100%', borderRadius: 4,
+                background: segColor ?? '#888',
+                width: `${frecuencia.score}%`,
+                transition: 'width 0.3s',
+              }} />
+            </div>
+          </div>
+          <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '10px 12px' }}>
+            <p style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>CONFIANZA</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: frecuencia.confianza_score === 'alta' ? '#34D399' : frecuencia.confianza_score === 'media' ? '#F59E0B' : '#888', textTransform: 'capitalize' }}>
+              {frecuencia.confianza_score ?? '—'}
+            </p>
+            <p style={{ fontSize: 10, color: '#555', marginTop: 4 }}>{frecuencia.total_pedidos} pedidos hist.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Métricas principales */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+        <div>
+          <p style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>DÍAS SIN COMPRAR</p>
+          <p style={{ fontSize: 22, fontWeight: 900, color: cfg.text, lineHeight: 1 }}>
+            {frecuencia.dias_sin_compra ?? '—'}
+          </p>
+        </div>
+        <div>
+          <p style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>CICLO PROMEDIO</p>
+          <p style={{ fontSize: 22, fontWeight: 900, color: '#fff', lineHeight: 1 }}>
+            {frecuencia.ciclo_promedio_dias ? `${frecuencia.ciclo_promedio_dias}d` : '—'}
+          </p>
+        </div>
+        <div>
+          <p style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>PEDIDOS/MES</p>
+          <p style={{ fontSize: 22, fontWeight: 900, color: '#fff', lineHeight: 1 }}>
+            {frecuencia.pedidos_por_mes != null ? frecuencia.pedidos_por_mes.toFixed(1) : '—'}
+          </p>
+        </div>
+      </div>
+
+      {/* Barra de progreso del ciclo */}
+      {cicloPct !== null && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontSize: 10, color: '#555' }}>Avance del ciclo</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: cfg.text }}>{cicloPct}%</span>
+          </div>
+          <div style={{ height: 6, background: '#1A1A1A', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 4,
+              background: cicloPct >= 100 ? '#EF4444' : cicloPct >= 80 ? '#F59E0B' : '#34D399',
+              width: `${Math.min(cicloPct, 100)}%`,
+              transition: 'width 0.3s',
+            }} />
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#555' }}>
+        <span>Último pedido: <strong style={{ color: '#aaa' }}>{frecuencia.ultima_compra ?? '—'}</strong></span>
+        {frecuencia.siguiente_compra_estimada && (
+          <span>Próximo estimado: <strong style={{ color: cfg.text }}>{frecuencia.siguiente_compra_estimada}</strong></span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function ClienteDetalleClient({ cliente, ventas, contactos, deudor, frecuencia }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<'info' | 'ventas' | 'contactos'>('info')
 
@@ -239,6 +377,9 @@ export default function ClienteDetalleClient({ cliente, ventas, contactos, deudo
         {/* INFO */}
         {tab === 'info' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* Frecuencia de compra */}
+            {frecuencia && <FrecuenciaCard frecuencia={frecuencia} />}
 
             {/* Deuda */}
             {deudor && (

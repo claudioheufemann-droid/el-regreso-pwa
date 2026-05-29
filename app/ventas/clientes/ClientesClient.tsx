@@ -9,6 +9,23 @@ import {
 } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 
+interface FrequencyStat {
+  ultima_compra: string | null
+  dias_sin_compra: number | null
+  ciclo_promedio_dias: number | null
+  total_pedidos: number
+  alert_level: string
+  dias_para_siguiente: number | null
+  siguiente_compra_estimada: string | null
+  // Scoring fields (RFM model)
+  score?: number
+  segmento?: string
+  confianza_score?: string
+  litros_totales?: number
+  revenue_total?: number
+  pedidos_por_mes?: number
+}
+
 interface Cliente {
   id: number
   nombre_fantasia: string | null
@@ -23,6 +40,7 @@ interface Cliente {
   lng: number | null
   ultimoContacto: { fecha: string; tipo: string; vendedor: string } | null
   ultimoPedido: { ultimaFecha: string; litrosPeriodo: number; ventaPeriodo: number } | null
+  frecuencia: FrequencyStat | null
 }
 
 interface Props {
@@ -244,6 +262,21 @@ function CampanaWhatsApp({ seleccionados, onClose }: CampanaProps) {
   )
 }
 
+// ── Segment color helpers ──────────────────────────────────────────────────
+const SEG_STYLE: Record<string, { bg: string; text: string; border: string }> = {
+  A: { bg: 'rgba(212,175,55,0.12)', text: '#D4AF37', border: 'rgba(212,175,55,0.3)' },
+  B: { bg: 'rgba(52,211,153,0.1)',  text: '#34D399', border: 'rgba(52,211,153,0.25)' },
+  C: { bg: 'rgba(96,165,250,0.1)',  text: '#60A5FA', border: 'rgba(96,165,250,0.25)' },
+  D: { bg: 'rgba(245,158,11,0.1)',  text: '#F59E0B', border: 'rgba(245,158,11,0.25)' },
+  E: { bg: 'rgba(248,113,113,0.08)',text: '#F87171', border: 'rgba(248,113,113,0.2)' },
+}
+const ALERT_COLOR: Record<string, string> = {
+  critico: '#EF4444', vencido: '#F87171', proximo: '#F59E0B',
+}
+const ALERT_LABEL: Record<string, string> = {
+  critico: '🔴 Urgente', vencido: '⚠ Vencido', proximo: '⏰ Próximo',
+}
+
 // ── ClienteCard ────────────────────────────────────────────────────────────
 function ClienteCard({
   cliente, isAdmin, modoSeleccion, seleccionado, onToggleSelect,
@@ -256,29 +289,38 @@ function ClienteCard({
 }) {
   const router = useRouter()
   const diasContacto = diasDesde(cliente.ultimoContacto?.fecha)
+  const seg = cliente.frecuencia?.segmento
+  const score = cliente.frecuencia?.score
+  const alertLevel = cliente.frecuencia?.alert_level
+  const diasSin = cliente.frecuencia?.dias_sin_compra
+  const ciclo = cliente.frecuencia?.ciclo_promedio_dias
+  const segStyle = seg ? (SEG_STYLE[seg] ?? SEG_STYLE.E) : null
+  const hasAlert = alertLevel && ['critico', 'vencido', 'proximo'].includes(alertLevel)
+  const alertColor = alertLevel ? (ALERT_COLOR[alertLevel] ?? null) : null
+
+  const waUrl = cliente.telefono
+    ? `https://wa.me/${cliente.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${cliente.nombre_fantasia ?? ''}, te saluda El Regreso Beer Co. 🍺`)}`
+    : null
 
   function handleClick() {
-    if (modoSeleccion) {
-      onToggleSelect(cliente.id)
-    } else {
-      router.push(`/ventas/clientes/${cliente.id}`)
-    }
+    if (modoSeleccion) onToggleSelect(cliente.id)
+    else router.push(`/ventas/clientes/${cliente.id}`)
   }
 
   return (
     <div
       onClick={handleClick}
       style={{
-        background: seleccionado ? 'rgba(37,211,102,0.06)' : '#141414',
-        border: `1px solid ${seleccionado ? 'rgba(37,211,102,0.3)' : '#222'}`,
-        borderRadius: 14, padding: '12px 14px',
-        cursor: 'pointer', transition: 'all 0.15s',
-        display: 'flex', alignItems: 'flex-start', gap: 10,
+        background: seleccionado ? 'rgba(37,211,102,0.05)' : '#141414',
+        border: `1px solid ${seleccionado ? 'rgba(37,211,102,0.3)' : alertLevel === 'critico' ? 'rgba(239,68,68,0.18)' : '#202020'}`,
+        borderRadius: 14, padding: '11px 13px',
+        cursor: 'pointer', transition: 'border-color 0.15s',
+        display: 'flex', alignItems: 'flex-start', gap: 11,
       }}
     >
-      {/* Checkbox in selection mode */}
+      {/* Checkbox */}
       {modoSeleccion && (
-        <div style={{ flexShrink: 0, marginTop: 1 }}>
+        <div style={{ flexShrink: 0, marginTop: 2 }}>
           {seleccionado
             ? <CheckSquare size={18} style={{ color: '#25D366' }} />
             : <Square size={18} style={{ color: '#444' }} />
@@ -286,62 +328,96 @@ function ClienteCard({
         </div>
       )}
 
+      {/* Segment badge */}
+      {segStyle && seg && !modoSeleccion && (
+        <div style={{
+          width: 46, height: 46, borderRadius: 13, flexShrink: 0,
+          background: segStyle.bg, border: `1px solid ${segStyle.border}`,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1,
+        }}>
+          <span style={{ fontSize: 18, fontWeight: 900, color: segStyle.text, lineHeight: 1 }}>{seg}</span>
+          {score != null && <span style={{ fontSize: 8, fontWeight: 700, color: segStyle.text, opacity: 0.75 }}>{score}pts</span>}
+        </div>
+      )}
+
+      {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* Name + contact badge */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 5 }}>
-          <p style={{ fontWeight: 700, fontSize: 13, color: '#fff', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+          <p style={{ fontWeight: 700, fontSize: 13, color: '#fff', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {cliente.nombre_fantasia}
           </p>
-          {/* Estado de contacto */}
           {diasContacto === null ? (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, flexShrink: 0, background: 'rgba(248,113,113,0.12)', color: '#F87171', border: '1px solid rgba(248,113,113,0.25)' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, flexShrink: 0, background: 'rgba(248,113,113,0.1)', color: '#F87171', border: '1px solid rgba(248,113,113,0.2)' }}>
               Sin contacto
             </span>
           ) : diasContacto <= 7 ? (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, flexShrink: 0, background: 'rgba(52,211,153,0.12)', color: '#34D399', border: '1px solid rgba(52,211,153,0.25)' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, flexShrink: 0, background: 'rgba(52,211,153,0.1)', color: '#34D399', border: '1px solid rgba(52,211,153,0.2)' }}>
               {diasContacto === 0 ? 'Hoy' : diasContacto === 1 ? 'Ayer' : `${diasContacto}d`}
             </span>
           ) : (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, flexShrink: 0, background: 'rgba(245,158,11,0.1)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.2)' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, flexShrink: 0, background: 'rgba(245,158,11,0.08)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.18)' }}>
               {diasContacto}d
             </span>
           )}
         </div>
 
-        {/* Badges secundarios */}
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 5 }}>
-          {cliente.categoria && (
-            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 20, background: '#1E1E1E', color: '#777', fontWeight: 600 }}>
-              {cliente.categoria}
-            </span>
+        {/* Tags row */}
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+          {(cliente.localidad_entrega || cliente.localidad) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <MapPin size={9} style={{ color: '#555' }} />
+              <span style={{ fontSize: 10, color: '#555' }}>{cliente.localidad_entrega || cliente.localidad}</span>
+            </div>
           )}
           {cliente.vendedor && (
             <span style={{ fontSize: 10, fontWeight: 700, color: cliente.vendedor === 'Javier Badilla' ? '#F59E0B' : cliente.vendedor === 'Carlos Urrejola' ? '#60A5FA' : '#888' }}>
               {cliente.vendedor.split(' ')[0]}
             </span>
           )}
-          {/* Último contacto — tipo */}
-          {cliente.ultimoContacto && (
-            <span style={{ fontSize: 10, color: '#555', fontWeight: 500 }}>
-              {cliente.ultimoContacto.tipo}
+          {cliente.categoria && (
+            <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: '#1C1C1C', color: '#666' }}>
+              {cliente.categoria}
+            </span>
+          )}
+          {cliente.ultimoPedido && (
+            <span style={{ fontSize: 10, color: '#444', marginLeft: 'auto' }}>
+              {formatFecha(cliente.ultimoPedido.ultimaFecha)}
             </span>
           )}
         </div>
 
-        {/* Location + last order */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {(cliente.localidad_entrega || cliente.localidad) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              <MapPin size={10} style={{ color: '#444' }} />
-              <span style={{ fontSize: 10, color: '#555' }}>{cliente.localidad_entrega || cliente.localidad}</span>
+        {/* Alert bar */}
+        {hasAlert && alertColor && (
+          <div style={{
+            marginTop: 8, paddingTop: 7, borderTop: '1px solid rgba(255,255,255,0.04)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Clock size={10} style={{ color: alertColor }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: alertColor }}>
+                {ALERT_LABEL[alertLevel!]}
+              </span>
+              <span style={{ fontSize: 10, color: '#555' }}>· {diasSin}d / {ciclo}d</span>
             </div>
-          )}
-          {cliente.ultimoPedido && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
-              <span style={{ fontSize: 10, color: '#555' }}>Pedido: {formatFecha(cliente.ultimoPedido.ultimaFecha)}</span>
-            </div>
-          )}
-        </div>
+            {waUrl && (
+              <a
+                href={waUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                  padding: '3px 9px', borderRadius: 8,
+                  background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.2)',
+                  color: '#25D366', fontSize: 10, fontWeight: 700, textDecoration: 'none',
+                }}
+              >
+                <MessageCircle size={11} /> WA
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -436,7 +512,161 @@ function RutaSection({ ruta, clientes, isAdmin, modoSeleccion, seleccionados, on
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
-type FiltroContacto = 'todos' | 'reciente' | 'pendiente' | 'nunca'
+type FiltroContacto = 'todos' | 'reciente' | 'pendiente' | 'nunca' | 'en_riesgo'
+
+// ── Sección "Por contactar hoy" ────────────────────────────────────────────
+function PorContactarSection({ clientes }: { clientes: Cliente[] }) {
+  const router = useRouter()
+  const [collapsed, setCollapsed] = useState(false)
+  const [showAll, setShowAll] = useState(false)
+
+  const criticos = clientes
+    .filter(c => c.frecuencia?.alert_level === 'critico')
+    .sort((a, b) => (b.frecuencia?.dias_sin_compra ?? 0) - (a.frecuencia?.dias_sin_compra ?? 0))
+  const vencidos = clientes
+    .filter(c => c.frecuencia?.alert_level === 'vencido')
+    .sort((a, b) => (b.frecuencia?.dias_sin_compra ?? 0) - (a.frecuencia?.dias_sin_compra ?? 0))
+
+  const total = criticos.length + vencidos.length
+  if (total === 0) return null
+
+  const allItems = [...criticos, ...vencidos]
+  const LIMIT = 6
+  const shown = showAll ? allItems : allItems.slice(0, LIMIT)
+
+  const fila = (c: Cliente) => {
+    const nivel = c.frecuencia?.alert_level as 'critico' | 'vencido'
+    const color = nivel === 'critico' ? '#EF4444' : '#F87171'
+    const seg = c.frecuencia?.segmento
+    const score = c.frecuencia?.score
+    const segStyle = seg ? (SEG_STYLE[seg] ?? SEG_STYLE.E) : null
+    const waUrl = c.telefono
+      ? `https://wa.me/${c.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${c.nombre_fantasia ?? ''}, te saluda El Regreso Beer Co. 🍺`)}`
+      : null
+
+    return (
+      <div
+        key={c.id}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
+        }}
+      >
+        {/* Seg badge */}
+        {segStyle && seg && (
+          <div style={{
+            width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+            background: segStyle.bg, border: `1px solid ${segStyle.border}`,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 900, color: segStyle.text, lineHeight: 1 }}>{seg}</span>
+            {score != null && <span style={{ fontSize: 7, fontWeight: 700, color: segStyle.text, opacity: 0.7 }}>{score}</span>}
+          </div>
+        )}
+
+        {/* Info */}
+        <div
+          style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+          onClick={() => router.push(`/ventas/clientes/${c.id}`)}
+        >
+          <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {c.nombre_fantasia}
+          </p>
+          <p style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
+            {c.vendedor?.split(' ')[0]}
+            {(c.localidad_entrega || c.localidad) && ` · ${c.localidad_entrega || c.localidad}`}
+          </p>
+        </div>
+
+        {/* Days */}
+        <div style={{ textAlign: 'right', flexShrink: 0, marginRight: 4 }}>
+          <p style={{ fontSize: 14, fontWeight: 800, color, lineHeight: 1 }}>{c.frecuencia?.dias_sin_compra}d</p>
+          <p style={{ fontSize: 9, color: '#555' }}>{c.frecuencia?.ciclo_promedio_dias}d ciclo</p>
+        </div>
+
+        {/* WhatsApp */}
+        {waUrl ? (
+          <a
+            href={waUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+              background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.2)',
+              color: '#25D366', textDecoration: 'none',
+            }}
+          >
+            <MessageCircle size={14} />
+          </a>
+        ) : (
+          <div style={{ width: 32, flexShrink: 0 }} />
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      borderRadius: 16, marginBottom: 16,
+      background: 'rgba(239,68,68,0.03)',
+      border: '1px solid rgba(239,68,68,0.18)',
+      overflow: 'hidden',
+    }}>
+      {/* Header clickable */}
+      <button
+        onClick={() => setCollapsed(v => !v)}
+        style={{
+          width: '100%', padding: '13px 16px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'none', border: 'none', cursor: 'pointer',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 18 }}>📋</span>
+          <div style={{ textAlign: 'left' }}>
+            <p style={{ fontSize: 13, fontWeight: 800, color: '#EF4444' }}>
+              {total} clientes a contactar
+            </p>
+            <p style={{ fontSize: 11, color: '#666' }}>
+              {criticos.length} urgentes · {vencidos.length} vencidos
+            </p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {criticos.length > 0 && (
+            <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, background: 'rgba(239,68,68,0.15)', color: '#EF4444' }}>
+              🔴 {criticos.length}
+            </span>
+          )}
+          {collapsed
+            ? <ChevronDown size={15} style={{ color: '#555' }} />
+            : <ChevronUp size={15} style={{ color: '#555' }} />
+          }
+        </div>
+      </button>
+
+      {!collapsed && (
+        <div style={{ padding: '0 16px 12px' }}>
+          {shown.map(c => fila(c))}
+          {allItems.length > LIMIT && (
+            <button
+              onClick={() => setShowAll(v => !v)}
+              style={{
+                width: '100%', marginTop: 8, padding: '8px 0',
+                background: 'none', border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: 8, color: '#666', fontSize: 12, cursor: 'pointer',
+              }}
+            >
+              {showAll ? '▲ Ver menos' : `▼ Ver ${allItems.length - LIMIT} más`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function ClientesClient({ clientes, periodo, totalesPorVendedor }: Props) {
   const isDesktop = useIsDesktop()
@@ -458,6 +688,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor }
         if (filtroContacto === 'reciente'  && !(dias !== null && dias <= 7)) return false
         if (filtroContacto === 'pendiente' && !(dias === null || dias > 7))  return false
         if (filtroContacto === 'nunca'     && dias !== null)                  return false
+        if (filtroContacto === 'en_riesgo' && !['critico', 'vencido'].includes(c.frecuencia?.alert_level ?? '')) return false
       }
       if (busqueda) {
         const b = busqueda.toLowerCase()
@@ -499,6 +730,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor }
   const cntReciente  = clientesDelVendedor.filter(c => { const d = diasDesde(c.ultimoContacto?.fecha); return d !== null && d <= 7 }).length
   const cntPendiente = clientesDelVendedor.filter(c => { const d = diasDesde(c.ultimoContacto?.fecha); return d === null || d > 7 }).length
   const cntNunca     = clientesDelVendedor.filter(c => !c.ultimoContacto).length
+  const cntEnRiesgo  = clientesDelVendedor.filter(c => ['critico', 'vencido'].includes(c.frecuencia?.alert_level ?? '')).length
 
   const sinContacto     = clientesFiltrados.filter(c => !c.ultimoContacto).length
   const contactoReciente = clientesFiltrados.filter(c => { const d = diasDesde(c.ultimoContacto?.fecha); return d !== null && d <= 7 }).length
@@ -645,10 +877,11 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor }
       {/* Filtro de estado de contacto */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
         {([
-          { value: 'todos',     label: 'Todos',           count: clientesDelVendedor.length, bg: '#1A1A1A',                       color: '#777',    activeBg: '#2A2A2A',                  activeColor: '#fff'    },
-          { value: 'reciente',  label: '✓ Contactados',   count: cntReciente,                bg: 'rgba(52,211,153,0.08)',          color: '#34D399', activeBg: 'rgba(52,211,153,0.2)',      activeColor: '#34D399' },
-          { value: 'pendiente', label: '⚠ Pendientes',    count: cntPendiente,               bg: 'rgba(245,158,11,0.08)',          color: '#F59E0B', activeBg: 'rgba(245,158,11,0.2)',      activeColor: '#F59E0B' },
-          { value: 'nunca',     label: '✕ Sin contacto',  count: cntNunca,                   bg: 'rgba(248,113,113,0.08)',         color: '#F87171', activeBg: 'rgba(248,113,113,0.2)',     activeColor: '#F87171' },
+          { value: 'todos',     label: 'Todos',            count: clientesDelVendedor.length, bg: '#1A1A1A',                       color: '#777',    activeBg: '#2A2A2A',                  activeColor: '#fff'    },
+          { value: 'reciente',  label: '✓ Contactados',    count: cntReciente,                bg: 'rgba(52,211,153,0.08)',          color: '#34D399', activeBg: 'rgba(52,211,153,0.2)',      activeColor: '#34D399' },
+          { value: 'pendiente', label: '⚠ Pendientes',     count: cntPendiente,               bg: 'rgba(245,158,11,0.08)',          color: '#F59E0B', activeBg: 'rgba(245,158,11,0.2)',      activeColor: '#F59E0B' },
+          { value: 'nunca',     label: '✕ Sin contacto',   count: cntNunca,                   bg: 'rgba(248,113,113,0.08)',         color: '#F87171', activeBg: 'rgba(248,113,113,0.2)',     activeColor: '#F87171' },
+          { value: 'en_riesgo', label: '🔴 Riesgo compra', count: cntEnRiesgo,                bg: 'rgba(239,68,68,0.08)',           color: '#EF4444', activeBg: 'rgba(239,68,68,0.2)',       activeColor: '#EF4444' },
         ] as const).map(op => {
           const active = filtroContacto === op.value
           return (
@@ -686,8 +919,16 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor }
         )}
       </p>
 
+      {/* Por contactar — visible en "todos" (sin búsqueda) o siempre en "en_riesgo" */}
+      {filtroContacto === 'en_riesgo' && (
+        <PorContactarSection clientes={clientesFiltrados} />
+      )}
+      {filtroContacto === 'todos' && !busqueda && (
+        <PorContactarSection clientes={clientesDelVendedor} />
+      )}
+
       {/* Routes */}
-      {porRuta.map(([ruta, clts]) => (
+      {filtroContacto !== 'en_riesgo' && porRuta.map(([ruta, clts]) => (
         <RutaSection
           key={ruta}
           ruta={ruta}

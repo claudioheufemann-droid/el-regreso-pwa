@@ -83,6 +83,45 @@ export default async function ClientesPage() {
     totalesPorVendedor[vend].venta  += v.total_sin_impuesto ?? 0
   }
 
+  // Scores y alertas de compra desde Supabase (RFM model)
+  const { data: scoreData } = await supabase
+    .rpc('get_client_scores')
+
+  const frecuenciaMap = new Map<string, {
+    ultima_compra: null
+    dias_sin_compra: number
+    ciclo_promedio_dias: number | null
+    total_pedidos: number
+    alert_level: string
+    dias_para_siguiente: null
+    siguiente_compra_estimada: string | null
+    score: number
+    segmento: string
+    confianza_score: string
+    litros_totales: number
+    revenue_total: number
+    pedidos_por_mes: number
+  }>()
+  for (const s of (scoreData ?? [])) {
+    if (s.nombre_fantasia) {
+      frecuenciaMap.set(s.nombre_fantasia, {
+        ultima_compra: null,
+        dias_sin_compra: s.dias_sin_compra ?? 0,
+        ciclo_promedio_dias: s.ciclo_promedio_dias ?? null,
+        total_pedidos: s.total_pedidos ?? 0,
+        alert_level: s.alert_level ?? 'sin_historial',
+        dias_para_siguiente: null,
+        siguiente_compra_estimada: s.siguiente_compra_estimada ?? null,
+        score: s.score ?? 0,
+        segmento: s.segmento ?? 'E',
+        confianza_score: s.confianza_score ?? 'baja',
+        litros_totales: s.litros_totales ?? 0,
+        revenue_total: s.revenue_total ?? 0,
+        pedidos_por_mes: s.pedidos_por_mes ?? 0,
+      })
+    }
+  }
+
   // Enriquecer clientes
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clientesEnriquecidos = (clientes ?? []).map((c: any) => ({
@@ -95,6 +134,7 @@ export default async function ClientesPage() {
           ventaPeriodo:  periodoMap.get(c.nombre_fantasia ?? '')?.ventaPeriodo  ?? 0,
         }
       : null,
+    frecuencia: frecuenciaMap.get(c.nombre_fantasia ?? '') ?? null,
   }))
 
   return (

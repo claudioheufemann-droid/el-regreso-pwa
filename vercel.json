@@ -16,6 +16,14 @@
     {
       "path": "/api/cron/task-alerts",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/contact-alerts",
+      "schedule": "30 11 * * 1-5"
+    },
+    {
+      "path": "/api/cron/weekly-briefing",
+      "schedule": "0 11 * * 1"
     }
   ]
 }

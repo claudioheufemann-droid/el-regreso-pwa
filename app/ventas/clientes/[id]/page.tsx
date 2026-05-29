@@ -14,6 +14,29 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
 
   if (!cliente) notFound()
 
+  // Score y frecuencia de compra desde client_scores (RFM model)
+  const { data: scoreRow } = await supabase
+    .from('client_scores')
+    .select('score, segmento, confianza_score, alert_level, dias_sin_compra, ciclo_promedio_dias, dias_para_siguiente, siguiente_compra_estimada, ultima_compra, total_pedidos, litros_totales, revenue_total, pedidos_por_mes')
+    .eq('nombre_fantasia', cliente.nombre_fantasia ?? '')
+    .single()
+
+  const frecuenciaData = scoreRow ? {
+    ultima_compra: scoreRow.ultima_compra ?? null,
+    dias_sin_compra: scoreRow.dias_sin_compra ?? null,
+    ciclo_promedio_dias: scoreRow.ciclo_promedio_dias ?? null,
+    total_pedidos: scoreRow.total_pedidos ?? 0,
+    alert_level: scoreRow.alert_level ?? 'sin_historial',
+    dias_para_siguiente: scoreRow.dias_para_siguiente ?? null,
+    siguiente_compra_estimada: scoreRow.siguiente_compra_estimada ?? null,
+    score: scoreRow.score ?? 0,
+    segmento: scoreRow.segmento ?? 'E',
+    confianza_score: scoreRow.confianza_score ?? 'baja',
+    litros_totales: scoreRow.litros_totales ?? 0,
+    revenue_total: scoreRow.revenue_total ?? 0,
+    pedidos_por_mes: scoreRow.pedidos_por_mes ?? 0,
+  } : null
+
   // Historial completo de ventas + contactos + deuda en paralelo
   const [{ data: ventas }, { data: contactos }, { data: deudorData }] = await Promise.all([
     supabase
@@ -41,6 +64,7 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
       ventas={ventas ?? []}
       contactos={contactos ?? []}
       deudor={deudorData ?? null}
+      frecuencia={frecuenciaData ?? null}
     />
   )
 }
