@@ -146,6 +146,11 @@ function getInitial(name: string) {
 }
 
 // ── Inventory Depletion Bar (HERO) ────────────────────────────────────────────
+// Stock de seguridad = cuando quedan 7 días para el próximo pedido estimado.
+// El marcador se posiciona dinámicamente según el ciclo del cliente:
+//   Ej: ciclo 30d → marker al día 23 (30-7=23) = 23.3% restante del lado derecho
+//   Ej: ciclo 14d → marker al día  7 (14-7= 7) = 50% restante
+//   Ej: ciclo 60d → marker al día 53 (60-7=53) = 11.7% restante
 function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
   const ciclo = frecuencia.ciclo_promedio_dias ?? 0
   const diasSin = frecuencia.dias_sin_compra ?? 0
@@ -153,20 +158,38 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
   const siguiente = frecuencia.siguiente_compra_estimada
   const ultimaCompra = frecuencia.ultima_compra
 
-  const pct = ciclo > 0 ? Math.min(100, Math.round((diasSin / ciclo) * 100)) : 0
-  const invPct = Math.max(0, 100 - pct) // inventario restante
+  // % del ciclo consumido (0 = recién pedido, 100 = completamente vencido)
+  const consumidoPct = ciclo > 0 ? Math.min(100, Math.round((diasSin / ciclo) * 100)) : 0
+  // % inventario restante (valor que se muestra prominentemente)
+  const invPct = Math.max(0, 100 - consumidoPct)
+
+  // ── Stock de seguridad dinámico ──────────────────────────────────────────
+  // El marcador está donde quedan exactamente 7 días para el próximo pedido.
+  // En términos del inventario restante: safetyInvPct = 7/ciclo * 100
+  const SAFETY_DIAS = 7
+  const safetyInvPct = ciclo > SAFETY_DIAS
+    ? Math.round((SAFETY_DIAS / ciclo) * 100)   // p.ej. 30d → 23%, 60d → 12%
+    : 50                                          // fallback si el ciclo es ≤7 días
+
+  // El cliente está en zona de stock de seguridad si le quedan ≤ 7 días
+  const enZonaSeguridad = diasRestantes <= SAFETY_DIAS || invPct <= safetyInvPct
 
   const alertCfg = ALERT_CFG[frecuencia.alert_level] ?? ALERT_CFG.sin_historial
-  const isWarning = ['proximo', 'vencido', 'critico'].includes(frecuencia.alert_level)
+  const isWarning = enZonaSeguridad || ['proximo', 'vencido', 'critico'].includes(frecuencia.alert_level)
 
-  // Color de la barra según inventory remaining
-  const barColor = invPct > 50 ? '#34D399'
-    : invPct > 25 ? '#F59E0B'
-    : invPct > 10 ? '#F97316'
-    : '#EF4444'
+  // Color de la barra — cambia según si está sobre o bajo el umbral de seguridad
+  const barColor = invPct > safetyInvPct + 10 ? '#34D399'  // verde: bien arriba del umbral
+    : invPct > safetyInvPct           ? '#84CC16'            // lima: acercándose
+    : invPct > safetyInvPct / 2       ? '#F59E0B'            // naranja: en zona de seguridad
+    : invPct > 5                       ? '#F97316'            // rojo-naranja: casi vencido
+    : '#EF4444'                                              // rojo: vencido/crítico
 
-  // Gradiente del track
-  const trackGradient = 'linear-gradient(to right, #34D399 0%, #84CC16 35%, #EAB308 50%, #F97316 75%, #EF4444 100%)'
+  // El marcador visual del safety stock se pone al safetyInvPct% del lado izquierdo
+  // (la barra va de LLENA izquierda → VACÍA derecha, el fill muestra invPct desde izq.)
+  const safetyMarkerLeft = safetyInvPct  // % desde la izquierda = % restante en el umbral
+
+  // Gradiente del track de fondo (visual)
+  const trackGradient = `linear-gradient(to right, #34D399 0%, #84CC16 ${100 - safetyInvPct - 10}%, #EAB308 ${100 - safetyInvPct}%, #F97316 ${100 - safetyInvPct / 2}%, #EF4444 100%)`
 
   return (
     <div style={{
@@ -188,6 +211,11 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
             </span>
             <span style={{ fontSize: 14, color: '#666' }}>inventario restante</span>
           </div>
+          {ciclo > 0 && (
+            <p style={{ fontSize: 11, color: '#555', marginTop: 4 }}>
+              Basado en su frecuencia de compra (cada {ciclo} días)
+            </p>
+          )}
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{
@@ -199,9 +227,13 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
               {alertCfg.icon} {alertCfg.label}
             </span>
           </div>
-          {diasRestantes > 0 && (
+          {diasRestantes > 0 ? (
             <p style={{ fontSize: 13, color: '#888' }}>
               <span style={{ fontWeight: 800, color: barColor }}>{diasRestantes} días</span> restantes
+            </p>
+          ) : diasSin > 0 && (
+            <p style={{ fontSize: 13, color: '#888' }}>
+              <span style={{ fontWeight: 800, color: '#EF4444' }}>{diasSin}d</span> sin comprar
             </p>
           )}
         </div>
@@ -209,47 +241,77 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
 
       {/* Progress bar */}
       <div style={{ position: 'relative', marginBottom: 10 }}>
-        {/* Track */}
+        {/* Track with gradient background */}
         <div style={{
-          height: 12, borderRadius: 12, overflow: 'hidden',
-          background: 'rgba(255,255,255,0.06)',
+          height: 14, borderRadius: 12, overflow: 'visible',
+          background: 'rgba(255,255,255,0.05)',
           position: 'relative',
         }}>
-          {/* Gradient background (full track) */}
-          <div style={{ position: 'absolute', inset: 0, background: trackGradient, opacity: 0.2 }} />
-          {/* Inventory fill — shrinking from right */}
+          {/* Subtle gradient hint on track */}
+          <div style={{
+            position: 'absolute', inset: 0, background: trackGradient, opacity: 0.15,
+            borderRadius: 12, overflow: 'hidden',
+          }} />
+
+          {/* Inventory fill — lleno a la izquierda, vacía hacia la derecha */}
           <div style={{
             position: 'absolute', top: 0, left: 0,
             width: `${invPct}%`,
             height: '100%',
-            background: barColor,
+            background: `linear-gradient(to right, ${barColor}ee, ${barColor})`,
             borderRadius: 12,
-            boxShadow: `0 0 12px ${barColor}60`,
+            boxShadow: `0 0 16px ${barColor}50`,
             transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)',
           }} />
-          {/* Safety stock marker at 50% */}
-          <div style={{
-            position: 'absolute', left: '50%', top: 0, bottom: 0,
-            width: 2, background: '#F59E0B',
-            boxShadow: '0 0 6px #F59E0B',
-          }} />
+
+          {/* Safety stock marker — dinámico según el ciclo */}
+          {ciclo > 0 && (
+            <div style={{
+              position: 'absolute',
+              left: `${safetyMarkerLeft}%`,
+              top: -4, bottom: -4,
+              width: 2,
+              background: enZonaSeguridad ? '#EF4444' : '#F59E0B',
+              boxShadow: enZonaSeguridad ? '0 0 8px #EF4444' : '0 0 8px #F59E0B',
+              zIndex: 2,
+              borderRadius: 2,
+            }} />
+          )}
         </div>
 
-        {/* Labels below bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-          <div style={{ textAlign: 'left' }}>
+        {/* Labels below bar — posicionados dinámicamente */}
+        <div style={{ position: 'relative', marginTop: 10, height: 36 }}>
+          {/* Label izquierda: pedido recibido */}
+          <div style={{ position: 'absolute', left: 0, top: 0 }}>
             <p style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>Pedido recibido</p>
-            <p style={{ fontSize: 12, fontWeight: 700, color: '#888' }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#666' }}>
               {ultimaCompra ? fFecha(ultimaCompra) : '—'}
             </p>
           </div>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 10, color: '#F59E0B', marginBottom: 2 }}>Stock de seguridad</p>
-            <p style={{ fontSize: 12, fontWeight: 700, color: '#F59E0B' }}>50%</p>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: 10, color: '#555', marginBottom: 2 }}>Próximo pedido</p>
-            <p style={{ fontSize: 12, fontWeight: 700, color: alertCfg.color }}>
+
+          {/* Label del marcador de safety stock — posicionado con el marcador */}
+          {ciclo > 0 && (
+            <div style={{
+              position: 'absolute',
+              left: `${safetyMarkerLeft}%`,
+              top: 0,
+              transform: 'translateX(-50%)',
+              textAlign: 'center',
+              minWidth: 80,
+            }}>
+              <p style={{ fontSize: 10, color: enZonaSeguridad ? '#EF4444' : '#F59E0B', marginBottom: 2, fontWeight: 700 }}>
+                Stock seguridad
+              </p>
+              <p style={{ fontSize: 11, fontWeight: 800, color: enZonaSeguridad ? '#EF4444' : '#F59E0B' }}>
+                {SAFETY_DIAS}d antes
+              </p>
+            </div>
+          )}
+
+          {/* Label derecha: próximo pedido */}
+          <div style={{ position: 'absolute', right: 0, top: 0 }}>
+            <p style={{ fontSize: 10, color: '#555', marginBottom: 2, textAlign: 'right' }}>Próximo pedido</p>
+            <p style={{ fontSize: 12, fontWeight: 700, color: alertCfg.color, textAlign: 'right' }}>
               {siguiente ? fFecha(siguiente) : '—'}
             </p>
           </div>
@@ -258,28 +320,34 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
 
       {/* Info row */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 16,
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 20,
         paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.05)',
       }}>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>Basado en ciclo</p>
+          <p style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>Ciclo promedio</p>
           <p style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>
-            {ciclo ? `Cada ${ciclo}d` : '—'}
+            {ciclo ? `${ciclo} días` : '—'}
           </p>
         </div>
-        <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.06)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
           <p style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>Días sin comprar</p>
           <p style={{ fontSize: 18, fontWeight: 800, color: barColor }}>{diasSin}d</p>
         </div>
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
+          <p style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>Días restantes</p>
+          <p style={{ fontSize: 18, fontWeight: 800, color: diasRestantes <= SAFETY_DIAS ? '#EF4444' : '#34D399' }}>
+            {diasRestantes > 0 ? `${diasRestantes}d` : 'Vencido'}
+          </p>
+        </div>
+        <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
           <p style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>Próximo estimado</p>
-          <p style={{ fontSize: 16, fontWeight: 800, color: alertCfg.color }}>
+          <p style={{ fontSize: 14, fontWeight: 800, color: alertCfg.color }}>
             {siguiente ? fFecha(siguiente, true) : '—'}
           </p>
         </div>
       </div>
 
-      {/* Warning box */}
+      {/* Warning box — aparece cuando entra en zona de seguridad (≤7 días) */}
       {isWarning && (
         <div style={{
           marginTop: 16, padding: '12px 16px', borderRadius: 12,
@@ -287,13 +355,22 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <AlertTriangle size={16} color={alertCfg.color} />
-          <p style={{ fontSize: 13, color: alertCfg.color, fontWeight: 600 }}>
-            {frecuencia.alert_level === 'proximo'
-              ? 'Se recomienda contactar al cliente para reposición esta semana.'
-              : frecuencia.alert_level === 'vencido'
-              ? 'El ciclo de compra ha vencido. Contactar con urgencia.'
-              : '⚠ Cliente en estado crítico. Requiere contacto inmediato.'}
-          </p>
+          <div>
+            <p style={{ fontSize: 13, color: alertCfg.color, fontWeight: 700, marginBottom: 2 }}>
+              {diasRestantes <= SAFETY_DIAS && diasRestantes > 0
+                ? `⚠ Stock de seguridad — quedan ${diasRestantes} días para el próximo pedido.`
+                : frecuencia.alert_level === 'vencido'
+                ? '⚠ El ciclo de compra ha vencido. Contactar con urgencia.'
+                : frecuencia.alert_level === 'critico'
+                ? '🔴 Cliente en estado crítico. Requiere contacto inmediato.'
+                : '⚠ Se recomienda contactar al cliente para reposición esta semana.'}
+            </p>
+            <p style={{ fontSize: 11, color: '#666' }}>
+              {ciclo > 0
+                ? `Stock de seguridad activo cuando restan ${SAFETY_DIAS} días de ${ciclo} del ciclo habitual.`
+                : 'Contactar para verificar necesidad de reposición.'}
+            </p>
+          </div>
         </div>
       )}
     </div>
