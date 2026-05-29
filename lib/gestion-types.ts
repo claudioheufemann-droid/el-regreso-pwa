@@ -50,6 +50,12 @@ export const MACRO_AREAS = {
     code: 'AD',
     areas: ['R. Humanos', 'Contabilidad', 'Finanzas'] as const,
   },
+  produccion: {
+    label: 'Área de Producción',
+    color: '#2ECC71',
+    code: 'PR',
+    areas: ['Producción', 'Calidad', 'Bodega'] as const,
+  },
 } as const
 
 export type MacroKey = keyof typeof MACRO_AREAS
@@ -57,6 +63,7 @@ export type MacroKey = keyof typeof MACRO_AREAS
 /** Devuelve la macro categoría a la que pertenece un área */
 export function getMacroKey(area: string): MacroKey {
   if ((MACRO_AREAS.administracion.areas as readonly string[]).includes(area)) return 'administracion'
+  if ((MACRO_AREAS.produccion.areas as readonly string[]).includes(area)) return 'produccion'
   return 'comercial'
 }
 
@@ -69,6 +76,7 @@ export function eligibleUsers(users: RcUser[], area: string): RcUser[] {
 export const AREAS = [
   ...MACRO_AREAS.comercial.areas,
   ...MACRO_AREAS.administracion.areas,
+  ...MACRO_AREAS.produccion.areas,
 ] as const
 export const CEREBRO_AREA = 'Mi Cerebro'
 export const ALL_AREAS = [...AREAS, CEREBRO_AREA] as const
@@ -87,6 +95,10 @@ export const AREA_CFG: Record<string, { color: string; dim: string; code: string
   'R. Humanos':           { color: '#8E44AD', dim: '#120A16', code: 'RH' },
   'Contabilidad':         { color: '#16A085', dim: '#061210', code: 'CT' },
   'Finanzas':             { color: '#27AE60', dim: '#081409', code: 'FZ' },
+  // Producción
+  'Producción':           { color: '#2ECC71', dim: '#071A0E', code: 'PR' },
+  'Calidad':              { color: '#1ABC9C', dim: '#061512', code: 'CA' },
+  'Bodega':               { color: '#F39C12', dim: '#16100A', code: 'BD' },
   // Personal
   'Mi Cerebro':           { color: '#9B59B6', dim: '#100A14', code: 'MC' },
 }
