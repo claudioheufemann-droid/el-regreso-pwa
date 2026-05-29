@@ -69,6 +69,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
+  const datePickerOpenRef = useRef(false)
 
   const canSubmit = titulo.trim().length > 0 && plazo && selectedIds.length > 0
 
@@ -437,7 +438,10 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
             <div style={{ position: 'relative' }}>
               {/* Botón visible — misma altura que los botones de prioridad */}
               <div
-                onClick={() => dateInputRef.current?.showPicker?.()}
+                onClick={() => {
+                  if (datePickerOpenRef.current) return
+                  dateInputRef.current?.showPicker?.()
+                }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 9,
                   padding: '9px 12px', borderRadius: 10, height: 42, boxSizing: 'border-box',
@@ -455,6 +459,8 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                 type="date"
                 value={plazo}
                 onChange={e => setPlazo(e.target.value)}
+                onFocus={() => { datePickerOpenRef.current = true }}
+                onBlur={() => { datePickerOpenRef.current = false }}
                 min={minDate}
                 required
                 style={{
