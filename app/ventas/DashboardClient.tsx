@@ -1389,36 +1389,37 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
 
 // ── MisionesWidgetCard ────────────────────────────────────────────────────────
 function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
-  const router = useRouter()
-  const SEG_C: Record<string, string> = { A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171' }
+  const router   = useRouter()
+  const [vtab, setVtab] = useState<string>('all')
 
-  const pendientes = misiones.filter(m => m.estado === 'pendiente')
+  const SEG_C: Record<string, string> = { A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171' }
+  const VC: Record<string, string>    = { 'Javier Badilla': '#60A5FA', 'Carlos Urrejola': '#34D399' }
+
+  const vendedores = [...new Set(misiones.map(m => m.vendedor))]
+  const vista      = vtab === 'all' ? misiones : misiones.filter(m => m.vendedor === vtab)
+
+  const total      = misiones.length
+  const pctTotal   = total > 0 ? Math.round((misiones.filter(m => m.estado === 'completada').length / total) * 100) : 0
+
+  const pendientes = vista.filter(m => m.estado === 'pendiente')
   const criticos   = pendientes.filter(m => m.alert_level === 'critico')
   const vencidos   = pendientes.filter(m => m.alert_level === 'vencido')
   const proximos   = pendientes.filter(m => m.alert_level === 'proximo')
-  const completadas = misiones.filter(m => m.estado === 'completada')
-  const total = misiones.length
-  const pct = total > 0 ? Math.round((completadas.length / total) * 100) : 0
+  const completadas = vista.filter(m => m.estado === 'completada')
+  const pct        = vista.length > 0 ? Math.round((completadas.length / vista.length) * 100) : 0
 
   return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 20, overflow: 'hidden',
-    }}>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, overflow: 'hidden' }}>
       <div style={{ padding: '16px 18px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Target size={15} color="var(--gold)" />
             <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 14 }}>Misiones esta semana</h3>
           </div>
-          <button
-            onClick={() => router.push('/ventas/misiones')}
-            style={{
-              fontSize: 11, fontWeight: 700, color: 'var(--gold)',
-              background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.2)',
-              borderRadius: 8, padding: '4px 10px', cursor: 'pointer',
-            }}
-          >
+          <button onClick={() => router.push('/ventas/misiones')}
+            style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'rgba(212,175,55,0.1)',
+              border: '1px solid rgba(212,175,55,0.2)', borderRadius: 8, padding: '4px 10px', cursor: 'pointer' }}>
             Ver plan →
           </button>
         </div>
@@ -1431,56 +1432,100 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
           </div>
         ) : (
           <>
-            {/* Progreso */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 6, overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%', borderRadius: 6, transition: 'width 0.4s',
-                  width: `${pct}%`,
-                  background: pct === 100 ? '#34D399' : pct > 60 ? '#F59E0B' : '#60A5FA',
-                }} />
+            {/* Progreso global */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pctTotal}%`, borderRadius: 4,
+                  background: pctTotal === 100 ? '#34D399' : pctTotal > 60 ? '#F59E0B' : '#60A5FA', transition: 'width 0.4s' }} />
               </div>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>
-                {completadas.length}/{total}
+                {misiones.filter(m=>m.estado==='completada').length}/{total} · {pctTotal}%
               </span>
             </div>
 
+            {/* Tabs por vendedor (si hay +1) */}
+            {vendedores.length > 1 && (
+              <div style={{ display: 'flex', gap: 5, marginBottom: 12 }}>
+                <button onClick={() => setVtab('all')}
+                  style={{ flex: 1, padding: '5px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                    background: vtab === 'all' ? 'rgba(212,175,55,0.15)' : 'transparent',
+                    color: vtab === 'all' ? 'var(--gold)' : 'var(--muted)',
+                    outline: vtab === 'all' ? '1px solid rgba(212,175,55,0.35)' : '1px solid var(--border)',
+                    fontSize: 10, fontWeight: 700 }}>
+                  Todos
+                </button>
+                {vendedores.map(v => {
+                  const c   = VC[v] ?? '#888'
+                  const ms  = misiones.filter(m => m.vendedor === v)
+                  const done2 = ms.filter(m => m.estado === 'completada').length
+                  const pend2 = ms.filter(m => m.estado === 'pendiente').length
+                  const act = vtab === v
+                  return (
+                    <button key={v} onClick={() => setVtab(v)}
+                      style={{ flex: 1, padding: '5px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                        background: act ? `${c}18` : 'transparent',
+                        outline: act ? `1px solid ${c}44` : '1px solid var(--border)',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: c }} />
+                        <span style={{ fontSize: 10, fontWeight: 800, color: act ? c : 'var(--muted)' }}>{v.split(' ')[0]}</span>
+                      </div>
+                      <span style={{ fontSize: 9, color: 'var(--muted)' }}>{done2}/{ms.length}</span>
+                      {pend2 > 0 && <span style={{ fontSize: 8, color: '#EF4444', fontWeight: 700 }}>{pend2} pend.</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Barra progreso vendedor seleccionado */}
+            {vtab !== 'all' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 10, color: VC[vtab] ?? '#888', fontWeight: 700, flexShrink: 0 }}>{vtab.split(' ')[0]}</span>
+                <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, borderRadius: 4,
+                    background: VC[vtab] ?? '#888', transition: 'width 0.4s' }} />
+                </div>
+                <span style={{ fontSize: 10, color: 'var(--muted)', flexShrink: 0 }}>{completadas.length}/{vista.length} · {pct}%</span>
+              </div>
+            )}
+
             {/* Contadores */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
               {[
                 { label: '🔴 Urgentes', count: criticos.length,  color: '#EF4444', bg: 'rgba(239,68,68,0.08)',    border: 'rgba(239,68,68,0.2)'    },
                 { label: '⚠ Vencidos',  count: vencidos.length,  color: '#F87171', bg: 'rgba(248,113,113,0.06)', border: 'rgba(248,113,113,0.15)' },
                 { label: '⏰ Próximos', count: proximos.length,  color: '#F59E0B', bg: 'rgba(245,158,11,0.06)',  border: 'rgba(245,158,11,0.15)'  },
               ].map(s => (
-                <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: '8px 6px', textAlign: 'center' }}>
+                <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: '7px 4px', textAlign: 'center' }}>
                   <p style={{ fontSize: 9, color: s.color, fontWeight: 700, marginBottom: 2 }}>{s.label}</p>
-                  <p style={{ fontSize: 20, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.count}</p>
+                  <p style={{ fontSize: 18, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.count}</p>
                 </div>
               ))}
             </div>
 
             {/* Top pendientes */}
-            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.07em', marginBottom: 8 }}>
-              PENDIENTES DE CONTACTO
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.07em', marginBottom: 6 }}>
+              PENDIENTES DE CONTACTO{vtab !== 'all' ? ` · ${vtab.split(' ')[0].toUpperCase()}` : ''}
             </p>
             {[...criticos, ...vencidos, ...proximos].slice(0, 4).map(c => {
               const alertColor = c.alert_level === 'critico' ? '#EF4444' : c.alert_level === 'vencido' ? '#F87171' : '#F59E0B'
-              const segColor = SEG_C[c.segmento] ?? '#888'
+              const segColor   = SEG_C[c.segmento] ?? '#888'
+              const vendColor  = VC[c.vendedor] ?? '#888'
               return (
-                <div key={`${c.vendedor}|||${c.nombre_fantasia}`} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
-                }}>
-                  <span style={{
-                    fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 5,
-                    background: `${segColor}22`, color: segColor, border: `1px solid ${segColor}44`, flexShrink: 0,
-                  }}>{c.segmento} {c.score}</span>
+                <div key={`${c.vendedor}|||${c.nombre_fantasia}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <span style={{ fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 5,
+                    background: `${segColor}22`, color: segColor, border: `1px solid ${segColor}44`, flexShrink: 0 }}>
+                    {c.segmento} {c.score}
+                  </span>
                   <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {c.nombre_fantasia}
                   </p>
-                  <p style={{ fontSize: 11, fontWeight: 800, color: alertColor, flexShrink: 0 }}>
-                    {c.dias_sin_compra}d
-                  </p>
+                  {vtab === 'all' && (
+                    <span style={{ fontSize: 9, color: vendColor, fontWeight: 700, flexShrink: 0 }}>{c.vendedor.split(' ')[0]}</span>
+                  )}
+                  <p style={{ fontSize: 11, fontWeight: 800, color: alertColor, flexShrink: 0 }}>{c.dias_sin_compra}d</p>
                 </div>
               )
             })}

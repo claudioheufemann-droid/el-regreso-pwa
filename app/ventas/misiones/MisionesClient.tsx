@@ -146,25 +146,33 @@ export default function MisionesClient({
   const [verTodas,  setVerTodas]  = useState(false)
   const [prioFiltro,setPrioFiltro]= useState<'todas'|'Alta'|'Media'|'Baja'>('todas')
   const [showFiltro,setShowFiltro]= useState(false)
+  const [vendorTab,  setVendorTab] = useState<string>('all')
 
   useEffect(() => { setMisiones(misionesProp) }, [misionesProp])
 
-  // ── Stats ───────────────────────────────────────────────────────────────────
-  const total       = misiones.length
-  const completadas  = misiones.filter(m=>m.estado==='completada')
-  const pendientes   = misiones.filter(m=>m.estado==='pendiente')
+  // ── Vendedores únicos (para tabs admin) ───────────────────────────────────
+  const vendedores = useMemo(()=>[...new Set(misiones.map(m=>m.vendedor))], [misiones])
+
+  // ── Misiones filtradas por vendedor seleccionado ──────────────────────────
+  const misionesActivas = useMemo(()=>
+    vendorTab==='all' ? misiones : misiones.filter(m=>m.vendedor===vendorTab)
+  , [misiones, vendorTab])
+
+  // ── Stats (siempre sobre misionesActivas) ─────────────────────────────────
+  const total       = misionesActivas.length
+  const completadas  = misionesActivas.filter(m=>m.estado==='completada')
+  const pendientes   = misionesActivas.filter(m=>m.estado==='pendiente')
   const done         = completadas.length
   const pct          = total>0 ? Math.round((done/total)*100) : 0
-  const noContactar  = misiones.filter(m=>m.alert_level==='proximo' && m.estado==='pendiente').length
+  const noContactar  = misionesActivas.filter(m=>m.alert_level==='proximo' && m.estado==='pendiente').length
 
   const porPrioridad = {
-    Alta:  misiones.filter(m=>m.prioridad==='Alta').length,
-    Media: misiones.filter(m=>m.prioridad==='Media').length,
-    Baja:  misiones.filter(m=>m.prioridad==='Baja').length,
+    Alta:  misionesActivas.filter(m=>m.prioridad==='Alta').length,
+    Media: misionesActivas.filter(m=>m.prioridad==='Media').length,
+    Baja:  misionesActivas.filter(m=>m.prioridad==='Baja').length,
   }
 
-  // Desglose por vendedor (admin)
-  const vendedores = useMemo(()=>[...new Set(misiones.map(m=>m.vendedor))], [misiones])
+  // Desglose por vendedor (admin — siempre sobre todas las misiones)
   const desglose = vendedores.map(v=>{
     const ms = misiones.filter(m=>m.vendedor===v)
     return { v, total:ms.length, done:ms.filter(m=>m.estado==='completada').length }
@@ -203,10 +211,10 @@ export default function MisionesClient({
 
   // ── Lista filtrada ──────────────────────────────────────────────────────────
   const misionesVista = useMemo(()=>{
-    let res = misiones
+    let res = misionesActivas
     if (prioFiltro !== 'todas') res = res.filter(m=>m.prioridad===prioFiltro)
     return res
-  }, [misiones, prioFiltro])
+  }, [misionesActivas, prioFiltro])
 
   const LIMITE = 7
   const misionesMostradas = verTodas ? misionesVista : misionesVista.slice(0, LIMITE)
@@ -239,6 +247,33 @@ export default function MisionesClient({
         {genError && (
           <div style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.25)', borderRadius:10, padding:'10px 14px', marginBottom:12 }}>
             <p style={{ fontSize:12, color:'#F87171' }}>{genError}</p>
+          </div>
+        )}
+
+        {/* Tabs vendedor (solo admin) */}
+        {isAdmin && vendedores.length > 1 && (
+          <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+            <button onClick={()=>{setVendorTab('all');setVerTodas(false)}}
+              style={{ flex:1, padding:'8px', borderRadius:10, border:'none', cursor:'pointer',
+                background: vendorTab==='all'?'var(--gold)':'var(--surface)',
+                color: vendorTab==='all'?'#080808':'var(--muted)', fontSize:11, fontWeight:vendorTab==='all'?800:500 }}>
+              Todos ({misiones.length})
+            </button>
+            {vendedores.map(v=>{
+              const c = VEND_COLOR[v]??'#888'
+              const cnt = misiones.filter(m=>m.vendedor===v).length
+              const active = vendorTab===v
+              return (
+                <button key={v} onClick={()=>{setVendorTab(v);setVerTodas(false)}}
+                  style={{ flex:1, padding:'8px', borderRadius:10, border:'none', cursor:'pointer',
+                    background: active?`${c}22`:'var(--surface)',
+                    color: active?c:'var(--muted)',
+                    outline: active?`1px solid ${c}55`:'1px solid var(--border)',
+                    fontSize:11, fontWeight:active?800:500 }}>
+                  {v.split(' ')[0]} ({cnt})
+                </button>
+              )
+            })}
           </div>
         )}
 
@@ -338,6 +373,45 @@ export default function MisionesClient({
       {genError && (
         <div style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.25)', borderRadius:12, padding:'12px 16px', marginBottom:16 }}>
           <p style={{ fontSize:12, color:'#F87171', fontWeight:600 }}>{genError}</p>
+        </div>
+      )}
+
+      {/* Selector vendedor (solo admin, solo cuando hay +1 vendedor) */}
+      {isAdmin && vendedores.length > 1 && (
+        <div style={{ display:'flex', gap:8, marginBottom:16, alignItems:'center' }}>
+          <span style={{ fontSize:11, color:'var(--muted)', fontWeight:600, flexShrink:0 }}>VER:</span>
+          <button onClick={()=>setVendorTab('all')}
+            style={{ padding:'7px 16px', borderRadius:10, border:'none', cursor:'pointer',
+              background: vendorTab==='all'?'var(--gold)':'var(--surface)',
+              color: vendorTab==='all'?'#080808':'var(--muted)',
+              outline: vendorTab==='all'?'none':'1px solid var(--border)',
+              fontSize:12, fontWeight:vendorTab==='all'?800:500 }}>
+            Todos <span style={{ fontSize:11, opacity:0.7 }}>({misiones.length})</span>
+          </button>
+          {vendedores.map(v=>{
+            const color = VEND_COLOR[v]??'#888'
+            const cnt   = misiones.filter(m=>m.vendedor===v).length
+            const pend  = misiones.filter(m=>m.vendedor===v&&m.estado==='pendiente').length
+            const active = vendorTab===v
+            return (
+              <button key={v} onClick={()=>setVendorTab(v)}
+                style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 14px', borderRadius:10, cursor:'pointer', border:'none',
+                  background: active?`${color}18`:'var(--surface)',
+                  outline: active?`1px solid ${color}55`:'1px solid var(--border)' }}>
+                <div style={{ width:8, height:8, borderRadius:'50%', background:color, flexShrink:0 }}/>
+                <span style={{ fontSize:12, color:active?color:'var(--cream)', fontWeight:active?800:500 }}>
+                  {v.split(' ')[0]}
+                </span>
+                <span style={{ fontSize:11, fontWeight:700, color:active?color:'var(--muted)' }}>{cnt}</span>
+                {pend>0 && (
+                  <span style={{ fontSize:10, fontWeight:800, padding:'1px 6px', borderRadius:20,
+                    background:'rgba(239,68,68,0.12)', color:'#EF4444', border:'1px solid rgba(239,68,68,0.25)' }}>
+                    {pend} pend.
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
       )}
 
