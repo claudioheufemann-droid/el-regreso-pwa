@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { RcUser, RcTask, AREA_CFG, eligibleUsers, MACRO_AREAS } from '@/lib/gestion-types'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
@@ -51,6 +51,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   const [descripcion, setDescripcion] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showResponsablesDropdown, setShowResponsablesDropdown] = useState(false)
+  const responsablesRef = useRef<HTMLDivElement>(null)
   const [plazo, setPlazo] = useState('')
   const [fechaInicio, setFechaInicio] = useState('')
   const [priority, setPriority] = useState('Alta')
@@ -160,6 +161,16 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
       setLoading(false); setSavingDraft(false)
     }
   }
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (responsablesRef.current && !responsablesRef.current.contains(e.target as Node)) {
+        setShowResponsablesDropdown(false)
+      }
+    }
+    if (showResponsablesDropdown) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showResponsablesDropdown])
 
   const minDate = new Date().toISOString().split('T')[0]
   const priorityCfg = PRIORITY_OPTIONS.find(p => p.label === priority) ?? PRIORITY_OPTIONS[0]
@@ -290,7 +301,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
           </div>
 
           {/* Responsables */}
-          <div style={{ position: 'relative' }}>
+          <div ref={responsablesRef} style={{ position: 'relative' }}>
             <label style={lbl}>Responsables *</label>
             <button
               type="button"
@@ -372,6 +383,19 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                     </button>
                   )
                 })}
+                {selectedIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowResponsablesDropdown(false)}
+                    style={{
+                      width: '100%', padding: '9px 14px', border: 'none', borderTop: '1px solid rgba(255,255,255,0.06)',
+                      background: `${cfg.color}15`, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                      color: cfg.color, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}
+                  >
+                    ✓ Listo ({selectedIds.length} seleccionado{selectedIds.length > 1 ? 's' : ''})
+                  </button>
+                )}
               </div>
             )}
           </div>
