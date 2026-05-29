@@ -58,7 +58,7 @@ interface Props {
   productRanking: ProductRank[]
   productDetail: Record<string, ProductBuyer[]>
   vendedoresScope: string[]
-  riesgoClientes: RiesgoCliente[]
+  riesgoClientes: PlanCliente[]
   planSemana: PlanCliente[]
 }
 
@@ -1273,7 +1273,8 @@ function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; o
 }
 
 // ── RiesgoClientesCard ────────────────────────────────────────────────────────
-function RiesgoClientesCard({ clientes, colors }: { clientes: RiesgoCliente[]; colors: Record<string, string> }) {
+const SEG_COLORS_RISK: Record<string, string> = { A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171' }
+function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; colors: Record<string, string> }) {
   const router = useRouter()
   const criticos = clientes.filter(c => c.alert_level === 'critico')
   const vencidos  = clientes.filter(c => c.alert_level === 'vencido')
@@ -1341,9 +1342,20 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: RiesgoCliente[]; c
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {c.nombre_fantasia}
-                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        {c.segmento && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 5,
+                            background: `${SEG_COLORS_RISK[c.segmento] ?? '#888'}22`,
+                            color: SEG_COLORS_RISK[c.segmento] ?? '#888',
+                            border: `1px solid ${SEG_COLORS_RISK[c.segmento] ?? '#888'}44`,
+                            flexShrink: 0, lineHeight: 1.4,
+                          }}>{c.segmento}{c.score != null ? ` ${c.score}` : ''}</span>
+                        )}
+                        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.nombre_fantasia}
+                        </p>
+                      </div>
                       <p style={{ fontSize: 10, color }}>
                         {c.vendedor_actual.split(' ')[0]}
                       </p>

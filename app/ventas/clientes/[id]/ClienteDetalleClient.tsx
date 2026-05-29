@@ -285,9 +285,22 @@ export default function ClienteDetalleClient({ cliente, ventas, contactos, deudo
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={{ fontSize: 22, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px', lineHeight: 1.2, marginBottom: 4 }}>
-                {cliente.nombre_fantasia}
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px', lineHeight: 1.2 }}>
+                  {cliente.nombre_fantasia}
+                </h1>
+                {frecuencia?.segmento && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 900, padding: '2px 8px', borderRadius: 8,
+                    background: `${SEGMENTO_COLOR[frecuencia.segmento] ?? '#888'}22`,
+                    color: SEGMENTO_COLOR[frecuencia.segmento] ?? '#888',
+                    border: `1px solid ${SEGMENTO_COLOR[frecuencia.segmento] ?? '#888'}55`,
+                    flexShrink: 0,
+                  }}>
+                    {frecuencia.segmento}{frecuencia.score != null ? ` · ${frecuencia.score}pts` : ''}
+                  </span>
+                )}
+              </div>
               {cliente.razon_social && cliente.razon_social !== cliente.nombre_fantasia && (
                 <p style={{ fontSize: 12, color: '#666' }}>{cliente.razon_social}</p>
               )}
