@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CheckCircle2, Circle, MessageCircle, Target, ChevronRight,
@@ -194,13 +194,35 @@ export default function MisionesClient({
   const [activeTab, setActiveTab] = useState<Tab>('todas')
   const [toggling, setToggling] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [genError, setGenError] = useState<string | null>(null)
+
+  // Sincronizar cuando el servidor actualice las props (router.refresh, navegación)
+  useEffect(() => {
+    setMisiones(misionesProp)
+  }, [misionesProp])
 
   // ── Generar misiones (admin) ────────────────────────────────────────────────
   const handleGenerar = async () => {
     setGenerating(true)
+    setGenError(null)
     try {
-      await fetch('/api/misiones?action=generar', { method: 'POST' })
-      router.refresh()
+      const res = await fetch('/api/misiones?action=generar', { method: 'POST' })
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        setGenError(data.error ?? 'Error al generar misiones')
+        return
+      }
+
+      // Actualizar estado directamente con las misiones devueltas por la API
+      if (data.misiones && data.misiones.length > 0) {
+        setMisiones(data.misiones as Mision[])
+      } else {
+        // Si no hay alertas activas (data.insertadas === 0 y misiones vacías)
+        setGenError('No hay clientes activos con contacto pendiente esta semana.')
+      }
+    } catch {
+      setGenError('Error de conexión. Intenta nuevamente.')
     } finally {
       setGenerating(false)
     }
@@ -319,6 +341,21 @@ export default function MisionesClient({
         </div>
       </div>
 
+      {/* ── Error al generar ───────────────────────────────────────────── */}
+      {genError && (
+        <div style={{
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+          borderRadius: 12, padding: '12px 16px', marginBottom: 12,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        }}>
+          <p style={{ fontSize: 12, color: '#F87171', fontWeight: 600 }}>{genError}</p>
+          <button
+            onClick={() => setGenError(null)}
+            style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
+          >×</button>
+        </div>
+      )}
+
       {/* ── Sin misiones ───────────────────────────────────────────────── */}
       {sinMisiones && (
         <div style={{
@@ -340,9 +377,10 @@ export default function MisionesClient({
               disabled={generating}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '12px 20px', borderRadius: 12, cursor: 'pointer',
+                padding: '12px 20px', borderRadius: 12, cursor: generating ? 'wait' : 'pointer',
                 background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.4)',
                 color: 'var(--gold)', fontSize: 13, fontWeight: 700,
+                opacity: generating ? 0.6 : 1,
               }}
             >
               <Zap size={16} />

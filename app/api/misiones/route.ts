@@ -66,7 +66,16 @@ export async function POST(req: Request) {
       .select('id')
 
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
-    return NextResponse.json({ ok: true, insertadas: inserted?.length ?? 0, semana })
+
+    // Devolver TODAS las misiones de la semana (incluyendo las ya existentes)
+    const { data: todasMisiones } = await supabase
+      .from('misiones')
+      .select('id,vendedor,nombre_fantasia,semana,alert_level,score,segmento,dias_sin_compra,ciclo_promedio_dias,siguiente_compra_estimada,estado,completado_at')
+      .eq('semana', semana)
+      .order('estado', { ascending: true })
+      .order('alert_level', { ascending: true })
+
+    return NextResponse.json({ ok: true, insertadas: inserted?.length ?? 0, semana, misiones: todasMisiones ?? [] })
   }
 
   // ── COMPLETAR ──────────────────────────────────────────────────────────────
