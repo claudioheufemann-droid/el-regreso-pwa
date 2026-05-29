@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { RcUser, RcTask, AREA_CFG, eligibleUsers, MACRO_AREAS } from '@/lib/gestion-types'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
+import useIsDesktop from '@/lib/useIsDesktop'
 
 interface AttachedFile {
   name: string; size: string; type: 'pdf' | 'image' | 'doc' | 'other'; preview?: string; url?: string
@@ -57,6 +58,7 @@ function SidebarRow({ icon, label, sub, children }: { icon: string; label: strin
 }
 
 export default function NewTaskModal({ defaultArea, availableAreas, users, onClose, onCreated }: Props) {
+  const isDesktop = useIsDesktop()
   const [selectedArea, setSelectedArea] = useState(defaultArea)
   const cfg = AREA_CFG[selectedArea] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
   const allUsers = eligibleUsers(users, selectedArea)
@@ -192,26 +194,29 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
     finally { setLoading(false); setSavingDraft(false) }
   }
 
+  // Estilos dinámicos: centrado en desktop, bottom sheet en mobile
+  const overlayStyle: React.CSSProperties = isDesktop
+    ? { position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }
+    : { position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }
+
+  const modalStyle: React.CSSProperties = isDesktop
+    ? { width: '100%', maxWidth: 1300, maxHeight: '92vh', background: '#111318', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 22, display: 'flex', flexDirection: 'column', boxShadow: '0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05)', overflow: 'hidden' }
+    : { width: '100%', height: '92vh', background: '#111318', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '20px 20px 0 0', display: 'flex', flexDirection: 'column', boxShadow: '0 -20px 60px rgba(0,0,0,0.8)', overflow: 'hidden' }
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-6"
-      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}
+      style={overlayStyle}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div onClick={e => e.stopPropagation()} style={{
-        width: '100%', maxWidth: 1300, maxHeight: '92vh',
-        background: '#111318', border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: 22, display: 'flex', flexDirection: 'column',
-        boxShadow: '0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05)', overflow: 'hidden',
-      }}>
+      <div onClick={e => e.stopPropagation()} style={modalStyle}>
 
         {/* HEADER */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 28px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📋</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isDesktop ? '20px 28px 16px' : '14px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {isDesktop && <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📋</div>}
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#F4EEDF', letterSpacing: -0.4 }}>Nueva tarea</div>
-              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 1 }}>Completa la información para crear una nueva tarea</div>
+              <div style={{ fontSize: isDesktop ? 18 : 16, fontWeight: 800, color: '#F4EEDF', letterSpacing: -0.4 }}>Nueva tarea</div>
+              {isDesktop && <div style={{ fontSize: 11, color: '#6B7280', marginTop: 1 }}>Completa la información para crear una nueva tarea</div>}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -227,7 +232,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
         </div>
 
         {/* FIRST ROW */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr 1.2fr 1.1fr', gap: 12, padding: '16px 28px 0', flexShrink: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1.6fr 1.2fr 1.1fr' : 'repeat(2, 1fr)', gap: 10, padding: isDesktop ? '16px 28px 0' : '12px 16px 0', flexShrink: 0 }}>
 
           {/* Área */}
           <div ref={areaRef} style={{ position: 'relative' }}>
@@ -338,10 +343,10 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
         </div>
 
         {/* BODY */}
-        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 0, padding: '16px 28px 0' }}>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: isDesktop ? '1fr 300px' : '1fr', gap: 0, padding: isDesktop ? '16px 28px 0' : '12px 16px 0' }}>
 
           {/* LEFT */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 20, borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingRight: isDesktop ? 20 : 0, borderRight: isDesktop ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
 
             <div>
               <label style={LBL}>Título *</label>
@@ -414,8 +419,8 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
             {error && <p style={{ fontSize:12, color:'#FF6B6B', padding:'10px 14px', background:'rgba(255,68,68,0.08)', borderRadius:10, border:'1px solid rgba(255,68,68,0.2)' }}>{error}</p>}
           </div>
 
-          {/* RIGHT SIDEBAR */}
-          <div style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
+          {/* RIGHT SIDEBAR — en mobile aparece debajo del contenido principal */}
+          <div style={{ paddingLeft: isDesktop ? 20 : 0, paddingTop: isDesktop ? 0 : 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* DETALLES */}
             <div style={{ background: '#1A1D24', borderRadius: 14, border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' }}>
@@ -544,7 +549,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
         </div>
 
         {/* FOOTER */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 28px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isDesktop ? '14px 28px' : '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, gap: 10, flexWrap: isDesktop ? 'nowrap' : 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
             <div onClick={() => setCrearOtra(v => !v)}
               style={{ width: 17, height: 17, borderRadius: 5, background: crearOtra ? cfg.color : 'transparent', border: `1.5px solid ${crearOtra ? cfg.color : 'rgba(156,163,175,0.4)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#0A0A0A', fontWeight: 900, cursor: 'pointer' }}>
