@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, MessageCircle, Mail, MapPin, Phone, Tag, Truck,
   ShoppingBag, Droplets, DollarSign, Clock, User, FileText,
-  CreditCard, Calendar,
+  CreditCard, Calendar, CheckCircle2, XCircle, Sunset,
 } from 'lucide-react'
 
 interface Cliente {
@@ -90,6 +90,8 @@ interface Props {
   contactos: Contacto[]
   deudor: Deudor | null
   frecuencia: FrequencyStat | null
+  estadoCliente?: 'activo' | 'inactivo' | 'estacional'
+  notaEstado?: string | null
 }
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -236,7 +238,134 @@ function FrecuenciaCard({ frecuencia }: { frecuencia: FrequencyStat }) {
   )
 }
 
-export default function ClienteDetalleClient({ cliente, ventas, contactos, deudor, frecuencia }: Props) {
+const ESTADO_CFG = {
+  activo:     { label: 'Activo',     color: '#34D399', bg: 'rgba(52,211,153,0.1)',  border: 'rgba(52,211,153,0.25)',  icon: CheckCircle2 },
+  inactivo:   { label: 'Inactivo',   color: '#888',    bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)',  icon: XCircle      },
+  estacional: { label: 'Estacional', color: '#60A5FA', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.25)', icon: Sunset       },
+}
+
+function EstadoSelector({ nombreFantasia, estadoInicial, notaInicial }: {
+  nombreFantasia: string
+  estadoInicial: 'activo' | 'inactivo' | 'estacional'
+  notaInicial: string | null
+}) {
+  const [estado, setEstado] = useState(estadoInicial)
+  const [nota, setNota] = useState(notaInicial ?? '')
+  const [editingNota, setEditingNota] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const cambiarEstado = async (nuevoEstado: 'activo' | 'inactivo' | 'estacional') => {
+    if (nuevoEstado === estado) return
+    setSaving(true)
+    setSaved(false)
+    const prev = estado
+    setEstado(nuevoEstado)
+    try {
+      const res = await fetch('/api/clientes/estado', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre_fantasia: nombreFantasia, estado: nuevoEstado, nota }),
+      })
+      if (!res.ok) throw new Error()
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      setEstado(prev)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const guardarNota = async () => {
+    setSaving(true)
+    try {
+      await fetch('/api/clientes/estado', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre_fantasia: nombreFantasia, estado, nota }),
+      })
+      setEditingNota(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const cfg = ESTADO_CFG[estado]
+
+  return (
+    <div style={{
+      background: cfg.bg, border: `1px solid ${cfg.border}`,
+      borderRadius: 14, padding: '12px 14px', marginBottom: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <cfg.icon size={14} color={cfg.color} />
+          <span style={{ fontSize: 12, fontWeight: 800, color: cfg.color, letterSpacing: '0.05em' }}>
+            {cfg.label.toUpperCase()}
+          </span>
+          {saved && <span style={{ fontSize: 10, color: '#34D399' }}>✓ Guardado</span>}
+          {saving && <span style={{ fontSize: 10, color: '#888' }}>Guardando…</span>}
+        </div>
+        <span style={{ fontSize: 10, color: '#555' }}>Estado del cliente</span>
+      </div>
+
+      {/* Botones de estado */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: nota || editingNota ? 10 : 0 }}>
+        {(['activo', 'inactivo', 'estacional'] as const).map(e => {
+          const c = ESTADO_CFG[e]
+          const active = estado === e
+          return (
+            <button
+              key={e}
+              onClick={() => cambiarEstado(e)}
+              style={{
+                flex: 1, padding: '7px 4px', borderRadius: 9, cursor: 'pointer',
+                background: active ? c.bg : 'rgba(255,255,255,0.03)',
+                border: active ? `1px solid ${c.border}` : '1px solid rgba(255,255,255,0.07)',
+                color: active ? c.color : '#555',
+                fontSize: 10, fontWeight: active ? 800 : 600,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              }}
+            >
+              <c.icon size={12} />
+              {c.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Nota */}
+      {editingNota ? (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            value={nota}
+            onChange={e => setNota(e.target.value)}
+            placeholder="Ej: Cerró en dic, vuelve en mar"
+            style={{
+              flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 8, padding: '6px 10px', color: '#ddd', fontSize: 11, outline: 'none',
+            }}
+          />
+          <button onClick={guardarNota} style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)', color: '#34D399', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}>
+            Guardar
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setEditingNota(true)}
+          style={{ background: 'none', border: 'none', color: nota ? '#888' : '#444', fontSize: 10, cursor: 'pointer', padding: 0 }}
+        >
+          {nota ? `📝 ${nota}` : '+ Agregar nota (ej: cierra en invierno)'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+export default function ClienteDetalleClient({ cliente, ventas, contactos, deudor, frecuencia, estadoCliente = 'activo', notaEstado }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<'info' | 'ventas' | 'contactos'>('info')
 
@@ -341,6 +470,13 @@ export default function ClienteDetalleClient({ cliente, ventas, contactos, deudo
               </a>
             )}
           </div>
+
+          {/* Estado del cliente */}
+          <EstadoSelector
+            nombreFantasia={cliente.nombre_fantasia ?? ''}
+            estadoInicial={estadoCliente}
+            notaInicial={notaEstado ?? null}
+          />
 
           {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>

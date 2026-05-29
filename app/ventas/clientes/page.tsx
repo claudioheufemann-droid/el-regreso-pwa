@@ -83,6 +83,16 @@ export default async function ClientesPage() {
     totalesPorVendedor[vend].venta  += v.total_sin_impuesto ?? 0
   }
 
+  // Estados manuales de clientes (activo / inactivo / estacional)
+  const { data: estadosData } = await supabase
+    .from('clientes_estado')
+    .select('nombre_fantasia, estado, nota')
+
+  const estadosMap = new Map<string, { estado: string; nota: string | null }>()
+  for (const e of (estadosData ?? [])) {
+    estadosMap.set(e.nombre_fantasia, { estado: e.estado, nota: e.nota ?? null })
+  }
+
   // Scores y alertas de compra desde Supabase (RFM model)
   const { data: scoreData } = await supabase
     .rpc('get_client_scores')
@@ -135,6 +145,8 @@ export default async function ClientesPage() {
         }
       : null,
     frecuencia: frecuenciaMap.get(c.nombre_fantasia ?? '') ?? null,
+    estadoCliente: estadosMap.get(c.nombre_fantasia ?? '')?.estado ?? 'activo',
+    notaEstado: estadosMap.get(c.nombre_fantasia ?? '')?.nota ?? null,
   }))
 
   return (

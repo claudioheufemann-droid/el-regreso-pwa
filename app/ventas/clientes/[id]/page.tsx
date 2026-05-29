@@ -37,6 +37,13 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
     pedidos_por_mes: scoreRow.pedidos_por_mes ?? 0,
   } : null
 
+  // Estado del cliente
+  const { data: estadoRow } = await supabase
+    .from('clientes_estado')
+    .select('estado, nota')
+    .eq('nombre_fantasia', cliente.nombre_fantasia ?? '')
+    .maybeSingle()
+
   // Historial completo de ventas + contactos + deuda en paralelo
   const [{ data: ventas }, { data: contactos }, { data: deudorData }] = await Promise.all([
     supabase
@@ -65,6 +72,8 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
       contactos={contactos ?? []}
       deudor={deudorData ?? null}
       frecuencia={frecuenciaData ?? null}
+      estadoCliente={(estadoRow?.estado as 'activo' | 'inactivo' | 'estacional') ?? 'activo'}
+      notaEstado={estadoRow?.nota ?? null}
     />
   )
 }

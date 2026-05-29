@@ -41,6 +41,8 @@ interface Cliente {
   ultimoContacto: { fecha: string; tipo: string; vendedor: string } | null
   ultimoPedido: { ultimaFecha: string; litrosPeriodo: number; ventaPeriodo: number } | null
   frecuencia: FrequencyStat | null
+  estadoCliente: 'activo' | 'inactivo' | 'estacional'
+  notaEstado: string | null
 }
 
 interface Props {
@@ -520,15 +522,19 @@ function PorContactarSection({ clientes }: { clientes: Cliente[] }) {
   const [collapsed, setCollapsed] = useState(false)
   const [showAll, setShowAll] = useState(false)
 
-  const criticos = clientes
+  // Solo clientes activos o estacionales (excluir inactivos cerrados)
+  const clientesActivos = clientes.filter(c => c.estadoCliente !== 'inactivo')
+  const inactivosExcluidos = clientes.filter(c => c.estadoCliente === 'inactivo')
+
+  const criticos = clientesActivos
     .filter(c => c.frecuencia?.alert_level === 'critico')
     .sort((a, b) => (b.frecuencia?.dias_sin_compra ?? 0) - (a.frecuencia?.dias_sin_compra ?? 0))
-  const vencidos = clientes
+  const vencidos = clientesActivos
     .filter(c => c.frecuencia?.alert_level === 'vencido')
     .sort((a, b) => (b.frecuencia?.dias_sin_compra ?? 0) - (a.frecuencia?.dias_sin_compra ?? 0))
 
   const total = criticos.length + vencidos.length
-  if (total === 0) return null
+  if (total === 0 && inactivosExcluidos.length === 0) return null
 
   const allItems = [...criticos, ...vencidos]
   const LIMIT = 6
@@ -569,9 +575,16 @@ function PorContactarSection({ clientes }: { clientes: Cliente[] }) {
           style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
           onClick={() => router.push(`/ventas/clientes/${c.id}`)}
         >
-          <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {c.nombre_fantasia}
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {c.nombre_fantasia}
+            </p>
+            {c.estadoCliente === 'estacional' && (
+              <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 5, background: 'rgba(96,165,250,0.15)', color: '#60A5FA', border: '1px solid rgba(96,165,250,0.3)', flexShrink: 0 }}>
+                ESTAC.
+              </span>
+            )}
+          </div>
           <p style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
             {c.vendedor?.split(' ')[0]}
             {(c.localidad_entrega || c.localidad) && ` · ${c.localidad_entrega || c.localidad}`}
@@ -649,7 +662,13 @@ function PorContactarSection({ clientes }: { clientes: Cliente[] }) {
 
       {!collapsed && (
         <div style={{ padding: '0 16px 12px' }}>
-          {shown.map(c => fila(c))}
+          {total === 0 ? (
+            <p style={{ fontSize: 12, color: '#555', padding: '8px 0', textAlign: 'center' }}>
+              ✅ No hay clientes activos a contactar ahora
+            </p>
+          ) : (
+            shown.map(c => fila(c))
+          )}
           {allItems.length > LIMIT && (
             <button
               onClick={() => setShowAll(v => !v)}
@@ -661,6 +680,11 @@ function PorContactarSection({ clientes }: { clientes: Cliente[] }) {
             >
               {showAll ? '▲ Ver menos' : `▼ Ver ${allItems.length - LIMIT} más`}
             </button>
+          )}
+          {inactivosExcluidos.length > 0 && (
+            <p style={{ fontSize: 10, color: '#444', marginTop: 10, padding: '6px 8px', background: 'rgba(255,255,255,0.02)', borderRadius: 6, textAlign: 'center' }}>
+              {inactivosExcluidos.length} cliente{inactivosExcluidos.length > 1 ? 's' : ''} inactivo{inactivosExcluidos.length > 1 ? 's' : ''} oculto{inactivosExcluidos.length > 1 ? 's' : ''} (cerrados o sin relación comercial)
+            </p>
           )}
         </div>
       )}
