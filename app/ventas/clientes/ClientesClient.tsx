@@ -139,9 +139,17 @@ function DonutResumen({ stats }: { stats: Stats }) {
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
-function Sidebar({ stats, actividad }: { stats: Stats; actividad: ActividadItem[] }) {
-  const deudaAltaCount = stats.deudaAlta
-  const sinContactoCount = stats.sinContacto
+function Sidebar({ stats, actividad, onAlertaClick, onClienteClick }: {
+  stats: Stats
+  actividad: ActividadItem[]
+  onAlertaClick: (filtro: string) => void
+  onClienteClick: (nombre: string) => void
+}) {
+  const ALERTAS = [
+    { key:'deuda',       count:stats.deudaAlta,    icon:AlertTriangle, color:'#EF4444', bg:'rgba(239,68,68,0.05)',   border:'rgba(239,68,68,0.2)',   label:`${stats.deudaAlta} clientes`,    sub:'con deuda vencida',                  show: stats.deudaAlta > 0 },
+    { key:'sin_contacto',count:stats.sinContacto,  icon:PhoneOff,      color:'#F59E0B', bg:'rgba(245,158,11,0.05)', border:'rgba(245,158,11,0.2)',  label:`${stats.sinContacto} clientes`,  sub:'sin contacto hace más de 7 días',    show: stats.sinContacto > 0 },
+    { key:'riesgo',      count:stats.riesgoCompra, icon:Clock,         color:'#60A5FA', bg:'rgba(96,165,250,0.05)', border:'rgba(96,165,250,0.2)',  label:`${stats.riesgoCompra} clientes`, sub:'con riesgo de compra',               show: stats.riesgoCompra > 0 },
+  ]
 
   return (
     <div style={{ width:260, flexShrink:0, display:'flex', flexDirection:'column', gap:12 }}>
@@ -153,23 +161,24 @@ function Sidebar({ stats, actividad }: { stats: Stats; actividad: ActividadItem[
 
       {/* Actividad reciente */}
       <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:16, padding:'14px 16px' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-            <Activity size={12} color="#D4AF37"/>
-            <p style={{ fontSize:11, fontWeight:800, color:'var(--cream)', letterSpacing:'0.04em' }}>ACTIVIDAD RECIENTE</p>
-          </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:12 }}>
+          <Activity size={12} color="#D4AF37"/>
+          <p style={{ fontSize:11, fontWeight:800, color:'var(--cream)', letterSpacing:'0.04em' }}>ACTIVIDAD RECIENTE</p>
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {actividad.slice(0,5).map((a,i)=>{
+          {actividad.slice(0,6).map((a,i)=>{
             const dc = diasDesde(a.fecha)
             const isContacto = a.tipo === 'contacto'
             return (
-              <div key={i} style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
+              <div key={i} onClick={()=>onClienteClick(a.cliente)}
+                style={{ display:'flex', gap:8, alignItems:'flex-start', cursor:'pointer',
+                  padding:'4px 6px', borderRadius:8, margin:'0 -6px',
+                  transition:'background 0.15s' }}
+                onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.03)')}
+                onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
                 <div style={{ width:28, height:28, borderRadius:8, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
                   background: isContacto?'rgba(37,211,102,0.1)':'rgba(96,165,250,0.1)' }}>
-                  {isContacto
-                    ? <MessageCircle size={13} color="#25D366"/>
-                    : <Zap size={13} color="#60A5FA"/>}
+                  {isContacto ? <MessageCircle size={13} color="#25D366"/> : <Zap size={13} color="#60A5FA"/>}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <p style={{ fontSize:11, fontWeight:600, color:'var(--cream)' }}>
@@ -178,6 +187,9 @@ function Sidebar({ stats, actividad }: { stats: Stats; actividad: ActividadItem[
                   <p style={{ fontSize:10, color:'var(--muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                     {a.cliente}
                   </p>
+                  {a.tipo === 'pedido' && (
+                    <p style={{ fontSize:9, color:'#60A5FA', fontWeight:600 }}>{a.detalle}</p>
+                  )}
                 </div>
                 <span style={{ fontSize:9, color:'#555', flexShrink:0, marginTop:2 }}>{fDias(dc)}</span>
               </div>
@@ -194,35 +206,25 @@ function Sidebar({ stats, actividad }: { stats: Stats; actividad: ActividadItem[
           <p style={{ fontSize:11, fontWeight:800, color:'var(--cream)', letterSpacing:'0.04em' }}>ALERTAS IMPORTANTES</p>
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {deudaAltaCount > 0 && (
-            <div style={{ display:'flex', gap:10, alignItems:'center', background:'rgba(239,68,68,0.05)', border:'1px solid rgba(239,68,68,0.15)', borderRadius:10, padding:'10px 12px' }}>
-              <AlertTriangle size={14} color="#EF4444"/>
+          {ALERTAS.filter(a=>a.show).map(a=>(
+            <button key={a.key} onClick={()=>onAlertaClick(a.key)}
+              style={{ display:'flex', gap:10, alignItems:'center', background:a.bg, border:`1px solid ${a.border}`,
+                borderRadius:10, padding:'10px 12px', cursor:'pointer', width:'100%', textAlign:'left',
+                transition:'all 0.15s' }}
+              onMouseEnter={e=>{e.currentTarget.style.background=a.bg.replace('0.05','0.1');e.currentTarget.style.borderColor=a.color.replace(')','') + (a.color.includes('#')?'80':'')}}
+              onMouseLeave={e=>{e.currentTarget.style.background=a.bg;e.currentTarget.style.borderColor=a.border}}>
+              <a.icon size={14} color={a.color}/>
               <div style={{ flex:1, minWidth:0 }}>
-                <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)' }}>{deudaAltaCount} clientes</p>
-                <p style={{ fontSize:10, color:'var(--muted)' }}>con deuda mayor a 60 días</p>
+                <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)' }}>{a.label}</p>
+                <p style={{ fontSize:10, color:'var(--muted)' }}>{a.sub}</p>
               </div>
-              <ChevronRight size={12} color="#555"/>
-            </div>
-          )}
-          {sinContactoCount > 0 && (
-            <div style={{ display:'flex', gap:10, alignItems:'center', background:'rgba(245,158,11,0.05)', border:'1px solid rgba(245,158,11,0.15)', borderRadius:10, padding:'10px 12px' }}>
-              <PhoneOff size={14} color="#F59E0B"/>
-              <div style={{ flex:1, minWidth:0 }}>
-                <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)' }}>{sinContactoCount} clientes</p>
-                <p style={{ fontSize:10, color:'var(--muted)' }}>sin contacto hace más de 7 días</p>
-              </div>
-              <ChevronRight size={12} color="#555"/>
-            </div>
-          )}
-          {stats.riesgoCompra > 0 && (
-            <div style={{ display:'flex', gap:10, alignItems:'center', background:'rgba(96,165,250,0.05)', border:'1px solid rgba(96,165,250,0.15)', borderRadius:10, padding:'10px 12px' }}>
-              <Clock size={14} color="#60A5FA"/>
-              <div style={{ flex:1, minWidth:0 }}>
-                <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)' }}>{stats.riesgoCompra} clientes</p>
-                <p style={{ fontSize:10, color:'var(--muted)' }}>con riesgo de compra</p>
-              </div>
-              <ChevronRight size={12} color="#555"/>
-            </div>
+              <ChevronRight size={12} color={a.color}/>
+            </button>
+          ))}
+          {ALERTAS.every(a=>!a.show) && (
+            <p style={{ fontSize:12, color:'#34D399', fontWeight:600, textAlign:'center', padding:'8px 0' }}>
+              ✓ Sin alertas críticas
+            </p>
           )}
         </div>
       </div>
@@ -480,6 +482,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   const FILTROS = [
     { key:'todos',       label:`Todos`,       count: stats.total,        color:'var(--cream)', icon: null },
     { key:'contactados', label:'Contactados', count: stats.contactados7d, color:'#34D399',     icon:'✓'  },
+    { key:'deuda',       label:'Deuda',       count: stats.deudaAlta,    color:'#EF4444',     icon:'⚠'  },
     { key:'pendientes',  label:'Pendientes',  count: stats.pendientes,    color:'#F59E0B',     icon:'⚠'  },
     { key:'sin_contacto',label:'Sin contacto',count: stats.sinContacto,   color:'#9CA3AF',     icon:'✕'  },
     { key:'riesgo',      label:'Riesgo compra',count:stats.riesgoCompra,  color:'#EF4444',     icon:'🔴' },
@@ -513,6 +516,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
           case 'pendientes':   return ['critico','vencido','proximo'].includes(al??'') && (dc===null||dc>3)
           case 'sin_contacto': return !c.ultimoContacto || dc===null || dc > 7
           case 'riesgo':       return al==='critico'||al==='vencido'
+          case 'deuda':        return (c.deuda?.deuda_vencida ?? 0) > 0
           default: return true
         }
       })
@@ -782,7 +786,22 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
         </div>
 
         {/* ── Sidebar (solo desktop) ───────────────────────────────────── */}
-        {isDesktop && <Sidebar stats={stats} actividad={actividad}/>}
+        {isDesktop && (
+          <Sidebar
+            stats={stats}
+            actividad={actividad}
+            onAlertaClick={(filtro) => {
+              setEstadoFiltro(filtro)
+              setPagina(1)
+              // scroll suave al inicio de la tabla
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+            onClienteClick={(nombre) => {
+              setBusqueda(nombre)
+              setPagina(1)
+            }}
+          />
+        )}
       </div>
 
       {/* Banner Campaña WA activa */}

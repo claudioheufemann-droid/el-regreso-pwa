@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES } from '@/lib/types'
+import { VENDEDORES, CLIENTES_EXCLUIR } from '@/lib/types'
 import ClientesClient from './ClientesClient'
 
 export const dynamic = 'force-dynamic'
@@ -116,9 +116,13 @@ export default async function ClientesPage() {
     totalesPorVendedor[vend].venta  += v.total_sin_impuesto ?? 0
   }
 
-  // ── Enriquecer clientes ────────────────────────────────────────────────────
+  // Helper: excluir clientes internos
+  const esInterno = (nombre: string | null) =>
+    nombre ? CLIENTES_EXCLUIR.some(ex => nombre.includes(ex)) : false
+
+  // ── Enriquecer clientes (sin internos) ────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const clientesEnriquecidos = (clientes ?? []).map((c: any) => ({
+  const clientesEnriquecidos = (clientes ?? []).filter((c: any) => !esInterno(c.nombre_fantasia)).map((c: any) => ({
     ...c,
     ultimoContacto: contactoMap.get(c.nombre_fantasia ?? '') ?? null,
     ultimoPedido: ultimaFechaMap.has(c.nombre_fantasia ?? '') ? {
@@ -155,22 +159,26 @@ export default async function ClientesPage() {
     const d = diasDesde(c.ultimoContacto?.fecha); return d !== null && d <= 7
   }).length
 
-  // ── Actividad reciente ────────────────────────────────────────────────────
+  // ── Actividad reciente (sin clientes internos) ───────────────────────────
   const actividad: ActividadItem[] = [
-    ...(ultimosContactos ?? []).slice(0, 6).map(c => ({
-      tipo: 'contacto' as const,
-      cliente: c.cliente_nombre_fantasia,
-      detalle: c.tipo || 'WhatsApp',
-      fecha: c.fecha_hora,
-    })),
-    ...(ultimosPedidos ?? []).slice(0, 6).map(v => ({
-      tipo: 'pedido' as const,
-      cliente: v.nombre_fantasia ?? '—',
-      detalle: `${(v.litros ?? 0).toFixed(1)} L`,
-      fecha: v.fecha_pedido,
-    })),
+    ...(ultimosContactos ?? [])
+      .filter(c => !esInterno(c.cliente_nombre_fantasia))
+      .slice(0, 10).map(c => ({
+        tipo: 'contacto' as const,
+        cliente: c.cliente_nombre_fantasia,
+        detalle: c.tipo || 'WhatsApp',
+        fecha: c.fecha_hora,
+      })),
+    ...(ultimosPedidos ?? [])
+      .filter(v => !esInterno(v.nombre_fantasia))
+      .slice(0, 10).map(v => ({
+        tipo: 'pedido' as const,
+        cliente: v.nombre_fantasia ?? '—',
+        detalle: `${(v.litros ?? 0).toFixed(1)} L`,
+        fecha: v.fecha_pedido,
+      })),
   ]
-    .filter(a => a.cliente)
+    .filter(a => a.cliente && a.cliente !== '—')
     .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
     .slice(0, 8)
 
