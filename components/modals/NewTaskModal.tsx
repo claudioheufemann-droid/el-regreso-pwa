@@ -68,6 +68,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   const [uploadingRef, setUploadingRef] = useState(false)
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dateInputRef = useRef<HTMLInputElement>(null)
 
   const canSubmit = titulo.trim().length > 0 && plazo && selectedIds.length > 0
 
@@ -433,20 +434,23 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
           <div>
             <label style={lbl}>Fecha vencimiento *</label>
             <div style={{ position: 'relative' }}>
-              {/* Botón visible */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 9,
-                padding: '9px 12px', borderRadius: 10,
-                background: plazo ? 'var(--input-bg)' : 'var(--surface2)',
-                border: `1.5px solid ${plazo ? 'var(--input-border)' : 'rgba(255,255,255,0.1)'}`,
-                fontSize: 13, color: plazo ? 'var(--cream)' : 'var(--muted)',
-                cursor: 'pointer', userSelect: 'none',
-              }}>
+              {/* Botón visible — misma altura que los botones de prioridad */}
+              <div
+                onClick={() => dateInputRef.current?.showPicker?.()}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 9,
+                  padding: '9px 12px', borderRadius: 10, height: 42, boxSizing: 'border-box',
+                  background: plazo ? 'var(--input-bg)' : 'var(--surface2)',
+                  border: `1.5px solid ${plazo ? 'var(--input-border)' : 'rgba(255,255,255,0.1)'}`,
+                  fontSize: 13, color: plazo ? 'var(--cream)' : 'var(--muted)',
+                  cursor: 'pointer', userSelect: 'none',
+                }}>
                 <span style={{ fontSize: 14 }}>📅</span>
                 <span>{plazo ? new Date(plazo + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' }) : 'Seleccionar fecha'}</span>
               </div>
-              {/* Input date invisible encima */}
+              {/* Input date invisible — solo para capturar el valor */}
               <input
+                ref={dateInputRef}
                 type="date"
                 value={plazo}
                 onChange={e => setPlazo(e.target.value)}
@@ -454,7 +458,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                 required
                 style={{
                   position: 'absolute', inset: 0, opacity: 0,
-                  cursor: 'pointer', width: '100%', height: '100%',
+                  pointerEvents: 'none', width: '100%', height: '100%',
                 }}
               />
             </div>
