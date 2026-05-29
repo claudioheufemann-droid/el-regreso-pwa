@@ -16,7 +16,19 @@ export const CATEGORIAS_NEGOCIO = [
   'Otros',
 ] as const
 
-export const CLIENTES_EXCLUIR = ['Cliente Ventas (Javier)', 'Cliente Ventas (Charly)', 'Cliente Ventas (Carlos)', 'Cliente PDV', 'Cliente Merma PDV']
+export const CLIENTES_EXCLUIR = [
+  // Variantes con V mayúscula (original)
+  'Cliente Ventas (Javier)',
+  'Cliente Ventas (Charly)',
+  'Cliente Ventas (Carlos)',
+  // Variante con v minúscula — encontrada en Excel de mayo (causa de discrepancia Javier)
+  'Cliente ventas (Javier)',
+  'Cliente ventas (Charly)',
+  'Cliente ventas (Carlos)',
+  // Otros internos
+  'Cliente PDV',
+  'Cliente Merma PDV',
+]
 
 export interface Venta {
   id: number
