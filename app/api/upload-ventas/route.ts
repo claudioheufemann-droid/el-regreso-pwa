@@ -4,6 +4,30 @@ import * as XLSX from 'xlsx'
 
 const VENDEDORES_VALIDOS = ['Javier Badilla', 'Carlos Urrejola']
 
+// Clientes internos a excluir en la carga — comparación case-insensitive
+// Estos son movimientos internos (consumo propio, mermas, ventas de personal)
+// que NO representan ventas reales a clientes externos.
+const CLIENTES_INTERNOS = [
+  'cliente ventas (javier)',
+  'cliente ventas (charly)',
+  'cliente ventas (carlos)',
+  'cliente directo javier',
+  'cliente pdv',
+  'cliente merma pdv',
+  'cliente mermas producto terminado',
+  'cliente feria',
+  'cliente marketing',
+  'cliente calidad reclamos',
+  'cliente copas/medallas',
+  'basecamp el regreso',
+  'beneficios clientes',
+].map(s => s.toLowerCase())
+
+function esClienteInterno(nombre: string | null): boolean {
+  if (!nombre) return false
+  return CLIENTES_INTERNOS.includes(nombre.toLowerCase().trim())
+}
+
 function parseFecha(raw: unknown): string | null {
   if (raw instanceof Date) {
     // Usar métodos UTC para evitar desfase por zona horaria del servidor
@@ -63,6 +87,8 @@ function deduplicarRegistros(registros: Record<string, unknown>[]) {
 function parseAndValidate(rows: Record<string, unknown>[]) {
   const erroresMapeo: string[] = []
   const advertenciasLitros: string[] = []
+  let clientesInternosExcluidos = 0
+  let litrosInternosExcluidos = 0
 
   const registrosBrutos = rows
     .map((row, idx) => {
@@ -81,14 +107,25 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
         return null
       }
 
+      const nombreFantasia =
+        String(row['NombreDeFantasia'] ?? row['Nombre de fantasía'] ?? row['Nombre de fantasia'] ?? '').trim() || null
+
+      // ── Excluir clientes internos en el momento de la carga ──────────────────
+      if (esClienteInterno(nombreFantasia)) {
+        const litrosRawInt = parseFloat(String(row['Litros'] ?? '0')) || 0
+        clientesInternosExcluidos++
+        litrosInternosExcluidos += litrosRawInt
+        return null
+      }
+
       const categoriaRaw = String(row['Categoria'] ?? row['Categoría'] ?? '').trim() || null
       const litrosRaw = row['Litros']
       const litros = parseFloat(String(litrosRaw ?? '0')) || 0
 
       if (litrosRaw === null || litrosRaw === undefined || litrosRaw === '') {
-        advertenciasLitros.push(`Fila ${idx + 2}: sin valor de litros (${row['NombreDeFantasia'] ?? ''})`)
+        advertenciasLitros.push(`Fila ${idx + 2}: sin valor de litros (${nombreFantasia ?? ''})`)
       } else if (litros === 0) {
-        advertenciasLitros.push(`Fila ${idx + 2}: litros = 0 (${row['Producto'] ?? ''} — ${row['NombreDeFantasia'] ?? ''})`)
+        advertenciasLitros.push(`Fila ${idx + 2}: litros = 0 (${row['Producto'] ?? ''} — ${nombreFantasia ?? ''})`)
       } else if (litros < 0) {
         advertenciasLitros.push(`Fila ${idx + 2}: litros negativos ${litros} (${row['Producto'] ?? ''})`)
       }
@@ -96,8 +133,7 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
       return {
         fecha_pedido: fechaPedido,
         vendedor_actual: vendedor,
-        nombre_fantasia:
-          String(row['NombreDeFantasia'] ?? row['Nombre de fantasía'] ?? row['Nombre de fantasia'] ?? '').trim() || null,
+        nombre_fantasia: nombreFantasia,
         categoria_producto:
           String(row['CategoriaProducto'] ?? row['Categoría producto'] ?? '').trim() || null,
         categoria_negocio: categoriaRaw && categoriaRaw !== '-' ? categoriaRaw : null,
@@ -154,6 +190,8 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
     advertenciasLitros,
     fechasOrdenadas,
     resumenVendedor,
+    clientesInternosExcluidos,
+    litrosInternosExcluidos: Math.round(litrosInternosExcluidos * 100) / 100,
   }
 }
 
@@ -186,6 +224,8 @@ export async function POST(req: NextRequest) {
     advertenciasLitros,
     fechasOrdenadas,
     resumenVendedor,
+    clientesInternosExcluidos,
+    litrosInternosExcluidos,
   } = parseAndValidate(rows)
 
   if (registros.length === 0) {
@@ -219,6 +259,8 @@ export async function POST(req: NextRequest) {
       preview: true,
       totalFilas: registros.length,
       duplicadosEnArchivo,
+      clientesInternosExcluidos,
+      litrosInternosExcluidos,
       erroresMapeo: erroresMapeo.slice(0, 10),
       advertenciasLitros: advertenciasLitros.slice(0, 20),
       fechaMin: fechasOrdenadas[0],
@@ -264,6 +306,8 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     insertadas,
     duplicadosEnArchivo,
+    clientesInternosExcluidos,
+    litrosInternosExcluidos,
     erroresMapeo: erroresMapeo.slice(0, 10),
     advertenciasLitros: advertenciasLitros.slice(0, 20),
     fechas: fechasOrdenadas,

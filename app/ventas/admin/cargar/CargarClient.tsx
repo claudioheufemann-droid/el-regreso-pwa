@@ -30,6 +30,8 @@ interface PreviewResult {
   preview: true
   totalFilas: number
   duplicadosEnArchivo: number
+  clientesInternosExcluidos: number
+  litrosInternosExcluidos: number
   erroresMapeo: string[]
   advertenciasLitros: string[]
   fechaMin: string
@@ -40,6 +42,8 @@ interface PreviewResult {
 interface UploadResult {
   insertadas: number
   duplicadosEnArchivo: number
+  clientesInternosExcluidos: number
+  litrosInternosExcluidos: number
   erroresMapeo: string[]
   advertenciasLitros: string[]
   fechas: string[]
@@ -366,6 +370,20 @@ export default function CargarClient({ periodos }: Props) {
               </div>
             )}
 
+            {/* Clientes internos excluidos */}
+            {preview.clientesInternosExcluidos > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, borderRadius: 10, padding: '10px 14px',
+                background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)',
+              }}>
+                <ShieldCheck size={13} style={{ color: '#60A5FA', flexShrink: 0 }} />
+                <p style={{ fontSize: 12, color: '#60A5FA' }}>
+                  <strong>{preview.clientesInternosExcluidos} filas internas excluidas</strong>
+                  {' '}({preview.litrosInternosExcluidos.toFixed(2)} L) — movimientos de personal/PDV, no se cargarán.
+                </p>
+              </div>
+            )}
+
             {/* Duplicados en archivo */}
             {preview.duplicadosEnArchivo > 0 && (
               <div style={{
@@ -470,6 +488,20 @@ export default function CargarClient({ periodos }: Props) {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {result.clientesInternosExcluidos > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8, borderRadius: 10, padding: '10px 14px',
+                background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)',
+                marginBottom: 8,
+              }}>
+                <ShieldCheck size={13} style={{ color: '#60A5FA', flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 12, color: '#60A5FA' }}>
+                  <strong>{result.clientesInternosExcluidos} filas internas excluidas</strong>
+                  {' '}({result.litrosInternosExcluidos.toFixed(2)} L) — movimientos de personal/PDV, no cargados.
+                </p>
               </div>
             )}
 
