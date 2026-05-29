@@ -636,21 +636,6 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
               )}
             </div>
 
-            {/* Comentario inicial */}
-            <div>
-              <label style={lbl}>Comentario inicial <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span></label>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: `${cfg.color}25`, border: `1.5px solid ${cfg.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: cfg.color, marginTop: 2 }}>
-                  CH
-                </div>
-                <input
-                  value={comentario}
-                  onChange={e => setComentario(e.target.value)}
-                  placeholder="Escribe un mensaje o instrucción adicional para el responsable..."
-                  style={{ flex: 1, borderRadius: 10, fontSize: 12 }}
-                />
-              </div>
-            </div>
 
             {error && (
               <p style={{ fontSize: 12, color: '#FF6666', padding: '10px 14px', background: 'rgba(255,68,68,0.08)', borderRadius: 10, border: '1px solid rgba(255,68,68,0.2)' }}>
