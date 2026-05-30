@@ -1722,6 +1722,87 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         const circ = 2 * Math.PI * donutR
         const dash = (pctMeta / 100) * circ
 
+        // ── Bloque vendedor reutilizable ──────────────────────────────────────
+        function VendedorBannerBlock({ v, compact }: { v: typeof resumen[0]; compact?: boolean }) {
+          const color = VEND_COLOR[v.vendedor] ?? '#D4AF37'
+          const pctVendedor = totalLitrosPeriodo > 0 ? (v.litrosPeriodo / totalLitrosPeriodo) * 100 : 0
+          const avatarSize = compact ? 36 : 44
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 10 : 12, minWidth: 0 }}>
+              {vendedorAvatars?.[v.vendedor] ? (
+                <div style={{
+                  width: avatarSize, height: avatarSize, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                  border: `2px solid ${color}`, boxShadow: `0 0 10px ${color}30`,
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={vendedorAvatars[v.vendedor]!} alt={v.vendedor}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
+                </div>
+              ) : (
+                <div style={{
+                  width: avatarSize, height: avatarSize, borderRadius: '50%', flexShrink: 0,
+                  background: color, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: avatarSize * 0.33, fontWeight: 900, color: '#080808', border: `2px solid ${color}40`,
+                }}>{getInitials(v.vendedor)}</div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 9, fontWeight: 800, color, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 2 }}>
+                  {v.vendedor.split(' ')[0]} {v.vendedor.split(' ')[1]?.charAt(0) ?? ''}.
+                </p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 2 }}>
+                  <span style={{ fontSize: compact ? 18 : 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px' }}>
+                    {v.litrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>L</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontSize: 10, color: '#555', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {pctVendedor.toFixed(1)}% del total
+                  </span>
+                  {!compact && <MiniSparkline vendedor={v.vendedor} color={color} />}
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        // ── Donut Meta ──────────────────────────────────────────────────────
+        function DonutMeta({ small }: { small?: boolean }) {
+          if (metaTotalEquipo <= 0) return null
+          const r = small ? 22 : 28, cx = small ? 26 : 34, cy = small ? 26 : 34, sw = small ? 5 : 7
+          const c2 = 2 * Math.PI * r
+          const d2 = (pctMeta / 100) * c2
+          const sz = small ? 52 : 68
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: small ? 10 : 14 }}>
+              <svg width={sz} height={sz} style={{ flexShrink: 0 }}>
+                <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={sw} />
+                <circle cx={cx} cy={cy} r={r} fill="none" stroke="#D4AF37" strokeWidth={sw}
+                  strokeLinecap="round"
+                  strokeDasharray={`${d2} ${c2 - d2}`}
+                  strokeDashoffset={c2 / 4} />
+                <text x={cx} y={cy + (small ? 4 : 5)} textAnchor="middle"
+                  fill="#D4AF37" fontSize={small ? 9 : 11} fontWeight="900" fontFamily="inherit">
+                  {pctMeta}%
+                </text>
+              </svg>
+              <div>
+                <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.55)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 3 }}>
+                  Meta Mensual
+                </p>
+                <p style={{ fontSize: small ? 20 : 26, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1px', lineHeight: 1, marginBottom: 3 }}>
+                  {pctMeta}%
+                </p>
+                <p style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
+                  {totalLitrosPeriodo.toFixed(1)} / {metaTotalEquipo.toFixed(1)} L
+                </p>
+              </div>
+            </div>
+          )
+        }
+
+        const Sep = () => <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(212,175,55,0.15)', margin: '0 4px' }} />
+
         return (
           <div style={{
             background: 'linear-gradient(135deg, #110D00 0%, #1C1500 50%, #0D0A00 100%)',
@@ -1738,126 +1819,89 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
               <DateSelector fechaActual={fechaHoy} fechasDisponibles={fechasDisponibles} />
             </div>
 
-            {/* Main content grid */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: isDesktop ? '1fr 1px 1fr 1px 1fr 1px auto' : '1fr 1fr',
-              gap: isDesktop ? '0 20px' : '14px',
-              alignItems: 'center',
-            }}>
+            {isDesktop ? (
+              /* ══ DESKTOP: una fila, todos los bloques lado a lado ══ */
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
 
-              {/* ── Sección 1: Total período ── */}
-              <div>
-                <p style={{ fontSize: 10, color: 'rgba(212,175,55,0.55)', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 6 }}>
-                  Litros vendidos en {mesNombre} {anio}
-                </p>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 5 }}>
-                  <span style={{ fontSize: isDesktop ? 42 : 34, fontWeight: 900, color: '#D4AF37', letterSpacing: '-2px', lineHeight: 1 }}>
-                    {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                  </span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: '#A8870F' }}>L</span>
-                </div>
-                {litrosMesAnterior > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{
-                      fontSize: 11, fontWeight: 800,
-                      color: diffTotal >= 0 ? '#4ADE80' : '#F87171',
-                    }}>
-                      {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre}
+                {/* Bloque 1: total período */}
+                <div style={{ minWidth: 160 }}>
+                  <p style={{ fontSize: 10, color: 'rgba(212,175,55,0.55)', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 6 }}>
+                    Litros en {mesNombre} {anio}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 5 }}>
+                    <span style={{ fontSize: 42, fontWeight: 900, color: '#D4AF37', letterSpacing: '-2px', lineHeight: 1 }}>
+                      {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                     </span>
-                    <span style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
-                      ({diffTotal >= 0 ? '+' : ''}{diffTotal.toFixed(1)} L)
-                    </span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: '#A8870F' }}>L</span>
                   </div>
-                )}
-              </div>
+                  {litrosMesAnterior > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
+                        {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
+                        ({diffTotal >= 0 ? '+' : ''}{diffTotal.toFixed(1)} L)
+                      </span>
+                    </div>
+                  )}
+                </div>
 
-              {/* Separador */}
-              {isDesktop && <div style={{ width: 1, height: 52, background: 'rgba(212,175,55,0.15)' }} />}
+                <Sep />
 
-              {/* ── Secciones vendedores ── */}
-              {resumen.map((v, idx) => {
-                const color = VEND_COLOR[v.vendedor] ?? '#D4AF37'
-                const pctVendedor = totalLitrosPeriodo > 0 ? (v.litrosPeriodo / totalLitrosPeriodo) * 100 : 0
-                return (
-                  <div key={v.vendedor} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    {/* Foto */}
-                    {vendedorAvatars?.[v.vendedor] ? (
-                      <div style={{
-                        width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
-                        border: `2px solid ${color}`, boxShadow: `0 0 12px ${color}30`,
-                      }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={vendedorAvatars[v.vendedor]!} alt={v.vendedor}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
-                      </div>
-                    ) : (
-                      <div style={{
-                        width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
-                        background: color, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 14, fontWeight: 900, color: '#080808', border: `2px solid ${color}40`,
-                      }}>{getInitials(v.vendedor)}</div>
-                    )}
-                    {/* Datos */}
+                {/* Bloques vendedores con separadores entre ellos */}
+                {resumen.map((v, i) => (
+                  <div key={v.vendedor} style={{ display: 'flex', alignItems: 'center', gap: 20, flex: 1, minWidth: 0 }}>
+                    {i > 0 && <Sep />}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 9, fontWeight: 800, color: color, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 3 }}>
-                        {v.vendedor.split(' ')[0]} {v.vendedor.split(' ')[1]?.charAt(0) ?? ''}.
-                      </p>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 2 }}>
-                        <span style={{ fontSize: isDesktop ? 22 : 18, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px' }}>
-                          {v.litrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                        </span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>L</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
-                          {pctVendedor.toFixed(1)}% del total
-                        </span>
-                        {isDesktop && <MiniSparkline vendedor={v.vendedor} color={color} />}
-                      </div>
+                      <VendedorBannerBlock v={v} />
                     </div>
                   </div>
-                )
-              })}
+                ))}
 
-              {/* Separadores entre vendedores y antes de meta */}
-              {isDesktop && resumen.length > 0 && <div style={{ width: 1, height: 52, background: 'rgba(212,175,55,0.15)' }} />}
+                {metaTotalEquipo > 0 && <><Sep /><DonutMeta /></>}
+              </div>
 
-              {/* ── Sección Meta Mensual ── */}
-              {metaTotalEquipo > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  {/* Donut */}
-                  <svg width={68} height={68} style={{ flexShrink: 0 }}>
-                    {/* Track */}
-                    <circle cx={donutCx} cy={donutCy} r={donutR} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={stroke} />
-                    {/* Progress */}
-                    <circle
-                      cx={donutCx} cy={donutCy} r={donutR} fill="none"
-                      stroke="#D4AF37" strokeWidth={stroke}
-                      strokeLinecap="round"
-                      strokeDasharray={`${dash} ${circ - dash}`}
-                      strokeDashoffset={circ / 4}
-                      style={{ transition: 'stroke-dasharray 0.6s ease' }}
-                    />
-                    <text x={donutCx} y={donutCy + 5} textAnchor="middle"
-                      fill="#D4AF37" fontSize="11" fontWeight="900" fontFamily="inherit">
-                      {pctMeta}%
-                    </text>
-                  </svg>
-                  <div>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.55)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 4 }}>
-                      Meta Mensual
-                    </p>
-                    <p style={{ fontSize: isDesktop ? 26 : 22, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1px', lineHeight: 1, marginBottom: 4 }}>
-                      {pctMeta}%
-                    </p>
-                    <p style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
-                      {totalLitrosPeriodo.toFixed(1)} / {metaTotalEquipo.toFixed(1)} L
-                    </p>
+            ) : (
+              /* ══ MOBILE: apilado en 3 filas ══ */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                {/* Fila 1: total período */}
+                <div>
+                  <p style={{ fontSize: 9, color: 'rgba(212,175,55,0.55)', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 4 }}>
+                    Litros en {mesNombre} {anio}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 4 }}>
+                    <span style={{ fontSize: 34, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1.5px', lineHeight: 1 }}>
+                      {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#A8870F' }}>L</span>
                   </div>
+                  {litrosMesAnterior > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
+                      {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre} ({diffTotal >= 0 ? '+' : ''}{diffTotal.toFixed(1)} L)
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
+
+                {/* Divisor */}
+                <div style={{ height: 1, background: 'rgba(212,175,55,0.12)' }} />
+
+                {/* Fila 2: vendedores en 2 columnas */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  {resumen.map(v => (
+                    <VendedorBannerBlock key={v.vendedor} v={v} compact />
+                  ))}
+                </div>
+
+                {/* Fila 3: meta mensual (horizontal, compacto) */}
+                {metaTotalEquipo > 0 && (
+                  <>
+                    <div style={{ height: 1, background: 'rgba(212,175,55,0.12)' }} />
+                    <DonutMeta small />
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )
       })()}
