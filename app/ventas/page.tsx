@@ -300,6 +300,16 @@ export default async function DashboardPage({
   }
   const misionesResumen: MisionResumen[] = misionesRaw ?? []
 
+  // Avatares de vendedores para los círculos del dashboard
+  const { data: usersAvatars } = await supabase
+    .from('users')
+    .select('nombre, avatar_url')
+    .in('nombre', ['Javier B.', 'Carlos U.'])
+  const vendedorAvatars: Record<string, string | null> = {
+    'Javier Badilla':  usersAvatars?.find(u => u.nombre === 'Javier B.')?.avatar_url  ?? null,
+    'Carlos Urrejola': usersAvatars?.find(u => u.nombre === 'Carlos U.')?.avatar_url ?? null,
+  }
+
   return (
     <DashboardClient
       resumen={resumen}
@@ -313,6 +323,7 @@ export default async function DashboardPage({
       riesgoClientes={riesgoClientes}
       planSemana={planSemana}
       misionesResumen={misionesResumen}
+      vendedorAvatars={vendedorAvatars}
     />
   )
 }

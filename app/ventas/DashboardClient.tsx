@@ -71,12 +71,43 @@ interface Props {
   riesgoClientes: PlanCliente[]
   planSemana: PlanCliente[]
   misionesResumen: MisionResumen[]
+  vendedorAvatars?: Record<string, string | null>
 }
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
 function fL(n: number) { return n.toFixed(1) + ' L' }
 function fP(n: number) { return '$' + Math.round(n).toLocaleString('es-CL') }
 function getInitials(name: string) { return name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() }
+
+// ── Avatar vendedor (foto o iniciales) ──────────────────────────────────────
+function VendedorAvatar({ vendedor, color, size, avatars }: {
+  vendedor: string; color: string; size: number; avatars?: Record<string, string | null>
+}) {
+  const url = avatars?.[vendedor]
+  if (url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <div style={{
+        width: size, height: size, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+        border: `2px solid ${color}`, boxShadow: `0 0 10px ${color}40`,
+      }}>
+        <img src={url} alt={vendedor}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
+      </div>
+    )
+  }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', background: color, flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.35, fontWeight: 800, color: '#080808',
+      border: `2px solid ${color}40`,
+    }}>
+      {getInitials(vendedor)}
+    </div>
+  )
+}
+
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 function formatFecha(s: string) {
   const [y, m, d] = s.split('-')
@@ -111,11 +142,13 @@ function DayDetailModal({
   vendedores,
   colors,
   onClose,
+  avatars,
 }: {
   day: EvolutionDay
   vendedores: string[]
   colors: Record<string, string>
   onClose: () => void
+  avatars?: Record<string, string | null>
 }) {
   const fecha = day.fecha as string
   const total = vendedores.reduce((s, v) => s + (typeof day[v] === 'number' ? (day[v] as number) : 0), 0)
@@ -170,13 +203,7 @@ function DayDetailModal({
               <div key={v} style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{
-                      width: 34, height: 34, borderRadius: '50%', background: color,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 800, color: '#080808', flexShrink: 0,
-                    }}>
-                      {getInitials(v)}
-                    </div>
+                    <VendedorAvatar vendedor={v} color={color} size={34} avatars={avatars} />
                     <div>
                       <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.split(' ')[0]}</p>
                       <p style={{ fontSize: 10, color: 'var(--muted)' }}>Vendedor Canal</p>
@@ -214,7 +241,7 @@ function DayDetailModal({
 }
 
 // ── LineChart ────────────────────────────────────────────────────────────────
-function LineChart({ data, vendedores, colors }: { data: EvolutionDay[]; vendedores: string[]; colors: Record<string, string> }) {
+function LineChart({ data, vendedores, colors, avatars }: { data: EvolutionDay[]; vendedores: string[]; colors: Record<string, string>; avatars?: Record<string, string | null> }) {
   const [selectedDay, setSelectedDay] = useState<EvolutionDay | null>(null)
 
   const W = 500
@@ -361,6 +388,7 @@ function LineChart({ data, vendedores, colors }: { data: EvolutionDay[]; vendedo
           vendedores={vendedores}
           colors={colors}
           onClose={() => setSelectedDay(null)}
+          avatars={avatars}
         />
       )}
     </>
@@ -368,19 +396,13 @@ function LineChart({ data, vendedores, colors }: { data: EvolutionDay[]; vendedo
 }
 
 // ── MetaBar ──────────────────────────────────────────────────────────────────
-function MetaBar({ vendedor, actual, meta }: { vendedor: string; actual: number; meta: number }) {
+function MetaBar({ vendedor, actual, meta, avatars }: { vendedor: string; actual: number; meta: number; avatars?: Record<string, string | null> }) {
   const pct = meta > 0 ? Math.min((actual / meta) * 100, 100) : 0
   const color = vendedor.toLowerCase().includes('javier') ? '#D4AF37' : '#60A5FA'
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: '50%',
-          background: color, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 12, fontWeight: 800, color: '#080808', flexShrink: 0,
-        }}>
-          {getInitials(vendedor)}
-        </div>
+        <VendedorAvatar vendedor={vendedor} color={color} size={36} avatars={avatars} />
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{vendedor.split(' ')[0]}</span>
@@ -614,12 +636,14 @@ function ClientesHoyModal({
   clientes,
   fechaHoy,
   onClose,
+  avatars,
 }: {
   vendedor: string
   color: string
   clientes: ClienteDetalle[]
   fechaHoy: string
   onClose: () => void
+  avatars?: Record<string, string | null>
 }) {
   const [clienteAbierto, setClienteAbierto] = useState<string | null>(null)
 
@@ -657,13 +681,7 @@ function ClientesHoyModal({
           borderBottom: '1px solid var(--border-subtle)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <div style={{
-              width: 38, height: 38, borderRadius: '50%', background: color,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 800, color: '#080808', flexShrink: 0,
-            }}>
-              {getInitials(vendedor)}
-            </div>
+            <VendedorAvatar vendedor={vendedor} color={color} size={38} avatars={avatars} />
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '1px' }}>
                 CLIENTES DEL DÍA · {formatFecha(fechaHoy)}
@@ -845,7 +863,7 @@ function ProductMixCard({ resumen }: { resumen: VendedorResumen[] }) {
 }
 
 // ── VendedorCard ─────────────────────────────────────────────────────────────
-function VendedorCard({ data, color, fechaHoy }: { data: VendedorResumen; color: string; fechaHoy: string }) {
+function VendedorCard({ data, color, fechaHoy, avatars }: { data: VendedorResumen; color: string; fechaHoy: string; avatars?: Record<string, string | null> }) {
   const [showModal, setShowModal] = useState(false)
 
   return (
@@ -858,13 +876,7 @@ function VendedorCard({ data, color, fechaHoy }: { data: VendedorResumen; color:
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px 12px' }}>
-        <div style={{
-          width: 42, height: 42, borderRadius: '50%',
-          background: color, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 14, fontWeight: 800, color: '#080808', flexShrink: 0,
-        }}>
-          {getInitials(data.vendedor)}
-        </div>
+        <VendedorAvatar vendedor={data.vendedor} color={color} size={42} avatars={avatars} />
         <div>
           <h2 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 16, letterSpacing: '-0.3px' }}>{data.vendedor}</h2>
           <p style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Vendedor Canal</p>
@@ -965,6 +977,7 @@ function VendedorCard({ data, color, fechaHoy }: { data: VendedorResumen; color:
         clientes={data.clientesHoy}
         fechaHoy={fechaHoy}
         onClose={() => setShowModal(false)}
+        avatars={avatars}
       />
     )}
     </>
@@ -972,7 +985,7 @@ function VendedorCard({ data, color, fechaHoy }: { data: VendedorResumen; color:
 }
 
 // ── MetasCard ────────────────────────────────────────────────────────────────
-function MetasCard({ resumen, periodo }: { resumen: VendedorResumen[]; periodo: Periodo | null }) {
+function MetasCard({ resumen, periodo, avatars }: { resumen: VendedorResumen[]; periodo: Periodo | null; avatars?: Record<string, string | null> }) {
   const allZero = resumen.every(v => v.metaLitros === 0)
   return (
     <div style={{
@@ -989,7 +1002,7 @@ function MetasCard({ resumen, periodo }: { resumen: VendedorResumen[]; periodo: 
           </p>
         ) : (
           resumen.map(v => (
-            <MetaBar key={v.vendedor} vendedor={v.vendedor} actual={v.litrosPeriodo} meta={v.metaLitros} />
+            <MetaBar key={v.vendedor} vendedor={v.vendedor} actual={v.litrosPeriodo} meta={v.metaLitros} avatars={avatars} />
           ))
         )}
       </div>
@@ -998,7 +1011,7 @@ function MetasCard({ resumen, periodo }: { resumen: VendedorResumen[]; periodo: 
 }
 
 // ── EvolutionCard ────────────────────────────────────────────────────────────
-function EvolutionCard({ evolution, vendedores, colors }: { evolution: EvolutionDay[]; vendedores: string[]; colors: Record<string, string> }) {
+function EvolutionCard({ evolution, vendedores, colors, avatars }: { evolution: EvolutionDay[]; vendedores: string[]; colors: Record<string, string>; avatars?: Record<string, string | null> }) {
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
@@ -1014,7 +1027,7 @@ function EvolutionCard({ evolution, vendedores, colors }: { evolution: Evolution
             </div>
           ))}
         </div>
-        <LineChart data={evolution} vendedores={vendedores} colors={colors} />
+        <LineChart data={evolution} vendedores={vendedores} colors={colors} avatars={avatars} />
       </div>
     </div>
   )
@@ -1542,7 +1555,7 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
 }
 
 // ── DropSizeCard ─────────────────────────────────────────────────────────────
-function DropSizeCard({ resumen, colors }: { resumen: VendedorResumen[]; colors: Record<string, string> }) {
+function DropSizeCard({ resumen, colors, avatars }: { resumen: VendedorResumen[]; colors: Record<string, string>; avatars?: Record<string, string | null> }) {
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
@@ -1558,13 +1571,7 @@ function DropSizeCard({ resumen, colors }: { resumen: VendedorResumen[]; colors:
             <div key={v.vendedor} style={{ marginBottom: i < resumen.length - 1 ? 20 : 0 }}>
               {/* Header row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: '50%',
-                  background: color, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, fontWeight: 800, color: '#080808', flexShrink: 0,
-                }}>
-                  {getInitials(v.vendedor)}
-                </div>
+                <VendedorAvatar vendedor={v.vendedor} color={color} size={36} avatars={avatars} />
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.vendedor}</p>
                   <p style={{ fontSize: 10, color: 'var(--muted)' }}>Vendedor Canal</p>
@@ -1595,7 +1602,7 @@ function DropSizeCard({ resumen, colors }: { resumen: VendedorResumen[]; colors:
 }
 
 // ── Main Component ───────────────────────────────────────────────────────────
-export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, periodo, evolution, productRanking, productDetail, vendedoresScope, riesgoClientes, planSemana, misionesResumen }: Props) {
+export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, periodo, evolution, productRanking, productDetail, vendedoresScope, riesgoClientes, planSemana, misionesResumen, vendedorAvatars }: Props) {
   const isDesktop = useIsDesktop()
   const [showPlanModal, setShowPlanModal] = useState(false)
 
@@ -1725,11 +1732,11 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
 
         {/* Col 2-3: Vendedor cards */}
         {resumen.map(v => (
-          <VendedorCard key={v.vendedor} data={v} color={VEND_COLOR[v.vendedor] ?? '#D4AF37'} fechaHoy={fechaHoy} />
+          <VendedorCard key={v.vendedor} data={v} color={VEND_COLOR[v.vendedor] ?? '#D4AF37'} fechaHoy={fechaHoy} avatars={vendedorAvatars} />
         ))}
 
         {/* Col 4: Metas */}
-        <MetasCard resumen={resumen} periodo={periodo} />
+        <MetasCard resumen={resumen} periodo={periodo} avatars={vendedorAvatars} />
       </div>
 
       {/* === BOTTOM GRID (2-col evolution + sidebar cards) === */}
@@ -1739,13 +1746,14 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
           evolution={evolution}
           vendedores={vendedoresScope}
           colors={VEND_COLOR}
+          avatars={vendedorAvatars}
         />
 
         {/* Col 2: Ranking */}
         <RankingCard productRanking={productRanking} productDetail={productDetail} fechaHoy={fechaHoy} />
 
         {/* Col 3: Drop Size */}
-        <DropSizeCard resumen={resumen} colors={VEND_COLOR} />
+        <DropSizeCard resumen={resumen} colors={VEND_COLOR} avatars={vendedorAvatars} />
       </div>
 
       {/* === RISK ROW === */}
