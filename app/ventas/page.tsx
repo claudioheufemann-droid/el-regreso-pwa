@@ -300,6 +300,39 @@ export default async function DashboardPage({
   }
   const misionesResumen: MisionResumen[] = misionesRaw ?? []
 
+  // Litros mes anterior para comparación en banner
+  let litrosMesAnteriorTotal = 0
+  const litrosMesAnteriorPorVendedor: Record<string, number> = {}
+  if (periodo?.fecha_inicio) {
+    const mesAnteriorFin = new Date(periodo.fecha_inicio)
+    mesAnteriorFin.setDate(mesAnteriorFin.getDate() - 1)
+    const mesAnteriorIni = new Date(mesAnteriorFin)
+    mesAnteriorIni.setDate(1)
+    const iniStr = mesAnteriorIni.toISOString().split('T')[0]
+    const finStr = mesAnteriorFin.toISOString().split('T')[0]
+
+    const rowsPrev: { vendedor_actual: string; litros: number | null; nombre_fantasia: string | null }[] = []
+    let offset = 0
+    while (true) {
+      const { data: page } = await supabase
+        .from('ventas')
+        .select('vendedor_actual, litros, nombre_fantasia')
+        .in('vendedor_actual', scope)
+        .gte('fecha_pedido', iniStr)
+        .lte('fecha_pedido', finStr)
+        .range(offset, offset + 999)
+      if (!page || page.length === 0) break
+      rowsPrev.push(...page)
+      if (page.length < 1000) break
+      offset += 1000
+    }
+    for (const v of rowsPrev) {
+      if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))) continue
+      litrosMesAnteriorTotal += v.litros ?? 0
+      litrosMesAnteriorPorVendedor[v.vendedor_actual] = (litrosMesAnteriorPorVendedor[v.vendedor_actual] ?? 0) + (v.litros ?? 0)
+    }
+  }
+
   // Avatares de vendedores para los círculos del dashboard
   const { data: usersAvatars } = await supabase
     .from('users')
@@ -324,6 +357,8 @@ export default async function DashboardPage({
       planSemana={planSemana}
       misionesResumen={misionesResumen}
       vendedorAvatars={vendedorAvatars}
+      litrosMesAnterior={litrosMesAnteriorTotal}
+      litrosMesAnteriorPorVendedor={litrosMesAnteriorPorVendedor}
     />
   )
 }
