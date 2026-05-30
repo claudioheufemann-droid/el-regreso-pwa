@@ -11,19 +11,24 @@ function getMondayOfWeek(d: Date): string {
   return x.toISOString().split('T')[0]
 }
 
+export type EstadoMision = 'pendiente' | 'contactado_pedido' | 'contactado_sin_pedido' | 'sin_respuesta'
+export type TipoMision = 'esta_semana' | 'proxima_semana' | 'vencido'
+
 export interface MisionEnriquecida {
   id: string
   vendedor: string
   nombre_fantasia: string
   semana: string
+  tipo: TipoMision
   alert_level: string
   score: number
   segmento: string
   dias_sin_compra: number
   ciclo_promedio_dias: number | null
   siguiente_compra_estimada: string | null
-  estado: 'pendiente' | 'completada'
+  estado: EstadoMision
   completado_at: string | null
+  nota: string | null
   // Enriquecido
   ruta_despacho: string | null
   localidad: string | null
@@ -32,6 +37,7 @@ export interface MisionEnriquecida {
   ultima_venta_monto: number
   prioridad: 'Alta' | 'Media' | 'Baja'
   frecuencia_texto: string
+  dias_para_compra: number | null // positivo = faltan días, negativo = ya venció
 }
 
 export interface ProximaPreview {
@@ -48,7 +54,7 @@ export interface HistorialSemana {
 }
 
 function enriquecerMision(
-  m: Omit<MisionEnriquecida, 'ruta_despacho'|'localidad'|'telefono'|'ultima_venta_fecha'|'ultima_venta_monto'|'prioridad'|'frecuencia_texto'>,
+  m: Omit<MisionEnriquecida, 'ruta_despacho'|'localidad'|'telefono'|'ultima_venta_fecha'|'ultima_venta_monto'|'prioridad'|'frecuencia_texto'|'dias_para_compra'>,
   clienteMap: Map<string, { ruta_despacho: string|null; localidad: string|null; telefono: string|null }>,
   ventaMap: Map<string, { fecha: string; monto: number }>
 ): MisionEnriquecida {
@@ -57,7 +63,16 @@ function enriquecerMision(
   const prioridad = m.alert_level==='critico' ? 'Alta' : m.alert_level==='vencido' ? 'Media' : 'Baja'
   const ciclo = m.ciclo_promedio_dias
   const frecuencia_texto = ciclo ? `Cada ${ciclo} días` : 'Sin datos'
-  return { ...m, ...cli, ultima_venta_fecha: vta?.fecha??null, ultima_venta_monto: vta?.monto??0, prioridad, frecuencia_texto }
+  // Calcular días restantes para próxima compra
+  let dias_para_compra: number | null = null
+  if (m.siguiente_compra_estimada) {
+    const hoy = new Date(); hoy.setHours(0,0,0,0)
+    const sig = new Date(m.siguiente_compra_estimada + 'T12:00:00')
+    dias_para_compra = Math.round((sig.getTime() - hoy.getTime()) / 86400000)
+  }
+  // Default tipo si no viene de DB (retrocompatibilidad)
+  const tipo: TipoMision = (m as MisionEnriquecida).tipo ?? 'vencido'
+  return { ...m, tipo, ...cli, ultima_venta_fecha: vta?.fecha??null, ultima_venta_monto: vta?.monto??0, prioridad, frecuencia_texto, dias_para_compra }
 }
 
 export default async function MisionesPage() {
@@ -81,13 +96,14 @@ export default async function MisionesPage() {
   ] = await Promise.all([
     // Misiones de esta semana
     supabase.from('misiones')
-      .select('id,vendedor,nombre_fantasia,semana,alert_level,score,segmento,dias_sin_compra,ciclo_promedio_dias,siguiente_compra_estimada,estado,completado_at')
+      .select('id,vendedor,nombre_fantasia,semana,tipo,alert_level,score,segmento,dias_sin_compra,ciclo_promedio_dias,siguiente_compra_estimada,estado,completado_at,nota')
       .eq('semana', semana)
-      .in('vendedor', vendedoresScope),
+      .in('vendedor', vendedoresScope)
+      .order('score', { ascending: false }),
 
     // Historial: últimas 4 semanas (excluye esta semana)
     supabase.from('misiones')
-      .select('id,vendedor,nombre_fantasia,semana,alert_level,score,segmento,dias_sin_compra,ciclo_promedio_dias,siguiente_compra_estimada,estado,completado_at')
+      .select('id,vendedor,nombre_fantasia,semana,tipo,alert_level,score,segmento,dias_sin_compra,ciclo_promedio_dias,siguiente_compra_estimada,estado,completado_at,nota')
       .in('vendedor', vendedoresScope)
       .gte('semana', semana4ago)
       .lt('semana', semana)
@@ -138,7 +154,7 @@ export default async function MisionesPage() {
   }
   const historial: HistorialSemana[] = Array.from(historialMap.entries())
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([s, ms]) => ({ semana: s, total: ms.length, completadas: ms.filter(m=>m.estado==='completada').length, misiones: ms }))
+    .map(([s, ms]) => ({ semana: s, total: ms.length, completadas: ms.filter(m=>m.estado==='contactado_pedido').length, misiones: ms }))
 
   // Preview próxima semana (alertas no guardadas aún)
   const proxima: ProximaPreview[] = (proximaRaw ?? []) as ProximaPreview[]
@@ -148,7 +164,7 @@ export default async function MisionesPage() {
   const consejos: string[] = []
   if (pendientesAlta.length > 0)
     consejos.push(`Tienes ${pendientesAlta.length} cliente${pendientesAlta.length>1?'s':''} de alta prioridad sin contactar. ¡Contáctalos hoy!`)
-  const completadasHoy = misiones.filter(m => m.estado==='completada' && m.completado_at &&
+  const completadasHoy = misiones.filter(m => m.estado==='contactado_pedido' && m.completado_at &&
     new Date(m.completado_at).toDateString() === new Date().toDateString())
   if (completadasHoy.length > 0)
     consejos.push(`¡Vas por buen camino! Contactaste ${completadasHoy.length} cliente${completadasHoy.length>1?'s':''} hoy 👍`)

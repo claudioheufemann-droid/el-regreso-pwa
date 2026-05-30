@@ -1,34 +1,23 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
-  CheckCircle2, Circle, MessageCircle, Target, ChevronRight, ChevronDown,
-  RefreshCw, Zap, User, Filter, Phone, Clock, PhoneOff, Calendar,
-  Lightbulb, X, TrendingUp,
+  CheckCircle2, Phone, PhoneOff, MessageCircle, RefreshCw, Calendar,
+  Clock, ChevronDown, ChevronRight, AlertTriangle, Zap, Target, X,
+  TrendingUp, Star,
 } from 'lucide-react'
-import type { MisionEnriquecida, ProximaPreview, HistorialSemana } from './page'
-import WAModal, { type WATarget, generarMensajeWA as _gen } from '@/components/ui/WAModal'
+import type { MisionEnriquecida, ProximaPreview, HistorialSemana, EstadoMision, TipoMision } from './page'
+import WAModal, { type WATarget } from '@/components/ui/WAModal'
 
 // ── Paleta ────────────────────────────────────────────────────────────────────
-const SEG_COLOR: Record<string, string> = { A:'#D4AF37', B:'#34D399', C:'#60A5FA', D:'#F59E0B', E:'#F87171' }
-const VEND_COLOR: Record<string, string> = { 'Javier Badilla':'#60A5FA', 'Carlos Urrejola':'#34D399' }
-const PRIO_CFG: Record<string, { color: string; bg: string; border: string }> = {
-  Alta:  { color:'#EF4444', bg:'rgba(239,68,68,0.1)',  border:'rgba(239,68,68,0.25)'  },
-  Media: { color:'#F59E0B', bg:'rgba(245,158,11,0.1)', border:'rgba(245,158,11,0.25)' },
-  Baja:  { color:'#34D399', bg:'rgba(52,211,153,0.1)', border:'rgba(52,211,153,0.25)' },
+const SEG_COLOR: Record<string, string> = {
+  A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171',
 }
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
-type Tab = 'semana' | 'proxima' | 'historial'
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function rangoSemana(lunes: string) {
-  const d = new Date(lunes + 'T12:00:00')
-  const fin = new Date(d); fin.setDate(fin.getDate() + 6)
-  return `${d.getDate()} ${MESES[d.getMonth()]} — ${fin.getDate()} ${MESES[fin.getMonth()]} ${fin.getFullYear()}`
-}
 function fFecha(s: string | null): string {
   if (!s) return '—'
   const [y, m, d] = s.split('T')[0].split('-')
@@ -39,84 +28,525 @@ function fPeso(n: number): string {
   if (n >= 1_000_000) return `$${(n/1_000_000).toFixed(1)}M`
   return `$${Math.round(n).toLocaleString('es-CL')}`
 }
-// waUrl, generarMensajeWA y WAModal → ahora vienen del componente compartido
-// @/components/ui/WAModal
+function rangoSemana(lunes: string) {
+  const d = new Date(lunes + 'T12:00:00')
+  const fin = new Date(d); fin.setDate(fin.getDate() + 6)
+  return `${d.getDate()} ${MESES[d.getMonth()]} — ${fin.getDate()} ${MESES[fin.getMonth()]} ${fin.getFullYear()}`
+}
 
-// ── Donut de progreso ──────────────────────────────────────────────────────────
-function ProgressDonut({ done, total, size=120 }: { done: number; total: number; size?: number }) {
+// ── Config por tipo de misión ──────────────────────────────────────────────────
+const TIPO_CFG: Record<TipoMision, { label: string; color: string; bg: string; border: string; icon: string; desc: string }> = {
+  esta_semana:    { label: 'Esta semana',    color: '#D4AF37', bg: 'rgba(212,175,55,0.08)',  border: 'rgba(212,175,55,0.3)',  icon: '📅', desc: 'Compra estimada esta semana' },
+  proxima_semana: { label: 'Próxima semana', color: '#60A5FA', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.3)', icon: '📆', desc: 'Compra estimada la próxima semana' },
+  vencido:        { label: '🚨 Llama ahora', color: '#F87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.3)', icon: '🚨', desc: 'Ya se pasó su ciclo de compra' },
+}
+
+// ── Config por estado ──────────────────────────────────────────────────────────
+const ESTADO_CFG: Record<EstadoMision, { label: string; color: string; icon: string }> = {
+  pendiente:              { label: 'Sin contactar',  color: '#6B7280', icon: '○' },
+  contactado_pedido:      { label: 'Hizo pedido ✓', color: '#34D399', icon: '✓' },
+  contactado_sin_pedido:  { label: 'Contactado',    color: '#F59E0B', icon: '📞' },
+  sin_respuesta:          { label: 'Sin respuesta',  color: '#94A3B8', icon: '🔇' },
+}
+
+// ── Donut progreso ────────────────────────────────────────────────────────────
+function ProgressDonut({ done, total, size = 100 }: { done: number; total: number; size?: number }) {
   const pct = total > 0 ? done / total : 0
-  const r = (size - 16) / 2
-  const cx = size / 2
+  const r = (size - 14) / 2; const cx = size / 2
   const circ = 2 * Math.PI * r
   const dash = circ * pct
-  const color = pct >= 0.9 ? '#34D399' : pct >= 0.5 ? '#F59E0B' : '#D4AF37'
+  const color = pct >= 0.8 ? '#34D399' : pct >= 0.5 ? '#F59E0B' : '#D4AF37'
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={cx} cy={cx} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8"/>
-      <circle cx={cx} cy={cx} r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+      <circle cx={cx} cy={cx} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7"/>
+      <circle cx={cx} cy={cx} r={r} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
         strokeDasharray={`${dash} ${circ}`} transform={`rotate(-90 ${cx} ${cx})`}
-        style={{ transition:'stroke-dasharray 0.6s ease' }}/>
-      <text x={cx} y={cx-2} textAnchor="middle" fontSize={size*0.2} fontWeight="900" fill="var(--cream)">{done}</text>
-      <text x={cx} y={cx+size*0.15} textAnchor="middle" fontSize={size*0.11} fill="var(--muted)">/ {total}</text>
+        style={{ transition: 'stroke-dasharray 0.6s ease' }}/>
+      <text x={cx} y={cx - 4} textAnchor="middle" fontSize={size * 0.22} fontWeight="900" fill="var(--cream)">{done}</text>
+      <text x={cx} y={cx + size * 0.17} textAnchor="middle" fontSize={size * 0.12} fill="var(--muted)">/ {total}</text>
     </svg>
   )
 }
 
-// ── Donut multicolor (resumen) ──────────────────────────────────────────────────
-function MultiDonut({ items, size=130, centerLabel }: {
-  items: { label: string; value: number; color: string }[]
-  size?: number; centerLabel?: string
+// ── Botones de acción del vendedor ────────────────────────────────────────────
+function BotonesAccion({
+  mision, onActualizar, loading,
+}: {
+  mision: MisionEnriquecida
+  onActualizar: (id: string, estado: EstadoMision, nota?: string) => Promise<void>
+  loading: boolean
 }) {
-  const total = items.reduce((s,i)=>s+i.value,0) || 1
-  let cum = -Math.PI/2
-  const R = (size-14)/2; const r = R*0.62; const c = size/2
-  const arcs = items.map(it => {
-    const angle = (it.value/total)*2*Math.PI
-    if (angle < 0.001) return null
-    const x1=c+R*Math.cos(cum), y1=c+R*Math.sin(cum)
-    cum+=angle
-    const x2=c+R*Math.cos(cum), y2=c+R*Math.sin(cum)
-    const x3=c+r*Math.cos(cum), y3=c+r*Math.sin(cum)
-    const x4=c+r*Math.cos(cum-angle), y4=c+r*Math.sin(cum-angle)
-    const lg = angle>Math.PI?1:0
-    return { d:`M ${x1} ${y1} A ${R} ${R} 0 ${lg} 1 ${x2} ${y2} L ${x3} ${y3} A ${r} ${r} 0 ${lg} 0 ${x4} ${y4} Z`, color:it.color }
-  })
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink:0 }}>
-      {arcs.map((a,i)=> a && <path key={i} d={a.d} fill={a.color}/>)}
-      {centerLabel && (
-        <>
-          <text x={c} y={c-2} textAnchor="middle" fontSize={size*0.22} fontWeight="900" fill="var(--cream)">{centerLabel}</text>
-          <text x={c} y={c+size*0.13} textAnchor="middle" fontSize={size*0.08} fill="var(--muted)">Completado</text>
-        </>
-      )}
-    </svg>
-  )
-}
+  const [expanded, setExpanded] = useState(false)
 
-// ── KPI Card desktop ────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, icon:Icon, color, donut }: {
-  label: string; value: React.ReactNode; sub: string
-  icon: React.ElementType; color: string; donut?: React.ReactNode
-}) {
+  const acciones: { estado: EstadoMision; label: string; color: string; icon: React.ReactNode }[] = [
+    { estado: 'contactado_pedido',     label: 'Hizo pedido',    color: '#34D399', icon: <CheckCircle2 size={14}/> },
+    { estado: 'contactado_sin_pedido', label: 'Contactado',     color: '#F59E0B', icon: <Phone size={14}/> },
+    { estado: 'sin_respuesta',         label: 'Sin respuesta',  color: '#94A3B8', icon: <PhoneOff size={14}/> },
+  ]
+
+  const isPedido = mision.estado === 'contactado_pedido'
+
+  if (isPedido) {
+    return (
+      <button
+        onClick={() => onActualizar(mision.id, 'pendiente')}
+        disabled={loading}
+        style={{
+          padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+          background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)',
+          color: '#34D399', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+        }}
+      >
+        <CheckCircle2 size={12}/> Hizo pedido — Deshacer
+      </button>
+    )
+  }
+
   return (
-    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:16, padding:'16px 18px',
-      display:'flex', justifyContent:'space-between', alignItems:'center', flex:'1 1 200px' }}>
-      <div>
-        <p style={{ fontSize:9, fontWeight:700, color:'var(--muted)', letterSpacing:'0.08em', marginBottom:8 }}>{label}</p>
-        <p style={{ fontSize:30, fontWeight:900, color:'var(--cream)', letterSpacing:'-1px', lineHeight:1 }}>{value}</p>
-        <p style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>{sub}</p>
+    <div style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {acciones.map(a => (
+          <button
+            key={a.estado}
+            onClick={() => onActualizar(mision.id, a.estado)}
+            disabled={loading}
+            style={{
+              padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+              background: mision.estado === a.estado ? `${a.color}20` : 'var(--surface2)',
+              border: `1px solid ${mision.estado === a.estado ? `${a.color}50` : 'var(--border)'}`,
+              color: mision.estado === a.estado ? a.color : 'var(--muted)',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { if (!loading && mision.estado !== a.estado) (e.currentTarget as HTMLElement).style.borderColor = `${a.color}50` }}
+            onMouseLeave={e => { if (mision.estado !== a.estado) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
+          >
+            {a.icon} {a.label}
+          </button>
+        ))}
       </div>
-      {donut ?? (
-        <div style={{ width:48, height:48, borderRadius:12, background:`${color}15`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-          <Icon size={22} color={color}/>
+    </div>
+  )
+}
+
+// ── Tarjeta de misión ─────────────────────────────────────────────────────────
+function MisionCard({
+  mision, onActualizar, onWA, loadingId,
+}: {
+  mision: MisionEnriquecida
+  onActualizar: (id: string, estado: EstadoMision, nota?: string) => Promise<void>
+  onWA: (m: MisionEnriquecida) => void
+  loadingId: string | null
+}) {
+  const [open, setOpen] = useState(false)
+  const segColor = SEG_COLOR[mision.segmento] ?? '#6B7280'
+  const tipoCfg  = TIPO_CFG[mision.tipo]
+  const estadoCfg = ESTADO_CFG[mision.estado]
+  const loading = loadingId === mision.id
+  const isPedido = mision.estado === 'contactado_pedido'
+
+  const diasLabel = mision.dias_para_compra !== null
+    ? mision.dias_para_compra < 0
+      ? `Venció hace ${Math.abs(mision.dias_para_compra)}d`
+      : mision.dias_para_compra === 0
+      ? 'Compra hoy'
+      : `En ${mision.dias_para_compra}d`
+    : null
+
+  return (
+    <div style={{
+      background: isPedido ? 'rgba(52,211,153,0.04)' : 'var(--surface)',
+      border: `1px solid ${isPedido ? 'rgba(52,211,153,0.2)' : 'var(--border)'}`,
+      borderRadius: 16,
+      opacity: isPedido ? 0.7 : 1,
+      transition: 'all 0.2s',
+    }}>
+      {/* Header — siempre visible */}
+      <div
+        onClick={() => setOpen(v => !v)}
+        style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+      >
+        {/* Score + segmento */}
+        <div style={{
+          width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
+          background: `${segColor}18`, border: `2px solid ${segColor}40`,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 900, color: segColor, lineHeight: 1 }}>{mision.segmento}</span>
+          <span style={{ fontSize: 8, color: segColor, opacity: 0.7, fontWeight: 700 }}>{mision.score}</span>
+        </div>
+
+        {/* Info principal */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+            <span style={{
+              fontSize: 14, fontWeight: 800, color: isPedido ? '#34D399' : 'var(--cream)',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              textDecoration: isPedido ? 'line-through' : 'none',
+            }}>
+              {mision.nombre_fantasia}
+            </span>
+            {isPedido && <CheckCircle2 size={14} color="#34D399" />}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {/* Estado */}
+            <span style={{ fontSize: 10, fontWeight: 700, color: estadoCfg.color }}>
+              {estadoCfg.icon} {estadoCfg.label}
+            </span>
+            {/* Días para compra */}
+            {diasLabel && (
+              <span style={{
+                fontSize: 10, fontWeight: 800, padding: '1px 8px', borderRadius: 20,
+                background: tipoCfg.bg, color: tipoCfg.color, border: `1px solid ${tipoCfg.border}`,
+              }}>
+                {diasLabel}
+              </span>
+            )}
+            {/* Ciclo */}
+            {mision.ciclo_promedio_dias && (
+              <span style={{ fontSize: 10, color: '#555' }}>
+                Ciclo {mision.ciclo_promedio_dias}d
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Botones rápidos */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {!isPedido && (
+            <button
+              onClick={e => { e.stopPropagation(); onWA(mision) }}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(37,211,102,0.3)',
+                background: 'rgba(37,211,102,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', flexShrink: 0,
+              }}
+              title="WhatsApp"
+            >
+              <MessageCircle size={15} color="#25D166" />
+            </button>
+          )}
+          {open ? <ChevronDown size={16} color="var(--muted)" /> : <ChevronRight size={16} color="var(--muted)" />}
+        </div>
+      </div>
+
+      {/* Detalle expandido */}
+      {open && (
+        <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border)' }}>
+          {/* Métricas */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 12, marginBottom: 14 }}>
+            {[
+              { label: 'Días sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#F87171' : 'var(--cream)' },
+              { label: 'Último pedido', value: fFecha(mision.ultima_venta_fecha), color: 'var(--cream)' },
+              { label: 'Venta histórica', value: fPeso(mision.ultima_venta_monto), color: '#D4AF37' },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
+                <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 4 }}>{label}</p>
+                <p style={{ fontSize: 13, fontWeight: 800, color }}>{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Compra estimada y localidad */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+            {mision.siguiente_compra_estimada && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Calendar size={12} color="var(--muted)" />
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  Próxima compra estimada: <strong style={{ color: tipoCfg.color }}>{fFecha(mision.siguiente_compra_estimada)}</strong>
+                </span>
+              </div>
+            )}
+            {mision.localidad && (
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                📍 {mision.localidad}
+              </span>
+            )}
+          </div>
+
+          {/* Nota si existe */}
+          {mision.nota && (
+            <div style={{
+              padding: '8px 12px', borderRadius: 10, marginBottom: 12,
+              background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.2)',
+            }}>
+              <p style={{ fontSize: 11, color: '#A08830', fontStyle: 'italic' }}>💬 {mision.nota}</p>
+            </div>
+          )}
+
+          {/* Acciones */}
+          <BotonesAccion mision={mision} onActualizar={onActualizar} loading={loading} />
         </div>
       )}
     </div>
   )
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────────
+// ── Sección de misiones por tipo ──────────────────────────────────────────────
+function SeccionMisiones({
+  tipo, misiones, onActualizar, onWA, loadingId, defaultOpen = true,
+}: {
+  tipo: TipoMision
+  misiones: MisionEnriquecida[]
+  onActualizar: (id: string, estado: EstadoMision, nota?: string) => Promise<void>
+  onWA: (m: MisionEnriquecida) => void
+  loadingId: string | null
+  defaultOpen?: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  if (!misiones.length) return null
+
+  const cfg = TIPO_CFG[tipo]
+  const pendientes = misiones.filter(m => m.estado === 'pendiente' || m.estado === 'sin_respuesta' || m.estado === 'contactado_sin_pedido')
+  const completadas = misiones.filter(m => m.estado === 'contactado_pedido')
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      {/* Header de sección */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10, marginBottom: open ? 12 : 0,
+          padding: '10px 14px', borderRadius: 12, border: `1px solid ${cfg.border}`,
+          background: cfg.bg, cursor: 'pointer', textAlign: 'left',
+        }}
+      >
+        <span style={{ fontSize: 16 }}>{tipo === 'vencido' ? '🚨' : tipo === 'esta_semana' ? '📅' : '📆'}</span>
+        <div style={{ flex: 1 }}>
+          <span style={{ fontSize: 14, fontWeight: 800, color: cfg.color }}>{cfg.label}</span>
+          <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>{cfg.desc}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 800,
+            background: `${cfg.color}20`, color: cfg.color,
+          }}>
+            {pendientes.length} pendientes
+          </span>
+          {completadas.length > 0 && (
+            <span style={{
+              padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+              background: 'rgba(52,211,153,0.12)', color: '#34D399',
+            }}>
+              {completadas.length} ✓
+            </span>
+          )}
+          {open ? <ChevronDown size={16} color="var(--muted)" /> : <ChevronRight size={16} color="var(--muted)" />}
+        </div>
+      </button>
+
+      {open && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {misiones.map(m => (
+            <MisionCard key={m.id} mision={m} onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Header resumen ────────────────────────────────────────────────────────────
+function HeaderResumen({
+  misiones, semana, vendedorActual, isAdmin,
+}: {
+  misiones: MisionEnriquecida[]
+  semana: string
+  vendedorActual: string | null
+  isAdmin: boolean
+}) {
+  const total     = misiones.length
+  const pedidos   = misiones.filter(m => m.estado === 'contactado_pedido').length
+  const contactados = misiones.filter(m => m.estado === 'contactado_sin_pedido').length
+  const vencidos  = misiones.filter(m => m.tipo === 'vencido' && m.estado === 'pendiente').length
+  const esSemana  = misiones.filter(m => m.tipo === 'esta_semana').length
+  const proxSem   = misiones.filter(m => m.tipo === 'proxima_semana').length
+
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #0D0A00 0%, #1C1500 100%)',
+      border: '1px solid rgba(212,175,55,0.2)',
+      borderRadius: 20, padding: '20px 22px', marginBottom: 20,
+    }}>
+      {/* Título */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.5px', marginBottom: 3 }}>
+            Misiones de la semana
+          </h1>
+          <p style={{ fontSize: 12, color: 'var(--muted)' }}>
+            {rangoSemana(semana)} {!isAdmin && vendedorActual ? `· ${vendedorActual.split(' ')[0]}` : ''}
+          </p>
+        </div>
+        <ProgressDonut done={pedidos} total={total} size={80} />
+      </div>
+
+      {/* KPIs en fila */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+        {[
+          { label: '🚨 Vencidos', value: vencidos, color: '#F87171', urgent: vencidos > 0 },
+          { label: '📅 Esta semana', value: esSemana, color: '#D4AF37', urgent: false },
+          { label: '📆 Próxima sem.', value: proxSem, color: '#60A5FA', urgent: false },
+          { label: '✓ Con pedido', value: pedidos, color: '#34D399', urgent: false },
+        ].map(({ label, value, color, urgent }) => (
+          <div key={label} style={{
+            background: urgent && value > 0 ? 'rgba(248,113,113,0.08)' : 'var(--surface2)',
+            border: `1px solid ${urgent && value > 0 ? 'rgba(248,113,113,0.25)' : 'var(--border)'}`,
+            borderRadius: 12, padding: '10px 12px', textAlign: 'center',
+          }}>
+            <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, marginBottom: 4, letterSpacing: '0.5px' }}>{label}</p>
+            <p style={{ fontSize: 22, fontWeight: 900, color, letterSpacing: '-0.5px' }}>{value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Historial ─────────────────────────────────────────────────────────────────
+function HistorialView({ historial }: { historial: HistorialSemana[] }) {
+  const [openSemana, setOpenSemana] = useState<string | null>(historial[0]?.semana ?? null)
+
+  if (!historial.length) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)' }}>
+        <p style={{ fontSize: 14 }}>No hay historial de semanas anteriores</p>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {historial.map(sem => {
+        const isOpen = openSemana === sem.semana
+        const pct = sem.total > 0 ? Math.round((sem.completadas / sem.total) * 100) : 0
+        return (
+          <div key={sem.semana} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+            <button
+              onClick={() => setOpenSemana(isOpen ? null : sem.semana)}
+              style={{
+                width: '100%', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12,
+                background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <Calendar size={16} color="var(--muted)" />
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', marginBottom: 2 }}>
+                  {rangoSemana(sem.semana)}
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  {sem.completadas} de {sem.total} con pedido — {pct}%
+                </p>
+              </div>
+              {/* Mini barra */}
+              <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width: `${pct}%`, height: '100%', background: pct >= 80 ? '#34D399' : '#D4AF37', borderRadius: 4 }} />
+              </div>
+              {isOpen ? <ChevronDown size={16} color="var(--muted)" /> : <ChevronRight size={16} color="var(--muted)" />}
+            </button>
+            {isOpen && (
+              <div style={{ borderTop: '1px solid var(--border)', padding: '10px 14px 14px' }}>
+                {sem.misiones.map(m => (
+                  <div key={m.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0',
+                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: SEG_COLOR[m.segmento] ?? '#6B7280', width: 16 }}>{m.segmento}</span>
+                    <span style={{ flex: 1, fontSize: 12, color: 'var(--cream)', fontWeight: 600 }}>{m.nombre_fantasia}</span>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                      background: m.estado === 'contactado_pedido' ? 'rgba(52,211,153,0.12)' : 'var(--surface2)',
+                      color: ESTADO_CFG[m.estado]?.color ?? '#6B7280',
+                    }}>
+                      {ESTADO_CFG[m.estado]?.label ?? m.estado}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Preview próxima semana ────────────────────────────────────────────────────
+function ProximaView({ proxima }: { proxima: ProximaPreview[] }) {
+  // Solo clientes cuya compra estimada cae en 7-14 días
+  const hoy = new Date(); hoy.setHours(0,0,0,0)
+  const d7  = new Date(hoy); d7.setDate(d7.getDate() + 7)
+  const d14 = new Date(hoy); d14.setDate(d14.getDate() + 14)
+
+  const enVentana = proxima.filter(p => {
+    if (!p.siguiente_compra_estimada) return false
+    const d = new Date(p.siguiente_compra_estimada + 'T12:00:00')
+    return d >= d7 && d <= d14
+  }).sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+
+  if (!enVentana.length) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+        <p style={{ fontSize: 32, marginBottom: 10 }}>📆</p>
+        <p style={{ fontSize: 14, color: 'var(--cream)', fontWeight: 700, marginBottom: 6 }}>Sin predicciones para la próxima semana</p>
+        <p style={{ fontSize: 12, color: 'var(--muted)' }}>Los clientes aparecerán aquí cuando su compra estimada caiga en los próximos 7-14 días.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div style={{ padding: '10px 14px', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 12, marginBottom: 16 }}>
+        <p style={{ fontSize: 12, color: '#60A5FA', fontWeight: 700 }}>
+          📆 {enVentana.length} clientes con compra estimada la próxima semana — adelántate y contáctalos hoy
+        </p>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {enVentana.map(p => {
+          const segColor = SEG_COLOR[p.segmento] ?? '#6B7280'
+          const hoyStr = hoy.toISOString().split('T')[0]
+          const sig = p.siguiente_compra_estimada
+          const diasRestantes = sig ? Math.round((new Date(sig + 'T12:00:00').getTime() - hoy.getTime()) / 86400000) : null
+
+          return (
+            <div key={`${p.vendedor_actual}|${p.nombre_fantasia}`} style={{
+              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14,
+              padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                background: `${segColor}18`, border: `2px solid ${segColor}40`,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ fontSize: 13, fontWeight: 900, color: segColor }}>{p.segmento}</span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 3 }}>{p.nombre_fantasia}</p>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>{p.vendedor_actual.split(' ')[0]}</span>
+                  {diasRestantes !== null && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#60A5FA' }}>
+                      En {diasRestantes} días
+                    </span>
+                  )}
+                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>
+                    Ciclo {p.ciclo_promedio_dias}d
+                  </span>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>Score</p>
+                <p style={{ fontSize: 14, fontWeight: 900, color: segColor }}>{p.score.toFixed(0)}</p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 interface Props {
   misiones: MisionEnriquecida[]
   proxima: ProximaPreview[]
@@ -129,719 +559,242 @@ interface Props {
   vendedorNombre: string | null
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
+type Tab = 'semana' | 'proxima' | 'historial'
+
 export default function MisionesClient({
-  misiones: misionesProp, proxima, historial, semana, semanaNext,
-  consejos, isAdmin, vendedorActual, vendedorNombre,
+  misiones: initialMisiones, proxima, historial,
+  semana, semanaNext, consejos, isAdmin, vendedorActual, vendedorNombre,
 }: Props) {
   const isDesktop = useIsDesktop()
   const router    = useRouter()
 
-  const [misiones,  setMisiones]  = useState<MisionEnriquecida[]>(misionesProp)
-  const [tab,       setTab]       = useState<Tab>('semana')
-  const [toggling,  setToggling]  = useState<string | null>(null)
-  const [generating,setGenerating]= useState(false)
-  const [genError,  setGenError]  = useState<string | null>(null)
-  const [verTodas,  setVerTodas]  = useState(false)
-  const [prioFiltro,setPrioFiltro]= useState<'todas'|'Alta'|'Media'|'Baja'>('todas')
-  const [showFiltro,setShowFiltro]= useState(false)
-  const [vendorTab,  setVendorTab] = useState<string>('all')
-  const [waModal,    setWaModal]   = useState<WATarget | null>(null)
-  const misionToWA = (m: MisionEnriquecida): WATarget => ({
-    nombre: m.nombre_fantasia,
-    telefono: m.telefono,
-    contexto: 'mision',
-    cicloPromedioDias: m.ciclo_promedio_dias,
-    siguienteCompra: m.siguiente_compra_estimada,
-    subtitulo: m.frecuencia_texto,
-  })
+  const [misiones, setMisiones]       = useState<MisionEnriquecida[]>(initialMisiones)
+  const [tab, setTab]                 = useState<Tab>('semana')
+  const [loadingId, setLoadingId]     = useState<string | null>(null)
+  const [generando, setGenerando]     = useState(false)
+  const [waTarget, setWaTarget]       = useState<WATarget | null>(null)
+  const [filtroVendedor, setFiltroVendedor] = useState<string | null>(null)
 
-  useEffect(() => { setMisiones(misionesProp) }, [misionesProp])
+  // Filtrar por vendedor (admin ve todos)
+  const misionesFiltradas = useMemo(() => {
+    if (!filtroVendedor) return misiones
+    return misiones.filter(m => m.vendedor === filtroVendedor)
+  }, [misiones, filtroVendedor])
 
-  // ── Vendedores únicos (para tabs admin) ───────────────────────────────────
-  const vendedores = useMemo(()=>[...new Set(misiones.map(m=>m.vendedor))], [misiones])
-
-  // ── Misiones filtradas por vendedor seleccionado ──────────────────────────
-  const misionesActivas = useMemo(()=>
-    vendorTab==='all' ? misiones : misiones.filter(m=>m.vendedor===vendorTab)
-  , [misiones, vendorTab])
-
-  // ── Stats (siempre sobre misionesActivas) ─────────────────────────────────
-  const total       = misionesActivas.length
-  const completadas  = misionesActivas.filter(m=>m.estado==='completada')
-  const pendientes   = misionesActivas.filter(m=>m.estado==='pendiente')
-  const done         = completadas.length
-  const pct          = total>0 ? Math.round((done/total)*100) : 0
-  const noContactar  = misionesActivas.filter(m=>m.alert_level==='proximo' && m.estado==='pendiente').length
-
-  const porPrioridad = {
-    Alta:  misionesActivas.filter(m=>m.prioridad==='Alta').length,
-    Media: misionesActivas.filter(m=>m.prioridad==='Media').length,
-    Baja:  misionesActivas.filter(m=>m.prioridad==='Baja').length,
-  }
-
-  // Desglose por vendedor (admin — siempre sobre todas las misiones)
-  const desglose = vendedores.map(v=>{
-    const ms = misiones.filter(m=>m.vendedor===v)
-    return { v, total:ms.length, done:ms.filter(m=>m.estado==='completada').length }
-  })
-
-  // ── Generar / actualizar (admin) ──────────────────────────────────────────────
-  const handleGenerar = async () => {
-    setGenerating(true); setGenError(null)
-    try {
-      const res = await fetch('/api/misiones?action=generar', { method:'POST' })
-      const data = await res.json()
-      if (!res.ok || data.error) { setGenError(data.error ?? 'Error al generar'); return }
-      // recargar desde servidor para traer datos enriquecidos
-      router.refresh()
-    } catch { setGenError('Error de conexión') }
-    finally { setGenerating(false) }
-  }
-
-  // ── Toggle completado ───────────────────────────────────────────────────────
-  const handleToggle = useCallback(async (m: MisionEnriquecida) => {
-    if (toggling) return
-    setToggling(m.id)
-    const isDone = m.estado === 'completada'
-    setMisiones(prev => prev.map(it => it.id===m.id
-      ? { ...it, estado: isDone?'pendiente':'completada', completado_at: isDone?null:new Date().toISOString() }
-      : it))
-    try {
-      const res = await fetch(`/api/misiones?action=${isDone?'deshacer':'completar'}`, {
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ mision_id:m.id }),
+  // Agrupar por tipo
+  const porTipo = useMemo(() => {
+    const grupos: Record<TipoMision, MisionEnriquecida[]> = {
+      vencido: [], esta_semana: [], proxima_semana: [],
+    }
+    for (const m of misionesFiltradas) {
+      grupos[m.tipo]?.push(m)
+    }
+    // Ordenar cada grupo: pendientes primero, luego por score desc
+    const orden: EstadoMision[] = ['pendiente', 'sin_respuesta', 'contactado_sin_pedido', 'contactado_pedido']
+    for (const key of Object.keys(grupos) as TipoMision[]) {
+      grupos[key].sort((a, b) => {
+        const oa = orden.indexOf(a.estado); const ob = orden.indexOf(b.estado)
+        if (oa !== ob) return oa - ob
+        return (b.score ?? 0) - (a.score ?? 0)
       })
-      if (!res.ok) throw new Error()
-    } catch {
-      setMisiones(prev => prev.map(it => it.id===m.id ? m : it))
-    } finally { setToggling(null) }
-  }, [toggling])
+    }
+    return grupos
+  }, [misionesFiltradas])
 
-  // ── Lista filtrada ──────────────────────────────────────────────────────────
-  const misionesVista = useMemo(()=>{
-    let res = misionesActivas
-    if (prioFiltro !== 'todas') res = res.filter(m=>m.prioridad===prioFiltro)
-    return res
-  }, [misionesActivas, prioFiltro])
+  // Actualizar estado de una misión
+  const onActualizar = useCallback(async (id: string, estado: EstadoMision, nota?: string) => {
+    setLoadingId(id)
+    try {
+      const res = await fetch('/api/misiones?action=actualizar_estado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mision_id: id, estado, nota }),
+      })
+      if (!res.ok) throw new Error('Error al actualizar')
 
-  const LIMITE = 7
-  const misionesMostradas = verTodas ? misionesVista : misionesVista.slice(0, LIMITE)
+      setMisiones(prev => prev.map(m =>
+        m.id === id
+          ? { ...m, estado, completado_at: estado === 'contactado_pedido' ? new Date().toISOString() : m.completado_at }
+          : m
+      ))
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingId(null)
+    }
+  }, [])
 
-  const sinMisiones = total === 0
-  const puedeToggle = (m: MisionEnriquecida) => isAdmin || m.vendedor === vendedorActual
+  // Generar misiones (admin)
+  const onGenerar = useCallback(async () => {
+    setGenerando(true)
+    try {
+      const res = await fetch('/api/misiones?action=generar', { method: 'POST' })
+      if (!res.ok) throw new Error('Error al generar')
+      router.refresh()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setGenerando(false)
+    }
+  }, [router])
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // RENDER MÓVIL
-  // ════════════════════════════════════════════════════════════════════════════
-  if (!isDesktop) {
-    return (
-      <>
-      <div style={{ padding:'14px 14px 90px', maxWidth:520, margin:'0 auto' }}>
-        {/* Header */}
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
-          <div>
-            <h1 style={{ fontSize:22, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.5px' }}>Misiones</h1>
-            <p style={{ fontSize:12, color:'var(--muted)' }}>Esta semana ({rangoSemana(semana).replace(/ \d{4}$/,'')})</p>
-          </div>
-          {isAdmin && (
-            <button onClick={handleGenerar} disabled={generating}
-              style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 12px', borderRadius:10,
-                background:'rgba(212,175,55,0.12)', border:'1px solid rgba(212,175,55,0.3)',
-                color:'var(--gold)', fontSize:11, fontWeight:700, cursor:'pointer', opacity:generating?0.6:1 }}>
-              <Zap size={13}/> {generating?'…':'Actualizar'}
-            </button>
-          )}
-        </div>
+  // Abrir WA
+  const onWA = useCallback((m: MisionEnriquecida) => {
+    setWaTarget({
+      nombre: m.nombre_fantasia,
+      telefono: m.telefono ?? undefined,
+      cicloPromedioDias: m.ciclo_promedio_dias ?? undefined,
+      siguienteCompra: m.siguiente_compra_estimada ?? undefined,
+      contexto: 'mision',
+    })
+  }, [])
 
-        {genError && (
-          <div style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.25)', borderRadius:10, padding:'10px 14px', marginBottom:12 }}>
-            <p style={{ fontSize:12, color:'#F87171' }}>{genError}</p>
-          </div>
-        )}
+  // Vendedores únicos para filtro admin
+  const vendedores = useMemo(() => [...new Set(misiones.map(m => m.vendedor))], [misiones])
 
-        {/* Tabs vendedor (solo admin) */}
-        {isAdmin && vendedores.length > 1 && (
-          <div style={{ display:'flex', gap:6, marginBottom:12 }}>
-            <button onClick={()=>{setVendorTab('all');setVerTodas(false)}}
-              style={{ flex:1, padding:'8px', borderRadius:10, border:'none', cursor:'pointer',
-                background: vendorTab==='all'?'var(--gold)':'var(--surface)',
-                color: vendorTab==='all'?'#080808':'var(--muted)', fontSize:11, fontWeight:vendorTab==='all'?800:500 }}>
-              Todos ({misiones.length})
-            </button>
-            {vendedores.map(v=>{
-              const c = VEND_COLOR[v]??'#888'
-              const cnt = misiones.filter(m=>m.vendedor===v).length
-              const active = vendorTab===v
-              return (
-                <button key={v} onClick={()=>{setVendorTab(v);setVerTodas(false)}}
-                  style={{ flex:1, padding:'8px', borderRadius:10, border:'none', cursor:'pointer',
-                    background: active?`${c}22`:'var(--surface)',
-                    color: active?c:'var(--muted)',
-                    outline: active?`1px solid ${c}55`:'1px solid var(--border)',
-                    fontSize:11, fontWeight:active?800:500 }}>
-                  {v.split(' ')[0]} ({cnt})
-                </button>
-              )
-            })}
-          </div>
-        )}
+  const tabs: { key: Tab; label: string; count?: number }[] = [
+    { key: 'semana',   label: 'Esta semana',    count: misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length },
+    { key: 'proxima',  label: 'Próxima semana', count: proxima.filter(p => {
+        if (!p.siguiente_compra_estimada) return false
+        const hoy = new Date(); const d7 = new Date(hoy); d7.setDate(d7.getDate()+7); const d14 = new Date(hoy); d14.setDate(d14.getDate()+14)
+        const d = new Date(p.siguiente_compra_estimada + 'T12:00:00')
+        return d >= d7 && d <= d14
+      }).length },
+    { key: 'historial', label: 'Historial' },
+  ]
 
-        {/* Progreso */}
-        <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, padding:'16px', marginBottom:12,
-          display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <div>
-            <p style={{ fontSize:11, fontWeight:700, color:'var(--muted)', letterSpacing:'0.05em', marginBottom:6 }}>PROGRESO SEMANAL</p>
-            <p style={{ fontSize:26, fontWeight:900, color:'var(--cream)', lineHeight:1 }}>{done} <span style={{ fontSize:15, color:'var(--muted)', fontWeight:400 }}>/ {total}</span></p>
-            <p style={{ fontSize:12, color:pct>=90?'#34D399':'var(--muted)', marginTop:4 }}>{pct}% completado</p>
-          </div>
-          <ProgressDonut done={done} total={total} size={90}/>
-        </div>
-
-        {/* Mini stats */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:14 }}>
-          {[
-            { icon:Target,      label:'Asignados',   val:total,           color:'#D4AF37' },
-            { icon:Phone,       label:'Contactados', val:done,            color:'#34D399' },
-            { icon:Clock,       label:'Pendientes',  val:pendientes.length,color:'#F59E0B' },
-            { icon:PhoneOff,    label:'No contactar',val:0,               color:'#6B7280' },
-          ].map(s=>(
-            <div key={s.label} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, padding:'10px 4px', textAlign:'center' }}>
-              <s.icon size={15} color={s.color} style={{ margin:'0 auto 4px' }}/>
-              <p style={{ fontSize:18, fontWeight:900, color:'var(--cream)', lineHeight:1 }}>{s.val}</p>
-              <p style={{ fontSize:9, color:'var(--muted)', marginTop:3 }}>{s.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display:'flex', gap:6, marginBottom:14 }}>
-          {([['semana','Misiones'],['proxima','Próxima semana'],['historial','Historial']] as [Tab,string][]).map(([k,l])=>(
-            <button key={k} onClick={()=>setTab(k)}
-              style={{ flex:1, padding:'8px 6px', borderRadius:10, cursor:'pointer', border:'none',
-                background: tab===k?'var(--gold)':'var(--surface)', color: tab===k?'#080808':'var(--muted)',
-                fontSize:11, fontWeight: tab===k?800:500, whiteSpace:'nowrap' }}>
-              {l}
-            </button>
-          ))}
-        </div>
-
-        {/* Contenido */}
-        {tab==='semana' && (
-          sinMisiones ? <EmptyState isAdmin={isAdmin} onGenerar={handleGenerar} generating={generating}/> : (
-            <>
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {misionesMostradas.map(m=>(
-                  <MobileRow key={m.id} m={m} onToggle={handleToggle} toggling={toggling===m.id} canToggle={puedeToggle(m)} onOpen={()=>router.push('/ventas/clientes')} onWA={m=>setWaModal(misionToWA(m))}/>
-                ))}
-              </div>
-              {misionesVista.length > LIMITE && (
-                <button onClick={()=>setVerTodas(v=>!v)}
-                  style={{ width:'100%', marginTop:12, padding:'12px', borderRadius:12, cursor:'pointer',
-                    background:'var(--gold)', border:'none', color:'#080808', fontSize:13, fontWeight:800 }}>
-                  {verTodas ? 'Ver menos' : `Ver todas las misiones (${misionesVista.length})`}
-                </button>
-              )}
-            </>
-          )
-        )}
-        {tab==='proxima' && <ProximaSemana proxima={proxima} semanaNext={semanaNext}/>}
-        {tab==='historial' && <HistorialView historial={historial}/>}
-      </div>
-
-      {/* Modal WA móvil */}
-      {waModal && <WAModal target={waModal} onClose={()=>setWaModal(null)}/>}
-    </>
-    )
-  }
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // RENDER DESKTOP
-  // ════════════════════════════════════════════════════════════════════════════
   return (
-    <div style={{ padding:'24px 28px 60px', maxWidth:1280, margin:'0 auto', width:'100%' }}>
+    <div style={{ padding: isDesktop ? '20px 24px 60px' : '12px 12px 80px', maxWidth: 900, margin: '0 auto' }}>
 
-      {/* Encabezado */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, flexWrap:'wrap', gap:12 }}>
-        <div>
-          <h1 style={{ fontSize:24, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.5px' }}>Misiones</h1>
-          <p style={{ fontSize:13, color:'var(--muted)', marginTop:2 }}>Tus clientes objetivo para esta semana</p>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:'8px 14px' }}>
-            <Calendar size={14} color="var(--muted)"/>
-            <span style={{ fontSize:12, color:'var(--cream)', fontWeight:600 }}>{rangoSemana(semana)}</span>
-          </div>
-          {isAdmin && (
-            <button onClick={handleGenerar} disabled={generating}
-              style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 16px', borderRadius:10,
-                background:'rgba(212,175,55,0.12)', border:'1px solid rgba(212,175,55,0.3)',
-                color:'var(--gold)', fontSize:12, fontWeight:700, cursor:'pointer', opacity:generating?0.6:1 }}>
-              <RefreshCw size={14} style={{ animation: generating?'spin 1s linear infinite':'none' }}/>
-              {generating ? 'Generando…' : 'Actualizar'}
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Header */}
+      <HeaderResumen misiones={misionesFiltradas} semana={semana} vendedorActual={vendedorActual} isAdmin={isAdmin} />
 
-      {genError && (
-        <div style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.25)', borderRadius:12, padding:'12px 16px', marginBottom:16 }}>
-          <p style={{ fontSize:12, color:'#F87171', fontWeight:600 }}>{genError}</p>
-        </div>
-      )}
-
-      {/* Selector vendedor (solo admin, solo cuando hay +1 vendedor) */}
-      {isAdmin && vendedores.length > 1 && (
-        <div style={{ display:'flex', gap:8, marginBottom:16, alignItems:'center' }}>
-          <span style={{ fontSize:11, color:'var(--muted)', fontWeight:600, flexShrink:0 }}>VER:</span>
-          <button onClick={()=>setVendorTab('all')}
-            style={{ padding:'7px 16px', borderRadius:10, border:'none', cursor:'pointer',
-              background: vendorTab==='all'?'var(--gold)':'var(--surface)',
-              color: vendorTab==='all'?'#080808':'var(--muted)',
-              outline: vendorTab==='all'?'none':'1px solid var(--border)',
-              fontSize:12, fontWeight:vendorTab==='all'?800:500 }}>
-            Todos <span style={{ fontSize:11, opacity:0.7 }}>({misiones.length})</span>
-          </button>
-          {vendedores.map(v=>{
-            const color = VEND_COLOR[v]??'#888'
-            const cnt   = misiones.filter(m=>m.vendedor===v).length
-            const pend  = misiones.filter(m=>m.vendedor===v&&m.estado==='pendiente').length
-            const active = vendorTab===v
-            return (
-              <button key={v} onClick={()=>setVendorTab(v)}
-                style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 14px', borderRadius:10, cursor:'pointer', border:'none',
-                  background: active?`${color}18`:'var(--surface)',
-                  outline: active?`1px solid ${color}55`:'1px solid var(--border)' }}>
-                <div style={{ width:8, height:8, borderRadius:'50%', background:color, flexShrink:0 }}/>
-                <span style={{ fontSize:12, color:active?color:'var(--cream)', fontWeight:active?800:500 }}>
-                  {v.split(' ')[0]}
-                </span>
-                <span style={{ fontSize:11, fontWeight:700, color:active?color:'var(--muted)' }}>{cnt}</span>
-                {pend>0 && (
-                  <span style={{ fontSize:10, fontWeight:800, padding:'1px 6px', borderRadius:20,
-                    background:'rgba(239,68,68,0.12)', color:'#EF4444', border:'1px solid rgba(239,68,68,0.25)' }}>
-                    {pend} pend.
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {/* KPI Cards */}
-      <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:20 }}>
-        <KpiCard label="MISIÓN SEMANAL" value={total} sub="Asignados esta semana" icon={Target} color="#D4AF37"/>
-        <KpiCard label="PROGRESO" value={`${done} / ${total}`} sub={`${pct}% completado`} icon={CheckCircle2} color="#F59E0B"
-          donut={<ProgressDonut done={done} total={total} size={56}/>}/>
-        <KpiCard label="CONTACTOS REALIZADOS" value={done} sub="Esta semana" icon={Phone} color="#34D399"/>
-        <KpiCard label="PENDIENTES" value={pendientes.length} sub="Por contactar" icon={Clock} color="#F59E0B"/>
-      </div>
-
-      {/* Tabs + Filtrar */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-        <div style={{ display:'flex', gap:8 }}>
-          {([['semana','Esta semana'],['proxima','Próxima semana'],['historial','Historial']] as [Tab,string][]).map(([k,l])=>(
-            <button key={k} onClick={()=>setTab(k)}
-              style={{ padding:'8px 18px', borderRadius:10, cursor:'pointer', border:'none',
-                background: tab===k?'var(--gold)':'var(--surface)', color: tab===k?'#080808':'var(--muted)',
-                fontSize:13, fontWeight: tab===k?800:500 }}>
-              {l}
-            </button>
-          ))}
-        </div>
-        {tab==='semana' && (
-          <div style={{ position:'relative' }}>
-            <button onClick={()=>setShowFiltro(s=>!s)}
-              style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 14px', borderRadius:10,
-                background:'var(--surface)', border:'1px solid var(--border)', color:'var(--muted)', fontSize:12, cursor:'pointer' }}>
-              <Filter size={13}/> {prioFiltro==='todas'?'Filtrar':`Prioridad ${prioFiltro}`} <ChevronDown size={12}/>
-            </button>
-            {showFiltro && (
-              <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:50, background:'#1a1a1a',
-                border:'1px solid var(--border)', borderRadius:12, overflow:'hidden', minWidth:150 }}>
-                {(['todas','Alta','Media','Baja'] as const).map(p=>(
-                  <button key={p} onClick={()=>{setPrioFiltro(p);setShowFiltro(false);setVerTodas(false)}}
-                    style={{ display:'block', width:'100%', padding:'10px 14px', textAlign:'left', border:'none',
-                      background: prioFiltro===p?'rgba(212,175,55,0.1)':'transparent',
-                      color: prioFiltro===p?'var(--gold)':'var(--cream)', fontSize:12, cursor:'pointer' }}>
-                    {p==='todas'?'Todas las prioridades':`Prioridad ${p}`}
-                  </button>
-                ))}
-              </div>
-            )}
+      {/* Controles: filtro vendedor (admin) + botón generar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        {isAdmin && vendedores.length > 1 && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => setFiltroVendedor(null)}
+              style={{
+                padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                background: !filtroVendedor ? 'rgba(212,175,55,0.15)' : 'var(--surface2)',
+                border: `1px solid ${!filtroVendedor ? 'rgba(212,175,55,0.4)' : 'var(--border)'}`,
+                color: !filtroVendedor ? '#D4AF37' : 'var(--muted)', cursor: 'pointer',
+              }}
+            >Todos</button>
+            {vendedores.map(v => (
+              <button key={v}
+                onClick={() => setFiltroVendedor(v === filtroVendedor ? null : v)}
+                style={{
+                  padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                  background: filtroVendedor === v ? 'rgba(96,165,250,0.15)' : 'var(--surface2)',
+                  border: `1px solid ${filtroVendedor === v ? 'rgba(96,165,250,0.4)' : 'var(--border)'}`,
+                  color: filtroVendedor === v ? '#60A5FA' : 'var(--muted)', cursor: 'pointer',
+                }}
+              >{v.split(' ')[0]}</button>
+            ))}
           </div>
         )}
+        <div style={{ flex: 1 }} />
+        {isAdmin && (
+          <button
+            onClick={onGenerar}
+            disabled={generando}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '8px 16px', borderRadius: 10,
+              background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
+              color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: generando ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <RefreshCw size={14} style={{ animation: generando ? 'spin 1s linear infinite' : 'none' }} />
+            {generando ? 'Actualizando…' : 'Actualizar misiones'}
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div style={{
+        display: 'flex', gap: 4, marginBottom: 20,
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 14, padding: 4,
+      }}>
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              flex: 1, padding: '9px 12px', borderRadius: 10, border: 'none',
+              background: tab === t.key ? 'rgba(212,175,55,0.12)' : 'transparent',
+              color: tab === t.key ? '#D4AF37' : 'var(--muted)',
+              fontSize: 12, fontWeight: tab === t.key ? 800 : 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+          >
+            {t.label}
+            {t.count !== undefined && t.count > 0 && (
+              <span style={{
+                padding: '1px 7px', borderRadius: 20, fontSize: 10, fontWeight: 800,
+                background: tab === t.key ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.06)',
+                color: tab === t.key ? '#D4AF37' : 'var(--muted)',
+              }}>{t.count}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Contenido por tab */}
-      {tab==='semana' && (
-        <>
-          {/* Tabla principal */}
-          <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, padding:'18px 20px', marginBottom:16 }}>
-            <p style={{ fontSize:15, fontWeight:800, color:'var(--cream)', marginBottom:16 }}>Tus misiones de esta semana</p>
+      {tab === 'semana' && (
+        <div>
+          {/* Vencidos primero */}
+          <SeccionMisiones
+            tipo="vencido"
+            misiones={porTipo.vencido}
+            onActualizar={onActualizar}
+            onWA={onWA}
+            loadingId={loadingId}
+            defaultOpen={true}
+          />
+          {/* Esta semana */}
+          <SeccionMisiones
+            tipo="esta_semana"
+            misiones={porTipo.esta_semana}
+            onActualizar={onActualizar}
+            onWA={onWA}
+            loadingId={loadingId}
+            defaultOpen={true}
+          />
 
-            {sinMisiones ? <EmptyState isAdmin={isAdmin} onGenerar={handleGenerar} generating={generating}/> : (
-              <>
-                <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom:'1px solid var(--border)' }}>
-                      {['CLIENTE','RUTA','PRIORIDAD','ÚLTIMO PEDIDO','FRECUENCIA','ESTADO',''].map(h=>(
-                        <th key={h} style={{ padding:'8px 10px', textAlign:'left', fontSize:9, fontWeight:700, color:'var(--muted)', letterSpacing:'0.08em' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {misionesMostradas.map(m=>(
-                      <DesktopRow key={m.id} m={m} onToggle={handleToggle} toggling={toggling===m.id} canToggle={puedeToggle(m)} onOpen={()=>router.push('/ventas/clientes')} onWA={m=>setWaModal(misionToWA(m))}/>
-                    ))}
-                  </tbody>
-                </table>
-                {misionesVista.length > LIMITE && (
-                  <button onClick={()=>setVerTodas(v=>!v)}
-                    style={{ width:'100%', marginTop:14, padding:'10px', borderRadius:10, cursor:'pointer',
-                      background:'transparent', border:'none', color:'var(--muted)', fontSize:12, fontWeight:600,
-                      display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-                    <ChevronDown size={14} style={{ transform: verTodas?'rotate(180deg)':'none' }}/>
-                    {verTodas ? 'Ver menos' : `Ver más misiones (${misionesVista.length - LIMITE})`}
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Fila inferior: Resumen + Distribución + Consejos */}
-          {!sinMisiones && (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14 }}>
-              {/* Resumen de la semana */}
-              <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, padding:'18px 20px' }}>
-                <p style={{ fontSize:14, fontWeight:800, color:'var(--cream)', marginBottom:14 }}>Resumen de la semana</p>
-                <div style={{ display:'flex', alignItems:'center', gap:16 }}>
-                  <MultiDonut size={120} centerLabel={`${pct}%`}
-                    items={[
-                      { label:'Completado', value:done, color:'#34D399' },
-                      { label:'Pendiente', value:pendientes.length, color:'#F59E0B' },
-                    ]}/>
-                  <div style={{ flex:1, display:'flex', flexDirection:'column', gap:8 }}>
-                    {[
-                      { label:'Contactados', val:done, pct:pct, color:'#34D399' },
-                      { label:'Pendientes', val:pendientes.length, pct:100-pct, color:'#F59E0B' },
-                      { label:'No contactar', val:0, pct:0, color:'#F87171' },
-                    ].map(it=>(
-                      <div key={it.label} style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <div style={{ width:8, height:8, borderRadius:'50%', background:it.color }}/>
-                        <span style={{ fontSize:11, color:'var(--muted)', flex:1 }}>{it.label}</span>
-                        <span style={{ fontSize:11, fontWeight:700, color:'var(--cream)' }}>{it.val} ({it.pct}%)</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <p style={{ fontSize:11, color:'var(--muted)', textAlign:'center', marginTop:14, fontStyle:'italic' }}>
-                  {pct>=70 ? '¡Vas por buen camino! 👏' : pct>=40 ? 'Sigue así, vas avanzando 💪' : '¡A contactar clientes! 🎯'}
-                </p>
-              </div>
-
-              {/* Distribución por prioridad */}
-              <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, padding:'18px 20px' }}>
-                <p style={{ fontSize:14, fontWeight:800, color:'var(--cream)', marginBottom:18 }}>Distribución por prioridad</p>
-                {([['Alta','#EF4444'],['Media','#F59E0B'],['Baja','#34D399']] as [keyof typeof porPrioridad,string][]).map(([p,color])=>{
-                  const val = porPrioridad[p]
-                  const max = Math.max(...Object.values(porPrioridad), 1)
-                  return (
-                    <div key={p} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-                      <span style={{ fontSize:12, color:'var(--muted)', width:48 }}>{p}</span>
-                      <div style={{ flex:1, height:8, background:'rgba(255,255,255,0.06)', borderRadius:8, overflow:'hidden' }}>
-                        <div style={{ height:'100%', width:`${(val/max)*100}%`, background:color, borderRadius:8, transition:'width 0.5s' }}/>
-                      </div>
-                      <span style={{ fontSize:13, fontWeight:800, color:'var(--cream)', width:24, textAlign:'right' }}>{val}</span>
-                    </div>
-                  )
-                })}
-                <p style={{ fontSize:11, color:'var(--muted)', textAlign:'center', marginTop:8, fontStyle:'italic' }}>
-                  Enfócate en las prioridades altas
-                </p>
-              </div>
-
-              {/* Consejos del día */}
-              <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, padding:'18px 20px' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
-                  <Lightbulb size={15} color="#D4AF37"/>
-                  <p style={{ fontSize:14, fontWeight:800, color:'var(--cream)' }}>Consejos del día</p>
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                  {consejos.slice(0,3).map((c,i)=>(
-                    <div key={i} style={{ background:'rgba(212,175,55,0.05)', border:'1px solid rgba(212,175,55,0.12)', borderRadius:10, padding:'12px 14px' }}>
-                      <p style={{ fontSize:12, color:'#ddd', lineHeight:1.5 }}>{c}</p>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={()=>{ setTab('semana'); setPrioFiltro('Alta'); setVerTodas(true) }}
-                  style={{ marginTop:14, width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between',
-                    background:'none', border:'none', color:'var(--gold)', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-                  Ver sugerencias de contacto <ChevronRight size={14}/>
-                </button>
-              </div>
+          {misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+              <p style={{ fontSize: 32, marginBottom: 10 }}>🎉</p>
+              <p style={{ fontSize: 14, color: 'var(--cream)', fontWeight: 700, marginBottom: 6 }}>
+                Sin misiones activas
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--muted)' }}>
+                Todos los clientes están al día o aún no se acercan a su próxima compra.
+                {isAdmin && ' Genera las misiones con el botón Actualizar.'}
+              </p>
             </div>
           )}
-
-          {/* Desglose por vendedor (admin) */}
-          {isAdmin && !sinMisiones && desglose.length>1 && (
-            <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, padding:'16px 20px', marginTop:14 }}>
-              <p style={{ fontSize:13, fontWeight:800, color:'var(--cream)', marginBottom:14 }}>Progreso por vendedor</p>
-              <div style={{ display:'flex', gap:20 }}>
-                {desglose.map(({v,total:vt,done:vd})=>{
-                  const c = VEND_COLOR[v]??'#888'
-                  const vpct = vt>0?Math.round((vd/vt)*100):0
-                  return (
-                    <div key={v} style={{ flex:1 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
-                        <User size={12} color={c}/>
-                        <span style={{ fontSize:12, color:c, fontWeight:700 }}>{v.split(' ')[0]}</span>
-                        <span style={{ fontSize:11, color:'var(--muted)', marginLeft:'auto' }}>{vd}/{vt} · {vpct}%</span>
-                      </div>
-                      <div style={{ height:6, background:'rgba(255,255,255,0.06)', borderRadius:6, overflow:'hidden' }}>
-                        <div style={{ height:'100%', width:`${vpct}%`, background:c, borderRadius:6 }}/>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {tab==='proxima'  && <ProximaSemana proxima={proxima} semanaNext={semanaNext}/>}
-      {tab==='historial'&& <HistorialView historial={historial}/>}
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-
-      {/* Modal WhatsApp */}
-      {waModal && <WAModal target={waModal} onClose={()=>setWaModal(null)}/>}
-    </div>
-  )
-}
-
-// ── Fila desktop ──────────────────────────────────────────────────────────────
-function DesktopRow({ m, onToggle, toggling, canToggle, onOpen, onWA }: {
-  m: MisionEnriquecida; onToggle: (m:MisionEnriquecida)=>void; toggling: boolean; canToggle: boolean; onOpen: ()=>void; onWA: (m:MisionEnriquecida)=>void
-}) {
-  const seg = m.segmento ?? 'E'; const segColor = SEG_COLOR[seg]??'#888'
-  const vendColor = VEND_COLOR[m.vendedor]??'#888'
-  const prio = PRIO_CFG[m.prioridad]
-  const done = m.estado==='completada'
-
-  return (
-    <tr style={{ borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
-      {/* Cliente */}
-      <td style={{ padding:'12px 10px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={onOpen}>
-          <div style={{ width:38, height:38, borderRadius:10, flexShrink:0, background:`${segColor}18`, border:`1.5px solid ${segColor}44`,
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
-            <span style={{ fontSize:13, fontWeight:900, color:segColor, lineHeight:1.1 }}>{seg}</span>
-            <span style={{ fontSize:7, fontWeight:700, color:segColor, opacity:0.7 }}>{m.score}</span>
-          </div>
-          <div>
-            <p style={{ fontSize:13, fontWeight:700, color: done?'var(--muted)':'var(--cream)', textDecoration: done?'line-through':'none' }}>{m.nombre_fantasia}</p>
-            <p style={{ fontSize:10, color:vendColor }}>{m.vendedor.split(' ')[0]}{m.localidad?` · ${m.localidad}`:''}</p>
-          </div>
-        </div>
-      </td>
-      {/* Ruta */}
-      <td style={{ padding:'12px 10px' }}>
-        <span style={{ fontSize:11, padding:'4px 10px', borderRadius:8, background:'rgba(255,255,255,0.05)', border:'1px solid var(--border)', color:'var(--cream)', whiteSpace:'nowrap' }}>
-          {m.ruta_despacho || 'Sin ruta'}
-        </span>
-      </td>
-      {/* Prioridad */}
-      <td style={{ padding:'12px 10px' }}>
-        <span style={{ fontSize:11, fontWeight:700, padding:'4px 12px', borderRadius:20, color:prio.color, background:prio.bg, border:`1px solid ${prio.border}` }}>
-          {m.prioridad}
-        </span>
-      </td>
-      {/* Último pedido */}
-      <td style={{ padding:'12px 10px' }}>
-        <p style={{ fontSize:12, color:'var(--cream)', fontWeight:600 }}>{fFecha(m.ultima_venta_fecha)}</p>
-        {m.ultima_venta_monto>0 && <p style={{ fontSize:10, color:'var(--muted)' }}>{fPeso(m.ultima_venta_monto)}</p>}
-      </td>
-      {/* Frecuencia */}
-      <td style={{ padding:'12px 10px' }}>
-        <span style={{ fontSize:11, color:'var(--muted)' }}>{m.frecuencia_texto}</span>
-      </td>
-      {/* Estado */}
-      <td style={{ padding:'12px 10px' }}>
-        {canToggle ? (
-          <button onClick={()=>onToggle(m)} disabled={toggling}
-            style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:20, cursor:toggling?'wait':'pointer',
-              background: done?'rgba(52,211,153,0.12)':'rgba(245,158,11,0.1)',
-              border: done?'1px solid rgba(52,211,153,0.3)':'1px solid rgba(245,158,11,0.25)',
-              color: done?'#34D399':'#F59E0B', fontSize:11, fontWeight:700, opacity:toggling?0.5:1 }}>
-            {done ? <><CheckCircle2 size={12}/> Contactado</> : 'Pendiente'}
-          </button>
-        ) : (
-          <span style={{ fontSize:11, fontWeight:700, padding:'5px 12px', borderRadius:20,
-            background: done?'rgba(52,211,153,0.12)':'rgba(245,158,11,0.1)', color: done?'#34D399':'#F59E0B' }}>
-            {done?'Contactado':'Pendiente'}
-          </span>
-        )}
-      </td>
-      {/* Acciones */}
-      <td style={{ padding:'12px 10px', textAlign:'right' }}>
-        <div style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
-          <button onClick={()=>onWA(m)}
-            style={{ width:30, height:30, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center',
-              background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.2)', color:'#25D366', cursor:'pointer' }}>
-            <MessageCircle size={14}/>
-          </button>
-          {canToggle && (
-            <button onClick={()=>onToggle(m)} disabled={toggling}
-              style={{ width:30, height:30, borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
-                background: done?'rgba(52,211,153,0.12)':'rgba(255,255,255,0.04)',
-                border: done?'1px solid rgba(52,211,153,0.3)':'1px solid var(--border)',
-                color: done?'#34D399':'var(--muted)' }}>
-              {done ? <CheckCircle2 size={15}/> : <Circle size={15}/>}
-            </button>
-          )}
-        </div>
-      </td>
-    </tr>
-  )
-}
-
-// ── Fila móvil ────────────────────────────────────────────────────────────────
-function MobileRow({ m, onToggle, toggling, canToggle, onOpen, onWA }: {
-  m: MisionEnriquecida; onToggle:(m:MisionEnriquecida)=>void; toggling:boolean; canToggle:boolean; onOpen:()=>void; onWA:(m:MisionEnriquecida)=>void
-}) {
-  const seg = m.segmento??'E'; const segColor = SEG_COLOR[seg]??'#888'
-  const vendColor = VEND_COLOR[m.vendedor]??'#888'
-  const done = m.estado==='completada'
-  return (
-    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:14, padding:'12px 14px',
-      display:'flex', alignItems:'center', gap:10, opacity:done?0.7:1 }}>
-      <div onClick={onOpen} style={{ width:40, height:40, borderRadius:10, flexShrink:0, background:`${segColor}18`, border:`1.5px solid ${segColor}44`,
-        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-        <span style={{ fontSize:14, fontWeight:900, color:segColor, lineHeight:1.1 }}>{seg}</span>
-        <span style={{ fontSize:7, fontWeight:700, color:segColor, opacity:0.7 }}>{m.score}</span>
-      </div>
-      <div style={{ flex:1, minWidth:0 }} onClick={onOpen}>
-        <p style={{ fontSize:13, fontWeight:700, color: done?'var(--muted)':'var(--cream)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textDecoration:done?'line-through':'none' }}>{m.nombre_fantasia}</p>
-        <p style={{ fontSize:10, color:vendColor }}>{m.vendedor.split(' ')[0]}{m.localidad?` · ${m.localidad}`:''}</p>
-      </div>
-      {canToggle ? (
-        <button onClick={()=>onToggle(m)} disabled={toggling}
-          style={{ padding:'4px 10px', borderRadius:20, cursor:'pointer', flexShrink:0,
-            background: done?'rgba(52,211,153,0.12)':'rgba(245,158,11,0.1)',
-            border: done?'1px solid rgba(52,211,153,0.3)':'1px solid rgba(245,158,11,0.25)',
-            color: done?'#34D399':'#F59E0B', fontSize:10, fontWeight:700, opacity:toggling?0.5:1 }}>
-          {done?'Contactado':'Pendiente'}
-        </button>
-      ) : (
-        <span style={{ padding:'4px 10px', borderRadius:20, flexShrink:0, fontSize:10, fontWeight:700,
-          background: done?'rgba(52,211,153,0.12)':'rgba(245,158,11,0.1)', color: done?'#34D399':'#F59E0B' }}>
-          {done?'Contactado':'Pendiente'}
-        </span>
-      )}
-      <button onClick={()=>onWA(m)}
-        style={{ width:34, height:34, borderRadius:9, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
-          background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.2)', color:'#25D366', cursor:'pointer' }}>
-        <MessageCircle size={15}/>
-      </button>
-    </div>
-  )
-}
-
-// ── Estado vacío ──────────────────────────────────────────────────────────────
-function EmptyState({ isAdmin, onGenerar, generating }: { isAdmin:boolean; onGenerar:()=>void; generating:boolean }) {
-  return (
-    <div style={{ textAlign:'center', padding:'48px 24px' }}>
-      <p style={{ fontSize:36, marginBottom:12 }}>🎯</p>
-      <p style={{ fontSize:15, fontWeight:800, color:'var(--cream)', marginBottom:6 }}>
-        {isAdmin ? 'No hay misiones para esta semana' : 'Sin misiones asignadas'}
-      </p>
-      <p style={{ fontSize:13, color:'var(--muted)', marginBottom:20 }}>
-        {isAdmin ? 'Genera las misiones para asignar contactos a cada vendedor.' : 'El admin generará las misiones semanales pronto.'}
-      </p>
-      {isAdmin && (
-        <button onClick={onGenerar} disabled={generating}
-          style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'12px 20px', borderRadius:12, cursor:'pointer',
-            background:'rgba(212,175,55,0.15)', border:'1px solid rgba(212,175,55,0.4)', color:'var(--gold)', fontSize:13, fontWeight:700 }}>
-          <Zap size={16}/> {generating?'Generando…':'Generar misiones esta semana'}
-        </button>
-      )}
-    </div>
-  )
-}
-
-// ── Próxima semana ────────────────────────────────────────────────────────────
-function ProximaSemana({ proxima, semanaNext }: { proxima: ProximaPreview[]; semanaNext: string }) {
-  const router = useRouter()
-  return (
-    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, padding:'18px 20px' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-        <Calendar size={15} color="#60A5FA"/>
-        <p style={{ fontSize:15, fontWeight:800, color:'var(--cream)' }}>Preview próxima semana</p>
-      </div>
-      <p style={{ fontSize:12, color:'var(--muted)', marginBottom:16 }}>
-        {proxima.length} clientes proyectados para contactar · {rangoSemana(semanaNext)}
-      </p>
-      {proxima.length===0 ? (
-        <p style={{ fontSize:13, color:'var(--muted)', textAlign:'center', padding:'30px 0' }}>Sin proyecciones para la próxima semana</p>
-      ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {proxima.slice(0,15).map((p,i)=>{
-            const segColor = SEG_COLOR[p.segmento]??'#888'
-            const alertColor = p.alert_level==='critico'?'#EF4444':p.alert_level==='vencido'?'#F87171':'#F59E0B'
-            return (
-              <div key={i} onClick={()=>router.push('/ventas/clientes')}
-                style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid rgba(255,255,255,0.04)', cursor:'pointer' }}>
-                <span style={{ fontSize:10, fontWeight:900, padding:'2px 7px', borderRadius:6, background:`${segColor}22`, color:segColor, border:`1px solid ${segColor}44`, flexShrink:0 }}>
-                  {p.segmento} {p.score}
-                </span>
-                <span style={{ fontSize:12, fontWeight:600, color:'var(--cream)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.nombre_fantasia}</span>
-                <span style={{ fontSize:10, color:'var(--muted)' }}>{p.vendedor_actual?.split(' ')[0]}</span>
-                <span style={{ fontSize:11, fontWeight:700, color:alertColor, flexShrink:0 }}>{p.dias_sin_compra}d</span>
-              </div>
-            )
-          })}
-          {proxima.length>15 && <p style={{ fontSize:11, color:'var(--muted)', textAlign:'center', paddingTop:8 }}>+{proxima.length-15} más</p>}
         </div>
       )}
-    </div>
-  )
-}
 
-// ── Historial ─────────────────────────────────────────────────────────────────
-function HistorialView({ historial }: { historial: HistorialSemana[] }) {
-  if (historial.length===0)
-    return (
-      <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, padding:'48px 24px', textAlign:'center' }}>
-        <p style={{ fontSize:32, marginBottom:10 }}>📅</p>
-        <p style={{ fontSize:14, fontWeight:700, color:'var(--cream)' }}>Sin historial todavía</p>
-        <p style={{ fontSize:12, color:'var(--muted)', marginTop:4 }}>Las semanas anteriores aparecerán aquí</p>
-      </div>
-    )
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-      {historial.map(h=>{
-        const pct = h.total>0?Math.round((h.completadas/h.total)*100):0
-        const color = pct>=80?'#34D399':pct>=50?'#F59E0B':'#F87171'
-        return (
-          <div key={h.semana} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:16, padding:'16px 18px' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <Calendar size={14} color="var(--muted)"/>
-                <span style={{ fontSize:13, fontWeight:700, color:'var(--cream)' }}>{rangoSemana(h.semana)}</span>
-              </div>
-              <span style={{ fontSize:13, fontWeight:900, color }}>{pct}%</span>
-            </div>
-            <div style={{ height:8, background:'rgba(255,255,255,0.06)', borderRadius:8, overflow:'hidden', marginBottom:6 }}>
-              <div style={{ height:'100%', width:`${pct}%`, background:color, borderRadius:8 }}/>
-            </div>
-            <p style={{ fontSize:11, color:'var(--muted)' }}>
-              {h.completadas} de {h.total} contactos completados
-            </p>
-          </div>
-        )
-      })}
+      {tab === 'proxima' && <ProximaView proxima={proxima} />}
+
+      {tab === 'historial' && <HistorialView historial={historial} />}
+
+      {/* WhatsApp Modal */}
+      {waTarget && (
+        <WAModal
+          target={waTarget}
+          onClose={() => setWaTarget(null)}
+        />
+      )}
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   )
 }
