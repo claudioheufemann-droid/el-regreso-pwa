@@ -602,7 +602,9 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
           <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #1E1E1E' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
               <div>
-                <h2 style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{currentRutaName}</h2>
+                <h2 style={{ fontSize: 14, fontWeight: 800, color: selectedRuta === '__sin_ruta__' ? '#F87171' : '#fff' }}>
+                  {currentRutaName}
+                </h2>
                 <p style={{ fontSize: 10, color: '#555', marginTop: 2 }}>
                   {clientesEnRuta.length} clientes
                   {seleccionados.size > 0 && <span style={{ color: '#D4AF37', marginLeft: 6 }}>· {seleccionados.size} seleccionados</span>}
@@ -613,11 +615,54 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
                   ? setSeleccionados(new Set())
                   : setSeleccionados(new Set(clientesEnRuta.map(c => c.id)))
                 }
-                style={{ padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, background: '#1A1A1A', border: '1px solid #333', color: '#888', cursor: 'pointer' }}
+                style={{
+                  padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                  background: seleccionados.size > 0
+                    ? '#1A1A1A'
+                    : selectedRuta === '__sin_ruta__'
+                      ? 'rgba(248,113,113,0.12)'
+                      : '#1A1A1A',
+                  border: seleccionados.size > 0
+                    ? '1px solid #333'
+                    : selectedRuta === '__sin_ruta__'
+                      ? '1px solid rgba(248,113,113,0.3)'
+                      : '1px solid #333',
+                  color: seleccionados.size > 0
+                    ? '#888'
+                    : selectedRuta === '__sin_ruta__'
+                      ? '#F87171'
+                      : '#888',
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
               >
                 {seleccionados.size > 0 ? 'Quitar selección' : 'Seleccionar todos'}
               </button>
             </div>
+
+            {/* Banner de acción rápida para clientes sin ruta */}
+            {selectedRuta === '__sin_ruta__' && seleccionados.size === 0 && clientesEnRuta.length > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 12px', marginBottom: 10, borderRadius: 10,
+                background: 'rgba(248,113,113,0.05)',
+                border: '1px solid rgba(248,113,113,0.18)',
+              }}>
+                <AlertCircle size={13} style={{ color: '#F87171', flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: '#F87171', flex: 1, fontWeight: 600 }}>
+                  {clientesEnRuta.length} cliente{clientesEnRuta.length !== 1 ? 's' : ''} sin ruta — selecciona todos para asignar rápido
+                </span>
+                <button
+                  onClick={() => setSeleccionados(new Set(clientesEnRuta.map(c => c.id)))}
+                  style={{
+                    padding: '5px 12px', borderRadius: 7, fontSize: 11, fontWeight: 800,
+                    background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.35)',
+                    color: '#F87171', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  }}
+                >
+                  Seleccionar todos →
+                </button>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <div style={{
@@ -634,17 +679,25 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
               </div>
 
               {seleccionados.size > 0 && (
-                <div style={{ display: 'flex', gap: 5 }}>
+                <div style={{
+                  display: 'flex', gap: 6, flexWrap: 'wrap',
+                  padding: selectedRuta === '__sin_ruta__' ? '8px 10px' : '0',
+                  borderRadius: selectedRuta === '__sin_ruta__' ? 10 : 0,
+                  background: selectedRuta === '__sin_ruta__' ? 'rgba(212,175,55,0.05)' : 'transparent',
+                  border: selectedRuta === '__sin_ruta__' ? '1px solid rgba(212,175,55,0.15)' : 'none',
+                  width: '100%',
+                }}>
                   <select
                     value={moverDestino}
                     onChange={e => setMoverDestino(e.target.value)}
                     style={{
+                      flex: 1, minWidth: 120,
                       background: '#1A1A1A', border: '1px solid #333', borderRadius: 8,
-                      padding: '6px 8px', color: moverDestino ? '#fff' : '#555',
-                      fontSize: 11, outline: 'none', cursor: 'pointer',
+                      padding: '7px 8px', color: moverDestino ? '#fff' : '#555',
+                      fontSize: 12, outline: 'none', cursor: 'pointer',
                     }}
                   >
-                    <option value="">Mover a...</option>
+                    <option value="">Asignar a ruta...</option>
                     {allRutaNames.filter(r => r !== selectedRuta).map(r => (
                       <option key={r} value={r}>Ruta {r}</option>
                     ))}
@@ -657,14 +710,15 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
                     disabled={!moverDestino || loading}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 5,
-                      padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                      padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       background: moverDestino ? 'rgba(212,175,55,0.15)' : '#1A1A1A',
                       border: moverDestino ? '1px solid rgba(212,175,55,0.3)' : '1px solid #333',
                       color: moverDestino ? '#D4AF37' : '#555',
                       cursor: moverDestino && !loading ? 'pointer' : 'not-allowed',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    <ArrowRightLeft size={12} /> Mover ({seleccionados.size})
+                    <ArrowRightLeft size={12} /> Asignar {seleccionados.size}
                   </button>
                 </div>
               )}

@@ -6,6 +6,7 @@ import { Home, LogOut, LucideIcon } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { ReactNode } from 'react'
 import Logo from '@/components/ui/Logo'
+import Avatar from '@/components/ui/Avatar'
 
 export interface SidebarNavItem {
   href: string
@@ -105,14 +106,24 @@ export default function SidebarShell({ moduleName, sectionLabel, navItems, cta }
 
       {/* Footer */}
       <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', letterSpacing: '-0.2px' }}>
-              {user?.nombre}
-            </p>
-            <p style={{ fontSize: 9, color: isAdmin ? '#A78BFA' : 'var(--muted)', fontWeight: 600, marginTop: 1 }}>
-              {isAdmin ? 'Administrador' : 'Vendedor'}
-            </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+            {user && (
+              <Avatar
+                iniciales={user.iniciales}
+                userId={user.id}
+                size={34}
+                avatarUrl={user.avatarUrl}
+              />
+            )}
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', letterSpacing: '-0.2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user?.nombre}
+              </p>
+              <p style={{ fontSize: 9, color: isAdmin ? '#A78BFA' : 'var(--muted)', fontWeight: 600, marginTop: 1 }}>
+                {isAdmin ? 'Administrador' : 'Vendedor'}
+              </p>
+            </div>
           </div>
           <button
             onClick={logout}
@@ -120,7 +131,7 @@ export default function SidebarShell({ moduleName, sectionLabel, navItems, cta }
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: 'var(--muted)', padding: 6, borderRadius: 8,
-              display: 'flex', alignItems: 'center',
+              display: 'flex', alignItems: 'center', flexShrink: 0,
             }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#F87171'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--muted)'}

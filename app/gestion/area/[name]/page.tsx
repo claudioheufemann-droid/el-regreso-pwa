@@ -14,8 +14,8 @@ export default async function AreaPage({ params }: { params: Promise<{ name: str
   if (!user) redirect('/login')
 
   const [{ data: tasks }, { data: users }] = await Promise.all([
-    supabase.from('tasks').select('*, responsable:users(id, nombre, iniciales, rol, area, email)').eq('area', area).order('created_at', { ascending: false }),
-    supabase.from('users').select('id, nombre, iniciales, rol, area, email, is_admin, macro_area'),
+    supabase.from('tasks').select('*, responsable:users(id, nombre, iniciales, rol, area, email, avatar_url)').eq('area', area).order('created_at', { ascending: false }),
+    supabase.from('users').select('id, nombre, iniciales, rol, area, email, is_admin, macro_area, avatar_url'),
   ])
 
   const userProfile = users?.find(u => u.email === user.email)

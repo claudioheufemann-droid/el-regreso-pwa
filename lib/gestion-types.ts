@@ -9,6 +9,7 @@ export interface RcUser {
   email: string
   is_admin?: boolean
   macro_area?: string | null   // 'comercial' | 'administracion' | null (global admin)
+  avatar_url?: string | null
 }
 
 export interface RcTask {

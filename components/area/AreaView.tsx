@@ -247,7 +247,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
               const myCount = tasks.filter(t => t.responsable_id === u.id && (filter === 'Todas' || t.estado === filter)).length
               return (
                 <button key={u.id} onClick={() => setFilterUserId(isActive ? null : u.id)} className="touch-active" style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', borderRadius: 10, border: 'none', background: isActive ? `${cfg.color}15` : 'transparent', cursor: 'pointer', marginBottom: 2 }}>
-                  <Avatar iniciales={u.iniciales} userId={u.id} size={26} />
+                  <Avatar iniciales={u.iniciales} userId={u.id} size={26} avatarUrl={u.avatar_url} />
                   <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? cfg.color : 'var(--muted)', flex: 1, textAlign: 'left' }}>{u.nombre.split(' ')[0]}</span>
                   {myCount > 0 && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: isActive ? `${cfg.color}25` : 'rgba(128,128,128,0.12)', color: isActive ? cfg.color : 'var(--muted)', fontWeight: 700 }}>{myCount}</span>}
                 </button>
@@ -307,7 +307,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
             >
               {/* Header persona */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                <Avatar iniciales={u.iniciales} userId={u.id} size={42} />
+                <Avatar iniciales={u.iniciales} userId={u.id} size={42} avatarUrl={u.avatar_url} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--cream)' }}>{u.nombre}</div>
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{u.rol}</div>

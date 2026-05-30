@@ -223,7 +223,7 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {/* Responsable principal */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Avatar iniciales={task.responsable.iniciales} userId={task.responsable_id} size={28} />
+                        <Avatar iniciales={task.responsable.iniciales} userId={task.responsable_id} size={28} avatarUrl={task.responsable.avatar_url} />
                         <div>
                           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)' }}>{task.responsable.nombre}</div>
                           <div style={{ fontSize: 9, color: 'var(--muted)' }}>{task.responsable.rol}</div>
@@ -232,7 +232,7 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
                       {/* Responsables adicionales si existen */}
                       {(task.responsables ?? []).filter(r => r.id !== task.responsable_id).map(r => (
                         <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Avatar iniciales={r.iniciales} userId={r.id} size={24} />
+                          <Avatar iniciales={r.iniciales} userId={r.id} size={24} avatarUrl={r.avatar_url} />
                           <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.nombre}</div>
                         </div>
                       ))}

@@ -71,10 +71,18 @@ export default async function MetasPage() {
     return rows
   }
 
-  const [ventasMes, ventasSemana] = await Promise.all([
+  const [ventasMes, ventasSemana, { data: usersData }] = await Promise.all([
     fetchVentas(mesInicio, fechaRef),
     fetchVentas(semInicio, fechaRef),
+    supabase.from('users').select('nombre, avatar_url').in('nombre', ['Javier B.', 'Carlos U.']),
   ])
+
+  // Mapa nombre_completo → avatar_url para los vendedores
+  // El nombre en ventas es "Javier Badilla" / "Carlos Urrejola" pero en users es "Javier B." / "Carlos U."
+  const vendedorAvatars: Record<string, string | null> = {
+    'Javier Badilla': usersData?.find(u => u.nombre === 'Javier B.')?.avatar_url ?? null,
+    'Carlos Urrejola': usersData?.find(u => u.nombre === 'Carlos U.')?.avatar_url ?? null,
+  }
 
   return (
     <MetasClient
@@ -91,6 +99,7 @@ export default async function MetasPage() {
       vendedores={VENDEDORES as unknown as string[]}
       periodosSemanas={periodosSemanas}
       periodosMeses={periodosMeses}
+      vendedorAvatars={vendedorAvatars}
     />
   )
 }

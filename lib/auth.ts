@@ -7,6 +7,7 @@ export interface AppUser {
   isAdmin: boolean
   iniciales: string
   macroArea: string | null   // null = admin global (ve todo)
+  avatarUrl: string | null
 }
 
 export async function getServerUser(): Promise<AppUser | null> {
@@ -18,7 +19,7 @@ export async function getServerUser(): Promise<AppUser | null> {
     // Primary lookup: by auth UUID
     let { data: profile } = await supabase
       .from('users')
-      .select('nombre, iniciales, is_admin, email, macro_area')
+      .select('nombre, iniciales, is_admin, email, macro_area, avatar_url')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -26,7 +27,7 @@ export async function getServerUser(): Promise<AppUser | null> {
     if (!profile && user.email) {
       const res = await supabase
         .from('users')
-        .select('nombre, iniciales, is_admin, email, macro_area')
+        .select('nombre, iniciales, is_admin, email, macro_area, avatar_url')
         .eq('email', user.email)
         .maybeSingle()
       profile = res.data
@@ -41,6 +42,7 @@ export async function getServerUser(): Promise<AppUser | null> {
       isAdmin: !!profile.is_admin,
       iniciales: profile.iniciales ?? '',
       macroArea: profile.macro_area ?? null,
+      avatarUrl: profile.avatar_url ?? null,
     }
   } catch {
     return null

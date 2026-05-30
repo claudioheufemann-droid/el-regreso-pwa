@@ -104,6 +104,7 @@ interface Props {
   vendedores: string[]
   periodosSemanas: PeriodoSemana[]
   periodosMeses: PeriodoMes[]
+  vendedorAvatars?: Record<string, string | null>
 }
 
 function fmt(n: number) { return n.toFixed(1) }
@@ -474,7 +475,7 @@ function CanalRow({ c, vista, canalDiario }: { c: AnalyticsCanal; vista: Vista; 
 
 // ─── VendedorCard ─────────────────────────────────────────────────────────────
 
-function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vista: Vista }) {
+function VendedorCard({ analytics, vista, avatarUrl }: { analytics: AnalyticsExtended; vista: Vista; avatarUrl?: string | null }) {
   const isDiario  = vista === 'diario'
   const esMensual = vista === 'mensual'
 
@@ -506,12 +507,26 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
       {/* Header */}
       <div style={{ padding: '18px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 42, height: 42, borderRadius: '50%',
-            background: SEMAFORO_COLORS[semaforo],
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 900, color: '#080808', flexShrink: 0,
-          }}>{getInitials(analytics.vendedor)}</div>
+          {avatarUrl ? (
+            <div style={{
+              width: 48, height: 48, borderRadius: '50%', overflow: 'hidden',
+              flexShrink: 0, border: `2px solid ${SEMAFORO_COLORS[semaforo]}`,
+              boxShadow: `0 0 12px ${SEMAFORO_COLORS[semaforo]}40`,
+              position: 'relative',
+            }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={avatarUrl} alt={analytics.vendedor}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
+            </div>
+          ) : (
+            <div style={{
+              width: 48, height: 48, borderRadius: '50%',
+              background: SEMAFORO_COLORS[semaforo],
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 15, fontWeight: 900, color: '#080808', flexShrink: 0,
+              border: `2px solid ${SEMAFORO_COLORS[semaforo]}`,
+            }}>{getInitials(analytics.vendedor)}</div>
+          )}
           <div>
             <h2 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 16, letterSpacing: '-0.3px' }}>
               {analytics.vendedor}
@@ -1016,7 +1031,7 @@ function buildPacingData(
 export default function MetasClient({
   metasSemanales, metasMensuales, ventasMes, ventasSemana,
   fechaRef, mesInicio, mesFin, semanaInicio, semanaFin,
-  periodo, vendedores, periodosSemanas, periodosMeses,
+  periodo, vendedores, periodosSemanas, periodosMeses, vendedorAvatars,
 }: Props) {
   const isDesktop = useIsDesktop()
   const [vista, setVista] = useState<Vista>('semanal')
@@ -1498,7 +1513,7 @@ export default function MetasClient({
           {/* Grid de vendedores */}
           <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(auto-fit, minmax(400px, 1fr))' : '1fr', gap: isDesktop ? 24 : 14 }}>
             {activeAnalytics.map(a => (
-              <VendedorCard key={a.vendedor} analytics={a} vista={vista} />
+              <VendedorCard key={a.vendedor} analytics={a} vista={vista} avatarUrl={vendedorAvatars?.[a.vendedor]} />
             ))}
           </div>
 
