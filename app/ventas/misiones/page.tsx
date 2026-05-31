@@ -117,12 +117,24 @@ export default async function MisionesPage() {
       .select('nombre_fantasia, ruta_despacho, localidad, localidad_entrega, telefono')
       .in('vendedor', vendedoresScope.length ? vendedoresScope : ['__none__']),
 
-    // Último pedido por cliente
-    supabase.from('ventas')
-      .select('nombre_fantasia, fecha_pedido, total_sin_impuesto')
-      .in('vendedor_actual', vendedoresScope.length ? vendedoresScope : ['__none__'])
-      .order('fecha_pedido', { ascending: false })
-      .limit(2000),
+    // Último pedido por cliente — paginado para no truncar a 1000
+    (async () => {
+      const rows: { nombre_fantasia: string | null; fecha_pedido: string; total_sin_impuesto: number }[] = []
+      let offset = 0
+      const scope2 = vendedoresScope.length ? vendedoresScope : ['__none__']
+      while (true) {
+        const { data } = await supabase.from('ventas')
+          .select('nombre_fantasia, fecha_pedido, total_sin_impuesto')
+          .in('vendedor_actual', scope2)
+          .order('fecha_pedido', { ascending: false })
+          .range(offset, offset + 999)
+        if (!data || data.length === 0) break
+        rows.push(...data)
+        if (data.length < 1000) break
+        offset += 1000
+      }
+      return { data: rows }
+    })(),
   ])
 
   // Mapas de lookup

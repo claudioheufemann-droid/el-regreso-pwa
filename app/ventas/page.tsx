@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, CLIENTES_EXCLUIR } from '@/lib/types'
+import { VENDEDORES, esClienteExcluido } from '@/lib/types'
 import DashboardClient from './DashboardClient'
 
 export const dynamic = 'force-dynamic'
@@ -131,7 +131,7 @@ export default async function DashboardPage({
   // Evolution: agrupar por fecha_pedido y vendedor
   const evolucionMap = new Map<string, Record<string, number>>()
   for (const v of ventasPeriodo ?? []) {
-    if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))) continue
+    if (esClienteExcluido(v.nombre_fantasia)) continue
     const fecha = v.fecha_pedido
     if (!evolucionMap.has(fecha)) evolucionMap.set(fecha, {})
     const dayMap = evolucionMap.get(fecha)!
@@ -144,7 +144,7 @@ export default async function DashboardPage({
   // Product ranking top 5
   const prodMap = new Map<string, { litros: number; categoria: string }>()
   for (const v of ventasHoy ?? []) {
-    if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))) continue
+    if (esClienteExcluido(v.nombre_fantasia)) continue
     if (!v.producto) continue
     const existing = prodMap.get(v.producto)
     prodMap.set(v.producto, {
@@ -160,7 +160,7 @@ export default async function DashboardPage({
   // Product detail: quién compró cada producto (agrupado por cliente)
   const productDetailMap: Record<string, ProductBuyer[]> = {}
   for (const v of ventasHoy ?? []) {
-    if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))) continue
+    if (esClienteExcluido(v.nombre_fantasia)) continue
     if (!v.producto || !v.nombre_fantasia) continue
     if (!productDetailMap[v.producto]) productDetailMap[v.producto] = []
     const existing = productDetailMap[v.producto].find(d => d.nombre === v.nombre_fantasia)
@@ -183,8 +183,8 @@ export default async function DashboardPage({
     const vHoy = (ventasHoy ?? []).filter(v => v.vendedor_actual === vendedor)
     const vPeriodo = (ventasPeriodo ?? []).filter(v => v.vendedor_actual === vendedor)
 
-    const vHoyFiltrado = vHoy.filter(v => !CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase())))
-    const vPeriodoFiltrado = vPeriodo.filter(v => !CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase())))
+    const vHoyFiltrado = vHoy.filter(v => !esClienteExcluido(v.nombre_fantasia))
+    const vPeriodoFiltrado = vPeriodo.filter(v => !esClienteExcluido(v.nombre_fantasia))
 
     const litrosHoy = vHoyFiltrado.reduce((s, v) => s + (v.litros ?? 0), 0)
     const ventaHoy = vHoyFiltrado.reduce((s, v) => s + (v.total_sin_impuesto ?? 0), 0)
@@ -327,7 +327,7 @@ export default async function DashboardPage({
       offset += 1000
     }
     for (const v of rowsPrev) {
-      if (CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))) continue
+      if (esClienteExcluido(v.nombre_fantasia)) continue
       litrosMesAnteriorTotal += v.litros ?? 0
       litrosMesAnteriorPorVendedor[v.vendedor_actual] = (litrosMesAnteriorPorVendedor[v.vendedor_actual] ?? 0) + (v.litros ?? 0)
     }

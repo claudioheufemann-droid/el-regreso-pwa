@@ -16,19 +16,44 @@ export const CATEGORIAS_NEGOCIO = [
   'Otros',
 ] as const
 
+/**
+ * Lista maestra de clientes internos a excluir de todas las vistas y cálculos.
+ * FUENTE ÚNICA DE VERDAD — no duplicar en otros archivos.
+ *
+ * Comparación: siempre case-insensitive con esClienteExcluido().
+ * Todos los strings están en minúscula para evitar variantes.
+ */
 export const CLIENTES_EXCLUIR = [
-  // Variantes con V mayúscula (original)
-  'Cliente Ventas (Javier)',
-  'Cliente Ventas (Charly)',
-  'Cliente Ventas (Carlos)',
-  // Variante con v minúscula — encontrada en Excel de mayo (causa de discrepancia Javier)
-  'Cliente ventas (Javier)',
-  'Cliente ventas (Charly)',
-  'Cliente ventas (Carlos)',
-  // Otros internos
-  'Cliente PDV',
-  'Cliente Merma PDV',
+  // Movimientos de personal de ventas
+  'cliente ventas (javier)',
+  'cliente ventas (charly)',
+  'cliente ventas (carlos)',
+  // PDV y mermas
+  'cliente pdv',
+  'cliente merma pdv',
+  'cliente mermas producto terminado',
+  // Consumo interno / marketing
+  'cliente feria',
+  'cliente marketing',
+  'cliente calidad reclamos',
+  'cliente copas/medallas',
+  'basecamp el regreso',
+  'beneficios clientes',
 ]
+
+/**
+ * Retorna true si el nombre de cliente es interno (debe excluirse de ventas reales).
+ * Usa comparación case-insensitive con cada entrada de CLIENTES_EXCLUIR.
+ * Usa includes() en vez de === para capturar variantes de escritura.
+ */
+export function esClienteExcluido(nombre: string | null | undefined): boolean {
+  if (!nombre) return false
+  const n = nombre.toLowerCase().trim()
+  return CLIENTES_EXCLUIR.some(ex => n.includes(ex))
+}
+
+/** Alias para compatibilidad con código existente */
+export const esInterno = esClienteExcluido
 
 export interface Venta {
   id: number

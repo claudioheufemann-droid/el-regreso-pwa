@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, CLIENTES_EXCLUIR } from '@/lib/types'
+import { VENDEDORES, esClienteExcluido } from '@/lib/types'
 import AcumuladoClient from './AcumuladoClient'
 
 export const dynamic = 'force-dynamic'
@@ -28,7 +28,7 @@ export type CatClientes = Record<string, Record<string, ClienteDet[]>>         /
 export type MixDetalle  = Record<string, ClienteDet[]>                         // cat→clientes
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const excluido = (n: string|null) => !n || CLIENTES_EXCLUIR.some(ex => n.toLowerCase().includes(ex.toLowerCase()))
+const excluido = (n: string|null) => esClienteExcluido(n)
 const getCat = (v: { categoria_negocio: string|null }) =>
   (v.categoria_negocio && v.categoria_negocio !== '-') ? v.categoria_negocio : 'Otros'
 

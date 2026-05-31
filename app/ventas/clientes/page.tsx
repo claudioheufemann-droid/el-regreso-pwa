@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, CLIENTES_EXCLUIR } from '@/lib/types'
+import { VENDEDORES, esClienteExcluido } from '@/lib/types'
 import ClientesClient from './ClientesClient'
 
 export const dynamic = 'force-dynamic'
@@ -29,12 +29,9 @@ export default async function ClientesPage() {
   const fechaInicio = periodo?.fecha_inicio ?? '2000-01-01'
   const fechaFin    = periodo?.fecha_fin    ?? new Date().toISOString().split('T')[0]
 
-  // Todas las queries en paralelo
+  // Queries pequeñas (no superan 1000 filas) — en paralelo
   const [
     { data: clientes },
-    { data: ultimosContactos },
-    { data: ultimosPedidos },
-    { data: ventasPeriodo },
     { data: estadosData },
     { data: scoreData },
     { data: deudoresData },
@@ -43,24 +40,59 @@ export default async function ClientesPage() {
       .select('id, nombre_fantasia, razon_social, categoria, vendedor, localidad, localidad_entrega, ruta_despacho, telefono, lat, lng')
       .in('vendedor', vendedoresScope.length ? vendedoresScope : ['__none__'])
       .order('nombre_fantasia'),
-
-    supabase.from('contactos')
-      .select('cliente_nombre_fantasia, fecha_hora, tipo, vendedor')
-      .order('fecha_hora', { ascending: false }).limit(5000),
-
-    supabase.from('ventas')
-      .select('nombre_fantasia, fecha_pedido, litros')
-      .order('fecha_pedido', { ascending: false }).limit(10000),
-
-    supabase.from('ventas')
-      .select('nombre_fantasia, vendedor_actual, litros, total_sin_impuesto, fecha_pedido')
-      .gte('fecha_pedido', fechaInicio).lte('fecha_pedido', fechaFin),
-
     supabase.from('clientes_estado').select('nombre_fantasia, estado, nota'),
-
     supabase.rpc('get_client_scores'),
-
     supabase.from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total'),
+  ])
+
+  // Queries grandes con paginación real (superan 1000 filas; .limit() fijo trunca silenciosamente)
+  const ultimosContactos: { cliente_nombre_fantasia: string; fecha_hora: string; tipo: string; vendedor: string }[] = []
+  const ultimosPedidos: { nombre_fantasia: string; fecha_pedido: string; litros: number }[] = []
+  const ventasPeriodo: { nombre_fantasia: string; vendedor_actual: string; litros: number; total_sin_impuesto: number; fecha_pedido: string }[] = []
+
+  await Promise.all([
+    // contactos: orden desc → capturamos el más reciente por cliente
+    (async () => {
+      let offset = 0
+      while (true) {
+        const { data } = await supabase.from('contactos')
+          .select('cliente_nombre_fantasia, fecha_hora, tipo, vendedor')
+          .order('fecha_hora', { ascending: false })
+          .range(offset, offset + 999)
+        if (!data || data.length === 0) break
+        ultimosContactos.push(...data)
+        if (data.length < 1000) break
+        offset += 1000
+      }
+    })(),
+    // ventas históricas: para determinar "último pedido por cliente"
+    (async () => {
+      let offset = 0
+      while (true) {
+        const { data } = await supabase.from('ventas')
+          .select('nombre_fantasia, fecha_pedido, litros')
+          .order('fecha_pedido', { ascending: false })
+          .range(offset, offset + 999)
+        if (!data || data.length === 0) break
+        ultimosPedidos.push(...data)
+        if (data.length < 1000) break
+        offset += 1000
+      }
+    })(),
+    // ventas del período activo: litros y venta por cliente
+    (async () => {
+      let offset = 0
+      while (true) {
+        const { data } = await supabase.from('ventas')
+          .select('nombre_fantasia, vendedor_actual, litros, total_sin_impuesto, fecha_pedido')
+          .gte('fecha_pedido', fechaInicio).lte('fecha_pedido', fechaFin)
+          .range(offset, offset + 999)
+        if (!data || data.length === 0) break
+        ventasPeriodo.push(...data)
+        if (data.length < 1000) break
+        offset += 1000
+      }
+    })(),
   ])
 
   // ── Mapas de lookup ────────────────────────────────────────────────────────
@@ -117,8 +149,7 @@ export default async function ClientesPage() {
   }
 
   // Helper: excluir clientes internos
-  const esInterno = (nombre: string | null) =>
-    nombre ? CLIENTES_EXCLUIR.some(ex => nombre.includes(ex)) : false
+  const esInterno = esClienteExcluido
 
   // ── Enriquecer clientes (sin internos) ────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

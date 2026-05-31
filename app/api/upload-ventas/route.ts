@@ -1,31 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import * as XLSX from 'xlsx'
+import { esClienteExcluido } from '@/lib/types'
 
 const VENDEDORES_VALIDOS = ['Javier Badilla', 'Carlos Urrejola']
 
-// Clientes internos a excluir en la carga — comparación case-insensitive
-// Estos son movimientos internos (consumo propio, mermas, ventas de personal)
-// que NO representan ventas reales a clientes externos.
-const CLIENTES_INTERNOS = [
-  'cliente ventas (javier)',
-  'cliente ventas (charly)',
-  'cliente ventas (carlos)',
-  'cliente pdv',
-  'cliente merma pdv',
-  'cliente mermas producto terminado',
-  'cliente feria',
-  'cliente marketing',
-  'cliente calidad reclamos',
-  'cliente copas/medallas',
-  'basecamp el regreso',
-  'beneficios clientes',
-].map(s => s.toLowerCase())
-
-function esClienteInterno(nombre: string | null): boolean {
-  if (!nombre) return false
-  return CLIENTES_INTERNOS.includes(nombre.toLowerCase().trim())
-}
+// Alias local para mantener compatibilidad con el nombre anterior
+const esClienteInterno = esClienteExcluido
 
 function parseFecha(raw: unknown): string | null {
   if (raw instanceof Date) {
