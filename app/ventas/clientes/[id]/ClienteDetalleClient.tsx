@@ -1,16 +1,18 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, MessageCircle, Mail, MapPin, Phone, Tag, Truck,
   ShoppingBag, Droplets, DollarSign, Clock, User, FileText,
   CreditCard, Calendar, CheckCircle2, XCircle, Sunset, Star,
-  AlertTriangle, TrendingUp, Package, Activity, MoreHorizontal,
+  AlertTriangle, TrendingUp, Package, Activity,
   Zap, ChevronRight, Navigation, Info, BarChart2,
+  Bell, Users, Trash2, Plus,
 } from 'lucide-react'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import RegistrarContactoModal, { type TipoContacto } from '@/components/ui/RegistrarContactoModal'
+import FollowUpModal, { type FollowUp } from '@/components/ui/FollowUpModal'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface Cliente {
@@ -98,6 +100,16 @@ interface FrequencyStat {
   litros_totales?: number
   revenue_total?: number
   pedidos_por_mes?: number
+}
+
+interface PersonaContacto {
+  id: string
+  nombre: string
+  cargo: string | null
+  telefono: string | null
+  email: string | null
+  es_decisor: boolean
+  notas: string | null
 }
 
 interface Props {
@@ -523,9 +535,16 @@ export default function ClienteDetalleClient({
   estadoCliente = 'activo', notaEstado = null, isAdmin = false,
 }: Props) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'contacts' | 'notes' | 'activity'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'contacts' | 'personas' | 'notes' | 'activity'>('overview')
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const [registrarTipo, setRegistrarTipo] = useState<TipoContacto | null>(null)
+  const [showFollowUp, setShowFollowUp] = useState(false)
+  const [followUps, setFollowUps] = useState<FollowUp[]>([])
+  const [personas, setPersonas] = useState<PersonaContacto[]>([])
+  const [loadingFollowUps, setLoadingFollowUps] = useState(false)
+  const [loadingPersonas, setLoadingPersonas] = useState(false)
+  const [showAddPersona, setShowAddPersona] = useState(false)
+  const [nuevaPersona, setNuevaPersona] = useState({ nombre: '', cargo: '', telefono: '', email: '', es_decisor: false })
 
   // ── Derived metrics ─────────────────────────────────────────────────────────
   const seg = frecuencia?.segmento ?? 'E'
@@ -601,6 +620,28 @@ export default function ClienteDetalleClient({
     return total / 3
   }, [ventas])
 
+  // Cargar follow-ups al abrir tab "Actividad" o al cambiar
+  const cargarFollowUps = useCallback(async () => {
+    if (loadingFollowUps) return
+    setLoadingFollowUps(true)
+    try {
+      const res = await fetch(`/api/followups?cliente=${encodeURIComponent(cliente.nombre_fantasia ?? '')}`)
+      if (res.ok) setFollowUps(await res.json())
+    } finally { setLoadingFollowUps(false) }
+  }, [cliente.nombre_fantasia])
+
+  const cargarPersonas = useCallback(async () => {
+    if (loadingPersonas) return
+    setLoadingPersonas(true)
+    try {
+      const res = await fetch(`/api/personas-contacto?cliente=${encodeURIComponent(cliente.nombre_fantasia ?? '')}`)
+      if (res.ok) setPersonas(await res.json())
+    } finally { setLoadingPersonas(false) }
+  }, [cliente.nombre_fantasia])
+
+  // Cargar al montar
+  useEffect(() => { cargarFollowUps(); cargarPersonas() }, [cargarFollowUps, cargarPersonas])
+
   const handleWA = () => {
     setWaTarget({
       nombre: cliente.nombre_fantasia ?? 'Cliente',
@@ -612,6 +653,38 @@ export default function ClienteDetalleClient({
     })
   }
 
+  async function guardarPersona() {
+    if (!nuevaPersona.nombre.trim()) return
+    try {
+      const res = await fetch('/api/personas-contacto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cliente_nombre_fantasia: cliente.nombre_fantasia, ...nuevaPersona }),
+      })
+      if (res.ok) {
+        const p = await res.json()
+        setPersonas(prev => [p, ...prev])
+        setNuevaPersona({ nombre: '', cargo: '', telefono: '', email: '', es_decisor: false })
+        setShowAddPersona(false)
+      }
+    } catch (e) { console.error(e) }
+  }
+
+  async function toggleFollowUp(id: string, estado: 'pendiente' | 'completado') {
+    await fetch('/api/followups', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, estado }) })
+    setFollowUps(prev => prev.map(f => f.id === id ? { ...f, estado } : f))
+  }
+
+  async function eliminarFollowUp(id: string) {
+    await fetch(`/api/followups?id=${id}`, { method: 'DELETE' })
+    setFollowUps(prev => prev.filter(f => f.id !== id))
+  }
+
+  async function eliminarPersona(id: string) {
+    await fetch(`/api/personas-contacto?id=${id}`, { method: 'DELETE' })
+    setPersonas(prev => prev.filter(p => p.id !== id))
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <>
@@ -621,6 +694,13 @@ export default function ClienteDetalleClient({
           target={{ nombre: cliente.nombre_fantasia ?? 'Cliente', tipoInicial: registrarTipo }}
           onClose={() => setRegistrarTipo(null)}
           onRegistrado={() => router.refresh()}
+        />
+      )}
+      {showFollowUp && (
+        <FollowUpModal
+          clienteNombre={cliente.nombre_fantasia ?? 'Cliente'}
+          onClose={() => setShowFollowUp(false)}
+          onCreado={fu => setFollowUps(prev => [...prev, fu].sort((a, b) => a.fecha_recordatorio.localeCompare(b.fecha_recordatorio)))}
         />
       )}
 
@@ -715,20 +795,20 @@ export default function ClienteDetalleClient({
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => setShowFollowUp(true)} style={{
+                minHeight: 44, display: 'flex', alignItems: 'center', gap: 7, padding: '0 16px',
+                background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.3)', borderRadius: 12,
+                color: '#D4AF37', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              }}>
+                <Bell size={14} /> Recordatorio
+              </button>
               <button onClick={handleWA} style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px',
+                minHeight: 44, display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px',
                 background: '#25D36615', border: '1px solid #25D36630', borderRadius: 12,
                 color: '#25D366', fontWeight: 700, fontSize: 13, cursor: 'pointer',
               }}>
                 <MessageCircle size={16} /> WhatsApp
-              </button>
-              <button style={{
-                width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555',
-              }}>
-                <MoreHorizontal size={16} />
               </button>
             </div>
           </div>
@@ -793,9 +873,10 @@ export default function ClienteDetalleClient({
           }}>
             {[
               { key: 'overview',  label: 'Resumen'          },
-              { key: 'orders',    label: 'Historial de pedidos', badge: pedidosUnicos.length },
+              { key: 'orders',    label: 'Pedidos',          badge: pedidosUnicos.length },
               { key: 'products',  label: 'Productos'        },
-              { key: 'contacts',  label: 'Contactos',       badge: contactos.length },
+              { key: 'contacts',  label: 'Interacciones',   badge: contactos.length },
+              { key: 'personas',  label: 'Personas',        badge: personas.length || undefined },
               { key: 'notes',     label: 'Notas'            },
               { key: 'activity',  label: 'Actividad'        },
             ].map(t => (
@@ -1139,6 +1220,140 @@ export default function ClienteDetalleClient({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              TAB: PERSONAS — personas de contacto del cliente (#14)
+          ══════════════════════════════════════════════════════════════════ */}
+          {activeTab === 'personas' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <p style={{ fontSize: 13, color: '#666' }}>{personas.length} persona{personas.length !== 1 ? 's' : ''} de contacto</p>
+                <button onClick={() => setShowAddPersona(v => !v)} style={{
+                  minHeight: 44, padding: '0 16px', borderRadius: 12,
+                  border: '1px solid rgba(212,175,55,0.3)', background: 'rgba(212,175,55,0.08)',
+                  color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <Plus size={14}/> Nueva persona
+                </button>
+              </div>
+
+              {/* Formulario agregar persona */}
+              {showAddPersona && (
+                <div style={{ padding: '16px 18px', borderRadius: 14, background: 'rgba(212,175,55,0.04)', border: '1px solid rgba(212,175,55,0.2)', marginBottom: 16 }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: '#D4AF37', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 12 }}>Nueva persona</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    {[
+                      { key: 'nombre' as const, placeholder: 'Nombre *', full: true },
+                      { key: 'cargo' as const,  placeholder: 'Cargo (dueño, comprador…)' },
+                      { key: 'telefono' as const, placeholder: 'Teléfono' },
+                      { key: 'email' as const,    placeholder: 'Email' },
+                    ].map(({ key, placeholder, full }) => (
+                      <input key={key} placeholder={placeholder}
+                        value={(nuevaPersona[key] as string) || ''}
+                        onChange={e => setNuevaPersona(p => ({ ...p, [key]: e.target.value }))}
+                        style={{
+                          gridColumn: full ? 'span 2' : undefined,
+                          minHeight: 44, padding: '0 12px', borderRadius: 10,
+                          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                          color: 'var(--cream)', fontSize: 13, outline: 'none',
+                        }}/>
+                    ))}
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={nuevaPersona.es_decisor}
+                      onChange={e => setNuevaPersona(p => ({ ...p, es_decisor: e.target.checked }))}
+                      style={{ width: 16, height: 16, cursor: 'pointer' }}/>
+                    <span style={{ fontSize: 13, color: 'var(--cream)' }}>Es quien toma la decisión de compra</span>
+                  </label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setShowAddPersona(false)} style={{
+                      flex: 1, minHeight: 40, borderRadius: 10, border: '1px solid var(--border)',
+                      background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>
+                      Cancelar
+                    </button>
+                    <button onClick={guardarPersona} disabled={!nuevaPersona.nombre.trim()} style={{
+                      flex: 2, minHeight: 40, borderRadius: 10, border: 'none',
+                      background: nuevaPersona.nombre.trim() ? '#D4AF37' : 'rgba(212,175,55,0.3)',
+                      color: '#0A0A0A', fontSize: 12, fontWeight: 800, cursor: nuevaPersona.nombre.trim() ? 'pointer' : 'not-allowed' }}>
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Lista de personas */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {personas.map(p => (
+                  <div key={p.id} style={{ padding: '14px 18px', borderRadius: 14, background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: p.es_decisor ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.05)', border: `1.5px solid ${p.es_decisor ? '#D4AF37' : 'rgba(255,255,255,0.1)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <User size={16} color={p.es_decisor ? '#D4AF37' : '#555'} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>{p.nombre}</span>
+                        {p.es_decisor && (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: 'rgba(212,175,55,0.15)', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.3)' }}>
+                            ★ Decisor
+                          </span>
+                        )}
+                      </div>
+                      {p.cargo && <p style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>{p.cargo}</p>}
+                      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                        {p.telefono && (
+                          <a href={`tel:${p.telefono}`} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#60A5FA', textDecoration: 'none' }}>
+                            <Phone size={12}/> {p.telefono}
+                          </a>
+                        )}
+                        {p.email && (
+                          <a href={`mailto:${p.email}`} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#60A5FA', textDecoration: 'none' }}>
+                            <Mail size={12}/> {p.email}
+                          </a>
+                        )}
+                      </div>
+                      {p.notas && <p style={{ fontSize: 11, color: '#555', marginTop: 6, fontStyle: 'italic' }}>{p.notas}</p>}
+                    </div>
+                    <button onClick={() => eliminarPersona(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#444', padding: 4, minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Trash2 size={14}/>
+                    </button>
+                  </div>
+                ))}
+                {personas.length === 0 && !showAddPersona && (
+                  <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                    <p style={{ fontSize: 28, marginBottom: 10 }}>👤</p>
+                    <p style={{ fontSize: 14, color: 'var(--cream)', fontWeight: 700, marginBottom: 6 }}>Sin personas de contacto</p>
+                    <p style={{ fontSize: 12, color: '#555' }}>Agrega al dueño, encargado de compras o quien decide. Así sabrás siempre a quién llamar.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Follow-ups de este cliente */}
+              {followUps.length > 0 && (
+                <div style={{ marginTop: 24 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>Recordatorios</p>
+                  {followUps.map(fu => {
+                    const vencido = fu.fecha_recordatorio < new Date().toISOString().split('T')[0] && fu.estado === 'pendiente'
+                    return (
+                      <div key={fu.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 12, background: 'var(--surface2)', border: `1px solid ${vencido ? 'rgba(248,113,113,0.3)' : 'var(--border)'}`, marginBottom: 6 }}>
+                        <Bell size={14} color={fu.estado === 'completado' ? '#34D399' : vencido ? '#F87171' : '#D4AF37'}/>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: fu.estado === 'completado' ? '#555' : 'var(--cream)', textDecoration: fu.estado === 'completado' ? 'line-through' : 'none' }}>{fu.nota}</p>
+                          <p style={{ fontSize: 10, color: vencido ? '#F87171' : '#555' }}>{fu.fecha_recordatorio}</p>
+                        </div>
+                        <button onClick={() => toggleFollowUp(fu.id, fu.estado === 'completado' ? 'pendiente' : 'completado')}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: fu.estado === 'completado' ? '#34D399' : '#555', minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <CheckCircle2 size={15}/>
+                        </button>
+                        <button onClick={() => eliminarFollowUp(fu.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#444', minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Trash2 size={13}/>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
