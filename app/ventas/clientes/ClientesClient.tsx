@@ -229,7 +229,7 @@ function Sidebar({ stats, actividad, onAlertaClick, onClienteClick }: {
   )
 }
 
-// ── Fila de tabla ─────────────────────────────────────────────────────────────
+// ── Fila de tabla (rediseñada) ────────────────────────────────────────────────
 function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onWA: (t:WATarget)=>void }) {
   const estado    = getEstado(c)
   const seg       = c.frecuencia?.segmento ?? 'E'
@@ -237,30 +237,39 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
   const segColor  = SEG_COLOR[seg] ?? '#888'
   const vendColor = VEND_COLOR[c.vendedor ?? ''] ?? '#888'
   const dcont     = diasDesde(c.ultimoContacto?.fecha)
-  const dup       = diasDesde(c.ultimoPedido?.ultimaFecha)
   const siguComp  = c.frecuencia?.siguiente_compra_estimada
   const deuda     = c.deuda?.deuda_vencida ?? 0
   const saldo     = c.deuda?.saldo_total ?? 0
+  const al        = c.frecuencia?.alert_level ?? 'sin_historial'
+  const diasSin   = c.frecuencia?.dias_sin_compra ?? 0
+
+  const alertBorderColor = al === 'critico' ? '#EF4444'
+    : al === 'vencido' ? '#F87171'
+    : al === 'proximo'  ? '#F59E0B'
+    : 'transparent'
 
   return (
-    <tr style={{ borderBottom:'1px solid rgba(255,255,255,0.04)', cursor:'pointer' }} onClick={onClick}>
-      {/* Cliente */}
+    <tr onClick={onClick} style={{
+      borderBottom:'1px solid rgba(255,255,255,0.04)', cursor:'pointer',
+      borderLeft:`3px solid ${alertBorderColor}`,
+    }}>
+      {/* Cliente + Score */}
       <td style={{ padding:'10px 12px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:40, height:40, borderRadius:10, flexShrink:0,
-            background:`${segColor}18`, border:`1.5px solid ${segColor}44`,
+          <div style={{ width:42, height:42, borderRadius:10, flexShrink:0,
+            background:`${segColor}18`, border:`1.5px solid ${segColor}55`,
             display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:0 }}>
-            <span style={{ fontSize:14, fontWeight:900, color:segColor, lineHeight:1.1 }}>{seg}</span>
-            <span style={{ fontSize:7, fontWeight:700, color:segColor, opacity:0.7 }}>{Math.round(score)}</span>
+            <span style={{ fontSize:16, fontWeight:900, color:segColor, lineHeight:1 }}>{seg}</span>
+            <span style={{ fontSize:7, fontWeight:700, color:segColor, opacity:0.7 }}>{Math.round(score)}pts</span>
           </div>
           <div style={{ minWidth:0 }}>
-            <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:160 }}>
+            <p style={{ fontSize:13, fontWeight:700, color:'var(--cream)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:180 }}>
               {c.nombre_fantasia}
             </p>
             <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2 }}>
-              <span style={{ fontSize:10, color:vendColor, fontWeight:600 }}>{(c.vendedor??'').split(' ')[0]}</span>
+              <span style={{ fontSize:10, color:vendColor, fontWeight:700 }}>{(c.vendedor??'').split(' ')[0]}</span>
               {(c.localidad_entrega || c.localidad) && (
-                <span style={{ fontSize:10, color:'var(--muted)' }}>· {c.localidad_entrega || c.localidad}</span>
+                <span style={{ fontSize:10, color:'#555' }}>· {c.localidad_entrega || c.localidad}</span>
               )}
             </div>
           </div>
@@ -269,42 +278,46 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
 
       {/* Ruta */}
       <td style={{ padding:'10px 8px' }}>
-        <span style={{ fontSize:11, color: c.ruta_despacho ? 'var(--cream)' : 'var(--muted)', fontWeight: c.ruta_despacho ? 600 : 400 }}>
-          {c.ruta_despacho || 'Sin ruta'}
+        <span style={{ fontSize:11, color: c.ruta_despacho ? 'var(--cream)' : '#444', fontWeight: c.ruta_despacho ? 600 : 400 }}>
+          {c.ruta_despacho || '—'}
         </span>
       </td>
 
-      {/* Último pedido */}
+      {/* Último pedido + Días sin */}
       <td style={{ padding:'10px 8px' }}>
         {c.ultimoPedido ? (
           <div>
-            <p style={{ fontSize:11, color:'var(--cream)', fontWeight:600 }}>{fFecha(c.ultimoPedido.ultimaFecha)}</p>
-            <p style={{ fontSize:10, color:'var(--muted)' }}>{c.ultimoPedido.litrosPeriodo.toFixed(0)} L período</p>
+            <p style={{ fontSize:11, color:'var(--cream)', fontWeight:600, marginBottom:2 }}>{fFecha(c.ultimoPedido.ultimaFecha)}</p>
+            {diasSin > 0 && (
+              <span style={{ fontSize:10, fontWeight:700, color:alertBorderColor !== 'transparent' ? alertBorderColor : '#555' }}>
+                {diasSin}d sin comprar
+              </span>
+            )}
           </div>
-        ) : <span style={{ fontSize:11, color:'var(--muted)' }}>Sin pedidos</span>}
+        ) : <span style={{ fontSize:11, color:'#444' }}>Sin pedidos</span>}
       </td>
 
       {/* Deuda */}
-      <td style={{ padding:'10px 8px', textAlign:'right' }}>
+      <td style={{ padding:'10px 8px' }}>
         {saldo > 0 ? (
           <div>
             <p style={{ fontSize:12, fontWeight:800, color: deuda>0 ? '#EF4444' : '#34D399' }}>{fPeso(saldo)}</p>
-            {deuda > 0 && <p style={{ fontSize:10, color:'#F87171' }}>vencida {fPeso(deuda)}</p>}
+            {deuda > 0 && <p style={{ fontSize:10, color:'#F87171' }}>vcda {fPeso(deuda)}</p>}
           </div>
-        ) : <span style={{ fontSize:11, color:'var(--muted)' }}>$0</span>}
+        ) : <span style={{ fontSize:11, color:'#444' }}>—</span>}
       </td>
 
       {/* Próximo pedido */}
       <td style={{ padding:'10px 8px' }}>
         {siguComp ? (
           <div>
-            <p style={{ fontSize:11, color:'var(--cream)', fontWeight:600 }}>{fFecha(siguComp)}</p>
-            <span style={{ fontSize:9, padding:'1px 6px', borderRadius:10, background:'rgba(52,211,153,0.12)', color:'#34D399', fontWeight:700 }}>Programado</span>
+            <p style={{ fontSize:11, color:'var(--cream)', fontWeight:600, marginBottom:2 }}>{fFecha(siguComp)}</p>
+            <span style={{ fontSize:9, padding:'1px 6px', borderRadius:10, background:'rgba(52,211,153,0.12)', color:'#34D399', fontWeight:700 }}>▸ estimado</span>
           </div>
-        ) : <span style={{ fontSize:11, color:'var(--muted)' }}>—</span>}
+        ) : <span style={{ fontSize:11, color:'#444' }}>—</span>}
       </td>
 
-      {/* WhatsApp */}
+      {/* Contacto + WA */}
       <td style={{ padding:'10px 8px' }} onClick={e=>e.stopPropagation()}>
         <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
           <button onClick={()=>onWA({ nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'general', cicloPromedioDias:c.frecuencia?.ciclo_promedio_dias, siguienteCompra:c.frecuencia?.siguiente_compra_estimada, subtitulo:c.categoria??undefined })}
@@ -313,8 +326,8 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
               color:'#25D366', fontSize:11, fontWeight:700, cursor:'pointer', width:'fit-content' }}>
             <MessageCircle size={13}/> WhatsApp
           </button>
-          <span style={{ fontSize:10, color: dcont !== null && dcont <= 7 ? '#34D399' : 'var(--muted)' }}>
-            {c.ultimoContacto ? `Contactado ${fDias(dcont)}` : 'Sin contacto'}
+          <span style={{ fontSize:10, color: dcont !== null && dcont <= 7 ? '#34D399' : '#555' }}>
+            {c.ultimoContacto ? fDias(dcont) : 'sin contacto'}
           </span>
         </div>
       </td>
@@ -322,25 +335,24 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
       {/* Estado */}
       <td style={{ padding:'10px 8px' }}>
         <span style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:20,
-          color:estado.color, background:estado.bg, border:`1px solid ${estado.border}`,
-          whiteSpace:'nowrap' }}>
+          color:estado.color, background:estado.bg, border:`1px solid ${estado.border}`, whiteSpace:'nowrap' }}>
           {estado.label}
         </span>
       </td>
 
-      {/* Acciones */}
+      {/* Ver ficha */}
       <td style={{ padding:'10px 8px', textAlign:'center' }} onClick={e=>e.stopPropagation()}>
         <button onClick={onClick}
           style={{ background:'rgba(255,255,255,0.05)', border:'1px solid var(--border)',
-            borderRadius:8, padding:'5px 8px', cursor:'pointer', color:'var(--muted)' }}>
-          <MoreVertical size={14}/>
+            borderRadius:8, padding:'5px 10px', cursor:'pointer', color:'var(--muted)', fontSize:11, display:'flex', alignItems:'center', gap:4 }}>
+          Ver →
         </button>
       </td>
     </tr>
   )
 }
 
-// ── Card móvil ────────────────────────────────────────────────────────────────
+// ── Card móvil (rediseñada) ───────────────────────────────────────────────────
 function ClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onWA: (t:WATarget)=>void }) {
   const estado   = getEstado(c)
   const seg      = c.frecuencia?.segmento ?? 'E'
@@ -348,57 +360,116 @@ function ClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; on
   const segColor = SEG_COLOR[seg] ?? '#888'
   const vendColor= VEND_COLOR[c.vendedor ?? ''] ?? '#888'
   const dcont    = diasDesde(c.ultimoContacto?.fecha)
+  const al       = c.frecuencia?.alert_level ?? 'sin_historial'
+  const diasSin  = c.frecuencia?.dias_sin_compra ?? 0
+  const ciclo    = c.frecuencia?.ciclo_promedio_dias ?? 0
+  const deudaV   = c.deuda?.deuda_vencida ?? 0
+
+  // Barra de urgencia: % del ciclo consumido
+  const pctConsumed = ciclo > 0 ? Math.min(100, Math.round((diasSin / ciclo) * 100)) : 0
+  const barColor = al === 'critico' ? '#EF4444'
+    : al === 'vencido' ? '#F87171'
+    : al === 'proximo'  ? '#F59E0B'
+    : '#34D399'
+
+  const waTarget: WATarget = { nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'general', cicloPromedioDias:c.frecuencia?.ciclo_promedio_dias, siguienteCompra:c.frecuencia?.siguiente_compra_estimada, subtitulo:c.categoria??undefined }
 
   return (
-    <div onClick={onClick} style={{ background:'var(--surface)', border:`1px solid var(--border)`,
-      borderRadius:16, padding:'14px', cursor:'pointer', marginBottom:8 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-        <div style={{ width:44, height:44, borderRadius:12, flexShrink:0,
-          background:`${segColor}18`, border:`1.5px solid ${segColor}44`,
-          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
-          <span style={{ fontSize:16, fontWeight:900, color:segColor, lineHeight:1.1 }}>{seg}</span>
-          <span style={{ fontSize:8, fontWeight:700, color:segColor, opacity:0.7 }}>{Math.round(score)}pts</span>
+    <div onClick={onClick} style={{
+      background:'var(--surface)', borderRadius:16, marginBottom:8, cursor:'pointer',
+      border:`1px solid var(--border)`, borderLeft:`3px solid ${barColor}`,
+      overflow:'hidden',
+    }}>
+      {/* Barra de progreso del ciclo */}
+      {ciclo > 0 && (
+        <div style={{ height:3, background:'rgba(255,255,255,0.04)' }}>
+          <div style={{ height:'100%', width:`${pctConsumed}%`, background:barColor, transition:'width 0.4s' }} />
         </div>
-        <div style={{ flex:1, minWidth:0 }}>
-          <p style={{ fontSize:13, fontWeight:700, color:'var(--cream)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {c.nombre_fantasia}
-          </p>
-          <div style={{ display:'flex', gap:6, marginTop:2 }}>
-            <span style={{ fontSize:10, color:vendColor, fontWeight:600 }}>{(c.vendedor??'').split(' ')[0]}</span>
-            {c.ruta_despacho && <span style={{ fontSize:10, color:'var(--muted)' }}>· {c.ruta_despacho}</span>}
-          </div>
-        </div>
-        <span style={{ fontSize:11, fontWeight:700, padding:'3px 9px', borderRadius:20,
-          color:estado.color, background:estado.bg, border:`1px solid ${estado.border}`, flexShrink:0 }}>
-          {estado.label}
-        </span>
-      </div>
+      )}
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-        {c.ultimoPedido && (
-          <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'8px 10px' }}>
-            <p style={{ fontSize:9, color:'var(--muted)', fontWeight:700, marginBottom:2 }}>ÚLTIMO PEDIDO</p>
-            <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)' }}>{fFecha(c.ultimoPedido.ultimaFecha)}</p>
+      <div style={{ padding:'12px 14px' }}>
+        {/* Fila superior: badge + nombre + estado */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+          {/* Badge segmento */}
+          <div style={{ width:46, height:46, borderRadius:12, flexShrink:0,
+            background:`${segColor}18`, border:`1.5px solid ${segColor}44`,
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:1 }}>
+            <span style={{ fontSize:18, fontWeight:900, color:segColor, lineHeight:1 }}>{seg}</span>
+            <span style={{ fontSize:8, fontWeight:700, color:segColor, opacity:0.6 }}>{Math.round(score)}pts</span>
+          </div>
+
+          <div style={{ flex:1, minWidth:0 }}>
+            <p style={{ fontSize:14, fontWeight:800, color:'var(--cream)',
+              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:3 }}>
+              {c.nombre_fantasia}
+            </p>
+            <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
+              <span style={{ fontSize:10, color:vendColor, fontWeight:700 }}>{(c.vendedor??'').split(' ')[0]}</span>
+              {c.ruta_despacho && <span style={{ fontSize:10, color:'#444' }}>· {c.ruta_despacho}</span>}
+              {dcont !== null && dcont <= 7
+                ? <span style={{ fontSize:10, color:'#34D399', fontWeight:600 }}>· contactado {fDias(dcont)}</span>
+                : <span style={{ fontSize:10, color:'#555' }}>· {c.ultimoContacto ? `contactado ${fDias(dcont)}` : 'sin contacto'}</span>
+              }
+            </div>
+          </div>
+
+          <span style={{ fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:20, flexShrink:0,
+            color:estado.color, background:estado.bg, border:`1px solid ${estado.border}` }}>
+            {estado.label}
+          </span>
+        </div>
+
+        {/* Fila info: pedidos + urgencia + deuda */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:10 }}>
+          <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'7px 10px' }}>
+            <p style={{ fontSize:9, color:'#555', fontWeight:700, letterSpacing:'0.06em', marginBottom:2 }}>ÚLTIMO PEDIDO</p>
+            <p style={{ fontSize:12, fontWeight:700, color: c.ultimoPedido ? 'var(--cream)' : '#444' }}>
+              {c.ultimoPedido ? fFecha(c.ultimoPedido.ultimaFecha) : '—'}
+            </p>
+            {diasSin > 0 && <p style={{ fontSize:10, color:barColor, fontWeight:600, marginTop:1 }}>{diasSin}d sin comprar</p>}
+          </div>
+
+          {c.frecuencia?.siguiente_compra_estimada ? (
+            <div style={{ background:`${barColor}08`, borderRadius:8, padding:'7px 10px', border:`1px solid ${barColor}25` }}>
+              <p style={{ fontSize:9, color:barColor, fontWeight:700, letterSpacing:'0.06em', marginBottom:2 }}>PRÓXIMO ESTIMADO</p>
+              <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)' }}>{fFecha(c.frecuencia.siguiente_compra_estimada)}</p>
+              {(c.ultimoPedido?.litrosPeriodo ?? 0) > 0 && (
+                <p style={{ fontSize:10, color:'#555', marginTop:1 }}>{(c.ultimoPedido?.litrosPeriodo ?? 0).toFixed(0)}L período</p>
+              )}
+            </div>
+          ) : (
+            <div style={{ background:'rgba(255,255,255,0.02)', borderRadius:8, padding:'7px 10px' }}>
+              <p style={{ fontSize:9, color:'#444', fontWeight:700, letterSpacing:'0.06em', marginBottom:2 }}>PRÓXIMO ESTIMADO</p>
+              <p style={{ fontSize:12, color:'#444' }}>Sin historial</p>
+            </div>
+          )}
+        </div>
+
+        {/* Deuda badge (solo si tiene) */}
+        {deudaV > 0 && (
+          <div style={{ background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.2)',
+            borderRadius:8, padding:'5px 10px', marginBottom:10,
+            display:'flex', alignItems:'center', gap:6 }}>
+            <AlertTriangle size={11} color="#EF4444"/>
+            <span style={{ fontSize:11, fontWeight:700, color:'#EF4444' }}>Deuda vencida: {fPeso(deudaV)}</span>
           </div>
         )}
-        {c.frecuencia?.siguiente_compra_estimada && (
-          <div style={{ background:'rgba(52,211,153,0.05)', borderRadius:8, padding:'8px 10px', border:'1px solid rgba(52,211,153,0.15)' }}>
-            <p style={{ fontSize:9, color:'#34D399', fontWeight:700, marginBottom:2 }}>PRÓXIMO</p>
-            <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)' }}>{fFecha(c.frecuencia.siguiente_compra_estimada)}</p>
-          </div>
-        )}
-      </div>
 
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:10 }}>
-        <span style={{ fontSize:10, color: dcont !== null && dcont <= 7 ? '#34D399' : 'var(--muted)' }}>
-          {c.ultimoContacto ? `Contactado ${fDias(dcont)}` : 'Sin contacto'}
-        </span>
-        <button onClick={e=>{e.stopPropagation();onWA({ nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'general', cicloPromedioDias:c.frecuencia?.ciclo_promedio_dias, siguienteCompra:c.frecuencia?.siguiente_compra_estimada, subtitulo:c.categoria??undefined })}}
-          style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:8,
-            background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.2)',
-            color:'#25D366', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-          <MessageCircle size={12}/> WA
-        </button>
+        {/* Acciones */}
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={e=>{e.stopPropagation();onWA(waTarget)}}
+            style={{ flex:1, minHeight:40, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+              background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.25)',
+              borderRadius:10, color:'#25D366', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+            <MessageCircle size={14}/> WhatsApp
+          </button>
+          <button onClick={e=>{e.stopPropagation();onClick()}}
+            style={{ minHeight:40, padding:'0 14px', display:'flex', alignItems:'center', gap:5,
+              background:'rgba(255,255,255,0.05)', border:'1px solid var(--border)',
+              borderRadius:10, color:'var(--muted)', fontSize:11, cursor:'pointer' }}>
+            Ver ficha →
+          </button>
+        </div>
       </div>
     </div>
   )
