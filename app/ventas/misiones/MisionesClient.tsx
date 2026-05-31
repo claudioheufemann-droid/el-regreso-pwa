@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, lazy, Suspense } from 'react'
+const MisionesAdminDashboard = lazy(() => import('./MisionesAdminDashboard'))
 import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
@@ -1000,7 +1001,7 @@ interface Props {
   vendedorNombre: string | null
 }
 
-type Tab = 'semana' | 'proxima' | 'historial'
+type Tab = 'resumen' | 'semana' | 'proxima' | 'historial'
 
 export default function MisionesClient({
   misiones: initialMisiones, proxima, historial,
@@ -1010,7 +1011,7 @@ export default function MisionesClient({
   const router    = useRouter()
 
   const [misiones, setMisiones]     = useState<MisionEnriquecida[]>(initialMisiones)
-  const [tab, setTab]               = useState<Tab>('semana')
+  const [tab, setTab]               = useState<Tab>(isAdmin ? 'resumen' : 'semana')
   const [loadingId, setLoadingId]   = useState<string | null>(null)
   const [generando, setGenerando]   = useState(false)
   const [waTarget, setWaTarget]     = useState<WATarget | null>(null)
@@ -1091,6 +1092,7 @@ export default function MisionesClient({
   const vendedores = useMemo(() => [...new Set(misiones.map(m => m.vendedor))], [misiones])
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
+    ...(isAdmin ? [{ key: 'resumen' as Tab, label: '📊 Resumen Admin' }] : []),
     { key: 'semana',    label: 'Esta semana',    count: misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length },
     { key: 'proxima',   label: 'Próxima semana', count: proxima.filter(p => { if (!p.siguiente_compra_estimada) return false; const hoy = new Date(); const d7 = new Date(hoy); d7.setDate(d7.getDate()+7); const d14 = new Date(hoy); d14.setDate(d14.getDate()+14); const d = new Date(p.siguiente_compra_estimada + 'T12:00:00'); return d >= d7 && d <= d14 }).length },
     { key: 'historial', label: 'Historial' },
@@ -1207,6 +1209,11 @@ export default function MisionesClient({
 
         {tab === 'proxima' && <ProximaView proxima={proxima} isDesktop />}
         {tab === 'historial' && <HistorialView historial={historial} />}
+        {tab === 'resumen' && isAdmin && (
+          <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>}>
+            <MisionesAdminDashboard isAdmin={isAdmin} />
+          </Suspense>
+        )}
 
         {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
         <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
@@ -1238,6 +1245,11 @@ export default function MisionesClient({
 
       {tab === 'proxima'   && <ProximaView   proxima={proxima} isDesktop={false} />}
       {tab === 'historial' && <HistorialView  historial={historial} />}
+      {tab === 'resumen' && isAdmin && (
+        <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>}>
+          <MisionesAdminDashboard isAdmin={isAdmin} />
+        </Suspense>
+      )}
 
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
       <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
