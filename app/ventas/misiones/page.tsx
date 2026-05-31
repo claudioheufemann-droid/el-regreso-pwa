@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { VENDEDORES } from '@/lib/types'
 import MisionesClient from './MisionesClient'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 120
 
 function getMondayOfWeek(d: Date): string {
   const x = new Date(d); const day = x.getDay()

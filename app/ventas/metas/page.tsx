@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { VENDEDORES } from '@/lib/types'
 import MetasClient from './MetasClient'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 120
 
 export default async function MetasPage() {
   const supabase = await createClient()

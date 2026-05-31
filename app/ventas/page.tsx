@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { VENDEDORES, esClienteExcluido } from '@/lib/types'
 import DashboardClient from './DashboardClient'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 120
 
 function contarLatas(litros: number, envase: string | null): number {
   if (!envase) return 0
@@ -63,13 +63,16 @@ export default async function DashboardPage({
     .eq('activo', true)
     .single()
 
-  // Fechas disponibles: últimas 90 días con ventas (para el selector)
+  // Fechas disponibles: últimos 90 días con ventas (para el selector)
+  // Tomamos solo la fecha (sin otras columnas) y aplicamos un límite razonable
+  const hace90 = new Date(); hace90.setDate(hace90.getDate() - 90)
   const { data: fechasRows } = await supabase
     .from('ventas')
     .select('fecha_pedido')
     .in('vendedor_actual', scope)
+    .gte('fecha_pedido', hace90.toISOString().split('T')[0])
     .order('fecha_pedido', { ascending: false })
-    .limit(5000)
+    .limit(2000)
 
   const fechasDisponibles = [
     ...new Set((fechasRows ?? []).map(f => f.fecha_pedido)),

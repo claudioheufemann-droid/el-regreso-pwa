@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { VENDEDORES, esClienteExcluido } from '@/lib/types'
 import ClientesClient from './ClientesClient'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 120
 
 function diasDesde(f: string | null | undefined): number | null {
   if (!f) return null
@@ -46,37 +46,26 @@ export default async function ClientesPage() {
   ])
 
   // Queries grandes con paginación real (superan 1000 filas; .limit() fijo trunca silenciosamente)
+  // NOTA: ultimosPedidos eliminado — client_scores ya tiene ultima_compra por cliente
   const ultimosContactos: { cliente_nombre_fantasia: string; fecha_hora: string; tipo: string; vendedor: string }[] = []
-  const ultimosPedidos: { nombre_fantasia: string; fecha_pedido: string; litros: number }[] = []
   const ventasPeriodo: { nombre_fantasia: string; vendedor_actual: string; litros: number; total_sin_impuesto: number; fecha_pedido: string }[] = []
 
+  // Filtrar contactos solo de clientes en scope para reducir volumen
+  const nombresScope = (clientes ?? []).map((c: { nombre_fantasia: string | null }) => c.nombre_fantasia).filter(Boolean) as string[]
+
   await Promise.all([
-    // contactos: orden desc → capturamos el más reciente por cliente
+    // contactos: solo de clientes en scope, orden desc → capturamos el más reciente por cliente
     (async () => {
-      let offset = 0
-      while (true) {
+      // Si hay muchos clientes, paginamos; si pocos, query directa
+      const chunk = 100 // máx clientes por chunk para no exceder URL limit
+      for (let i = 0; i < nombresScope.length; i += chunk) {
+        const nombres = nombresScope.slice(i, i + chunk)
         const { data } = await supabase.from('contactos')
           .select('cliente_nombre_fantasia, fecha_hora, tipo, vendedor')
+          .in('cliente_nombre_fantasia', nombres)
           .order('fecha_hora', { ascending: false })
-          .range(offset, offset + 999)
-        if (!data || data.length === 0) break
-        ultimosContactos.push(...data)
-        if (data.length < 1000) break
-        offset += 1000
-      }
-    })(),
-    // ventas históricas: para determinar "último pedido por cliente"
-    (async () => {
-      let offset = 0
-      while (true) {
-        const { data } = await supabase.from('ventas')
-          .select('nombre_fantasia, fecha_pedido, litros')
-          .order('fecha_pedido', { ascending: false })
-          .range(offset, offset + 999)
-        if (!data || data.length === 0) break
-        ultimosPedidos.push(...data)
-        if (data.length < 1000) break
-        offset += 1000
+          .limit(1000)
+        if (data) ultimosContactos.push(...data)
       }
     })(),
     // ventas del período activo: litros y venta por cliente
@@ -101,11 +90,6 @@ export default async function ClientesPage() {
     if (!contactoMap.has(c.cliente_nombre_fantasia))
       contactoMap.set(c.cliente_nombre_fantasia, { fecha: c.fecha_hora, tipo: c.tipo, vendedor: c.vendedor })
 
-  const ultimaFechaMap = new Map<string, string>()
-  for (const v of ultimosPedidos ?? [])
-    if (v.nombre_fantasia && !ultimaFechaMap.has(v.nombre_fantasia))
-      ultimaFechaMap.set(v.nombre_fantasia, v.fecha_pedido)
-
   const periodoMap = new Map<string, { litrosPeriodo: number; ventaPeriodo: number }>()
   for (const v of ventasPeriodo ?? []) {
     if (!v.nombre_fantasia) continue
@@ -118,13 +102,14 @@ export default async function ClientesPage() {
   for (const e of estadosData ?? []) estadosMap.set(e.nombre_fantasia, { estado: e.estado, nota: e.nota ?? null })
 
   const frecuenciaMap = new Map<string, {
-    dias_sin_compra: number; ciclo_promedio_dias: number | null; total_pedidos: number
+    ultima_compra: string | null; dias_sin_compra: number; ciclo_promedio_dias: number | null; total_pedidos: number
     alert_level: string; siguiente_compra_estimada: string | null
     score: number; segmento: string; confianza_score: string
     litros_totales: number; revenue_total: number; pedidos_por_mes: number
   }>()
   for (const s of scoreData ?? [])
     if (s.nombre_fantasia) frecuenciaMap.set(s.nombre_fantasia, {
+      ultima_compra: s.ultima_compra ?? null,
       dias_sin_compra: s.dias_sin_compra ?? 0,
       ciclo_promedio_dias: s.ciclo_promedio_dias ?? null,
       total_pedidos: s.total_pedidos ?? 0,
@@ -153,19 +138,24 @@ export default async function ClientesPage() {
 
   // ── Enriquecer clientes (sin internos) ────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const clientesEnriquecidos = (clientes ?? []).filter((c: any) => !esInterno(c.nombre_fantasia)).map((c: any) => ({
-    ...c,
-    ultimoContacto: contactoMap.get(c.nombre_fantasia ?? '') ?? null,
-    ultimoPedido: ultimaFechaMap.has(c.nombre_fantasia ?? '') ? {
-      ultimaFecha:   ultimaFechaMap.get(c.nombre_fantasia!)!,
-      litrosPeriodo: periodoMap.get(c.nombre_fantasia ?? '')?.litrosPeriodo ?? 0,
-      ventaPeriodo:  periodoMap.get(c.nombre_fantasia ?? '')?.ventaPeriodo  ?? 0,
-    } : null,
-    frecuencia:    frecuenciaMap.get(c.nombre_fantasia ?? '') ?? null,
-    estadoCliente: estadosMap.get(c.nombre_fantasia ?? '')?.estado ?? 'activo',
-    notaEstado:    estadosMap.get(c.nombre_fantasia ?? '')?.nota ?? null,
-    deuda:         deudaMap.get(c.nombre_fantasia ?? '') ?? null,
-  }))
+  const clientesEnriquecidos = (clientes ?? []).filter((c: any) => !esInterno(c.nombre_fantasia)).map((c: any) => {
+    const freq = frecuenciaMap.get(c.nombre_fantasia ?? '') ?? null
+    const ultimaFechaCompra = freq?.ultima_compra ?? null  // viene de client_scores, sin query extra
+    const periodo = periodoMap.get(c.nombre_fantasia ?? '') ?? null
+    return {
+      ...c,
+      ultimoContacto: contactoMap.get(c.nombre_fantasia ?? '') ?? null,
+      ultimoPedido: ultimaFechaCompra ? {
+        ultimaFecha:   ultimaFechaCompra,
+        litrosPeriodo: periodo?.litrosPeriodo ?? 0,
+        ventaPeriodo:  periodo?.ventaPeriodo  ?? 0,
+      } : null,
+      frecuencia:    freq,
+      estadoCliente: estadosMap.get(c.nombre_fantasia ?? '')?.estado ?? 'activo',
+      notaEstado:    estadosMap.get(c.nombre_fantasia ?? '')?.nota ?? null,
+      deuda:         deudaMap.get(c.nombre_fantasia ?? '') ?? null,
+    }
+  })
 
   // ── KPIs de estado ────────────────────────────────────────────────────────
   const total         = clientesEnriquecidos.length
@@ -190,7 +180,12 @@ export default async function ClientesPage() {
     const d = diasDesde(c.ultimoContacto?.fecha); return d !== null && d <= 7
   }).length
 
-  // ── Actividad reciente (sin clientes internos) ───────────────────────────
+  // ── Actividad reciente (contactos + últimas ventas del período) ─────────
+  const actividadPedidos = ventasPeriodo
+    .filter(v => !esInterno(v.nombre_fantasia) && v.nombre_fantasia)
+    .sort((a, b) => b.fecha_pedido.localeCompare(a.fecha_pedido))
+    .slice(0, 10)
+
   const actividad: ActividadItem[] = [
     ...(ultimosContactos ?? [])
       .filter(c => !esInterno(c.cliente_nombre_fantasia))
@@ -200,14 +195,12 @@ export default async function ClientesPage() {
         detalle: c.tipo || 'WhatsApp',
         fecha: c.fecha_hora,
       })),
-    ...(ultimosPedidos ?? [])
-      .filter(v => !esInterno(v.nombre_fantasia))
-      .slice(0, 10).map(v => ({
-        tipo: 'pedido' as const,
-        cliente: v.nombre_fantasia ?? '—',
-        detalle: `${(v.litros ?? 0).toFixed(1)} L`,
-        fecha: v.fecha_pedido,
-      })),
+    ...actividadPedidos.map(v => ({
+      tipo: 'pedido' as const,
+      cliente: v.nombre_fantasia ?? '—',
+      detalle: `${(v.litros ?? 0).toFixed(1)} L`,
+      fecha: v.fecha_pedido,
+    })),
   ]
     .filter(a => a.cliente && a.cliente !== '—')
     .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())

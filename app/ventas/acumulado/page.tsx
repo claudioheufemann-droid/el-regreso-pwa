@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { VENDEDORES, esClienteExcluido } from '@/lib/types'
 import AcumuladoClient from './AcumuladoClient'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 120
 
 // ── Tipos exportados ────────────────────────────────────────────────────────
 export interface KpiData {
