@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Upload, Users, AlertCircle, Target } from 'lucide-react'
+import { Upload, Users, AlertCircle, Target, BarChart3 } from 'lucide-react'
 import CargarClient from './cargar/CargarClient'
 import ClientesUploadClient from './clientes-upload/ClientesUploadClient'
 import DeudoresClient from './deudores/DeudoresClient'
@@ -43,13 +43,22 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores }
   return (
     <div style={{ padding: '32px 40px 60px' }}>
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px', lineHeight: 1.1 }}>
-          Administración
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 5 }}>
-          Cargas de datos y configuración
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px', lineHeight: 1.1 }}>
+            Administración
+          </h1>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 5 }}>
+            Cargas de datos y configuración
+          </p>
+        </div>
+        <button onClick={() => router.push('/ventas/admin/crm-metrics')} style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12,
+          background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
+          color: '#D4AF37', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        }}>
+          <BarChart3 size={16} /> Métricas CRM
+        </button>
       </div>
 
       {/* Tab Bar */}
