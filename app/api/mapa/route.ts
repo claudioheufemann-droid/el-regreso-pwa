@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
   // ── Todos los clientes con coordenadas ──────────────────
   const { data: todosClientes } = await supabase
     .from('clientes')
-    .select('nombre_fantasia, lat, lng, categoria, localidad_entrega, localidad, telefono, email, contacto, vendedor_actual')
+    .select('nombre_fantasia, lat, lng, categoria, localidad_entrega, localidad, telefono, email, contacto')
 
   const clientesMap = new Map<string, {
     lat: number; lng: number; categoria: string; localidad: string
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
         telefono: c.telefono ?? null,
         email: c.email ?? null,
         contacto: c.contacto ?? null,
-        vendedor_actual: c.vendedor_actual ?? null,
+        vendedor_actual: null, // se obtiene de ventas o client_scores
       })
     }
   }
@@ -171,12 +171,13 @@ export async function GET(req: NextRequest) {
 
     for (const [nombre, coords] of clientesMap) {
       if (conVentas.has(nombre)) continue
-      if (vendedorFilter && coords.vendedor_actual !== vendedorFilter) continue
-
       const sc = scoresMap.get(nombre)
+      const vendedorCliente = sc?.vendedor_score ?? ''
+      if (vendedorFilter && vendedorCliente !== vendedorFilter) continue
+
       resultado.push({
         nombre_fantasia: nombre,
-        vendedor_actual: coords.vendedor_actual ?? sc?.vendedor_score ?? '',
+        vendedor_actual: vendedorCliente,
         categoria_negocio: coords.categoria,
         localidad: coords.localidad,
         lat: coords.lat,
