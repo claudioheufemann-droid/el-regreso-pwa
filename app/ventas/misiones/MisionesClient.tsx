@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
   CheckCircle2, Phone, PhoneOff, MessageCircle, RefreshCw, Calendar,
-  ChevronDown, ChevronRight, Target,
+  ChevronDown, ChevronRight, Target, Minus, Plus, ArrowLeft, Sparkles,
 } from 'lucide-react'
 import type { MisionEnriquecida, ProximaPreview, HistorialSemana, EstadoMision, TipoMision } from './page'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
@@ -161,12 +161,24 @@ function BotonesAccion({ mision, onActualizar, loading }: {
 }
 
 // ── Panel de detalle (desktop) ────────────────────────────────────────────────
-function DetailPanel({ mision, onActualizar, onWA, loadingId }: {
+function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose }: {
   mision: MisionEnriquecida | null
   onActualizar: OnActualizar
   onWA: (m: MisionEnriquecida) => void
   loadingId: string | null
+  onClose?: () => void
 }) {
+  const [litrosInput, setLitrosInput] = useState(50)
+  const [diasPosp, setDiasPospD] = useState(5)
+  const [saving, setSaving] = useState(false)
+
+  async function registrar(estado: EstadoMision, opts?: ActualizarOpts) {
+    if (!mision) return
+    setSaving(true)
+    await onActualizar(mision.id, estado, opts)
+    setSaving(false)
+  }
+
   if (!mision) {
     return (
       <div style={{
@@ -183,196 +195,357 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId }: {
   const segColor  = SEG_COLOR[mision.segmento] ?? '#6B7280'
   const tipoCfg   = TIPO_CFG[mision.tipo]
   const estadoCfg = ESTADO_CFG[mision.estado]
-  const loading   = loadingId === mision.id
-  const isPedido  = mision.estado === 'contactado_pedido'
-  const dl        = diasLabel(mision)
+  const loading   = loadingId === mision.id || saving
+  const isDone    = esCompletada(mision.estado)
+
+  // Sugerencia predictiva basada en urgencia
+  const sugerencia = (() => {
+    const litros = mision.litros_ultima_compra ?? mision.volumen_promedio
+    if (mision.tipo === 'vencido' && litros)   return `Ofrecer Promo Recuperación ${litros}L.`
+    if (mision.tipo === 'esta_semana' && litros) return `Recordar pedido habitual de ${litros}L.`
+    if (litros)                                  return `Contactar para pedido estimado de ${litros}L.`
+    return 'Contactar para evaluar necesidades actuales.'
+  })()
 
   return (
-    <div style={{ padding: '24px 28px', height: '100%', overflowY: 'auto' }}>
-      {/* Header del cliente */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 24 }}>
-        <div style={{
-          width: 56, height: 56, borderRadius: '50%', flexShrink: 0,
-          background: `${segColor}18`, border: `2px solid ${segColor}50`,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <span style={{ fontSize: 18, fontWeight: 900, color: segColor, lineHeight: 1 }}>{mision.segmento}</span>
-          <span style={{ fontSize: 9, color: segColor, opacity: 0.7 }}>{mision.score}</span>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{
-            fontSize: 18, fontWeight: 900, color: isPedido ? '#34D399' : 'var(--cream)',
-            marginBottom: 6, textDecoration: isPedido ? 'line-through' : 'none',
+    <div style={{ padding: '20px 22px', height: '100%', overflowY: 'auto' }}>
+
+      {/* ── Header: nombre + criticidad + contacto ── */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 10, fontWeight: 800, color: tipoCfg.color, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>
+              Detalle de Misión — <span style={{ color: tipoCfg.color }}>{tipoCfg.label}</span>
+            </p>
+            <h2 style={{
+              fontSize: 17, fontWeight: 900, color: isDone ? '#34D399' : 'var(--cream)',
+              textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.2,
+            }}>
+              {mision.nombre_fantasia}
+            </h2>
+          </div>
+          {/* Seg badge */}
+          <div style={{
+            width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
+            background: `${segColor}18`, border: `2px solid ${segColor}40`,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           }}>
-            {mision.nombre_fantasia}
-          </h2>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: estadoCfg.color }}>
-              {estadoCfg.icon} {estadoCfg.label}
-            </span>
-            {dl && (
-              <span style={{
-                fontSize: 11, fontWeight: 800, padding: '2px 10px', borderRadius: 20,
-                background: tipoCfg.bg, color: tipoCfg.color, border: `1px solid ${tipoCfg.border}`,
-              }}>{dl}</span>
-            )}
+            <span style={{ fontSize: 14, fontWeight: 900, color: segColor, lineHeight: 1 }}>{mision.segmento}</span>
+            <span style={{ fontSize: 8, color: segColor, opacity: 0.7 }}>{mision.score}</span>
           </div>
+        </div>
+
+        {/* Contacto + acciones de contacto */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, fontWeight: 800, color: 'var(--cream)',
+          }}>
+            {(mision.nombre_fantasia).charAt(0).toUpperCase()}
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>
+              {mision.nombre_fantasia.split(' ').slice(0, 2).join(' ')}
+            </p>
+            {mision.localidad && <p style={{ fontSize: 10, color: 'var(--muted)' }}>📍 {mision.localidad}</p>}
+          </div>
+          {mision.telefono && (
+            <button onClick={() => window.open(`tel:${mision.telefono}`)} style={quickBtn('#60A5FA')}>
+              <Phone size={14} />
+            </button>
+          )}
+          {mision.telefono && (
+            <button onClick={() => onWA(mision)} style={quickBtn('#25D166')}>
+              <MessageCircle size={14} />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Tipo de misión banner */}
-      <div style={{
-        padding: '10px 14px', borderRadius: 12, marginBottom: 20,
-        background: tipoCfg.bg, border: `1px solid ${tipoCfg.border}`,
-        display: 'flex', alignItems: 'center', gap: 8,
-      }}>
-        <span style={{ fontSize: 18 }}>{tipoCfg.icon}</span>
-        <div>
-          <p style={{ fontSize: 12, fontWeight: 800, color: tipoCfg.color }}>{tipoCfg.label}</p>
-          <p style={{ fontSize: 11, color: 'var(--muted)' }}>{tipoCfg.desc}</p>
+      <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
+
+      {/* ── Contexto Predictivo ── */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+          <Sparkles size={13} style={{ color: '#D4AF37' }} />
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.7px' }}>
+            Contexto Predictivo
+          </p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingLeft: 4 }}>
+          {mision.litros_ultima_compra != null && mision.ultima_venta_fecha && (
+            <p style={{ fontSize: 12, color: 'var(--cream)' }}>
+              Último pedido: <strong>{mision.litros_ultima_compra}L</strong>{' '}
+              <span style={{ color: 'var(--muted)' }}>({fFecha(mision.ultima_venta_fecha)})</span>
+            </p>
+          )}
+          {mision.ciclo_promedio_dias && (
+            <p style={{ fontSize: 12, color: 'var(--cream)' }}>
+              Frecuencia Promedio: <strong>Cada {mision.ciclo_promedio_dias}d</strong>
+            </p>
+          )}
+          {mision.siguiente_compra_estimada && (
+            <p style={{ fontSize: 12, color: 'var(--cream)' }}>
+              Predicción de Stock:{' '}
+              <strong style={{ color: tipoCfg.color }}>
+                {mision.litros_ultima_compra != null ? '0L' : '?'} el {fFecha(mision.siguiente_compra_estimada)}
+              </strong>
+              {(mision.dias_para_compra ?? 0) < 0 && (
+                <span style={{ color: '#F87171' }}>{' '}(Venció hace {Math.abs(mision.dias_para_compra ?? 0)}d)</span>
+              )}
+            </p>
+          )}
+          <p style={{ fontSize: 12, color: '#D4AF37', fontWeight: 600 }}>
+            💡 Suggestion: {sugerencia}
+          </p>
         </div>
       </div>
 
-      {/* Métricas */}
-      <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
-        {[
-          { label: 'Días sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#F87171' : 'var(--cream)' },
-          { label: 'Último pedido',    value: mision.litros_ultima_compra != null ? `${mision.litros_ultima_compra} L` : fFecha(mision.ultima_venta_fecha), color: 'var(--cream)' },
-          { label: 'Volumen prom.',    value: mision.volumen_promedio != null ? `${mision.volumen_promedio} L` : fPeso(mision.ultima_venta_monto), color: '#D4AF37' },
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{ background: 'var(--surface2)', borderRadius: 12, padding: '12px 14px', textAlign: 'center' }}>
-            <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 5 }}>{label}</p>
-            <p style={{ fontSize: 14, fontWeight: 900, color }}>{value}</p>
-          </div>
-        ))}
-      </div>
+      <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
 
-      {/* Info adicional */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
-        {mision.ciclo_promedio_dias && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <RefreshCw size={13} color="var(--muted)" />
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-              Frecuencia de compra: <strong style={{ color: 'var(--cream)' }}>cada {mision.ciclo_promedio_dias} días</strong>
+      {/* ── Registrar Llamada ── */}
+      <div>
+        <p style={{ fontSize: 11, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 10 }}>
+          Registrar Llamada
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+          {/* Fila 1: Venta Cerrada + litros */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12,
+            background: isDone ? 'rgba(52,211,153,0.1)' : 'rgba(52,211,153,0.05)',
+            border: `1px solid ${isDone ? 'rgba(52,211,153,0.4)' : 'rgba(52,211,153,0.15)'}`,
+            cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+            onClick={() => !loading && !isDone && registrar('contactado_pedido', { litros: litrosInput })}
+          >
+            <CheckCircle2 size={16} color="#34D399" />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: isDone ? '#34D399' : 'var(--cream)' }}>
+              Venta Cerrada
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
+              <button onClick={() => setLitrosInput(v => Math.max(1, v - 5))} style={counterBtn}>
+                <Minus size={12} />
+              </button>
+              <input
+                type="number" min={1} step={5} value={litrosInput}
+                onChange={e => setLitrosInput(Number(e.target.value))}
+                style={{
+                  width: 52, textAlign: 'center', background: 'var(--surface2)',
+                  border: '1px solid var(--border)', borderRadius: 8,
+                  color: '#34D399', fontSize: 13, fontWeight: 800, padding: '5px 0',
+                  outline: 'none',
+                }}
+              />
+              <button onClick={() => setLitrosInput(v => v + 5)} style={counterBtn}>
+                <Plus size={12} />
+              </button>
+            </div>
+          </div>
+
+          {/* Fila 2: Posponer + días */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12,
+            background: mision.estado === 'pospuesto' ? 'rgba(167,139,250,0.1)' : 'rgba(167,139,250,0.05)',
+            border: `1px solid ${mision.estado === 'pospuesto' ? 'rgba(167,139,250,0.4)' : 'rgba(167,139,250,0.15)'}`,
+          }}>
+            <span style={{ fontSize: 16 }}>⏰</span>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: mision.estado === 'pospuesto' ? '#A78BFA' : 'var(--cream)' }}>
+              Aún con Stock — Posponer
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <select
+                value={diasPosp}
+                onChange={e => setDiasPospD(Number(e.target.value))}
+                disabled={loading}
+                style={{
+                  background: 'var(--surface2)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 8,
+                  color: '#A78BFA', fontSize: 12, fontWeight: 700, padding: '5px 8px', cursor: 'pointer', outline: 'none',
+                }}
+              >
+                {DIAS_POSPONER.map(d => <option key={d} value={d} style={{ background: 'var(--surface)' }}>{d} días</option>)}
+              </select>
+              <button
+                onClick={() => !loading && registrar('pospuesto', { dias: diasPosp })}
+                disabled={loading}
+                style={{
+                  padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 800,
+                  background: 'rgba(167,139,250,0.2)', border: '1px solid rgba(167,139,250,0.4)',
+                  color: '#A78BFA', cursor: loading ? 'not-allowed' : 'pointer',
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+
+          {/* Fila 3: No Contestó + intentos */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12,
+            background: mision.estado === 'sin_respuesta' ? 'rgba(248,113,113,0.08)' : 'rgba(248,113,113,0.04)',
+            border: `1px solid ${mision.estado === 'sin_respuesta' ? 'rgba(248,113,113,0.35)' : 'rgba(248,113,113,0.12)'}`,
+            cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+            onClick={() => !loading && registrar('sin_respuesta')}
+          >
+            <PhoneOff size={16} color="#F87171" />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: mision.estado === 'sin_respuesta' ? '#F87171' : 'var(--cream)' }}>
+              No Contestó
+            </span>
+            <span style={{
+              minWidth: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: mision.estado === 'sin_respuesta' ? 'rgba(248,113,113,0.2)' : 'rgba(255,255,255,0.05)',
+              fontSize: 12, fontWeight: 800, color: '#F87171',
+            }}>
+              {mision.intentos_contacto ?? 0}
             </span>
           </div>
-        )}
-        {mision.siguiente_compra_estimada && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Calendar size={13} color="var(--muted)" />
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-              Próxima compra estimada: <strong style={{ color: tipoCfg.color }}>{fFecha(mision.siguiente_compra_estimada)}</strong>
-            </span>
-          </div>
-        )}
-        {mision.localidad && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 13 }}>📍</span>
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{mision.localidad}</span>
-          </div>
-        )}
-        {mision.vendedor && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 13 }}>👤</span>
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>Vendedor: <strong style={{ color: 'var(--cream)' }}>{mision.vendedor}</strong></span>
-          </div>
-        )}
-      </div>
 
-      {/* Nota */}
-      {mision.nota && (
-        <div style={{
-          padding: '10px 14px', borderRadius: 12, marginBottom: 20,
-          background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.2)',
-        }}>
-          <p style={{ fontSize: 12, color: '#A08830', fontStyle: 'italic' }}>💬 {mision.nota}</p>
         </div>
-      )}
 
-      {/* Separador */}
-      <div style={{ height: 1, background: 'var(--border)', marginBottom: 20 }} />
+        {/* Nota */}
+        {mision.nota && (
+          <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 10, background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.2)' }}>
+            <p style={{ fontSize: 11, color: '#A08830', fontStyle: 'italic' }}>💬 {mision.nota}</p>
+          </div>
+        )}
 
-      {/* Acciones */}
-      <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 }}>
-        Registrar acción
-      </p>
-      <BotonesAccion mision={mision} onActualizar={onActualizar} loading={loading} />
-
-      {/* WhatsApp */}
-      {!isPedido && (
-        <button onClick={() => onWA(mision)} style={{
-          marginTop: 14, width: '100%', padding: '10px 0', borderRadius: 12,
-          background: 'rgba(37,211,102,0.06)', border: '1px solid rgba(37,211,102,0.2)',
-          color: '#25D166', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        }}>
-          <MessageCircle size={16}/> Enviar WhatsApp
-        </button>
-      )}
+        {/* Botones finales */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button
+            onClick={() => !loading && registrar(isDone ? 'pendiente' : 'contactado_sin_pedido')}
+            disabled={loading}
+            style={{
+              flex: 1, padding: '11px 0', borderRadius: 12, fontSize: 13, fontWeight: 800,
+              background: '#D4AF37', border: 'none', color: '#1a1200',
+              cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
+            }}
+          >
+            {loading ? 'Guardando…' : isDone ? '↩ Deshacer' : 'Actualizar Misión'}
+          </button>
+          {onClose && (
+            <button onClick={onClose} style={{
+              padding: '11px 18px', borderRadius: 12, fontSize: 13, fontWeight: 700,
+              background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer',
+            }}>
+              <ArrowLeft size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+              Volver
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
+const counterBtn: React.CSSProperties = {
+  width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)',
+  background: 'var(--surface2)', cursor: 'pointer', display: 'flex',
+  alignItems: 'center', justifyContent: 'center', color: 'var(--muted)',
+}
+
 // ── Compact card para lista desktop ──────────────────────────────────────────
-function CompactCard({ mision, selected, onClick }: {
+function CompactCard({ mision, selected, onClick, onWA }: {
   mision: MisionEnriquecida
   selected: boolean
   onClick: () => void
+  onWA?: (m: MisionEnriquecida) => void
 }) {
   const segColor  = SEG_COLOR[mision.segmento] ?? '#6B7280'
   const tipoCfg   = TIPO_CFG[mision.tipo]
   const estadoCfg = ESTADO_CFG[mision.estado]
-  const isPedido  = mision.estado === 'contactado_pedido'
+  const isDone    = esCompletada(mision.estado)
   const dl        = diasLabel(mision)
+  const litros    = mision.litros_ultima_compra ?? null
+  const diasSin   = mision.dias_sin_compra
+
+  // Línea contextual: "Último pedido: 40L [82d]"
+  const contexto = litros != null
+    ? `Último pedido: ${litros}L${diasSin ? ` [${diasSin}d]` : ''}`
+    : diasSin ? `Sin comprar: ${diasSin}d` : null
 
   return (
     <div
       onClick={onClick}
       style={{
-        padding: '10px 14px', borderRadius: 12, cursor: 'pointer',
-        background: selected ? 'rgba(212,175,55,0.08)' : 'transparent',
-        border: `1px solid ${selected ? 'rgba(212,175,55,0.3)' : 'transparent'}`,
+        padding: '10px 14px', cursor: 'pointer',
+        background: selected
+          ? 'rgba(212,175,55,0.08)'
+          : isDone ? 'rgba(52,211,153,0.03)' : 'transparent',
+        borderLeft: selected ? '3px solid #D4AF37' : `3px solid ${isDone ? '#34D39930' : 'transparent'}`,
         transition: 'all 0.15s',
-        opacity: isPedido ? 0.6 : 1,
+        opacity: isDone ? 0.65 : 1,
       }}
       onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)' }}
-      onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+      onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.background = isDone ? 'rgba(52,211,153,0.03)' : 'transparent' }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* Segmento badge */}
+        {/* Avatar inicial */}
         <div style={{
-          width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+          width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
           background: `${segColor}18`, border: `1.5px solid ${segColor}40`,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 14, fontWeight: 900, color: segColor,
         }}>
-          <span style={{ fontSize: 11, fontWeight: 900, color: segColor, lineHeight: 1 }}>{mision.segmento}</span>
+          {mision.nombre_fantasia.charAt(0).toUpperCase()}
         </div>
 
         {/* Info */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{
-            fontSize: 13, fontWeight: 700, color: isPedido ? '#34D399' : 'var(--cream)',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3,
-            textDecoration: isPedido ? 'line-through' : 'none',
+            fontSize: 13, fontWeight: 700, color: isDone ? '#34D399' : 'var(--cream)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            marginBottom: 2, textDecoration: isDone ? 'line-through' : 'none',
           }}>
             {mision.nombre_fantasia}
+            {contexto && <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginLeft: 5 }}>({contexto})</span>}
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 10, color: estadoCfg.color, fontWeight: 600 }}>{estadoCfg.icon}</span>
-            {dl && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 9, color: estadoCfg.color, fontWeight: 600 }}>○ {dl ?? estadoCfg.label}</span>
+            {mision.score != null && (
               <span style={{
                 fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20,
-                background: tipoCfg.bg, color: tipoCfg.color,
-              }}>{dl}</span>
+                background: `${segColor}18`, color: segColor,
+              }}>{mision.score}. {mision.prioridad}</span>
             )}
           </div>
         </div>
 
-        {/* Score */}
-        <span style={{ fontSize: 11, fontWeight: 800, color: segColor, flexShrink: 0 }}>{mision.score}</span>
+        {/* Botones rápidos */}
+        {!isDone && (
+          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+            {mision.telefono && (
+              <button
+                onClick={e => { e.stopPropagation(); window.open(`tel:${mision.telefono}`) }}
+                style={quickBtn('#60A5FA')}
+              >
+                <Phone size={12} />
+              </button>
+            )}
+            {mision.telefono && onWA && (
+              <button
+                onClick={e => { e.stopPropagation(); onWA(mision) }}
+                style={quickBtn('#25D166')}
+              >
+                <MessageCircle size={12} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
+}
+
+function quickBtn(color: string): React.CSSProperties {
+  return {
+    width: 28, height: 28, borderRadius: '50%', border: `1px solid ${color}40`,
+    background: `${color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', color, flexShrink: 0,
+  }
 }
 
 // ── Tarjeta mobile (expandible) ───────────────────────────────────────────────
@@ -409,12 +582,17 @@ function MisionCard({ mision, onActualizar, onWA, loadingId }: {
           <span style={{ fontSize: 8, color: segColor, opacity: 0.7 }}>{mision.score}</span>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
             <span style={{
               fontSize: 13, fontWeight: 800, color: isPedido ? '#34D399' : 'var(--cream)',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               textDecoration: isPedido ? 'line-through' : 'none',
             }}>{mision.nombre_fantasia}</span>
+            {mision.litros_ultima_compra != null && !isPedido && (
+              <span style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                ({mision.litros_ultima_compra}L{mision.dias_sin_compra ? ` · ${mision.dias_sin_compra}d` : ''})
+              </span>
+            )}
             {isPedido && <CheckCircle2 size={13} color="#34D399" />}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -489,43 +667,95 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
   const proxSem  = misiones.filter(m => m.tipo === 'proxima_semana').length
   const volumen  = misiones.filter(m => esCompletada(m.estado)).reduce((s, m) => s + (m.resultado_litros ?? 0), 0)
 
+  const pct     = total > 0 ? Math.round((pedidos / total) * 100) : 0
+  const STEPS   = isDesktop ? 8 : 5
+  const filled  = Math.round((pct / 100) * STEPS)
+  const pColor  = pct >= 80 ? '#34D399' : pct >= 50 ? '#F59E0B' : '#D4AF37'
+
   return (
     <div style={{
       background: 'linear-gradient(135deg, #0D0A00 0%, #1C1500 100%)',
       border: '1px solid rgba(212,175,55,0.2)',
       borderRadius: 20, padding: isDesktop ? '20px 28px' : '16px 18px', marginBottom: 20,
     }}>
-      <div style={{ display: 'flex', alignItems: isDesktop ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+      {/* Fila superior: título + global status */}
+      <div style={{ display: 'flex', alignItems: isDesktop ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: isDesktop ? 24 : 20, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.5px', marginBottom: 3 }}>
+          <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
+            PROGRESO SEMANAL
+          </p>
+          <h1 style={{ fontSize: isDesktop ? 26 : 20, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.5px', lineHeight: 1.1, marginBottom: 3 }}>
             Misiones de la semana
           </h1>
           <p style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {rangoSemana(semana)}{!isAdmin && vendedorActual ? ` · ${vendedorActual.split(' ')[0]}` : ''}
+            {rangoSemana(semana)}
           </p>
-          {volumen > 0 && (
-            <p style={{ fontSize: 12, color: '#34D399', fontWeight: 700, marginTop: 4 }}>
-              💧 Volumen rescatado: {volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
-            </p>
-          )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: isDesktop ? 20 : 12 }}>
+        {/* GLOBAL STATUS */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           {isDesktop && (
-            <div style={{ display: 'flex', gap: 16 }}>
-              {[
-                { label: 'Completadas', value: `${total > 0 ? Math.round(pedidos / total * 100) : 0}%`, color: '#34D399' },
-              ].map(({ label, value, color }) => (
-                <div key={label} style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase' }}>{label}</p>
-                  <p style={{ fontSize: 22, fontWeight: 900, color }}>{value}</p>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 3 }}>
+                GLOBAL STATUS
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div>
+                  <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>COMPLETADAS</p>
+                  <p style={{ fontSize: 26, fontWeight: 900, color: '#34D399', lineHeight: 1 }}>{pct}%</p>
                 </div>
-              ))}
+                <ProgressDonut done={pedidos} total={total} size={80} />
+              </div>
             </div>
           )}
-          <ProgressDonut done={pedidos} total={total} size={isDesktop ? 80 : 70} />
+          {!isDesktop && <ProgressDonut done={pedidos} total={total} size={68} />}
         </div>
       </div>
 
+      {/* MI PROGRESO con barra tipo chevron */}
+      {!isAdmin && vendedorActual && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <p style={{ fontSize: 12, color: 'var(--cream)', fontWeight: 700 }}>
+              MI PROGRESO: <span style={{ color: pColor }}>{vendedorActual.split(' ')[0]} (Vendedor)</span>
+            </p>
+            <span style={{ fontSize: 12, fontWeight: 800, color: pColor }}>{pedidos} / {total}</span>
+          </div>
+          {/* Chevron progress bar */}
+          <div style={{ display: 'flex', gap: 3, marginBottom: 6 }}>
+            {Array.from({ length: STEPS }).map((_, i) => (
+              <div key={i} style={{
+                flex: 1, height: 22,
+                background: i < filled ? pColor : 'rgba(255,255,255,0.06)',
+                borderRadius: 3,
+                clipPath: i < STEPS - 1
+                  ? 'polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%, 6px 50%)'
+                  : 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 6px 50%)',
+                transition: 'background 0.4s',
+              }} />
+            ))}
+            <div style={{
+              marginLeft: 4, background: pColor,
+              borderRadius: 6, padding: '0 10px',
+              display: 'flex', alignItems: 'center',
+              fontSize: 11, fontWeight: 900, color: '#0D0A00', whiteSpace: 'nowrap',
+            }}>{pct}%</div>
+          </div>
+          <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--muted)' }}>
+            <span>Misiones Completadas: <strong style={{ color: 'var(--cream)' }}>{pedidos} / {total}</strong></span>
+            {volumen > 0 && (
+              <span>Volumen Rescatado: <strong style={{ color: '#34D399' }}>{volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} Litros</strong></span>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Admin: solo volumen si hay */}
+      {isAdmin && volumen > 0 && (
+        <p style={{ fontSize: 12, color: '#34D399', fontWeight: 700, marginBottom: 14 }}>
+          💧 Volumen rescatado: {volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
+        </p>
+      )}
+
+      {/* KPI chips */}
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: 8 }}>
         {[
           { label: '🚨 Llama ahora', value: vencidos, color: '#F87171', urgent: vencidos > 0 },
@@ -534,12 +764,12 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
           { label: '✓ Con pedido',   value: pedidos,  color: '#34D399', urgent: false },
         ].map(({ label, value, color, urgent }) => (
           <div key={label} style={{
-            background: urgent && value > 0 ? 'rgba(248,113,113,0.08)' : 'var(--surface2)',
-            border: `1px solid ${urgent && value > 0 ? 'rgba(248,113,113,0.25)' : 'var(--border)'}`,
+            background: urgent && value > 0 ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${urgent && value > 0 ? 'rgba(248,113,113,0.25)' : 'rgba(255,255,255,0.07)'}`,
             borderRadius: 12, padding: isDesktop ? '12px 14px' : '10px 12px', textAlign: 'center',
           }}>
             <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>{label}</p>
-            <p style={{ fontSize: isDesktop ? 24 : 20, fontWeight: 900, color }}>{value}</p>
+            <p style={{ fontSize: isDesktop ? 26 : 22, fontWeight: 900, color }}>{value}</p>
           </div>
         ))}
       </div>
@@ -714,10 +944,11 @@ function ProximaView({ proxima, isDesktop }: { proxima: ProximaPreview[]; isDesk
 }
 
 // ── Lista desktop con separadores por tipo ────────────────────────────────────
-function ListaDesktop({ porTipo, selectedId, onSelect }: {
+function ListaDesktop({ porTipo, selectedId, onSelect, onWA }: {
   porTipo: Record<TipoMision, MisionEnriquecida[]>
   selectedId: string | null
   onSelect: (m: MisionEnriquecida) => void
+  onWA: (m: MisionEnriquecida) => void
 }) {
   const ORDEN: TipoMision[] = ['vencido', 'esta_semana', 'proxima_semana']
   return (
@@ -726,26 +957,29 @@ function ListaDesktop({ porTipo, selectedId, onSelect }: {
         const items = porTipo[tipo]
         if (!items.length) return null
         const cfg = TIPO_CFG[tipo]
+        const pendientes = items.filter(m => !esCompletada(m.estado)).length
         return (
           <div key={tipo}>
-            {/* Label de sección */}
+            {/* Label de sección — sticky */}
             <div style={{
               padding: '8px 14px 6px', display: 'flex', alignItems: 'center', gap: 8,
               position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1,
+              borderBottom: '1px solid rgba(255,255,255,0.04)',
             }}>
-              <span style={{ fontSize: 12 }}>{cfg.icon}</span>
-              <span style={{ fontSize: 10, fontWeight: 800, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                {cfg.label}
+              <span style={{ fontSize: 13 }}>{cfg.icon}</span>
+              <span style={{ fontSize: 10, fontWeight: 800, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.8px', flex: 1 }}>
+                {tipo === 'vencido' ? 'PRIORIDAD ALTA' : cfg.label}
               </span>
-              <span style={{
-                padding: '1px 7px', borderRadius: 20, fontSize: 10, fontWeight: 700,
-                background: `${cfg.color}15`, color: cfg.color,
-              }}>{items.length}</span>
+              {pendientes > 0 && (
+                <span style={{
+                  padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 800,
+                  background: `${cfg.color}18`, color: cfg.color,
+                }}>{pendientes}</span>
+              )}
             </div>
             {items.map(m => (
-              <CompactCard key={m.id} mision={m} selected={selectedId === m.id} onClick={() => onSelect(m)} />
+              <CompactCard key={m.id} mision={m} selected={selectedId === m.id} onClick={() => onSelect(m)} onWA={onWA} />
             ))}
-            <div style={{ height: 1, background: 'var(--border)', margin: '6px 14px' }} />
           </div>
         )
       })}
@@ -949,6 +1183,7 @@ export default function MisionesClient({
                   porTipo={{ ...porTipo, proxima_semana: [] }}
                   selectedId={selectedMision?.id ?? null}
                   onSelect={m => setSelectedMision(m)}
+                  onWA={onWA}
                 />
               )}
             </div>
@@ -964,6 +1199,7 @@ export default function MisionesClient({
                 onActualizar={onActualizar}
                 onWA={onWA}
                 loadingId={loadingId}
+                onClose={() => setSelectedMision(null)}
               />
             </div>
           </div>

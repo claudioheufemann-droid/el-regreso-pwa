@@ -32,6 +32,7 @@ export interface MisionEnriquecida {
   snooze_until: string | null
   completado_canal: string | null
   resultado_litros: number | null
+  intentos_contacto: number | null
   volumen_promedio: number | null
   litros_ultima_compra: number | null
   prioridad_calculada: number | null
@@ -83,6 +84,7 @@ function enriquecerMision(
     snooze_until: m.snooze_until ?? null,
     completado_canal: m.completado_canal ?? null,
     resultado_litros: m.resultado_litros ?? null,
+    intentos_contacto: m.intentos_contacto ?? null,
     volumen_promedio: m.volumen_promedio ?? null,
     litros_ultima_compra: m.litros_ultima_compra ?? null,
     prioridad_calculada: m.prioridad_calculada ?? null,
