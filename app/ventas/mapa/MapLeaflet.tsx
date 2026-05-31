@@ -24,16 +24,20 @@ export interface Punto {
   score: number | null
   alerta_nivel: string | null
   ultima_compra: string | null
+  deuda_total: number
+  deuda_vencida: number
   sin_compra: boolean
 }
 
 export type CapaViz = 'pedidos' | 'salud' | 'calor'
+export type TileTipo = 'mapa' | 'satelite' | 'hibrido'
 
 interface Props {
   puntos: Punto[]
   vendedorFiltro: string
   capaViz: CapaViz
   mostrarSinCompra: boolean
+  tileTipo?: TileTipo
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -139,6 +143,7 @@ function PopupDetalle({ p, color, onWA }: {
   color: string
   onWA: (t: WATarget) => void
 }) {
+  const verClienteUrl = `/ventas/clientes?q=${encodeURIComponent(p.nombre_fantasia)}`
   const prods = (() => {
     const m = new Map<string, number>()
     for (const pr of p.productos) {
@@ -188,6 +193,11 @@ function PopupDetalle({ p, color, onWA }: {
         {p.ultima_compra && (
           <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
             Última: {new Date(p.ultima_compra).toLocaleDateString('es-CL')}
+          </div>
+        )}
+        {p.deuda_vencida > 0 && (
+          <div style={{ fontSize: 10, color: '#EF4444', marginTop: 3, fontWeight: 700 }}>
+            ⚠ Deuda vencida: {formatPeso(p.deuda_vencida)}
           </div>
         )}
       </div>
@@ -250,14 +260,42 @@ function PopupDetalle({ p, color, onWA }: {
           </div>
         </div>
       )}
+
+      {/* Ver cliente */}
+      <a
+        href={verClienteUrl}
+        style={{
+          display: 'block', marginTop: 10, padding: '8px', textAlign: 'center', borderRadius: 8,
+          background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)',
+          color: '#D4AF37', fontSize: 12, fontWeight: 700, textDecoration: 'none',
+        }}
+      >
+        Ver ficha del cliente →
+      </a>
     </div>
   )
 }
 
 // ── Componente principal ─────────────────────────────────────
 
-export default function MapLeaflet({ puntos, vendedorFiltro, capaViz, mostrarSinCompra }: Props) {
+const TILES: Record<TileTipo, { url: string; attribution: string }> = {
+  mapa: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+  },
+  satelite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+  },
+  hibrido: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+  },
+}
+
+export default function MapLeaflet({ puntos, vendedorFiltro, capaViz, mostrarSinCompra, tileTipo = 'mapa' }: Props) {
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+  const tile = TILES[tileTipo]
 
   const filtrados = (vendedorFiltro === 'all'
     ? puntos
@@ -275,10 +313,14 @@ export default function MapLeaflet({ puntos, vendedorFiltro, capaViz, mostrarSin
         style={{ height: '100%', width: '100%', background: '#111' }}
         zoomControl={true}
       >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; OpenStreetMap contributors &copy; CARTO'
-        />
+        <TileLayer key={tileTipo} url={tile.url} attribution={tile.attribution} />
+        {/* Capa de etiquetas para modo híbrido */}
+        {tileTipo === 'hibrido' && (
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            attribution=""
+          />
+        )}
 
         {/* Capa heatmap */}
         {capaViz === 'calor' && <HeatmapLayer puntos={conVenta} />}

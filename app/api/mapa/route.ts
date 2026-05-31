@@ -27,16 +27,40 @@ export async function GET(req: NextRequest) {
     query = query.eq('vendedor_actual', vendedor)
   }
 
-  // ── Scores de clientes (para salud / días sin compra) ───
-  const [{ data: ventas, error: ventasError }, { data: scores }] = await Promise.all([
+  // ── Scores + clientes + deudores en paralelo ─────────────
+  const [
+    { data: ventas, error: ventasError },
+    { data: scores },
+    { data: todosClientes },
+    { data: deudores },
+  ] = await Promise.all([
     query,
     supabase
       .from('client_scores')
-      .select('nombre, dias_sin_compra, segmento, score, alerta_nivel, ultima_compra, vendedor_actual')
+      .select('nombre, dias_sin_compra, segmento, score, alerta_nivel, ultima_compra, vendedor_actual'),
+    supabase
+      .from('clientes')
+      .select('nombre_fantasia, lat, lng, categoria, localidad_entrega, localidad, telefono, email, contacto'),
+    supabase
+      .from('deudores')
+      .select('nombre_fantasia, saldo_total, deuda_vencida, vendedor'),
   ])
 
   if (ventasError) {
     return NextResponse.json({ error: ventasError.message }, { status: 500 })
+  }
+
+  // ── Mapa de deuda por cliente + totales globales ────────
+  const deudaMap = new Map<string, { saldo: number; vencida: number }>()
+  let deudaGlobal = 0
+  let deudaVencidaGlobal = 0
+  for (const d of (deudores ?? [])) {
+    if (vendedor && vendedor !== 'all' && d.vendedor !== vendedor) continue
+    const saldo = d.saldo_total ?? 0
+    const vencida = d.deuda_vencida ?? 0
+    deudaMap.set(d.nombre_fantasia, { saldo, vencida })
+    deudaGlobal += saldo
+    deudaVencidaGlobal += vencida
   }
 
   // ── Mapa de scores por cliente ───────────────────────────
@@ -60,10 +84,6 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Todos los clientes con coordenadas ──────────────────
-  const { data: todosClientes } = await supabase
-    .from('clientes')
-    .select('nombre_fantasia, lat, lng, categoria, localidad_entrega, localidad, telefono, email, contacto')
-
   const clientesMap = new Map<string, {
     lat: number; lng: number; categoria: string; localidad: string
     telefono: string | null; email: string | null; contacto: string | null
@@ -161,6 +181,8 @@ export async function GET(req: NextRequest) {
     score: g.score,
     alerta_nivel: g.alerta_nivel,
     ultima_compra: g.ultima_compra,
+    deuda_total: deudaMap.get(g.nombre_fantasia)?.saldo ?? 0,
+    deuda_vencida: deudaMap.get(g.nombre_fantasia)?.vencida ?? 0,
     sin_compra: false,
   }))
 
@@ -194,10 +216,16 @@ export async function GET(req: NextRequest) {
         score: sc?.score ?? null,
         alerta_nivel: sc?.alerta_nivel ?? null,
         ultima_compra: sc?.ultima_compra ?? null,
+        deuda_total: deudaMap.get(nombre)?.saldo ?? 0,
+        deuda_vencida: deudaMap.get(nombre)?.vencida ?? 0,
         sin_compra: true,
       })
     }
   }
 
-  return NextResponse.json(resultado)
+  return NextResponse.json({
+    puntos: resultado,
+    deudaGlobal: Math.round(deudaGlobal),
+    deudaVencidaGlobal: Math.round(deudaVencidaGlobal),
+  })
 }

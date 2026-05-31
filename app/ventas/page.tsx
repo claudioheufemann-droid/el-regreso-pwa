@@ -46,33 +46,34 @@ export default async function DashboardPage({
 
   const scope = vendedoresScope.length ? vendedoresScope : ['__none__']
 
-  // Fecha más reciente disponible
-  const { data: ultimaFecha } = await supabase
-    .from('ventas')
-    .select('fecha_pedido')
-    .in('vendedor_actual', scope)
-    .order('fecha_pedido', { ascending: false })
-    .limit(1)
-    .single()
+  // Lunes de esta semana (para misiones) — sin query
+  const semanaLunes = (() => {
+    const d = new Date(); const day = d.getDay()
+    d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
+    return d.toISOString().split('T')[0]
+  })()
+  const misionesScope = vendedoresScope.length ? vendedoresScope : ['__none__']
+  const p_vendedor = appUser?.isAdmin ? null : (appUser?.nombre ?? null)
+  const hace90 = new Date(); hace90.setDate(hace90.getDate() - 90)
+
+  // ── FASE A: queries independientes en paralelo ───────────
+  const [
+    { data: ultimaFecha },
+    { data: periodo },
+    { data: fechasRows },
+    { data: planRaw },
+    { data: misionesRaw },
+    { data: usersAvatars },
+  ] = await Promise.all([
+    supabase.from('ventas').select('fecha_pedido').in('vendedor_actual', scope).order('fecha_pedido', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('periodos').select('*').eq('activo', true).maybeSingle(),
+    supabase.from('ventas').select('fecha_pedido').in('vendedor_actual', scope).gte('fecha_pedido', hace90.toISOString().split('T')[0]).order('fecha_pedido', { ascending: false }).limit(2000),
+    supabase.rpc('get_pending_call_alerts', { p_vendedor, p_nivel_minimo: 'proximo' }),
+    supabase.from('misiones').select('vendedor, alert_level, estado, score, segmento, nombre_fantasia, dias_sin_compra').eq('semana', semanaLunes).in('vendedor', misionesScope),
+    supabase.from('users').select('nombre, avatar_url').in('nombre', ['Javier B.', 'Carlos U.']),
+  ])
 
   const ultimaFechaStr = ultimaFecha?.fecha_pedido ?? new Date().toISOString().split('T')[0]
-
-  const { data: periodo } = await supabase
-    .from('periodos')
-    .select('*')
-    .eq('activo', true)
-    .single()
-
-  // Fechas disponibles: últimos 90 días con ventas (para el selector)
-  // Tomamos solo la fecha (sin otras columnas) y aplicamos un límite razonable
-  const hace90 = new Date(); hace90.setDate(hace90.getDate() - 90)
-  const { data: fechasRows } = await supabase
-    .from('ventas')
-    .select('fecha_pedido')
-    .in('vendedor_actual', scope)
-    .gte('fecha_pedido', hace90.toISOString().split('T')[0])
-    .order('fecha_pedido', { ascending: false })
-    .limit(2000)
 
   const fechasDisponibles = [
     ...new Set((fechasRows ?? []).map(f => f.fecha_pedido)),
@@ -84,47 +85,77 @@ export default async function DashboardPage({
       ? fechaParam
       : ultimaFechaStr
 
-  // Ventas del día seleccionado (ahora incluye localidad)
-  const { data: ventasHoy } = await supabase
-    .from('ventas')
-    .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, categoria_producto, producto, envase, localidad')
-    .in('vendedor_actual', scope)
-    .eq('fecha_pedido', fechaHoy)
+  const fechaIni = periodo?.fecha_inicio ?? '2026-04-24'
+  const fechaFinPeriodo = periodo?.fecha_fin ?? '2026-05-23'
 
-  // Paginación: PostgREST limita a 1000 filas por request.
-  // Un período con muchas SKUs puede superar ese límite.
-  const ventasPeriodo: {
-    vendedor_actual: string; nombre_fantasia: string | null; litros: number | null
-    total_sin_impuesto: number | null; categoria_negocio: string | null
-    fecha_pedido: string; categoria_producto: string | null
-  }[] = []
-  {
-    const fechaIni = periodo?.fecha_inicio ?? '2026-04-24'
-    const fechaFin = periodo?.fecha_fin    ?? '2026-05-23'
+  // Helper: fetch paginado (PostgREST limita 1000 filas/request)
+  async function fetchPaginado<T>(build: (offset: number) => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
+    const out: T[] = []
     let offset = 0
     const PAGE = 1000
     while (true) {
-      const { data: page } = await supabase
+      const { data: page } = await build(offset)
+      if (!page || page.length === 0) break
+      out.push(...page)
+      if (page.length < PAGE) break
+      offset += PAGE
+    }
+    return out
+  }
+
+  // Fechas mes anterior (para comparación banner)
+  let iniPrev = '', finPrev = ''
+  if (periodo?.fecha_inicio) {
+    const mesAnteriorFin = new Date(periodo.fecha_inicio)
+    mesAnteriorFin.setDate(mesAnteriorFin.getDate() - 1)
+    const mesAnteriorIni = new Date(mesAnteriorFin)
+    mesAnteriorIni.setDate(1)
+    iniPrev = mesAnteriorIni.toISOString().split('T')[0]
+    finPrev = mesAnteriorFin.toISOString().split('T')[0]
+  }
+
+  type VentaPeriodoRow = {
+    vendedor_actual: string; nombre_fantasia: string | null; litros: number | null
+    total_sin_impuesto: number | null; categoria_negocio: string | null
+    fecha_pedido: string; categoria_producto: string | null
+  }
+  type VentaPrevRow = { vendedor_actual: string; litros: number | null; nombre_fantasia: string | null }
+
+  // ── FASE B: queries dependientes de fechaHoy/periodo en paralelo ─
+  const [
+    { data: ventasHoy },
+    ventasPeriodo,
+    { data: metasData },
+    rowsPrev,
+  ] = await Promise.all([
+    supabase
+      .from('ventas')
+      .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, categoria_producto, producto, envase, localidad')
+      .in('vendedor_actual', scope)
+      .eq('fecha_pedido', fechaHoy),
+    fetchPaginado<VentaPeriodoRow>(offset =>
+      supabase
         .from('ventas')
         .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, fecha_pedido, categoria_producto')
         .in('vendedor_actual', scope)
         .gte('fecha_pedido', fechaIni)
-        .lte('fecha_pedido', fechaFin)
+        .lte('fecha_pedido', fechaFinPeriodo)
         .order('fecha_pedido', { ascending: true })
-        .range(offset, offset + PAGE - 1)
-      if (!page || page.length === 0) break
-      ventasPeriodo.push(...page)
-      if (page.length < PAGE) break
-      offset += PAGE
-    }
-  }
-
-  // Metas
-  const { data: metasData } = await supabase
-    .from('metas')
-    .select('vendedor, meta_litros')
-    .eq('periodo_id', periodo?.id ?? -1)
-    .eq('tipo', 'mensual')
+        .range(offset, offset + 999)
+    ),
+    supabase.from('metas').select('vendedor, meta_litros').eq('periodo_id', periodo?.id ?? -1).eq('tipo', 'mensual'),
+    iniPrev
+      ? fetchPaginado<VentaPrevRow>(offset =>
+          supabase
+            .from('ventas')
+            .select('vendedor_actual, litros, nombre_fantasia')
+            .in('vendedor_actual', scope)
+            .gte('fecha_pedido', iniPrev)
+            .lte('fecha_pedido', finPrev)
+            .range(offset, offset + 999)
+        )
+      : Promise.resolve([] as VentaPrevRow[]),
+  ])
 
   const metasPorVendedor: Record<string, number> = {}
   for (const m of metasData ?? []) {
@@ -250,14 +281,7 @@ export default async function DashboardPage({
     }
   })
 
-  // Plan semanal (para popup lunes y card de riesgo)
-  const p_vendedor = appUser?.isAdmin ? null : (appUser?.nombre ?? null)
-  const { data: planRaw } = await supabase
-    .rpc('get_pending_call_alerts', {
-      p_vendedor,
-      p_nivel_minimo: 'proximo',
-    })
-
+  // Plan semanal (planRaw ya cargado en FASE A)
   type ClientePlan = {
     nombre_fantasia: string
     vendedor_actual: string
@@ -284,63 +308,23 @@ export default async function DashboardPage({
     c.alert_level === 'critico' || c.alert_level === 'vencido'
   )
 
-  // Resumen de misiones de la tabla persistente (para el widget del dashboard)
-  const semanaLunes = (() => {
-    const d = new Date(); const day = d.getDay()
-    d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
-    return d.toISOString().split('T')[0]
-  })()
-  const misionesScope = vendedoresScope.length ? vendedoresScope : ['__none__']
-  const { data: misionesRaw } = await supabase
-    .from('misiones')
-    .select('vendedor, alert_level, estado, score, segmento, nombre_fantasia, dias_sin_compra')
-    .eq('semana', semanaLunes)
-    .in('vendedor', misionesScope)
-
+  // Resumen de misiones (misionesRaw ya cargado en FASE A)
   type MisionResumen = {
     vendedor: string; alert_level: string; estado: string
     score: number; segmento: string; nombre_fantasia: string; dias_sin_compra: number
   }
   const misionesResumen: MisionResumen[] = misionesRaw ?? []
 
-  // Litros mes anterior para comparación en banner
+  // Litros mes anterior para comparación (rowsPrev ya cargado en FASE B)
   let litrosMesAnteriorTotal = 0
   const litrosMesAnteriorPorVendedor: Record<string, number> = {}
-  if (periodo?.fecha_inicio) {
-    const mesAnteriorFin = new Date(periodo.fecha_inicio)
-    mesAnteriorFin.setDate(mesAnteriorFin.getDate() - 1)
-    const mesAnteriorIni = new Date(mesAnteriorFin)
-    mesAnteriorIni.setDate(1)
-    const iniStr = mesAnteriorIni.toISOString().split('T')[0]
-    const finStr = mesAnteriorFin.toISOString().split('T')[0]
-
-    const rowsPrev: { vendedor_actual: string; litros: number | null; nombre_fantasia: string | null }[] = []
-    let offset = 0
-    while (true) {
-      const { data: page } = await supabase
-        .from('ventas')
-        .select('vendedor_actual, litros, nombre_fantasia')
-        .in('vendedor_actual', scope)
-        .gte('fecha_pedido', iniStr)
-        .lte('fecha_pedido', finStr)
-        .range(offset, offset + 999)
-      if (!page || page.length === 0) break
-      rowsPrev.push(...page)
-      if (page.length < 1000) break
-      offset += 1000
-    }
-    for (const v of rowsPrev) {
-      if (esClienteExcluido(v.nombre_fantasia)) continue
-      litrosMesAnteriorTotal += v.litros ?? 0
-      litrosMesAnteriorPorVendedor[v.vendedor_actual] = (litrosMesAnteriorPorVendedor[v.vendedor_actual] ?? 0) + (v.litros ?? 0)
-    }
+  for (const v of rowsPrev) {
+    if (esClienteExcluido(v.nombre_fantasia)) continue
+    litrosMesAnteriorTotal += v.litros ?? 0
+    litrosMesAnteriorPorVendedor[v.vendedor_actual] = (litrosMesAnteriorPorVendedor[v.vendedor_actual] ?? 0) + (v.litros ?? 0)
   }
 
-  // Avatares de vendedores para los círculos del dashboard
-  const { data: usersAvatars } = await supabase
-    .from('users')
-    .select('nombre, avatar_url')
-    .in('nombre', ['Javier B.', 'Carlos U.'])
+  // Avatares de vendedores (usersAvatars ya cargado en FASE A)
   const vendedorAvatars: Record<string, string | null> = {
     'Javier Badilla':  usersAvatars?.find(u => u.nombre === 'Javier B.')?.avatar_url  ?? null,
     'Carlos Urrejola': usersAvatars?.find(u => u.nombre === 'Carlos U.')?.avatar_url ?? null,
