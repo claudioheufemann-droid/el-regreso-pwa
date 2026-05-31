@@ -1838,7 +1838,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                         {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre}
                       </span>
                       <span style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
-                        ({diffTotal >= 0 ? '+' : ''}{diffTotal.toFixed(1)} L)
+                        ({litrosMesAnterior.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L en {mesAnteriorNombre})
                       </span>
                     </div>
                   )}
@@ -1876,7 +1876,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                   </div>
                   {litrosMesAnterior > 0 && (
                     <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
-                      {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre} ({diffTotal >= 0 ? '+' : ''}{diffTotal.toFixed(1)} L)
+                      {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre} ({litrosMesAnterior.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L)
                     </span>
                   )}
                 </div>
