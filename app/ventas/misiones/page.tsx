@@ -11,7 +11,7 @@ function getMondayOfWeek(d: Date): string {
   return x.toISOString().split('T')[0]
 }
 
-export type EstadoMision = 'pendiente' | 'contactado_pedido' | 'contactado_sin_pedido' | 'sin_respuesta'
+export type EstadoMision = 'pendiente' | 'contactado_pedido' | 'contactado_sin_pedido' | 'sin_respuesta' | 'pospuesto' | 'auto_completado'
 export type TipoMision = 'esta_semana' | 'proxima_semana' | 'vencido'
 
 export interface MisionEnriquecida {
@@ -29,6 +29,12 @@ export interface MisionEnriquecida {
   estado: EstadoMision
   completado_at: string | null
   nota: string | null
+  snooze_until: string | null
+  completado_canal: string | null
+  resultado_litros: number | null
+  volumen_promedio: number | null
+  litros_ultima_compra: number | null
+  prioridad_calculada: number | null
   // Enriquecido
   ruta_despacho: string | null
   localidad: string | null
@@ -72,7 +78,17 @@ function enriquecerMision(
   }
   // Default tipo si no viene de DB (retrocompatibilidad)
   const tipo: TipoMision = (m as MisionEnriquecida).tipo ?? 'vencido'
-  return { ...m, tipo, ...cli, ultima_venta_fecha: vta?.fecha??null, ultima_venta_monto: vta?.monto??0, prioridad, frecuencia_texto, dias_para_compra }
+  return {
+    ...m, tipo, ...cli,
+    snooze_until: m.snooze_until ?? null,
+    completado_canal: m.completado_canal ?? null,
+    resultado_litros: m.resultado_litros ?? null,
+    volumen_promedio: m.volumen_promedio ?? null,
+    litros_ultima_compra: m.litros_ultima_compra ?? null,
+    prioridad_calculada: m.prioridad_calculada ?? null,
+    ultima_venta_fecha: vta?.fecha??null, ultima_venta_monto: vta?.monto??0,
+    prioridad, frecuencia_texto, dias_para_compra,
+  }
 }
 
 export default async function MisionesPage() {
@@ -94,16 +110,16 @@ export default async function MisionesPage() {
     { data: clientesRaw },
     { data: ventasRaw },
   ] = await Promise.all([
-    // Misiones de esta semana
+    // Misiones de esta semana (select '*' = tolerante a columnas nuevas)
     supabase.from('misiones')
-      .select('id,vendedor,nombre_fantasia,semana,tipo,alert_level,score,segmento,dias_sin_compra,ciclo_promedio_dias,siguiente_compra_estimada,estado,completado_at,nota')
+      .select('*')
       .eq('semana', semana)
       .in('vendedor', vendedoresScope)
       .order('score', { ascending: false }),
 
     // Historial: últimas 4 semanas (excluye esta semana)
     supabase.from('misiones')
-      .select('id,vendedor,nombre_fantasia,semana,tipo,alert_level,score,segmento,dias_sin_compra,ciclo_promedio_dias,siguiente_compra_estimada,estado,completado_at,nota')
+      .select('*')
       .in('vendedor', vendedoresScope)
       .gte('semana', semana4ago)
       .lt('semana', semana)
@@ -148,13 +164,17 @@ export default async function MisionesPage() {
     if (v.nombre_fantasia && !ventaMap.has(v.nombre_fantasia))
       ventaMap.set(v.nombre_fantasia, { fecha: v.fecha_pedido, monto: v.total_sin_impuesto ?? 0 })
 
-  // Enriquecer misiones actuales
+  // Enriquecer misiones actuales (oculta las pospuestas con snooze vigente)
+  const hoyStr = new Date().toISOString().split('T')[0]
   const misiones: MisionEnriquecida[] = (misionesRaw ?? [])
     .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap))
+    .filter(m => !(m.estado === 'pospuesto' && m.snooze_until && m.snooze_until > hoyStr))
     .sort((a, b) => {
       if (a.estado !== b.estado) return a.estado === 'pendiente' ? -1 : 1
-      const pOrd = { Alta:0, Media:1, Baja:2 }
-      return (pOrd[a.prioridad]??3) - (pOrd[b.prioridad]??3)
+      // Priorización inteligente: prioridad_calculada (urgencia+volumen+valor), fallback score
+      const pa = a.prioridad_calculada ?? a.score ?? 0
+      const pb = b.prioridad_calculada ?? b.score ?? 0
+      return pb - pa
     })
 
   // Historial agrupado por semana
@@ -166,7 +186,7 @@ export default async function MisionesPage() {
   }
   const historial: HistorialSemana[] = Array.from(historialMap.entries())
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([s, ms]) => ({ semana: s, total: ms.length, completadas: ms.filter(m=>m.estado==='contactado_pedido').length, misiones: ms }))
+    .map(([s, ms]) => ({ semana: s, total: ms.length, completadas: ms.filter(m=>m.estado==='contactado_pedido'||m.estado==='auto_completado').length, misiones: ms }))
 
   // Preview próxima semana (alertas no guardadas aún)
   const proxima: ProximaPreview[] = (proximaRaw ?? []) as ProximaPreview[]

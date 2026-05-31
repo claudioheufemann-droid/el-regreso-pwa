@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
@@ -25,7 +25,17 @@ const ESTADO_CFG: Record<EstadoMision, { label: string; color: string; icon: str
   contactado_pedido:      { label: 'Hizo pedido ✓', color: '#34D399', icon: '✓' },
   contactado_sin_pedido:  { label: 'Contactado',    color: '#F59E0B', icon: '📞' },
   sin_respuesta:          { label: 'Sin respuesta',  color: '#94A3B8', icon: '🔇' },
+  pospuesto:              { label: 'Pospuesto',      color: '#A78BFA', icon: '⏰' },
+  auto_completado:        { label: 'Compró ✓ (auto)', color: '#34D399', icon: '⚡' },
 }
+
+const DIAS_POSPONER = [3, 5, 7, 14]
+
+// Una misión cuenta como completada si el vendedor cerró pedido o el cliente compró solo
+const esCompletada = (e: EstadoMision) => e === 'contactado_pedido' || e === 'auto_completado'
+
+type ActualizarOpts = { dias?: number; litros?: number }
+type OnActualizar = (id: string, estado: EstadoMision, opts?: ActualizarOpts) => Promise<void>
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fFecha(s: string | null): string {
@@ -72,9 +82,10 @@ function ProgressDonut({ done, total, size = 90 }: { done: number; total: number
 // ── Botones de acción ─────────────────────────────────────────────────────────
 function BotonesAccion({ mision, onActualizar, loading }: {
   mision: MisionEnriquecida
-  onActualizar: (id: string, estado: EstadoMision) => Promise<void>
+  onActualizar: OnActualizar
   loading: boolean
 }) {
+  const [diasPosp, setDiasPosp] = useState(5)
   const isPedido = mision.estado === 'contactado_pedido'
 
   const acciones: { estado: EstadoMision; label: string; color: string; icon: React.ReactNode }[] = [
@@ -96,22 +107,55 @@ function BotonesAccion({ mision, onActualizar, loading }: {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {acciones.map(a => (
-        <button key={a.estado} onClick={() => onActualizar(mision.id, a.estado)} disabled={loading} style={{
-          padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-          background: mision.estado === a.estado ? `${a.color}20` : 'var(--surface2)',
-          border: `1px solid ${mision.estado === a.estado ? `${a.color}50` : 'var(--border)'}`,
-          color: mision.estado === a.estado ? a.color : 'var(--muted)',
-          cursor: loading ? 'not-allowed' : 'pointer',
-          display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s',
-        }}
-          onMouseEnter={e => { if (!loading && mision.estado !== a.estado) (e.currentTarget as HTMLElement).style.borderColor = `${a.color}50` }}
-          onMouseLeave={e => { if (mision.estado !== a.estado) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {acciones.map(a => (
+          <button key={a.estado} onClick={() => onActualizar(mision.id, a.estado)} disabled={loading} style={{
+            padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+            background: mision.estado === a.estado ? `${a.color}20` : 'var(--surface2)',
+            border: `1px solid ${mision.estado === a.estado ? `${a.color}50` : 'var(--border)'}`,
+            color: mision.estado === a.estado ? a.color : 'var(--muted)',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s',
+          }}
+            onMouseEnter={e => { if (!loading && mision.estado !== a.estado) (e.currentTarget as HTMLElement).style.borderColor = `${a.color}50` }}
+            onMouseLeave={e => { if (mision.estado !== a.estado) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
+          >
+            {a.icon} {a.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Posponer — aún tiene stock */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 12,
+        background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.25)',
+      }}>
+        <span style={{ fontSize: 16 }}>⏰</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#A78BFA', flex: 1 }}>Aún con stock</span>
+        <select
+          value={diasPosp}
+          onChange={e => setDiasPosp(Number(e.target.value))}
+          disabled={loading}
+          style={{
+            background: 'var(--surface2)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 8,
+            color: '#A78BFA', fontSize: 12, fontWeight: 700, padding: '5px 8px', cursor: 'pointer', outline: 'none',
+          }}
         >
-          {a.icon} {a.label}
+          {DIAS_POSPONER.map(d => <option key={d} value={d} style={{ background: 'var(--surface)' }}>{d} días</option>)}
+        </select>
+        <button
+          onClick={() => onActualizar(mision.id, 'pospuesto', { dias: diasPosp })}
+          disabled={loading}
+          style={{
+            padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 800,
+            background: 'rgba(167,139,250,0.18)', border: '1px solid rgba(167,139,250,0.4)',
+            color: '#A78BFA', cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          Posponer
         </button>
-      ))}
+      </div>
     </div>
   )
 }
@@ -119,7 +163,7 @@ function BotonesAccion({ mision, onActualizar, loading }: {
 // ── Panel de detalle (desktop) ────────────────────────────────────────────────
 function DetailPanel({ mision, onActualizar, onWA, loadingId }: {
   mision: MisionEnriquecida | null
-  onActualizar: (id: string, estado: EstadoMision) => Promise<void>
+  onActualizar: OnActualizar
   onWA: (m: MisionEnriquecida) => void
   loadingId: string | null
 }) {
@@ -193,8 +237,8 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId }: {
       <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
         {[
           { label: 'Días sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#F87171' : 'var(--cream)' },
-          { label: 'Último pedido',    value: fFecha(mision.ultima_venta_fecha), color: 'var(--cream)' },
-          { label: 'Venta histórica',  value: fPeso(mision.ultima_venta_monto), color: '#D4AF37' },
+          { label: 'Último pedido',    value: mision.litros_ultima_compra != null ? `${mision.litros_ultima_compra} L` : fFecha(mision.ultima_venta_fecha), color: 'var(--cream)' },
+          { label: 'Volumen prom.',    value: mision.volumen_promedio != null ? `${mision.volumen_promedio} L` : fPeso(mision.ultima_venta_monto), color: '#D4AF37' },
         ].map(({ label, value, color }) => (
           <div key={label} style={{ background: 'var(--surface2)', borderRadius: 12, padding: '12px 14px', textAlign: 'center' }}>
             <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 5 }}>{label}</p>
@@ -334,7 +378,7 @@ function CompactCard({ mision, selected, onClick }: {
 // ── Tarjeta mobile (expandible) ───────────────────────────────────────────────
 function MisionCard({ mision, onActualizar, onWA, loadingId }: {
   mision: MisionEnriquecida
-  onActualizar: (id: string, estado: EstadoMision) => Promise<void>
+  onActualizar: OnActualizar
   onWA: (m: MisionEnriquecida) => void
   loadingId: string | null
 }) {
@@ -439,10 +483,11 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
   isDesktop: boolean
 }) {
   const total    = misiones.length
-  const pedidos  = misiones.filter(m => m.estado === 'contactado_pedido').length
+  const pedidos  = misiones.filter(m => esCompletada(m.estado)).length
   const vencidos = misiones.filter(m => m.tipo === 'vencido' && m.estado === 'pendiente').length
   const esSem    = misiones.filter(m => m.tipo === 'esta_semana').length
   const proxSem  = misiones.filter(m => m.tipo === 'proxima_semana').length
+  const volumen  = misiones.filter(m => esCompletada(m.estado)).reduce((s, m) => s + (m.resultado_litros ?? 0), 0)
 
   return (
     <div style={{
@@ -458,6 +503,11 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
           <p style={{ fontSize: 12, color: 'var(--muted)' }}>
             {rangoSemana(semana)}{!isAdmin && vendedorActual ? ` · ${vendedorActual.split(' ')[0]}` : ''}
           </p>
+          {volumen > 0 && (
+            <p style={{ fontSize: 12, color: '#34D399', fontWeight: 700, marginTop: 4 }}>
+              💧 Volumen rescatado: {volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
+            </p>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: isDesktop ? 20 : 12 }}>
           {isDesktop && (
@@ -501,7 +551,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
 function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, defaultOpen = true }: {
   tipo: TipoMision
   misiones: MisionEnriquecida[]
-  onActualizar: (id: string, estado: EstadoMision) => Promise<void>
+  onActualizar: OnActualizar
   onWA: (m: MisionEnriquecida) => void
   loadingId: string | null
   defaultOpen?: boolean
@@ -509,8 +559,8 @@ function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, defaul
   const [open, setOpen] = useState(defaultOpen)
   if (!misiones.length) return null
   const cfg = TIPO_CFG[tipo]
-  const pendientes  = misiones.filter(m => m.estado !== 'contactado_pedido').length
-  const completadas = misiones.filter(m => m.estado === 'contactado_pedido').length
+  const pendientes  = misiones.filter(m => !esCompletada(m.estado)).length
+  const completadas = misiones.filter(m => esCompletada(m.estado)).length
 
   return (
     <div style={{ marginBottom: 18 }}>
@@ -741,31 +791,51 @@ export default function MisionesClient({
   const porTipo = useMemo(() => {
     const grupos: Record<TipoMision, MisionEnriquecida[]> = { vencido: [], esta_semana: [], proxima_semana: [] }
     for (const m of misionesFiltradas) grupos[m.tipo]?.push(m)
-    const orden: EstadoMision[] = ['pendiente', 'sin_respuesta', 'contactado_sin_pedido', 'contactado_pedido']
+    const orden: EstadoMision[] = ['pendiente', 'sin_respuesta', 'contactado_sin_pedido', 'pospuesto', 'contactado_pedido', 'auto_completado']
     for (const key of Object.keys(grupos) as TipoMision[]) {
       grupos[key].sort((a, b) => {
         const oa = orden.indexOf(a.estado); const ob = orden.indexOf(b.estado)
         if (oa !== ob) return oa - ob
-        return (b.score ?? 0) - (a.score ?? 0)
+        const pa = a.prioridad_calculada ?? a.score ?? 0
+        const pb = b.prioridad_calculada ?? b.score ?? 0
+        return pb - pa
       })
     }
     return grupos
   }, [misionesFiltradas])
 
-  const onActualizar = useCallback(async (id: string, estado: EstadoMision) => {
+  // Misiones dinámicas: al entrar, reconciliar contra ventas de la semana.
+  // Si algún cliente ya compró por otro canal, su misión se auto-completa.
+  useEffect(() => {
+    let cancel = false
+    fetch('/api/misiones?action=reconciliar', { method: 'POST' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancel && d?.changed > 0) router.refresh() })
+      .catch(() => {})
+    return () => { cancel = true }
+  }, [router])
+
+  const onActualizar = useCallback(async (id: string, estado: EstadoMision, opts?: ActualizarOpts) => {
     setLoadingId(id)
     try {
       const res = await fetch('/api/misiones?action=actualizar_estado', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mision_id: id, estado }),
+        body: JSON.stringify({ mision_id: id, estado, dias: opts?.dias, litros: opts?.litros }),
       })
       if (!res.ok) throw new Error('Error')
-      setMisiones(prev => prev.map(m =>
-        m.id === id ? { ...m, estado, completado_at: estado === 'contactado_pedido' ? new Date().toISOString() : m.completado_at } : m
-      ))
-      // Actualizar la misión seleccionada en desktop
-      setSelectedMision(prev => prev?.id === id ? { ...prev, estado, completado_at: estado === 'contactado_pedido' ? new Date().toISOString() : prev.completado_at } : prev)
+
+      if (estado === 'pospuesto') {
+        // Snooze: sale de la lista activa hasta que reaparezca
+        setMisiones(prev => prev.filter(m => m.id !== id))
+        setSelectedMision(prev => (prev?.id === id ? null : prev))
+      } else {
+        const completado_at = estado === 'contactado_pedido' ? new Date().toISOString() : null
+        setMisiones(prev => prev.map(m =>
+          m.id === id ? { ...m, estado, completado_at: completado_at ?? m.completado_at } : m
+        ))
+        setSelectedMision(prev => prev?.id === id ? { ...prev, estado, completado_at: completado_at ?? prev.completado_at } : prev)
+      }
     } catch (e) { console.error(e) }
     finally { setLoadingId(null) }
   }, [])

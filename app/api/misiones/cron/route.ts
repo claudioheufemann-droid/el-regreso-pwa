@@ -5,6 +5,7 @@
  */
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { calcularVolumen, calcularPrioridad } from '@/lib/misiones'
 
 function getMondayOfWeek(date: Date): string {
   const d = new Date(date)
@@ -91,14 +92,22 @@ export async function POST(req: Request) {
     (existentes ?? []).map(e => [`${e.vendedor}|${e.nombre_fantasia}|${e.tipo}`, e.estado])
   )
 
+  // Priorización por volumen
+  const nombresVol = [...new Set(alertsFiltrados.map(a => a.nombre_fantasia))]
+  const volMap = await calcularVolumen(supabase, nombresVol)
+  const maxVol = Math.max(1, ...[...volMap.values()].map(v => v.volumen_promedio))
+
   const rows = alertsFiltrados.map(a => {
     const tipo = clasificarTipo(a.siguiente_compra_estimada, hoy)
     const key  = `${a.vendedor_actual}|${a.nombre_fantasia}|${tipo}`
     const estadoExistente = existMap.get(key)
     const estadoFinal = estadoExistente &&
-      ['contactado_pedido', 'contactado_sin_pedido', 'sin_respuesta'].includes(estadoExistente)
+      ['contactado_pedido', 'contactado_sin_pedido', 'sin_respuesta', 'pospuesto', 'auto_completado'].includes(estadoExistente)
       ? estadoExistente
       : 'pendiente'
+
+    const vol = volMap.get(a.nombre_fantasia)
+    const volProm = vol?.volumen_promedio ?? 0
 
     return {
       vendedor:                  a.vendedor_actual,
@@ -112,17 +121,27 @@ export async function POST(req: Request) {
       ciclo_promedio_dias:       a.ciclo_promedio_dias,
       siguiente_compra_estimada: a.siguiente_compra_estimada ?? null,
       estado:                    estadoFinal,
+      volumen_promedio:          volProm,
+      litros_ultima_compra:      vol?.litros_ultima_compra ?? null,
+      prioridad_calculada:       calcularPrioridad(a, volProm, maxVol),
     }
   })
 
-  const { data: inserted, error: insErr } = await supabase
-    .from('misiones')
-    .upsert(rows, { onConflict: 'vendedor,nombre_fantasia,semana,tipo' })
-    .select('id')
-
-  if (insErr) {
-    console.error('[misiones/cron] Error al insertar:', insErr)
-    return NextResponse.json({ error: insErr.message }, { status: 500 })
+  const upsertOpts = { onConflict: 'vendedor,nombre_fantasia,semana,tipo' }
+  let inserted: { id: string }[] | null = null
+  {
+    const r = await supabase.from('misiones').upsert(rows, upsertOpts).select('id')
+    if (r.error) {
+      const rowsBase = rows.map(({ volumen_promedio, litros_ultima_compra, prioridad_calculada, ...base }) => base)
+      const r2 = await supabase.from('misiones').upsert(rowsBase, upsertOpts).select('id')
+      if (r2.error) {
+        console.error('[misiones/cron] Error al insertar:', r2.error)
+        return NextResponse.json({ error: r2.error.message }, { status: 500 })
+      }
+      inserted = r2.data
+    } else {
+      inserted = r.data
+    }
   }
 
   const resumen = {
