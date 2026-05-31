@@ -6,9 +6,10 @@ import { useIsDesktop } from '@/lib/useIsDesktop'
 import type { KpiData, EvoDia, CatRow, TopCliente, MixItem, InsightItem, AlertaItem, DivVend, EvoDetalle, CatClientes, MixDetalle, ClienteDet } from './page'
 import type { Periodo } from '@/lib/types'
 import { TrendingUp, TrendingDown, Users, Award, DollarSign, Droplets, Bell, Lightbulb, ChevronRight, ChevronDown, BarChart2, Target, X } from 'lucide-react'
+import { VEND_COLOR } from '@/lib/theme'
 
 // ── Paleta ────────────────────────────────────────────────────────────────────
-const VEND_COLOR: Record<string,string> = { 'Javier Badilla':'#60A5FA', 'Carlos Urrejola':'#D4AF37' }
+// VEND_COLOR viene de lib/theme (fuente única de verdad)
 const CAT_COLOR: Record<string,string> = {
   'Bar':'#D4AF37','Minimarket':'#60A5FA','Cafetería':'#4ADE80','Botillería':'#A78BFA',
   'Almacén':'#FB923C','Restaurante':'#F472B6','Supermercado':'#38BDF8','Distribuidor':'#86EFAC',

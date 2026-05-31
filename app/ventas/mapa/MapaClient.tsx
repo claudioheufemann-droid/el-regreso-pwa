@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { Calendar, Droplets, MapPin, Users, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { VEND_COLOR } from '@/lib/theme'
 
 const MapLeaflet = dynamic(() => import('./MapLeaflet'), {
   ssr: false,
@@ -160,12 +161,10 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
                 key={v.value}
                 onClick={() => setVendedor(v.value)}
                 style={{
-                  padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  minHeight: 44, padding: '0 16px', borderRadius: 10, fontSize: 12, fontWeight: 700,
                   border: 'none', cursor: 'pointer', transition: 'all 0.15s',
                   background: vendedor === v.value
-                    ? v.value === 'Javier Badilla' ? '#F59E0B'
-                      : v.value === 'Carlos Urrejola' ? '#60A5FA'
-                        : '#F59E0B'
+                    ? VEND_COLOR[v.value] ?? '#F59E0B'
                     : '#1A1A1A',
                   color: vendedor === v.value ? '#000' : '#888',
                 }}
@@ -180,18 +179,18 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
         {(javiPuntos.length > 0 || carlosPuntos.length > 0) && (
           <div style={{ display: 'flex', gap: 8 }}>
             {javiPuntos.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#1A1200', borderRadius: 8, padding: '5px 10px', border: '1px solid #3D2E00' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B' }} />
-                <span style={{ fontSize: 11, color: '#F59E0B', fontWeight: 600 }}>Javier</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: `${VEND_COLOR['Javier Badilla']}12`, borderRadius: 8, padding: '5px 10px', border: `1px solid ${VEND_COLOR['Javier Badilla']}30` }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: VEND_COLOR['Javier Badilla'] }} />
+                <span style={{ fontSize: 11, color: VEND_COLOR['Javier Badilla'], fontWeight: 600 }}>Javier</span>
                 <span style={{ fontSize: 11, color: '#888' }}>
                   {javiPuntos.reduce((s, p) => s + p.litros_total, 0).toFixed(1)} L · {javiPuntos.length} clientes
                 </span>
               </div>
             )}
             {carlosPuntos.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#001228', borderRadius: 8, padding: '5px 10px', border: '1px solid #1E3A5A' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#60A5FA' }} />
-                <span style={{ fontSize: 11, color: '#60A5FA', fontWeight: 600 }}>Carlos</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: `${VEND_COLOR['Carlos Urrejola']}12`, borderRadius: 8, padding: '5px 10px', border: `1px solid ${VEND_COLOR['Carlos Urrejola']}30` }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: VEND_COLOR['Carlos Urrejola'] }} />
+                <span style={{ fontSize: 11, color: VEND_COLOR['Carlos Urrejola'], fontWeight: 600 }}>Carlos</span>
                 <span style={{ fontSize: 11, color: '#888' }}>
                   {carlosPuntos.reduce((s, p) => s + p.litros_total, 0).toFixed(1)} L · {carlosPuntos.length} clientes
                 </span>
@@ -242,12 +241,12 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
         <span style={{ fontSize: 11, color: '#555', fontWeight: 600 }}>LEYENDA</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#F59E0B', opacity: 0.8 }} />
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: VEND_COLOR['Javier Badilla'], opacity: 0.8 }} />
             <span style={{ fontSize: 11, color: '#888' }}>Javier Badilla</span>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#60A5FA', opacity: 0.8 }} />
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: VEND_COLOR['Carlos Urrejola'], opacity: 0.8 }} />
           <span style={{ fontSize: 11, color: '#888' }}>Carlos Urrejola</span>
         </div>
         <span style={{ fontSize: 10, color: '#444', marginLeft: 'auto' }}>Tamaño = litros vendidos · Clic en punto para detalles</span>

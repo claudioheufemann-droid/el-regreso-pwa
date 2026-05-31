@@ -9,11 +9,9 @@ import {
 } from 'lucide-react'
 import type { MisionEnriquecida, ProximaPreview, HistorialSemana, EstadoMision, TipoMision } from './page'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import { SEG_COLOR } from '@/lib/theme'
 
-// ── Paleta ────────────────────────────────────────────────────────────────────
-const SEG_COLOR: Record<string, string> = {
-  A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171',
-}
+// ── Paleta — SEG_COLOR importado de lib/theme (fuente única) ─────────────────
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
 const TIPO_CFG: Record<TipoMision, { label: string; color: string; bg: string; border: string; icon: string; desc: string }> = {

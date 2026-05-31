@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import type { ActividadItem } from './page'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import { VEND_COLOR, SEG_COLOR } from '@/lib/theme'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface FrequencyStat {
@@ -45,9 +46,8 @@ interface Props {
   vendedoresScope: string[]
 }
 
-// ── Paleta ────────────────────────────────────────────────────────────────────
-const SEG_COLOR: Record<string, string> = { A:'#D4AF37', B:'#34D399', C:'#60A5FA', D:'#F59E0B', E:'#F87171' }
-const VEND_COLOR: Record<string, string> = { 'Javier Badilla':'#60A5FA', 'Carlos Urrejola':'#D4AF37' }
+// ── Paleta — importada desde lib/theme (fuente única de verdad) ───────────────
+// SEG_COLOR y VEND_COLOR vienen del import de arriba
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

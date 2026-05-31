@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { Periodo } from '@/lib/types'
 import type { EvolutionDay, ProductRank, ProductBuyer } from './page'
+import { VEND_COLOR as VEND_COLOR_THEME, SEG_COLOR as SEG_COLOR_THEME } from '@/lib/theme'
 
 interface ProductoDetalle {
   producto: string
@@ -1134,9 +1135,7 @@ function RankingCard({
 }
 
 // ── WeeklyBriefingModal ───────────────────────────────────────────────────────
-const SEG_COLORS_PLAN: Record<string, string> = {
-  A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171',
-}
+const SEG_COLORS_PLAN = SEG_COLOR_THEME // desde lib/theme
 
 function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; onClose: () => void }) {
   const router = useRouter()
@@ -1299,7 +1298,7 @@ function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; o
 }
 
 // ── RiesgoClientesCard ────────────────────────────────────────────────────────
-const SEG_COLORS_RISK: Record<string, string> = { A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171' }
+const SEG_COLORS_RISK = SEG_COLOR_THEME // desde lib/theme
 function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; colors: Record<string, string> }) {
   const router = useRouter()
   const criticos = clientes.filter(c => c.alert_level === 'critico')
@@ -1407,8 +1406,8 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
   const router   = useRouter()
   const [vtab, setVtab] = useState<string>('all')
 
-  const SEG_C: Record<string, string> = { A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171' }
-  const VC: Record<string, string>    = { 'Javier Badilla': '#60A5FA', 'Carlos Urrejola': '#34D399' }
+  const SEG_C = SEG_COLOR_THEME   // desde lib/theme
+  const VC    = VEND_COLOR_THEME  // desde lib/theme
 
   const vendedores = [...new Set(misiones.map(m => m.vendedor))]
   const vista      = vtab === 'all' ? misiones : misiones.filter(m => m.vendedor === vtab)
@@ -1632,9 +1631,8 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
   const totalLitrosPeriodo = resumen.reduce((s, v) => s + v.litrosPeriodo, 0)
   const precioProm = totalLitrosHoy > 0 ? totalVentaHoy / totalLitrosHoy : 0
 
-  // Vendedor colors
-  const VEND_COLOR: Record<string, string> = {}
-  resumen.forEach((v, i) => { VEND_COLOR[v.vendedor] = i === 0 ? '#D4AF37' : '#60A5FA' })
+  // Vendedor colors — usa fuente única de lib/theme (no más asignación por índice)
+  const VEND_COLOR = VEND_COLOR_THEME
 
   const gridStyle4 = isDesktop
     ? { display: 'grid', gridTemplateColumns: '220px 1fr 1fr 220px', gap: 16, marginBottom: 16 }

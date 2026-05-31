@@ -6,6 +6,7 @@ import {
   Route, Users, MoveRight, ArrowRightLeft, AlertCircle,
 } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
+import { VEND_COLOR as VENDEDOR_COLOR } from '@/lib/theme'
 
 interface Cliente {
   id: number
@@ -165,11 +166,7 @@ function RutaItem({ nombre, count, isSelected, isEditing, onSelect, onEdit, onSa
   )
 }
 
-// ── ClienteRow ───────────────────────────────────────────────────────────────
-const VENDEDOR_COLOR: Record<string, string> = {
-  'Javier Badilla': '#F59E0B',
-  'Carlos Urrejola': '#60A5FA',
-}
+// ── ClienteRow — VENDEDOR_COLOR importado de lib/theme ───────────────────────
 
 function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
   cliente: Cliente

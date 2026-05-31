@@ -10,6 +10,7 @@ import {
   Zap, ChevronRight, Navigation, Info, BarChart2,
 } from 'lucide-react'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import RegistrarContactoModal, { type TipoContacto } from '@/components/ui/RegistrarContactoModal'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface Cliente {
@@ -55,7 +56,19 @@ interface Contacto {
   fecha_hora: string
   tipo: string
   vendedor: string
+  resultado?: string | null
   notas: string | null
+}
+
+const RESULTADO_LABEL: Record<string, { label: string; color: string }> = {
+  pedido:      { label: 'Hizo pedido', color: '#34D399' },
+  sin_pedido:  { label: 'Sin pedido',  color: '#F59E0B' },
+  no_estaba:   { label: 'No estaba',   color: '#94A3B8' },
+  reclamo:     { label: 'Reclamo',     color: '#F87171' },
+  seguimiento: { label: 'Seguimiento', color: '#60A5FA' },
+}
+const TIPO_LABEL: Record<string, string> = {
+  visita: 'Visita', llamada: 'Llamada', whatsapp: 'WhatsApp', nota: 'Nota',
 }
 
 interface Deudor {
@@ -512,6 +525,7 @@ export default function ClienteDetalleClient({
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'contacts' | 'notes' | 'activity'>('overview')
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+  const [registrarTipo, setRegistrarTipo] = useState<TipoContacto | null>(null)
 
   // ── Derived metrics ─────────────────────────────────────────────────────────
   const seg = frecuencia?.segmento ?? 'E'
@@ -563,7 +577,15 @@ export default function ClienteDetalleClient({
       items.push({ date: v.fecha_pedido, type: 'order', label: `Pedido ${fPeso(v.total_sin_impuesto)}`, sub: `${v.litros} L`, vendedor: cliente.vendedor ?? undefined })
     }
     for (const c of contactos.slice(0, 10)) {
-      items.push({ date: c.fecha_hora.split('T')[0], type: 'contact', label: `Contacto ${c.tipo}`, sub: c.notas ?? undefined, vendedor: c.vendedor })
+      const tipoLbl = TIPO_LABEL[c.tipo] ?? c.tipo
+      const resLbl = c.resultado ? RESULTADO_LABEL[c.resultado]?.label : undefined
+      items.push({
+        date: c.fecha_hora.split('T')[0],
+        type: 'contact',
+        label: resLbl ? `${tipoLbl} · ${resLbl}` : tipoLbl,
+        sub: c.notas ?? undefined,
+        vendedor: c.vendedor,
+      })
     }
     return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12)
   }, [ventas, contactos, cliente.vendedor])
@@ -594,6 +616,13 @@ export default function ClienteDetalleClient({
   return (
     <>
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
+      {registrarTipo && (
+        <RegistrarContactoModal
+          target={{ nombre: cliente.nombre_fantasia ?? 'Cliente', tipoInicial: registrarTipo }}
+          onClose={() => setRegistrarTipo(null)}
+          onRegistrado={() => router.refresh()}
+        />
+      )}
 
       <div style={{ minHeight: '100vh', background: '#090909', color: '#fff' }}>
         {/* ── Back button (mobile) ── */}
@@ -1009,61 +1038,175 @@ export default function ClienteDetalleClient({
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              TAB: CONTACTS
+              TAB: CONTACTS — bitácora real de interacciones
           ══════════════════════════════════════════════════════════════════ */}
           {activeTab === 'contacts' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <p style={{ fontSize: 13, color: '#555' }}>{contactos.length} contactos registrados · {contactos30d.length} este mes</p>
-                <button onClick={handleWA} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: '#25D36615', border: '1px solid #25D36630', color: '#25D366', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                  <MessageCircle size={13} /> Nuevo contacto
-                </button>
+              {/* Barra superior */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+                <p style={{ fontSize: 13, color: '#666' }}>
+                  {contactos.length} {contactos.length === 1 ? 'interacción' : 'interacciones'} · {contactos30d.length} este mes
+                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setRegistrarTipo('visita')} style={{
+                    minHeight: 44, padding: '0 16px', borderRadius: 12, border: '1px solid rgba(52,211,153,0.3)',
+                    background: 'rgba(52,211,153,0.08)', color: '#34D399', fontSize: 12, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <MapPin size={14}/> Registrar
+                  </button>
+                  <button onClick={handleWA} style={{
+                    minHeight: 44, padding: '0 16px', borderRadius: 12, border: '1px solid rgba(37,211,102,0.3)',
+                    background: 'rgba(37,211,102,0.08)', color: '#25D366', fontSize: 12, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <MessageCircle size={14}/> WhatsApp
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {contactos.map((c, i) => (
-                  <div key={i} style={{ padding: '14px 18px', borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 14 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: '#25D36608', border: '1px solid #25D36620', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <MessageCircle size={16} color="#25D366" />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <p style={{ fontSize: 13, fontWeight: 700, color: '#ddd' }}>
-                          {c.tipo === 'whatsapp' ? 'WhatsApp' : c.tipo === 'llamada' ? 'Llamada' : c.tipo}
-                        </p>
-                        <p style={{ fontSize: 11, color: '#444' }}>{fFecha(c.fecha_hora.split('T')[0], true)} · {c.fecha_hora.split('T')[1]?.slice(0,5) ?? ''}</p>
-                      </div>
-                      {c.notas && <p style={{ fontSize: 12, color: '#666' }}>{c.notas}</p>}
-                      <p style={{ fontSize: 11, color: '#444', marginTop: 4 }}>por {c.vendedor}</p>
-                    </div>
-                  </div>
+
+              {/* Botones de acción rápida por tipo */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
+                {([
+                  { tipo: 'visita' as TipoContacto,   label: 'Visita',   icon: <MapPin size={14}/>,        color: '#34D399' },
+                  { tipo: 'llamada' as TipoContacto,  label: 'Llamada',  icon: <Phone size={14}/>,         color: '#60A5FA' },
+                  { tipo: 'whatsapp' as TipoContacto, label: 'WhatsApp', icon: <MessageCircle size={14}/>, color: '#25D366' },
+                  { tipo: 'nota' as TipoContacto,     label: 'Nota',     icon: <FileText size={14}/>,      color: '#D4AF37' },
+                ] as const).map(({ tipo, label, icon, color }) => (
+                  <button key={tipo} onClick={() => setRegistrarTipo(tipo)} style={{
+                    minHeight: 60, padding: '10px 6px', borderRadius: 14, border: `1px solid ${color}25`,
+                    background: `${color}08`, color, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    transition: 'all 0.15s',
+                  }}>
+                    {icon}
+                    <span>{label}</span>
+                  </button>
                 ))}
+              </div>
+
+              {/* Timeline de interacciones */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {contactos.map((c, i) => {
+                  const resCfg = c.resultado ? RESULTADO_LABEL[c.resultado] : null
+                  const tipoIcon = c.tipo === 'visita' ? <MapPin size={15} /> : c.tipo === 'llamada' ? <Phone size={15} /> : c.tipo === 'nota' ? <FileText size={15} /> : <MessageCircle size={15} />
+                  const tipoColor = c.tipo === 'visita' ? '#34D399' : c.tipo === 'llamada' ? '#60A5FA' : c.tipo === 'nota' ? '#D4AF37' : '#25D366'
+                  return (
+                    <div key={i} style={{
+                      padding: '14px 18px', borderRadius: 14,
+                      background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                      display: 'flex', gap: 14,
+                    }}>
+                      <div style={{
+                        width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+                        background: `${tipoColor}10`, border: `1px solid ${tipoColor}25`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: tipoColor,
+                      }}>
+                        {tipoIcon}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#ddd' }}>
+                              {TIPO_LABEL[c.tipo] ?? c.tipo}
+                            </span>
+                            {resCfg && (
+                              <span style={{
+                                fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                                background: `${resCfg.color}15`, color: resCfg.color, border: `1px solid ${resCfg.color}30`,
+                              }}>
+                                {resCfg.label}
+                              </span>
+                            )}
+                          </div>
+                          <span style={{ fontSize: 11, color: '#444', flexShrink: 0 }}>
+                            {fFecha(c.fecha_hora.split('T')[0], true)} {c.fecha_hora.split('T')[1]?.slice(0, 5)}
+                          </span>
+                        </div>
+                        {c.notas && (
+                          <p style={{ fontSize: 12, color: '#888', lineHeight: 1.5, marginBottom: 4 }}>{c.notas}</p>
+                        )}
+                        <p style={{ fontSize: 11, color: '#444' }}>por {c.vendedor}</p>
+                      </div>
+                    </div>
+                  )
+                })}
                 {contactos.length === 0 && (
-                  <p style={{ textAlign: 'center', color: '#444', padding: '40px 0', fontSize: 14 }}>Sin contactos registrados</p>
+                  <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                    <p style={{ fontSize: 28, marginBottom: 10 }}>📋</p>
+                    <p style={{ fontSize: 14, color: '#ccc', fontWeight: 700, marginBottom: 6 }}>Sin interacciones registradas</p>
+                    <p style={{ fontSize: 12, color: '#555' }}>Registra visitas, llamadas, WhatsApps y notas para construir el historial del cliente.</p>
+                  </div>
                 )}
               </div>
             </div>
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              TAB: NOTES
+              TAB: NOTES — timeline fechado de notas (#15)
           ══════════════════════════════════════════════════════════════════ */}
           {activeTab === 'notes' && (
             <div>
-              {cliente.notas ? (
-                <div style={{ padding: '20px', borderRadius: 16, background: 'rgba(212,175,55,0.04)', border: `1px solid ${GOLD}20` }}>
-                  <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                    <FileText size={16} color={GOLD} />
-                    <p style={{ fontSize: 12, fontWeight: 700, color: GOLD }}>Nota del cliente</p>
+              {/* Botón agregar nota */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                <button onClick={() => setRegistrarTipo('nota')} style={{
+                  minHeight: 44, padding: '0 18px', borderRadius: 12,
+                  border: `1px solid ${GOLD}40`, background: `${GOLD}0A`,
+                  color: GOLD, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <FileText size={14}/> Nueva nota
+                </button>
+              </div>
+
+              {/* Notas del CRM (contactos tipo="nota") como timeline */}
+              {contactos.filter(c => c.tipo === 'nota').length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
+                    Notas del equipo
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {contactos.filter(c => c.tipo === 'nota').map((c, i) => (
+                      <div key={i} style={{
+                        padding: '14px 18px', borderRadius: 14,
+                        background: `${GOLD}06`, border: `1px solid ${GOLD}18`,
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: GOLD }}>📝 {c.vendedor}</span>
+                          <span style={{ fontSize: 11, color: '#444' }}>
+                            {fFecha(c.fecha_hora.split('T')[0], true)} {c.fecha_hora.split('T')[1]?.slice(0, 5)}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 13, color: '#ccc', lineHeight: 1.6 }}>{c.notas}</p>
+                      </div>
+                    ))}
                   </div>
-                  <p style={{ fontSize: 14, color: '#ccc', lineHeight: 1.7 }}>{cliente.notas}</p>
                 </div>
-              ) : (
-                <p style={{ textAlign: 'center', color: '#444', padding: '40px 0', fontSize: 14 }}>Sin notas registradas</p>
               )}
+
+              {/* Nota estática del ERP (campo clientes.notas) */}
+              {cliente.notas && (
+                <div style={{ padding: '18px 20px', borderRadius: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                    <FileText size={15} color="#555" />
+                    <p style={{ fontSize: 11, fontWeight: 700, color: '#555', letterSpacing: '0.5px' }}>NOTA DEL ERP</p>
+                  </div>
+                  <p style={{ fontSize: 13, color: '#888', lineHeight: 1.7 }}>{cliente.notas}</p>
+                </div>
+              )}
+
               {notaEstado && (
-                <div style={{ marginTop: 12, padding: '16px 20px', borderRadius: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 6 }}>NOTA DE ESTADO</p>
+                <div style={{ padding: '14px 18px', borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 6 }}>Nota de estado</p>
                   <p style={{ fontSize: 13, color: '#888', fontStyle: 'italic' }}>{notaEstado}</p>
+                </div>
+              )}
+
+              {contactos.filter(c => c.tipo === 'nota').length === 0 && !cliente.notas && !notaEstado && (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <p style={{ fontSize: 28, marginBottom: 10 }}>📝</p>
+                  <p style={{ fontSize: 14, color: '#ccc', fontWeight: 700, marginBottom: 6 }}>Sin notas aún</p>
+                  <p style={{ fontSize: 12, color: '#555' }}>Registra lo que conversaste, acuerdos, alertas del cliente.</p>
                 </div>
               )}
             </div>
