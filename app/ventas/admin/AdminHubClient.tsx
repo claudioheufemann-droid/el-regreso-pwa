@@ -41,7 +41,7 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores }
   }
 
   return (
-    <div style={{ padding: '32px 40px 60px' }}>
+    <div className="admin-pad" style={{ padding: '32px 40px 60px' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
@@ -62,7 +62,7 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores }
       </div>
 
       {/* Tab Bar */}
-      <div style={{
+      <div className="scroll-x-mobile" style={{
         display: 'flex', gap: 2, marginBottom: 32,
         background: 'var(--surface)',
         border: '1px solid var(--border)',
@@ -84,6 +84,7 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores }
                 background: active ? 'var(--gold)' : 'transparent',
                 color: active ? '#1a1200' : 'var(--muted)',
                 transition: 'all 0.15s',
+                flexShrink: 0, whiteSpace: 'nowrap',
               }}
             >
               <Icon size={14} />

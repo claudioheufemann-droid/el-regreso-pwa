@@ -244,6 +244,18 @@ input::placeholder, textarea::placeholder { color: #5A5248; }
   .kpi-grid-3 { grid-template-columns: repeat(2, 1fr) !important; }
   .hide-on-mobile { display: none !important; }
   .content-pad { padding-left: 16px !important; padding-right: 16px !important; }
+  /* Grids que colapsan a 1 columna en móvil (filtros, detalles, master-detail) */
+  .grid-stack-mobile { grid-template-columns: 1fr !important; }
+  /* Padding lateral reducido para secciones admin */
+  .admin-pad { padding-left: 16px !important; padding-right: 16px !important; }
+  /* Barra de pestañas/filtros con scroll horizontal en móvil */
+  .scroll-x-mobile { overflow-x: auto !important; width: 100% !important; -webkit-overflow-scrolling: touch; }
+  .scroll-x-mobile::-webkit-scrollbar { height: 0; }
+}
+
+/* Tablet: grids de 4 columnas pasan a 2 */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .grid-stack-mobile { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
 /* ── Desktop ── */

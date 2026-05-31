@@ -619,7 +619,7 @@ function VendedorCard({ analytics, vista, avatarUrl }: { analytics: AnalyticsExt
       </div>
 
       {/* KPI chips */}
-      <div style={{ padding: '0 20px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+      <div className="kpi-grid-3" style={{ padding: '0 20px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         {[
           { label: 'Meta', value: `${fmt(meta)} L` },
           { label: 'Realizado', value: `${fmt(real)} L` },

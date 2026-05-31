@@ -344,7 +344,7 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
       </div>
 
       {/* Info row */}
-      <div style={{
+      <div className="kpi-grid-4" style={{
         display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 20,
         paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.05)',
       }}>
@@ -894,7 +894,7 @@ export default function ClienteDetalleClient({
               TAB: OVERVIEW
           ══════════════════════════════════════════════════════════════════ */}
           {activeTab === 'overview' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+            <div className="grid-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
 
               {/* Col 1 — Customer Info */}
               <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18, padding: 20 }}>
@@ -1147,7 +1147,7 @@ export default function ClienteDetalleClient({
               </div>
 
               {/* Botones de acción rápida por tipo */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
+              <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
                 {([
                   { tipo: 'visita' as TipoContacto,   label: 'Visita',   icon: <MapPin size={14}/>,        color: '#34D399' },
                   { tipo: 'llamada' as TipoContacto,  label: 'Llamada',  icon: <Phone size={14}/>,         color: '#60A5FA' },

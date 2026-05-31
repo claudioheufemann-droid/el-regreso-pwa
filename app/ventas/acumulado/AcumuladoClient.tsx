@@ -480,7 +480,7 @@ export default function AcumuladoClient({
             </div>
           </div>
           <LineChart data={evolucion} vendedores={vendedoresScope} evoDetalle={evoDetalle}/>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginTop:14, paddingTop:14, borderTop:'1px solid rgba(255,255,255,0.05)' }}>
+          <div className="kpi-grid-3" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginTop:14, paddingTop:14, borderTop:'1px solid rgba(255,255,255,0.05)' }}>
             {[
               { label:'PROMEDIO DIARIO',       value:`${fLn(promedioDiario)} L` },
               { label:'MEJOR DÍA',             value:mejorDia?`${fF(mejorDia.fecha)} — ${fLn(mejorDia.total)} L`:'—' },

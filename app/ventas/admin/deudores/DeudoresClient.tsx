@@ -193,7 +193,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
                 Carga exitosa
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+            <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
               {[
                 { label: 'Procesados', value: uploadStats.total_procesados, color: 'var(--cream)' },
                 { label: 'Nuevos', value: uploadStats.nuevos, color: '#60a5fa' },
@@ -211,7 +211,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+      <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Total Deudores', value: totals.deudores, format: 'n', color: '#60a5fa' },
           { label: 'Deuda Vencida', value: totals.deuda_vencida, format: '$', color: '#f87171' },
@@ -233,7 +233,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
       </div>
 
       {/* Filters */}
-      <div style={{
+      <div className="grid-stack-mobile" style={{
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 12, padding: '16px 20px', marginBottom: 16,
         display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12,
@@ -359,7 +359,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
                           borderBottom: '1px solid var(--border)',
                           borderLeft: '3px solid var(--gold)',
                         }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
+                          <div className="grid-stack-mobile" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
 
                             {/* Contacto */}
                             <div>
