@@ -305,6 +305,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
               currentUserId={currentUserId}
               currentMacroArea={currentMacroArea}
               availableAreas={availableTaskAreas}
+              backHref={backHref}
               onTaskUpdated={handleUpdate}
               onTaskDeleted={handleDelete}
               onTaskCreated={t => setTasks(prev => [t, ...prev])}

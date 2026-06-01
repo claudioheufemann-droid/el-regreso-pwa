@@ -14,6 +14,7 @@ interface Props {
   currentUserId: string
   currentMacroArea: string | null
   availableAreas: string[]
+  backHref?: string
   onTaskUpdated: (t: RcTask) => void
   onTaskDeleted: (id: string) => void
   onTaskCreated: (t: RcTask) => void
@@ -144,7 +145,7 @@ function KpiCard({ value, label, sub, color, bg, border, glow, icon, up = true, 
   )
 }
 
-export default function HomeDashboard({ tasks, users, userName, isAdmin, currentUserId, currentMacroArea, availableAreas, onTaskUpdated, onTaskDeleted, onTaskCreated, onNavigate }: Props) {
+export default function HomeDashboard({ tasks, users, userName, isAdmin, currentUserId, currentMacroArea, availableAreas, backHref = '/', onTaskUpdated, onTaskDeleted, onTaskCreated, onNavigate }: Props) {
   const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<TabKey>('todas')
   const [search, setSearch] = useState('')
@@ -285,6 +286,12 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
 
+        {/* Botón volver al módulo */}
+        <a href={backHref} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', fontWeight: 500 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+          {backHref === '/' ? 'Cambiar módulo' : 'Volver'}
+        </a>
+
         {/* Header compacto */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ minWidth: 0 }}>
@@ -366,6 +373,32 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             <div style={{ fontSize: 8, color: 'var(--muted)', marginTop: 2 }}>cumplido</div>
           </div>
         </div>
+
+        {/* Próximos vencimientos */}
+        {proximos.length > 0 && (
+          <div style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--cream)' }}>📅 Próximos vencimientos</span>
+              <button onClick={() => onNavigate('calendar')} style={{ fontSize: 10, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver calendario →</button>
+            </div>
+            <div style={{ overflowX: 'auto', display: 'flex', gap: 8, padding: '10px 14px', scrollbarWidth: 'none' } as React.CSSProperties}>
+              {proximos.map(t => {
+                const [, m, d] = t.plazo.split('-')
+                const MS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+                const vCol = vColor(t.plazo)
+                return (
+                  <div key={t.id} onClick={() => setSelectedTask(t)}
+                    style={{ flexShrink: 0, background: `${vCol}09`, border: `1px solid ${vCol}25`, borderRadius: 12, padding: '10px 12px', minWidth: 130, cursor: 'pointer' }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: vCol, lineHeight: 1 }}>{parseInt(d)}</div>
+                    <div style={{ fontSize: 9, color: vCol, fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>{MS[parseInt(m)-1]}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>{t.titulo}</div>
+                    <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4 }}>{t.prioridad_maxima ? '⚡ Alta' : '△ Media'}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Tareas pendientes próximas */}
         <div style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, overflow: 'hidden' }}>
