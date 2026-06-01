@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Truck, Camera, CheckCircle, ChevronLeft, MapPin, Clock,
@@ -268,7 +268,10 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   // Paso 2 — ruta unificada
   const [tipoViaje, setTipoViaje] = useState<'reparto' | 'tramite'>('reparto')
   const [paradas, setParadas] = useState<Parada[]>([])
-  const [kmRuta, setKmRuta] = useState('')
+  const [kmPlanificado, setKmPlanificado] = useState<number | null>(null)
+  const [kmCalculado, setKmCalculado] = useState<number | null>(null)
+  const [minCalculado, setMinCalculado] = useState<number | null>(null)
+  const [calculandoRuta, setCalculandoRuta] = useState(false)
   const [motivoViaje, setMotivoViaje] = useState('')
   const [modoAdd, setModoAdd] = useState<null | 'cliente' | 'manual'>(null)
   const [busquedaCliente, setBusquedaCliente] = useState('')
@@ -293,14 +296,37 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
   const listo = !!fotoOdo && fotos360ok && !!fotoMarcador && !!kmInicio && !!combustible
 
-  // Tiempo estimado: 35 km/h promedio urbano con paradas
-  const kmNum = parseInt(kmRuta) || 0
-  const minTotales = kmNum ? Math.round(kmNum / 35 * 60) : 0
-  const tiempoLabel = minTotales === 0
-    ? '—'
-    : minTotales < 60
-      ? `${minTotales} min`
-      : `${Math.floor(minTotales / 60)}h${minTotales % 60 > 0 ? ` ${minTotales % 60}m` : ''}`
+  // km y tiempo finales: OSRM > planificado
+  const kmMostrado = kmCalculado ?? kmPlanificado
+  const minMostrado = minCalculado ?? (kmPlanificado ? Math.round(kmPlanificado / 35 * 60) : null)
+  const tiempoLabel = !minMostrado ? '—'
+    : minMostrado < 60 ? `${minMostrado} min`
+    : `${Math.floor(minMostrado / 60)}h${minMostrado % 60 > 0 ? ` ${minMostrado % 60}m` : ''}`
+
+  // Auto-calcular km vía OSRM cuando cambian las paradas
+  useEffect(() => {
+    const conCoords = paradas.filter(p => p.lat && p.lng)
+    if (conCoords.length < 2) {
+      setKmCalculado(null)
+      setMinCalculado(null)
+      return
+    }
+    const t = setTimeout(async () => {
+      setCalculandoRuta(true)
+      try {
+        const res = await fetch('/api/calcular-ruta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paradas }),
+        })
+        const data = await res.json()
+        if (data.km > 0) { setKmCalculado(data.km); setMinCalculado(data.minutos) }
+        else { setKmCalculado(null); setMinCalculado(null) }
+      } catch { setKmCalculado(null); setMinCalculado(null) }
+      finally { setCalculandoRuta(false) }
+    }, 700)
+    return () => clearTimeout(t)
+  }, [paradas]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const clientesFiltrados = busquedaCliente.trim().length > 0
     ? clientes.filter(c =>
@@ -353,7 +379,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   }
 
   function usarRutaPlanificada(r: Ruta) {
-    if (r.km_teoricos) setKmRuta(String(r.km_teoricos))
+    if (r.km_teoricos) setKmPlanificado(r.km_teoricos)
     setParadas(prev => {
       if (prev.some(p => p.id === r.id)) return prev
       return [...prev, { id: r.id, tipo: 'excel', nombre: r.nombre ?? 'Ruta del día', direccion: r.km_teoricos ? `${r.km_teoricos} km planificados` : 'Ruta asignada' }]
@@ -394,7 +420,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
         tipo: tipoViaje,
         motivo: motivoViaje.trim() || null,
         km_inicio: parseInt(kmInicio),
-        km_teoricos: kmRuta ? parseInt(kmRuta) : null,
+        km_teoricos: kmMostrado ?? null,
         destino_declarado: paradas.length > 0
           ? JSON.stringify(paradas.map(p => ({ n: p.nombre, d: p.direccion })))
           : motivoViaje.trim() || null,
@@ -616,32 +642,46 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                 onChange={e => { const f = e.target.files?.[0]; if (f) cargarExcel(f) }} />
             </div>
 
-            {/* Resumen de ruta */}
+            {/* Resumen de ruta — solo lectura, calculado automáticamente */}
             <div style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.07), rgba(249,115,22,0.02))', border: '1px solid rgba(249,115,22,0.18)', borderRadius: 14, padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-                <Navigation2 size={14} color={F} />
-                <p style={{ fontSize: 10, fontWeight: 700, color: F, letterSpacing: '1px', textTransform: 'uppercase' }}>Resumen de ruta</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Navigation2 size={14} color={F} />
+                  <p style={{ fontSize: 10, fontWeight: 700, color: F, letterSpacing: '1px', textTransform: 'uppercase' }}>Resumen de ruta</p>
+                </div>
+                {calculandoRuta && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: `2px solid ${F}`, borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Calculando…</span>
+                  </div>
+                )}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'end' }}>
-                <div>
-                  <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>Km estimados</p>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <input value={kmRuta} onChange={e => setKmRuta(e.target.value.replace(/\D/g, ''))}
-                      placeholder="0" type="text" inputMode="numeric"
-                      style={{ width: 72, padding: '8px 10px', borderRadius: 9, background: '#0D0D0D', border: `1px solid ${kmRuta ? F_BORDER : 'rgba(255,255,255,0.1)'}`, color: kmRuta ? F : '#F4EEDF', fontSize: 24, fontWeight: 900, outline: 'none', textAlign: 'center', letterSpacing: '-0.5px' }} />
-                    <span style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>km</span>
+              {kmMostrado ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 6 }}>Distancia total</p>
+                    <p style={{ fontSize: 32, fontWeight: 900, color: F, letterSpacing: '-1.5px', lineHeight: 1 }}>
+                      {kmMostrado}
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)', marginLeft: 4 }}>km</span>
+                    </p>
+                    {kmCalculado && <p style={{ fontSize: 9, color: '#4ADE80', marginTop: 3 }}>✓ Calculado por la app</p>}
+                    {!kmCalculado && kmPlanificado && <p style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3 }}>Ruta planificada</p>}
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Clock size={10} /> Tiempo estimado
+                    </p>
+                    <p style={{ fontSize: 28, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1px', lineHeight: 1 }}>
+                      {tiempoLabel}
+                    </p>
+                    <p style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3 }}>Incluye paradas</p>
                   </div>
                 </div>
-                <div>
-                  <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Clock size={10} /> Tiempo estimado
-                  </p>
-                  <p style={{ fontSize: 28, fontWeight: 900, color: minTotales > 0 ? '#F4EEDF' : 'rgba(255,255,255,0.2)', letterSpacing: '-1px', lineHeight: 1 }}>
-                    {tiempoLabel}
-                  </p>
-                  {kmNum > 0 && <p style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3 }}>a 35 km/h prom.</p>}
-                </div>
-              </div>
+              ) : (
+                <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '8px 0' }}>
+                  {calculandoRuta ? 'Calculando ruta…' : 'Agrega al menos 2 paradas verificadas para calcular km y tiempo'}
+                </p>
+              )}
             </div>
 
             {/* Notas / Motivo */}
