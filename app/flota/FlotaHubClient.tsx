@@ -262,15 +262,37 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
       </div>
 
       {/* KPIs */}
-      <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: isDesktop ? 10 : 8, marginBottom: isDesktop ? 28 : 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16 }}>
         {[
-          { label: 'Vehículos',   value: vehiculos.length, color: 'var(--cream)' },
-          { label: 'Disponibles', value: disponibles,      color: '#4ADE80' },
-          { label: 'En uso',      value: enUso,            color: '#F59E0B' },
+          { label: 'Vehículos',  sub: 'Totales',         value: vehiculos.length, color: F,        icon: <Truck size={18} color={F} />,        iconBg: F_DIM,                         img: '/vehicles/transit.jpg' },
+          { label: 'Disponibles',sub: 'Listos para salir',value: disponibles,     color: '#4ADE80', icon: <CheckCircle size={18} color="#4ADE80"/>, iconBg:'rgba(74,222,128,0.12)',     img: null },
+          { label: 'En uso',     sub: 'En operación',    value: enUso,            color: '#F59E0B', icon: <Clock size={18} color="#F59E0B" />,   iconBg:'rgba(245,158,11,0.12)',        img: null },
         ].map(k => (
-          <div key={k.label} style={{ background: 'var(--surface2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 12, padding: isDesktop ? '16px 14px' : '18px 10px', textAlign: 'center' }}>
-            <p style={{ fontSize: isDesktop ? 30 : 38, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: '-1.5px' }}>{k.value}</p>
-            <p style={{ fontSize: 9, color: 'var(--muted)', marginTop: 6, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>{k.label}</p>
+          <div key={k.label} style={{
+            position: 'relative', overflow: 'hidden',
+            background: 'var(--surface2)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: 16, padding: '14px 10px 12px',
+            textAlign: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+          }}>
+            {/* Imagen de fondo si aplica */}
+            {k.img && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={k.img} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center', opacity:0.18 }} />
+                <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.5))' }} />
+              </>
+            )}
+            {/* Ícono */}
+            <div style={{ position:'relative', width:36, height:36, borderRadius:'50%', background:k.iconBg, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:2 }}>
+              {k.icon}
+            </div>
+            {/* Número */}
+            <p style={{ position:'relative', fontSize: 36, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: '-1.5px', margin: 0 }}>{k.value}</p>
+            {/* Etiqueta */}
+            <p style={{ position:'relative', fontSize: 8, color: k.color, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.8px', margin: 0, opacity: 0.9 }}>{k.label}</p>
+            <p style={{ position:'relative', fontSize: 9, color: 'var(--muted)', margin: 0 }}>{k.sub}</p>
           </div>
         ))}
       </div>
