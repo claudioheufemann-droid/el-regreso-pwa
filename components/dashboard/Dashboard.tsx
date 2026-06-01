@@ -255,6 +255,45 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     }
   }, [refreshTasks])
 
+  // ── Deep link: abrir tarea desde notificación push (?task=<id>) ──
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const taskId = params.get('task')
+    if (!taskId) return
+
+    // Limpiar el badge del ícono
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_BADGE' })
+    }
+    if ('clearAppBadge' in navigator) {
+      (navigator as Navigator & { clearAppBadge: () => Promise<void> }).clearAppBadge().catch(() => {})
+    }
+
+    // Buscar la tarea en el estado local primero
+    const found = tasks.find(t => t.id === taskId)
+    if (found) {
+      setSelectedTask(found)
+      // Limpiar el param de la URL sin recargar
+      const url = new URL(window.location.href)
+      url.searchParams.delete('task')
+      window.history.replaceState({}, '', url.toString())
+      return
+    }
+
+    // Si no está en estado local, fetchearla
+    fetch(`/api/tasks?id=${taskId}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        const task = Array.isArray(data) ? data.find((t: { id: string }) => t.id === taskId) : data
+        if (task) setSelectedTask(task)
+      })
+      .catch(() => {})
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete('task')
+    window.history.replaceState({}, '', url.toString())
+  }, [tasks])
+
   // ── Filter view config ──
   const filterMap: Record<FilterKey, { label: string; color: string; items: RcTask[] }> = {
     activas:      { label: 'Tareas Activas', color: 'var(--cream)', items: activeTasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada') },

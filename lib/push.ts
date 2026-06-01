@@ -20,6 +20,7 @@ export interface PushPayload {
   body: string
   url?: string
   tag?: string
+  taskId?: string   // ← deep link directo a la tarea
   requireInteraction?: boolean
 }
 

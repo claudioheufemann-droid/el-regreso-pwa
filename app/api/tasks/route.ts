@@ -196,7 +196,7 @@ export async function PATCH(req: NextRequest) {
     sendPushToAllAdmins({
       title: '⭐ Tarea lista para aprobar',
       body: data.titulo,
-      url: '/',
+      taskId: data.id,
       tag: `review-${data.id}`,
       requireInteraction: true,
     }).catch(() => {})
@@ -213,7 +213,7 @@ export async function PATCH(req: NextRequest) {
     sendPushToUser(data.responsable_id, {
       title: isApproved ? '✅ Tarea aprobada' : '❌ Tarea rechazada',
       body: data.titulo,
-      url: '/',
+      taskId: data.id,
       tag: `status-${data.id}`,
     }).catch(() => {})
 

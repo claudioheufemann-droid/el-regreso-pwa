@@ -58,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     sendPushToUser(task.responsable_id, {
       title: `💬 Nuevo comentario`,
       body: `${profile.nombre}: "${texto.trim().slice(0, 80)}"`,
-      url: '/',
+      taskId: id,
       tag: `comment-${id}`,
     }).catch(() => {})
 
