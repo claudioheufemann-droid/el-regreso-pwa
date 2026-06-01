@@ -3,24 +3,55 @@ import './globals.css'
 import Providers from '@/components/Providers'
 import { getServerUser } from '@/lib/auth'
 
+const APP_NAME = 'El Regreso Control'
+const APP_DESCRIPTION = 'Plataforma de gestión y ventas · Cervecería El Regreso'
+
 export const metadata: Metadata = {
-  title: 'El Regreso – Control',
-  description: 'Plataforma de gestión y ventas · Cervecería El Regreso',
+  applicationName: APP_NAME,
+  title: { default: APP_NAME, template: `%s · El Regreso` },
+  description: APP_DESCRIPTION,
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'El Regreso',
+  },
+  formatDetection: { telephone: false },
+  icons: {
+    icon: [
+      { url: '/favicon-32x32.png',        sizes: '32x32',   type: 'image/png' },
+      { url: '/icons/icon-192x192.png',   sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png',   sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  themeColor: '#0F0F0F',
+  userScalable: false,
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)',  color: '#0A0A0A' },
+    { media: '(prefers-color-scheme: light)', color: '#D4AF37' },
+  ],
+  viewportFit: 'cover',
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // getServerUser returns null gracefully — no redirect, no crash
   const user = await getServerUser()
 
   return (
     <html lang="es">
+      <head>
+        {/* PWA iOS */}
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="El Regreso" />
+        <link rel="apple-touch-startup-image" href="/icons/icon-512x512.png" />
+      </head>
       <body className="min-h-screen">
         <Providers initialUser={user}>
           {children}

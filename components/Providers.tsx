@@ -3,6 +3,7 @@
 import { UserProvider } from '@/lib/userContext'
 import type { AppUser } from '@/lib/auth'
 import type { ReactNode } from 'react'
+import InstallPWA from '@/components/ui/InstallPWA'
 
 export default function Providers({
   children,
@@ -11,5 +12,10 @@ export default function Providers({
   children: ReactNode
   initialUser: AppUser | null
 }) {
-  return <UserProvider initialUser={initialUser}>{children}</UserProvider>
+  return (
+    <UserProvider initialUser={initialUser}>
+      {children}
+      <InstallPWA />
+    </UserProvider>
+  )
 }
