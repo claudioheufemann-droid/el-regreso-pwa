@@ -564,13 +564,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
               onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#9CA3AF' }}>
               Cancelar
             </button>
-            <button type="button" onClick={() => handleSubmit(true)} disabled={savingDraft||loading}
-              style={{ padding: '10px 22px', borderRadius: 10, cursor: 'pointer', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, color: '#D1D5DB', fontWeight: 600, opacity: savingDraft ? 0.6 : 1 }}
-              onMouseEnter={e => (e.currentTarget.style.background='rgba(255,255,255,0.09)')}
-              onMouseLeave={e => (e.currentTarget.style.background='rgba(255,255,255,0.05)')}>
-              {savingDraft ? 'Guardando...' : 'Guardar borrador'}
-            </button>
-            <button type="button" onClick={() => handleSubmit(false)} disabled={!canSubmit||loading||savingDraft}
+            <button type="button" onClick={() => handleSubmit(false)} disabled={!canSubmit||loading}
               style={{ padding: '10px 28px', borderRadius: 10, cursor: canSubmit ? 'pointer' : 'not-allowed', background: canSubmit ? `linear-gradient(135deg,${cfg.color},${cfg.color}CC)` : 'rgba(107,114,128,0.15)', border: 'none', fontSize: 13, fontWeight: 800, color: canSubmit ? '#0A0A0A' : '#6B7280', display: 'flex', alignItems: 'center', gap: 7, opacity: loading ? 0.7 : 1, boxShadow: canSubmit ? `0 4px 20px ${cfg.color}40` : 'none', transition: 'all 0.2s' }}>
               <span>✓</span>{loading ? 'Creando...' : `Crear tarea${selectedIds.length > 1 ? ` (${selectedIds.length})` : ''}`}
             </button>
