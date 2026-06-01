@@ -643,43 +643,43 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
 
-      {/* Topbar */}
-      <div className="safe-top" style={{ display: 'flex', alignItems: 'center', padding: '8px 16px', gap: 10, background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <Logo size={30} />
+      {/* Topbar — más espacioso */}
+      <div className="safe-top" style={{ display: 'flex', alignItems: 'center', padding: '14px 16px 12px', gap: 14, background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <Logo size={36} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--cream)', letterSpacing: 0.2, lineHeight: 1.1 }}>Gestión</div>
+          <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--cream)', letterSpacing: 0.2, lineHeight: 1.2 }}>Gestión</div>
           {currentMacroArea ? (() => {
             const mac = Object.entries(MACRO_AREAS).find(([k]) => k === currentMacroArea)
-            if (!mac) return <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 0.3 }}>El Regreso</div>
+            if (!mac) return <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: 0.3, marginTop: 2 }}>El Regreso</div>
             const [, macData] = mac
             return (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: 10, height: 10, borderRadius: 3, background: macData.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 9, fontWeight: 700, color: macData.color, letterSpacing: 0.5 }}>{macData.label}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 4, background: macData.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 10, fontWeight: 700, color: macData.color, letterSpacing: 0.5 }}>{macData.label}</span>
               </div>
             )
-          })() : <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 0.3 }}>El Regreso</div>}
+          })() : <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: 0.3, marginTop: 2 }}>El Regreso</div>}
         </div>
         {(atrasadas + porAprobar) > 0 && (
-          <div className="pulse" style={{ flexShrink: 0, padding: '3px 8px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#FF4444' }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#FF7070' }}>{atrasadas + porAprobar}</span>
+          <div className="pulse" style={{ flexShrink: 0, padding: '6px 10px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#FF4444' }} />
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#FF7070' }}>{atrasadas + porAprobar}</span>
           </div>
         )}
         <button onClick={refreshTasks} className="touch-active" title="Actualizar"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px 6px', color: 'var(--muted)', fontSize: 15, lineHeight: 1, flexShrink: 0 }}>
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 8px', color: 'var(--muted)', fontSize: 18, lineHeight: 1, flexShrink: 0, borderRadius: 8 }}>
           ↻
         </button>
         <a href="/" title="Módulos"
-          style={{ background: 'rgba(128,128,128,0.07)', border: '1px solid rgba(128,128,128,0.12)', borderRadius: 8, padding: '5px 8px', color: 'var(--muted)', fontSize: 13, textDecoration: 'none', flexShrink: 0, lineHeight: 1 }}>
+          style={{ background: 'rgba(128,128,128,0.07)', border: '1px solid rgba(128,128,128,0.12)', borderRadius: 10, padding: '8px 10px', color: 'var(--muted)', fontSize: 16, textDecoration: 'none', flexShrink: 0, lineHeight: 1 }}>
           ⌂
         </a>
         <div
           onClick={() => setShowSettings(true)}
           className="touch-active"
-          style={{ width: 32, height: 32, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#0A0A0A', flexShrink: 0, cursor: 'pointer', position: 'relative' }}>
+          style={{ width: 40, height: 40, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#0A0A0A', flexShrink: 0, cursor: 'pointer', position: 'relative' }}>
           {initials}
-          {isAdmin && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 11, height: 11, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6 }}>★</div>}
+          {isAdmin && <div style={{ position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: '50%', background: 'var(--surface)', border: '1.5px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8 }}>★</div>}
         </div>
       </div>
 
