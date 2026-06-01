@@ -3,30 +3,31 @@
 // Usado por /api/misiones (generar) y /api/misiones/cron.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type VolAgg = { volumen_promedio: number; litros_ultima_compra: number }
+export type VolAgg = { volumen_promedio: number; litros_ultima_compra: number; fecha_ultima_compra: string | null }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any
 
+// Nº de pedidos recientes considerados para el volumen promedio
+const ULTIMOS_PEDIDOS = 8
+
 /**
- * Calcula volumen promedio por pedido y litros del último pedido, por cliente.
- * Ventana acotada (últimos `dias`) para mantener el costo bajo.
+ * Calcula, mirando TODO el histórico de cada cliente:
+ *   - litros y fecha del ÚLTIMO pedido real (sin importar cuánto tiempo atrás)
+ *   - volumen promedio de sus últimos pedidos (recencia, no diluido por años)
+ * Recorre las ventas ordenadas por fecha DESC y se queda con los pedidos más
+ * recientes de cada cliente, así que captura el último pedido aunque sea antiguo.
  */
 export async function calcularVolumen(
   supabase: SupabaseLike,
   nombres: string[],
-  dias = 150,
 ): Promise<Map<string, VolAgg>> {
   const out = new Map<string, VolAgg>()
   if (!nombres.length) return out
 
-  const desde = new Date(); desde.setDate(desde.getDate() - dias)
-  const desdeStr = desde.toISOString().split('T')[0]
-
-  // pedido → { fecha, litros } por cliente
+  // pedido → litros (agrupado), por cliente — solo los más recientes
   const porCliente = new Map<string, Map<string, { fecha: string; litros: number }>>()
 
-  // Procesar en lotes de nombres para no exceder límites de la cláusula IN
   const LOTE = 200
   for (let i = 0; i < nombres.length; i += LOTE) {
     const sub = nombres.slice(i, i + LOTE)
@@ -36,31 +37,38 @@ export async function calcularVolumen(
         .from('ventas')
         .select('nombre_fantasia, litros, pedido, fecha_pedido')
         .in('nombre_fantasia', sub)
-        .gte('fecha_pedido', desdeStr)
+        .order('fecha_pedido', { ascending: false }) // más reciente primero → histórico completo
         .range(offset, offset + 999)
       if (!data || data.length === 0) break
+
+      let todosCompletos = true
       for (const v of data as { nombre_fantasia: string | null; litros: number | null; pedido: string | null; fecha_pedido: string }[]) {
         if (!v.nombre_fantasia) continue
         if (!porCliente.has(v.nombre_fantasia)) porCliente.set(v.nombre_fantasia, new Map())
-        const pedKey = v.pedido ?? `${v.fecha_pedido}`
         const m = porCliente.get(v.nombre_fantasia)!
+        const pedKey = v.pedido ?? `${v.fecha_pedido}`
+        // Ya tenemos suficientes pedidos recientes de este cliente: ignorar el resto
+        if (!m.has(pedKey) && m.size >= ULTIMOS_PEDIDOS) continue
         const prev = m.get(pedKey)
         m.set(pedKey, { fecha: v.fecha_pedido, litros: (prev?.litros ?? 0) + (v.litros ?? 0) })
+        if (m.size < ULTIMOS_PEDIDOS) todosCompletos = false
       }
+      // Si toda la página ya era de clientes "completos" y no es la primera, podemos parar
       if (data.length < 1000) break
+      if (todosCompletos && offset > 0) break
       offset += 1000
     }
   }
 
   for (const [nombre, pedidos] of porCliente) {
-    const arr = [...pedidos.values()]
+    const arr = [...pedidos.values()].sort((a, b) => (a.fecha < b.fecha ? 1 : -1)) // desc
     if (!arr.length) continue
+    const ultimo = arr[0] // el más reciente = última compra real (histórico)
     const totalLitros = arr.reduce((s, p) => s + p.litros, 0)
-    const volumen_promedio = totalLitros / arr.length
-    const ultimo = arr.reduce((a, b) => (a.fecha >= b.fecha ? a : b))
     out.set(nombre, {
-      volumen_promedio: Math.round(volumen_promedio * 10) / 10,
+      volumen_promedio: Math.round((totalLitros / arr.length) * 10) / 10,
       litros_ultima_compra: Math.round(ultimo.litros * 10) / 10,
+      fecha_ultima_compra: ultimo.fecha,
     })
   }
   return out
