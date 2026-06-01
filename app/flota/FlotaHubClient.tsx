@@ -264,32 +264,35 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16 }}>
         {[
-          { label: 'Vehículos',  sub: 'Totales',         value: vehiculos.length, color: F,        icon: <Truck size={18} color={F} />,        iconBg: F_DIM,                         img: '/vehicles/transit.jpg' },
-          { label: 'Disponibles',sub: 'Listos para salir',value: disponibles,     color: '#4ADE80', icon: <CheckCircle size={18} color="#4ADE80"/>, iconBg:'rgba(74,222,128,0.12)',     img: null },
-          { label: 'En uso',     sub: 'En operación',    value: enUso,            color: '#F59E0B', icon: <Clock size={18} color="#F59E0B" />,   iconBg:'rgba(245,158,11,0.12)',        img: null },
+          { label: 'Vehículos',   sub: 'Totales',          value: vehiculos.length, color: F,         rgb: '249,115,22',  icon: <Truck size={18} color={F} />,           img: '/vehicles/transit.jpg' },
+          { label: 'Disponibles', sub: 'Listos para salir', value: disponibles,      color: '#4ADE80',  rgb: '74,222,128',  icon: <CheckCircle size={18} color="#4ADE80"/>, img: null },
+          { label: 'En uso',      sub: 'En operación',      value: enUso,            color: '#F59E0B',  rgb: '245,158,11',  icon: <Clock size={18} color="#F59E0B" />,      img: null },
         ].map(k => (
           <div key={k.label} style={{
             position: 'relative', overflow: 'hidden',
-            background: 'var(--surface2)',
-            border: '1px solid rgba(255,255,255,0.06)',
+            background: `linear-gradient(160deg, rgba(${k.rgb},0.10) 0%, rgba(${k.rgb},0.04) 60%, transparent 100%)`,
+            border: `1px solid rgba(${k.rgb},0.22)`,
             borderRadius: 16, padding: '14px 10px 12px',
             textAlign: 'center',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            backdropFilter: 'blur(6px)',
           }}>
             {/* Imagen de fondo si aplica */}
             {k.img && (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={k.img} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center', opacity:0.18 }} />
-                <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.5))' }} />
+                <img src={k.img} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center', opacity:0.12 }} />
+                <div style={{ position:'absolute', inset:0, background:`linear-gradient(160deg, rgba(${k.rgb},0.35), rgba(0,0,0,0.6))` }} />
               </>
             )}
+            {/* Glow esquina superior */}
+            <div style={{ position:'absolute', top:-20, left:'50%', transform:'translateX(-50%)', width:60, height:60, borderRadius:'50%', background:`radial-gradient(circle, rgba(${k.rgb},0.18), transparent 70%)`, pointerEvents:'none' }} />
             {/* Ícono */}
-            <div style={{ position:'relative', width:36, height:36, borderRadius:'50%', background:k.iconBg, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:2 }}>
+            <div style={{ position:'relative', width:36, height:36, borderRadius:'50%', background:`rgba(${k.rgb},0.14)`, border:`1px solid rgba(${k.rgb},0.25)`, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:2 }}>
               {k.icon}
             </div>
             {/* Número */}
-            <p style={{ position:'relative', fontSize: 36, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: '-1.5px', margin: 0 }}>{k.value}</p>
+            <p style={{ position:'relative', fontSize: 36, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: '-1.5px', margin: 0, textShadow:`0 0 20px rgba(${k.rgb},0.4)` }}>{k.value}</p>
             {/* Etiqueta */}
             <p style={{ position:'relative', fontSize: 8, color: k.color, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.8px', margin: 0, opacity: 0.9 }}>{k.label}</p>
             <p style={{ position:'relative', fontSize: 9, color: 'var(--muted)', margin: 0 }}>{k.sub}</p>
