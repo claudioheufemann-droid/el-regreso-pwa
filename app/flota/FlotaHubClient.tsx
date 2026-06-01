@@ -305,16 +305,26 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
               display: 'flex', alignItems: 'stretch',
             }}>
               {/* ── FOTO IZQUIERDA ── */}
-              <div style={{ width: 110, flexShrink: 0, position: 'relative', background: '#0a0a0f', overflow: 'hidden' }}>
-                <VehiclePhoto nombre={v.nombre} tipo={v.tipo} />
-                {/* overlay fade derecha para fusionar con el contenido */}
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, transparent 50%, var(--surface2) 100%)' }} />
-                {/* overlay oscuro sutil */}
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)' }} />
-                {/* SVG fallback si no hay foto */}
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
-                  {getVehicleArt(v.nombre, v.tipo)}
-                </div>
+              <div style={{ width: 115, flexShrink: 0, position: 'relative', background: '#080810', overflow: 'hidden' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={
+                    (() => {
+                      const n = (v.nombre + v.tipo).toLowerCase()
+                      if (n.includes('porter') || n.includes('nqr') || n.includes('npr') || n.includes('camion') || n.includes('camión')) return '/vehicles/porter.jpg'
+                      if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup')) return '/vehicles/ranger.jpg'
+                      return '/vehicles/transit.jpg'
+                    })()
+                  }
+                  alt={v.nombre}
+                  style={{
+                    position: 'absolute', inset: 0,
+                    width: '100%', height: '100%',
+                    objectFit: 'cover', objectPosition: 'center',
+                  }}
+                />
+                {/* fade sutil hacia la derecha */}
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.15) 0%, rgba(8,8,16,0.55) 100%)' }} />
               </div>
 
               {/* ── CONTENIDO DERECHA ── */}
