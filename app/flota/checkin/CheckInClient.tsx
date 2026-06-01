@@ -655,8 +655,10 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                   </div>
                 )}
               </div>
+
+              {/* Km y tiempo */}
               {kmMostrado ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
                   <div>
                     <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 6 }}>Distancia total</p>
                     <p style={{ fontSize: 32, fontWeight: 900, color: F, letterSpacing: '-1.5px', lineHeight: 1 }}>
@@ -676,10 +678,40 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                     <p style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3 }}>Incluye paradas</p>
                   </div>
                 </div>
-              ) : (
-                <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '8px 0' }}>
-                  {calculandoRuta ? 'Calculando ruta…' : 'Agrega al menos 2 paradas verificadas para calcular km y tiempo'}
+              ) : !calculandoRuta && paradas.length < 2 && (
+                <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>
+                  Agrega 2 o más paradas para calcular km y tiempo automáticamente
                 </p>
+              )}
+
+              {/* Botón Google Maps — siempre visible si hay paradas */}
+              {paradas.length > 0 && (
+                <a
+                  href={(() => {
+                    const base = encodeURIComponent('El Regreso Beer, Valdivia, Chile')
+                    const stops = paradas.map(p => {
+                      if (p.lat && p.lng) return `${p.lat},${p.lng}`
+                      const dir = p.direccion || p.nombre
+                      return encodeURIComponent(dir.toLowerCase().includes('valdivia') ? dir : `${dir}, Valdivia, Chile`)
+                    }).join('/')
+                    return `https://www.google.com/maps/dir/${base}/${stops}/${base}`
+                  })()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '11px 14px', borderRadius: 10,
+                    background: 'rgba(66,133,244,0.12)',
+                    border: '1px solid rgba(66,133,244,0.3)',
+                    color: '#6BA3F5', fontSize: 13, fontWeight: 700,
+                    textDecoration: 'none', width: '100%', boxSizing: 'border-box',
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6BA3F5"/>
+                  </svg>
+                  Ver ruta en Google Maps
+                </a>
               )}
             </div>
 
