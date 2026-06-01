@@ -2,7 +2,10 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Truck, Camera, CheckCircle, ChevronLeft, MapPin, Package, AlertTriangle } from 'lucide-react'
+import {
+  Truck, Camera, CheckCircle, ChevronLeft, MapPin, Clock,
+  AlertTriangle, Plus, X, FileSpreadsheet, Navigation2, Search,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
@@ -19,13 +22,12 @@ const NIVELES_COMB = [
   { value: 'vacio',        label: 'Vacío',   fill: 0, color: '#6B0000' },
 ] as const
 
-// Muestra el nivel detectado + botón para corregir manualmente
 function NivelDetectado({ nivel, onCorregir }: { nivel: string; onCorregir: () => void }) {
   const n = NIVELES_COMB.find(x => x.value === nivel) ?? NIVELES_COMB[2]
   return (
     <div style={{ background: `${n.color}12`, border: `1px solid ${n.color}40`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
       <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 28, flexShrink: 0 }}>
-        {[1, 2, 3, 4, 5, 6].map(bar => (
+        {[1,2,3,4,5,6].map(bar => (
           <div key={bar} style={{ width: 7, height: 5 + bar * 3.2, borderRadius: 2, background: bar <= n.fill ? n.color : 'rgba(255,255,255,0.1)' }} />
         ))}
       </div>
@@ -40,14 +42,13 @@ function NivelDetectado({ nivel, onCorregir }: { nivel: string; onCorregir: () =
   )
 }
 
-// Selector manual de combustible (solo visible al corregir o si la IA falla)
 function SelectorManual({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6, marginBottom: 16 }}>
       {NIVELES_COMB.map(n => (
         <div key={n.value} onClick={() => onChange(n.value)} style={{ cursor: 'pointer', borderRadius: 10, padding: '10px 4px 8px', background: value === n.value ? `${n.color}20` : '#1C1C1C', border: `2px solid ${value === n.value ? n.color : 'rgba(255,255,255,0.06)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
           <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 22 }}>
-            {[1, 2, 3, 4, 5, 6].map(bar => (
+            {[1,2,3,4,5,6].map(bar => (
               <div key={bar} style={{ width: 5, height: 4 + bar * 2.8, borderRadius: 1.5, background: bar <= n.fill ? n.color : 'rgba(255,255,255,0.1)' }} />
             ))}
           </div>
@@ -56,6 +57,13 @@ function SelectorManual({ value, onChange }: { value: string; onChange: (v: stri
       ))}
     </div>
   )
+}
+
+interface Parada {
+  id: string
+  tipo: 'cliente' | 'manual' | 'excel'
+  nombre: string
+  direccion: string
 }
 
 interface Vehiculo { id: string; nombre: string; tipo: string; patente: string | null; km_actual: number; estado: string; combustible: string | null }
@@ -80,8 +88,7 @@ function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji
   return (
     <div onClick={() => ref.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 12px', borderRadius: 10, cursor: 'pointer', flexShrink: 0, background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `1px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.08)'}` }}>
       <input ref={ref} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(URL.createObjectURL(f), f) }}
-      />
+        onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(URL.createObjectURL(f), f) }} />
       <span style={{ fontSize: 15 }}>{capturada ? '✅' : emoji}</span>
       <span style={{ fontSize: 12, fontWeight: 700, color: capturada ? '#4ADE80' : 'var(--muted)', flex: 1 }}>{label}</span>
       {!capturada && <Camera size={13} color="var(--muted)" />}
@@ -111,39 +118,27 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   const [paso, setPaso] = useState(1)
   const [guardando, setGuardando] = useState(false)
 
+  // Paso 1
   const [vehiculo, setVehiculo] = useState<Vehiculo | null>(null)
-  const [tipoSalida, setTipoSalida] = useState<'reparto' | 'tramite' | null>(null)
-  const [rutaId, setRutaId] = useState<string | null>(null)
-  const [motivo, setMotivo] = useState('')
-  const [destino, setDestino] = useState('')
-  const [clienteSearch, setClienteSearch] = useState('')
-  const [showClienteSuggestions, setShowClienteSuggestions] = useState(false)
 
-  const clientesFiltrados = clienteSearch.trim().length > 0
-    ? clientes.filter(c =>
-        c.nombre_fantasia.toLowerCase().includes(clienteSearch.toLowerCase()) ||
-        (c.localidad ?? '').toLowerCase().includes(clienteSearch.toLowerCase())
-      ).slice(0, 6)
-    : []
+  // Paso 2 — ruta unificada
+  const [tipoViaje, setTipoViaje] = useState<'reparto' | 'tramite'>('reparto')
+  const [paradas, setParadas] = useState<Parada[]>([])
+  const [kmRuta, setKmRuta] = useState('')
+  const [motivoViaje, setMotivoViaje] = useState('')
+  const [modoAdd, setModoAdd] = useState<null | 'cliente' | 'manual'>(null)
+  const [busquedaCliente, setBusquedaCliente] = useState('')
+  const [inputDireccion, setInputDireccion] = useState('')
+  const [cargandoExcel, setCargandoExcel] = useState(false)
+  const excelRef = useRef<HTMLInputElement>(null)
 
-  function seleccionarCliente(c: ClienteFlota) {
-    const dir = [c.nombre_fantasia, c.direccion, c.localidad].filter(Boolean).join(' — ')
-    setDestino(dir)
-    setClienteSearch(c.nombre_fantasia)
-    setShowClienteSuggestions(false)
-  }
-
-  // Fotos
+  // Paso 3
   const [fotoOdo, setFotoOdo] = useState('')
   const [fotos360, setFotos360] = useState<Record<string, string>>({})
   const [fotoMarcador, setFotoMarcador] = useState('')
-
-  // KM — auto-llenado por IA
   const [kmInicio, setKmInicio] = useState('')
   const [analizandoOdo, setAnalizandoOdo] = useState(false)
   const [kmLeido, setKmLeido] = useState<string | null>(null)
-
-  // Combustible — determinado por IA, sin selector visible por defecto
   const [combustible, setCombustible] = useState('')
   const [analizandoComb, setAnalizandoComb] = useState(false)
   const [nivelDetectado, setNivelDetectado] = useState<string | null>(null)
@@ -155,80 +150,136 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
   const listo = !!fotoOdo && fotos360ok && !!fotoMarcador && !!kmInicio && !!combustible
 
-  // ── Análisis IA: Odómetro ────────────────────────────────────────────────────
-  async function analizarOdometro(file: File) {
-    setAnalizandoOdo(true)
-    setKmLeido(null)
+  // Tiempo estimado: 35 km/h promedio urbano con paradas
+  const kmNum = parseInt(kmRuta) || 0
+  const minTotales = kmNum ? Math.round(kmNum / 35 * 60) : 0
+  const tiempoLabel = minTotales === 0
+    ? '—'
+    : minTotales < 60
+      ? `${minTotales} min`
+      : `${Math.floor(minTotales / 60)}h${minTotales % 60 > 0 ? ` ${minTotales % 60}m` : ''}`
+
+  const clientesFiltrados = busquedaCliente.trim().length > 0
+    ? clientes.filter(c =>
+        c.nombre_fantasia.toLowerCase().includes(busquedaCliente.toLowerCase()) ||
+        (c.localidad ?? '').toLowerCase().includes(busquedaCliente.toLowerCase())
+      ).slice(0, 6)
+    : []
+
+  function agregarCliente(c: ClienteFlota) {
+    setParadas(prev => [...prev, {
+      id: Math.random().toString(36).slice(2),
+      tipo: 'cliente',
+      nombre: c.nombre_fantasia,
+      direccion: [c.direccion, c.localidad].filter(Boolean).join(', '),
+    }])
+    setBusquedaCliente('')
+    setModoAdd(null)
+  }
+
+  function agregarDireccionManual() {
+    if (!inputDireccion.trim()) return
+    setParadas(prev => [...prev, {
+      id: Math.random().toString(36).slice(2),
+      tipo: 'manual',
+      nombre: inputDireccion.trim(),
+      direccion: inputDireccion.trim(),
+    }])
+    setInputDireccion('')
+    setModoAdd(null)
+  }
+
+  async function cargarExcel(file: File) {
+    setCargandoExcel(true)
     try {
-      const base64 = await fileToBase64(file)
-      const res = await fetch('/api/analizar-odometro', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagen: base64, tipo: file.type }),
-      })
-      const { km } = await res.json()
-      if (km) { setKmInicio(String(km)); setKmLeido(String(km)) }
+      const XLSX = await import('xlsx')
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf)
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+      const nuevas: Parada[] = rows.flatMap(row => {
+        const keys = Object.keys(row)
+        const nKey = keys.find(k => /nombre|cliente|raz[oó]n|fantasia|negocio|local/i.test(k)) ?? keys[0]
+        const dKey = keys.find(k => /direc|calle|address|ubicaci[oó]n/i.test(k)) ?? (keys[1] ?? null)
+        const lKey = keys.find(k => /localidad|ciudad|sector|comuna/i.test(k))
+        const nombre = String(row[nKey] ?? '').trim()
+        const dir = dKey ? String(row[dKey] ?? '').trim() : ''
+        const loc = lKey ? String(row[lKey] ?? '').trim() : ''
+        const direccion = [dir, loc].filter(Boolean).join(', ')
+        if (!nombre && !dir) return []
+        return [{ id: Math.random().toString(36).slice(2), tipo: 'excel' as const, nombre: nombre || dir, direccion: direccion || nombre }]
+      }).slice(0, 60)
+      if (nuevas.length > 0) setParadas(prev => [...prev, ...nuevas])
+      if (excelRef.current) excelRef.current.value = ''
     } catch { /* silently fail */ } finally {
-      setAnalizandoOdo(false)
+      setCargandoExcel(false)
     }
   }
 
-  // ── Análisis IA: Combustible ─────────────────────────────────────────────────
-  async function analizarCombustible(file: File) {
-    setAnalizandoComb(true)
-    setNivelDetectado(null)
-    setIaFalloComb(false)
-    setMostrarSelectorComb(false)
+  function usarRutaPlanificada(r: Ruta) {
+    if (r.km_teoricos) setKmRuta(String(r.km_teoricos))
+    setParadas(prev => {
+      if (prev.some(p => p.id === r.id)) return prev
+      return [...prev, { id: r.id, tipo: 'excel', nombre: r.nombre ?? 'Ruta del día', direccion: r.km_teoricos ? `${r.km_teoricos} km planificados` : 'Ruta asignada' }]
+    })
+    setTipoViaje('reparto')
+  }
+
+  async function analizarOdometro(file: File) {
+    setAnalizandoOdo(true); setKmLeido(null)
     try {
       const base64 = await fileToBase64(file)
-      const res = await fetch('/api/analizar-combustible', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagen: base64, tipo: file.type }),
-      })
+      const res = await fetch('/api/analizar-odometro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagen: base64, tipo: file.type }) })
+      const { km } = await res.json()
+      if (km) { setKmInicio(String(km)); setKmLeido(String(km)) }
+    } catch { /* silently fail */ } finally { setAnalizandoOdo(false) }
+  }
+
+  async function analizarCombustible(file: File) {
+    setAnalizandoComb(true); setNivelDetectado(null); setIaFalloComb(false); setMostrarSelectorComb(false)
+    try {
+      const base64 = await fileToBase64(file)
+      const res = await fetch('/api/analizar-combustible', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagen: base64, tipo: file.type }) })
       const { nivel } = await res.json()
-      if (nivel) {
-        setCombustible(nivel)
-        setNivelDetectado(nivel)
-      } else {
-        setIaFalloComb(true)
-        setMostrarSelectorComb(true)
-      }
-    } catch {
-      setIaFalloComb(true)
-      setMostrarSelectorComb(true)
-    } finally {
-      setAnalizandoComb(false)
-    }
+      if (nivel) { setCombustible(nivel); setNivelDetectado(nivel) }
+      else { setIaFalloComb(true); setMostrarSelectorComb(true) }
+    } catch { setIaFalloComb(true); setMostrarSelectorComb(true) }
+    finally { setAnalizandoComb(false) }
   }
 
   async function confirmar() {
-    if (!vehiculo || !tipoSalida || !listo) return
+    if (!vehiculo || !listo) return
     setGuardando(true)
     try {
-      const km = parseInt(kmInicio)
-      const rutaSeleccionada = rutasHoy.find(r => r.id === rutaId)
       await supabase.from('viajes_flota').insert({
         vehiculo_id: vehiculo.id,
         conductor_id: user.id,
-        ruta_id: rutaId ?? null,
-        tipo: tipoSalida,
-        motivo: tipoSalida === 'tramite' ? motivo : null,
-        km_inicio: km,
-        km_teoricos: rutaSeleccionada?.km_teoricos ?? null,
-        destino_declarado: tipoSalida === 'tramite' ? destino.trim() || null : null,
+        ruta_id: null,
+        tipo: tipoViaje,
+        motivo: motivoViaje.trim() || null,
+        km_inicio: parseInt(kmInicio),
+        km_teoricos: kmRuta ? parseInt(kmRuta) : null,
+        destino_declarado: paradas.length > 0
+          ? JSON.stringify(paradas.map(p => ({ n: p.nombre, d: p.direccion })))
+          : motivoViaje.trim() || null,
         estado: 'en_curso',
       })
       await supabase.from('vehiculos').update({ estado: 'en_uso', combustible }).eq('id', vehiculo.id)
-      if (rutaId) await supabase.from('rutas_reparto').update({ estado: 'en_curso' }).eq('id', rutaId)
       router.push('/flota')
-    } finally {
-      setGuardando(false)
-    }
+    } finally { setGuardando(false) }
   }
 
+  const paso2Ok = tipoViaje === 'reparto' || motivoViaje.trim().length > 0
   const totalPasos = 3
-  const pasoLabel = ['', 'Vehículo', 'Tipo de salida', 'Documentación'][paso]
+  const pasoLabel = ['', 'Vehículo', 'Ruta', 'Documentación'][paso]
+
+  const addBtnStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+    padding: '11px 8px', borderRadius: 10,
+    border: '1px solid rgba(255,255,255,0.08)',
+    background: '#161616', color: 'var(--muted)',
+    fontSize: 12, fontWeight: 700, cursor: 'pointer',
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
@@ -282,87 +333,205 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
         </div>
       )}
 
-      {/* ── Paso 2: Tipo de salida ─────────────────────────────────────────── */}
+      {/* ── Paso 2: Ruta unificada ─────────────────────────────────────────── */}
       {paso === 2 && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 }}>Tipo de salida</p>
-            <div onClick={() => setTipoSalida('reparto')} style={{ padding: '16px', borderRadius: 14, cursor: 'pointer', marginBottom: 10, background: tipoSalida === 'reparto' ? F_DIM : '#1C1C1C', border: `2px solid ${tipoSalida === 'reparto' ? F : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: F_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <MapPin size={18} color={F} />
-              </div>
-              <div>
-                <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF', marginBottom: 3 }}>A. Salida Planificada</p>
-                <p style={{ fontSize: 12, color: 'var(--muted)' }}>Reparto con ruta asignada por el encargado</p>
-                {rutasVehiculo.length > 0 && tipoSalida === 'reparto' && (
-                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {rutasVehiculo.map(r => (
-                      <div key={r.id} onClick={e => { e.stopPropagation(); setRutaId(r.id) }} style={{ padding: '10px 12px', borderRadius: 10, background: rutaId === r.id ? 'rgba(249,115,22,0.15)' : 'rgba(0,0,0,0.3)', border: `1px solid ${rutaId === r.id ? F : 'rgba(255,255,255,0.08)'}`, cursor: 'pointer' }}>
-                        <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>{r.nombre ?? 'Ruta del día'}</p>
-                        {r.km_teoricos && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{r.km_teoricos} km estimados</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* Tipo toggle */}
+            <div style={{ background: '#111', borderRadius: 12, padding: 4, display: 'flex', gap: 3 }}>
+              {(['reparto', 'tramite'] as const).map(t => {
+                const active = tipoViaje === t
+                const color = t === 'reparto' ? F : '#F59E0B'
+                const rgb = t === 'reparto' ? '249,115,22' : '245,158,11'
+                return (
+                  <button key={t} onClick={() => setTipoViaje(t)} style={{
+                    flex: 1, padding: '11px 8px', borderRadius: 9, cursor: 'pointer',
+                    border: active ? `1px solid rgba(${rgb},0.3)` : '1px solid transparent',
+                    background: active ? `rgba(${rgb},0.12)` : 'transparent',
+                    color: active ? color : 'var(--muted)',
+                    fontSize: 13, fontWeight: 800,
+                  }}>
+                    {t === 'reparto' ? '🚚  Reparto' : '🔧  Trámite'}
+                  </button>
+                )
+              })}
             </div>
-            <div onClick={() => { setTipoSalida('tramite'); setRutaId(null) }} style={{ padding: '16px', borderRadius: 14, cursor: 'pointer', background: tipoSalida === 'tramite' ? 'rgba(245,158,11,0.08)' : '#1C1C1C', border: `2px solid ${tipoSalida === 'tramite' ? '#F59E0B' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Package size={18} color="#F59E0B" />
-              </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF', marginBottom: 3 }}>B. Salida No Planificada</p>
-                <p style={{ fontSize: 12, color: 'var(--muted)' }}>Trámites o uso libre · Requiere motivo</p>
-                {tipoSalida === 'tramite' && (
-                  <div onClick={e => e.stopPropagation()} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ position: 'relative' }}>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>
-                        Cliente o destino *
-                      </label>
-                      <input
-                        value={clienteSearch}
-                        onChange={e => { setClienteSearch(e.target.value); setDestino(e.target.value); setShowClienteSuggestions(true) }}
-                        onFocus={() => setShowClienteSuggestions(true)}
-                        onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 150)}
-                        placeholder="Buscar cliente o escribir dirección..."
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: '#131313', border: `1px solid ${destino.trim() ? 'rgba(249,115,22,0.4)' : 'rgba(255,255,255,0.1)'}`, color: '#F4EEDF', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-                      />
-                      {showClienteSuggestions && clientesFiltrados.length > 0 && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, marginTop: 4, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
-                          {clientesFiltrados.map(c => (
-                            <div key={c.nombre_fantasia} onMouseDown={() => seleccionarCliente(c)}
-                              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
-                              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(249,115,22,0.08)')}
-                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>{c.nombre_fantasia}</div>
-                              {(c.direccion || c.localidad) && (
-                                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
-                                  {[c.direccion, c.localidad].filter(Boolean).join(' · ')}
-                                </div>
-                              )}
-                            </div>
-                          ))}
+
+            {/* Rutas planificadas del día */}
+            {rutasVehiculo.length > 0 && (
+              <div>
+                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>
+                  Ruta planificada del día
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {rutasVehiculo.map(r => {
+                    const usada = paradas.some(p => p.id === r.id)
+                    return (
+                      <div key={r.id} onClick={() => usarRutaPlanificada(r)} style={{
+                        background: usada ? F_DIM : '#161616',
+                        border: `1px solid ${usada ? F_BORDER : 'rgba(255,255,255,0.08)'}`,
+                        borderRadius: 12, padding: '12px 14px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 12,
+                      }}>
+                        <Navigation2 size={16} color={usada ? F : 'var(--muted)'} />
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>{r.nombre ?? 'Ruta del día'}</p>
+                          {r.km_teoricos && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{r.km_teoricos} km planificados</p>}
                         </div>
+                        {usada ? <CheckCircle size={16} color={F} /> : <Plus size={16} color="var(--muted)" />}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Paradas */}
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>
+                Paradas{paradas.length > 0 ? ` (${paradas.length})` : ''}
+              </p>
+
+              {/* Lista */}
+              {paradas.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                  {paradas.map((p, i) => (
+                    <div key={p.id} style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(249,115,22,0.6)', minWidth: 16, marginTop: 2 }}>{i + 1}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
+                        {p.direccion && p.direccion !== p.nombre && (
+                          <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.direccion}</p>
+                        )}
+                      </div>
+                      <button onClick={() => setParadas(prev => prev.filter(x => x.id !== p.id))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'rgba(255,255,255,0.25)', display: 'flex', flexShrink: 0 }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Modo: buscar cliente */}
+              {modoAdd === 'cliente' && (
+                <div style={{ background: '#141414', border: `1px solid ${F_BORDER}`, borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <Search size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
+                    <input autoFocus value={busquedaCliente} onChange={e => setBusquedaCliente(e.target.value)}
+                      placeholder="Buscar cliente..."
+                      style={{ flex: 1, padding: '12px 10px', background: 'transparent', border: 'none', color: '#F4EEDF', fontSize: 14, outline: 'none' }} />
+                    <button onClick={() => { setModoAdd(null); setBusquedaCliente('') }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', padding: 4 }}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                  {clientesFiltrados.length > 0 ? clientesFiltrados.map(c => (
+                    <div key={c.nombre_fantasia} onMouseDown={() => agregarCliente(c)}
+                      style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(249,115,22,0.08)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>{c.nombre_fantasia}</p>
+                      {(c.direccion || c.localidad) && (
+                        <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 1 }}>{[c.direccion, c.localidad].filter(Boolean).join(' · ')}</p>
                       )}
                     </div>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>
-                        Motivo del viaje *
-                      </label>
-                      <textarea value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Describe el motivo del viaje..." rows={2}
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: '#131313', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 14, resize: 'none', outline: 'none' }} />
-                    </div>
+                  )) : (
+                    <p style={{ padding: '12px 14px', fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+                      {busquedaCliente.trim() ? 'Sin resultados' : 'Escribe para buscar…'}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Modo: dirección manual */}
+              {modoAdd === 'manual' && (
+                <div style={{ background: '#141414', border: `1px solid ${F_BORDER}`, borderRadius: 12, padding: '12px', marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input autoFocus value={inputDireccion} onChange={e => setInputDireccion(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && agregarDireccionManual()}
+                    placeholder="Escribe la dirección o destino..."
+                    style={{ padding: '10px 12px', borderRadius: 9, background: '#0D0D0D', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 14, outline: 'none' }} />
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={agregarDireccionManual} disabled={!inputDireccion.trim()}
+                      style={{ flex: 1, padding: '10px', borderRadius: 9, border: 'none', cursor: inputDireccion.trim() ? 'pointer' : 'not-allowed', background: inputDireccion.trim() ? F : 'rgba(255,255,255,0.06)', color: inputDireccion.trim() ? '#fff' : 'var(--muted)', fontSize: 13, fontWeight: 700 }}>
+                      Agregar parada
+                    </button>
+                    <button onClick={() => { setModoAdd(null); setInputDireccion('') }}
+                      style={{ padding: '10px 14px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.06)', color: 'var(--muted)', fontSize: 13 }}>
+                      Cancelar
+                    </button>
                   </div>
-                )}
+                </div>
+              )}
+
+              {/* Botones agregar */}
+              {!modoAdd && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                  <button onClick={() => setModoAdd('cliente')} style={addBtnStyle}>
+                    <Search size={13} /> Cliente
+                  </button>
+                  <button onClick={() => setModoAdd('manual')} style={addBtnStyle}>
+                    <MapPin size={13} /> Dirección
+                  </button>
+                  <button onClick={() => excelRef.current?.click()} disabled={cargandoExcel} style={{ ...addBtnStyle, opacity: cargandoExcel ? 0.6 : 1 }}>
+                    <FileSpreadsheet size={13} /> {cargandoExcel ? '…' : 'Excel'}
+                  </button>
+                </div>
+              )}
+              {cargandoExcel && (
+                <p style={{ fontSize: 11, color: '#F59E0B', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+                  Leyendo Excel…
+                </p>
+              )}
+              <input ref={excelRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) cargarExcel(f) }} />
+            </div>
+
+            {/* Resumen de ruta */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.07), rgba(249,115,22,0.02))', border: '1px solid rgba(249,115,22,0.18)', borderRadius: 14, padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                <Navigation2 size={14} color={F} />
+                <p style={{ fontSize: 10, fontWeight: 700, color: F, letterSpacing: '1px', textTransform: 'uppercase' }}>Resumen de ruta</p>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'end' }}>
+                <div>
+                  <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>Km estimados</p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <input value={kmRuta} onChange={e => setKmRuta(e.target.value.replace(/\D/g, ''))}
+                      placeholder="0" type="text" inputMode="numeric"
+                      style={{ width: 72, padding: '8px 10px', borderRadius: 9, background: '#0D0D0D', border: `1px solid ${kmRuta ? F_BORDER : 'rgba(255,255,255,0.1)'}`, color: kmRuta ? F : '#F4EEDF', fontSize: 24, fontWeight: 900, outline: 'none', textAlign: 'center', letterSpacing: '-0.5px' }} />
+                    <span style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>km</span>
+                  </div>
+                </div>
+                <div>
+                  <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Clock size={10} /> Tiempo estimado
+                  </p>
+                  <p style={{ fontSize: 28, fontWeight: 900, color: minTotales > 0 ? '#F4EEDF' : 'rgba(255,255,255,0.2)', letterSpacing: '-1px', lineHeight: 1 }}>
+                    {tiempoLabel}
+                  </p>
+                  {kmNum > 0 && <p style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3 }}>a 35 km/h prom.</p>}
+                </div>
               </div>
             </div>
+
+            {/* Notas / Motivo */}
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>
+                {tipoViaje === 'tramite' ? 'Motivo *' : 'Notas (opcional)'}
+              </label>
+              <textarea value={motivoViaje} onChange={e => setMotivoViaje(e.target.value)}
+                placeholder={tipoViaje === 'tramite' ? 'Describe el motivo del trámite…' : 'Instrucciones, cliente principal, observaciones…'}
+                rows={2}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: '#141414', border: `1px solid ${motivoViaje.trim() ? 'rgba(249,115,22,0.3)' : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 14, resize: 'none', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+
           </div>
           <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
-            <button
-              onClick={() => (tipoSalida === 'reparto' || (tipoSalida === 'tramite' && motivo.trim() && destino.trim())) && setPaso(3)}
-              disabled={!tipoSalida || (tipoSalida === 'tramite' && (!motivo.trim() || !destino.trim()))}
-              style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: 'pointer', background: (tipoSalida === 'reparto' || (tipoSalida === 'tramite' && motivo.trim() && destino.trim())) ? F : 'rgba(255,255,255,0.06)', color: (tipoSalida === 'reparto' || (tipoSalida === 'tramite' && motivo.trim() && destino.trim())) ? '#fff' : 'var(--muted)', fontSize: 16, fontWeight: 900 }}
-            >
+            <button onClick={() => paso2Ok && setPaso(3)} disabled={!paso2Ok}
+              style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: paso2Ok ? 'pointer' : 'not-allowed', background: paso2Ok ? F : 'rgba(255,255,255,0.06)', color: paso2Ok ? '#fff' : 'var(--muted)', fontSize: 16, fontWeight: 900 }}>
               Continuar →
             </button>
           </div>
@@ -377,12 +546,9 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               Documentación obligatoria
             </p>
 
-            {/* ── Odómetro ─────────────────────────────────────────────────── */}
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Foto odómetro *</p>
             <div style={{ marginBottom: 6 }}>
-              <FotoSlot label="Odómetro" emoji="🔢"
-                onCaptura={(url, file) => { setFotoOdo(url); analizarOdometro(file) }}
-                capturada={!!fotoOdo} />
+              <FotoSlot label="Odómetro" emoji="🔢" onCaptura={(url, file) => { setFotoOdo(url); analizarOdometro(file) }} capturada={!!fotoOdo} />
             </div>
             {analizandoOdo && (
               <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -391,16 +557,12 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               </p>
             )}
 
-            {/* KM inicio — auto-llenado */}
             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 8 }}>
               Kilometraje actual (odómetro)
             </label>
-            <input
-              value={kmInicio} onChange={e => { setKmInicio(e.target.value.replace(/\D/g, '')); setKmLeido(null) }}
-              placeholder={`Ej: ${vehiculo?.km_actual ?? 45000}`}
-              type="text" inputMode="numeric"
-              style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${kmLeido ? '#4ADE80' : kmInicio ? F_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', letterSpacing: '-0.5px', marginBottom: 4 }}
-            />
+            <input value={kmInicio} onChange={e => { setKmInicio(e.target.value.replace(/\D/g, '')); setKmLeido(null) }}
+              placeholder={`Ej: ${vehiculo?.km_actual ?? 45000}`} type="text" inputMode="numeric"
+              style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${kmLeido ? '#4ADE80' : kmInicio ? F_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', letterSpacing: '-0.5px', marginBottom: 4 }} />
             {kmLeido && !analizandoOdo && (
               <p style={{ fontSize: 11, color: '#4ADE80', marginBottom: 12, textAlign: 'center' }}>✨ Leído de la foto por IA · puedes corregir si es necesario</p>
             )}
@@ -413,7 +575,6 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               </p>
             )}
 
-            {/* ── Inspección 360° ───────────────────────────────────────────── */}
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
               Inspección 360° *
               <span style={{ fontSize: 10, fontWeight: 500, color: fotos360ok ? '#4ADE80' : 'var(--muted)', marginLeft: 8 }}>
@@ -428,34 +589,22 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               ))}
             </div>
 
-            {/* ── Combustible ───────────────────────────────────────────────── */}
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Marcador de combustible *</p>
             <div style={{ marginBottom: 8 }}>
-              <FotoSlot label="Foto del tablero" emoji="⛽"
-                onCaptura={(url, file) => { setFotoMarcador(url); analizarCombustible(file) }}
-                capturada={!!fotoMarcador} />
+              <FotoSlot label="Foto del tablero" emoji="⛽" onCaptura={(url, file) => { setFotoMarcador(url); analizarCombustible(file) }} capturada={!!fotoMarcador} />
             </div>
-
             {analizandoComb && (
               <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
                 Leyendo nivel de estanque…
               </p>
             )}
-
-            {/* Nivel detectado por IA */}
             {!analizandoComb && nivelDetectado && !mostrarSelectorComb && (
               <NivelDetectado nivel={nivelDetectado} onCorregir={() => setMostrarSelectorComb(true)} />
             )}
-
-            {/* Fallback si IA falló o el usuario quiere corregir */}
             {!analizandoComb && (iaFalloComb || mostrarSelectorComb) && (
               <div style={{ marginBottom: 4 }}>
-                {iaFalloComb && (
-                  <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
-                    No se pudo leer el nivel automáticamente, selecciona manualmente:
-                  </p>
-                )}
+                {iaFalloComb && <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>No se pudo leer el nivel automáticamente, selecciona manualmente:</p>}
                 <SelectorManual value={combustible} onChange={v => { setCombustible(v); setNivelDetectado(v) }} />
                 {nivelDetectado && mostrarSelectorComb && !iaFalloComb && (
                   <button onClick={() => setMostrarSelectorComb(false)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', marginBottom: 8 }}>
