@@ -64,6 +64,150 @@ interface Parada {
   tipo: 'cliente' | 'manual' | 'excel'
   nombre: string
   direccion: string
+  lat?: number
+  lng?: number
+  verificada?: boolean
+}
+
+interface SugerenciaGeo {
+  place_id: number
+  display_name: string
+  lat: string
+  lon: string
+  address: {
+    house_number?: string
+    road?: string
+    neighbourhood?: string
+    suburb?: string
+    city_district?: string
+    city?: string
+    town?: string
+  }
+}
+
+function formatGeoDir(s: SugerenciaGeo): string {
+  const a = s.address
+  const calle = [a.road, a.house_number].filter(Boolean).join(' ')
+  const barrio = a.neighbourhood || a.suburb || a.city_district || ''
+  const ciudad = a.city || a.town || 'Valdivia'
+  return [calle, barrio, ciudad].filter(Boolean).join(', ')
+}
+
+function InputDireccionValidada({
+  onConfirmar,
+  onCancelar,
+}: {
+  onConfirmar: (p: Omit<Parada, 'id'>) => void
+  onCancelar: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [sugerencias, setSugerencias] = useState<SugerenciaGeo[]>([])
+  const [buscando, setBuscando] = useState(false)
+  const [seleccionada, setSeleccionada] = useState<SugerenciaGeo | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  function handleChange(txt: string) {
+    setQuery(txt)
+    setSeleccionada(null)
+    clearTimeout(timer.current)
+    if (txt.trim().length < 4) { setSugerencias([]); return }
+    timer.current = setTimeout(async () => {
+      setBuscando(true)
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(txt)}`)
+        const data: SugerenciaGeo[] = await res.json()
+        setSugerencias(data)
+      } catch { /* silently fail */ } finally { setBuscando(false) }
+    }, 420)
+  }
+
+  function elegir(s: SugerenciaGeo) {
+    setSeleccionada(s)
+    setQuery(formatGeoDir(s))
+    setSugerencias([])
+  }
+
+  function confirmar() {
+    const dir = query.trim()
+    if (!dir) return
+    onConfirmar({
+      tipo: 'manual',
+      nombre: dir.split(',')[0].trim(),
+      direccion: dir,
+      lat: seleccionada ? parseFloat(seleccionada.lat) : undefined,
+      lng: seleccionada ? parseFloat(seleccionada.lon) : undefined,
+      verificada: !!seleccionada,
+    })
+  }
+
+  return (
+    <div style={{ background: '#141414', border: `1px solid ${F_BORDER}`, borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
+      {/* Input */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <MapPin size={14} color={seleccionada ? '#4ADE80' : 'var(--muted)'} style={{ flexShrink: 0 }} />
+        <input
+          autoFocus
+          value={query}
+          onChange={e => handleChange(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !sugerencias.length && confirmar()}
+          placeholder="Ej: Picarte 3000"
+          style={{ flex: 1, padding: '12px 10px', background: 'transparent', border: 'none', color: '#F4EEDF', fontSize: 14, outline: 'none' }}
+        />
+        {buscando && (
+          <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', border: `2px solid ${F}`, borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+        )}
+        <button onClick={onCancelar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', padding: 4, marginLeft: 4 }}>
+          <X size={14} />
+        </button>
+      </div>
+
+      {/* Verificada badge */}
+      {seleccionada && (
+        <div style={{ padding: '8px 14px', background: 'rgba(74,222,128,0.06)', borderBottom: '1px solid rgba(74,222,128,0.15)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <CheckCircle size={12} color="#4ADE80" />
+          <span style={{ fontSize: 11, color: '#4ADE80', fontWeight: 700 }}>Dirección verificada en el mapa</span>
+        </div>
+      )}
+
+      {/* Sugerencias */}
+      {sugerencias.length > 0 && sugerencias.map(s => (
+        <div key={s.place_id} onMouseDown={() => elegir(s)}
+          style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'flex-start', gap: 10 }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(249,115,22,0.08)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+          <MapPin size={13} color={F} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {[s.address.road, s.address.house_number].filter(Boolean).join(' ') || s.display_name.split(',')[0]}
+            </p>
+            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {[s.address.neighbourhood || s.address.suburb, s.address.city || s.address.town || 'Valdivia'].filter(Boolean).join(', ')}
+            </p>
+          </div>
+        </div>
+      ))}
+
+      {/* Sin resultados */}
+      {!buscando && query.trim().length >= 4 && sugerencias.length === 0 && !seleccionada && (
+        <p style={{ padding: '10px 14px', fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+          Sin resultados · puedes agregar igual como texto libre
+        </p>
+      )}
+
+      {/* Botones */}
+      <div style={{ display: 'flex', gap: 6, padding: '10px 12px' }}>
+        <button
+          onMouseDown={confirmar}
+          disabled={!query.trim()}
+          style={{ flex: 1, padding: '10px', borderRadius: 9, border: 'none', cursor: query.trim() ? 'pointer' : 'not-allowed', background: query.trim() ? (seleccionada ? '#4ADE80' : F) : 'rgba(255,255,255,0.06)', color: query.trim() ? (seleccionada ? '#000' : '#fff') : 'var(--muted)', fontSize: 13, fontWeight: 700 }}>
+          {seleccionada ? '✓ Confirmar dirección' : 'Agregar parada'}
+        </button>
+        <button onMouseDown={onCancelar} style={{ padding: '10px 14px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.06)', color: 'var(--muted)', fontSize: 13 }}>
+          Cancelar
+        </button>
+      </div>
+    </div>
+  )
 }
 
 interface Vehiculo { id: string; nombre: string; tipo: string; patente: string | null; km_actual: number; estado: string; combustible: string | null }
@@ -128,7 +272,6 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   const [motivoViaje, setMotivoViaje] = useState('')
   const [modoAdd, setModoAdd] = useState<null | 'cliente' | 'manual'>(null)
   const [busquedaCliente, setBusquedaCliente] = useState('')
-  const [inputDireccion, setInputDireccion] = useState('')
   const [cargandoExcel, setCargandoExcel] = useState(false)
   const excelRef = useRef<HTMLInputElement>(null)
 
@@ -177,15 +320,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
     setModoAdd(null)
   }
 
-  function agregarDireccionManual() {
-    if (!inputDireccion.trim()) return
-    setParadas(prev => [...prev, {
-      id: Math.random().toString(36).slice(2),
-      tipo: 'manual',
-      nombre: inputDireccion.trim(),
-      direccion: inputDireccion.trim(),
-    }])
-    setInputDireccion('')
+  function agregarDireccionManual(datos: Omit<Parada, 'id'>) {
+    setParadas(prev => [...prev, { id: Math.random().toString(36).slice(2), ...datos }])
     setModoAdd(null)
   }
 
@@ -397,10 +533,13 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               {paradas.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
                   {paradas.map((p, i) => (
-                    <div key={p.id} style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <div key={p.id} style={{ background: '#141414', border: `1px solid ${p.verificada ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                       <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(249,115,22,0.6)', minWidth: 16, marginTop: 2 }}>{i + 1}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
+                          {p.verificada && <CheckCircle size={11} color="#4ADE80" style={{ flexShrink: 0 }} />}
+                        </div>
                         {p.direccion && p.direccion !== p.nombre && (
                           <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.direccion}</p>
                         )}
@@ -445,24 +584,12 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                 </div>
               )}
 
-              {/* Modo: dirección manual */}
+              {/* Modo: dirección con autocomplete validada */}
               {modoAdd === 'manual' && (
-                <div style={{ background: '#141414', border: `1px solid ${F_BORDER}`, borderRadius: 12, padding: '12px', marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <input autoFocus value={inputDireccion} onChange={e => setInputDireccion(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && agregarDireccionManual()}
-                    placeholder="Escribe la dirección o destino..."
-                    style={{ padding: '10px 12px', borderRadius: 9, background: '#0D0D0D', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 14, outline: 'none' }} />
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={agregarDireccionManual} disabled={!inputDireccion.trim()}
-                      style={{ flex: 1, padding: '10px', borderRadius: 9, border: 'none', cursor: inputDireccion.trim() ? 'pointer' : 'not-allowed', background: inputDireccion.trim() ? F : 'rgba(255,255,255,0.06)', color: inputDireccion.trim() ? '#fff' : 'var(--muted)', fontSize: 13, fontWeight: 700 }}>
-                      Agregar parada
-                    </button>
-                    <button onClick={() => { setModoAdd(null); setInputDireccion('') }}
-                      style={{ padding: '10px 14px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.06)', color: 'var(--muted)', fontSize: 13 }}>
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
+                <InputDireccionValidada
+                  onConfirmar={datos => agregarDireccionManual(datos)}
+                  onCancelar={() => setModoAdd(null)}
+                />
               )}
 
               {/* Botones agregar */}
