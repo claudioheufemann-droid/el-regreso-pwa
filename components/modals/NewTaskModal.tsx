@@ -15,9 +15,9 @@ interface Props {
 }
 
 const PRIORITY_OPTIONS = [
-  { label: 'Alta',   color: '#E74C3C', bg: 'rgba(231,76,60,0.15)',  border: 'rgba(231,76,60,0.4)',  icon: '⚡' },
-  { label: 'Media',  color: '#F39C12', bg: 'rgba(243,156,18,0.15)', border: 'rgba(243,156,18,0.4)', icon: '▲' },
-  { label: 'Normal', color: '#6B7280', bg: 'rgba(107,114,128,0.15)',border: 'rgba(107,114,128,0.4)',icon: '—' },
+  { label: 'Alta',   color: '#E74C3C', bg: 'rgba(231,76,60,0.18)',  border: 'rgba(231,76,60,0.45)',  icon: '⚡', glow: 'rgba(231,76,60,0.25)' },
+  { label: 'Media',  color: '#F59E0B', bg: 'rgba(245,158,11,0.18)', border: 'rgba(245,158,11,0.45)', icon: '△',  glow: 'rgba(245,158,11,0.25)' },
+  { label: 'Normal', color: '#6B7280', bg: 'rgba(107,114,128,0.15)',border: 'rgba(107,114,128,0.35)',icon: '—',  glow: 'none' },
 ]
 const ESFUERZO_OPTIONS = ['Bajo', 'Medio', 'Alto', 'Crítico']
 
@@ -32,13 +32,32 @@ function fmtBytes(b: number) {
   return b < 1048576 ? `${(b/1024).toFixed(1)} KB` : `${(b/1048576).toFixed(1)} MB`
 }
 
-/* ── Sidebar expandable row ─────────────────────────── */
+// ── iOS Toggle ─────────────────────────────────────────────────────────
+function IOSToggle({ value, onChange, color = '#3B82F6' }: { value: boolean; onChange: (v: boolean) => void; color?: string }) {
+  return (
+    <div onClick={() => onChange(!value)} style={{
+      width: 44, height: 26, borderRadius: 13, flexShrink: 0, cursor: 'pointer', position: 'relative',
+      background: value ? color : 'rgba(255,255,255,0.12)',
+      transition: 'background 0.22s ease',
+      boxShadow: value ? `0 0 12px ${color}60` : 'none',
+    }}>
+      <div style={{
+        position: 'absolute', top: 3, left: value ? 21 : 3,
+        width: 20, height: 20, borderRadius: '50%', background: '#fff',
+        transition: 'left 0.22s ease',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+      }} />
+    </div>
+  )
+}
+
+// ── Sidebar expandable row (desktop) ───────────────────────────────────
 function SidebarRow({ icon, label, sub, children }: { icon: string; label: string; sub: string; children?: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
     <div>
       <div onClick={() => setOpen(v => !v)}
-        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', cursor: 'pointer', transition: 'background 0.1s', background: open ? 'rgba(255,255,255,0.04)' : 'transparent' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', cursor: 'pointer', transition: 'background 0.15s', background: open ? 'rgba(255,255,255,0.04)' : 'transparent' }}
         onMouseEnter={e => { if (!open) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
         onMouseLeave={e => { if (!open) e.currentTarget.style.background = 'transparent' }}>
         <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>{icon}</div>
@@ -46,12 +65,10 @@ function SidebarRow({ icon, label, sub, children }: { icon: string; label: strin
           <div style={{ fontSize: 12, fontWeight: 600, color: '#D1D5DB' }}>{label}</div>
           <div style={{ fontSize: 10, color: '#6B7280', marginTop: 1 }}>{sub}</div>
         </div>
-        <span style={{ color: '#4B5563', fontSize: 13, transition: 'transform 0.15s', display: 'inline-block', transform: open ? 'rotate(90deg)' : 'none' }}>›</span>
+        <span style={{ color: '#4B5563', fontSize: 13, transition: 'transform 0.18s', display: 'inline-block', transform: open ? 'rotate(90deg)' : 'none' }}>›</span>
       </div>
       {open && children && (
-        <div style={{ padding: '0 16px 12px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-          {children}
-        </div>
+        <div style={{ padding: '0 16px 12px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>{children}</div>
       )}
     </div>
   )
@@ -89,7 +106,6 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [savingDraft, setSavingDraft] = useState(false)
   const [error, setError] = useState('')
   const [crearOtra, setCrearOtra] = useState(false)
   const [uploadingRef, setUploadingRef] = useState(false)
@@ -103,7 +119,6 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   const minDate = new Date().toISOString().split('T')[0]
   const canSubmit = titulo.trim().length > 0 && plazo && selectedIds.length > 0
   const selectedUsers = allUsers.filter(u => selectedIds.includes(u.id))
-
   const macroGroups = (Object.entries(MACRO_AREAS) as [string, typeof MACRO_AREAS[keyof typeof MACRO_AREAS]][])
     .map(([key, macro]) => ({ key, label: macro.label, color: macro.color, areas: macro.areas.filter(a => availableAreas.includes(a)) }))
     .filter(g => g.areas.length > 0)
@@ -158,15 +173,13 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
     }
   }, [])
 
-  async function handleSubmit(draft = false) {
-    if (!draft && !canSubmit) return
-    draft ? setSavingDraft(true) : setLoading(true)
-    setError('')
+  async function handleSubmit() {
+    if (!canSubmit) return
+    setLoading(true); setError('')
     try {
       const evidencias = attachedFiles.filter(f => f.url).map(f => f.url)
-      // Pack sidebar metadata into nota_admin
       const meta: string[] = []
-      if (tiempoH || tiempoM) meta.push(`Tiempo: ${tiempoH || '0'}h ${tiempoM || '00'}m`)
+      if (tiempoH || tiempoM) meta.push(`Tiempo: ${tiempoH||'0'}h ${tiempoM||'00'}m`)
       if (fechaInicio) meta.push(`Inicio: ${fechaInicio}`)
       if (etiquetas.length) meta.push(`Etiquetas: ${etiquetas.join(', ')}`)
       if (proyecto) meta.push(`Proyecto: ${proyecto}`)
@@ -177,9 +190,9 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
       const res = await fetch('/api/tasks/assign', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          titulo: titulo.trim() || '(borrador)', descripcion: descripcion.trim(),
+          titulo: titulo.trim(), descripcion: descripcion.trim(),
           area: selectedArea, responsable_id: selectedIds[0] ?? null, responsable_ids: selectedIds,
-          plazo: plazo || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
+          plazo: plazo,
           prioridad_maxima: prioridad || priority === 'Alta',
           evidencia_url: evidencias[0] ?? undefined,
           nota_admin: meta.length > 0 ? meta.join('\n') : undefined,
@@ -191,40 +204,414 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
       if (!crearOtra) onClose()
       else { setTitulo(''); setDescripcion(''); setSelectedIds([]); setPlazo(''); setAttachedFiles([]) }
     } catch { setError('Error al crear la tarea. Intenta nuevamente.') }
-    finally { setLoading(false); setSavingDraft(false) }
+    finally { setLoading(false) }
   }
 
-  // Estilos dinámicos: centrado en desktop, bottom sheet en mobile
+  // ── Estilos overlay / modal ────────────────────────────────────────
   const overlayStyle: React.CSSProperties = isDesktop
-    ? { position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }
-    : { position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }
+    ? { position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }
+    : { position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(10px)' }
 
   const modalStyle: React.CSSProperties = isDesktop
-    ? { width: '100%', maxWidth: 1300, maxHeight: '92vh', background: '#111318', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 22, display: 'flex', flexDirection: 'column', boxShadow: '0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05)', overflow: 'hidden' }
-    : { width: '100%', height: '92vh', background: '#111318', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '20px 20px 0 0', display: 'flex', flexDirection: 'column', boxShadow: '0 -20px 60px rgba(0,0,0,0.8)', overflow: 'hidden' }
+    ? { width: '100%', maxWidth: 1300, maxHeight: '92vh', background: '#0D1117', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 22, display: 'flex', flexDirection: 'column', boxShadow: '0 40px 100px rgba(0,0,0,0.8)', overflow: 'hidden' }
+    : { width: '100%', height: '94dvh', background: 'linear-gradient(170deg, #060B14 0%, #0B1220 100%)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '28px 28px 0 0', display: 'flex', flexDirection: 'column', boxShadow: '0 -24px 80px rgba(0,0,0,0.9)', overflow: 'hidden' }
+
+  // ── Shared input style ─────────────────────────────────────────────
+  const INPUT: React.CSSProperties = {
+    width: '100%', boxSizing: 'border-box', outline: 'none',
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 14, color: '#F4EEDF', fontSize: 14,
+    padding: '13px 16px', fontFamily: 'inherit',
+    transition: 'border-color 0.18s, background 0.18s',
+  }
+
+  // ── Block card style ───────────────────────────────────────────────
+  const BLOCK: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: 18, padding: '18px 18px',
+  }
+
+  const LABEL: React.CSSProperties = {
+    fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 0.4, display: 'block', marginBottom: 10,
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // MOBILE LAYOUT
+  // ──────────────────────────────────────────────────────────────────
+  if (!isDesktop) {
+    return (
+      <div style={overlayStyle} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+        <div onClick={e => e.stopPropagation()} style={modalStyle}>
+
+          {/* ── Handle bar ── */}
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12, paddingBottom: 4, flexShrink: 0 }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.15)' }} />
+          </div>
+
+          {/* ── HEADER ── */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '16px 24px 20px', flexShrink: 0 }}>
+            <div>
+              <h1 style={{ fontSize: 32, fontWeight: 900, color: '#F4EEDF', letterSpacing: -1, lineHeight: 1.1, margin: 0, marginBottom: 5 }}>
+                Nueva tarea
+              </h1>
+              <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.28)', fontWeight: 400 }}>
+                Organiza y asigna una nueva tarea
+              </p>
+            </div>
+            {/* Glass buttons */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button type="button" onClick={onClose} style={{
+                width: 36, height: 36, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
+                backdropFilter: 'blur(8px)', color: 'rgba(255,255,255,0.4)',
+                cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>✕</button>
+            </div>
+          </div>
+
+          {/* ── SCROLLABLE BODY ── */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* BLOQUE 1 — Área + Responsable */}
+            <div style={BLOCK}>
+              <span style={LABEL}>Área · Responsable</span>
+
+              {/* Área selector */}
+              <div ref={areaRef} style={{ position: 'relative', marginBottom: 12 }}>
+                <button type="button" onClick={() => setShowAreaDropdown(v => !v)} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '12px 14px', borderRadius: 14, cursor: 'pointer',
+                  background: `${cfg.color}10`, border: `1px solid ${cfg.color}30`,
+                  transition: 'all 0.18s',
+                }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: `${cfg.color}22`, border: `1px solid ${cfg.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, color: cfg.color, flexShrink: 0 }}>{cfg.code}</div>
+                  <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: cfg.color, textAlign: 'left' }}>{selectedArea}</span>
+                  <span style={{ fontSize: 12, color: `${cfg.color}80` }}>▾</span>
+                </button>
+                {showAreaDropdown && availableAreas.length > 1 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200, background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, marginTop: 6, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+                    {macroGroups.map(group => (
+                      <div key={group.key}>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: group.color, padding: '10px 16px 5px', letterSpacing: 1.6, textTransform: 'uppercase' }}>{group.label}</div>
+                        {group.areas.map(area => {
+                          const ac = AREA_CFG[area] ?? { color: '#888', code: '??' }
+                          return (
+                            <button key={area} type="button" onClick={() => handleAreaChange(area)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', background: selectedArea === area ? `${ac.color}15` : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                              <div style={{ width: 22, height: 22, borderRadius: 7, background: `${ac.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 900, color: ac.color }}>{ac.code}</div>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: selectedArea === area ? ac.color : '#9CA3AF' }}>{area}</span>
+                              {selectedArea === area && <span style={{ marginLeft: 'auto', fontSize: 12, color: ac.color }}>✓</span>}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Responsables */}
+              <div ref={responsablesRef} style={{ position: 'relative' }}>
+                <button type="button" onClick={() => setShowResponsablesDropdown(v => !v)} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '12px 14px', borderRadius: 14, cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                  transition: 'all 0.18s',
+                }}>
+                  {selectedUsers.length === 0 ? (
+                    <>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'rgba(255,255,255,0.3)' }}>+</div>
+                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', flex: 1, textAlign: 'left' }}>Asignar responsable...</span>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex' }}>
+                        {selectedUsers.slice(0,4).map((u,i) => (
+                          <div key={u.id} style={{ width: 28, height: 28, borderRadius: '50%', background: `${cfg.color}30`, border: `2px solid ${cfg.color}70`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, color: cfg.color, marginLeft: i>0?-8:0, zIndex: 4-i }}>
+                            {u.iniciales}
+                          </div>
+                        ))}
+                        {selectedUsers.length > 4 && <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#9CA3AF', marginLeft: -8 }}>+{selectedUsers.length-4}</div>}
+                      </div>
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#F4EEDF', textAlign: 'left' }}>
+                        {selectedUsers.length === 1 ? selectedUsers[0].nombre : `${selectedUsers.length} responsables`}
+                      </span>
+                    </>
+                  )}
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>▾</span>
+                </button>
+                {showResponsablesDropdown && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200, background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, marginTop: 6, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+                    <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                      {allUsers.length === 0
+                        ? <div style={{ padding: 16, fontSize: 12, color: '#6B7280', textAlign: 'center' }}>No hay usuarios en esta área</div>
+                        : allUsers.map(u => {
+                          const sel = selectedIds.includes(u.id)
+                          return (
+                            <button key={u.id} type="button" onClick={() => toggleUser(u.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: sel ? `${cfg.color}12` : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s' }}>
+                              <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, background: sel ? `${cfg.color}30` : 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: sel ? cfg.color : '#9CA3AF', border: sel ? `2px solid ${cfg.color}50` : 'none' }}>{u.iniciales}</div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: sel ? '#F4EEDF' : '#9CA3AF' }}>{u.nombre}</div>
+                                <div style={{ fontSize: 10, color: '#6B7280', marginTop: 1 }}>{u.rol}</div>
+                              </div>
+                              {sel && <div style={{ width: 20, height: 20, borderRadius: 6, background: cfg.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#000', fontWeight: 900 }}>✓</div>}
+                            </button>
+                          )
+                        })}
+                    </div>
+                    <button type="button" onClick={() => setShowResponsablesDropdown(false)} style={{ width: '100%', padding: '13px', border: 'none', borderTop: '1px solid rgba(255,255,255,0.07)', background: selectedIds.length > 0 ? cfg.color : 'rgba(255,255,255,0.04)', cursor: 'pointer', fontSize: 13, fontWeight: 800, color: selectedIds.length > 0 ? '#000' : '#9CA3AF' }}>
+                      {selectedIds.length > 0 ? `Confirmar (${selectedIds.length} seleccionado${selectedIds.length > 1 ? 's' : ''})` : 'Cerrar'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* BLOQUE 2 — Prioridad + Fecha */}
+            <div style={BLOCK}>
+              {/* Prioridad — segmented control */}
+              <span style={LABEL}>Prioridad</span>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 18, background: 'rgba(0,0,0,0.2)', borderRadius: 14, padding: 4 }}>
+                {PRIORITY_OPTIONS.map(p => (
+                  <button key={p.label} type="button"
+                    onClick={() => { setPriority(p.label); setPrioridad(p.label === 'Alta') }}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      padding: '10px 6px', borderRadius: 11, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                      border: 'none', transition: 'all 0.22s ease',
+                      background: priority === p.label ? p.bg : 'transparent',
+                      color: priority === p.label ? p.color : 'rgba(255,255,255,0.3)',
+                      boxShadow: priority === p.label ? `0 0 16px ${p.glow}` : 'none',
+                    }}>
+                    <span style={{ fontSize: 13 }}>{p.icon}</span>
+                    <span>{p.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Fecha */}
+              <span style={LABEL}>Fecha de vencimiento *</span>
+              <div style={{ position: 'relative' }}>
+                <div onClick={() => !datePickerOpenRef.current && dateInputRef.current?.showPicker?.()}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '13px 16px', borderRadius: 14, cursor: 'pointer',
+                    background: plazo ? `rgba(255,255,255,0.06)` : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${plazo ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.08)'}`,
+                    transition: 'all 0.18s',
+                  }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: plazo ? `${cfg.color}20` : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📅</div>
+                  <span style={{ fontSize: 14, color: plazo ? '#F4EEDF' : 'rgba(255,255,255,0.3)', fontWeight: plazo ? 600 : 400 }}>
+                    {plazo ? new Date(plazo+'T12:00:00').toLocaleDateString('es-CL', { weekday:'long', day:'2-digit', month:'long' }) : 'Seleccionar fecha'}
+                  </span>
+                </div>
+                <input ref={dateInputRef} type="date" value={plazo} onChange={e => setPlazo(e.target.value)}
+                  onFocus={() => { datePickerOpenRef.current = true }}
+                  onBlur={() => { datePickerOpenRef.current = false }}
+                  min={minDate} required
+                  style={{ position: 'absolute', inset: 0, opacity: 0, pointerEvents: 'none', width: '100%', height: '100%' }} />
+              </div>
+            </div>
+
+            {/* BLOQUE 3 — Título */}
+            <div style={{ ...BLOCK, padding: '18px 18px' }}>
+              <span style={LABEL}>¿Qué hay que hacer? *</span>
+              <input
+                value={titulo} onChange={e => setTitulo(e.target.value)}
+                placeholder="Escribe el título de la tarea..."
+                style={{
+                  ...INPUT, fontSize: 16, fontWeight: 600, height: 62, padding: '0 16px',
+                  borderRadius: 14, letterSpacing: -0.2,
+                  borderColor: titulo ? `${cfg.color}40` : 'rgba(255,255,255,0.08)',
+                  background: titulo ? `${cfg.color}07` : 'rgba(255,255,255,0.04)',
+                }}
+                onFocus={e => { e.target.style.borderColor = `${cfg.color}60`; e.target.style.background = `${cfg.color}09` }}
+                onBlur={e => { e.target.style.borderColor = titulo ? `${cfg.color}40` : 'rgba(255,255,255,0.08)'; e.target.style.background = titulo ? `${cfg.color}07` : 'rgba(255,255,255,0.04)' }}
+              />
+            </div>
+
+            {/* BLOQUE 4 — Descripción */}
+            <div style={BLOCK}>
+              <span style={LABEL}>Descripción</span>
+              <div style={{ borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+                {/* Toolbar */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto' }}>
+                  {[
+                    { icon: 'B', style: { fontWeight: 900 } },
+                    { icon: 'I', style: { fontStyle: 'italic' } },
+                    { icon: 'U', style: { textDecoration: 'underline' } },
+                    { icon: '≡', style: {} },
+                    { icon: '⊞', style: {} },
+                    { icon: '😊', style: {} },
+                    { icon: '<>', style: { fontSize: 10 } },
+                  ].map((t, i) => (
+                    <button key={i} type="button" style={{
+                      width: 30, height: 30, borderRadius: 7, background: 'transparent', border: 'none',
+                      cursor: 'pointer', color: 'rgba(255,255,255,0.35)', fontSize: 13, flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: 'inherit', ...t.style,
+                      transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.08)'; e.currentTarget.style.color='#F4EEDF' }}
+                      onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='rgba(255,255,255,0.35)' }}>
+                      {t.icon}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={descripcion} onChange={e => setDescripcion(e.target.value)} rows={5}
+                  placeholder="Agrega más contexto, instrucciones o referencias para esta tarea..."
+                  style={{
+                    resize: 'none', border: 'none', background: 'transparent',
+                    width: '100%', padding: '14px 16px', fontSize: 13,
+                    color: 'rgba(244,238,223,0.8)', boxSizing: 'border-box', outline: 'none',
+                    lineHeight: 1.65, fontFamily: 'inherit',
+                  }} />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 14px 8px' }}>
+                  <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.15)' }}>{descripcion.length} / 1000</span>
+                </div>
+              </div>
+            </div>
+
+            {/* BLOQUE 5 — Archivos */}
+            <div style={BLOCK}>
+              <span style={LABEL}>Archivos · Fotos <span style={{ fontWeight: 400, letterSpacing: 0, opacity: 0.5 }}>(opcional)</span></span>
+              <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
+              {attachedFiles.length === 0 ? (
+                <div
+                  onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files) }}
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    borderRadius: 16, border: `2px dashed ${dragOver ? cfg.color+'80' : 'rgba(255,255,255,0.1)'}`,
+                    background: dragOver ? `${cfg.color}07` : 'rgba(255,255,255,0.02)',
+                    padding: '28px 20px', cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                    transition: 'all 0.22s ease',
+                  }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 16, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+                    ☁
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>
+                      Arrastra o toca para subir archivos
+                    </div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>
+                      JPG · PNG · PDF · DOC · XLS — Máx. 20 MB
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
+                    {attachedFiles.slice(0,5).map((f,i) => (
+                      <div key={i} style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', aspectRatio: '1' }}>
+                        {f.preview
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={f.preview} alt={f.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                          : <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', gap:4, padding:8 }}>
+                              <span style={{ fontSize: 24 }}>{f.type==='pdf'?'📄':f.type==='doc'?'📝':'📎'}</span>
+                              <span style={{ fontSize: 8, color:'rgba(255,255,255,0.4)', textAlign:'center', wordBreak:'break-all' }}>{f.name}</span>
+                            </div>
+                        }
+                        <button type="button" onClick={() => setAttachedFiles(prev => prev.filter((_,j)=>j!==i))}
+                          style={{ position:'absolute', top:4, right:4, width:18, height:18, borderRadius:'50%', background:'rgba(0,0,0,0.8)', border:'none', color:'#fff', fontSize:9, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} style={{ width: '100%', padding: '10px', borderRadius: 12, border: '1px dashed rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.02)', cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
+                    + Agregar más archivos
+                  </button>
+                </div>
+              )}
+              {uploadingRef && <p style={{ fontSize: 11, color: cfg.color, marginTop: 8, display: 'flex', alignItems: 'center', gap: 5 }}>⏳ Subiendo imagen...</p>}
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 14, fontSize: 12, color: '#FCA5A5' }}>
+                {error}
+              </div>
+            )}
+
+            {/* Espacio para el footer */}
+            <div style={{ height: 20 }} />
+          </div>
+
+          {/* ── STICKY FOOTER ── */}
+          <div style={{
+            flexShrink: 0, padding: '16px 20px max(20px, env(safe-area-inset-bottom))',
+            borderTop: '1px solid rgba(255,255,255,0.07)',
+            background: 'rgba(6,11,20,0.95)', backdropFilter: 'blur(12px)',
+          }}>
+            {/* Toggle crear otra */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>Crear otra tarea después</span>
+              <IOSToggle value={crearOtra} onChange={setCrearOtra} color={cfg.color} />
+            </div>
+
+            {/* Botones */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="button" onClick={onClose} style={{
+                flex: 1, height: 54, borderRadius: 18, cursor: 'pointer',
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)',
+                fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.45)',
+                transition: 'all 0.18s',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.09)' }}
+                onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,0.05)' }}>
+                Cancelar
+              </button>
+              <button type="button" onClick={handleSubmit} disabled={!canSubmit || loading} style={{
+                flex: 2.5, height: 54, borderRadius: 18, cursor: canSubmit ? 'pointer' : 'not-allowed',
+                background: canSubmit
+                  ? 'linear-gradient(135deg, #3B82F6, #2563EB)'
+                  : 'rgba(255,255,255,0.06)',
+                border: 'none', fontSize: 14, fontWeight: 800,
+                color: canSubmit ? '#fff' : 'rgba(255,255,255,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: canSubmit ? '0 4px 24px rgba(59,130,246,0.35)' : 'none',
+                transition: 'all 0.22s ease',
+                opacity: loading ? 0.75 : 1,
+              }}>
+                {loading
+                  ? <><span style={{ fontSize: 16 }}>⏳</span> Creando...</>
+                  : <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> Crear tarea</>
+                }
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    )
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // DESKTOP LAYOUT (sin cambios significativos en desktop)
+  // ──────────────────────────────────────────────────────────────────
+  const LBL: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: '#9CA3AF', letterSpacing: 1.2, textTransform: 'uppercase', display: 'block', marginBottom: 6 }
 
   return (
-    <div
-      style={overlayStyle}
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
+    <div style={overlayStyle} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div onClick={e => e.stopPropagation()} style={modalStyle}>
 
         {/* HEADER */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isDesktop ? '20px 28px 16px' : '14px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 28px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {isDesktop && <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📋</div>}
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📋</div>
             <div>
-              <div style={{ fontSize: isDesktop ? 18 : 16, fontWeight: 800, color: '#F4EEDF', letterSpacing: -0.4 }}>Nueva tarea</div>
-              {isDesktop && <div style={{ fontSize: 11, color: '#6B7280', marginTop: 1 }}>Completa la información para crear una nueva tarea</div>}
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#F4EEDF', letterSpacing: -0.4 }}>Nueva tarea</div>
+              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 1 }}>Completa la información para crear una nueva tarea</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {[{ icon: '─' }, { icon: '✕' }].map((b, i) => (
               <button key={i} type="button" onClick={onClose}
-                style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#6B7280', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.1)'; e.currentTarget.style.color='#F4EEDF' }}
-                onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,0.05)'; e.currentTarget.style.color='#6B7280' }}>
+                style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#6B7280', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {b.icon}
               </button>
             ))}
@@ -232,8 +619,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
         </div>
 
         {/* FIRST ROW */}
-        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1.6fr 1.2fr 1.1fr' : 'repeat(2, 1fr)', gap: 10, padding: isDesktop ? '16px 28px 0' : '12px 16px 0', flexShrink: 0 }}>
-
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr 1.2fr 1.1fr', gap: 10, padding: '16px 28px 0', flexShrink: 0 }}>
           {/* Área */}
           <div ref={areaRef} style={{ position: 'relative' }}>
             <label style={LBL}>Área *</label>
@@ -290,23 +676,23 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                   {allUsers.length === 0
                     ? <div style={{ padding: '14px', fontSize: 12, color: '#6B7280', textAlign: 'center' }}>No hay usuarios en esta área</div>
                     : allUsers.map(u => {
-                        const sel = selectedIds.includes(u.id)
-                        return (
-                          <button key={u.id} type="button" onClick={() => toggleUser(u.id)}
-                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: sel ? `${cfg.color}12` : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-                            <div style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, background: sel ? cfg.color : 'transparent', border: `1.5px solid ${sel ? cfg.color : 'rgba(156,163,175,0.4)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#111', fontWeight: 700 }}>{sel && '✓'}</div>
-                            <div style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: sel ? `${cfg.color}30` : 'rgba(156,163,175,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: sel ? cfg.color : '#9CA3AF' }}>{u.iniciales}</div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: sel ? '#F4EEDF' : '#9CA3AF' }}>{u.nombre}</div>
-                              <div style={{ fontSize: 10, color: '#6B7280' }}>{u.rol}</div>
-                            </div>
-                            {selectedIds[0] === u.id && <span style={{ fontSize: 8, padding: '2px 7px', borderRadius: 8, background: `${cfg.color}20`, color: cfg.color, fontWeight: 700 }}>PRINCIPAL</span>}
-                          </button>
-                        )
-                      })}
+                      const sel = selectedIds.includes(u.id)
+                      return (
+                        <button key={u.id} type="button" onClick={() => toggleUser(u.id)}
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: sel ? `${cfg.color}12` : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                          <div style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, background: sel ? cfg.color : 'transparent', border: `1.5px solid ${sel ? cfg.color : 'rgba(156,163,175,0.4)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#111', fontWeight: 700 }}>{sel && '✓'}</div>
+                          <div style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: sel ? `${cfg.color}30` : 'rgba(156,163,175,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: sel ? cfg.color : '#9CA3AF' }}>{u.iniciales}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: sel ? '#F4EEDF' : '#9CA3AF' }}>{u.nombre}</div>
+                            <div style={{ fontSize: 10, color: '#6B7280' }}>{u.rol}</div>
+                          </div>
+                          {selectedIds[0] === u.id && <span style={{ fontSize: 8, padding: '2px 7px', borderRadius: 8, background: `${cfg.color}20`, color: cfg.color, fontWeight: 700 }}>PRINCIPAL</span>}
+                        </button>
+                      )
+                    })}
                 </div>
                 <button type="button" onClick={() => setShowResponsablesDropdown(false)}
-                  style={{ width: '100%', padding: '11px', border: 'none', borderTop: '1px solid rgba(255,255,255,0.07)', background: selectedIds.length > 0 ? cfg.color : 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: 12, fontWeight: 800, borderRadius: '0 0 12px 12px', color: selectedIds.length > 0 ? '#0A0A0A' : '#9CA3AF', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  style={{ width: '100%', padding: '11px', border: 'none', borderTop: '1px solid rgba(255,255,255,0.07)', background: selectedIds.length > 0 ? cfg.color : 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: 12, fontWeight: 800, borderRadius: '0 0 12px 12px', color: selectedIds.length > 0 ? '#0A0A0A' : '#9CA3AF' }}>
                   {selectedIds.length > 0 ? `✓ Confirmar (${selectedIds.length} seleccionado${selectedIds.length > 1 ? 's' : ''})` : 'Cerrar'}
                 </button>
               </div>
@@ -319,14 +705,14 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
             <div style={{ display: 'flex', gap: 6, height: 44 }}>
               {PRIORITY_OPTIONS.map(p => (
                 <button key={p.label} type="button" onClick={() => { setPriority(p.label); setPrioridad(p.label === 'Alta') }}
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 700, height: 44, background: priority === p.label ? p.bg : 'rgba(255,255,255,0.04)', border: `1.5px solid ${priority === p.label ? p.border : 'rgba(255,255,255,0.08)'}`, color: priority === p.label ? p.color : '#6B7280', transition: 'all 0.15s' }}>
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 700, height: 44, background: priority === p.label ? p.bg : 'rgba(255,255,255,0.04)', border: `1.5px solid ${priority === p.label ? p.border : 'rgba(255,255,255,0.08)'}`, color: priority === p.label ? p.color : '#6B7280', transition: 'all 0.18s' }}>
                   <span style={{ fontSize: 11 }}>{p.icon}</span><span>{p.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Fecha vencimiento */}
+          {/* Fecha */}
           <div>
             <label style={LBL}>Fecha vencimiento *</label>
             <div style={{ position: 'relative', height: 44 }}>
@@ -343,19 +729,15 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
         </div>
 
         {/* BODY */}
-        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: isDesktop ? '1fr 300px' : '1fr', gap: 0, padding: isDesktop ? '16px 28px 0' : '12px 16px 0' }}>
-
-          {/* LEFT */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingRight: isDesktop ? 20 : 0, borderRight: isDesktop ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-
+        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 0, padding: '16px 28px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingRight: 20, borderRight: '1px solid rgba(255,255,255,0.05)' }}>
             <div>
               <label style={LBL}>Título *</label>
               <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="¿Qué hay que hacer?"
                 style={{ width: '100%', borderRadius: 10, fontSize: 15, fontWeight: 600, padding: '12px 16px', background: '#1A1D24', border: '1.5px solid rgba(255,255,255,0.08)', color: '#F4EEDF', outline: 'none', boxSizing: 'border-box' }} />
             </div>
-
             <div style={{ flex: 1 }}>
-              <label style={LBL}>Descripción *</label>
+              <label style={LBL}>Descripción</label>
               <div style={{ borderRadius: 12, border: '1.5px solid rgba(255,255,255,0.08)', background: '#1A1D24', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   {['B','I','U','S','≡','⊞','⊕','<>'].map((t,i) => (
@@ -374,22 +756,17 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                 </div>
               </div>
             </div>
-
             <div>
               <label style={LBL}>Archivos / Fotos <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#6B7280' }}>(opcional)</span></label>
               <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
-              <div
-                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-                onDragLeave={() => setDragOver(false)}
+              <div onDragOver={e => { e.preventDefault(); setDragOver(true) }} onDragLeave={() => setDragOver(false)}
                 onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files) }}
                 onClick={() => attachedFiles.length === 0 && fileInputRef.current?.click()}
                 style={{ borderRadius: 12, border: `2px dashed ${dragOver ? cfg.color+'80' : 'rgba(255,255,255,0.1)'}`, background: dragOver ? `${cfg.color}06` : 'rgba(255,255,255,0.02)', transition: 'all 0.2s', minHeight: attachedFiles.length === 0 ? 120 : 'auto', cursor: attachedFiles.length === 0 ? 'pointer' : 'default' }}>
                 {attachedFiles.length === 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 20px', gap: 10 }}>
                     <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>☁</div>
-                    <div style={{ fontSize: 13, color: '#9CA3AF', textAlign: 'center' }}>
-                      Arrastra archivos aquí o haz <span style={{ color: cfg.color, fontWeight: 700, cursor: 'pointer' }}>clic para seleccionar</span>
-                    </div>
+                    <div style={{ fontSize: 13, color: '#9CA3AF', textAlign: 'center' }}>Arrastra archivos aquí o haz <span style={{ color: cfg.color, fontWeight: 700, cursor: 'pointer' }}>clic para seleccionar</span></div>
                     <div style={{ fontSize: 11, color: '#6B7280' }}>JPG, PNG, PDF, DOC, XLS (Máx. 20MB)</div>
                   </div>
                 ) : (
@@ -399,174 +776,126 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                         {f.preview
                           // eslint-disable-next-line @next/next/no-img-element
                           ? <img src={f.preview} alt={f.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                          : <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', gap:4, padding: 8 }}>
+                          : <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', gap:4, padding:8 }}>
                               <span style={{ fontSize: 22 }}>{f.type==='pdf'?'📄':f.type==='doc'?'📝':'📎'}</span>
                               <span style={{ fontSize: 8, color:'#9CA3AF', textAlign:'center', wordBreak:'break-all' }}>{f.name}</span>
-                            </div>
-                        }
-                        <button type="button" onClick={() => setAttachedFiles(prev => prev.filter((_,j)=>j!==i))}
-                          style={{ position:'absolute', top:4, right:4, width:16, height:16, borderRadius:'50%', background:'rgba(0,0,0,0.8)', border:'none', color:'#fff', fontSize:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                            </div>}
+                        <button type="button" onClick={() => setAttachedFiles(prev => prev.filter((_,j)=>j!==i))} style={{ position:'absolute', top:4, right:4, width:16, height:16, borderRadius:'50%', background:'rgba(0,0,0,0.8)', border:'none', color:'#fff', fontSize:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
                       </div>
                     ))}
-                    <button type="button" onClick={() => fileInputRef.current?.click()}
-                      style={{ borderRadius:10, border:'1px dashed rgba(255,255,255,0.12)', background:'rgba(255,255,255,0.02)', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, aspectRatio:'4/3', color:'#6B7280', fontSize:22 }}>+</button>
+                    <button type="button" onClick={() => fileInputRef.current?.click()} style={{ borderRadius:10, border:'1px dashed rgba(255,255,255,0.12)', background:'rgba(255,255,255,0.02)', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, aspectRatio:'4/3', color:'#6B7280', fontSize:22 }}>+</button>
                   </div>
                 )}
               </div>
               {uploadingRef && <p style={{ fontSize:10, color:cfg.color, marginTop:4 }}>⏳ Subiendo...</p>}
             </div>
-
             {error && <p style={{ fontSize:12, color:'#FF6B6B', padding:'10px 14px', background:'rgba(255,68,68,0.08)', borderRadius:10, border:'1px solid rgba(255,68,68,0.2)' }}>{error}</p>}
           </div>
 
-          {/* RIGHT SIDEBAR — en mobile aparece debajo del contenido principal */}
-          <div style={{ paddingLeft: isDesktop ? 20 : 0, paddingTop: isDesktop ? 0 : 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-            {/* DETALLES */}
+          {/* SIDEBAR DESKTOP */}
+          <div style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ background: '#1A1D24', borderRadius: 14, border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <span style={{ fontSize: 13 }}>✦</span>
                 <span style={{ fontSize: 10, fontWeight: 800, color: '#F4EEDF', letterSpacing: 1.3, textTransform: 'uppercase' }}>Detalles de la tarea</span>
               </div>
-
               <SidebarRow icon="🕐" label="Tiempo estimado" sub={tiempoH||tiempoM ? `${tiempoH||'0'}h ${tiempoM||'00'}m` : 'Seleccionar tiempo'}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10 }}>
-                  <input type="number" min="0" max="99" value={tiempoH} onChange={e => setTiempoH(e.target.value)} placeholder="0"
-                    style={{ width: 54, borderRadius: 8, textAlign: 'center', fontSize: 13, padding: '7px 8px', background: '#111318', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', outline: 'none' }} />
+                  <input type="number" min="0" max="99" value={tiempoH} onChange={e => setTiempoH(e.target.value)} placeholder="0" style={{ width: 54, borderRadius: 8, textAlign: 'center', fontSize: 13, padding: '7px 8px', background: '#111318', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', outline: 'none' }} />
                   <span style={{ fontSize: 11, color: '#6B7280' }}>h</span>
-                  <input type="number" min="0" max="59" step="15" value={tiempoM} onChange={e => setTiempoM(e.target.value)} placeholder="00"
-                    style={{ width: 54, borderRadius: 8, textAlign: 'center', fontSize: 13, padding: '7px 8px', background: '#111318', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', outline: 'none' }} />
+                  <input type="number" min="0" max="59" step="15" value={tiempoM} onChange={e => setTiempoM(e.target.value)} placeholder="00" style={{ width: 54, borderRadius: 8, textAlign: 'center', fontSize: 13, padding: '7px 8px', background: '#111318', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', outline: 'none' }} />
                   <span style={{ fontSize: 11, color: '#6B7280' }}>m</span>
                 </div>
               </SidebarRow>
-
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                 <SidebarRow icon="📅" label="Fecha de inicio" sub={fechaInicio || 'Opcional'}>
                   <div style={{ paddingTop: 10 }}>
-                    <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)}
-                      style={{ width: '100%', borderRadius: 8, fontSize: 12, padding: '8px 10px', background: '#111318', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', outline: 'none', boxSizing: 'border-box' }} />
+                    <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} style={{ width: '100%', borderRadius: 8, fontSize: 12, padding: '8px 10px', background: '#111318', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                 </SidebarRow>
               </div>
-
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                 <SidebarRow icon="🏷" label="Etiquetas" sub={etiquetas.length > 0 ? etiquetas.join(', ') : 'Agregar etiquetas'}>
                   <div style={{ paddingTop: 10 }}>
-                    {etiquetas.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
-                        {etiquetas.map((et, i) => (
-                          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '3px 8px', borderRadius: 20, background: `${cfg.color}20`, color: cfg.color, border: `1px solid ${cfg.color}30` }}>
-                            {et}
-                            <button type="button" onClick={() => setEtiquetas(prev => prev.filter((_,j)=>j!==i))} style={{ background:'none', border:'none', color:cfg.color, cursor:'pointer', fontSize:10, padding:0, lineHeight:1 }}>×</button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <input value={etiquetaInput} onChange={e => setEtiquetaInput(e.target.value)} onKeyDown={addEtiqueta}
-                      placeholder="Escribe y presiona Enter..."
-                      style={{ width:'100%', borderRadius:8, fontSize:11, padding:'7px 10px', background:'#111318', border:'1px solid rgba(255,255,255,0.1)', color:'#F4EEDF', outline:'none', boxSizing:'border-box' }} />
+                    {etiquetas.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+                      {etiquetas.map((et, i) => (
+                        <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '3px 8px', borderRadius: 20, background: `${cfg.color}20`, color: cfg.color, border: `1px solid ${cfg.color}30` }}>
+                          {et}
+                          <button type="button" onClick={() => setEtiquetas(prev => prev.filter((_,j)=>j!==i))} style={{ background:'none', border:'none', color:cfg.color, cursor:'pointer', fontSize:10, padding:0, lineHeight:1 }}>×</button>
+                        </span>
+                      ))}
+                    </div>}
+                    <input value={etiquetaInput} onChange={e => setEtiquetaInput(e.target.value)} onKeyDown={addEtiqueta} placeholder="Escribe y presiona Enter..." style={{ width:'100%', borderRadius:8, fontSize:11, padding:'7px 10px', background:'#111318', border:'1px solid rgba(255,255,255,0.1)', color:'#F4EEDF', outline:'none', boxSizing:'border-box' }} />
                   </div>
                 </SidebarRow>
               </div>
-
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                 <SidebarRow icon="📁" label="Proyecto" sub={proyecto || 'Seleccionar proyecto'}>
                   <div style={{ paddingTop: 10 }}>
-                    <input value={proyecto} onChange={e => setProyecto(e.target.value)} placeholder="Nombre del proyecto..."
-                      style={{ width:'100%', borderRadius:8, fontSize:12, padding:'8px 10px', background:'#111318', border:'1px solid rgba(255,255,255,0.1)', color:'#F4EEDF', outline:'none', boxSizing:'border-box' }} />
+                    <input value={proyecto} onChange={e => setProyecto(e.target.value)} placeholder="Nombre del proyecto..." style={{ width:'100%', borderRadius:8, fontSize:12, padding:'8px 10px', background:'#111318', border:'1px solid rgba(255,255,255,0.1)', color:'#F4EEDF', outline:'none', boxSizing:'border-box' }} />
                   </div>
                 </SidebarRow>
               </div>
             </div>
-
-            {/* CONFIGURACIÓN */}
             <div style={{ background: '#1A1D24', borderRadius: 14, border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <span style={{ fontSize: 13 }}>⚙</span>
                 <span style={{ fontSize: 10, fontWeight: 800, color: '#F4EEDF', letterSpacing: 1.3, textTransform: 'uppercase' }}>Configuración</span>
               </div>
-
               <SidebarRow icon="👁" label="Visibilidad" sub={visibilidad === 'equipo' ? 'Solo el equipo asignado' : 'Todos los usuarios'}>
                 <div style={{ display: 'flex', gap: 6, paddingTop: 10 }}>
                   {[{ v: 'equipo' as const, label: 'Solo equipo' }, { v: 'todos' as const, label: 'Todos' }].map(opt => (
-                    <button key={opt.v} type="button" onClick={() => setVisibilidad(opt.v)}
-                      style={{ flex: 1, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 700, border: `1px solid ${visibilidad===opt.v ? cfg.color+'50' : 'rgba(255,255,255,0.08)'}`, background: visibilidad===opt.v ? `${cfg.color}15` : 'rgba(255,255,255,0.03)', color: visibilidad===opt.v ? cfg.color : '#9CA3AF' }}>
-                      {opt.label}
-                    </button>
+                    <button key={opt.v} type="button" onClick={() => setVisibilidad(opt.v)} style={{ flex: 1, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 700, border: `1px solid ${visibilidad===opt.v ? cfg.color+'50' : 'rgba(255,255,255,0.08)'}`, background: visibilidad===opt.v ? `${cfg.color}15` : 'rgba(255,255,255,0.03)', color: visibilidad===opt.v ? cfg.color : '#9CA3AF' }}>{opt.label}</button>
                   ))}
                 </div>
               </SidebarRow>
-
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                <SidebarRow icon="🔗" label="Dependencias" sub="Agregar dependencias">
-                  <div style={{ paddingTop: 10 }}>
-                    <div style={{ padding: '8px 10px', borderRadius: 8, background: '#111318', border: '1px solid rgba(255,255,255,0.08)', fontSize: 11, color: '#6B7280', textAlign: 'center' }}>
-                      Funcionalidad próximamente disponible
-                    </div>
-                  </div>
-                </SidebarRow>
-              </div>
-
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                 <SidebarRow icon="☑" label="Checklist" sub={subtareas.length > 0 ? `${subtareas.length} subtareas` : '0/0 subtareas'}>
                   <div style={{ paddingTop: 10 }}>
-                    {subtareas.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
-                        {subtareas.map((st,i) => (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 14, height: 14, borderRadius: 4, border: '1.5px solid rgba(255,255,255,0.2)', flexShrink: 0 }} />
-                            <span style={{ fontSize: 11, color: '#D1D5DB', flex: 1 }}>{st}</span>
-                            <button type="button" onClick={() => setSubtareas(prev => prev.filter((_,j)=>j!==i))} style={{ background:'none', border:'none', color:'#6B7280', cursor:'pointer', fontSize:11 }}>✕</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {subtareas.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
+                      {subtareas.map((st,i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 14, height: 14, borderRadius: 4, border: '1.5px solid rgba(255,255,255,0.2)', flexShrink: 0 }} />
+                          <span style={{ fontSize: 11, color: '#D1D5DB', flex: 1 }}>{st}</span>
+                          <button type="button" onClick={() => setSubtareas(prev => prev.filter((_,j)=>j!==i))} style={{ background:'none', border:'none', color:'#6B7280', cursor:'pointer', fontSize:11 }}>✕</button>
+                        </div>
+                      ))}
+                    </div>}
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <input value={subtareaInput} onChange={e => setSubtareaInput(e.target.value)} onKeyDown={e => e.key==='Enter' && addSubtarea()} placeholder="Nueva subtarea..."
-                        style={{ flex: 1, borderRadius: 8, fontSize: 11, padding: '7px 10px', background: '#111318', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', outline: 'none' }} />
-                      <button type="button" onClick={addSubtarea}
-                        style={{ padding: '7px 10px', borderRadius: 8, background: `${cfg.color}20`, border: `1px solid ${cfg.color}30`, color: cfg.color, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>+</button>
+                      <input value={subtareaInput} onChange={e => setSubtareaInput(e.target.value)} onKeyDown={e => e.key==='Enter' && addSubtarea()} placeholder="Nueva subtarea..." style={{ flex: 1, borderRadius: 8, fontSize: 11, padding: '7px 10px', background: '#111318', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', outline: 'none' }} />
+                      <button type="button" onClick={addSubtarea} style={{ padding: '7px 10px', borderRadius: 8, background: `${cfg.color}20`, border: `1px solid ${cfg.color}30`, color: cfg.color, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>+</button>
                     </div>
                   </div>
                 </SidebarRow>
               </div>
-
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                 <SidebarRow icon="📊" label="Nivel de esfuerzo" sub={esfuerzo || 'Seleccionar nivel'}>
                   <div style={{ display: 'flex', gap: 5, paddingTop: 10, flexWrap: 'wrap' }}>
                     {ESFUERZO_OPTIONS.map(op => (
-                      <button key={op} type="button" onClick={() => setEsfuerzo(esfuerzo === op ? '' : op)}
-                        style={{ padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 700, border: `1px solid ${esfuerzo===op ? cfg.color+'50' : 'rgba(255,255,255,0.08)'}`, background: esfuerzo===op ? `${cfg.color}15` : 'rgba(255,255,255,0.03)', color: esfuerzo===op ? cfg.color : '#9CA3AF' }}>
-                        {op}
-                      </button>
+                      <button key={op} type="button" onClick={() => setEsfuerzo(esfuerzo === op ? '' : op)} style={{ padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 700, border: `1px solid ${esfuerzo===op ? cfg.color+'50' : 'rgba(255,255,255,0.08)'}`, background: esfuerzo===op ? `${cfg.color}15` : 'rgba(255,255,255,0.03)', color: esfuerzo===op ? cfg.color : '#9CA3AF' }}>{op}</button>
                     ))}
                   </div>
                 </SidebarRow>
               </div>
             </div>
-
           </div>
         </div>
 
-        {/* FOOTER */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isDesktop ? '14px 28px' : '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, gap: 10, flexWrap: isDesktop ? 'nowrap' : 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
-            <div onClick={() => setCrearOtra(v => !v)}
-              style={{ width: 17, height: 17, borderRadius: 5, background: crearOtra ? cfg.color : 'transparent', border: `1.5px solid ${crearOtra ? cfg.color : 'rgba(156,163,175,0.4)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#0A0A0A', fontWeight: 900, cursor: 'pointer' }}>
-              {crearOtra && '✓'}
-            </div>
+        {/* FOOTER DESKTOP */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 28px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, gap: 10 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+            <IOSToggle value={crearOtra} onChange={setCrearOtra} color={cfg.color} />
             <span style={{ fontSize: 12, color: '#9CA3AF' }}>Crear otra tarea después</span>
           </label>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={onClose}
-              style={{ padding: '10px 22px', borderRadius: 10, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, color: '#9CA3AF', fontWeight: 600 }}
-              onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.05)'; e.currentTarget.style.color='#F4EEDF' }}
-              onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#9CA3AF' }}>
+              style={{ padding: '10px 22px', borderRadius: 10, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, color: '#9CA3AF', fontWeight: 600 }}>
               Cancelar
             </button>
-            <button type="button" onClick={() => handleSubmit(false)} disabled={!canSubmit||loading}
-              style={{ padding: '10px 28px', borderRadius: 10, cursor: canSubmit ? 'pointer' : 'not-allowed', background: canSubmit ? `linear-gradient(135deg,${cfg.color},${cfg.color}CC)` : 'rgba(107,114,128,0.15)', border: 'none', fontSize: 13, fontWeight: 800, color: canSubmit ? '#0A0A0A' : '#6B7280', display: 'flex', alignItems: 'center', gap: 7, opacity: loading ? 0.7 : 1, boxShadow: canSubmit ? `0 4px 20px ${cfg.color}40` : 'none', transition: 'all 0.2s' }}>
-              <span>✓</span>{loading ? 'Creando...' : `Crear tarea${selectedIds.length > 1 ? ` (${selectedIds.length})` : ''}`}
+            <button type="button" onClick={handleSubmit} disabled={!canSubmit || loading}
+              style={{ padding: '10px 28px', borderRadius: 10, cursor: canSubmit ? 'pointer' : 'not-allowed', background: canSubmit ? 'linear-gradient(135deg,#3B82F6,#2563EB)' : 'rgba(107,114,128,0.15)', border: 'none', fontSize: 13, fontWeight: 800, color: canSubmit ? '#fff' : '#6B7280', display: 'flex', alignItems: 'center', gap: 7, opacity: loading ? 0.7 : 1, boxShadow: canSubmit ? '0 4px 20px rgba(59,130,246,0.35)' : 'none', transition: 'all 0.2s' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              {loading ? 'Creando...' : `Crear tarea${selectedIds.length > 1 ? ` (${selectedIds.length})` : ''}`}
             </button>
           </div>
         </div>
@@ -574,9 +903,4 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
       </div>
     </div>
   )
-}
-
-const LBL: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, color: '#9CA3AF',
-  letterSpacing: 1.2, textTransform: 'uppercase', display: 'block', marginBottom: 6,
 }
