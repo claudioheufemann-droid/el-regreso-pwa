@@ -2,11 +2,12 @@
 
 import { useState, useCallback, useMemo, useEffect, lazy, Suspense } from 'react'
 const MisionesAdminDashboard = lazy(() => import('./MisionesAdminDashboard'))
+const CalendarioMensual = lazy(() => import('./CalendarioMensual'))
 import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
   CheckCircle2, Phone, PhoneOff, MessageCircle, RefreshCw, Calendar,
-  ChevronDown, ChevronRight, Target, Minus, Plus, ArrowLeft, Sparkles,
+  ChevronDown, ChevronRight, Target, Minus, Plus, ArrowLeft, Sparkles, UserX,
 } from 'lucide-react'
 import type { MisionEnriquecida, ProximaPreview, HistorialSemana, EstadoMision, TipoMision } from './page'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
@@ -191,12 +192,13 @@ function BotonesAccion({ mision, onActualizar, loading }: {
 }
 
 // ── Panel de detalle (desktop) ────────────────────────────────────────────────
-function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose }: {
+function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarInactivo }: {
   mision: MisionEnriquecida | null
   onActualizar: OnActualizar
   onWA: (m: MisionEnriquecida) => void
   loadingId: string | null
   onClose?: () => void
+  onMarcarInactivo?: (m: MisionEnriquecida) => void
 }) {
   const [litrosInput, setLitrosInput] = useState(50)
   const [diasPosp, setDiasPospD] = useState(5)
@@ -482,6 +484,26 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose }: {
             </button>
           )}
         </div>
+
+        {/* Marcar inactivo */}
+        {onMarcarInactivo && (
+          <button
+            onClick={() => {
+              if (window.confirm(`¿Marcar a "${mision.nombre_fantasia}" como INACTIVO? Dejará de aparecer en misiones.`)) {
+                onMarcarInactivo(mision)
+              }
+            }}
+            disabled={loading}
+            style={{
+              marginTop: 10, width: '100%', padding: '9px 0', borderRadius: 10,
+              background: 'transparent', border: '1px solid rgba(248,113,113,0.25)',
+              color: '#F87171', fontSize: 12, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+          >
+            <UserX size={13} /> Marcar cliente como inactivo
+          </button>
+        )}
       </div>
     </div>
   )
@@ -595,11 +617,12 @@ function quickBtn(color: string): React.CSSProperties {
 }
 
 // ── Tarjeta mobile (expandible) ───────────────────────────────────────────────
-function MisionCard({ mision, onActualizar, onWA, loadingId }: {
+function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo }: {
   mision: MisionEnriquecida
   onActualizar: OnActualizar
   onWA: (m: MisionEnriquecida) => void
   loadingId: string | null
+  onMarcarInactivo?: (m: MisionEnriquecida) => void
 }) {
   const [open, setOpen] = useState(false)
   const segColor  = SEG_COLOR[mision.segmento] ?? '#6B7280'
@@ -692,6 +715,22 @@ function MisionCard({ mision, onActualizar, onWA, loadingId }: {
             </div>
           )}
           <BotonesAccion mision={mision} onActualizar={onActualizar} loading={loading} />
+          {onMarcarInactivo && (
+            <button
+              onClick={() => {
+                if (window.confirm(`¿Marcar a "${mision.nombre_fantasia}" como INACTIVO?`)) onMarcarInactivo(mision)
+              }}
+              disabled={loading}
+              style={{
+                marginTop: 8, width: '100%', padding: '8px 0', borderRadius: 10,
+                background: 'transparent', border: '1px solid rgba(248,113,113,0.25)',
+                color: '#F87171', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              <UserX size={12} /> Marcar inactivo
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -824,12 +863,13 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
 }
 
 // ── Sección mobile ────────────────────────────────────────────────────────────
-function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, defaultOpen = true }: {
+function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, onMarcarInactivo, defaultOpen = true }: {
   tipo: TipoMision
   misiones: MisionEnriquecida[]
   onActualizar: OnActualizar
   onWA: (m: MisionEnriquecida) => void
   loadingId: string | null
+  onMarcarInactivo?: (m: MisionEnriquecida) => void
   defaultOpen?: boolean
 }) {
   const [open, setOpen] = useState(defaultOpen)
@@ -867,7 +907,7 @@ function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, defaul
       {open && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {misiones.map(m => (
-            <MisionCard key={m.id} mision={m} onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} />
+            <MisionCard key={m.id} mision={m} onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} />
           ))}
         </div>
       )}
@@ -1046,7 +1086,7 @@ interface Props {
   vendedorNombre: string | null
 }
 
-type Tab = 'resumen' | 'semana' | 'proxima' | 'historial'
+type Tab = 'resumen' | 'semana' | 'calendario' | 'proxima' | 'historial'
 
 export default function MisionesClient({
   misiones: initialMisiones, proxima, historial,
@@ -1133,6 +1173,22 @@ export default function MisionesClient({
     finally { setLoadingId(null) }
   }, [])
 
+  const onMarcarInactivo = useCallback(async (m: MisionEnriquecida) => {
+    setLoadingId(m.id)
+    try {
+      const res = await fetch('/api/clientes/estado', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre_fantasia: m.nombre_fantasia, estado: 'inactivo', nota: 'Marcado desde misiones' }),
+      })
+      if (!res.ok) throw new Error('Error')
+      // Sale de la lista al instante
+      setMisiones(prev => prev.filter(x => x.id !== m.id))
+      setSelectedMision(prev => (prev?.id === m.id ? null : prev))
+    } catch (e) { console.error(e) }
+    finally { setLoadingId(null) }
+  }, [])
+
   const onGenerar = useCallback(async () => {
     setGenerando(true)
     try {
@@ -1152,6 +1208,7 @@ export default function MisionesClient({
   const tabs: { key: Tab; label: string; count?: number }[] = [
     ...(isAdmin ? [{ key: 'resumen' as Tab, label: '📊 Resumen Admin' }] : []),
     { key: 'semana',    label: 'Esta semana',    count: misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length },
+    { key: 'calendario', label: '📅 Calendario' },
     { key: 'proxima',   label: 'Próxima semana', count: proxima.filter(p => { if (!p.siguiente_compra_estimada) return false; const hoy = new Date(); const d7 = new Date(hoy); d7.setDate(d7.getDate()+7); const d14 = new Date(hoy); d14.setDate(d14.getDate()+14); const d = new Date(p.siguiente_compra_estimada + 'T12:00:00'); return d >= d7 && d <= d14 }).length },
     { key: 'historial', label: 'Historial' },
   ]
@@ -1292,6 +1349,7 @@ export default function MisionesClient({
                 onWA={onWA}
                 loadingId={loadingId}
                 onClose={() => setSelectedMision(null)}
+                onMarcarInactivo={onMarcarInactivo}
               />
             </div>
           </div>
@@ -1302,6 +1360,11 @@ export default function MisionesClient({
         {tab === 'resumen' && isAdmin && (
           <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>}>
             <MisionesAdminDashboard isAdmin={isAdmin} />
+          </Suspense>
+        )}
+        {tab === 'calendario' && (
+          <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>}>
+            <CalendarioMensual isAdmin={isAdmin} vendedorActual={vendedorActual} isDesktop />
           </Suspense>
         )}
 
@@ -1321,8 +1384,8 @@ export default function MisionesClient({
 
       {tab === 'semana' && (
         <div>
-          <SeccionMisiones tipo="vencido"      misiones={porTipo.vencido}      onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} />
-          <SeccionMisiones tipo="esta_semana"  misiones={porTipo.esta_semana}  onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} />
+          <SeccionMisiones tipo="vencido"      misiones={porTipo.vencido}      onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} />
+          <SeccionMisiones tipo="esta_semana"  misiones={porTipo.esta_semana}  onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} />
           {misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length === 0 && (
             <div style={{ textAlign: 'center', padding: '36px 16px' }}>
               <p style={{ fontSize: 28, marginBottom: 8 }}>🎉</p>
@@ -1338,6 +1401,11 @@ export default function MisionesClient({
       {tab === 'resumen' && isAdmin && (
         <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>}>
           <MisionesAdminDashboard isAdmin={isAdmin} />
+        </Suspense>
+      )}
+      {tab === 'calendario' && (
+        <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>}>
+          <CalendarioMensual isAdmin={isAdmin} vendedorActual={vendedorActual} isDesktop={false} />
         </Suspense>
       )}
 

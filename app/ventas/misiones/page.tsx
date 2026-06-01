@@ -117,6 +117,7 @@ export default async function MisionesPage() {
     { data: clientesRaw },
     { data: ventasRaw },
     { data: tiposRaw },
+    { data: inactivosRaw },
   ] = await Promise.all([
     // Misiones de esta semana (select '*' = tolerante a columnas nuevas)
     supabase.from('misiones')
@@ -164,6 +165,11 @@ export default async function MisionesPage() {
     supabase.from('client_scores')
       .select('nombre_fantasia, tipo_cliente')
       .in('vendedor_actual', vendedoresScope.length ? vendedoresScope : ['__none__']),
+
+    // Clientes marcados como inactivos manualmente → ocultar de misiones
+    supabase.from('clientes_estado')
+      .select('nombre_fantasia')
+      .eq('estado', 'inactivo'),
   ])
 
   // Mapas de lookup
@@ -183,10 +189,14 @@ export default async function MisionesPage() {
     if (t.nombre_fantasia && t.tipo_cliente)
       tipoClienteMap.set(t.nombre_fantasia, t.tipo_cliente as 'activo' | 'inactivo' | 'temporal' | 'nuevo')
 
-  // Enriquecer misiones actuales (oculta las pospuestas con snooze vigente)
+  // Set de clientes inactivos manuales → se ocultan de misiones al instante
+  const inactivosManuales = new Set<string>((inactivosRaw ?? []).map(c => c.nombre_fantasia))
+
+  // Enriquecer misiones actuales (oculta pospuestas con snooze vigente + inactivos manuales)
   const hoyStr = new Date().toISOString().split('T')[0]
   const misiones: MisionEnriquecida[] = (misionesRaw ?? [])
     .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap))
+    .filter(m => !inactivosManuales.has(m.nombre_fantasia))
     .filter(m => !(m.estado === 'pospuesto' && m.snooze_until && m.snooze_until > hoyStr))
     .sort((a, b) => {
       if (a.estado !== b.estado) return a.estado === 'pendiente' ? -1 : 1
