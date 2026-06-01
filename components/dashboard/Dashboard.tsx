@@ -644,10 +644,12 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
 
       {/* ── Topbar mobile moderno ── */}
-      <div className="safe-top" style={{
+      {/* safe-top solo en el spacer, para no pisar el padding de contenido */}
+      <div style={{
         background: 'linear-gradient(180deg, #13131a 0%, var(--surface) 100%)',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
         flexShrink: 0,
+        paddingTop: 'env(safe-area-inset-top, 44px)',
       }}>
         {/* Fila superior: logo+nombre / acciones */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '16px 18px 10px', gap: 12 }}>
