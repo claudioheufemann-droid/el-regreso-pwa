@@ -11,6 +11,21 @@
 -- Seguro de re-ejecutar.
 -- =============================================================================
 
+-- ── 0. Tabla clientes_estado (si no existe) ───────────────────────────────────
+CREATE TABLE IF NOT EXISTS clientes_estado (
+  nombre_fantasia  text        PRIMARY KEY,
+  estado           text        NOT NULL DEFAULT 'activo'
+                               CHECK (estado IN ('activo','inactivo','estacional')),
+  nota             text,
+  updated_at       timestamptz DEFAULT now(),
+  updated_by       text
+);
+ALTER TABLE clientes_estado ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "authenticated_all" ON clientes_estado;
+CREATE POLICY "authenticated_all" ON clientes_estado
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON clientes_estado TO authenticated;
+
 DROP FUNCTION IF EXISTS get_pending_call_alerts(text, text);
 DROP FUNCTION IF EXISTS get_client_scores(text, numeric, text);
 
@@ -277,10 +292,11 @@ GRANT EXECUTE ON FUNCTION get_client_scores TO anon, authenticated;
 -- ── 5. NUEVA función: calendario mensual de pedidos esperados ─────────────────
 --    Proyecta las fechas de pedido esperadas de cada cliente activo dentro
 --    de un rango, repitiendo según su ciclo. Para la línea de tiempo mensual.
-CREATE OR REPLACE FUNCTION get_calendario_pedidos(
+DROP FUNCTION IF EXISTS get_calendario_pedidos(text, date, date);
+CREATE FUNCTION get_calendario_pedidos(
   p_vendedor text DEFAULT NULL,
   p_desde    date DEFAULT CURRENT_DATE,
-  p_hasta    date DEFAULT (CURRENT_DATE + INTERVAL '31 days')::date
+  p_hasta    date DEFAULT (CURRENT_DATE + 31)
 )
 RETURNS TABLE (
   nombre_fantasia text,
@@ -300,20 +316,23 @@ LANGUAGE sql STABLE PARALLEL SAFE AS $$
     LEFT JOIN clientes_estado ce ON ce.nombre_fantasia = cs.nombre_fantasia
     WHERE (p_vendedor IS NULL OR cs.vendedor_actual = p_vendedor)
       AND cs.ciclo_promedio_dias IS NOT NULL
+      AND cs.ciclo_promedio_dias > 0
       AND cs.total_pedidos >= 3
       AND cs.tipo_cliente <> 'inactivo'
       AND COALESCE(ce.estado, 'activo') <> 'inactivo'
       AND cs.siguiente_compra_estimada IS NOT NULL
   ),
   proyeccion AS (
-    SELECT b.*,
-      -- Generar fechas: desde la siguiente compra estimada, repetir cada ciclo
-      generate_series(
-        GREATEST(b.siguiente_compra_estimada, p_desde - (b.ciclo_promedio_dias || ' days')::interval)::date,
-        p_hasta,
-        (b.ciclo_promedio_dias || ' days')::interval
-      )::date AS fecha_esperada
+    SELECT
+      b.nombre_fantasia, b.vendedor_actual, b.segmento, b.tipo_cliente,
+      b.ciclo_promedio_dias, b.litros_por_pedido,
+      gs::date AS fecha_esperada
     FROM base b
+    CROSS JOIN LATERAL generate_series(
+      b.siguiente_compra_estimada::timestamp,
+      p_hasta::timestamp,
+      make_interval(days => b.ciclo_promedio_dias)
+    ) AS gs
   )
   SELECT
     nombre_fantasia, vendedor_actual, segmento, tipo_cliente,
