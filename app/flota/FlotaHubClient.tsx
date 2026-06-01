@@ -305,82 +305,68 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
           const viaje = viajesActivos.find(va => va.vehiculo_id === v.id)
           const conductor = conductores.find(c => c.id === viaje?.conductor_id)
           return (
-            <div key={v.id} style={{ background: 'var(--surface2)', border: `1px solid ${v.estado === 'en_uso' ? 'rgba(245,158,11,0.3)' : v.estado === 'mantenimiento' ? 'rgba(255,85,85,0.2)' : 'rgba(255,255,255,0.06)'}`, borderRadius: 18, overflow: 'hidden', position: 'relative' }}>
-              {/* Foto real del vehículo (cinematic) */}
-              <div style={{
-                position: 'absolute', right: 0, top: 0, bottom: 0, width: '62%',
-                maskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.65) 28%, black 100%)',
-                WebkitMaskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.65) 28%, black 100%)',
-                pointerEvents: 'none', overflow: 'hidden',
-              } as React.CSSProperties}>
+            <div key={v.id} style={{
+              background: 'var(--surface2)',
+              border: `1px solid ${v.estado === 'en_uso' ? 'rgba(245,158,11,0.3)' : v.estado === 'mantenimiento' ? 'rgba(255,85,85,0.2)' : 'rgba(255,255,255,0.06)'}`,
+              borderRadius: 18, overflow: 'hidden',
+              display: 'flex', alignItems: 'stretch',
+            }}>
+              {/* ── FOTO IZQUIERDA ── */}
+              <div style={{ width: 110, flexShrink: 0, position: 'relative', background: '#0a0a0f', overflow: 'hidden' }}>
                 <VehiclePhoto nombre={v.nombre} tipo={v.tipo} />
-                {/* Dark cinematic overlay */}
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)' }} />
-              </div>
-              {/* SVG fallback — visible si foto no carga */}
-              <div style={{
-                position: 'absolute', right: 0, top: 0, bottom: 0, width: '58%',
-                maskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.75) 100%)',
-                WebkitMaskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.75) 100%)',
-                opacity: 0.5, display: 'flex', alignItems: 'center',
-                pointerEvents: 'none', zIndex: -1,
-              } as React.CSSProperties}>
-                {getVehicleArt(v.nombre, v.tipo)}
-              </div>
-              <div style={{ padding: '14px 16px', position: 'relative', zIndex: 2 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 42, height: 42, borderRadius: 11, flexShrink: 0, background: F_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Truck size={20} color={F} />
+                {/* overlay fade derecha para fusionar con el contenido */}
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, transparent 50%, var(--surface2) 100%)' }} />
+                {/* overlay oscuro sutil */}
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)' }} />
+                {/* SVG fallback si no hay foto */}
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>
+                  {getVehicleArt(v.nombre, v.tipo)}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF', marginBottom: 2 }}>{v.nombre}</p>
-                  {v.modelo && (
-                    <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{v.modelo}{v.color ? ` · ${v.color}` : ''}</p>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                    {v.patente && (
-                      <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 7, padding: '4px 10px', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase' }}>Patente</span>
-                        <span style={{ fontSize: 14, fontWeight: 900, color: '#F4EEDF', letterSpacing: '1.5px' }}>{v.patente}</span>
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 10, color: 'var(--muted)' }}>{v.anio ?? ''} · {TIPO_LABEL[v.tipo] ?? v.tipo}</span>
-                      <span style={{ fontSize: 10, color: 'var(--muted)' }}>{v.km_actual.toLocaleString('es-CL')} km</span>
-                    </div>
+              </div>
+
+              {/* ── CONTENIDO DERECHA ── */}
+              <div style={{ flex: 1, minWidth: 0, padding: '14px 14px 14px 10px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF', marginBottom: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.nombre}</p>
+                    {v.modelo && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{v.modelo}{v.color ? ` · ${v.color}` : ''}</p>}
                   </div>
-                  <CombustibleMini nivel={v.combustible} />
-                  {viaje && (
-                    <div style={{ marginTop: 4 }}>
-                      <p style={{ fontSize: 11, color: '#F59E0B' }}>
-                        {conductor?.nombre?.split(' ')[0] ?? 'En uso'} · {viaje.tipo === 'reparto' ? 'Reparto' : 'Trámite'} · {tiempoTranscurrido(viaje.iniciado_at)}
-                      </p>
-                      {viaje.tipo === 'tramite' && viaje.destino_declarado && (
-                        <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                          📍 {viaje.destino_declarado}
-                          {viaje.llegada_confirmada_at && <span style={{ color: '#4ADE80', marginLeft: 6 }}>✓ Llegada confirmada</span>}
-                        </p>
-                      )}
+                  <EstadoChip estado={v.estado} />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                  {v.patente && (
+                    <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 7, padding: '3px 9px', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <span style={{ fontSize: 7, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase' }}>Patente</span>
+                      <span style={{ fontSize: 13, fontWeight: 900, color: '#F4EEDF', letterSpacing: '1.5px' }}>{v.patente}</span>
                     </div>
                   )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>{v.anio ?? ''} · {TIPO_LABEL[v.tipo] ?? v.tipo}</span>
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>{v.km_actual.toLocaleString('es-CL')} km</span>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                  <EstadoChip estado={v.estado} />
-                  {viaje && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+
+                <CombustibleMini nivel={v.combustible} />
+
+                {viaje && (
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap' }}>
+                    <p style={{ fontSize: 11, color: '#F59E0B' }}>
+                      {conductor?.nombre?.split(' ')[0] ?? 'En uso'} · {viaje.tipo === 'reparto' ? 'Reparto' : 'Trámite'} · {tiempoTranscurrido(viaje.iniciado_at)}
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
                       {viaje.tipo === 'tramite' && !viaje.llegada_confirmada_at && (
-                        <Link href={`/flota/llegada/${viaje.id}`} style={{ fontSize: 11, fontWeight: 700, color: '#4ADE80', textDecoration: 'none', background: 'rgba(74,222,128,0.1)', padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(74,222,128,0.25)' }}>
+                        <Link href={`/flota/llegada/${viaje.id}`} style={{ fontSize: 10, fontWeight: 700, color: '#4ADE80', textDecoration: 'none', background: 'rgba(74,222,128,0.1)', padding: '3px 8px', borderRadius: 7, border: '1px solid rgba(74,222,128,0.25)', whiteSpace: 'nowrap' }}>
                           📍 Confirmar llegada
                         </Link>
                       )}
-                      <Link href={`/flota/checkout/${viaje.id}`} style={{ fontSize: 11, fontWeight: 700, color: F, textDecoration: 'none', background: F_DIM, padding: '4px 10px', borderRadius: 8 }}>
+                      <Link href={`/flota/checkout/${viaje.id}`} style={{ fontSize: 11, fontWeight: 700, color: F, textDecoration: 'none', background: F_DIM, padding: '4px 10px', borderRadius: 8, whiteSpace: 'nowrap' }}>
                         Cerrar viaje
                       </Link>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-              </div>{/* cierre padding div */}
             </div>
           )
         })}
