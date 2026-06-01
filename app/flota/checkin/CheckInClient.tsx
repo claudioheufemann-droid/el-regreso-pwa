@@ -282,7 +282,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: 1, minHeight: 0, background: '#080808', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(249,115,22,0.15)', padding: '14px 16px 10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
