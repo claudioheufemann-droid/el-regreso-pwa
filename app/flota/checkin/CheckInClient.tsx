@@ -60,7 +60,8 @@ function SelectorManual({ value, onChange }: { value: string; onChange: (v: stri
 
 interface Vehiculo { id: string; nombre: string; tipo: string; patente: string | null; km_actual: number; estado: string; combustible: string | null }
 interface Ruta { id: string; nombre: string | null; vehiculo_id: string; km_teoricos: number | null; estado: string }
-interface Props { user: AppUser; vehiculos: Vehiculo[]; rutasHoy: Ruta[] }
+interface ClienteFlota { nombre_fantasia: string; direccion: string | null; localidad: string | null; ruta_despacho: string | null; lat: number | null; lng: number | null }
+interface Props { user: AppUser; vehiculos: Vehiculo[]; rutasHoy: Ruta[]; clientes: ClienteFlota[] }
 
 const TIPO_LABEL: Record<string, string> = { camioneta: 'Camioneta', furgon: 'Furgón', camion_34: 'Camión 3/4' }
 
@@ -104,7 +105,7 @@ async function fileToBase64(file: File): Promise<string> {
   })
 }
 
-export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
+export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [paso, setPaso] = useState(1)
@@ -115,6 +116,22 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
   const [rutaId, setRutaId] = useState<string | null>(null)
   const [motivo, setMotivo] = useState('')
   const [destino, setDestino] = useState('')
+  const [clienteSearch, setClienteSearch] = useState('')
+  const [showClienteSuggestions, setShowClienteSuggestions] = useState(false)
+
+  const clientesFiltrados = clienteSearch.trim().length > 0
+    ? clientes.filter(c =>
+        c.nombre_fantasia.toLowerCase().includes(clienteSearch.toLowerCase()) ||
+        (c.localidad ?? '').toLowerCase().includes(clienteSearch.toLowerCase())
+      ).slice(0, 6)
+    : []
+
+  function seleccionarCliente(c: ClienteFlota) {
+    const dir = [c.nombre_fantasia, c.direccion, c.localidad].filter(Boolean).join(' — ')
+    setDestino(dir)
+    setClienteSearch(c.nombre_fantasia)
+    setShowClienteSuggestions(false)
+  }
 
   // Fotos
   const [fotoOdo, setFotoOdo] = useState('')
@@ -298,15 +315,35 @@ export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
                 <p style={{ fontSize: 12, color: 'var(--muted)' }}>Trámites o uso libre · Requiere motivo</p>
                 {tipoSalida === 'tramite' && (
                   <div onClick={e => e.stopPropagation()} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div>
+                    <div style={{ position: 'relative' }}>
                       <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>
-                        Dirección de destino *
+                        Cliente o destino *
                       </label>
                       <input
-                        value={destino} onChange={e => setDestino(e.target.value)}
-                        placeholder="Ej: Arauco 215, Valdivia"
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: '#131313', border: `1px solid ${destino.trim() ? 'rgba(249,115,22,0.4)' : 'rgba(255,255,255,0.1)'}`, color: '#F4EEDF', fontSize: 14, outline: 'none' }}
+                        value={clienteSearch}
+                        onChange={e => { setClienteSearch(e.target.value); setDestino(e.target.value); setShowClienteSuggestions(true) }}
+                        onFocus={() => setShowClienteSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 150)}
+                        placeholder="Buscar cliente o escribir dirección..."
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: '#131313', border: `1px solid ${destino.trim() ? 'rgba(249,115,22,0.4)' : 'rgba(255,255,255,0.1)'}`, color: '#F4EEDF', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
                       />
+                      {showClienteSuggestions && clientesFiltrados.length > 0 && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, marginTop: 4, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+                          {clientesFiltrados.map(c => (
+                            <div key={c.nombre_fantasia} onMouseDown={() => seleccionarCliente(c)}
+                              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(249,115,22,0.08)')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>{c.nombre_fantasia}</div>
+                              {(c.direccion || c.localidad) && (
+                                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                                  {[c.direccion, c.localidad].filter(Boolean).join(' · ')}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>

@@ -42,19 +42,21 @@ export default async function NuevaVisitaPage({
     visitaRetomada = data ?? null
   }
 
-  // Clientes únicos de ventas para búsqueda
-  const { data: clientesVentas } = await supabase
-    .from('ventas')
-    .select('nombre_fantasia, categoria_negocio, localidad')
+  // Clientes desde tabla maestra (compartida entre módulos)
+  const { data: clientesMaestros } = await supabase
+    .from('clientes')
+    .select('nombre_fantasia, categoria, localidad, direccion, lat, lng')
     .not('nombre_fantasia', 'is', null)
     .order('nombre_fantasia')
 
-  const seen = new Set<string>()
-  const clientes = (clientesVentas ?? []).filter(c => {
-    if (!c.nombre_fantasia || seen.has(c.nombre_fantasia)) return false
-    seen.add(c.nombre_fantasia)
-    return true
-  })
+  const clientes = (clientesMaestros ?? []).map(c => ({
+    nombre_fantasia: c.nombre_fantasia,
+    categoria_negocio: c.categoria ?? null,
+    localidad: c.localidad ?? null,
+    direccion: c.direccion ?? null,
+    lat: c.lat ?? null,
+    lng: c.lng ?? null,
+  }))
 
   // Productos del catálogo — filtrados y normalizados
   const { data: productosRaw } = await supabase
