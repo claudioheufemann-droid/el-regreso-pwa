@@ -28,6 +28,10 @@
     {
       "path": "/api/cron/followup-alerts",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/reporte-ventas",
+      "schedule": "0 12,13 * * 1"
     }
   ]
 }
