@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createServerClient } from '@supabase/ssr'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
+import { getServerUser } from '@/lib/auth'
 
 // Cron: lunes 13:00 UTC = 9:00 Chile (invierno UTC-4). En verano (UTC-3) llega 10:00.
 // Plan Hobby solo permite 1 disparo diario; al pasar a Pro se puede afinar a "0 12,13".
@@ -25,8 +26,18 @@ function mondayAgo(weeks: number): Date {
 }
 
 export async function GET(req: Request) {
+  // Autoriza: (a) el cron de Vercel (Bearer CRON_SECRET) o (b) un admin logueado
+  // que abre la URL en el navegador para enviar el reporte manualmente.
   const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  let authorized = !!process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`
+  let manual = false
+  if (!authorized) {
+    try {
+      const user = await getServerUser()
+      if (user?.isAdmin) { authorized = true; manual = true }
+    } catch { /* sin sesión */ }
+  }
+  if (!authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -177,5 +188,5 @@ export async function GET(req: Request) {
     html,
   })
 
-  return NextResponse.json({ ok: true, sent_to: adminEmails, semana: ini, litros, misPct })
+  return NextResponse.json({ ok: true, manual, sent_to: adminEmails, semana: ini, litros, misPct, riesgo: riesgoArr.length })
 }
