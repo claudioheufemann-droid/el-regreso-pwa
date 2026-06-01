@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { VENDEDORES } from '@/lib/types'
+import { getVentasRango } from '@/lib/ventasCache'
 import MetasClient from './MetasClient'
 
 export const revalidate = 120
@@ -51,31 +52,15 @@ export default async function MetasPage() {
   const semInicio = metasSemanales?.[0]?.fecha_inicio  ?? fechaRef
   const semFin    = metasSemanales?.[0]?.fecha_fin     ?? fechaRef
 
-  // Paginación: Supabase devuelve máx 1000 filas. Un mes con muchas SKUs supera ese límite.
-  async function fetchVentas(fechaIni: string, fechaFin: string) {
-    const cols = 'vendedor_actual, litros, categoria_negocio, fecha_pedido, categoria_producto, producto'
-    const rows: { vendedor_actual: string; litros: number; categoria_negocio: string | null; fecha_pedido: string; categoria_producto: string | null; producto: string | null }[] = []
-    let offset = 0
-    const PAGE = 1000
-    while (true) {
-      const { data } = await supabase.from('ventas').select(cols)
-        .in('vendedor_actual', VENDEDORES)
-        .gte('fecha_pedido', fechaIni).lte('fecha_pedido', fechaFin)
-        .order('fecha_pedido', { ascending: true })
-        .range(offset, offset + PAGE - 1)
-      if (!data || data.length === 0) break
-      rows.push(...data)
-      if (data.length < PAGE) break
-      offset += PAGE
-    }
-    return rows
-  }
-
-  const [ventasMes, ventasSemana, { data: usersData }] = await Promise.all([
-    fetchVentas(mesInicio, fechaRef),
-    fetchVentas(semInicio, fechaRef),
+  // Ventas cacheadas (compartidas entre usuarios). Metas siempre usa todos los vendedores.
+  const [ventasMesRaw, ventasSemanaRaw, { data: usersData }] = await Promise.all([
+    getVentasRango(mesInicio, fechaRef),
+    getVentasRango(semInicio, fechaRef),
     supabase.from('users').select('nombre, avatar_url').in('nombre', ['Javier B.', 'Carlos U.']),
   ])
+  // Coerción de litros (cache lo expone como number|null)
+  const ventasMes    = ventasMesRaw.map(v => ({ ...v, litros: v.litros ?? 0 }))
+  const ventasSemana = ventasSemanaRaw.map(v => ({ ...v, litros: v.litros ?? 0 }))
 
   // Mapa nombre_completo → avatar_url para los vendedores
   // El nombre en ventas es "Javier Badilla" / "Carlos Urrejola" pero en users es "Javier B." / "Carlos U."

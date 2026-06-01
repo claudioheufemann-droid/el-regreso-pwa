@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { VENDEDORES, esClienteExcluido } from '@/lib/types'
+import { getVentasRango } from '@/lib/ventasCache'
 import AcumuladoClient from './AcumuladoClient'
 
 export const revalidate = 120
@@ -79,56 +80,17 @@ export default async function AcumuladoPage() {
   const fechaFin    = periodo?.fecha_fin    ?? new Date().toISOString().split('T')[0]
   const prev = prevPeriod(fechaInicio)
 
-  // Paginación: PostgREST/Supabase limita a 1000 filas por request aunque se indique limit mayor.
-  // Usamos .range() en loop para obtener TODAS las filas sin truncar.
-  const PAGE = 1000
-  const ventasRaw: {
-    vendedor_actual: string; litros: number|null; total_sin_impuesto: number|null
-    categoria_negocio: string|null; categoria_producto: string|null
-    fecha_pedido: string; nombre_fantasia: string|null; pedido?: string|null
-  }[] = []
-  const ventasPrevRaw: {
-    vendedor_actual: string; litros: number|null; total_sin_impuesto: number|null
-    categoria_negocio: string|null; categoria_producto: string|null
-    fecha_pedido: string; nombre_fantasia: string|null
-  }[] = []
-
-  await Promise.all([
-    (async () => {
-      let off = 0
-      while (true) {
-        const { data } = await supabase.from('ventas')
-          .select('vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,fecha_pedido,nombre_fantasia,pedido')
-          .in('vendedor_actual', scope).gte('fecha_pedido', fechaInicio).lte('fecha_pedido', fechaFin)
-          .order('fecha_pedido', { ascending: true }).range(off, off + PAGE - 1)
-        if (!data || data.length === 0) break
-        ventasRaw.push(...data)
-        if (data.length < PAGE) break
-        off += PAGE
-      }
-    })(),
-    (async () => {
-      let off = 0
-      while (true) {
-        const { data } = await supabase.from('ventas')
-          .select('vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,fecha_pedido,nombre_fantasia')
-          .in('vendedor_actual', scope).gte('fecha_pedido', prev.inicio).lte('fecha_pedido', prev.fin)
-          .order('fecha_pedido', { ascending: true }).range(off, off + PAGE - 1)
-        if (!data || data.length === 0) break
-        ventasPrevRaw.push(...data)
-        if (data.length < PAGE) break
-        off += PAGE
-      }
-    })(),
-  ])
-
-  const [{ data: metasData }, { data: riesgoRaw }] = await Promise.all([
+  // Ventas cacheadas (compartidas entre usuarios) + filtro por scope en memoria
+  const inScope = (v: { vendedor_actual: string }) => scope.includes(v.vendedor_actual)
+  const [ventasRangoActual, ventasRangoPrev, { data: metasData }, { data: riesgoRaw }] = await Promise.all([
+    getVentasRango(fechaInicio, fechaFin),
+    getVentasRango(prev.inicio, prev.fin),
     supabase.from('metas').select('vendedor,meta_litros,tipo').eq('periodo_id', periodo?.id??-1).eq('tipo','mensual'),
     supabase.rpc('get_pending_call_alerts', { p_vendedor: null, p_nivel_minimo: 'critico' }),
   ])
 
-  const ventas     = (ventasRaw    ??[]).filter(v=>!excluido(v.nombre_fantasia))
-  const ventasPrev = (ventasPrevRaw??[]).filter(v=>!excluido(v.nombre_fantasia))
+  const ventas     = ventasRangoActual.filter(v => inScope(v) && !excluido(v.nombre_fantasia))
+  const ventasPrev = ventasRangoPrev.filter(v => inScope(v) && !excluido(v.nombre_fantasia))
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const totalLitros     = ventas.reduce((s,v)=>s+(v.litros??0),0)
