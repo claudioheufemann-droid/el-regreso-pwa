@@ -105,38 +105,39 @@ type TabKey = 'todas' | 'en-proceso' | 'atrasadas' | 'sin-iniciar' | 'completada
 interface KpiCardProps {
   value: number; label: string; sub: string
   color: string; bg: string; border: string; glow: string
-  icon: React.ReactNode; up?: boolean
+  icon: React.ReactNode; up?: boolean; compact?: boolean
   onClick?: () => void
 }
-function KpiCard({ value, label, sub, color, bg, border, glow, icon, up = true, onClick }: KpiCardProps) {
-  // isDesktop is not available here since this is outside the main component,
-  // so we pass compact via a data attribute workaround — instead we just use responsive values inline
+function KpiCard({ value, label, sub, color, bg, border, glow, icon, up = true, compact = false, onClick }: KpiCardProps) {
   return (
     <div onClick={onClick} style={{
-      borderRadius: 16, padding: '16px 16px 12px', position: 'relative', overflow: 'hidden',
+      borderRadius: compact ? 14 : 16,
+      padding: compact ? '12px 12px 8px' : '16px 16px 12px',
+      position: 'relative', overflow: 'hidden',
       background: bg, border: `1px solid ${border}`,
       boxShadow: `0 4px 28px ${glow}`,
-      cursor: onClick ? 'pointer' : 'default', minHeight: 140,
+      cursor: onClick ? 'pointer' : 'default',
+      minHeight: compact ? 110 : 140,
       display: 'flex', flexDirection: 'column',
     }}>
       {/* top row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 11, background: `${color}22`, border: `1px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: compact ? 6 : 10 }}>
+        <div style={{ width: compact ? 28 : 36, height: compact ? 28 : 36, borderRadius: compact ? 8 : 11, background: `${color}22`, border: `1px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {icon}
         </div>
-        <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>→</div>
+        <div style={{ width: compact ? 20 : 26, height: compact ? 20 : 26, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 10 : 12, color: 'rgba(255,255,255,0.4)' }}>→</div>
       </div>
       {/* number */}
-      <div style={{ fontSize: 42, fontWeight: 900, color, lineHeight: 1, letterSpacing: -2, marginBottom: 6 }}>{value}</div>
+      <div style={{ fontSize: compact ? 34 : 42, fontWeight: 900, color, lineHeight: 1, letterSpacing: -2, marginBottom: compact ? 4 : 6 }}>{value}</div>
       {/* label */}
-      <div style={{ fontSize: 9, fontWeight: 800, color, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: compact ? 8 : 9, fontWeight: 800, color, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
       {/* sub */}
-      <div style={{ fontSize: 9, color: `${color}88`, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-        <span style={{ width: 4, height: 4, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      <div style={{ fontSize: 8, color: `${color}88`, display: 'flex', alignItems: 'center', gap: 3, marginBottom: 4 }}>
+        <span style={{ width: 3, height: 3, borderRadius: '50%', background: color, flexShrink: 0 }} />
         {sub}
       </div>
-      {/* sparkline — en flujo, no superpuesta */}
-      <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'flex-end', pointerEvents: 'none' }}>
+      {/* sparkline */}
+      <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'flex-end', pointerEvents: 'none', opacity: compact ? 0.7 : 1 }}>
         <Sparkline color={color} up={up} />
       </div>
     </div>
@@ -250,7 +251,8 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
       return { area, ac, total, done: activeTasks.filter(t => t.area === area && t.estado === 'Completada').length }
     })
 
-  const CARD: React.CSSProperties = { background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: '22px 24px' }
+  const CARD: React.CSSProperties = { background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: isDesktop ? '22px 24px' : '16px 18px' }
+  const CARD_SNAP: React.CSSProperties = isDesktop ? CARD : { ...CARD, minWidth: '75vw', scrollSnapAlign: 'start', flexShrink: 0 }
   const actColor: Record<string,string> = { completada:'#22C55E', proceso:'#E67E22', asignada:'#5B8AA8' }
   const actIcon:  Record<string,string> = { completada:'✓', proceso:'↻', asignada:'↗' }
   const actVerb:  Record<string,string> = { completada:'completó', proceso:'inició', asignada:'asignó' }
@@ -258,19 +260,27 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-      {/* HEADER */}
-      <div style={{ display: 'flex', alignItems: isDesktop ? 'center' : 'flex-start', justifyContent: 'space-between', flexDirection: isDesktop ? 'row' : 'column', gap: isDesktop ? 0 : 10 }}>
-        <div>
-          {macroConfig && <div style={{ fontSize: 10, fontWeight: 700, color: macroConfig.color, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>{macroConfig.code} · {macroConfig.label}</div>}
-          <div style={{ fontSize: isDesktop ? 26 : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5 }}>¡Buenos días, {firstName}! 👋</div>
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, textTransform: 'capitalize' }}>{dateStr}</div>
+      {/* HEADER — siempre en 1 fila */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          {macroConfig && (
+            <div style={{ fontSize: 9, fontWeight: 700, color: macroConfig.color, letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 2 }}>
+              {macroConfig.code} · {macroConfig.label}
+            </div>
+          )}
+          <div style={{ fontSize: isDesktop ? 26 : 18, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            ¡Buenos días, {firstName}! 👋
+          </div>
+          {isDesktop && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, textTransform: 'capitalize' }}>{dateStr}</div>}
         </div>
-        <div style={{ display: 'flex', gap: 8, alignSelf: isDesktop ? 'auto' : 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <div style={{ position: 'relative' }}>
             <button style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 15 }}>🔔</button>
             {(kpiAtrasadas + kpiAprobar) > 0 && <span style={{ position: 'absolute', top: -4, right: -4, background: '#E74C3C', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 8, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{kpiAtrasadas + kpiAprobar}</span>}
           </div>
-          <button onClick={() => setShowNewTask(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: isDesktop ? '10px 20px' : '8px 14px', background: 'var(--gold)', color: '#0A0A0A', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: isDesktop ? 13 : 12, fontWeight: 800 }}>+ Nueva tarea</button>
+          <button onClick={() => setShowNewTask(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: isDesktop ? '10px 20px' : '8px 12px', background: 'var(--gold)', color: '#0A0A0A', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: isDesktop ? 13 : 11, fontWeight: 800, whiteSpace: 'nowrap' }}>
+            + {isDesktop ? 'Nueva tarea' : 'Nueva'}
+          </button>
         </div>
       </div>
 
@@ -280,31 +290,37 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
         {/* COLUMNA IZQUIERDA */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Fila 1 izquierda: 4 KPI cards (2x2 en mobile) */}
-          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: 14 }}>
+          {/* Fila 1: 4 KPI cards — 4 en desktop, 2x2 compacto en mobile */}
+          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: isDesktop ? 14 : 10 }}>
             <KpiCard value={kpiAsignadas} label="Asignadas" sub="Requieren tu atención"
               color="#5B8AA8" bg="linear-gradient(145deg,#0d1e36,#091425)" border="rgba(91,138,168,0.28)" glow="rgba(91,138,168,0.1)"
+              compact={!isDesktop}
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M3 6h18v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>}
               up onClick={() => scrollToTable('sin-iniciar')} />
             <KpiCard value={kpiEnProceso} label="En Proceso" sub="En ejecución activa"
               color="#E67E22" bg="linear-gradient(145deg,#261400,#170d00)" border="rgba(230,126,34,0.28)" glow="rgba(230,126,34,0.1)"
+              compact={!isDesktop}
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E67E22" strokeWidth="2" strokeLinecap="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>}
               up onClick={() => scrollToTable('en-proceso')} />
             <KpiCard value={kpiCompletadas} label="Completadas" sub="Completadas exitosamente"
               color="#22C55E" bg="linear-gradient(145deg,#081f0f,#041309)" border="rgba(34,197,94,0.28)" glow="rgba(34,197,94,0.08)"
+              compact={!isDesktop}
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>}
               up onClick={() => scrollToTable('completadas')} />
             <KpiCard value={kpiAtrasadas} label="Atrasadas" sub="Requieren acción inmediata"
               color="#E74C3C" bg={kpiAtrasadas>0?"linear-gradient(145deg,#250a0a,#160505)":"linear-gradient(145deg,#181010,#100a0a)"} border="rgba(231,76,60,0.28)" glow="rgba(231,76,60,0.08)"
+              compact={!isDesktop}
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" strokeWidth="2" strokeLinecap="round"><path d="m10.29 3.86-8.26 14.28A1 1 0 0 0 2.9 20h16.2a1 1 0 0 0 .87-1.5L11.71 3.86a1 1 0 0 0-1.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
               up={false} onClick={() => scrollToTable('atrasadas')} />
           </div>
 
-          {/* Fila 2 izquierda: 3 analytics */}
-          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(3, 1fr)' : '1fr', gap: 14 }}>
+          {/* Fila 2: analytics — grid en desktop, scroll horizontal en mobile */}
+          <div style={isDesktop
+            ? { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }
+            : { display: 'flex', overflowX: 'auto', gap: 10, paddingBottom: 4, scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
 
             {/* Resumen */}
-            <div style={CARD}>
+            <div style={CARD_SNAP}>
               <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 18 }}>Resumen de tareas</div>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
                 <DonutChart size={110} stroke={15} label={String(kpiTotal)} sub="Total"
@@ -338,7 +354,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             </div>
 
             {/* Prioridad */}
-            <div style={CARD}>
+            <div style={CARD_SNAP}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Tareas por prioridad</div>
                 <button onClick={() => scrollToTable('todas')} style={{ fontSize: 18, color: 'var(--muted)', cursor: 'pointer', background: 'none', border: 'none', padding: '0 4px', lineHeight: 1 }} title="Ver todas las tareas">⋯</button>
@@ -367,7 +383,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             </div>
 
             {/* Cumplimiento */}
-            <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ ...CARD_SNAP, display: 'flex', flexDirection: 'column' }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 14 }}>Cumplimiento general</div>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <RingChart pct={cumplimiento} />
@@ -386,8 +402,26 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
 
           </div>
 
-          {/* Fila 3 izquierda: Atrasadas + Por área + Recordatorios (mismo grid 3 cols) */}
-          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(3, 1fr)' : '1fr', gap: 14 }}>
+          {/* Fila 3: Atrasadas + Por área + Recordatorios — cards en desktop, strip compacto en mobile */}
+          {!isDesktop && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              {[
+                { icon: '⚠', label: 'Atrasadas',  value: kpiAtrasadas, color: kpiAtrasadas>0 ? '#E74C3C' : '#22C55E', onClick: () => scrollToTable('atrasadas') },
+                { icon: '◈', label: 'Áreas',      value: areaStats.length, color: '#D4AF37', onClick: () => scrollToTable('todas') },
+                { icon: '🔔', label: 'Activas',   value: activeTasks.filter(t => ['Asignada','En Proceso'].includes(t.estado)).length, color: '#5B8AA8', onClick: () => scrollToTable('en-proceso') },
+              ].map(s => (
+                <button key={s.label} onClick={s.onClick} style={{
+                  background: 'var(--surface)', border: `1px solid ${s.color}25`,
+                  borderRadius: 14, padding: '12px 8px', cursor: 'pointer', textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: s.color, lineHeight: 1, marginBottom: 2 }}>{s.value}</div>
+                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8 }}>{s.label}</div>
+                </button>
+              ))}
+            </div>
+          )}
+          <div style={{ display: isDesktop ? 'grid' : 'none', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
 
             {/* Tareas atrasadas */}
             <div style={{
