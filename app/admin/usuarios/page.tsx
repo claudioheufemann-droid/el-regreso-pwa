@@ -72,13 +72,29 @@ export default function UsuariosAdminPage() {
   const [filter, setFilter]     = useState<'todos' | 'comercial' | 'administracion' | 'produccion' | 'sin-area'>('todos')
   const [search, setSearch]     = useState('')
   const [sortBy, setSortBy]     = useState<'nombre' | 'actividad'>('actividad')
+  const [syncing, setSyncing]   = useState(false)
+  const [syncMsg, setSyncMsg]   = useState('')
 
-  useEffect(() => {
+  function loadUsers() {
+    setLoading(true)
     fetch('/api/admin/usuarios')
       .then(r => r.json())
       .then(data => { setUsers(Array.isArray(data) ? data : []); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { loadUsers() }, [])
+
+  async function syncAvatars() {
+    setSyncing(true); setSyncMsg('')
+    try {
+      const res = await fetch('/api/admin/sync-avatars')
+      const data = await res.json()
+      setSyncMsg(`✓ ${data.sincronizados} fotos sincronizadas de ${data.total} usuarios`)
+      loadUsers() // recargar para mostrar fotos nuevas
+    } catch { setSyncMsg('Error al sincronizar') }
+    setSyncing(false)
+  }
 
   const filtered = users
     .filter(u => {
@@ -120,8 +136,15 @@ export default function UsuariosAdminPage() {
           <div style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>Panel de Usuarios</div>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>Administración · El Regreso</div>
         </div>
-        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-          ★ Solo admins
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {syncMsg && <span style={{ fontSize: 11, color: syncMsg.startsWith('✓') ? '#22C55E' : '#FF6666' }}>{syncMsg}</span>}
+          <button onClick={syncAvatars} disabled={syncing}
+            style={{ padding: '7px 14px', borderRadius: 9, border: '1px solid rgba(91,138,168,0.35)', background: 'rgba(91,138,168,0.1)', color: '#5B8AA8', fontSize: 11, fontWeight: 700, cursor: syncing ? 'default' : 'pointer', opacity: syncing ? 0.6 : 1, whiteSpace: 'nowrap' }}>
+            {syncing ? '⏳ Sincronizando...' : '🔄 Sincronizar fotos'}
+          </button>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            ★ Solo admins
+          </div>
         </div>
       </div>
 

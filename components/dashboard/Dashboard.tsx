@@ -590,7 +590,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
         {/* Contenido principal */}
         <ContentArea />
 
-        {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} />}
+        {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} avatarUrl={users.find(u => u.email === userEmail)?.avatar_url} />}
         {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
         {showNewTask && <NewTaskModal defaultArea={defaultNewTaskArea} availableAreas={availableTaskAreas} users={users} onClose={() => setShowNewTask(false)} onCreated={(t) => { setTasks(prev => [t, ...prev]); setShowNewTask(false) }} />}
       </div>
@@ -643,7 +643,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
         </div>
       </div>
 
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} />}
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} avatarUrl={users.find(u => u.email === userEmail)?.avatar_url} />}
 
       {/* Nav tabs */}
       <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid rgba(128,128,128,0.08)', flexShrink: 0 }}>
