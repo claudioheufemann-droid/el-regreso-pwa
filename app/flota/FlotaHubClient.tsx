@@ -315,41 +315,38 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
       <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 }}>
         Estado de la flota
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* paddingBottom extra para que el último card no quede bajo el bottom nav */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 100 }}>
         {vehiculos.map(v => {
           const viaje = viajesActivos.find(va => va.vehiculo_id === v.id)
           const conductor = conductores.find(c => c.id === viaje?.conductor_id)
+          const n = (v.nombre + v.tipo).toLowerCase()
+          let vehicleSrc = '/vehicles/transit.jpg'
+          if (n.includes('porter') || n.includes('nqr') || n.includes('npr') || n.includes('camion') || n.includes('camión')) vehicleSrc = '/vehicles/porter.jpg'
+          if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup') || n.includes('camioneta')) vehicleSrc = '/vehicles/ranger.jpg'
           return (
             <div key={v.id} style={{
               background: 'var(--surface2)',
               border: `1px solid ${v.estado === 'en_uso' ? 'rgba(245,158,11,0.3)' : v.estado === 'mantenimiento' ? 'rgba(255,85,85,0.2)' : 'rgba(255,255,255,0.06)'}`,
               borderRadius: 18, overflow: 'hidden',
               display: 'flex', alignItems: 'stretch',
-              minHeight: 140,
             }}>
-              {/* ── FOTO IZQUIERDA ── */}
-              {(() => {
-                const n = (v.nombre + v.tipo).toLowerCase()
-                let src = '/vehicles/transit.jpg'
-                if (n.includes('porter') || n.includes('nqr') || n.includes('npr') || n.includes('camion') || n.includes('camión')) src = '/vehicles/porter.jpg'
-                if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup')) src = '/vehicles/ranger.jpg'
-                return (
-                  <div style={{ width: 130, flexShrink: 0, position: 'relative', overflow: 'hidden', background: '#06060d' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={src}
-                      alt={v.nombre}
-                      style={{
-                        position: 'absolute', top: 0, left: 0,
-                        width: '100%', height: '100%',
-                        objectFit: 'cover', objectPosition: 'center',
-                      }}
-                    />
-                    {/* fade derecha */}
-                    <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 40, background: 'linear-gradient(to right, transparent, rgba(16,16,24,0.95))' }} />
-                  </div>
-                )
-              })()}
+              {/* ── FOTO IZQUIERDA — vehiculo completo ── */}
+              <div style={{ width: 140, flexShrink: 0, position: 'relative', background: '#04040a' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={vehicleSrc}
+                  alt={v.nombre}
+                  style={{
+                    position: 'absolute', top: 0, left: 0,
+                    width: '100%', height: '100%',
+                    objectFit: 'contain',   /* muestra el vehiculo COMPLETO sin cortar */
+                    objectPosition: 'center',
+                  }}
+                />
+                {/* fade derecha suave */}
+                <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 36, background: 'linear-gradient(to right, transparent, #04040a)' }} />
+              </div>
 
               {/* ── CONTENIDO DERECHA ── */}
               <div style={{ flex: 1, minWidth: 0, padding: '14px 14px 14px 10px' }}>
