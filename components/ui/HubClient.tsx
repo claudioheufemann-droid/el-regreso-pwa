@@ -6,6 +6,46 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
+/* ── Logo La Ida Kombucha — SVG inline (fallback si no hay archivo) ── */
+function LaIdaLogo({ size = 100 }: { size?: number }) {
+  const [useImg, setUseImg] = useState(true)
+  if (useImg) {
+    return (
+      <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+        <Image
+          src="/logo-laida.png"
+          alt="La Ida Kombucha"
+          fill
+          style={{ objectFit: 'contain', filter: 'invert(1) drop-shadow(0 0 12px rgba(255,255,255,0.2))' }}
+          onError={() => setUseImg(false)}
+          priority
+        />
+      </div>
+    )
+  }
+  // SVG fallback: La Ida Kombucha
+  return (
+    <svg width={size} height={size} viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Semicírculo superior */}
+      <path d="M20 110 A80 80 0 0 1 180 110" stroke="white" strokeWidth="7" fill="none" strokeLinecap="round"/>
+      {/* Montañas */}
+      <path d="M40 110 L75 55 L100 80 L125 45 L160 110Z" fill="white" opacity="0.9"/>
+      <path d="M55 110 L75 70 L100 90 L125 60 L145 110Z" fill="#1a1a2e" opacity="0.4"/>
+      {/* Carretera */}
+      <path d="M85 110 Q100 130 130 155 Q150 165 170 168" stroke="white" strokeWidth="5" strokeLinecap="round" fill="none" opacity="0.9"/>
+      <path d="M90 110 Q105 128 132 152" stroke="#1a1a2e" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.4"/>
+      {/* Señal de tráfico */}
+      <line x1="112" y1="138" x2="112" y2="155" stroke="white" strokeWidth="3" strokeLinecap="round"/>
+      <rect x="108" y="130" width="14" height="9" rx="2" fill="white" opacity="0.9"/>
+      {/* Banner inferior */}
+      <rect x="18" y="150" width="164" height="38" rx="8" fill="white"/>
+      {/* Texto LA IDA */}
+      <text x="100" y="164" textAnchor="middle" fontSize="10" fontWeight="900" fill="#0a0a0a" fontFamily="system-ui" letterSpacing="2">LA IDA</text>
+      <text x="100" y="178" textAnchor="middle" fontSize="8" fontWeight="700" fill="#333" fontFamily="system-ui" letterSpacing="3">KOMBUCHA</text>
+    </svg>
+  )
+}
+
 /* ── SVG Art Cinematográfico por módulo ── */
 
 function VentasArt() {
@@ -261,14 +301,21 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
         {/* ── HEADER ── */}
         <div style={{ textAlign: 'center', padding: '28px 0 32px' }}>
           {/* Logos — ambas marcas */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, marginBottom: 20 }}>
-            <div style={{ position: 'relative', width: 80, height: 80 }}>
-              <Image src="/logo.png" alt="El Regreso Beer Co." fill style={{ objectFit: 'contain', filter: 'drop-shadow(0 0 18px rgba(212,175,55,0.45))' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 24 }}>
+            {/* El Regreso */}
+            <div style={{ position: 'relative', width: 110, height: 110, flexShrink: 0 }}>
+              <Image
+                src="/logo.png"
+                alt="El Regreso Beer Co."
+                fill
+                style={{ objectFit: 'contain', filter: 'drop-shadow(0 0 24px rgba(212,175,55,0.55))' }}
+                priority
+              />
             </div>
-            <div style={{ width: 1, height: 52, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.14), transparent)' }} />
-            <div style={{ position: 'relative', width: 76, height: 76 }}>
-              <Image src="/logo-laida.png" alt="La Ida Kombucha" fill style={{ objectFit: 'contain', filter: 'invert(1) drop-shadow(0 0 10px rgba(255,255,255,0.15))' }} />
-            </div>
+            {/* Separador */}
+            <div style={{ width: 1, height: 70, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.18), transparent)', flexShrink: 0 }} />
+            {/* La Ida */}
+            <LaIdaLogo />
           </div>
 
           {/* Nombre empresa */}
