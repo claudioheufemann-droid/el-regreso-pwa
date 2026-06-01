@@ -325,9 +325,10 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
               border: `1px solid ${v.estado === 'en_uso' ? 'rgba(245,158,11,0.3)' : v.estado === 'mantenimiento' ? 'rgba(255,85,85,0.2)' : 'rgba(255,255,255,0.06)'}`,
               borderRadius: 18, overflow: 'hidden',
               display: 'flex', alignItems: 'stretch',
+              minHeight: 140,
             }}>
-              {/* ── FOTO IZQUIERDA ── */}
-              <div style={{ width: 115, flexShrink: 0, position: 'relative', background: '#080810', overflow: 'hidden' }}>
+              {/* ── FOTO IZQUIERDA — completa ── */}
+              <div style={{ width: 130, flexShrink: 0, position: 'relative', background: '#06060d', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={
@@ -340,13 +341,14 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
                   }
                   alt={v.nombre}
                   style={{
-                    position: 'absolute', inset: 0,
                     width: '100%', height: '100%',
-                    objectFit: 'cover', objectPosition: 'center',
+                    objectFit: 'cover',
+                    objectPosition: 'center',
+                    display: 'block',
                   }}
                 />
-                {/* fade sutil hacia la derecha */}
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.15) 0%, rgba(8,8,16,0.55) 100%)' }} />
+                {/* fade derecha suave */}
+                <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 32, background: 'linear-gradient(to right, transparent, #06060d)' }} />
               </div>
 
               {/* ── CONTENIDO DERECHA ── */}
