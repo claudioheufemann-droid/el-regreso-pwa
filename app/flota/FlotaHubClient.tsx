@@ -153,25 +153,18 @@ function RangerArt() {
   )
 }
 
-// Imagen real: usa fleet.jpg y recorta la sección correcta
-// fleet.jpg tiene 3 franjas verticales: Transit (top), Porter (middle), Ranger (bottom)
 function VehiclePhoto({ nombre, tipo }: { nombre: string; tipo: string }) {
   const n = (nombre + tipo).toLowerCase()
-  // objectPosition Y para cada franja (0% top, 50% middle, 100% bottom)
-  let yPos = '16%'   // Transit — franja superior
-  if (n.includes('porter') || n.includes('camion') || n.includes('camión') || n.includes('nqr') || n.includes('npr')) yPos = '50%'
-  if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup') || n.includes('pick')) yPos = '84%'
+  let src = '/vehicles/transit.jpg'
+  if (n.includes('porter') || n.includes('camion') || n.includes('camión') || n.includes('nqr') || n.includes('npr')) src = '/vehicles/porter.jpg'
+  if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup') || n.includes('pick')) src = '/vehicles/ranger.jpg'
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src="/vehicles/fleet.jpg"
+      src={src}
       alt=""
-      style={{
-        width: '100%', height: '100%',
-        objectFit: 'cover',
-        objectPosition: `center ${yPos}`,
-      }}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
       onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
     />
   )
