@@ -345,6 +345,11 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
               )}
             </p>
           )}
+          {mision.volumen_caida_pct != null && (
+            <p style={{ fontSize: 12, color: '#F87171', fontWeight: 700 }}>
+              📉 Volumen a la baja: pidió −{mision.volumen_caida_pct}% vs su histórico
+            </p>
+          )}
           <p style={{ fontSize: 12, color: '#D4AF37', fontWeight: 600 }}>
             💡 {sugerencia}
           </p>
@@ -579,6 +584,11 @@ function CompactCard({ mision, selected, onClick, onWA }: {
               </span>
             )}
             <TipoClienteBadge tipo={mision.tipo_cliente} size="xs" />
+            {mision.volumen_caida_pct != null && (
+              <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, background: 'rgba(248,113,113,0.12)', color: '#F87171', whiteSpace: 'nowrap' }}>
+                📉 −{mision.volumen_caida_pct}%
+              </span>
+            )}
           </div>
         </div>
 

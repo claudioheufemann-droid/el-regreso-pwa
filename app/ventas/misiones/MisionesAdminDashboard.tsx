@@ -20,6 +20,8 @@ interface AdminStats {
   zonasRiesgo: number
   topRiesgo: { nombre: string; vendedor: string; diasSinCompra: number; ultimaCompra: string | null; segmento: string; telefono: string | null }[]
   segmentacion: { activo: number; inactivo: number; temporal: number; nuevo: number }
+  volumenBaja: { nombre_fantasia: string; vendedor_actual: string; segmento: string; litros_reciente: number; litros_baseline: number; caida_pct: number; pedidos_totales: number; dias_sin_compra: number; telefono: string | null }[]
+  volumenBajaTotal: number
 }
 
 const SEG_TYPES = [
@@ -596,6 +598,68 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           </div>
         </div>
       </div>
+
+      {/* ── Volumen a la baja (señal temprana de fuga) ── */}
+      {stats.volumenBaja && stats.volumenBaja.length > 0 && (
+        <div style={{ marginTop: 14, background: 'var(--surface)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 16, padding: '18px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <TrendingDown size={18} style={{ color: '#F87171' }} />
+              <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>Clientes con volumen a la baja</p>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#F87171', background: 'rgba(248,113,113,0.12)', padding: '3px 10px', borderRadius: 20 }}>
+              {stats.volumenBajaTotal} detectados
+            </span>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 14 }}>
+            Siguen comprando pero pidieron menos en sus últimos pedidos — señal temprana de fuga. Contáctalos antes de que se venzan.
+          </p>
+
+          {/* Header tabla */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 130px 90px 80px', gap: 8, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+            {['CLIENTE', 'VENDEDOR', 'VOLUMEN/PEDIDO', 'CAÍDA', 'ACCIÓN'].map(h => (
+              <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</span>
+            ))}
+          </div>
+
+          {stats.volumenBaja.map((c, i) => (
+            <div key={c.nombre_fantasia} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 130px 90px 80px', gap: 8, padding: '10px 0', borderBottom: i < stats.volumenBaja.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
+              {/* Nombre */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#F87171', flexShrink: 0 }}>
+                  {c.nombre_fantasia.charAt(0)}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre_fantasia}</span>
+              </div>
+              {/* Vendedor */}
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual?.split(' ')[0] ?? '—'}</span>
+              {/* Volumen reciente vs baseline */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+                <span style={{ color: '#F87171', fontWeight: 700 }}>{c.litros_reciente}L</span>
+                <span style={{ color: '#555' }}>←</span>
+                <span style={{ color: 'var(--muted)' }}>{c.litros_baseline}L</span>
+              </div>
+              {/* Caída % */}
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#F87171' }}>−{c.caida_pct}%</span>
+              {/* Acciones */}
+              <div style={{ display: 'flex', gap: 6 }}>
+                {c.telefono && (
+                  <button onClick={() => setWaTarget({ nombre: c.nombre_fantasia, telefono: c.telefono!, contexto: 'mision' })}
+                    style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <MessageCircle size={13} color="#25D166" />
+                  </button>
+                )}
+                {c.telefono && (
+                  <button onClick={() => window.open(`tel:${c.telefono}`)}
+                    style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <Phone size={13} color="#60A5FA" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
       <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>

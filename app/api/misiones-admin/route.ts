@@ -66,6 +66,18 @@ export async function GET(req: NextRequest) {
     : { data: [] }
   const telMap = new Map((clientesTel ?? []).map(c => [c.nombre_fantasia, c.telefono ?? null]))
 
+  // ── Clientes con volumen a la baja (señal temprana de fuga) ───────────────────
+  const { data: volBajaData } = await supabase.rpc('get_clientes_volumen_baja', {
+    p_vendedor: null,
+    p_umbral: 0.25,
+  })
+  const volumenBaja = ((volBajaData ?? []) as {
+    nombre_fantasia: string; vendedor_actual: string; segmento: string
+    litros_reciente: number; litros_baseline: number; caida_pct: number
+    pedidos_totales: number; dias_sin_compra: number; telefono: string | null
+  }[]).slice(0, 8)
+  const volumenBajaTotal = (volBajaData ?? []).length
+
   // ── Segmentación tipo_cliente ─────────────────────────────────────────────────
   const { data: tiposData } = await supabase
     .from('client_scores')
@@ -247,5 +259,9 @@ export async function GET(req: NextRequest) {
 
     // Segmentación activo/inactivo/temporal/nuevo
     segmentacion: tipoConteo,
+
+    // Caída de volumen (señal temprana de fuga)
+    volumenBaja,
+    volumenBajaTotal,
   })
 }
