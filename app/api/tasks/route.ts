@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { Resend } from 'resend'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 import { sendPushToAllAdmins, sendPushToUser } from '@/lib/push'
+import { emailTaskAprobada, emailTaskRechazada, emailTaskPorAprobar } from '@/lib/email'
 
 const ADMIN_REVIEW_EMAIL = process.env.ADMIN_REVIEW_EMAIL ?? ''
 
@@ -177,7 +178,21 @@ export async function PATCH(req: NextRequest) {
 
   // Notificar a admins si la tarea acaba de pasar a "Por Aprobar"
   if (updates.estado === 'Por Aprobar' && before?.estado !== 'Por Aprobar') {
-    notifyClaudio(data).catch(() => {})
+    // Email a admins (push + email bonito)
+    const { data: admins } = await supabase.from('users').select('email').eq('is_admin', true)
+    const adminEmails = (admins ?? []).map(a => a.email).filter(Boolean)
+
+    notifyClaudio(data).catch(() => {}) // legado — mantener por compatibilidad
+    emailTaskPorAprobar({
+      toEmails: adminEmails,
+      taskTitulo: data.titulo,
+      taskArea: data.area,
+      responsableNombre: data.responsable?.nombre ?? 'Sin responsable',
+      taskPlazo: data.plazo,
+      resumen: data.resumen_cierre,
+      fotoAntesUrl: data.foto_antes_url,
+      fotoDespuesUrl: data.foto_despues_url,
+    }).catch(() => {})
     sendPushToAllAdmins({
       title: '⭐ Tarea lista para aprobar',
       body: data.titulo,
@@ -191,12 +206,35 @@ export async function PATCH(req: NextRequest) {
   if ((updates.estado === 'Completada' || updates.estado === 'Rechazada') &&
       before?.estado === 'Por Aprobar' && data.responsable_id) {
     const isApproved = updates.estado === 'Completada'
+    const responsableEmail = data.responsable?.email
+    const responsableNombre = data.responsable?.nombre ?? 'Responsable'
+
+    // Push + Email al responsable
     sendPushToUser(data.responsable_id, {
       title: isApproved ? '✅ Tarea aprobada' : '❌ Tarea rechazada',
       body: data.titulo,
       url: '/',
       tag: `status-${data.id}`,
     }).catch(() => {})
+
+    if (responsableEmail) {
+      if (isApproved) {
+        emailTaskAprobada({
+          toEmail: responsableEmail,
+          toNombre: responsableNombre,
+          taskTitulo: data.titulo,
+          taskArea: data.area,
+        }).catch(() => {})
+      } else {
+        emailTaskRechazada({
+          toEmail: responsableEmail,
+          toNombre: responsableNombre,
+          taskTitulo: data.titulo,
+          taskArea: data.area,
+          motivo: updates.nota_rechazo,
+        }).catch(() => {})
+      }
+    }
   }
 
   return NextResponse.json(data)
