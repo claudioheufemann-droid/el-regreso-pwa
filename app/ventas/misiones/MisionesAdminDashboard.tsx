@@ -24,6 +24,14 @@ interface AdminStats {
   volumenBajaTotal: number
   crossSell: { nombre_fantasia: string; vendedor_actual: string; categoria_negocio: string; categoria_sugerida: string; peers_pct: number; telefono: string | null }[]
   crossSellTotal: number
+  cohortes: { cohorte: string; clientes: number; repitieron: number; repeat_pct: number; activos: number; activos_pct: number; pedidos_prom: number; litros_prom: number }[]
+  repeatRateGlobal: number
+}
+
+const MES_NOMBRE = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+function cohorteLabel(c: string): string {
+  const [y, m] = c.split('-').map(Number)
+  return `${MES_NOMBRE[m - 1]} ${String(y).slice(2)}`
 }
 
 const SEG_TYPES = [
@@ -718,6 +726,52 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                   </button>
                 )}
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Retención por cohorte ── */}
+      {stats.cohortes && stats.cohortes.length > 0 && (
+        <div style={{ marginTop: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <TrendingUp size={18} style={{ color: '#34D399' }} />
+              <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>Retención por cohorte</p>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#34D399', background: 'rgba(52,211,153,0.12)', padding: '3px 10px', borderRadius: 20 }}>
+              {stats.repeatRateGlobal}% repite compra
+            </span>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 14 }}>
+            Clientes agrupados por mes de su primera compra. ¿Cuántos volvieron y siguen comprando?
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '90px 80px 1fr 1fr 90px', gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+            {['COHORTE', 'CLIENTES', 'REPITIERON', 'SIGUEN ACTIVOS', 'PED. PROM'].map(h => (
+              <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</span>
+            ))}
+          </div>
+
+          {stats.cohortes.map((c, i) => (
+            <div key={c.cohorte} style={{ display: 'grid', gridTemplateColumns: '90px 80px 1fr 1fr 90px', gap: 10, padding: '9px 0', borderBottom: i < stats.cohortes.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{cohorteLabel(c.cohorte)}</span>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>{c.clientes}</span>
+              {/* Repitieron */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${c.repeat_pct}%`, height: '100%', background: '#60A5FA', borderRadius: 3 }} />
+                </div>
+                <span style={{ fontSize: 11, color: '#60A5FA', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.repitieron} · {c.repeat_pct}%</span>
+              </div>
+              {/* Activos */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${c.activos_pct}%`, height: '100%', background: '#34D399', borderRadius: 3 }} />
+                </div>
+                <span style={{ fontSize: 11, color: '#34D399', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.activos} · {c.activos_pct}%</span>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{c.pedidos_prom}</span>
             </div>
           ))}
         </div>

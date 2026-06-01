@@ -78,6 +78,16 @@ export async function GET(req: NextRequest) {
   }[]).slice(0, 8)
   const volumenBajaTotal = (volBajaData ?? []).length
 
+  // ── Retención por cohorte ─────────────────────────────────────────────────────
+  const { data: cohortesRaw } = await supabase.rpc('get_retencion_cohortes')
+  const cohortes = ((cohortesRaw ?? []) as {
+    cohorte: string; clientes: number; repitieron: number; repeat_pct: number
+    activos: number; activos_pct: number; pedidos_prom: number; litros_prom: number
+  }[])
+  const cohorteClientesTot = cohortes.reduce((s, c) => s + c.clientes, 0)
+  const cohorteRepiteTot   = cohortes.reduce((s, c) => s + c.repitieron, 0)
+  const repeatRateGlobal   = cohorteClientesTot > 0 ? Math.round((cohorteRepiteTot / cohorteClientesTot) * 100) : 0
+
   // ── Oportunidades de cross-sell ───────────────────────────────────────────────
   const { data: crossRaw } = await supabase.rpc('get_cross_sell', { p_vendedor: null, p_min_penetracion: 0.4 })
   const crossSell = ((crossRaw ?? []) as {
@@ -275,5 +285,9 @@ export async function GET(req: NextRequest) {
     // Cross-sell
     crossSell,
     crossSellTotal,
+
+    // Retención por cohorte
+    cohortes,
+    repeatRateGlobal,
   })
 }
