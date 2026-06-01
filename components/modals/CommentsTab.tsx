@@ -114,8 +114,8 @@ export default function CommentsTab({ taskId, currentUserId, accentColor }: Prop
                 </div>
                 {/* Bubble */}
                 <div style={{ maxWidth: '75%' }}>
-                  <div style={{ fontSize: 9, color: '#5A5450', marginBottom: 4, textAlign: isMe ? 'right' : 'left', letterSpacing: 0.5 }}>
-                    {isMe ? 'Tú' : c.user_nombre} · {timeAgo(c.created_at)}
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 5, textAlign: isMe ? 'right' : 'left', fontWeight: 600 }}>
+                    {c.user_nombre} <span style={{ fontSize: 10, fontWeight: 400, color: 'rgba(255,255,255,0.25)' }}>· {timeAgo(c.created_at)}</span>
                   </div>
                   <div style={{
                     padding: '10px 14px', borderRadius: isMe ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
