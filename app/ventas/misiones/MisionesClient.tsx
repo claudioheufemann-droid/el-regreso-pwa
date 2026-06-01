@@ -361,6 +361,37 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
         </div>
       </div>
 
+      {/* ── Pedido sugerido ── */}
+      {mision.pedido_sugerido && mision.pedido_sugerido.length > 0 && (
+        <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 12, background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 14 }}>🛒</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#34D399' }}>Pedido sugerido</span>
+            </div>
+            {mision.siguiente_compra_estimada && (
+              <span style={{ fontSize: 10, color: 'var(--muted)' }}>para el {fFecha(mision.siguiente_compra_estimada)}</span>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {mision.pedido_sugerido.map((p, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.producto}{p.envase ? <span style={{ color: 'var(--muted)' }}> · {p.envase}</span> : null}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#34D399', flexShrink: 0 }}>~{p.litros} L</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(52,211,153,0.15)' }}>
+            <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Total estimado</span>
+            <span style={{ fontSize: 13, fontWeight: 900, color: '#34D399' }}>
+              ~{Math.round(mision.pedido_sugerido.reduce((s, p) => s + p.litros, 0) * 10) / 10} L
+            </span>
+          </div>
+        </div>
+      )}
+
       <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
 
       {/* ── Registrar Llamada ── */}

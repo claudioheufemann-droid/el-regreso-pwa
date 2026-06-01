@@ -42,6 +42,8 @@ export interface MisionEnriquecida {
   volumen_caida_pct: number | null
   // Cross-sell: categoría sugerida que pares compran y este cliente no
   cross_sell: { categoria: string; pct: number } | null
+  // Pedido sugerido: productos habituales (top 3) con litros típicos
+  pedido_sugerido: { producto: string; envase: string | null; litros: number }[]
   // Enriquecido
   ruta_despacho: string | null
   localidad: string | null
@@ -67,18 +69,20 @@ export interface HistorialSemana {
 }
 
 function enriquecerMision(
-  m: Omit<MisionEnriquecida, 'ruta_despacho'|'localidad'|'telefono'|'ultima_venta_fecha'|'ultima_venta_monto'|'prioridad'|'frecuencia_texto'|'dias_para_compra'|'tipo_cliente'|'volumen_caida_pct'|'cross_sell'>,
+  m: Omit<MisionEnriquecida, 'ruta_despacho'|'localidad'|'telefono'|'ultima_venta_fecha'|'ultima_venta_monto'|'prioridad'|'frecuencia_texto'|'dias_para_compra'|'tipo_cliente'|'volumen_caida_pct'|'cross_sell'|'pedido_sugerido'>,
   clienteMap: Map<string, { ruta_despacho: string|null; localidad: string|null; telefono: string|null }>,
   ventaMap: Map<string, { fecha: string; monto: number }>,
   tipoClienteMap: Map<string, 'activo' | 'inactivo' | 'temporal' | 'nuevo'>,
   volBajaMap: Map<string, number>,
-  crossSellMap: Map<string, { categoria: string; pct: number }>
+  crossSellMap: Map<string, { categoria: string; pct: number }>,
+  pedidoSugMap: Map<string, { producto: string; envase: string | null; litros: number }[]>
 ): MisionEnriquecida {
   const cli = clienteMap.get(m.nombre_fantasia) ?? { ruta_despacho:null, localidad:null, telefono:null }
   const vta = ventaMap.get(m.nombre_fantasia)
   const tipo_cliente = tipoClienteMap.get(m.nombre_fantasia) ?? null
   const volumen_caida_pct = volBajaMap.get(m.nombre_fantasia) ?? null
   const cross_sell = crossSellMap.get(m.nombre_fantasia) ?? null
+  const pedido_sugerido = pedidoSugMap.get(m.nombre_fantasia) ?? []
   const prioridad = m.alert_level==='critico' ? 'Alta' : m.alert_level==='vencido' ? 'Media' : 'Baja'
   const ciclo = m.ciclo_promedio_dias
   const frecuencia_texto = ciclo ? `Cada ${ciclo} días` : 'Sin datos'
@@ -96,6 +100,7 @@ function enriquecerMision(
     tipo_cliente,
     volumen_caida_pct,
     cross_sell,
+    pedido_sugerido,
     snooze_until: m.snooze_until ?? null,
     completado_canal: m.completado_canal ?? null,
     resultado_litros: m.resultado_litros ?? null,
@@ -130,6 +135,7 @@ export default async function MisionesPage() {
     { data: inactivosRaw },
     { data: volBajaRaw },
     { data: crossRaw },
+    { data: pedidoSugRaw },
   ] = await Promise.all([
     // Misiones de esta semana (select '*' = tolerante a columnas nuevas)
     supabase.from('misiones')
@@ -188,6 +194,9 @@ export default async function MisionesPage() {
 
     // Oportunidades de cross-sell
     supabase.rpc('get_cross_sell', { p_vendedor, p_min_penetracion: 0.4 }),
+
+    // Pedido sugerido (productos habituales)
+    supabase.rpc('get_pedido_sugerido', { p_vendedor }),
   ])
 
   // Mapas de lookup
@@ -221,10 +230,17 @@ export default async function MisionesPage() {
     if (!crossSellMap.has(c.nombre_fantasia))
       crossSellMap.set(c.nombre_fantasia, { categoria: c.categoria_sugerida, pct: c.peers_pct })
 
+  // Mapa de pedido sugerido: nombre → top productos habituales (ya viene ordenado por rank)
+  const pedidoSugMap = new Map<string, { producto: string; envase: string | null; litros: number }[]>()
+  for (const p of ((pedidoSugRaw ?? []) as { nombre_fantasia: string; producto: string; envase: string | null; litros_tipico: number }[])) {
+    if (!pedidoSugMap.has(p.nombre_fantasia)) pedidoSugMap.set(p.nombre_fantasia, [])
+    pedidoSugMap.get(p.nombre_fantasia)!.push({ producto: p.producto, envase: p.envase, litros: p.litros_tipico })
+  }
+
   // Enriquecer misiones actuales (oculta pospuestas con snooze vigente + inactivos manuales)
   const hoyStr = new Date().toISOString().split('T')[0]
   const misiones: MisionEnriquecida[] = (misionesRaw ?? [])
-    .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap))
+    .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap))
     .filter(m => !inactivosManuales.has(m.nombre_fantasia))
     .filter(m => !(m.estado === 'pospuesto' && m.snooze_until && m.snooze_until > hoyStr))
     .sort((a, b) => {
@@ -238,7 +254,7 @@ export default async function MisionesPage() {
   // Historial agrupado por semana
   const historialMap = new Map<string, MisionEnriquecida[]>()
   for (const m of historialRaw ?? []) {
-    const me = enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap)
+    const me = enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap)
     if (!historialMap.has(m.semana)) historialMap.set(m.semana, [])
     historialMap.get(m.semana)!.push(me)
   }
