@@ -114,47 +114,29 @@ export default async function DashboardPage({
     finPrev = mesAnteriorFin.toISOString().split('T')[0]
   }
 
-  type VentaPeriodoRow = {
-    vendedor_actual: string; nombre_fantasia: string | null; litros: number | null
-    total_sin_impuesto: number | null; categoria_negocio: string | null
-    fecha_pedido: string; categoria_producto: string | null
-  }
   type VentaPrevRow = { vendedor_actual: string; litros: number | null; nombre_fantasia: string | null }
 
-  // ── FASE B: queries dependientes de fechaHoy/periodo en paralelo ─
+  // ── FASE B: ventas del día (raw) + metas + AGREGACIONES en Postgres ─
+  // La agregación del período (evolución + totales por vendedor) ahora la hace
+  // Postgres vía RPC → transferimos ~60 filas en vez de miles.
   const [
     { data: ventasHoy },
-    ventasPeriodo,
     { data: metasData },
-    rowsPrev,
+    aggDiariaRes,
+    aggPeriodoRes,
+    aggPrevRes,
   ] = await Promise.all([
     supabase
       .from('ventas')
       .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, categoria_producto, producto, envase, localidad')
       .in('vendedor_actual', scope)
       .eq('fecha_pedido', fechaHoy),
-    fetchPaginado<VentaPeriodoRow>(offset =>
-      supabase
-        .from('ventas')
-        .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, fecha_pedido, categoria_producto')
-        .in('vendedor_actual', scope)
-        .gte('fecha_pedido', fechaIni)
-        .lte('fecha_pedido', fechaFinPeriodo)
-        .order('fecha_pedido', { ascending: true })
-        .range(offset, offset + 999)
-    ),
     supabase.from('metas').select('vendedor, meta_litros').eq('periodo_id', periodo?.id ?? -1).eq('tipo', 'mensual'),
+    supabase.rpc('ventas_agg_diaria',  { p_ini: fechaIni, p_fin: fechaFinPeriodo, p_vendedor }),
+    supabase.rpc('ventas_agg_periodo', { p_ini: fechaIni, p_fin: fechaFinPeriodo, p_vendedor }),
     iniPrev
-      ? fetchPaginado<VentaPrevRow>(offset =>
-          supabase
-            .from('ventas')
-            .select('vendedor_actual, litros, nombre_fantasia')
-            .in('vendedor_actual', scope)
-            .gte('fecha_pedido', iniPrev)
-            .lte('fecha_pedido', finPrev)
-            .range(offset, offset + 999)
-        )
-      : Promise.resolve([] as VentaPrevRow[]),
+      ? supabase.rpc('ventas_agg_periodo', { p_ini: iniPrev, p_fin: finPrev, p_vendedor })
+      : Promise.resolve({ data: [], error: null }),
   ])
 
   const metasPorVendedor: Record<string, number> = {}
@@ -162,18 +144,67 @@ export default async function DashboardPage({
     metasPorVendedor[m.vendedor] = (metasPorVendedor[m.vendedor] ?? 0) + m.meta_litros
   }
 
-  // Evolution: agrupar por fecha_pedido y vendedor
-  const evolucionMap = new Map<string, Record<string, number>>()
-  for (const v of ventasPeriodo ?? []) {
-    if (esClienteExcluido(v.nombre_fantasia)) continue
-    const fecha = v.fecha_pedido
-    if (!evolucionMap.has(fecha)) evolucionMap.set(fecha, {})
-    const dayMap = evolucionMap.get(fecha)!
-    dayMap[v.vendedor_actual] = (dayMap[v.vendedor_actual] ?? 0) + (v.litros ?? 0)
+  // Estructuras derivadas (se llenan por RPC o por fallback paginado)
+  let evolution: EvolutionDay[] = []
+  const periodoPorVendedor = new Map<string, { litros: number; revenue: number; clientes: number }>()
+  const prevPorVendedor = new Map<string, number>()
+
+  const aggOk = !aggDiariaRes.error && !aggPeriodoRes.error && !aggPrevRes.error
+
+  if (aggOk) {
+    // ── Ruta rápida: Postgres ya agregó ──
+    const evoMap = new Map<string, Record<string, number>>()
+    for (const r of (aggDiariaRes.data ?? []) as { fecha: string; vendedor: string; litros: number }[]) {
+      if (!evoMap.has(r.fecha)) evoMap.set(r.fecha, {})
+      evoMap.get(r.fecha)![r.vendedor] = Number(r.litros ?? 0)
+    }
+    evolution = Array.from(evoMap.entries())
+      .map(([fecha, vals]) => ({ fecha, ...vals }))
+      .sort((a, b) => a.fecha.localeCompare(b.fecha))
+    for (const r of (aggPeriodoRes.data ?? []) as { vendedor: string; litros: number; revenue: number; clientes: number }[])
+      periodoPorVendedor.set(r.vendedor, { litros: Number(r.litros ?? 0), revenue: Number(r.revenue ?? 0), clientes: Number(r.clientes ?? 0) })
+    for (const r of (aggPrevRes.data ?? []) as { vendedor: string; litros: number }[])
+      prevPorVendedor.set(r.vendedor, Number(r.litros ?? 0))
+  } else {
+    // ── Fallback: scans paginados (si la migración SQL aún no corre) ──
+    type PeriodoRow = { vendedor_actual: string; nombre_fantasia: string | null; litros: number | null; total_sin_impuesto: number | null; fecha_pedido: string }
+    const ventasPeriodo = await fetchPaginado<PeriodoRow>(offset =>
+      supabase.from('ventas')
+        .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, fecha_pedido')
+        .in('vendedor_actual', scope)
+        .gte('fecha_pedido', fechaIni).lte('fecha_pedido', fechaFinPeriodo)
+        .order('fecha_pedido', { ascending: true }).range(offset, offset + 999)
+    )
+    const evoMap = new Map<string, Record<string, number>>()
+    const cliSet = new Map<string, Set<string>>()
+    for (const v of ventasPeriodo) {
+      if (esClienteExcluido(v.nombre_fantasia)) continue
+      if (!evoMap.has(v.fecha_pedido)) evoMap.set(v.fecha_pedido, {})
+      const d = evoMap.get(v.fecha_pedido)!
+      d[v.vendedor_actual] = (d[v.vendedor_actual] ?? 0) + (v.litros ?? 0)
+      const cur = periodoPorVendedor.get(v.vendedor_actual) ?? { litros: 0, revenue: 0, clientes: 0 }
+      cur.litros += v.litros ?? 0; cur.revenue += v.total_sin_impuesto ?? 0
+      periodoPorVendedor.set(v.vendedor_actual, cur)
+      if (v.nombre_fantasia) {
+        if (!cliSet.has(v.vendedor_actual)) cliSet.set(v.vendedor_actual, new Set())
+        cliSet.get(v.vendedor_actual)!.add(v.nombre_fantasia)
+      }
+    }
+    for (const [vend, set] of cliSet) { const c = periodoPorVendedor.get(vend); if (c) c.clientes = set.size }
+    evolution = Array.from(evoMap.entries()).map(([fecha, vals]) => ({ fecha, ...vals })).sort((a, b) => a.fecha.localeCompare(b.fecha))
+
+    if (iniPrev) {
+      const rowsPrev = await fetchPaginado<VentaPrevRow>(offset =>
+        supabase.from('ventas').select('vendedor_actual, litros, nombre_fantasia')
+          .in('vendedor_actual', scope).gte('fecha_pedido', iniPrev).lte('fecha_pedido', finPrev)
+          .range(offset, offset + 999)
+      )
+      for (const v of rowsPrev) {
+        if (esClienteExcluido(v.nombre_fantasia)) continue
+        prevPorVendedor.set(v.vendedor_actual, (prevPorVendedor.get(v.vendedor_actual) ?? 0) + (v.litros ?? 0))
+      }
+    }
   }
-  const evolution: EvolutionDay[] = Array.from(evolucionMap.entries())
-    .map(([fecha, vals]) => ({ fecha, ...vals }))
-    .sort((a, b) => a.fecha.localeCompare(b.fecha))
 
   // Product ranking top 5
   const prodMap = new Map<string, { litros: number; categoria: string }>()
@@ -215,15 +246,15 @@ export default async function DashboardPage({
   // Resumen por vendedor
   const resumen = vendedoresScope.map(vendedor => {
     const vHoy = (ventasHoy ?? []).filter(v => v.vendedor_actual === vendedor)
-    const vPeriodo = (ventasPeriodo ?? []).filter(v => v.vendedor_actual === vendedor)
-
     const vHoyFiltrado = vHoy.filter(v => !esClienteExcluido(v.nombre_fantasia))
-    const vPeriodoFiltrado = vPeriodo.filter(v => !esClienteExcluido(v.nombre_fantasia))
 
     const litrosHoy = vHoyFiltrado.reduce((s, v) => s + (v.litros ?? 0), 0)
     const ventaHoy = vHoyFiltrado.reduce((s, v) => s + (v.total_sin_impuesto ?? 0), 0)
-    const litrosPeriodo = vPeriodoFiltrado.reduce((s, v) => s + (v.litros ?? 0), 0)
-    const ventaPeriodo = vPeriodoFiltrado.reduce((s, v) => s + (v.total_sin_impuesto ?? 0), 0)
+
+    // Período: agregado en Postgres (o fallback)
+    const periodoAgg = periodoPorVendedor.get(vendedor) ?? { litros: 0, revenue: 0, clientes: 0 }
+    const litrosPeriodo = periodoAgg.litros
+    const ventaPeriodo = periodoAgg.revenue
 
     const latasCervezaHoy = vHoyFiltrado
       .filter(v => v.envase?.includes('Lata') && v.categoria_producto?.includes('Cerveza'))
@@ -242,12 +273,10 @@ export default async function DashboardPage({
       .reduce((s, v) => s + (v.litros ?? 0), 0)
 
     const clientesHoySet = new Set<string>()
-    const clientesPeriodoSet = new Set<string>()
     for (const v of vHoyFiltrado) { if (v.nombre_fantasia) clientesHoySet.add(v.nombre_fantasia) }
-    for (const v of vPeriodoFiltrado) { if (v.nombre_fantasia) clientesPeriodoSet.add(v.nombre_fantasia) }
 
     const clientesHoyCount = clientesHoySet.size
-    const clientesPeriodoCount = clientesPeriodoSet.size
+    const clientesPeriodoCount = periodoAgg.clientes
     const dropSize = clientesHoyCount > 0 ? ventaHoy / clientesHoyCount : 0
     const metaLitros = metasPorVendedor[vendedor] ?? 0
 
@@ -315,13 +344,12 @@ export default async function DashboardPage({
   }
   const misionesResumen: MisionResumen[] = misionesRaw ?? []
 
-  // Litros mes anterior para comparación (rowsPrev ya cargado en FASE B)
+  // Litros mes anterior para comparación (prevPorVendedor ya calculado en FASE B)
   let litrosMesAnteriorTotal = 0
   const litrosMesAnteriorPorVendedor: Record<string, number> = {}
-  for (const v of rowsPrev) {
-    if (esClienteExcluido(v.nombre_fantasia)) continue
-    litrosMesAnteriorTotal += v.litros ?? 0
-    litrosMesAnteriorPorVendedor[v.vendedor_actual] = (litrosMesAnteriorPorVendedor[v.vendedor_actual] ?? 0) + (v.litros ?? 0)
+  for (const [vend, litros] of prevPorVendedor) {
+    litrosMesAnteriorTotal += litros
+    litrosMesAnteriorPorVendedor[vend] = litros
   }
 
   // Avatares de vendedores (usersAvatars ya cargado en FASE A)
