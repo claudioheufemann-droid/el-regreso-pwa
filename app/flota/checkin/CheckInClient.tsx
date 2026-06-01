@@ -294,7 +294,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   const disponibles = vehiculos.filter(v => v.estado === 'disponible')
   const rutasVehiculo = vehiculo ? rutasHoy.filter(r => r.vehiculo_id === vehiculo.id) : []
   const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
-  const listo = !!fotoOdo && fotos360ok && !!fotoMarcador && !!kmInicio && !!combustible
+  const listo = !!kmInicio && !!combustible
 
   // km y tiempo finales: OSRM > planificado
   const kmMostrado = kmCalculado ?? kmPlanificado
@@ -815,7 +815,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
           <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
             <button onClick={confirmar} disabled={!listo || guardando} style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed', background: listo && !guardando ? F : 'rgba(255,255,255,0.06)', color: listo && !guardando ? '#fff' : 'var(--muted)', fontSize: 16, fontWeight: 900 }}>
-              {guardando ? 'Registrando salida…' : listo ? 'Confirmar salida ✓' : `Faltan ${[!fotoOdo && 'odómetro', !fotos360ok && `360° (${Object.keys(fotos360).length}/4)`, !fotoMarcador && 'combustible', !combustible && 'nivel', !kmInicio && 'km'].filter(Boolean).join(', ')}`}
+              {guardando ? 'Registrando salida…' : listo ? 'Confirmar salida ✓' : `Faltan ${[!kmInicio && 'kilometraje', !combustible && 'nivel de combustible'].filter(Boolean).join(' y ')}`}
             </button>
           </div>
         </div>
