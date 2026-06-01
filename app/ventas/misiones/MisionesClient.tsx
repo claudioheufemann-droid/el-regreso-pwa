@@ -350,6 +350,11 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
               📉 Volumen a la baja: pidió −{mision.volumen_caida_pct}% vs su histórico
             </p>
           )}
+          {mision.cross_sell && (
+            <p style={{ fontSize: 12, color: '#A78BFA', fontWeight: 700 }}>
+              🔀 Cross-sell: ofrécele <strong>{mision.cross_sell.categoria}</strong> ({mision.cross_sell.pct}% de negocios similares la compran)
+            </p>
+          )}
           <p style={{ fontSize: 12, color: '#D4AF37', fontWeight: 600 }}>
             💡 {sugerencia}
           </p>

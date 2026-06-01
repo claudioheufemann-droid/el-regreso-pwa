@@ -78,6 +78,14 @@ export async function GET(req: NextRequest) {
   }[]).slice(0, 8)
   const volumenBajaTotal = (volBajaData ?? []).length
 
+  // ── Oportunidades de cross-sell ───────────────────────────────────────────────
+  const { data: crossRaw } = await supabase.rpc('get_cross_sell', { p_vendedor: null, p_min_penetracion: 0.4 })
+  const crossSell = ((crossRaw ?? []) as {
+    nombre_fantasia: string; vendedor_actual: string; categoria_negocio: string
+    categoria_sugerida: string; peers_pct: number; telefono: string | null
+  }[]).slice(0, 8)
+  const crossSellTotal = (crossRaw ?? []).length
+
   // ── Segmentación tipo_cliente ─────────────────────────────────────────────────
   const { data: tiposData } = await supabase
     .from('client_scores')
@@ -263,5 +271,9 @@ export async function GET(req: NextRequest) {
     // Caída de volumen (señal temprana de fuga)
     volumenBaja,
     volumenBajaTotal,
+
+    // Cross-sell
+    crossSell,
+    crossSellTotal,
   })
 }
