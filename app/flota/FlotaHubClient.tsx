@@ -153,12 +153,35 @@ function RangerArt() {
   )
 }
 
+// Imagen real: usa fleet.jpg y recorta la sección correcta
+// fleet.jpg tiene 3 franjas verticales: Transit (top), Porter (middle), Ranger (bottom)
+function VehiclePhoto({ nombre, tipo }: { nombre: string; tipo: string }) {
+  const n = (nombre + tipo).toLowerCase()
+  // objectPosition Y para cada franja (0% top, 50% middle, 100% bottom)
+  let yPos = '16%'   // Transit — franja superior
+  if (n.includes('porter') || n.includes('camion') || n.includes('camión') || n.includes('nqr') || n.includes('npr')) yPos = '50%'
+  if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup') || n.includes('pick')) yPos = '84%'
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/vehicles/fleet.jpg"
+      alt=""
+      style={{
+        width: '100%', height: '100%',
+        objectFit: 'cover',
+        objectPosition: `center ${yPos}`,
+      }}
+      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+    />
+  )
+}
+
 function getVehicleArt(nombre: string, tipo: string) {
   const n = (nombre + tipo).toLowerCase()
   if (n.includes('transit') || n.includes('furgon') || n.includes('furgón') || n.includes('van')) return <TransitArt />
   if (n.includes('porter') || n.includes('camion') || n.includes('camión') || n.includes('nqr') || n.includes('npr')) return <PorterArt />
   if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup') || n.includes('pick')) return <RangerArt />
-  // Default: Transit
   return <TransitArt />
 }
 
@@ -283,13 +306,24 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
           const conductor = conductores.find(c => c.id === viaje?.conductor_id)
           return (
             <div key={v.id} style={{ background: 'var(--surface2)', border: `1px solid ${v.estado === 'en_uso' ? 'rgba(245,158,11,0.3)' : v.estado === 'mantenimiento' ? 'rgba(255,85,85,0.2)' : 'rgba(255,255,255,0.06)'}`, borderRadius: 18, overflow: 'hidden', position: 'relative' }}>
-              {/* Arte SVG cinematográfico del vehículo */}
+              {/* Foto real del vehículo (cinematic) */}
+              <div style={{
+                position: 'absolute', right: 0, top: 0, bottom: 0, width: '62%',
+                maskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.65) 28%, black 100%)',
+                WebkitMaskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.65) 28%, black 100%)',
+                pointerEvents: 'none', overflow: 'hidden',
+              } as React.CSSProperties}>
+                <VehiclePhoto nombre={v.nombre} tipo={v.tipo} />
+                {/* Dark cinematic overlay */}
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)' }} />
+              </div>
+              {/* SVG fallback — visible si foto no carga */}
               <div style={{
                 position: 'absolute', right: 0, top: 0, bottom: 0, width: '58%',
                 maskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.75) 100%)',
                 WebkitMaskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.75) 100%)',
-                opacity: 0.7, display: 'flex', alignItems: 'center',
-                pointerEvents: 'none',
+                opacity: 0.5, display: 'flex', alignItems: 'center',
+                pointerEvents: 'none', zIndex: -1,
               } as React.CSSProperties}>
                 {getVehicleArt(v.nombre, v.tipo)}
               </div>
