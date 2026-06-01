@@ -66,6 +66,17 @@ export async function GET(req: NextRequest) {
     : { data: [] }
   const telMap = new Map((clientesTel ?? []).map(c => [c.nombre_fantasia, c.telefono ?? null]))
 
+  // ── Segmentación tipo_cliente ─────────────────────────────────────────────────
+  const { data: tiposData } = await supabase
+    .from('client_scores')
+    .select('nombre_fantasia, tipo_cliente, vendedor_actual')
+
+  const tipoConteo = { activo: 0, inactivo: 0, temporal: 0, nuevo: 0 }
+  for (const t of (tiposData ?? [])) {
+    const tipo = t.tipo_cliente as keyof typeof tipoConteo
+    if (tipo in tipoConteo) tipoConteo[tipo]++
+  }
+
   // ── Helpers de cálculo ────────────────────────────────────────────────────────
 
   function calcMisiones(rows: typeof mActual) {
@@ -233,5 +244,8 @@ export async function GET(req: NextRequest) {
 
     // Top 5 en riesgo
     topRiesgo,
+
+    // Segmentación activo/inactivo/temporal/nuevo
+    segmentacion: tipoConteo,
   })
 }

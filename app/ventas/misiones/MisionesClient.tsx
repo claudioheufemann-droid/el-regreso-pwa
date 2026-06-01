@@ -32,6 +32,35 @@ const ESTADO_CFG: Record<EstadoMision, { label: string; color: string; icon: str
 
 const DIAS_POSPONER = [3, 5, 7, 14]
 
+// ── Segmentación de clientes ─────────────────────────────────────────────────
+type TipoCliente = 'activo' | 'inactivo' | 'temporal' | 'nuevo'
+
+const TIPO_CLIENTE_CFG: Record<TipoCliente, {
+  label: string; color: string; bg: string; border: string
+  icon: string; estrategia: string
+}> = {
+  activo:   { label: 'Activo',   color: '#34D399', bg: 'rgba(52,211,153,0.1)',  border: 'rgba(52,211,153,0.3)',  icon: '🟢', estrategia: 'Recompra habitual — contactar para siguiente pedido.' },
+  inactivo: { label: 'Inactivo', color: '#F87171', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.3)', icon: '🔴', estrategia: 'Cliente en riesgo de abandono — ofrecer propuesta de recuperación.' },
+  temporal: { label: 'Temporal', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)',  icon: '🟡', estrategia: 'Comprador esporádico — evaluar necesidad y construir relación.' },
+  nuevo:    { label: 'Nuevo',    color: '#60A5FA', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.3)',  icon: '🔵', estrategia: 'Primer seguimiento — entender preferencias y fidelizar.' },
+}
+
+function TipoClienteBadge({ tipo, size = 'sm' }: { tipo: TipoCliente | null | undefined; size?: 'sm' | 'xs' }) {
+  if (!tipo) return null
+  const cfg = TIPO_CLIENTE_CFG[tipo]
+  const pad = size === 'xs' ? '1px 5px' : '2px 8px'
+  const fs  = size === 'xs' ? 9 : 10
+  return (
+    <span style={{
+      padding: pad, borderRadius: 20, fontSize: fs, fontWeight: 800,
+      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
+      whiteSpace: 'nowrap', flexShrink: 0,
+    }}>
+      {cfg.icon} {cfg.label}
+    </span>
+  )
+}
+
 // Una misión cuenta como completada si el vendedor cerró pedido o el cliente compró solo
 const esCompletada = (e: EstadoMision) => e === 'contactado_pedido' || e === 'auto_completado'
 
@@ -267,6 +296,22 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose }: {
 
       <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
 
+      {/* ── Tipo de cliente + estrategia ── */}
+      {mision.tipo_cliente && (() => {
+        const tc = TIPO_CLIENTE_CFG[mision.tipo_cliente as TipoCliente]
+        return (
+          <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 12, background: tc.bg, border: `1px solid ${tc.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16 }}>{tc.icon}</span>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 800, color: tc.color, marginBottom: 2 }}>Cliente {tc.label}</p>
+                <p style={{ fontSize: 11, color: 'var(--muted)' }}>{tc.estrategia}</p>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── Contexto Predictivo ── */}
       <div style={{ marginBottom: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
@@ -299,7 +344,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose }: {
             </p>
           )}
           <p style={{ fontSize: 12, color: '#D4AF37', fontWeight: 600 }}>
-            💡 Suggestion: {sugerencia}
+            💡 {sugerencia}
           </p>
         </div>
       </div>
@@ -504,14 +549,14 @@ function CompactCard({ mision, selected, onClick, onWA }: {
             {mision.nombre_fantasia}
             {contexto && <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginLeft: 5 }}>({contexto})</span>}
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 9, color: estadoCfg.color, fontWeight: 600 }}>○ {dl ?? estadoCfg.label}</span>
             {mision.score != null && (
-              <span style={{
-                fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20,
-                background: `${segColor}18`, color: segColor,
-              }}>{mision.score}. {mision.prioridad}</span>
+              <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, background: `${segColor}18`, color: segColor }}>
+                {mision.score}. {mision.prioridad}
+              </span>
             )}
+            <TipoClienteBadge tipo={mision.tipo_cliente} size="xs" />
           </div>
         </div>
 
@@ -596,14 +641,14 @@ function MisionCard({ mision, onActualizar, onWA, loadingId }: {
             )}
             {isPedido && <CheckCircle2 size={13} color="#34D399" />}
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: 10, color: estadoCfg.color, fontWeight: 600 }}>{estadoCfg.icon} {estadoCfg.label}</span>
             {dl && (
               <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 7px', borderRadius: 20, background: tipoCfg.bg, color: tipoCfg.color }}>
                 {dl}
               </span>
             )}
-            {mision.ciclo_promedio_dias && <span style={{ fontSize: 10, color: '#555' }}>Ciclo {mision.ciclo_promedio_dias}d</span>}
+            <TipoClienteBadge tipo={mision.tipo_cliente} size="xs" />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -1016,11 +1061,24 @@ export default function MisionesClient({
   const [generando, setGenerando]   = useState(false)
   const [waTarget, setWaTarget]     = useState<WATarget | null>(null)
   const [filtroVendedor, setFiltroVendedor] = useState<string | null>(null)
+  const [filtroTipo, setFiltroTipo] = useState<TipoCliente | null>(null)
   const [selectedMision, setSelectedMision] = useState<MisionEnriquecida | null>(null)
 
   const misionesFiltradas = useMemo(() => {
-    const base = !filtroVendedor ? misiones : misiones.filter(m => m.vendedor === filtroVendedor)
+    let base = !filtroVendedor ? misiones : misiones.filter(m => m.vendedor === filtroVendedor)
+    if (filtroTipo) base = base.filter(m => m.tipo_cliente === filtroTipo)
     return base
+  }, [misiones, filtroVendedor, filtroTipo])
+
+  // Conteos por tipo para el filtro UI
+  const conteosPorTipo = useMemo(() => {
+    const base = !filtroVendedor ? misiones : misiones.filter(m => m.vendedor === filtroVendedor)
+    return {
+      activo:   base.filter(m => m.tipo_cliente === 'activo').length,
+      inactivo: base.filter(m => m.tipo_cliente === 'inactivo').length,
+      temporal: base.filter(m => m.tipo_cliente === 'temporal').length,
+      nuevo:    base.filter(m => m.tipo_cliente === 'nuevo').length,
+    }
   }, [misiones, filtroVendedor])
 
   const porTipo = useMemo(() => {
@@ -1100,7 +1158,38 @@ export default function MisionesClient({
 
   // Barra de controles compartida
   const Controles = () => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+      {/* Filtro de tipo de cliente */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.7px' }}>Tipo cliente:</span>
+        <button
+          onClick={() => setFiltroTipo(null)}
+          style={{ padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700, border: `1px solid ${!filtroTipo ? 'rgba(212,175,55,0.4)' : 'var(--border)'}`, background: !filtroTipo ? 'rgba(212,175,55,0.12)' : 'transparent', color: !filtroTipo ? '#D4AF37' : 'var(--muted)', cursor: 'pointer' }}
+        >
+          Todos ({misiones.filter(m => !filtroVendedor || m.vendedor === filtroVendedor).length})
+        </button>
+        {(Object.entries(conteosPorTipo) as [TipoCliente, number][]).map(([tipo, count]) => {
+          if (count === 0) return null
+          const cfg = TIPO_CLIENTE_CFG[tipo]
+          const active = filtroTipo === tipo
+          return (
+            <button
+              key={tipo}
+              onClick={() => setFiltroTipo(active ? null : tipo)}
+              style={{
+                padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
+                background: active ? cfg.bg : 'transparent',
+                border: `1px solid ${active ? cfg.border : 'var(--border)'}`,
+                color: active ? cfg.color : 'var(--muted)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              {cfg.icon} {cfg.label} ({count})
+            </button>
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       {isAdmin && vendedores.length > 1 && (
         <div style={{ display: 'flex', gap: 5 }}>
           <button onClick={() => setFiltroVendedor(null)} style={{
@@ -1131,6 +1220,7 @@ export default function MisionesClient({
           {generando ? 'Actualizando…' : 'Actualizar misiones'}
         </button>
       )}
+      </div>
     </div>
   )
 

@@ -36,6 +36,8 @@ export interface MisionEnriquecida {
   volumen_promedio: number | null
   litros_ultima_compra: number | null
   prioridad_calculada: number | null
+  // Segmentación de cliente
+  tipo_cliente: 'activo' | 'inactivo' | 'temporal' | 'nuevo' | null
   // Enriquecido
   ruta_despacho: string | null
   localidad: string | null
@@ -61,12 +63,14 @@ export interface HistorialSemana {
 }
 
 function enriquecerMision(
-  m: Omit<MisionEnriquecida, 'ruta_despacho'|'localidad'|'telefono'|'ultima_venta_fecha'|'ultima_venta_monto'|'prioridad'|'frecuencia_texto'|'dias_para_compra'>,
+  m: Omit<MisionEnriquecida, 'ruta_despacho'|'localidad'|'telefono'|'ultima_venta_fecha'|'ultima_venta_monto'|'prioridad'|'frecuencia_texto'|'dias_para_compra'|'tipo_cliente'>,
   clienteMap: Map<string, { ruta_despacho: string|null; localidad: string|null; telefono: string|null }>,
-  ventaMap: Map<string, { fecha: string; monto: number }>
+  ventaMap: Map<string, { fecha: string; monto: number }>,
+  tipoClienteMap: Map<string, 'activo' | 'inactivo' | 'temporal' | 'nuevo'>
 ): MisionEnriquecida {
   const cli = clienteMap.get(m.nombre_fantasia) ?? { ruta_despacho:null, localidad:null, telefono:null }
   const vta = ventaMap.get(m.nombre_fantasia)
+  const tipo_cliente = tipoClienteMap.get(m.nombre_fantasia) ?? null
   const prioridad = m.alert_level==='critico' ? 'Alta' : m.alert_level==='vencido' ? 'Media' : 'Baja'
   const ciclo = m.ciclo_promedio_dias
   const frecuencia_texto = ciclo ? `Cada ${ciclo} días` : 'Sin datos'
@@ -81,6 +85,7 @@ function enriquecerMision(
   const tipo: TipoMision = (m as MisionEnriquecida).tipo ?? 'vencido'
   return {
     ...m, tipo, ...cli,
+    tipo_cliente,
     snooze_until: m.snooze_until ?? null,
     completado_canal: m.completado_canal ?? null,
     resultado_litros: m.resultado_litros ?? null,
@@ -111,6 +116,7 @@ export default async function MisionesPage() {
     { data: proximaRaw },
     { data: clientesRaw },
     { data: ventasRaw },
+    { data: tiposRaw },
   ] = await Promise.all([
     // Misiones de esta semana (select '*' = tolerante a columnas nuevas)
     supabase.from('misiones')
@@ -153,6 +159,11 @@ export default async function MisionesPage() {
       }
       return { data: rows }
     })(),
+
+    // Tipo de cliente desde client_scores (para segmentación activo/inactivo/temporal/nuevo)
+    supabase.from('client_scores')
+      .select('nombre_fantasia, tipo_cliente')
+      .in('vendedor_actual', vendedoresScope.length ? vendedoresScope : ['__none__']),
   ])
 
   // Mapas de lookup
@@ -166,10 +177,16 @@ export default async function MisionesPage() {
     if (v.nombre_fantasia && !ventaMap.has(v.nombre_fantasia))
       ventaMap.set(v.nombre_fantasia, { fecha: v.fecha_pedido, monto: v.total_sin_impuesto ?? 0 })
 
+  // Mapa tipo_cliente: nombre → tipo
+  const tipoClienteMap = new Map<string, 'activo' | 'inactivo' | 'temporal' | 'nuevo'>()
+  for (const t of (tiposRaw ?? []))
+    if (t.nombre_fantasia && t.tipo_cliente)
+      tipoClienteMap.set(t.nombre_fantasia, t.tipo_cliente as 'activo' | 'inactivo' | 'temporal' | 'nuevo')
+
   // Enriquecer misiones actuales (oculta las pospuestas con snooze vigente)
   const hoyStr = new Date().toISOString().split('T')[0]
   const misiones: MisionEnriquecida[] = (misionesRaw ?? [])
-    .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap))
+    .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap))
     .filter(m => !(m.estado === 'pospuesto' && m.snooze_until && m.snooze_until > hoyStr))
     .sort((a, b) => {
       if (a.estado !== b.estado) return a.estado === 'pendiente' ? -1 : 1
@@ -182,7 +199,7 @@ export default async function MisionesPage() {
   // Historial agrupado por semana
   const historialMap = new Map<string, MisionEnriquecida[]>()
   for (const m of historialRaw ?? []) {
-    const me = enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap)
+    const me = enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap)
     if (!historialMap.has(m.semana)) historialMap.set(m.semana, [])
     historialMap.get(m.semana)!.push(me)
   }

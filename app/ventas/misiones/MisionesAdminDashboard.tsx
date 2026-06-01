@@ -19,7 +19,15 @@ interface AdminStats {
   mejoresDias: { dia: string; count: number; tasa: number }[]
   zonasRiesgo: number
   topRiesgo: { nombre: string; vendedor: string; diasSinCompra: number; ultimaCompra: string | null; segmento: string; telefono: string | null }[]
+  segmentacion: { activo: number; inactivo: number; temporal: number; nuevo: number }
 }
+
+const SEG_TYPES = [
+  { key: 'activo',   label: 'Activos',   color: '#34D399', icon: '🟢', desc: 'Compradores regulares' },
+  { key: 'inactivo', label: 'Inactivos', color: '#F87171', icon: '🔴', desc: 'En riesgo de abandono' },
+  { key: 'temporal', label: 'Temporales',color: '#F59E0B', icon: '🟡', desc: 'Compradores esporádicos' },
+  { key: 'nuevo',    label: 'Nuevos',    color: '#60A5FA', icon: '🔵', desc: 'Incorporación reciente' },
+] as const
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -343,6 +351,39 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           sub="Contactos esta semana"
           link="Ver calendario" onLink={() => router.push('/ventas')} />
       </div>
+
+      {/* ── Segmentación de cartera ── */}
+      {stats.segmentacion && (() => {
+        const seg = stats.segmentacion
+        const totalSeg = seg.activo + seg.inactivo + seg.temporal + seg.nuevo || 1
+        return (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '16px 20px', marginBottom: 14 }}>
+            <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 12 }}>Segmentación de cartera</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }} className="kpi-grid-4">
+              {SEG_TYPES.map(s => {
+                const count = seg[s.key]
+                const pct = Math.round((count / totalSeg) * 100)
+                return (
+                  <div key={s.key} style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${s.color}25`, borderRadius: 12, padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <span style={{ fontSize: 15 }}>{s.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: s.color }}>{s.label}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 26, fontWeight: 900, color: s.color }}>{count}</span>
+                      <span style={{ fontSize: 12, color: 'var(--muted)' }}>{pct}%</span>
+                    </div>
+                    <div style={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: s.color, borderRadius: 2 }} />
+                    </div>
+                    <p style={{ fontSize: 10, color: 'var(--muted)' }}>{s.desc}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Row 3: Tabla vendedores + Donut + Gauge ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px 220px', gap: 14, marginBottom: 14 }} className="grid-stack-mobile">
