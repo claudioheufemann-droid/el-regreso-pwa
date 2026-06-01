@@ -3,8 +3,8 @@ import { Resend } from 'resend'
 import { createServerClient } from '@supabase/ssr'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 
-// Cron: lunes 12:00 y 13:00 UTC. La guardia envía solo cuando en Chile son las 9am
-// (cubre horario de verano/invierno: UTC-3 → 12:00 / UTC-4 → 13:00).
+// Cron: lunes 13:00 UTC = 9:00 Chile (invierno UTC-4). En verano (UTC-3) llega 10:00.
+// Plan Hobby solo permite 1 disparo diario; al pasar a Pro se puede afinar a "0 12,13".
 export const runtime = 'nodejs'
 
 const APP_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://el-regreso-pwa.vercel.app'
@@ -28,13 +28,6 @@ export async function GET(req: Request) {
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // Guardia de hora local Chile: solo enviar a las 9am
-  const chileHour = Number(new Date().toLocaleString('en-US', { timeZone: 'America/Santiago', hour: 'numeric', hour12: false }))
-  const force = new URL(req.url).searchParams.get('force') === '1'
-  if (chileHour !== 9 && !force) {
-    return NextResponse.json({ skipped: true, reason: 'no son las 9am en Chile', chileHour })
   }
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
