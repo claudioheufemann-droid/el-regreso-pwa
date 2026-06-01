@@ -257,6 +257,162 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
   const actIcon:  Record<string,string> = { completada:'✓', proceso:'↻', asignada:'↗' }
   const actVerb:  Record<string,string> = { completada:'completó', proceso:'inició', asignada:'asignó' }
 
+  // ─────────────────────────────────────────────────────────────────
+  // MOBILE — layout ultra-compacto, todo en pantalla sin desborde
+  // ─────────────────────────────────────────────────────────────────
+  if (!isDesktop) {
+    const miniKpis = [
+      { value: kpiAsignadas,   label: 'Asignadas',  color: '#5B8AA8', bg: 'linear-gradient(145deg,#0d1e36,#091425)', border: 'rgba(91,138,168,0.3)',  icon: '📋', tab: 'sin-iniciar' as TabKey },
+      { value: kpiEnProceso,   label: 'En Proceso', color: '#E67E22', bg: 'linear-gradient(145deg,#261400,#170d00)', border: 'rgba(230,126,34,0.3)',  icon: '🔄', tab: 'en-proceso'  as TabKey },
+      { value: kpiCompletadas, label: 'Completadas',color: '#22C55E', bg: 'linear-gradient(145deg,#081f0f,#041309)', border: 'rgba(34,197,94,0.25)',  icon: '✅', tab: 'completadas'  as TabKey },
+      { value: kpiAtrasadas,   label: 'Atrasadas',  color: '#E74C3C', bg: kpiAtrasadas>0?'linear-gradient(145deg,#250a0a,#160505)':'linear-gradient(145deg,#181010,#100a0a)', border: 'rgba(231,76,60,0.28)', icon: '⚠️', tab: 'atrasadas' as TabKey },
+    ]
+
+    const pendientes = [...activeTasks]
+      .filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada')
+      .sort((a, b) => a.plazo.localeCompare(b.plazo))
+      .slice(0, 4)
+
+    function vColor(plazo: string) {
+      const d = Math.ceil((new Date(plazo).getTime() - Date.now()) / 86400000)
+      return d < 0 ? '#FF4444' : d <= 1 ? '#E67E22' : d <= 3 ? '#D4AF37' : 'var(--muted)'
+    }
+    function fPlazo(plazo: string) {
+      const [, m, d] = plazo.split('-')
+      return `${parseInt(d)} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][parseInt(m)-1]}`
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+
+        {/* Header compacto */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ minWidth: 0 }}>
+            {macroConfig && <div style={{ fontSize: 9, fontWeight: 700, color: macroConfig.color, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 1 }}>{macroConfig.code} · {macroConfig.label}</div>}
+            <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>¡Buenos días, {firstName}! 👋</div>
+          </div>
+          <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
+            <div style={{ position: 'relative' }}>
+              <button style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14 }}>🔔</button>
+              {(kpiAtrasadas + kpiAprobar) > 0 && <span style={{ position: 'absolute', top: -3, right: -3, background: '#E74C3C', color: '#fff', borderRadius: '50%', width: 14, height: 14, fontSize: 7, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{kpiAtrasadas + kpiAprobar}</span>}
+            </div>
+            <button onClick={() => setShowNewTask(true)} style={{ padding: '7px 12px', background: 'var(--gold)', color: '#0A0A0A', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>+ Nueva</button>
+          </div>
+        </div>
+
+        {/* 4 KPI mini-cards 2x2 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {miniKpis.map(k => (
+            <button key={k.label} onClick={() => scrollToTable(k.tab)} style={{
+              background: k.bg, border: `1px solid ${k.border}`,
+              borderRadius: 14, padding: '10px 12px',
+              display: 'flex', alignItems: 'center', gap: 10,
+              cursor: 'pointer', textAlign: 'left',
+            }}>
+              <div style={{ fontSize: 20 }}>{k.icon}</div>
+              <div>
+                <div style={{ fontSize: 28, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: -1 }}>{k.value}</div>
+                <div style={{ fontSize: 8, fontWeight: 800, color: k.color, letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 2, opacity: 0.85 }}>{k.label}</div>
+              </div>
+              <div style={{ marginLeft: 'auto', fontSize: 10, color: k.color, opacity: 0.5 }}>→</div>
+            </button>
+          ))}
+        </div>
+
+        {/* Stats compactos: donut mini + leyenda */}
+        <div style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Mini donut */}
+          <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0 }}>
+            <svg width={52} height={52} style={{ transform: 'rotate(-90deg)' }}>
+              {(() => {
+                const r = 20, circ = 2 * Math.PI * r
+                const segs = [
+                  { v: kpiCompletadas, c: '#22C55E' }, { v: kpiEnProceso, c: '#E67E22' },
+                  { v: kpiAtrasadas, c: '#E74C3C' },   { v: kpiAsignadas + kpiAprobar, c: '#5B8AA8' },
+                ]
+                const total = segs.reduce((s, x) => s + x.v, 0) || 1
+                let off = 0
+                return segs.map((s, i) => {
+                  const dash = (s.v / total) * circ
+                  const el = <circle key={i} cx={26} cy={26} r={r} fill="none" stroke={s.c} strokeWidth={8} strokeDasharray={`${dash} ${circ}`} strokeDashoffset={circ - off} />
+                  off += dash; return el
+                })
+              })()}
+              <circle cx={26} cy={26} r={20} fill="none" stroke="rgba(128,128,128,0.1)" strokeWidth={8} />
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--cream)', lineHeight: 1 }}>{kpiTotal}</div>
+              <div style={{ fontSize: 6, color: 'var(--muted)', marginTop: 1 }}>total</div>
+            </div>
+          </div>
+          {/* Leyenda compacta */}
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px' }}>
+            {[
+              { label: 'Completas', n: kpiCompletadas, color: '#22C55E' },
+              { label: 'En proceso', n: kpiEnProceso, color: '#E67E22' },
+              { label: 'Atrasadas', n: kpiAtrasadas, color: '#E74C3C' },
+              { label: 'Pendientes', n: kpiAsignadas + kpiAprobar, color: '#5B8AA8' },
+            ].map(s => (
+              <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 10, color: 'var(--muted)', flex: 1 }}>{s.label}</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--cream)' }}>{s.n}</span>
+              </div>
+            ))}
+          </div>
+          {/* Cumplimiento */}
+          <div style={{ flexShrink: 0, textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.07)', paddingLeft: 12 }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: cumplimiento >= 80 ? '#22C55E' : cumplimiento >= 50 ? '#D4AF37' : '#E74C3C', lineHeight: 1 }}>{cumplimiento}%</div>
+            <div style={{ fontSize: 8, color: 'var(--muted)', marginTop: 2 }}>cumplido</div>
+          </div>
+        </div>
+
+        {/* Tareas pendientes próximas */}
+        <div style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--cream)' }}>Tareas pendientes</span>
+            <button onClick={() => scrollToTable('todas')} style={{ fontSize: 10, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todas →</button>
+          </div>
+          {pendientes.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '16px', fontSize: 12, color: 'var(--muted)' }}>✅ Sin tareas pendientes</div>
+          ) : pendientes.map((t, idx) => {
+            const stCfg = STATUS_CFG[t.estado as keyof typeof STATUS_CFG] ?? { color: '#888' }
+            const cfg2 = AREA_CFG[t.area] ?? { color: '#888', code: '??' }
+            return (
+              <div key={t.id} onClick={() => setSelectedTask(t)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: idx < pendientes.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', cursor: 'pointer' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: stCfg.color, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.titulo}</div>
+                  <div style={{ fontSize: 9, color: cfg2.color, marginTop: 1 }}>{t.area}</div>
+                </div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: vColor(t.plazo), flexShrink: 0 }}>{fPlazo(t.plazo)}</div>
+              </div>
+            )
+          })}
+        </div>
+
+        {showNewTask && (
+          <NewTaskModal defaultArea={availableAreas[0]??'Ventas'} availableAreas={availableAreas}
+            users={users} onClose={() => setShowNewTask(false)}
+            onCreated={t => { onTaskCreated(t); setShowNewTask(false) }} />
+        )}
+        {selectedTask && (
+          <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)}
+            onUpdate={t => { onTaskUpdated(t); setSelectedTask(null) }}
+            onDelete={id => { onTaskDeleted(id); setSelectedTask(null) }}
+            isAdmin={isAdmin} currentUserId={currentUserId} />
+        )}
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // DESKTOP return continúa abajo
+  // ─────────────────────────────────────────────────────────────────
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
