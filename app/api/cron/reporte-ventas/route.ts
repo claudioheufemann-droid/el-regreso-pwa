@@ -7,7 +7,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 // Plan Hobby solo permite 1 disparo diario; al pasar a Pro se puede afinar a "0 12,13".
 export const runtime = 'nodejs'
 
-const APP_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://el-regreso-pwa.vercel.app'
+const APP_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://el-regreso-pwa-psi.vercel.app'
 const esComp = (e: string) => e === 'contactado_pedido' || e === 'auto_completado'
 
 function ymd(d: Date) { return d.toISOString().split('T')[0] }
