@@ -643,60 +643,86 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
 
-      {/* Topbar — más espacioso */}
-      <div className="safe-top" style={{ display: 'flex', alignItems: 'center', padding: '14px 16px 12px', gap: 14, background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <Logo size={36} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--cream)', letterSpacing: 0.2, lineHeight: 1.2 }}>Gestión</div>
-          {currentMacroArea ? (() => {
-            const mac = Object.entries(MACRO_AREAS).find(([k]) => k === currentMacroArea)
-            if (!mac) return <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: 0.3, marginTop: 2 }}>El Regreso</div>
-            const [, macData] = mac
-            return (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 4, background: macData.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 10, fontWeight: 700, color: macData.color, letterSpacing: 0.5 }}>{macData.label}</span>
-              </div>
-            )
-          })() : <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: 0.3, marginTop: 2 }}>El Regreso</div>}
-        </div>
-        {(atrasadas + porAprobar) > 0 && (
-          <div className="pulse" style={{ flexShrink: 0, padding: '6px 10px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#FF4444' }} />
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#FF7070' }}>{atrasadas + porAprobar}</span>
+      {/* ── Topbar mobile moderno ── */}
+      <div className="safe-top" style={{
+        background: 'linear-gradient(180deg, #13131a 0%, var(--surface) 100%)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        flexShrink: 0,
+      }}>
+        {/* Fila superior: logo+nombre / acciones */}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '16px 18px 10px', gap: 12 }}>
+          <Logo size={34} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.3, lineHeight: 1.1 }}>
+              El Regreso
+            </div>
+            {currentMacroArea ? (() => {
+              const mac = Object.entries(MACRO_AREAS).find(([k]) => k === currentMacroArea)
+              if (!mac) return null
+              const [, macData] = mac
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: macData.color }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: macData.color, letterSpacing: 0.3 }}>{macData.label}</span>
+                </div>
+              )
+            })() : <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>Control de Gestión</div>}
           </div>
-        )}
-        <button onClick={refreshTasks} className="touch-active" title="Actualizar"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 8px', color: 'var(--muted)', fontSize: 18, lineHeight: 1, flexShrink: 0, borderRadius: 8 }}>
-          ↻
-        </button>
-        <a href="/" title="Módulos"
-          style={{ background: 'rgba(128,128,128,0.07)', border: '1px solid rgba(128,128,128,0.12)', borderRadius: 10, padding: '8px 10px', color: 'var(--muted)', fontSize: 16, textDecoration: 'none', flexShrink: 0, lineHeight: 1 }}>
-          ⌂
-        </a>
-        <div
-          onClick={() => setShowSettings(true)}
-          className="touch-active"
-          style={{ width: 40, height: 40, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#0A0A0A', flexShrink: 0, cursor: 'pointer', position: 'relative' }}>
-          {initials}
-          {isAdmin && <div style={{ position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: '50%', background: 'var(--surface)', border: '1.5px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8 }}>★</div>}
+
+          {/* Badge alertas */}
+          {(atrasadas + porAprobar) > 0 && (
+            <div className="pulse" style={{ padding: '6px 12px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#FF4444' }} />
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#FF6B6B' }}>{atrasadas + porAprobar}</span>
+            </div>
+          )}
+
+          {/* Refresh */}
+          <button onClick={refreshTasks} className="touch-active" title="Actualizar"
+            style={{ width: 38, height: 38, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--muted)', fontSize: 17, flexShrink: 0 }}>
+            ↻
+          </button>
+
+          {/* Avatar / Configuración */}
+          <div onClick={() => setShowSettings(true)} className="touch-active" style={{
+            width: 38, height: 38, borderRadius: 12,
+            background: isAdmin ? 'linear-gradient(135deg, #D4AF37, #B8962E)' : 'linear-gradient(135deg, #C06A1A, #A0551A)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, fontWeight: 800, color: '#0A0A0A',
+            flexShrink: 0, cursor: 'pointer', position: 'relative',
+            boxShadow: isAdmin ? '0 2px 12px rgba(212,175,55,0.3)' : '0 2px 12px rgba(192,106,26,0.3)',
+          }}>
+            {initials}
+            {isAdmin && <div style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: '50%', background: '#0A0A0A', border: '1.5px solid #D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#D4AF37' }}>★</div>}
+          </div>
+        </div>
+
+        {/* Nav tabs */}
+        <div style={{ display: 'flex', padding: '0 6px 0' }}>
+          {visibleNavItems.map(({ key, label }) => {
+            const isActive = view === key || (key === 'home' && view === 'filter')
+            return (
+              <button key={key} onClick={() => setView(key)} style={{
+                flex: 1, padding: '10px 4px 12px', border: 'none', background: 'transparent',
+                cursor: 'pointer', fontSize: 12, fontWeight: isActive ? 700 : 500,
+                color: isActive ? 'var(--gold)' : 'rgba(255,255,255,0.35)',
+                letterSpacing: 0.2, transition: 'color 0.15s', position: 'relative',
+              }}>
+                {label}
+                {isActive && (
+                  <div style={{
+                    position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+                    width: 20, height: 2.5, borderRadius: 99,
+                    background: 'var(--gold)',
+                  }} />
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} avatarUrl={users.find(u => u.email === userEmail)?.avatar_url} />}
-
-      {/* Nav tabs */}
-      <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid rgba(128,128,128,0.08)', flexShrink: 0 }}>
-        {visibleNavItems.map(({ key, label }) => {
-          const isActive = view === key || (key === 'home' && view === 'filter')
-          return (
-            <button key={key} onClick={() => setView(key)} style={{ flex: 1, padding: '8px 4px 6px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--gold)' : 'var(--muted)', letterSpacing: 0.3, transition: 'color 0.15s' }}>
-              <div>{label}</div>
-              <div className={`nav-pill${isActive ? '' : ' inactive'}`} />
-            </button>
-          )
-        })}
-      </div>
 
       <ContentArea />
 

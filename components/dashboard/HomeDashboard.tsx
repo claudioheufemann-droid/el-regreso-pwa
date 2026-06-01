@@ -286,25 +286,31 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
 
-        {/* Botón volver al módulo */}
-        <a href={backHref} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', fontWeight: 500 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-          {backHref === '/' ? 'Cambiar módulo' : 'Volver'}
-        </a>
-
-        {/* Header compacto */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        {/* Header saludo + acción */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10, paddingTop: 4 }}>
           <div style={{ minWidth: 0 }}>
-            {macroConfig && <div style={{ fontSize: 9, fontWeight: 700, color: macroConfig.color, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 1 }}>{macroConfig.code} · {macroConfig.label}</div>}
-            <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>¡Buenos días, {firstName}! 👋</div>
-          </div>
-          <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
-            <div style={{ position: 'relative' }}>
-              <button style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14 }}>🔔</button>
-              {(kpiAtrasadas + kpiAprobar) > 0 && <span style={{ position: 'absolute', top: -3, right: -3, background: '#E74C3C', color: '#fff', borderRadius: '50%', width: 14, height: 14, fontSize: 7, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{kpiAtrasadas + kpiAprobar}</span>}
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', fontWeight: 500, marginBottom: 4 }}>
+              {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
-            <button onClick={() => setShowNewTask(true)} style={{ padding: '7px 12px', background: 'var(--gold)', color: '#0A0A0A', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>+ Nueva</button>
+            <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5, lineHeight: 1.1 }}>
+              Hola, {firstName} 👋
+            </div>
+            {macroConfig && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: macroConfig.color }} />
+                <span style={{ fontSize: 11, color: macroConfig.color, fontWeight: 600, letterSpacing: 0.3 }}>{macroConfig.label}</span>
+              </div>
+            )}
           </div>
+          <button onClick={() => setShowNewTask(true)} style={{
+            flexShrink: 0,
+            padding: '12px 18px',
+            background: 'linear-gradient(135deg, #D4AF37, #B8962E)',
+            color: '#0A0A0A', border: 'none', borderRadius: 14,
+            cursor: 'pointer', fontSize: 13, fontWeight: 800,
+            boxShadow: '0 4px 16px rgba(212,175,55,0.35)',
+            letterSpacing: 0.2,
+          }}>+ Nueva</button>
         </div>
 
         {/* 4 KPI mini-cards 2x2 */}
