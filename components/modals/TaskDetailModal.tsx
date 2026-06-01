@@ -439,42 +439,44 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
   // ─────────────────────────────────────────────────────────
   return (
     <>
+      {/* Overlay */}
       <div
         style={{
           position: 'fixed', inset: 0, zIndex: 50,
-          background: '#07070D',
-          overflowY: 'auto',
-          display: 'flex', flexDirection: 'column',
+          background: 'rgba(0,0,0,0.72)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: isDesktop ? '24px' : '0',
         }}
         onClick={e => { if (e.target === e.currentTarget) onClose() }}
       >
-        {/* ── TOP NAV ── */}
+        {/* Modal card */}
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '14px 24px',
-          position: 'sticky', top: 0, zIndex: 10,
-          background: 'rgba(7,7,13,0.95)', backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
-          flexShrink: 0,
+          position: 'relative',
+          background: '#0F0F18',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: isDesktop ? 22 : 0,
+          width: '100%',
+          maxWidth: 1060,
+          maxHeight: isDesktop ? '90vh' : '100dvh',
+          height: isDesktop ? 'auto' : '100dvh',
+          display: 'flex', flexDirection: 'column',
+          overflowY: 'auto',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
         }}>
+          {/* Botón X */}
           <button onClick={onClose} style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: 500,
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-            Volver a tareas
-          </button>
-          <button onClick={onClose} style={{
+            position: 'sticky', top: 16, zIndex: 20,
+            marginLeft: 'auto', marginRight: 16, marginTop: 16,
             width: 34, height: 34, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
-            color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 16,
+            background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+            color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 16,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
           }}>✕</button>
-        </div>
 
         {/* ── MAIN CONTENT ── */}
-        <div style={{ maxWidth: 1140, width: '100%', margin: '0 auto', padding: isDesktop ? '36px 32px 60px' : '24px 16px 48px', flex: 1, boxSizing: 'border-box' }}>
+        <div style={{ padding: isDesktop ? '8px 32px 48px' : '16px 16px 40px', boxSizing: 'border-box' }}>
 
           {/* HEADER */}
           <div style={{ marginBottom: 28 }}>
@@ -676,7 +678,8 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
             </div>
           )}
         </div>
-      </div>
+        </div>{/* end modal card */}
+      </div>{/* end overlay */}
 
       {/* Lightbox */}
       {lightboxUrl && (
