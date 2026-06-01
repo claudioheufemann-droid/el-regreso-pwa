@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { RcTask, RcUser, AREA_CFG, MACRO_AREAS, MacroKey, STATUS_CFG } from '@/lib/gestion-types'
 import NewTaskModal from '@/components/modals/NewTaskModal'
 import TaskDetailModal from '@/components/modals/TaskDetailModal'
@@ -150,6 +150,12 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
   const [showNewTask, setShowNewTask] = useState(false)
   const [selectedTask, setSelectedTask] = useState<RcTask | null>(null)
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
+  const tableRef = useRef<HTMLDivElement>(null)
+
+  function scrollToTable(tab: TabKey) {
+    setActiveTab(tab)
+    setTimeout(() => tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
 
   useEffect(() => {
     fetch('/api/analytics').then(r => r.json()).then(d => setCommentCounts(d ?? {})).catch(() => {})
@@ -279,19 +285,19 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             <KpiCard value={kpiAsignadas} label="Asignadas" sub="Requieren tu atención"
               color="#5B8AA8" bg="linear-gradient(145deg,#0d1e36,#091425)" border="rgba(91,138,168,0.28)" glow="rgba(91,138,168,0.1)"
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M3 6h18v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>}
-              up onClick={() => setActiveTab('todas')} />
+              up onClick={() => scrollToTable('sin-iniciar')} />
             <KpiCard value={kpiEnProceso} label="En Proceso" sub="En ejecución activa"
               color="#E67E22" bg="linear-gradient(145deg,#261400,#170d00)" border="rgba(230,126,34,0.28)" glow="rgba(230,126,34,0.1)"
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E67E22" strokeWidth="2" strokeLinecap="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>}
-              up />
+              up onClick={() => scrollToTable('en-proceso')} />
             <KpiCard value={kpiCompletadas} label="Completadas" sub="Completadas exitosamente"
               color="#22C55E" bg="linear-gradient(145deg,#081f0f,#041309)" border="rgba(34,197,94,0.28)" glow="rgba(34,197,94,0.08)"
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>}
-              up />
+              up onClick={() => scrollToTable('completadas')} />
             <KpiCard value={kpiAtrasadas} label="Atrasadas" sub="Requieren acción inmediata"
               color="#E74C3C" bg={kpiAtrasadas>0?"linear-gradient(145deg,#250a0a,#160505)":"linear-gradient(145deg,#181010,#100a0a)"} border="rgba(231,76,60,0.28)" glow="rgba(231,76,60,0.08)"
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E74C3C" strokeWidth="2" strokeLinecap="round"><path d="m10.29 3.86-8.26 14.28A1 1 0 0 0 2.9 20h16.2a1 1 0 0 0 .87-1.5L11.71 3.86a1 1 0 0 0-1.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
-              up={false} />
+              up={false} onClick={() => scrollToTable('atrasadas')} />
           </div>
 
           {/* Fila 2 izquierda: 3 analytics */}
@@ -325,7 +331,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                   ))}
                 </div>
               </div>
-              <button style={{ marginTop: 14, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <button onClick={() => scrollToTable('todas')} style={{ marginTop: 14, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 Ver detalle completo →
               </button>
@@ -335,7 +341,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             <div style={CARD}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Tareas por prioridad</div>
-                <span style={{ fontSize: 18, color: 'var(--muted)', cursor: 'pointer' }}>⋯</span>
+                <button onClick={() => scrollToTable('todas')} style={{ fontSize: 18, color: 'var(--muted)', cursor: 'pointer', background: 'none', border: 'none', padding: '0 4px', lineHeight: 1 }} title="Ver todas las tareas">⋯</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 {[
@@ -437,7 +443,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                   )
                 })}
               </div>
-              <button style={{ marginTop: 14, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todas las áreas →</button>
+              <button onClick={() => isAdmin ? onNavigate('analytics') : scrollToTable('todas')} style={{ marginTop: 14, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todas las áreas →</button>
             </div>
 
             {/* Recordatorios activos — 3ra columna de fila 3, mismo porte que Cumplimiento */}
@@ -453,7 +459,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
               </div>
               <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>Tareas con recordatorios programados</div>
               <div style={{ position: 'absolute', bottom: -16, right: -10, fontSize: 100, opacity: 0.05, transform: 'rotate(12deg)', pointerEvents: 'none', lineHeight: 1 }}>🔔</div>
-              <button style={{ fontSize: 11, color: '#5B8AA8', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos →</button>
+              <button onClick={() => scrollToTable('en-proceso')} style={{ fontSize: 11, color: '#5B8AA8', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todos →</button>
             </div>
 
           </div>
@@ -507,7 +513,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           <div style={{ ...CARD, display: 'flex', flexDirection: 'column', flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Actividad reciente</div>
-              <button style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
+              <button onClick={() => onNavigate('mis-tareas')} style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               {recentActivity.map((item, idx) => {
@@ -531,7 +537,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                 )
               })}
             </div>
-            <button style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda la actividad →</button>
+            <button onClick={() => onNavigate('mis-tareas')} style={{ marginTop: 10, fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda la actividad →</button>
           </div>
 
         </div>
@@ -584,7 +590,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           <div style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Actividad reciente</div>
-              <button style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
+              <button onClick={() => onNavigate('mis-tareas')} style={{ fontSize: 11, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver toda →</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {recentActivity.map((item, idx) => {
@@ -613,7 +619,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
       )}
 
       {/* ── TABLA TAREAS ── */}
-      <div style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, overflow: 'hidden' }}>
+      <div ref={tableRef} style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, overflow: 'hidden' }}>
         <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>Mis tareas</div>
