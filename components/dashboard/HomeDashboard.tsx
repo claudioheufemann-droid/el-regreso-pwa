@@ -263,10 +263,10 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
   // ─────────────────────────────────────────────────────────────────
   if (!isDesktop) {
     const miniKpis = [
-      { value: kpiAsignadas,   label: 'Asignadas',  color: '#5B8AA8', bg: 'linear-gradient(145deg,#0d1e36,#091425)', border: 'rgba(91,138,168,0.3)',  icon: '📋', tab: 'sin-iniciar' as TabKey },
-      { value: kpiEnProceso,   label: 'En Proceso', color: '#E67E22', bg: 'linear-gradient(145deg,#261400,#170d00)', border: 'rgba(230,126,34,0.3)',  icon: '🔄', tab: 'en-proceso'  as TabKey },
-      { value: kpiCompletadas, label: 'Completadas',color: '#22C55E', bg: 'linear-gradient(145deg,#081f0f,#041309)', border: 'rgba(34,197,94,0.25)',  icon: '✅', tab: 'completadas'  as TabKey },
-      { value: kpiAtrasadas,   label: 'Atrasadas',  color: '#E74C3C', bg: kpiAtrasadas>0?'linear-gradient(145deg,#250a0a,#160505)':'linear-gradient(145deg,#181010,#100a0a)', border: 'rgba(231,76,60,0.28)', icon: '⚠️', tab: 'atrasadas' as TabKey },
+      { value: kpiAsignadas,   label: 'Asignadas',  color: '#5B8AA8', bg: 'linear-gradient(145deg,#0d1e36,#091425)', border: 'rgba(91,138,168,0.3)',  icon: '📋', filter: 'activas'    },
+      { value: kpiEnProceso,   label: 'En Proceso', color: '#E67E22', bg: 'linear-gradient(145deg,#261400,#170d00)', border: 'rgba(230,126,34,0.3)',  icon: '🔄', filter: 'en-proceso' },
+      { value: kpiCompletadas, label: 'Completadas',color: '#22C55E', bg: 'linear-gradient(145deg,#081f0f,#041309)', border: 'rgba(34,197,94,0.25)',  icon: '✅', filter: 'aprobar'    },
+      { value: kpiAtrasadas,   label: 'Atrasadas',  color: '#E74C3C', bg: kpiAtrasadas>0?'linear-gradient(145deg,#250a0a,#160505)':'linear-gradient(145deg,#181010,#100a0a)', border: 'rgba(231,76,60,0.28)', icon: '⚠️', filter: 'atraso' },
     ]
 
     const pendientes = [...activeTasks]
@@ -313,21 +313,23 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           }}>+ Nueva</button>
         </div>
 
-        {/* 4 KPI mini-cards 2x2 */}
+        {/* 4 KPI mini-cards 2x2 — tocar navega a esas tareas */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {miniKpis.map(k => (
-            <button key={k.label} onClick={() => scrollToTable(k.tab)} style={{
+            <button key={k.label} onClick={() => onNavigate(`filter:${k.filter}`)} style={{
               background: k.bg, border: `1px solid ${k.border}`,
               borderRadius: 14, padding: '10px 12px',
               display: 'flex', alignItems: 'center', gap: 10,
               cursor: 'pointer', textAlign: 'left',
+              WebkitTapHighlightColor: 'transparent',
+              transition: 'opacity 0.1s',
             }}>
               <div style={{ fontSize: 20 }}>{k.icon}</div>
               <div>
                 <div style={{ fontSize: 28, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: -1 }}>{k.value}</div>
                 <div style={{ fontSize: 8, fontWeight: 800, color: k.color, letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 2, opacity: 0.85 }}>{k.label}</div>
               </div>
-              <div style={{ marginLeft: 'auto', fontSize: 10, color: k.color, opacity: 0.5 }}>→</div>
+              <div style={{ marginLeft: 'auto', fontSize: 12, color: k.color, opacity: 0.6 }}>›</div>
             </button>
           ))}
         </div>

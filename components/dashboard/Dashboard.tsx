@@ -348,7 +348,16 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
               onTaskUpdated={handleUpdate}
               onTaskDeleted={handleDelete}
               onTaskCreated={t => setTasks(prev => [t, ...prev])}
-              onNavigate={(v) => setView(v as View)}
+              onNavigate={(v) => {
+                // Soporte para 'filter:atrasadas', 'filter:en-proceso', etc.
+                if (v.startsWith('filter:')) {
+                  const fk = v.replace('filter:', '') as FilterKey
+                  setFilterKey(fk)
+                  setView('filter')
+                } else {
+                  setView(v as View)
+                }
+              }}
             />
           )}
 
