@@ -305,8 +305,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
   // Auto-calcular km vía OSRM cuando cambian las paradas
   useEffect(() => {
-    const conCoords = paradas.filter(p => p.lat && p.lng)
-    if (conCoords.length < 2) {
+    if (paradas.length < 2) {
       setKmCalculado(null)
       setMinCalculado(null)
       return
