@@ -260,10 +260,14 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
 
         {/* ── HEADER ── */}
         <div style={{ textAlign: 'center', padding: '28px 0 32px' }}>
-          {/* Logos */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 }}>
-            <div style={{ position: 'relative', width: 72, height: 72 }}>
-              <Image src="/logo.png" alt="El Regreso" fill style={{ objectFit: 'contain', filter: 'drop-shadow(0 0 16px rgba(212,175,55,0.35))' }} />
+          {/* Logos — ambas marcas */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, marginBottom: 20 }}>
+            <div style={{ position: 'relative', width: 80, height: 80 }}>
+              <Image src="/logo.png" alt="El Regreso Beer Co." fill style={{ objectFit: 'contain', filter: 'drop-shadow(0 0 18px rgba(212,175,55,0.45))' }} />
+            </div>
+            <div style={{ width: 1, height: 52, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.14), transparent)' }} />
+            <div style={{ position: 'relative', width: 76, height: 76 }}>
+              <Image src="/logo-laida.png" alt="La Ida Kombucha" fill style={{ objectFit: 'contain', filter: 'invert(1) drop-shadow(0 0 10px rgba(255,255,255,0.15))' }} />
             </div>
           </div>
 

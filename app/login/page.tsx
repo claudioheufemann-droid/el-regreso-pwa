@@ -75,14 +75,23 @@ export default function LoginPage() {
     >
       <div style={{ width: '100%', maxWidth: 480 }}>
 
-        {/* Logo */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+        {/* Logos */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 28 }}>
           <Image
             src="/logo.png"
             alt="El Regreso Beer Co."
-            width={200}
-            height={200}
-            style={{ filter: 'invert(1)', objectFit: 'contain' }}
+            width={100}
+            height={100}
+            style={{ objectFit: 'contain', filter: 'drop-shadow(0 0 20px rgba(212,175,55,0.4))' }}
+            priority
+          />
+          <div style={{ width: 1, height: 60, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.12), transparent)' }} />
+          <Image
+            src="/logo-laida.png"
+            alt="La Ida Kombucha"
+            width={90}
+            height={90}
+            style={{ objectFit: 'contain', filter: 'invert(1) drop-shadow(0 0 10px rgba(255,255,255,0.15))' }}
             priority
           />
         </div>
