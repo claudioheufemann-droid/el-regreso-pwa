@@ -262,11 +262,12 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
   // MOBILE — layout ultra-compacto, todo en pantalla sin desborde
   // ─────────────────────────────────────────────────────────────────
   if (!isDesktop) {
+    // Paleta simplificada: dorado/crema por defecto, solo rojo si hay atraso
     const miniKpis = [
-      { value: kpiAsignadas,   label: 'Asignadas',  color: '#5B8AA8', bg: 'linear-gradient(145deg,#0d1e36,#091425)', border: 'rgba(91,138,168,0.3)',  icon: '📋', filter: 'activas'    },
-      { value: kpiEnProceso,   label: 'En Proceso', color: '#E67E22', bg: 'linear-gradient(145deg,#261400,#170d00)', border: 'rgba(230,126,34,0.3)',  icon: '🔄', filter: 'en-proceso' },
-      { value: kpiCompletadas, label: 'Completadas',color: '#22C55E', bg: 'linear-gradient(145deg,#081f0f,#041309)', border: 'rgba(34,197,94,0.25)',  icon: '✅', filter: 'aprobar'    },
-      { value: kpiAtrasadas,   label: 'Atrasadas',  color: '#E74C3C', bg: kpiAtrasadas>0?'linear-gradient(145deg,#250a0a,#160505)':'linear-gradient(145deg,#181010,#100a0a)', border: 'rgba(231,76,60,0.28)', icon: '⚠️', filter: 'atraso' },
+      { value: kpiAsignadas,   label: 'Asignadas',   icon: '📋', filter: 'activas'    },
+      { value: kpiEnProceso,   label: 'En Proceso',  icon: '🔄', filter: 'en-proceso' },
+      { value: kpiCompletadas, label: 'Completadas', icon: '✅', filter: 'aprobar'    },
+      { value: kpiAtrasadas,   label: 'Atrasadas',   icon: '⚠️', filter: 'atraso', alert: kpiAtrasadas > 0 },
     ]
 
     const pendientes = [...activeTasks]
@@ -284,54 +285,62 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
     }
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
+
+        {/* Botón volver */}
+        <a href={backHref} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          fontSize: 12, color: 'rgba(255,255,255,0.35)', textDecoration: 'none',
+          fontWeight: 600, letterSpacing: 0.2, paddingTop: 2,
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m15 18-6-6 6-6"/></svg>
+          Módulos
+        </a>
 
         {/* Header saludo + acción */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10, paddingTop: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', fontWeight: 500, marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 500, marginBottom: 5, textTransform: 'capitalize' }}>
               {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5, lineHeight: 1.1 }}>
+            <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5, lineHeight: 1.1 }}>
               Hola, {firstName} 👋
             </div>
-            {macroConfig && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: macroConfig.color }} />
-                <span style={{ fontSize: 11, color: macroConfig.color, fontWeight: 600, letterSpacing: 0.3 }}>{macroConfig.label}</span>
-              </div>
-            )}
           </div>
           <button onClick={() => setShowNewTask(true)} style={{
-            flexShrink: 0,
-            padding: '12px 18px',
+            flexShrink: 0, padding: '11px 16px',
             background: 'linear-gradient(135deg, #D4AF37, #B8962E)',
             color: '#0A0A0A', border: 'none', borderRadius: 14,
             cursor: 'pointer', fontSize: 13, fontWeight: 800,
-            boxShadow: '0 4px 16px rgba(212,175,55,0.35)',
-            letterSpacing: 0.2,
+            boxShadow: '0 4px 16px rgba(212,175,55,0.3)',
           }}>+ Nueva</button>
         </div>
 
-        {/* 4 KPI mini-cards 2x2 — tocar navega a esas tareas */}
+        {/* 4 KPI cards — paleta limpia */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {miniKpis.map(k => (
-            <button key={k.label} onClick={() => onNavigate(`filter:${k.filter}`)} style={{
-              background: k.bg, border: `1px solid ${k.border}`,
-              borderRadius: 14, padding: '10px 12px',
-              display: 'flex', alignItems: 'center', gap: 10,
-              cursor: 'pointer', textAlign: 'left',
-              WebkitTapHighlightColor: 'transparent',
-              transition: 'opacity 0.1s',
-            }}>
-              <div style={{ fontSize: 20 }}>{k.icon}</div>
-              <div>
-                <div style={{ fontSize: 28, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: -1 }}>{k.value}</div>
-                <div style={{ fontSize: 8, fontWeight: 800, color: k.color, letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 2, opacity: 0.85 }}>{k.label}</div>
-              </div>
-              <div style={{ marginLeft: 'auto', fontSize: 12, color: k.color, opacity: 0.6 }}>›</div>
-            </button>
-          ))}
+          {miniKpis.map(k => {
+            const isAlert = k.alert
+            return (
+              <button key={k.label} onClick={() => onNavigate(`filter:${k.filter}`)} style={{
+                background: isAlert ? 'rgba(231,76,60,0.08)' : 'var(--surface)',
+                border: `1px solid ${isAlert ? 'rgba(231,76,60,0.3)' : 'rgba(255,255,255,0.07)'}`,
+                borderRadius: 16, padding: '14px 14px',
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4,
+                cursor: 'pointer', textAlign: 'left',
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+                <div style={{ fontSize: 16, marginBottom: 2 }}>{k.icon}</div>
+                <div style={{
+                  fontSize: 32, fontWeight: 900, lineHeight: 1, letterSpacing: -1,
+                  color: isAlert ? '#FF6B6B' : 'var(--cream)',
+                }}>{k.value}</div>
+                <div style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: 1.1, textTransform: 'uppercase',
+                  color: isAlert ? '#FF6B6B' : 'rgba(255,255,255,0.35)',
+                }}>{k.label}</div>
+              </button>
+            )
+          })}
         </div>
 
         {/* Stats compactos: donut mini + leyenda */}
@@ -342,8 +351,8 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
               {(() => {
                 const r = 20, circ = 2 * Math.PI * r
                 const segs = [
-                  { v: kpiCompletadas, c: '#22C55E' }, { v: kpiEnProceso, c: '#E67E22' },
-                  { v: kpiAtrasadas, c: '#E74C3C' },   { v: kpiAsignadas + kpiAprobar, c: '#5B8AA8' },
+                  { v: kpiCompletadas, c: '#D4AF37' }, { v: kpiEnProceso, c: 'rgba(212,175,55,0.5)' },
+                  { v: kpiAtrasadas, c: '#FF6B6B' },   { v: kpiAsignadas + kpiAprobar, c: 'rgba(255,255,255,0.15)' },
                 ]
                 const total = segs.reduce((s, x) => s + x.v, 0) || 1
                 let off = 0
@@ -363,10 +372,10 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           {/* Leyenda compacta */}
           <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px' }}>
             {[
-              { label: 'Completas', n: kpiCompletadas, color: '#22C55E' },
-              { label: 'En proceso', n: kpiEnProceso, color: '#E67E22' },
-              { label: 'Atrasadas', n: kpiAtrasadas, color: '#E74C3C' },
-              { label: 'Pendientes', n: kpiAsignadas + kpiAprobar, color: '#5B8AA8' },
+              { label: 'Completas',  n: kpiCompletadas,            color: '#D4AF37' },
+              { label: 'En proceso', n: kpiEnProceso,               color: 'rgba(212,175,55,0.5)' },
+              { label: 'Atrasadas',  n: kpiAtrasadas,               color: '#FF6B6B' },
+              { label: 'Pendientes', n: kpiAsignadas + kpiAprobar,  color: 'rgba(255,255,255,0.2)' },
             ].map(s => (
               <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
@@ -377,7 +386,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           </div>
           {/* Cumplimiento */}
           <div style={{ flexShrink: 0, textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.07)', paddingLeft: 12 }}>
-            <div style={{ fontSize: 20, fontWeight: 900, color: cumplimiento >= 80 ? '#22C55E' : cumplimiento >= 50 ? '#D4AF37' : '#E74C3C', lineHeight: 1 }}>{cumplimiento}%</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: cumplimiento >= 50 ? '#D4AF37' : '#FF6B6B', lineHeight: 1 }}>{cumplimiento}%</div>
             <div style={{ fontSize: 8, color: 'var(--muted)', marginTop: 2 }}>cumplido</div>
           </div>
         </div>
