@@ -175,24 +175,23 @@ interface ModuleCardProps {
   rgb: string
   title: string
   subtitle: string
-  icon: string
-  art: React.ReactNode
+  img: string
   locked?: boolean
 }
 
-function ModuleCard({ href, color, rgb, title, subtitle, icon, art, locked }: ModuleCardProps) {
+function ModuleCard({ href, color, rgb, title, subtitle, img, locked }: ModuleCardProps) {
   const [pressed, setPressed] = useState(false)
 
   if (locked) return (
     <div style={{
       background: '#0D0D10', border: '1px solid rgba(255,255,255,0.04)',
-      borderRadius: 24, padding: '20px 20px',
-      display: 'flex', alignItems: 'center', gap: 16,
-      opacity: 0.35, cursor: 'not-allowed', overflow: 'hidden', position: 'relative',
+      borderRadius: 20, overflow: 'hidden',
+      display: 'flex', alignItems: 'stretch', minHeight: 110,
+      opacity: 0.35, cursor: 'not-allowed',
     }}>
-      <div style={{ width: 48, height: 48, borderRadius: 15, background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🔒</div>
-      <div>
-        <div style={{ fontSize: 17, fontWeight: 800, color: '#4A4A50', marginBottom: 3 }}>{title}</div>
+      <div style={{ width: 110, flexShrink: 0, background: 'rgba(255,255,255,0.03)' }} />
+      <div style={{ flex: 1, padding: '18px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: '#4A4A50', marginBottom: 4 }}>{title}</div>
         <div style={{ fontSize: 12, color: '#2A2A30', lineHeight: 1.4 }}>{subtitle}</div>
       </div>
     </div>
@@ -207,71 +206,55 @@ function ModuleCard({ href, color, rgb, title, subtitle, icon, art, locked }: Mo
         onMouseUp={() => setPressed(false)}
         onMouseLeave={() => setPressed(false)}
         style={{
-          position: 'relative', overflow: 'hidden',
-          borderRadius: 24,
-          border: `1px solid rgba(${rgb}, ${pressed ? 0.45 : 0.22})`,
-          background: `linear-gradient(135deg, #0E0E12 0%, rgba(${rgb},0.06) 100%)`,
+          borderRadius: 20,
+          border: `1px solid rgba(${rgb}, ${pressed ? 0.5 : 0.28})`,
+          background: `linear-gradient(135deg, #0E0E12 0%, rgba(${rgb},0.07) 100%)`,
           boxShadow: pressed
-            ? `0 0 0 1px rgba(${rgb},0.4), 0 8px 32px rgba(${rgb},0.18), inset 0 0 0 1px rgba(${rgb},0.1)`
-            : `0 4px 24px rgba(${rgb},0.08), inset 0 1px 0 rgba(255,255,255,0.04)`,
-          transform: pressed ? 'scale(0.988) translateY(2px)' : 'scale(1) translateY(0)',
+            ? `0 0 0 1px rgba(${rgb},0.4), 0 8px 32px rgba(${rgb},0.2)`
+            : `0 4px 24px rgba(${rgb},0.1)`,
+          transform: pressed ? 'scale(0.988) translateY(1px)' : 'scale(1)',
           transition: 'all 0.18s cubic-bezier(0.34,1.2,0.64,1)',
           cursor: 'pointer',
-          minHeight: 96,
           display: 'flex',
           alignItems: 'stretch',
+          minHeight: 110,
+          overflow: 'hidden',
         }}
       >
-        {/* Contenido izquierdo */}
-        <div style={{ flex: 1, padding: '20px 18px 20px 20px', display: 'flex', alignItems: 'center', gap: 16, zIndex: 2, position: 'relative' }}>
-          {/* Icono */}
+        {/* Imagen cuadrada izquierda */}
+        <div style={{ width: 110, flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+          <Image
+            src={img}
+            alt={title}
+            fill
+            style={{ objectFit: 'cover', opacity: pressed ? 0.75 : 0.9, transition: 'opacity 0.18s' }}
+          />
+          {/* Fade hacia la derecha */}
           <div style={{
-            width: 52, height: 52, borderRadius: 16, flexShrink: 0,
-            background: `rgba(${rgb}, 0.12)`,
-            border: `1.5px solid rgba(${rgb}, 0.28)`,
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to right, transparent 60%, #0E0E12 100%)',
+          }} />
+        </div>
+
+        {/* Texto */}
+        <div style={{ flex: 1, padding: '16px 14px 16px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+          <div style={{ fontSize: 19, fontWeight: 900, color: '#F4EEDF', marginBottom: 5, letterSpacing: -0.4, lineHeight: 1.1 }}>{title}</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', lineHeight: 1.5 }}>{subtitle}</div>
+        </div>
+
+        {/* Botón flecha */}
+        <div style={{
+          flexShrink: 0, display: 'flex', alignItems: 'center', paddingRight: 16,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 12,
+            background: `rgba(${rgb}, 0.18)`,
+            border: `1.5px solid rgba(${rgb}, 0.4)`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 24,
-            boxShadow: `0 4px 16px rgba(${rgb}, 0.15)`,
-          }}>{icon}</div>
-          {/* Texto */}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 900, color: '#F4EEDF', marginBottom: 5, letterSpacing: -0.3 }}>{title}</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', lineHeight: 1.45 }}>{subtitle}</div>
-          </div>
+            color: color, fontSize: 18, fontWeight: 900,
+            boxShadow: `0 2px 12px rgba(${rgb}, 0.2)`,
+          }}>›</div>
         </div>
-
-        {/* Arte derecho — fade desde la izquierda */}
-        <div style={{
-          position: 'absolute', right: 0, top: 0, bottom: 0,
-          width: '52%',
-          display: 'flex', alignItems: 'center',
-          maskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.6) 35%, rgba(0,0,0,0.85) 100%)',
-          WebkitMaskImage: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.6) 35%, rgba(0,0,0,0.85) 100%)',
-          opacity: pressed ? 0.55 : 0.38,
-          transition: 'opacity 0.18s',
-          paddingRight: 8,
-          filter: `saturate(1.2)`,
-        } as React.CSSProperties}>
-          {art}
-        </div>
-
-        {/* Flecha */}
-        <div style={{
-          position: 'absolute', right: 18, top: '50%', transform: 'translateY(-50%)',
-          width: 28, height: 28, borderRadius: 10, zIndex: 3,
-          background: `rgba(${rgb}, 0.15)`,
-          border: `1px solid rgba(${rgb}, 0.25)`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: color, fontSize: 14, fontWeight: 800,
-        }}>›</div>
-
-        {/* Glow activo sutil */}
-        <div style={{
-          position: 'absolute', inset: 0, borderRadius: 24,
-          background: `radial-gradient(ellipse at 75% 50%, rgba(${rgb},${pressed?0.12:0.05}) 0%, transparent 70%)`,
-          transition: 'background 0.18s',
-          pointerEvents: 'none',
-        }} />
       </div>
     </Link>
   )
@@ -353,8 +336,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             rgb="212,175,55"
             title="Ventas"
             subtitle="Dashboard, clientes, KPIs y metas"
-            icon="📊"
-            art={<VentasArt />}
+            img="/hub-ventas.jpg.png"
           />
 
           {isAdmin ? (
@@ -364,8 +346,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
               rgb="59,130,246"
               title="Gestión de tareas"
               subtitle="Tareas, proyectos, áreas y sistema operativo"
-              icon="📋"
-              art={<GestionArt />}
+              img="/hub-gestion.jpg.png"
             />
           ) : (
             <ModuleCard
@@ -374,8 +355,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
               rgb="59,130,246"
               title="Gestión"
               subtitle="Acceso restringido · Solo administradores"
-              icon="🔒"
-              art={<GestionArt />}
+              img="/hub-gestion.jpg.png"
               locked
             />
           )}
@@ -386,8 +366,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             rgb="16,185,129"
             title="Venta en terreno"
             subtitle="Rutas, auditorías y check-in GPS"
-            icon="📍"
-            art={<TerrenoArt />}
+            img="/hub-terreno.jpg.png"
           />
 
           <ModuleCard
@@ -396,8 +375,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             rgb="249,115,22"
             title="Logística"
             subtitle="Bitácora, rutas y control de vehículos"
-            icon="🚛"
-            art={<FlotaArt />}
+            img="/hub-logistica.jpg.png"
           />
 
         </div>
