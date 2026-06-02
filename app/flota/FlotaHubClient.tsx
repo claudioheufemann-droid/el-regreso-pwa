@@ -238,8 +238,8 @@ function EstadoChip({ estado }: { estado: string }) {
 
   const Icon = cfg.icon
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, background: cfg.bg }}>
-      <Icon size={12} color={cfg.color} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 20, background: cfg.bg, border: `1px solid ${cfg.color}30`, flexShrink: 0, whiteSpace: 'nowrap' }}>
+      <Icon size={11} color={cfg.color} />
       <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color }}>{cfg.label}</span>
     </div>
   )
@@ -358,10 +358,10 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
 
               {/* ── CONTENIDO DERECHA ── */}
               <div style={{ flex: 1, minWidth: 0, padding: '14px 14px 14px 10px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-                  <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF', marginBottom: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.nombre}</p>
-                    {v.modelo && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{v.modelo}{v.color ? ` · ${v.color}` : ''}</p>}
+                    {v.modelo && <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.modelo}{v.color ? ` · ${v.color}` : ''}</p>}
                   </div>
                   <EstadoChip estado={v.estado} />
                 </div>
