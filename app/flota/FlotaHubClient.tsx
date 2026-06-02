@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Truck, Plus, AlertTriangle, CheckCircle, Clock, ChevronRight, Wrench } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import type { AppUser } from '@/lib/auth'
@@ -246,6 +247,7 @@ function EstadoChip({ estado }: { estado: string }) {
 
 export default function FlotaHubClient({ user, vehiculos, viajesActivos, conductores }: Props) {
   const isDesktop = useIsDesktop()
+  const router = useRouter()
   const disponibles = vehiculos.filter(v => v.estado === 'disponible').length
   const enUso = vehiculos.filter(v => v.estado === 'en_uso').length
 
@@ -327,21 +329,16 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
           let vehicleSrc = '/vehicles/transit.jpg'
           if (n.includes('porter') || n.includes('nqr') || n.includes('npr') || n.includes('camion') || n.includes('camión')) vehicleSrc = '/vehicles/porter.jpg'
           if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup') || n.includes('camioneta')) vehicleSrc = '/vehicles/ranger.jpg'
-          const CardWrapper = viaje
-            ? ({ children }: { children: React.ReactNode }) => (
-                <Link href={`/flota/viaje/${viaje.id}`} style={{ textDecoration: 'none', display: 'block' }}>{children}</Link>
-              )
-            : ({ children }: { children: React.ReactNode }) => <>{children}</>
-
           return (
-            <CardWrapper key={v.id}>
-            <div key={v.id} style={{
-              background: 'var(--surface2)',
-              border: `1px solid ${v.estado === 'en_uso' ? 'rgba(245,158,11,0.3)' : v.estado === 'mantenimiento' ? 'rgba(255,85,85,0.2)' : 'rgba(255,255,255,0.06)'}`,
-              borderRadius: 18, overflow: 'hidden',
-              display: 'flex', alignItems: 'stretch',
-              cursor: viaje ? 'pointer' : 'default',
-            }}>
+            <div key={v.id}
+              onClick={() => viaje && router.push(`/flota/viaje/${viaje.id}`)}
+              style={{
+                background: 'var(--surface2)',
+                border: `1px solid ${v.estado === 'en_uso' ? 'rgba(245,158,11,0.3)' : v.estado === 'mantenimiento' ? 'rgba(255,85,85,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                borderRadius: 18, overflow: 'hidden',
+                display: 'flex', alignItems: 'stretch',
+                cursor: viaje ? 'pointer' : 'default',
+              }}>
               {/* ── FOTO IZQUIERDA — vehiculo completo ── */}
               <div style={{ width: 140, flexShrink: 0, position: 'relative', background: '#04040a' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -396,7 +393,6 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
                 )}
               </div>
             </div>
-            </CardWrapper>
           )
         })}
       </div>
