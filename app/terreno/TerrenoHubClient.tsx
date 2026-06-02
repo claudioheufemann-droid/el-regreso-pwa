@@ -100,8 +100,8 @@ function KPIPanel({ label, value, color, rgb, icon: Icon, yesterday }: {
     <div style={{
       background: `linear-gradient(145deg, rgba(${rgb},0.06) 0%, rgba(10,10,10,0.9) 100%)`,
       border: `1px solid rgba(${rgb},0.18)`,
-      borderRadius: 20,
-      padding: '16px 14px 12px',
+      borderRadius: 16,
+      padding: '12px 10px 10px',
       display: 'flex', flexDirection: 'column', gap: 0,
       boxShadow: `0 4px 24px rgba(${rgb},0.08), inset 0 1px 0 rgba(255,255,255,0.04)`,
       position: 'relative', overflow: 'hidden',
@@ -109,21 +109,21 @@ function KPIPanel({ label, value, color, rgb, icon: Icon, yesterday }: {
       {/* Glow fondo */}
       <div style={{ position: 'absolute', top: -20, right: -20, width: 60, height: 60, borderRadius: '50%', background: `rgba(${rgb},0.1)`, filter: 'blur(20px)' }} />
       {/* Icono */}
-      <div style={{ width: 32, height: 32, borderRadius: 10, background: `rgba(${rgb},0.12)`, border: `1px solid rgba(${rgb},0.2)`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-        <Icon size={15} color={color} />
+      <div style={{ width: 26, height: 26, borderRadius: 8, background: `rgba(${rgb},0.12)`, border: `1px solid rgba(${rgb},0.2)`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+        <Icon size={12} color={color} />
       </div>
       {/* Número */}
-      <p style={{ fontSize: 38, fontWeight: 900, color, lineHeight: 1, letterSpacing: '-2px', marginBottom: 4 }}>{value}</p>
+      <p style={{ fontSize: 28, fontWeight: 900, color, lineHeight: 1, letterSpacing: '-1.5px', marginBottom: 3 }}>{value}</p>
       {/* Label */}
-      <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>{label}</p>
+      <p style={{ fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6 }}>{label}</p>
       {/* Sparkline + badge */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Sparkline color={color} up={up} />
         <div style={{
           background: up ? 'rgba(74,222,128,0.1)' : 'rgba(255,85,85,0.1)',
           border: `1px solid ${up ? 'rgba(74,222,128,0.2)' : 'rgba(255,85,85,0.2)'}`,
-          borderRadius: 8, padding: '2px 6px',
-          fontSize: 9, fontWeight: 700,
+          borderRadius: 6, padding: '2px 5px',
+          fontSize: 8, fontWeight: 700,
           color: up ? '#4ADE80' : '#FF5555',
         }}>
           {up ? '↑' : '↓'} {pct}%
