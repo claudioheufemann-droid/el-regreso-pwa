@@ -32,6 +32,8 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
   const [ciudad, setCiudad] = useState('all')
   const [q, setQ] = useState('')
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -64,6 +66,20 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
     ciudades: new Set(filtrados.map(l => l.ciudad)).size,
   }), [filtrados])
 
+  async function importar() {
+    if (!confirm('Importar y analizar los 5.801 leads del archivo. Esto recalcula potencial y ubicación. ¿Continuar?')) return
+    setImporting(true); setImportMsg(null)
+    try {
+      const res = await fetch('/api/leads/import', { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d?.error || 'Error')
+      setImportMsg(`✓ ${d.total} leads procesados · ${d.en_zona} en zona de despacho · ${d.litros_potencial_total_en_zona?.toLocaleString('es-CL')} L/mes potencial · ${d.categorias_historicas} categorías analizadas`)
+      load()
+    } catch (e) {
+      setImportMsg(`✗ ${e instanceof Error ? e.message : 'Error al importar'}`)
+    } finally { setImporting(false) }
+  }
+
   async function marcar(id: number, estado: string) {
     setLeads(prev => prev.map(l => l.id === id ? { ...l, estado } : l))
     try { await fetch('/api/leads', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, estado }) }) } catch {}
@@ -77,10 +93,26 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
           <h1 style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>🎯 Posibles clientes (Leads)</h1>
           <p style={{ fontSize: 12, color: 'var(--muted)' }}>Prospectos ordenados por potencial de venta estimado</p>
         </div>
-        <button onClick={load} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)', color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-          <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> Actualizar
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {isAdmin && (
+            <button onClick={importar} disabled={importing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', color: '#A78BFA', fontSize: 12, fontWeight: 700, cursor: importing ? 'not-allowed' : 'pointer' }}>
+              <RefreshCw size={13} style={{ animation: importing ? 'spin 1s linear infinite' : 'none' }} /> {importing ? 'Analizando…' : 'Importar / analizar leads'}
+            </button>
+          )}
+          <button onClick={load} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)', color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> Actualizar
+          </button>
+        </div>
       </div>
+
+      {importMsg && (
+        <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, fontSize: 12, fontWeight: 600,
+          background: importMsg.startsWith('✓') ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
+          border: `1px solid ${importMsg.startsWith('✓') ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`,
+          color: importMsg.startsWith('✓') ? '#34D399' : '#F87171' }}>
+          {importMsg}
+        </div>
+      )}
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }} className="kpi-grid-4">
