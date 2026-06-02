@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createSbClient } from '@supabase/supabase-js'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 import { getServerUser } from '@/lib/auth'
 
@@ -44,6 +45,10 @@ export async function GET(req: Request) {
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: { getAll: () => [], setAll: () => {} },
   })
+  // Para leer la tabla users (RLS bloquea al anónimo) usamos el service key si está
+  const adminDb = process.env.SUPABASE_SERVICE_KEY
+    ? createSbClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
+    : supabase
 
   // Rangos: semana pasada (lun-dom) y la anterior (para delta)
   const lastMon = mondayAgo(1)
@@ -63,7 +68,7 @@ export async function GET(req: Request) {
     supabase.rpc('get_clientes_volumen_baja', { p_vendedor: null, p_umbral: 0.25 }),
     supabase.rpc('get_cross_sell', { p_vendedor: null, p_min_penetracion: 0.4 }),
     supabase.rpc('get_retencion_cohortes'),
-    supabase.from('users').select('email').eq('is_admin', true),
+    adminDb.from('users').select('email').eq('is_admin', true),
   ])
 
   type AggRow = { vendedor: string; litros: number; revenue: number; clientes: number; pedidos: number }
@@ -179,7 +184,12 @@ export async function GET(req: Request) {
   const from = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'
   const adminEmails = ((adminsRes.data ?? []) as { email: string | null }[]).map(a => a.email).filter((e): e is string => !!e)
 
-  if (adminEmails.length === 0) return NextResponse.json({ ok: true, sent_to: [], reason: 'sin admins' })
+  if (adminEmails.length === 0) {
+    const hint = process.env.SUPABASE_SERVICE_KEY
+      ? 'No hay usuarios con is_admin=true y email en la tabla users.'
+      : 'Falta SUPABASE_SERVICE_KEY en Vercel: el anónimo no puede leer users (RLS).'
+    return NextResponse.json({ ok: true, sent_to: [], reason: 'sin admins', hint })
+  }
 
   await resend.emails.send({
     from: `El Regreso Ventas <${from}>`,
