@@ -418,7 +418,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
         ruta_id: null,
         tipo: tipoViaje,
         motivo: motivoViaje.trim() || null,
-        km_inicio: parseInt(kmInicio),
+        km_inicio: Math.round(parseFloat(kmInicio) || 0),
         km_teoricos: kmMostrado ? Math.round(kmMostrado) : null,
         destino_declarado: paradas.length > 0
           ? JSON.stringify(paradas.map(p => ({ n: p.nombre, d: p.direccion, lat: p.lat, lng: p.lng })))

@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       const data = await osrmRes.json()
       const ruta = data.routes?.[0]
       if (ruta) {
-        const km = Math.round(ruta.distance / 100) / 10
+        const km = Math.round(ruta.distance / 1000)
         const minutos = Math.round(ruta.duration / 60)
         return NextResponse.json({ km, minutos, fuente: 'osrm' })
       }
@@ -74,6 +74,6 @@ export async function POST(req: NextRequest) {
   // Fallback: suma de distancias haversine (en línea recta)
   let totalM = 0
   for (let i = 0; i < coords.length - 1; i++) totalM += haversineM(coords[i], coords[i + 1])
-  const km = Math.round(totalM / 100) / 10
+  const km = Math.round(totalM / 1000)
   return NextResponse.json({ km, minutos: Math.round(km / 35 * 60), fuente: 'haversine' })
 }
