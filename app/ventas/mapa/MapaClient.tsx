@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { VEND_COLOR } from '@/lib/theme'
 import { useIsDesktop } from '@/lib/useIsDesktop'
-import type { Punto, CapaViz, TileTipo } from './MapLeaflet'
+import type { Punto, CapaViz, TileTipo, LeadPunto } from './MapLeaflet'
 
 const MapLeaflet = dynamic(() => import('./MapLeaflet'), {
   ssr: false,
@@ -82,6 +82,8 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
   const [capaViz, setCapaViz] = useState<CapaViz>('pedidos')
   const [tileTipo, setTileTipo] = useState<TileTipo>('mapa')
   const [mostrarSinCompra, setMostrarSinCompra] = useState(false)
+  const [mostrarLeads, setMostrarLeads] = useState(false)
+  const [leads, setLeads] = useState<LeadPunto[]>([])
   const [productoFiltro, setProductoFiltro] = useState('all')
   const [playing, setPlaying] = useState(false)
   const [modoRango, setModoRango] = useState(false)
@@ -112,6 +114,19 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
   useEffect(() => {
     fetchData(fecha, vendedor, modoRango ? fechaFin : '', mostrarSinCompra)
   }, [fecha, vendedor, fechaFin, modoRango, mostrarSinCompra, fetchData])
+
+  // ── Leads (posibles clientes): cargar una vez al activar ──
+  useEffect(() => {
+    if (!mostrarLeads || leads.length > 0) return
+    fetch('/api/leads?en_zona=1&conCoords=1&limit=2000')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (Array.isArray(d?.leads)) setLeads(d.leads) })
+      .catch(() => {})
+  }, [mostrarLeads, leads.length])
+
+  const leadsFiltrados = useMemo(() =>
+    mostrarLeads ? leads.filter(l => l.lat != null && l.lng != null) : [],
+    [mostrarLeads, leads])
 
   // ── Play timeline ────────────────────────────────────────
   useEffect(() => {
@@ -267,6 +282,11 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
           {mostrarSinCompra ? <Eye size={13} /> : <EyeOff size={13} />} Zonas blancas
         </button>
 
+        {/* Leads (posibles clientes) */}
+        <button onClick={() => setMostrarLeads(b => !b)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 36, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: mostrarLeads ? 'rgba(167,139,250,0.18)' : '#111', color: mostrarLeads ? '#A78BFA' : '#555', outline: mostrarLeads ? '1px solid rgba(167,139,250,0.4)' : '1px solid #222' }}>
+          <Target size={13} /> Leads{mostrarLeads && leads.length ? ` (${leadsFiltrados.length})` : ''}
+        </button>
+
         {/* Rango */}
         <button onClick={() => setModoRango(r => !r)} style={{ padding: '0 12px', height: 36, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: modoRango ? 'rgba(96,165,250,0.15)' : '#111', color: modoRango ? '#60A5FA' : '#555', outline: modoRango ? '1px solid rgba(96,165,250,0.3)' : '1px solid #222' }}>Rango</button>
         {modoRango && (
@@ -304,7 +324,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
               </div>
             </div>
           )}
-          <MapLeaflet puntos={puntosFiltrados} vendedorFiltro="all" capaViz={capaViz} mostrarSinCompra={mostrarSinCompra} tileTipo={tileTipo} />
+          <MapLeaflet puntos={puntosFiltrados} leads={leadsFiltrados} vendedorFiltro="all" capaViz={capaViz} mostrarSinCompra={mostrarSinCompra} tileTipo={tileTipo} />
         </div>
 
         {/* Sidebar */}

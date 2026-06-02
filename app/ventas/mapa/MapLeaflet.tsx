@@ -32,8 +32,25 @@ export interface Punto {
 export type CapaViz = 'pedidos' | 'salud' | 'calor'
 export type TileTipo = 'mapa' | 'satelite' | 'hibrido'
 
+export interface LeadPunto {
+  id: number
+  nombre: string
+  ciudad: string | null
+  categoria: string | null
+  categoria_mapeada: string | null
+  producto_sugerido: string | null
+  telefono: string | null
+  sitio_web: string | null
+  rating: number | null
+  lat: number | null
+  lng: number | null
+  litros_potencial: number | null
+  score_lead: number | null
+}
+
 interface Props {
   puntos: Punto[]
+  leads?: LeadPunto[]
   vendedorFiltro: string
   capaViz: CapaViz
   mostrarSinCompra: boolean
@@ -293,7 +310,37 @@ const TILES: Record<TileTipo, { url: string; attribution: string }> = {
   },
 }
 
-export default function MapLeaflet({ puntos, vendedorFiltro, capaViz, mostrarSinCompra, tileTipo = 'mapa' }: Props) {
+function PopupLead({ l, onWA }: { l: LeadPunto; onWA: (t: WATarget) => void }) {
+  return (
+    <div style={{ minWidth: 210, fontFamily: 'system-ui,sans-serif' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span style={{ fontSize: 9, fontWeight: 800, color: '#A78BFA', background: 'rgba(167,139,250,0.15)', padding: '1px 7px', borderRadius: 10 }}>POSIBLE CLIENTE</span>
+        {l.rating != null && <span style={{ fontSize: 11, color: '#D97706' }}>★ {l.rating}</span>}
+      </div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1a1a', marginBottom: 2 }}>{l.nombre}</div>
+      <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
+        {l.categoria ?? '—'} · 📍 {l.ciudad ?? ''}{l.categoria_mapeada ? ` · ≈ ${l.categoria_mapeada}` : ''}
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+        <div><div style={{ fontSize: 16, fontWeight: 900, color: '#059669' }}>~{l.litros_potencial} L</div><div style={{ fontSize: 9, color: '#999', textTransform: 'uppercase' }}>potencial/mes</div></div>
+        <div><div style={{ fontSize: 16, fontWeight: 900, color: '#7C3AED' }}>{l.score_lead ?? 0}</div><div style={{ fontSize: 9, color: '#999', textTransform: 'uppercase' }}>score</div></div>
+        {l.producto_sugerido && <div><div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', marginTop: 3 }}>{l.producto_sugerido}</div><div style={{ fontSize: 9, color: '#999', textTransform: 'uppercase' }}>sugerido</div></div>}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {l.telefono && (
+          <button onClick={() => onWA({ nombre: l.nombre, telefono: l.telefono!, contexto: 'mision' })}
+            style={{ flex: 1, padding: '6px', borderRadius: 7, border: 'none', background: '#25D166', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>WhatsApp</button>
+        )}
+        {l.telefono && (
+          <button onClick={() => window.open(`tel:${l.telefono}`)}
+            style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #60A5FA', background: 'white', color: '#2563EB', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Llamar</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz, mostrarSinCompra, tileTipo = 'mapa' }: Props) {
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const tile = TILES[tileTipo]
 
@@ -376,6 +423,20 @@ export default function MapLeaflet({ puntos, vendedorFiltro, capaViz, mostrarSin
             </CircleMarker>
           )
         })}
+
+        {/* Capa de LEADS (posibles clientes) — morado, hueco, diferenciado */}
+        {leads.map((l, i) => (
+          <CircleMarker
+            key={`lead-${l.id ?? i}`}
+            center={[l.lat as number, l.lng as number]}
+            radius={6}
+            pathOptions={{ color: '#A78BFA', fillColor: '#A78BFA', fillOpacity: 0.18, weight: 2, opacity: 0.95, dashArray: '2 2' }}
+          >
+            <Popup closeButton maxWidth={290}>
+              <PopupLead l={l} onWA={setWaTarget} />
+            </Popup>
+          </CircleMarker>
+        ))}
 
         {filtrados.length > 0 && <RecenterMap puntos={filtrados} />}
       </MapContainer>
