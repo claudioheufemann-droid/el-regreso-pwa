@@ -4,10 +4,10 @@ import PageTabs from '@/components/PageTabs'
 import type { PageTab } from '@/components/PageTabs'
 
 const TABS: PageTab[] = [
-  { href: '/flota',         label: 'Vehículos',    exact: true  },
-  { href: '/flota/checkin', label: 'Nueva Salida'              },
-  { href: '/flota/rutas',   label: 'Rutas'                     },
-  { href: '/flota/admin',   label: 'Reportes'                  },
+  { href: '/flota',           label: 'Vehículos',    exact: true  },
+  { href: '/flota/checkin',   label: 'Nueva Salida'              },
+  { href: '/flota/historial', label: 'Historial'                 },
+  { href: '/flota/admin',     label: 'Reportes'                  },
 ]
 
 const ORANGE = '#F97316'
