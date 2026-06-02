@@ -2,9 +2,10 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Camera, CheckCircle, Fuel, AlertTriangle } from 'lucide-react'
+import { Camera, CheckCircle, Fuel, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
+import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
 
 const F = '#F97316'
 const F_BORDER = 'rgba(249,115,22,0.28)'
@@ -205,19 +206,13 @@ export default function CheckOutClient({ user, viaje }: Props) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(249,115,22,0.15)', padding: '14px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => router.push('/flota')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
-            <ChevronLeft size={18} /> Flota
-          </button>
-          <div>
-            <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>Cerrar viaje</p>
-            <p style={{ fontSize: 11, color: 'var(--muted)' }}>{viaje.vehiculos?.nombre} · {fmtDuracion(viaje.iniciado_at)}</p>
-          </div>
-        </div>
-      </div>
+    <div style={{ flex: 1, minHeight: 0, background: '#080808', display: 'flex', flexDirection: 'column' }}>
+      <FlotaPageHeader
+        title="Cerrar viaje"
+        subtitle={`${viaje.vehiculos?.nombre ?? ''} · ${fmtDuracion(viaje.iniciado_at)}`}
+        onBack={() => router.push('/flota')}
+        backLabel="Volver"
+      />
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
 

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, MapPin, Plus, X, Search, Navigation2, Clock, CheckCircle } from 'lucide-react'
+import { MapPin, Plus, X, Search, Navigation2, Clock, CheckCircle } from 'lucide-react'
+import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
@@ -249,21 +250,12 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
   return (
     <div style={{ flex: 1, minHeight: 0, background: '#080808', display: 'flex', flexDirection: 'column' }}>
 
-      {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(249,115,22,0.15)', padding: '14px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => router.push('/flota')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, fontWeight: 600, padding: 0 }}>
-            <ChevronLeft size={18} /> Flota
-          </button>
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <p style={{ fontSize: 15, fontWeight: 900, color: '#F4EEDF' }}>{viaje.vehiculo.nombre}</p>
-            <p style={{ fontSize: 11, color: '#F59E0B' }}>
-              {viaje.tipo === 'reparto' ? 'Reparto' : 'Trámite'} · En curso · {tiempo}
-            </p>
-          </div>
-          <div style={{ width: 60 }} />
-        </div>
-      </div>
+      <FlotaPageHeader
+        title={viaje.vehiculo.nombre}
+        subtitle={`${viaje.tipo === 'reparto' ? 'Reparto' : 'Trámite'} · En curso · ${tiempo}`}
+        onBack={() => router.push('/flota')}
+        backLabel="Volver"
+      />
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 100 }}>

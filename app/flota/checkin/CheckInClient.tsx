@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
+import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
 
 const F = '#F97316'
 const F_DIM = 'rgba(249,115,22,0.12)'
@@ -457,20 +458,14 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
   return (
     <div style={{ flex: 1, minHeight: 0, background: '#080808', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(249,115,22,0.15)', padding: '14px 16px 10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <button onClick={() => paso > 1 ? setPaso(paso - 1) : router.push('/flota')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
-            <ChevronLeft size={18} /> {paso === 1 ? 'Cancelar' : 'Atrás'}
-          </button>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 14, fontWeight: 800, color: '#F4EEDF' }}>{vehiculo ? vehiculo.nombre : 'Nueva Salida'}</p>
-            <p style={{ fontSize: 11, color: 'var(--muted)' }}>Paso {paso}/{totalPasos} · {pasoLabel}</p>
-          </div>
-          <div style={{ width: 60 }} />
-        </div>
+      <FlotaPageHeader
+        title={vehiculo ? vehiculo.nombre : 'Nueva Salida'}
+        subtitle={`Paso ${paso}/${totalPasos} · ${pasoLabel}`}
+        onBack={() => paso > 1 ? setPaso(paso - 1) : router.push('/flota')}
+        backLabel={paso === 1 ? 'Cancelar' : 'Atrás'}
+      >
         <StepBar paso={paso} total={totalPasos} />
-      </div>
+      </FlotaPageHeader>
 
       {/* ── Paso 1: Selección vehículo ─────────────────────────────────────── */}
       {paso === 1 && (
