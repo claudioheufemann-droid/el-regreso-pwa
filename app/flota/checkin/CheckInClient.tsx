@@ -475,7 +475,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
       {/* ── Paso 1: Selección vehículo ─────────────────────────────────────── */}
       {paso === 1 && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 0' }}>
             {disponibles.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px' }}>
                 <AlertTriangle size={32} color="#F59E0B" style={{ margin: '0 auto 12px', display: 'block' }} />
@@ -483,19 +483,47 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                 <p style={{ fontSize: 13, color: 'var(--muted)' }}>Todos los vehículos están en uso o en mantención</p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {disponibles.map(v => (
-                  <div key={v.id} onClick={() => setVehiculo(v)} style={{ padding: '14px 16px', borderRadius: 14, cursor: 'pointer', background: vehiculo?.id === v.id ? F_DIM : '#1C1C1C', border: `1px solid ${vehiculo?.id === v.id ? F_BORDER : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 10, background: F_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Truck size={18} color={F} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {disponibles.map(v => {
+                  const n = (v.nombre + v.tipo).toLowerCase()
+                  let src = '/vehicles/transit.jpg'
+                  if (n.includes('porter') || n.includes('nqr') || n.includes('npr') || n.includes('camion')) src = '/vehicles/porter.jpg'
+                  if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup') || n.includes('camioneta')) src = '/vehicles/ranger.jpg'
+                  const selected = vehiculo?.id === v.id
+                  return (
+                    <div key={v.id} onClick={() => setVehiculo(v)} style={{
+                      borderRadius: 16, cursor: 'pointer', overflow: 'hidden',
+                      border: `2px solid ${selected ? F : 'rgba(255,255,255,0.06)'}`,
+                      background: selected ? F_DIM : '#141414',
+                      display: 'flex', alignItems: 'stretch', height: 110,
+                      transition: 'border-color 0.15s',
+                    }}>
+                      {/* Foto del vehículo */}
+                      <div style={{ width: 130, flexShrink: 0, position: 'relative', background: '#04040a', overflow: 'hidden' }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt={v.nombre} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center' }} />
+                        <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 32, background: `linear-gradient(to right, transparent, ${selected ? '#1a0e00' : '#04040a'})` }} />
+                      </div>
+                      {/* Info */}
+                      <div style={{ flex: 1, padding: '14px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5, minWidth: 0 }}>
+                        <p style={{ fontSize: 17, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-0.3px' }}>{v.nombre}</p>
+                        <p style={{ fontSize: 12, color: 'var(--muted)' }}>{TIPO_LABEL[v.tipo] ?? v.tipo}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {v.patente && (
+                            <span style={{ fontSize: 11, fontWeight: 800, color: '#F4EEDF', background: 'rgba(255,255,255,0.08)', padding: '2px 8px', borderRadius: 5, letterSpacing: '1px' }}>{v.patente}</span>
+                          )}
+                          <span style={{ fontSize: 11, color: 'var(--muted)' }}>{v.km_actual.toLocaleString('es-CL')} km</span>
+                        </div>
+                      </div>
+                      {/* Check */}
+                      <div style={{ padding: '0 12px', display: 'flex', alignItems: 'center' }}>
+                        {selected
+                          ? <CheckCircle size={22} color={F} />
+                          : <div style={{ width: 22, height: 22, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.12)' }} />}
+                      </div>
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 15, fontWeight: 700, color: '#F4EEDF', marginBottom: 2 }}>{v.nombre}</p>
-                      <p style={{ fontSize: 11, color: 'var(--muted)' }}>{TIPO_LABEL[v.tipo] ?? v.tipo}{v.patente ? ` · ${v.patente}` : ''} · {v.km_actual.toLocaleString('es-CL')} km</p>
-                    </div>
-                    {vehiculo?.id === v.id && <CheckCircle size={18} color={F} />}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
