@@ -19,7 +19,9 @@ export default function FlotaLayout({ children }: { children: React.ReactNode })
         <FlotaSidebar />
       </div>
       <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-32 lg:pb-0">
-        <FlotaTabBar tabs={TABS} accent={ORANGE} />
+        <div className="hidden lg:block">
+          <FlotaTabBar tabs={TABS} accent={ORANGE} />
+        </div>
         {children}
       </main>
       <div className="lg:hidden">
