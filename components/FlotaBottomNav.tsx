@@ -17,18 +17,21 @@ export default function FlotaBottomNav() {
     <nav
       className="lg:hidden fixed bottom-0 left-0 right-0 flex items-center justify-around px-2 z-50"
       style={{
-        background: 'var(--surface)',
-        borderTop: '1px solid var(--border)',
-        paddingTop: '0.5rem',
-        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+        background: '#0F0F0F',
+        borderTop: '1px solid rgba(249,115,22,0.2)',
+        paddingTop: '10px',
+        paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
       }}
     >
       {items.map(({ href, icon: Icon, label, exact }) => {
         const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
         return (
-          <Link key={href} href={href} className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl" style={{ color: active ? 'var(--gold)' : 'var(--muted)' }}>
-            <Icon size={20} />
-            <span className="text-xs font-medium">{label}</span>
+          <Link key={href} href={href}
+            className="flex flex-col items-center gap-1 px-4 py-1 rounded-xl"
+            style={{ color: active ? '#F97316' : 'rgba(255,255,255,0.4)', minWidth: 56, textAlign: 'center' }}
+          >
+            <Icon size={22} />
+            <span style={{ fontSize: 10, fontWeight: active ? 700 : 500 }}>{label}</span>
           </Link>
         )
       })}

@@ -527,7 +527,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               </div>
             )}
           </div>
-          <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+          <div style={{ padding: '16px', paddingBottom: 'max(84px, calc(env(safe-area-inset-bottom) + 16px))' }}>
             <button onClick={() => vehiculo && setPaso(2)} disabled={!vehiculo} style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: vehiculo ? 'pointer' : 'not-allowed', background: vehiculo ? F : 'rgba(255,255,255,0.06)', color: vehiculo ? '#fff' : 'var(--muted)', fontSize: 16, fontWeight: 900 }}>
               Seleccionar vehículo →
             </button>
@@ -768,7 +768,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
             </div>
 
           </div>
-          <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+          <div style={{ padding: '16px', paddingBottom: 'max(84px, calc(env(safe-area-inset-bottom) + 16px))' }}>
             <button onClick={() => paso2Ok && setPaso(3)} disabled={!paso2Ok}
               style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: paso2Ok ? 'pointer' : 'not-allowed', background: paso2Ok ? F : 'rgba(255,255,255,0.06)', color: paso2Ok ? '#fff' : 'var(--muted)', fontSize: 16, fontWeight: 900 }}>
               Continuar →
@@ -854,7 +854,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
             </div>
           </div>
 
-          <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', display: 'flex', gap: 8 }}>
+          <div style={{ padding: '12px 16px', paddingBottom: 'max(84px, calc(env(safe-area-inset-bottom) + 16px))', display: 'flex', gap: 8 }}>
             <button onClick={() => router.push('/flota')} disabled={guardando}
               style={{ flex: '0 0 auto', padding: '17px 20px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', background: 'transparent', color: 'var(--muted)', fontSize: 15, fontWeight: 700 }}>
               Cancelar
