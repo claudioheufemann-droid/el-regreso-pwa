@@ -2,13 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Truck, Plus, Map, BarChart3 } from 'lucide-react'
+import { Truck, Plus, History, BarChart3 } from 'lucide-react'
 
 const items = [
-  { href: '/flota',         icon: Truck,     label: 'Flota',    exact: true  },
-  { href: '/flota/checkin', icon: Plus,      label: 'Salida',   exact: false },
-  { href: '/flota/rutas',   icon: Map,       label: 'Rutas',    exact: false },
-  { href: '/flota/admin',   icon: BarChart3, label: 'Reportes', exact: false },
+  { href: '/flota',           icon: Truck,    label: 'Flota',     exact: true  },
+  { href: '/flota/checkin',   icon: Plus,     label: 'Salida',    exact: false },
+  { href: '/flota/historial', icon: History,  label: 'Historial', exact: false },
+  { href: '/flota/admin',     icon: BarChart3,label: 'Reportes',  exact: false },
 ]
 
 export default function FlotaBottomNav() {
