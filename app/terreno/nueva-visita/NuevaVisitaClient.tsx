@@ -1103,10 +1103,18 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   const [waModal, setWaModal] = useState<null | 'catalogo'>(null)
   const [showImagenModal, setShowImagenModal] = useState(false)
 
-  const prodsFiltrados = productos
-    .filter(p => (p.categoria_producto ?? '').toLowerCase().includes(tabCat.toLowerCase()))
-    .filter(p => !!PRODUCTO_IMAGENES[p.producto])
-    .sort((a, b) => (a.producto ?? '').localeCompare(b.producto ?? ''))
+  // Siempre usa CATALOGO_INFO como fuente de verdad — evita depender de la BD
+  const prodsFiltrados: Producto[] = Object.entries(CATALOGO_INFO)
+    .filter(([, info]) => {
+      const esKom = info.estilo.toLowerCase().includes('kombucha')
+      return tabCat === 'Kombucha' ? esKom : !esKom
+    })
+    .map(([nombre, info]) => ({
+      producto: nombre,
+      categoria_producto: info.estilo.toLowerCase().includes('kombucha') ? 'Kombucha' : 'Cerveza',
+      envase: 'Lata',
+    }))
+    .sort((a, b) => a.producto.localeCompare(b.producto))
 
   function ajustar(prod: Producto, delta: number) {
     setCarrito(prev => {
