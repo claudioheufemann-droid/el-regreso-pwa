@@ -331,13 +331,13 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
           if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup') || n.includes('camioneta')) vehicleSrc = '/vehicles/ranger.jpg'
           return (
             <div key={v.id}
-              onClick={() => viaje && router.push(`/flota/viaje/${viaje.id}`)}
+              onClick={() => v.estado === 'en_uso' && router.push(`/flota/vehiculo/${v.id}`)}
               style={{
                 background: 'var(--surface2)',
                 border: `1px solid ${v.estado === 'en_uso' ? 'rgba(245,158,11,0.3)' : v.estado === 'mantenimiento' ? 'rgba(255,85,85,0.2)' : 'rgba(255,255,255,0.06)'}`,
                 borderRadius: 18, overflow: 'hidden',
                 display: 'flex', alignItems: 'stretch',
-                cursor: viaje ? 'pointer' : 'default',
+                cursor: v.estado === 'en_uso' ? 'pointer' : 'default',
               }}>
               {/* ── FOTO IZQUIERDA — vehiculo completo ── */}
               <div style={{ width: 140, flexShrink: 0, position: 'relative', background: '#04040a' }}>
