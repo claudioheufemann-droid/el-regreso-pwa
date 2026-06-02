@@ -327,12 +327,20 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
           let vehicleSrc = '/vehicles/transit.jpg'
           if (n.includes('porter') || n.includes('nqr') || n.includes('npr') || n.includes('camion') || n.includes('camión')) vehicleSrc = '/vehicles/porter.jpg'
           if (n.includes('ranger') || n.includes('hilux') || n.includes('dmax') || n.includes('pickup') || n.includes('camioneta')) vehicleSrc = '/vehicles/ranger.jpg'
+          const CardWrapper = viaje
+            ? ({ children }: { children: React.ReactNode }) => (
+                <Link href={`/flota/viaje/${viaje.id}`} style={{ textDecoration: 'none', display: 'block' }}>{children}</Link>
+              )
+            : ({ children }: { children: React.ReactNode }) => <>{children}</>
+
           return (
+            <CardWrapper key={v.id}>
             <div key={v.id} style={{
               background: 'var(--surface2)',
               border: `1px solid ${v.estado === 'en_uso' ? 'rgba(245,158,11,0.3)' : v.estado === 'mantenimiento' ? 'rgba(255,85,85,0.2)' : 'rgba(255,255,255,0.06)'}`,
               borderRadius: 18, overflow: 'hidden',
               display: 'flex', alignItems: 'stretch',
+              cursor: viaje ? 'pointer' : 'default',
             }}>
               {/* ── FOTO IZQUIERDA — vehiculo completo ── */}
               <div style={{ width: 140, flexShrink: 0, position: 'relative', background: '#04040a' }}>
@@ -377,24 +385,18 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
                 <CombustibleMini nivel={v.combustible} />
 
                 {viaje && (
-                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                     <p style={{ fontSize: 11, color: '#F59E0B' }}>
                       {conductor?.nombre?.split(' ')[0] ?? 'En uso'} · {viaje.tipo === 'reparto' ? 'Reparto' : 'Trámite'} · {tiempoTranscurrido(viaje.iniciado_at)}
                     </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                      {viaje.tipo === 'tramite' && !viaje.llegada_confirmada_at && (
-                        <Link href={`/flota/llegada/${viaje.id}`} style={{ fontSize: 10, fontWeight: 700, color: '#4ADE80', textDecoration: 'none', background: 'rgba(74,222,128,0.1)', padding: '3px 8px', borderRadius: 7, border: '1px solid rgba(74,222,128,0.25)', whiteSpace: 'nowrap' }}>
-                          📍 Confirmar llegada
-                        </Link>
-                      )}
-                      <Link href={`/flota/checkout/${viaje.id}`} style={{ fontSize: 11, fontWeight: 700, color: F, textDecoration: 'none', background: F_DIM, padding: '4px 10px', borderRadius: 8, whiteSpace: 'nowrap' }}>
-                        Cerrar viaje
-                      </Link>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
+                      Ver viaje <ChevronRight size={13} color={F} />
                     </div>
                   </div>
                 )}
               </div>
             </div>
+            </CardWrapper>
           )
         })}
       </div>
