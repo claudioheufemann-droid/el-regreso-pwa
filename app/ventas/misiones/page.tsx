@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { VENDEDORES } from '@/lib/types'
+import { getVolumenBajaCached, getCrossSellCached, getPedidoSugeridoCached, getUltimaVentasCached } from '@/lib/misionesCache'
 import MisionesClient from './MisionesClient'
 
 export const revalidate = 120
@@ -130,12 +131,12 @@ export default async function MisionesPage() {
     { data: historialRaw },
     { data: proximaRaw },
     { data: clientesRaw },
-    { data: ventasRaw },
+    ventasRaw,
     { data: tiposRaw },
     { data: inactivosRaw },
-    { data: volBajaRaw },
-    { data: crossRaw },
-    { data: pedidoSugRaw },
+    volBajaRaw,
+    crossRaw,
+    pedidoSugRaw,
   ] = await Promise.all([
     // Misiones de esta semana (select '*' = tolerante a columnas nuevas)
     supabase.from('misiones')
@@ -160,24 +161,8 @@ export default async function MisionesPage() {
       .select('nombre_fantasia, ruta_despacho, localidad, localidad_entrega, telefono')
       .in('vendedor', vendedoresScope.length ? vendedoresScope : ['__none__']),
 
-    // Último pedido por cliente — paginado para no truncar a 1000
-    (async () => {
-      const rows: { nombre_fantasia: string | null; fecha_pedido: string; total_sin_impuesto: number }[] = []
-      let offset = 0
-      const scope2 = vendedoresScope.length ? vendedoresScope : ['__none__']
-      while (true) {
-        const { data } = await supabase.from('ventas')
-          .select('nombre_fantasia, fecha_pedido, total_sin_impuesto')
-          .in('vendedor_actual', scope2)
-          .order('fecha_pedido', { ascending: false })
-          .range(offset, offset + 999)
-        if (!data || data.length === 0) break
-        rows.push(...data)
-        if (data.length < 1000) break
-        offset += 1000
-      }
-      return { data: rows }
-    })(),
+    // Último pedido por cliente — cacheado por scope (TTL 10 min)
+    getUltimaVentasCached(vendedoresScope),
 
     // Tipo de cliente desde client_scores (para segmentación activo/inactivo/temporal/nuevo)
     supabase.from('client_scores')
@@ -189,14 +174,10 @@ export default async function MisionesPage() {
       .select('nombre_fantasia')
       .eq('estado', 'inactivo'),
 
-    // Clientes con volumen a la baja (señal temprana de fuga)
-    supabase.rpc('get_clientes_volumen_baja', { p_vendedor, p_umbral: 0.25 }),
-
-    // Oportunidades de cross-sell
-    supabase.rpc('get_cross_sell', { p_vendedor, p_min_penetracion: 0.4 }),
-
-    // Pedido sugerido (productos habituales)
-    supabase.rpc('get_pedido_sugerido', { p_vendedor }),
+    // Análisis caros cacheados (compartidos, TTL 10 min) → no recalculan en cada navegación
+    getVolumenBajaCached(p_vendedor),
+    getCrossSellCached(p_vendedor),
+    getPedidoSugeridoCached(p_vendedor),
   ])
 
   // Mapas de lookup

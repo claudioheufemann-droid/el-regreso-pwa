@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createClient } from './supabase/server'
 
 export interface AppUser {
@@ -10,7 +11,8 @@ export interface AppUser {
   avatarUrl: string | null
 }
 
-export async function getServerUser(): Promise<AppUser | null> {
+// Memoizado por request: layout + página comparten una sola validación de auth
+export const getServerUser = cache(async (): Promise<AppUser | null> => {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -47,4 +49,4 @@ export async function getServerUser(): Promise<AppUser | null> {
   } catch {
     return null
   }
-}
+})
