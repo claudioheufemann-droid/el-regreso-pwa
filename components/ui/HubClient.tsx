@@ -303,12 +303,12 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
           {/* Logos — ambas marcas */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 24 }}>
             {/* El Regreso */}
-            <div style={{ position: 'relative', width: 130, height: 130, flexShrink: 0 }}>
+            <div style={{ position: 'relative', width: 150, height: 150, flexShrink: 0 }}>
               <Image
                 src="/logo.png"
                 alt="El Regreso Beer Co."
                 fill
-                style={{ objectFit: 'contain', filter: 'drop-shadow(0 0 24px rgba(212,175,55,0.55))' }}
+                style={{ objectFit: 'contain', filter: 'invert(1) drop-shadow(0 0 12px rgba(255,255,255,0.2))' }}
                 priority
               />
             </div>
