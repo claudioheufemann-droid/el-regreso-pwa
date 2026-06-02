@@ -222,12 +222,12 @@ function ModuleCard({ href, color, rgb, title, subtitle, img, locked }: ModuleCa
         }}
       >
         {/* Imagen cuadrada izquierda */}
-        <div style={{ width: 110, flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
-          <Image
+        <div style={{ width: 110, minHeight: 110, flexShrink: 0, position: 'relative', overflow: 'hidden', alignSelf: 'stretch' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src={img}
             alt={title}
-            fill
-            style={{ objectFit: 'cover', opacity: pressed ? 0.75 : 0.9, transition: 'opacity 0.18s' }}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: pressed ? 0.75 : 0.9, transition: 'opacity 0.18s' }}
           />
           {/* Fade hacia la derecha */}
           <div style={{
