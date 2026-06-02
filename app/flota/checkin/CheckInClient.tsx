@@ -800,30 +800,30 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               ))}
             </div>
 
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Marcador de combustible *</p>
-            <div style={{ marginBottom: 8 }}>
-              <FotoSlot label="Foto del tablero" emoji="⛽" onCaptura={(url, file) => { setFotoMarcador(url); analizarCombustible(file) }} capturada={!!fotoMarcador} />
-            </div>
-            {analizandoComb && (
-              <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
-                Leyendo nivel de estanque…
-              </p>
-            )}
-            {!analizandoComb && nivelDetectado && !mostrarSelectorComb && (
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+              Nivel de combustible *
+            </p>
+
+            {/* Selector siempre visible — foto es opcional para auto-detectar */}
+            {!analizandoComb && nivelDetectado && !mostrarSelectorComb ? (
               <NivelDetectado nivel={nivelDetectado} onCorregir={() => setMostrarSelectorComb(true)} />
-            )}
-            {!analizandoComb && (iaFalloComb || mostrarSelectorComb) && (
-              <div style={{ marginBottom: 4 }}>
-                {iaFalloComb && <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>No se pudo leer el nivel automáticamente, selecciona manualmente:</p>}
-                <SelectorManual value={combustible} onChange={v => { setCombustible(v); setNivelDetectado(v) }} />
-                {nivelDetectado && mostrarSelectorComb && !iaFalloComb && (
-                  <button onClick={() => setMostrarSelectorComb(false)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', marginBottom: 8 }}>
-                    ← Volver al nivel detectado
-                  </button>
+            ) : (
+              <div style={{ marginBottom: 8 }}>
+                {analizandoComb ? (
+                  <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+                    Leyendo nivel de estanque…
+                  </p>
+                ) : (
+                  <SelectorManual value={combustible} onChange={v => { setCombustible(v); setNivelDetectado(v) }} />
                 )}
               </div>
             )}
+
+            {/* Foto tablero — opcional, mejora la detección */}
+            <div style={{ marginBottom: 8 }}>
+              <FotoSlot label="Foto del tablero (opcional)" emoji="⛽" onCaptura={(url, file) => { setFotoMarcador(url); analizarCombustible(file) }} capturada={!!fotoMarcador} />
+            </div>
           </div>
 
           <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
