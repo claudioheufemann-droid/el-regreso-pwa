@@ -75,12 +75,27 @@ export default async function NuevaVisitaPage({
       return true
     })
 
+  // Deudores para mostrar estado de cuenta al seleccionar cliente
+  const { data: deudoresRaw } = await supabase
+    .from('deudores')
+    .select('nombre_fantasia, saldo_total, deuda_vencida, ultimo_pago, fecha_ultima_compra, limite_cta_cte')
+
+  const deudores = (deudoresRaw ?? []).map(d => ({
+    nombre_fantasia: d.nombre_fantasia as string,
+    saldo_total: Number(d.saldo_total ?? 0),
+    deuda_vencida: Number(d.deuda_vencida ?? 0),
+    ultimo_pago: d.ultimo_pago as string | null,
+    fecha_ultima_compra: d.fecha_ultima_compra as string | null,
+    limite_cta_cte: d.limite_cta_cte ? Number(d.limite_cta_cte) : null,
+  }))
+
   return (
     <NuevaVisitaClient
       vendedor={user}
       clientesExistentes={clientes}
       catalogoProductos={productos}
       visitaRetomada={visitaRetomada}
+      deudores={deudores}
     />
   )
 }

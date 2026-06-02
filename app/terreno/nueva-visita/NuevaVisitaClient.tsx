@@ -595,11 +595,21 @@ interface VisitaRetomada {
   direccion_gps: string | null
 }
 
+interface DeudorInfo {
+  nombre_fantasia: string
+  saldo_total: number
+  deuda_vencida: number
+  ultimo_pago: string | null
+  fecha_ultima_compra: string | null
+  limite_cta_cte: number | null
+}
+
 interface Props {
   vendedor: AppUser
   clientesExistentes: ClienteExistente[]
   catalogoProductos: Producto[]
   visitaRetomada?: VisitaRetomada | null
+  deudores?: DeudorInfo[]
 }
 
 // ─── Selector de cantidad editable ───────────────────────────
@@ -701,8 +711,9 @@ function StepBar({ paso, total }: { paso: number; total: number }) {
 
 // ─── Paso 1: Selección de cliente ────────────────────────────
 
-function Paso1Cliente({ clientes, onConfirmar }: {
+function Paso1Cliente({ clientes, deudores, onConfirmar }: {
   clientes: ClienteExistente[]
+  deudores: DeudorInfo[]
   onConfirmar: (nombre: string, esNuevo: boolean, canal: string) => void
 }) {
   const [tab, setTab] = useState<'existente' | 'nuevo'>('existente')
@@ -766,7 +777,53 @@ function Paso1Cliente({ clientes, onConfirmar }: {
               ))}
             </div>
           </>
-        ) : (
+        ) : (<>
+          {/* Badge de deuda si hay cliente seleccionado */}
+          {(() => {
+            const d = seleccionado ? deudores.find(x => x.nombre_fantasia === seleccionado.nombre_fantasia) : null
+            if (!d) return null
+            const tieneDeuda = d.saldo_total > 0
+            const color = d.deuda_vencida > 0 ? '#EF4444' : '#F59E0B'
+            const rgb   = d.deuda_vencida > 0 ? '239,68,68' : '245,158,11'
+            if (!tieneDeuda) return (
+              <div style={{ margin: '8px 0 4px', padding: '10px 14px', background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle size={14} color="#4ADE80" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#4ADE80' }}>Cliente al día — sin deuda pendiente</span>
+              </div>
+            )
+            return (
+              <div style={{ margin: '8px 0 4px', padding: '12px 14px', background: `rgba(${rgb},0.07)`, border: `1px solid rgba(${rgb},0.25)`, borderRadius: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 14 }}>{d.deuda_vencida > 0 ? '⚠️' : '💰'}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {d.deuda_vencida > 0 ? 'Deuda vencida' : 'Saldo pendiente'}
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Saldo total</p>
+                    <p style={{ fontSize: 16, fontWeight: 900, color, letterSpacing: '-0.5px' }}>
+                      {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(d.saldo_total)}
+                    </p>
+                  </div>
+                  {d.deuda_vencida > 0 && (
+                    <div>
+                      <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Vencida</p>
+                      <p style={{ fontSize: 16, fontWeight: 900, color: '#EF4444', letterSpacing: '-0.5px' }}>
+                        {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(d.deuda_vencida)}
+                      </p>
+                    </div>
+                  )}
+                  {d.ultimo_pago && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Último pago</p>
+                      <p style={{ fontSize: 11, color: '#F4EEDF' }}>{new Date(d.ultimo_pago).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
               { label: 'Nombre de fantasía *', value: nombre, onChange: setNombre, placeholder: 'Ej: Bar El Cóndor' },
@@ -789,7 +846,7 @@ function Paso1Cliente({ clientes, onConfirmar }: {
               </select>
             </div>
           </div>
-        )}
+        </>)}
       </div>
 
       <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
@@ -1397,7 +1454,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
 
 // ─── Wizard principal ─────────────────────────────────────────
 
-export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos, visitaRetomada }: Props) {
+export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos, visitaRetomada, deudores = [] }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -1475,7 +1532,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
         <StepBar paso={paso} total={totalPasos} />
       </div>
 
-      {paso === 1 && <Paso1Cliente clientes={clientesExistentes} onConfirmar={onClienteConfirmado} />}
+      {paso === 1 && <Paso1Cliente clientes={clientesExistentes} deudores={deudores} onConfirmar={onClienteConfirmado} />}
       {paso === 2 && <Paso2Checkin onConfirmar={onCheckinConfirmado} />}
       {paso === 3 && !cliente?.esNuevo && <Paso3Vista360 clienteNombre={cliente?.nombre ?? ''} esNuevo={false} onContinuar={onVista360Continuar} />}
       {(paso === 4 || (paso === 3 && cliente?.esNuevo)) && (
