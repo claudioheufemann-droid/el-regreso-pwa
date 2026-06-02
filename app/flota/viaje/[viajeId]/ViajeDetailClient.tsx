@@ -352,9 +352,20 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
       </div>
 
       {/* Footer sticky */}
-      <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', background: '#0F0F0F', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', background: '#0F0F0F', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
+        <a
+          href={urlGoogleMaps(paradas)}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ flex: 1, padding: '16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: 'rgba(66,133,244,0.15)', border: '1px solid rgba(66,133,244,0.35)', color: '#6BA3F5', fontSize: 15, fontWeight: 900, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6BA3F5"/>
+          </svg>
+          Iniciar viaje
+        </a>
         <button onClick={() => router.push(`/flota/checkout/${viaje.id}`)}
-          style={{ width: '100%', padding: '16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: F, color: '#fff', fontSize: 16, fontWeight: 900 }}>
+          style={{ flex: 1, padding: '16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: F, color: '#fff', fontSize: 15, fontWeight: 900 }}>
           Cerrar viaje →
         </button>
       </div>
