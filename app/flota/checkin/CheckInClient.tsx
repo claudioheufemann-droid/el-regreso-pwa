@@ -826,9 +826,14 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
             </div>
           </div>
 
-          <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
-            <button onClick={confirmar} disabled={!listo || guardando} style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed', background: listo && !guardando ? F : 'rgba(255,255,255,0.06)', color: listo && !guardando ? '#fff' : 'var(--muted)', fontSize: 16, fontWeight: 900 }}>
-              {guardando ? 'Registrando salida…' : listo ? 'Confirmar salida ✓' : `Faltan ${[!kmInicio && 'kilometraje', !combustible && 'nivel de combustible'].filter(Boolean).join(' y ')}`}
+          <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', display: 'flex', gap: 8 }}>
+            <button onClick={() => router.push('/flota')} disabled={guardando}
+              style={{ flex: '0 0 auto', padding: '17px 20px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', background: 'transparent', color: 'var(--muted)', fontSize: 15, fontWeight: 700 }}>
+              Cancelar
+            </button>
+            <button onClick={confirmar} disabled={!listo || guardando}
+              style={{ flex: 1, padding: '17px', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed', background: listo && !guardando ? F : 'rgba(255,255,255,0.06)', color: listo && !guardando ? '#fff' : 'var(--muted)', fontSize: 15, fontWeight: 900 }}>
+              {guardando ? 'Iniciando…' : listo ? 'Iniciar viaje →' : `Faltan ${[!kmInicio && 'km', !combustible && 'combustible'].filter(Boolean).join(' y ')}`}
             </button>
           </div>
         </div>

@@ -41,6 +41,7 @@ interface Props {
   user: AppUser
   viaje: {
     id: string
+    vehiculo_id: string
     tipo: string
     motivo: string | null
     km_inicio: number | null
@@ -193,6 +194,24 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
   const [kmCalculado, setKmCalculado] = useState<number | null>(viaje.km_teoricos)
   const [calculandoRuta, setCalculandoRuta] = useState(false)
   const [tiempo, setTiempo] = useState(tiempoTranscurrido(viaje.iniciado_at))
+  const [terminando, setTerminando] = useState(false)
+  const [kmFin, setKmFin] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [completado, setCompletado] = useState(viaje.estado === 'completado')
+
+  async function terminarViaje() {
+    setGuardando(true)
+    try {
+      await supabase.from('viajes_flota').update({
+        estado: 'completado',
+        completado_at: new Date().toISOString(),
+        km_fin: kmFin ? Math.round(parseFloat(kmFin)) : null,
+      }).eq('id', viaje.id)
+      await supabase.from('vehiculos').update({ estado: 'disponible' }).eq('id', viaje.vehiculo_id)
+      setCompletado(true)
+      setTerminando(false)
+    } catch { /* silently fail */ } finally { setGuardando(false) }
+  }
 
   // Actualizar reloj cada minuto
   useEffect(() => {
@@ -248,6 +267,16 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 100 }}>
+        {/* Banner viaje terminado */}
+        {completado && (
+          <div style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <CheckCircle size={22} color="#4ADE80" style={{ flexShrink: 0 }} />
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 900, color: '#4ADE80' }}>Viaje terminado</p>
+              <p style={{ fontSize: 11, color: 'var(--muted)' }}>Este viaje fue completado exitosamente</p>
+            </div>
+          </div>
+        )}
 
         {/* Info del viaje */}
         <div style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.18)', borderRadius: 14, padding: '14px 16px' }}>
@@ -351,23 +380,64 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
 
       </div>
 
+      {/* Overlay: confirmar término */}
+      {terminando && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'flex-end', zIndex: 200 }}>
+          <div style={{ width: '100%', background: '#141414', borderRadius: '20px 20px 0 0', padding: '24px 20px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
+            <p style={{ fontSize: 18, fontWeight: 900, color: '#F4EEDF', marginBottom: 6 }}>¿Terminar viaje?</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>El vehículo quedará disponible y el viaje se cerrará.</p>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 8 }}>
+              Km odómetro al llegar (opcional)
+            </label>
+            <input
+              value={kmFin}
+              onChange={e => setKmFin(e.target.value.replace(/\D/g, ''))}
+              placeholder={`Ej: ${(viaje.km_inicio ?? 0) + (kmCalculado ?? 0)}`}
+              type="text" inputMode="numeric"
+              style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#0D0D0D', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', marginBottom: 16, boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setTerminando(false)} disabled={guardando}
+                style={{ flex: 1, padding: '15px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'var(--muted)', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={terminarViaje} disabled={guardando}
+                style={{ flex: 1, padding: '15px', borderRadius: 12, border: 'none', background: '#4ADE80', color: '#000', fontSize: 15, fontWeight: 900, cursor: 'pointer' }}>
+                {guardando ? 'Cerrando…' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer sticky */}
       <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', background: '#0F0F0F', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
-        <a
-          href={urlGoogleMaps(paradas)}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ flex: 1, padding: '16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: 'rgba(66,133,244,0.15)', border: '1px solid rgba(66,133,244,0.35)', color: '#6BA3F5', fontSize: 15, fontWeight: 900, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6BA3F5"/>
-          </svg>
-          Iniciar viaje
-        </a>
-        <button onClick={() => router.push(`/flota/checkout/${viaje.id}`)}
-          style={{ flex: 1, padding: '16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: F, color: '#fff', fontSize: 15, fontWeight: 900 }}>
-          Cerrar viaje →
-        </button>
+        {completado ? (
+          <>
+            <div style={{ flex: 1, padding: '16px', borderRadius: 14, background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <CheckCircle size={18} color="#4ADE80" />
+              <span style={{ fontSize: 15, fontWeight: 900, color: '#4ADE80' }}>Viaje terminado</span>
+            </div>
+            <button onClick={() => router.push('/flota')}
+              style={{ flex: '0 0 auto', padding: '16px 20px', borderRadius: 14, border: 'none', background: F, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+              Volver
+            </button>
+          </>
+        ) : (
+          <>
+            <a href={urlGoogleMaps(paradas)} target="_blank" rel="noopener noreferrer"
+              style={{ flex: 1, padding: '16px', borderRadius: 14, background: 'rgba(66,133,244,0.15)', border: '1px solid rgba(66,133,244,0.35)', color: '#6BA3F5', fontSize: 15, fontWeight: 900, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6BA3F5"/>
+              </svg>
+              Iniciar viaje
+            </a>
+            <button onClick={() => setTerminando(true)}
+              style={{ flex: 1, padding: '16px', borderRadius: 14, border: 'none', background: '#4ADE80', color: '#000', fontSize: 15, fontWeight: 900, cursor: 'pointer' }}>
+              Viaje terminado ✓
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
