@@ -19,7 +19,7 @@ export default async function TerrenoLayout({ children }: { children: React.Reac
       <div className="hidden lg:flex">
         <TerrenoSidebar />
       </div>
-      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-24 lg:pb-0">
+      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-28 lg:pb-0">
         <PageTabs tabs={TABS} />
         {children}
       </main>
