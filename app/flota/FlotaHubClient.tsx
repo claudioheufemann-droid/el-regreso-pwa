@@ -267,8 +267,8 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16 }}>
         {[
           { label: 'Vehículos',   sub: 'Totales',          value: vehiculos.length, color: F,         rgb: '249,115,22',  icon: <Truck size={18} color={F} />,           img: '/vehicles/transit.jpg' },
-          { label: 'Disponibles', sub: 'Listos para salir', value: disponibles,      color: '#4ADE80',  rgb: '74,222,128',  icon: <CheckCircle size={18} color="#4ADE80"/>, img: null },
-          { label: 'En uso',      sub: 'En operación',      value: enUso,            color: '#F59E0B',  rgb: '245,158,11',  icon: <Clock size={18} color="#F59E0B" />,      img: null },
+          { label: 'Disponibles', sub: 'Listos para salir', value: disponibles,      color: '#4ADE80',  rgb: '74,222,128',  icon: <CheckCircle size={18} color="#4ADE80"/>, img: '/vehicles/ranger.jpg' },
+          { label: 'En uso',      sub: 'En operación',      value: enUso,            color: '#F59E0B',  rgb: '245,158,11',  icon: <Clock size={18} color="#F59E0B" />,      img: '/vehicles/porter.jpg' },
         ].map(k => (
           <div key={k.label} style={{
             position: 'relative', overflow: 'hidden',
