@@ -118,7 +118,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
   // ── Leads (posibles clientes): cargar una vez al activar ──
   useEffect(() => {
     if (!mostrarLeads || leads.length > 0) return
-    fetch('/api/leads?en_zona=1&conCoords=1&limit=2000')
+    fetch('/api/leads?conCoords=1&limit=6000')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (Array.isArray(d?.leads)) setLeads(d.leads) })
       .catch(() => {})

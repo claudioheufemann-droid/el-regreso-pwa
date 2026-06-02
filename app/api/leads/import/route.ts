@@ -53,6 +53,34 @@ export async function POST() {
   const cityCentroid = new Map<string, { lat: number; lng: number }>()
   for (const [k, v] of cityAcc) cityCentroid.set(k, { lat: v.lat / v.n, lng: v.lng / v.n })
 
+  const leads = leadsData as Lead[]
+
+  // 2b. Geocodificar las ciudades de leads que NO tienen centroide de cliente
+  //     (zonas fuera de despacho) → así TODOS los leads quedan en el mapa.
+  const cityGeo = new Map<string, { lat: number; lng: number }>()
+  const ciudadesFaltantes = new Map<string, string | null>() // key → region (para precisión)
+  for (const l of leads) {
+    const k = norm(l.ciudad)
+    if (!k || cityCentroid.has(k) || ciudadesFaltantes.has(k)) continue
+    ciudadesFaltantes.set(k, l.region)
+  }
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+  for (const [k, region] of ciudadesFaltantes) {
+    // recuperar el nombre de ciudad original (sin normalizar) del primer lead que la tenga
+    const ciudadReal = leads.find(l => norm(l.ciudad) === k)?.ciudad ?? k
+    try {
+      const q = encodeURIComponent(`${ciudadReal}, ${region ?? ''}, Chile`)
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=cl`, {
+        headers: { 'User-Agent': 'ElRegresoBeerApp/1.0 (benja.alarcon@elregresobeer.com)', 'Accept-Language': 'es' },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.length > 0) cityGeo.set(k, { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) })
+      }
+    } catch { /* ignora ciudad fallida */ }
+    await sleep(1100) // respetar el límite de Nominatim (1 req/seg)
+  }
+
   // 3. Mapear categoría del lead → nuestra categoría → litros base
   function lpmParaLead(l: Lead): { cat: string | null; lpm: number } {
     const candidates = [norm(l.categoria), norm(l.tipo_buscado)].filter(Boolean)
@@ -66,16 +94,15 @@ export async function POST() {
     return { cat: null, lpm: globalAvg }
   }
 
-  const leads = leadsData as Lead[]
-
   // Pre-cálculo para normalizar score por volumen
   const evaluados = leads.map(l => {
     const { cat, lpm } = lpmParaLead(l)
     const ratingFactor = l.rating ? Math.max(0.6, Math.min(1.3, l.rating / 4.5)) : 1.0
     const litros_potencial = Math.round(lpm * ratingFactor * 10) / 10
     const ciudadKey = norm(l.ciudad)
-    const centro = cityCentroid.get(ciudadKey) ?? null
-    return { l, cat, litros_potencial, centro, en_zona: !!centro }
+    const enZonaCentro = cityCentroid.get(ciudadKey) ?? null
+    const coords = enZonaCentro ?? cityGeo.get(ciudadKey) ?? null   // dentro de ruta → centroide; si no → geocodificado
+    return { l, cat, litros_potencial, centro: coords, en_zona: !!enZonaCentro }
   })
   const maxLpm = Math.max(1, ...evaluados.map(e => e.litros_potencial))
 

@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const producto  = searchParams.get('producto')
   const q         = searchParams.get('q')
   const conCoords = searchParams.get('conCoords') === '1'
-  const limit     = Math.min(Number(searchParams.get('limit') ?? 500), 2000)
+  const limit     = Math.min(Number(searchParams.get('limit') ?? 500), 6000)
 
   let query = supabase
     .from('cold_leads')

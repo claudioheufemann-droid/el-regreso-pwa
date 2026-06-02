@@ -27,7 +27,7 @@ function scoreColor(s: number) { return s >= 70 ? '#34D399' : s >= 45 ? '#F59E0B
 export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
-  const [enZona, setEnZona] = useState(true)
+  const [enZona, setEnZona] = useState(false)
   const [producto, setProducto] = useState('all')
   const [ciudad, setCiudad] = useState('all')
   const [q, setQ] = useState('')
