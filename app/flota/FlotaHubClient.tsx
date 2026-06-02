@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Truck, Plus, AlertTriangle, CheckCircle, Clock, ChevronRight, Wrench } from 'lucide-react'
+import { Truck, Plus, AlertTriangle, CheckCircle, Clock, ChevronLeft, ChevronRight, Wrench } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import type { AppUser } from '@/lib/auth'
 
@@ -253,6 +253,20 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
 
   return (
     <div style={{ padding: isDesktop ? 'var(--sp-3)' : '16px 14px', maxWidth: 800, margin: '0 auto', width: '100%' }}>
+      {/* Botón volver al inicio — solo mobile */}
+      {!isDesktop && (
+        <button
+          onClick={() => router.push('/')}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: '#F97316', display: 'flex', alignItems: 'center', gap: 4,
+            fontSize: 13, fontWeight: 600, padding: '0 0 12px 0',
+          }}
+        >
+          <ChevronLeft size={18} strokeWidth={2.5} />
+          Inicio
+        </button>
+      )}
       {/* Header */}
       <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
         <p style={{ fontSize: isDesktop ? 11 : 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: isDesktop ? 4 : 3 }}>
