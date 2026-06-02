@@ -849,7 +849,7 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
         </>)}
       </div>
 
-      <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+      <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
         <button
           onClick={() => {
             if (tab === 'existente' && seleccionado) onConfirmar(seleccionado.nombre_fantasia, false, seleccionado.categoria_negocio ?? '')
@@ -953,7 +953,7 @@ function Paso2Checkin({ onConfirmar }: {
         {!listo && <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 8 }}>{!gps ? 'Esperando GPS…' : `Falta${fotosListas < 3 ? ` ${3 - fotosListas} foto${3 - fotosListas > 1 ? 's' : ''}` : ''}`}</p>}
       </div>
 
-      <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+      <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
         <button onClick={() => gps && onConfirmar(gps, fotos)} disabled={!listo} style={{
           width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed',
           background: listo ? T : 'rgba(255,255,255,0.06)', color: listo ? '#080808' : 'var(--muted)',
@@ -1128,7 +1128,7 @@ function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
         )}
       </div>
 
-      <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+      <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
         <button onClick={() => onContinuar(Array.from(carritoSug.values()))} style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: 'pointer', background: T, color: '#080808', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}>
           {carritoSug.size > 0 ? `Ir a la Venta · ${Array.from(carritoSug.values()).reduce((s, i) => s + i.cantidad, 0)} ud. →` : 'Ir a la Venta →'}
         </button>
@@ -1281,7 +1281,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           </div>
         </div>
 
-        <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+        <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
           <button
             onClick={() => { if (sinVenta && !motivo) return; onCerrar(items, !sinVenta, motivo, obs) }}
             disabled={sinVenta && !motivo}
@@ -1413,7 +1413,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
       </div>
 
       {/* Carrito flotante */}
-      <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+      <div style={{ padding: '12px 16px', paddingBottom: 'max(76px, calc(64px + env(safe-area-inset-bottom)))' }}>
         <div style={{ display: 'flex', gap: 8 }}>
           {/* Botón ver detalle */}
           {totalItems > 0 && (
