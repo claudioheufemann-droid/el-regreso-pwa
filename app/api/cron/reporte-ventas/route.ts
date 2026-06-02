@@ -191,12 +191,23 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, sent_to: [], reason: 'sin admins', hint })
   }
 
-  await resend.emails.send({
+  const { data: sendData, error: sendError } = await resend.emails.send({
     from: `El Regreso Ventas <${from}>`,
     to: adminEmails,
     subject: `📊 Reporte de Ventas ${fmt(ini)} — ${fmt(fin)}`,
     html,
   })
 
-  return NextResponse.json({ ok: true, manual, sent_to: adminEmails, semana: ini, litros, misPct, riesgo: riesgoArr.length })
+  if (sendError) console.error('[reporte-ventas] Resend error:', sendError)
+  else console.log('[reporte-ventas] enviado, id:', sendData?.id)
+
+  return NextResponse.json({
+    ok: !sendError,
+    manual,
+    from,
+    sent_to: adminEmails,
+    resend_id: sendData?.id ?? null,
+    resend_error: sendError ? { name: sendError.name, message: sendError.message } : null,
+    semana: ini, litros, misPct, riesgo: riesgoArr.length,
+  })
 }
