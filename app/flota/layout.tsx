@@ -1,6 +1,6 @@
 import FlotaSidebar from '@/components/FlotaSidebar'
 import FlotaBottomNav from '@/components/FlotaBottomNav'
-import PageTabs from '@/components/PageTabs'
+import FlotaTabBar from '@/components/FlotaTabBar'
 import type { PageTab } from '@/components/PageTabs'
 
 const TABS: PageTab[] = [
@@ -19,7 +19,7 @@ export default function FlotaLayout({ children }: { children: React.ReactNode })
         <FlotaSidebar />
       </div>
       <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-32 lg:pb-0">
-        <PageTabs tabs={TABS} accent={ORANGE} />
+        <FlotaTabBar tabs={TABS} accent={ORANGE} />
         {children}
       </main>
       <div className="lg:hidden">
