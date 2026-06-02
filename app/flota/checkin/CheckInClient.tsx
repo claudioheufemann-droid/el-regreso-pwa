@@ -412,22 +412,45 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
     if (!vehiculo || !listo) return
     setGuardando(true)
     try {
-      await supabase.from('viajes_flota').insert({
-        vehiculo_id: vehiculo.id,
-        conductor_id: user.id,
-        ruta_id: null,
-        tipo: tipoViaje,
-        motivo: motivoViaje.trim() || null,
-        km_inicio: parseInt(kmInicio),
-        km_teoricos: kmMostrado ?? null,
-        destino_declarado: paradas.length > 0
-          ? JSON.stringify(paradas.map(p => ({ n: p.nombre, d: p.direccion })))
-          : motivoViaje.trim() || null,
-        estado: 'en_curso',
-      })
-      await supabase.from('vehiculos').update({ estado: 'en_uso', combustible }).eq('id', vehiculo.id)
-      router.push('/flota')
-    } finally { setGuardando(false) }
+      // 1. Crear viaje primero
+      const { data: nuevoViaje, error: errViaje } = await supabase
+        .from('viajes_flota')
+        .insert({
+          vehiculo_id: vehiculo.id,
+          conductor_id: user.id,
+          ruta_id: null,
+          tipo: tipoViaje,
+          motivo: motivoViaje.trim() || null,
+          km_inicio: parseInt(kmInicio),
+          km_teoricos: kmMostrado ?? null,
+          destino_declarado: paradas.length > 0
+            ? JSON.stringify(paradas.map(p => ({ n: p.nombre, d: p.direccion, lat: p.lat, lng: p.lng })))
+            : motivoViaje.trim() || null,
+          estado: 'en_curso',
+        })
+        .select('id')
+        .single()
+
+      if (errViaje || !nuevoViaje) throw new Error('No se pudo registrar el viaje')
+
+      // 2. Marcar vehículo — solo si el viaje se creó correctamente
+      const { error: errVeh } = await supabase
+        .from('vehiculos')
+        .update({ estado: 'en_uso', combustible })
+        .eq('id', vehiculo.id)
+
+      if (errVeh) {
+        // Rollback: eliminar el viaje recién creado para evitar desincronización
+        await supabase.from('viajes_flota').delete().eq('id', nuevoViaje.id)
+        throw new Error('No se pudo actualizar el vehículo')
+      }
+
+      router.push(`/flota/viaje/${nuevoViaje.id}`)
+    } catch (e) {
+      alert((e as Error).message)
+    } finally {
+      setGuardando(false)
+    }
   }
 
   const paso2Ok = tipoViaje === 'reparto' || motivoViaje.trim().length > 0
