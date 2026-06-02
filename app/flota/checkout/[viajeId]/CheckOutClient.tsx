@@ -136,7 +136,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
   const desvio = kmRecorridos && viaje.km_teoricos ? kmRecorridos - viaje.km_teoricos : null
   const desvioPorc = desvio && viaje.km_teoricos ? (desvio / viaje.km_teoricos) * 100 : null
   const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
-  const listo = !!fotoKmFin && !!kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0) && fotos360ok && !!fotoMarcador && !!combustibleFin
+  const listo = !!kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0) && !!combustibleFin
 
   // ── Análisis IA: Odómetro ────────────────────────────────────────────────────
   async function analizarOdometro(file: File) {
