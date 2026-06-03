@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Truck, Plus, History, BarChart3 } from 'lucide-react'
+import { Truck, Plus, History, BarChart3, Home } from 'lucide-react'
 
 const G = '#F97316'
 const G_RGB = '249,115,22'
 
 const items = [
+  { href: '/',                icon: Home,     label: 'Inicio',    exact: true  },
   { href: '/flota',           icon: Truck,    label: 'Flota',     exact: true  },
   { href: '/flota/checkin',   icon: Plus,     label: 'Salida',    exact: false },
   { href: '/flota/historial', icon: History,  label: 'Historial', exact: false },
