@@ -115,11 +115,11 @@ body {
 }
 
 /* ── Anti-overflow horizontal global (mobile) ──
-   Garantiza que nada se salga del ancho de pantalla en iPhone */
+   Usa overflow-x: clip (no 'hidden') para NO romper el scroll vertical
+   del documento en iOS. 'clip' recorta sin crear contenedor de scroll. */
 @media (max-width: 1023px) {
-  html, body { overflow-x: hidden; max-width: 100vw; }
-  /* Cualquier elemento ancho no fuerza scroll horizontal */
-  #__next, main { max-width: 100vw; overflow-x: hidden; }
+  body { overflow-x: clip; }
+  main { max-width: 100%; overflow-x: clip; }
 }
 
 /* ── Safe area para el notch (iPhone) ──
