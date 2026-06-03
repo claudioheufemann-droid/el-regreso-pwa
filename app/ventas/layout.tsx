@@ -25,7 +25,7 @@ export default async function VentasLayout({ children }: { children: React.React
         <Sidebar />
       </div>
       <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-24 lg:pb-0">
-        <div className="lg:hidden">
+        <div className="hidden lg:block">
           <PageTabs tabs={TABS} />
         </div>
         {children}

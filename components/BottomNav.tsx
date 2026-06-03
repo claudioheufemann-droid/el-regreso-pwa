@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart2, TrendingUp, Users, Map, Upload, Home, Target } from 'lucide-react'
+import { BarChart2, TrendingUp, Users, Map, Upload, Home, Target, Trophy } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 
 const G = '#D4AF37'
@@ -19,6 +19,7 @@ export default function BottomNav() {
     { href: '/ventas/misiones',     icon: Target,     label: 'Misiones', exact: false },
     { href: '/ventas/clientes',     icon: Users,      label: 'Clientes', exact: false },
     { href: '/ventas/mapa',         icon: Map,        label: 'Mapa',     exact: false },
+    { href: '/ventas/metas',        icon: Trophy,     label: 'Metas',    exact: false },
     ...(isAdmin ? [{ href: '/ventas/admin/cargar', icon: Upload, label: 'Cargar', exact: false }] : []),
   ]
 
