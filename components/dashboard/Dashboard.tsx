@@ -708,34 +708,54 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           </div>
         </div>
 
-        {/* Nav tabs */}
-        <div style={{ display: 'flex', padding: '0 6px 0' }}>
-          {visibleNavItems.map(({ key, label }) => {
-            const isActive = view === key || (key === 'home' && view === 'filter')
-            return (
-              <button key={key} onClick={() => setView(key)} style={{
-                flex: 1, padding: '10px 4px 12px', border: 'none', background: 'transparent',
-                cursor: 'pointer', fontSize: 12, fontWeight: isActive ? 700 : 500,
-                color: isActive ? 'var(--gold)' : 'rgba(255,255,255,0.35)',
-                letterSpacing: 0.2, transition: 'color 0.15s', position: 'relative',
-              }}>
-                {label}
-                {isActive && (
-                  <div style={{
-                    position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
-                    width: 20, height: 2.5, borderRadius: 99,
-                    background: 'var(--gold)',
-                  }} />
-                )}
-              </button>
-            )
-          })}
-        </div>
       </div>
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} avatarUrl={users.find(u => u.email === userEmail)?.avatar_url} />}
 
       <ContentArea />
+
+      {/* ── Bottom nav flotante — vistas del área ── */}
+      <nav style={{
+        position: 'fixed',
+        bottom: 'max(16px, env(safe-area-inset-bottom))',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        background: 'rgba(10,10,10,0.88)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 100,
+        padding: '8px 12px',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
+        zIndex: 50,
+        justifyContent: 'space-around',
+      } as React.CSSProperties}>
+        {visibleNavItems.map(({ key, icon, label }) => {
+          const active = view === key || (key === 'home' && view === 'filter')
+          return (
+            <button key={key} onClick={() => setView(key)} style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              padding: '6px 14px', borderRadius: 80, border: 'none', cursor: 'pointer',
+              background: active ? 'rgba(212,175,55,0.12)' : 'transparent',
+              outline: active ? '1px solid rgba(212,175,55,0.2)' : '1px solid transparent',
+              transition: 'all 0.2s ease',
+              color: active ? '#D4AF37' : 'rgba(255,255,255,0.35)',
+              minWidth: 56,
+            }}>
+              <div style={{ position: 'relative' }}>
+                <span style={{ fontSize: 17 }}>{icon}</span>
+                {active && (
+                  <div style={{ position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: '50%', background: '#D4AF37', boxShadow: '0 0 6px #D4AF37' }} />
+                )}
+              </div>
+              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>{label}</span>
+            </button>
+          )
+        })}
+      </nav>
 
       {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
     </div>
