@@ -317,7 +317,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   // CONTENIDO PRINCIPAL (compartido mobile/desktop)
   // ─────────────────────────────────────────────
   const navItems: { key: View; icon: string; label: string; adminOnly?: boolean }[] = [
-    { key: 'home',       icon: '⊞', label: 'Inicio' },
+    { key: 'home',       icon: '▦',  label: 'Resumen' },
     { key: 'mis-tareas', icon: '👤', label: 'Mis Tareas' },
     { key: 'calendar',   icon: '📅', label: 'Calendario' },
     { key: 'analytics',  icon: '◈',  label: 'Gestión', adminOnly: true },
@@ -733,6 +733,19 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
         zIndex: 50,
         justifyContent: 'space-around',
       } as React.CSSProperties}>
+        {/* Botón Inicio — volver a /gestion */}
+        <button onClick={() => router.push('/gestion')} style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+          padding: '6px 14px', borderRadius: 80, border: '1px solid transparent',
+          cursor: 'pointer', background: 'transparent',
+          color: 'rgba(255,255,255,0.35)', minWidth: 52,
+        }}>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: '0.3px' }}>Inicio</span>
+        </button>
+
         {visibleNavItems.map(({ key, icon, label }) => {
           const active = view === key || (key === 'home' && view === 'filter')
           return (
@@ -743,7 +756,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
               outline: active ? '1px solid rgba(212,175,55,0.2)' : '1px solid transparent',
               transition: 'all 0.2s ease',
               color: active ? '#D4AF37' : 'rgba(255,255,255,0.35)',
-              minWidth: 56,
+              minWidth: 52,
             }}>
               <div style={{ position: 'relative' }}>
                 <span style={{ fontSize: 17 }}>{icon}</span>
