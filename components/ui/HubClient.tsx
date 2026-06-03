@@ -284,9 +284,9 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
         {/* ── HEADER ── */}
         <div style={{ textAlign: 'center', padding: '4px 0 16px' }}>
           {/* Logos — ambas marcas */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, marginBottom: 10 }}>
-            {/* El Regreso */}
-            <div style={{ position: 'relative', width: 90, height: 90, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 8 }}>
+            {/* El Regreso — contenedor mayor para compensar su margen interno */}
+            <div style={{ position: 'relative', width: 120, height: 120, flexShrink: 0 }}>
               <Image
                 src="/logo.png"
                 alt="El Regreso Beer Co."
@@ -296,32 +296,32 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
               />
             </div>
             {/* Separador */}
-            <div style={{ width: 1, height: 48, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.18), transparent)', flexShrink: 0 }} />
+            <div style={{ width: 1, height: 56, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.18), transparent)', flexShrink: 0 }} />
             {/* La Ida */}
-            <LaIdaLogo size={64} />
+            <LaIdaLogo size={88} />
           </div>
 
           {/* Nombre empresa */}
-          <h1 style={{ fontSize: 22, fontWeight: 900, color: '#F4EEDF', letterSpacing: -0.6, margin: '0 0 4px', lineHeight: 1.1 }}>
+          <h1 style={{ fontSize: 18, fontWeight: 900, color: '#F4EEDF', letterSpacing: -0.5, margin: '0 0 3px', lineHeight: 1.1 }}>
             El Regreso Beer
           </h1>
 
           {/* Saludo */}
-          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', margin: '0 0 10px', fontWeight: 500 }}>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', margin: '0 0 9px', fontWeight: 500 }}>
             Hola, <span style={{ color: '#D4AF37', fontWeight: 800 }}>{firstName}</span> 👋
           </p>
 
           {/* Badge rol */}
           <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '5px 14px', borderRadius: 99,
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '4px 12px', borderRadius: 99,
             background: 'rgba(212,175,55,0.08)',
             border: '1px solid rgba(212,175,55,0.18)',
           }}>
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
               <path d="M6 1L7.5 4.5H11L8.5 6.8L9.5 10.5L6 8.5L2.5 10.5L3.5 6.8L1 4.5H4.5L6 1Z" fill="#D4AF37" fillOpacity="0.8"/>
             </svg>
-            <span style={{ fontSize: 11, color: '#D4AF37', fontWeight: 700, letterSpacing: 0.3 }}>
+            <span style={{ fontSize: 10, color: '#D4AF37', fontWeight: 700, letterSpacing: 0.3 }}>
               {isAdmin ? 'Administrador · Acceso total' : 'Acceso Ventas'}
             </span>
           </div>
