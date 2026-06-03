@@ -12,7 +12,7 @@ const AREAS = [
     rgb: '230,126,34',
     code: 'AC',
     href: '/gestion/comercial',
-    img: '/gestion-comercial.jpg',
+    img: '/gestion-comercial.jpg.png',
     imgFallback: 'linear-gradient(135deg, #1a0e00 0%, #2d1a00 50%, #1a0e00 100%)',
   },
   {
@@ -23,7 +23,7 @@ const AREAS = [
     rgb: '91,138,168',
     code: 'AD',
     href: '/gestion/administracion',
-    img: '/gestion-admin.jpg',
+    img: '/gestion-admin.jpg.png',
     imgFallback: 'linear-gradient(135deg, #00111a 0%, #001d2b 50%, #00111a 100%)',
   },
   {
@@ -34,7 +34,7 @@ const AREAS = [
     rgb: '46,204,113',
     code: 'PR',
     href: '/gestion/produccion',
-    img: '/gestion-produccion.jpg',
+    img: '/gestion-produccion.jpg.png',
     imgFallback: 'linear-gradient(135deg, #001a0a 0%, #002b11 50%, #001a0a 100%)',
   },
 ]
@@ -91,7 +91,7 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
 
         {/* ── HEADER ── */}
-        <div style={{ position: 'relative', paddingTop: 'max(env(safe-area-inset-top), 22px)', paddingBottom: 4, marginBottom: 28 }}>
+        <div style={{ position: 'relative', paddingTop: 'max(env(safe-area-inset-top), 16px)', paddingBottom: 0, marginBottom: 18 }}>
           <div style={{ position: 'absolute', top: 0, right: 0 }}>
             <GestionHero />
           </div>
@@ -99,14 +99,14 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
             <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4px', marginBottom: 6 }}>
               {fechaCap}
             </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <h1 style={{ fontSize: 38, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1.5px', lineHeight: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <h1 style={{ fontSize: 30, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1px', lineHeight: 1 }}>
                 Gestión
               </h1>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#D4AF37', display: 'inline-block', boxShadow: '0 0 12px #D4AF37', marginTop: 4 }} />
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#D4AF37', display: 'inline-block', boxShadow: '0 0 10px #D4AF37', marginTop: 2 }} />
             </div>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.32)', fontWeight: 400, maxWidth: 210, lineHeight: 1.5 }}>
-              Administra y optimiza cada área de tu negocio.
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', maxWidth: 210 }}>
+              Administra y optimiza cada área.
             </p>
           </div>
         </div>
@@ -129,7 +129,7 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
         })()}
 
         {/* ── CARDS ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {visibleAreas.map(area => {
             const count = taskCounts[area.key] ?? 0
             return (
@@ -149,7 +149,7 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
                 onTouchEnd={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)' }}
               >
                 {/* Imagen de fondo */}
-                <div style={{ position: 'relative', height: 130 }}>
+                <div style={{ position: 'relative', height: 90 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={area.img}
@@ -163,12 +163,12 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(5,5,5,0.1) 0%, rgba(5,5,5,0.85) 100%)' }} />
                   {/* Badge código — esquina inferior izquierda sobre imagen */}
                   <div style={{
-                    position: 'absolute', bottom: 12, left: 14,
-                    width: 44, height: 44, borderRadius: 13,
+                    position: 'absolute', bottom: 10, left: 12,
+                    width: 36, height: 36, borderRadius: 10,
                     background: `rgba(${area.rgb},0.9)`,
                     border: `1.5px solid rgba(255,255,255,0.15)`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 14, fontWeight: 900, color: '#050505',
+                    fontSize: 11, fontWeight: 900, color: '#050505',
                     backdropFilter: 'blur(8px)',
                     boxShadow: `0 4px 16px rgba(${area.rgb},0.5)`,
                   }}>
@@ -179,7 +179,7 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
                 {/* Contenido inferior */}
                 <div style={{
                   background: `linear-gradient(135deg, rgba(${area.rgb},0.06) 0%, #0a0a0a 100%)`,
-                  padding: '16px 18px 18px',
+                  padding: '12px 14px 14px',
                   position: 'relative',
                 }}>
                   {/* Sparkline fondo */}
@@ -189,10 +189,10 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
 
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 20, fontWeight: 900, color: '#F4EEDF', letterSpacing: -0.5, marginBottom: 5, lineHeight: 1.1 }}>
+                      <p style={{ fontSize: 16, fontWeight: 900, color: '#F4EEDF', letterSpacing: -0.3, marginBottom: 3, lineHeight: 1.1 }}>
                         {area.label}
                       </p>
-                      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', marginBottom: count > 0 ? 12 : 0, lineHeight: 1.5 }}>
+                      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: count > 0 ? 8 : 0, lineHeight: 1.4 }}>
                         {area.description}
                       </p>
                       {count > 0 && (
@@ -207,7 +207,7 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
 
                     {/* Flecha */}
                     <div style={{
-                      width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
+                      width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
                       background: `rgba(${area.rgb},0.15)`,
                       border: `1.5px solid rgba(${area.rgb},0.35)`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
