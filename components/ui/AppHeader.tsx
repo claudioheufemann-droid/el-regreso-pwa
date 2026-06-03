@@ -27,7 +27,7 @@ export default function AppHeader({ eyebrow, title, extraAction }: AppHeaderProp
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '4px 16px 0', marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '4px 0 0', marginBottom: 18 }}>
         <div style={{ minWidth: 0 }}>
           {eyebrow && (
             <p style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4px', marginBottom: 6, textTransform: 'capitalize' }}>

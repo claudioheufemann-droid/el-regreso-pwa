@@ -10,6 +10,7 @@ import {
   PhoneOff, AlertTriangle, Zap, Bell, Activity, X, User,
 } from 'lucide-react'
 import type { ActividadItem } from './page'
+import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { VEND_COLOR, SEG_COLOR } from '@/lib/theme'
 
@@ -623,12 +624,9 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   return (
     <div style={{ padding: isDesktop?'24px 28px 60px':'14px 14px 80px', maxWidth: isDesktop?1400:640, margin:'0 auto', width:'100%' }}>
 
-      {/* ── Encabezado ─────────────────────────────────────────────────── */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, flexWrap:'wrap', gap:12 }}>
-        <div>
-          <h1 style={{ fontSize:22, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.5px', marginBottom:2 }}>Clientes</h1>
-          <p style={{ fontSize:12, color:'var(--muted)' }}>Cartera{periodo ? ` · ${periodo.nombre}` : ''}</p>
-        </div>
+      {/* ── Encabezado estándar ────────────────────────────────────────── */}
+      <AppHeader eyebrow={`Cartera${periodo ? ` · ${periodo.nombre}` : ''}`} title="Clientes" />
+      <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'flex-start', marginBottom:20, flexWrap:'wrap', gap:10 }}>
         <div style={{ display:'flex', gap:10 }}>
           <button onClick={()=>setShowWA(true)}
             style={{ display:'flex', alignItems:'center', gap:6, padding:'9px 16px',

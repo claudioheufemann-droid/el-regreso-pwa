@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { MapPin, CheckCircle, XCircle, Filter, ChevronDown, ChevronUp, Package, TrendingUp, AlertTriangle, Clock } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import { useIsDesktop } from '@/lib/useIsDesktop'
+import AppHeader from '@/components/ui/AppHeader'
 
 const T = '#D4AF37'
 const T_DIM = 'rgba(212,175,55,0.12)'
@@ -458,15 +459,17 @@ export default function HistorialClient({ user, visitas, items, vendedores, deud
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 80 }}>
-      {/* Header */}
-      <div style={{ padding: isDesktop ? '28px 28px 16px' : '16px 16px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <p style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4px', marginBottom: 6 }}>Ventas en terreno</p>
-          <h1 style={{ fontSize: isDesktop ? 'var(--fs-title)' : 26, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1px', lineHeight: 1.1 }}>Historial</h1>
-        </div>
-        <button onClick={() => setShowFiltros(f => !f)} style={{ background: hayFiltros ? T_DIM : 'transparent', border: `1px solid ${hayFiltros ? T_BORDER : 'rgba(255,255,255,0.1)'}`, borderRadius: 8, padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: hayFiltros ? T : 'var(--muted)' }}>
-          <Filter size={14} /><span style={{ fontSize: 12, fontWeight: 600 }}>Filtros{hayFiltros ? ' •' : ''}</span>
-        </button>
+      {/* Header estándar */}
+      <div style={{ padding: isDesktop ? '20px 28px 16px' : '16px 16px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <AppHeader
+          eyebrow="Ventas en terreno"
+          title="Historial"
+          extraAction={
+            <button onClick={() => setShowFiltros(f => !f)} style={{ background: hayFiltros ? T_DIM : 'transparent', border: `1px solid ${hayFiltros ? T_BORDER : 'rgba(255,255,255,0.1)'}`, borderRadius: 8, padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: hayFiltros ? T : 'var(--muted)' }}>
+              <Filter size={14} /><span style={{ fontSize: 12, fontWeight: 600 }}>Filtros{hayFiltros ? ' •' : ''}</span>
+            </button>
+          }
+        />
       </div>
 
       {/* Filtros */}

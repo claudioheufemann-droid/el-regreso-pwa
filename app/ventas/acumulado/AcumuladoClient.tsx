@@ -7,6 +7,7 @@ import type { KpiData, EvoDia, CatRow, TopCliente, MixItem, InsightItem, AlertaI
 import type { Periodo } from '@/lib/types'
 import { TrendingUp, TrendingDown, Users, Award, DollarSign, Droplets, Bell, Lightbulb, ChevronRight, ChevronDown, BarChart2, Target, X } from 'lucide-react'
 import { VEND_COLOR } from '@/lib/theme'
+import AppHeader from '@/components/ui/AppHeader'
 
 // ── Paleta ────────────────────────────────────────────────────────────────────
 // VEND_COLOR viene de lib/theme (fuente única de verdad)
@@ -441,10 +442,9 @@ export default function AcumuladoClient({
   return (
     <div style={{ padding:isDesktop?'24px 28px 60px':'14px 14px 80px', maxWidth:1280, margin:'0 auto', width:'100%' }}>
 
-      {/* Encabezado */}
+      {/* Encabezado estándar */}
+      <AppHeader eyebrow={periodo?.nombre ?? 'Período'} title="Período Acumulado" />
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20, flexWrap:'wrap' }}>
-        <h1 style={{ fontSize:isDesktop?22:18, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.5px' }}>Período Acumulado</h1>
-        <span style={{ fontSize:13, color:'var(--gold)', fontWeight:700 }}>{periodo?.nombre??'Período'}</span>
         <span style={{ background:'rgba(255,255,255,0.05)', border:'1px solid var(--border)', borderRadius:8, padding:'4px 10px', fontSize:11, color:'var(--muted)', fontWeight:600 }}>
           VS {periodoAnteriorNombre}
         </span>

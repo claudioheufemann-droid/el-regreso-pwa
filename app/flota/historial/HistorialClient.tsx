@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, MapPin, Truck, Clock, Navigation2, User } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
+import AppHeader from '@/components/ui/AppHeader'
 
 const F = '#D4AF37'
 
@@ -235,10 +236,7 @@ export default function HistorialClient({ user, viajes }: Props) {
     <div style={{ maxWidth: 800, margin: '0 auto', width: '100%', padding: '20px 16px', paddingBottom: 100 }}>
 
       {/* Header estándar */}
-      <div style={{ marginBottom: 20 }}>
-        <p style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4px', marginBottom: 6, textTransform: 'capitalize' }}>Módulo logística</p>
-        <h1 style={{ fontSize: 26, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1px', lineHeight: 1.1 }}>Historial de viajes</h1>
-      </div>
+      <AppHeader eyebrow="Módulo logística" title="Historial de viajes" />
 
       {/* Stats globales */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>

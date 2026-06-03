@@ -10,6 +10,7 @@ import {
   ChevronDown, ChevronRight, Target, Minus, Plus, ArrowLeft, Sparkles, UserX,
 } from 'lucide-react'
 import type { MisionEnriquecida, ProximaPreview, HistorialSemana, EstadoMision, TipoMision } from './page'
+import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { SEG_COLOR } from '@/lib/theme'
 
@@ -1423,6 +1424,7 @@ export default function MisionesClient({
   // ── Mobile: columna simple ──────────────────────────────────────────────────
   return (
     <div style={{ padding: '12px 12px 80px', maxWidth: 680, margin: '0 auto' }}>
+      <AppHeader title="Misiones" />
       <HeaderResumen misiones={misionesFiltradas} semana={semana} vendedorActual={vendedorActual} isAdmin={isAdmin} isDesktop={false} />
 
       <Controles />

@@ -19,6 +19,7 @@ import {
   type AnalyticsCanal,
   type AnalyticsVendedor,
 } from '@/lib/metas-engine'
+import AppHeader from '@/components/ui/AppHeader'
 
 type Vista = 'diario' | 'semanal' | 'mensual'
 
@@ -1361,10 +1362,8 @@ export default function MetasClient({
   return (
     <div className="px-4 pt-8 pb-16 lg:px-12 lg:pt-10" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
-        <h1 style={{ fontSize: isDesktop ? 32 : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
-          Metas Comerciales
-        </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+        <AppHeader title="Metas Comerciales" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -10 }}>
           <Calendar size={13} color="var(--muted)" />
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>
             Trimestre Mayo–Julio 2026 · Escenario optimista · Días hábiles L-V

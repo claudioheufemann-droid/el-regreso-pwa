@@ -7,6 +7,7 @@ import { useIsDesktop } from '@/lib/useIsDesktop'
 import { Periodo } from '@/lib/types'
 import type { EvolutionDay, ProductRank, ProductBuyer } from './page'
 import { VEND_COLOR as VEND_COLOR_THEME, SEG_COLOR as SEG_COLOR_THEME } from '@/lib/theme'
+import AppHeader from '@/components/ui/AppHeader'
 
 interface ProductoDetalle {
   producto: string
@@ -1644,6 +1645,12 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
 
   return (
     <div style={{ padding: isDesktop ? '20px 24px 60px' : '12px 12px 80px', maxWidth: 1400, margin: '0 auto' }}>
+
+      {/* === HEADER ESTÁNDAR === */}
+      <AppHeader
+        eyebrow={new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
+        title="Ventas"
+      />
 
       {/* === POPUP PLAN SEMANAL (solo lunes) === */}
       {showPlanModal && (
