@@ -252,13 +252,13 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
   const enUso = vehiculos.filter(v => v.estado === 'en_uso').length
 
   return (
-    <div style={{ padding: isDesktop ? 'var(--sp-3)' : 'max(env(safe-area-inset-top), 20px) 14px 16px', maxWidth: 800, margin: '0 auto', width: '100%' }}>
-      {/* Header */}
-      <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
-        <p style={{ fontSize: isDesktop ? 11 : 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: isDesktop ? 4 : 3 }}>
+    <div style={{ padding: isDesktop ? 'var(--sp-3)' : '20px 14px 16px', maxWidth: 800, margin: '0 auto', width: '100%' }}>
+      {/* Header estándar */}
+      <div style={{ marginBottom: isDesktop ? 28 : 20 }}>
+        <p style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4px', marginBottom: 6, textTransform: 'capitalize' }}>
           {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
-        <h1 style={{ fontSize: isDesktop ? 'var(--fs-title)' : 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', marginBottom: 0 }}>
+        <h1 style={{ fontSize: isDesktop ? 'var(--fs-title)' : 28, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1px', lineHeight: 1.1 }}>
           Bitácora de Flota
         </h1>
       </div>
