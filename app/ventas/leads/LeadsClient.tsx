@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Loader2, MessageCircle, Phone, Search, Target, Droplets, Star, MapPin, Globe, RefreshCw } from 'lucide-react'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import AppHeader from '@/components/ui/AppHeader'
 
 interface Lead {
   id: number; nombre: string; region: string | null; ciudad: string | null
@@ -87,12 +88,9 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div style={{ padding: '20px 16px 60px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>🎯 Posibles clientes (Leads)</h1>
-          <p style={{ fontSize: 12, color: 'var(--muted)' }}>Prospectos ordenados por potencial de venta estimado</p>
-        </div>
+      {/* Header estándar */}
+      <AppHeader eyebrow="Prospectos por potencial" title="Leads" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           {isAdmin && (
             <button onClick={importar} disabled={importing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', color: '#8A6D1F', fontSize: 12, fontWeight: 700, cursor: importing ? 'not-allowed' : 'pointer' }}>
