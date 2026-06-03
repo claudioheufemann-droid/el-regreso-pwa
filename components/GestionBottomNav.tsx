@@ -2,16 +2,16 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, LayoutGrid, Briefcase, Factory } from 'lucide-react'
+import { Home, Briefcase, Building2, Factory } from 'lucide-react'
 
 const G = '#D4AF37'
 const G_RGB = '212,175,55'
 
 const items = [
-  { href: '/',                    icon: Home,        label: 'Inicio',    exact: true  },
-  { href: '/gestion',             icon: LayoutGrid,  label: 'Gestión',   exact: true  },
-  { href: '/gestion/comercial',   icon: Briefcase,   label: 'Comercial', exact: false },
-  { href: '/gestion/produccion',  icon: Factory,     label: 'Producción',exact: false },
+  { href: '/',                       icon: Home,      label: 'Inicio',     exact: true  },
+  { href: '/gestion/comercial',      icon: Briefcase, label: 'Comercial',  exact: false },
+  { href: '/gestion/administracion', icon: Building2, label: 'Admin',      exact: false },
+  { href: '/gestion/produccion',     icon: Factory,   label: 'Producción', exact: false },
 ]
 
 export default function GestionBottomNav() {
