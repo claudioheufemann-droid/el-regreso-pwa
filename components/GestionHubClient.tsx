@@ -148,72 +148,67 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
                 onTouchStart={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(0.982)' }}
                 onTouchEnd={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)' }}
               >
-                {/* Imagen de fondo */}
-                <div style={{ position: 'relative', height: 90 }}>
-                  {/* Fallback gradient (debajo) */}
-                  <div style={{ position: 'absolute', inset: 0, background: area.imgFallback, zIndex: 0 }} />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`${area.img}?v=2`}
-                    alt={area.label}
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', zIndex: 1 }}
-                  />
-                  {/* Overlay degradado abajo */}
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(5,5,5,0.1) 0%, rgba(5,5,5,0.85) 100%)', zIndex: 2 }} />
-                  {/* Badge código — esquina inferior izquierda sobre imagen */}
-                  <div style={{
-                    position: 'absolute', bottom: 10, left: 12, zIndex: 3,
-                    width: 36, height: 36, borderRadius: 10,
-                    background: `rgba(${area.rgb},0.9)`,
-                    border: `1.5px solid rgba(255,255,255,0.15)`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 900, color: '#050505',
-                    backdropFilter: 'blur(8px)',
-                    boxShadow: `0 4px 16px rgba(${area.rgb},0.5)`,
-                  }}>
-                    {area.code}
-                  </div>
-                </div>
-
-                {/* Contenido inferior */}
                 <div style={{
-                  background: `linear-gradient(135deg, rgba(${area.rgb},0.06) 0%, #0a0a0a 100%)`,
-                  padding: '12px 14px 14px',
-                  position: 'relative',
+                  background: `linear-gradient(135deg, rgba(${area.rgb},0.07) 0%, #0a0a0a 100%)`,
+                  display: 'flex', alignItems: 'stretch', gap: 14,
+                  padding: 14, position: 'relative',
                 }}>
                   {/* Sparkline fondo */}
-                  <div style={{ position: 'absolute', bottom: 16, right: 64, pointerEvents: 'none' }}>
+                  <div style={{ position: 'absolute', bottom: 16, right: 60, pointerEvents: 'none', zIndex: 0 }}>
                     <Spark color={area.color} />
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 16, fontWeight: 900, color: '#F4EEDF', letterSpacing: -0.3, marginBottom: 3, lineHeight: 1.1 }}>
+                  {/* Imagen cuadrada izquierda */}
+                  <div style={{ position: 'relative', width: 110, height: 110, borderRadius: 16, overflow: 'hidden', flexShrink: 0 }}>
+                    {/* Fallback gradient */}
+                    <div style={{ position: 'absolute', inset: 0, background: area.imgFallback, zIndex: 0 }} />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`${area.img}?v=2`}
+                      alt={area.label}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', zIndex: 1 }}
+                    />
+                    {/* Badge código */}
+                    <div style={{
+                      position: 'absolute', bottom: 8, left: 8, zIndex: 2,
+                      width: 38, height: 38, borderRadius: 11,
+                      background: `rgba(${area.rgb},0.95)`,
+                      border: `1.5px solid rgba(255,255,255,0.18)`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, fontWeight: 900, color: '#050505',
+                      boxShadow: `0 4px 16px rgba(${area.rgb},0.5)`,
+                    }}>
+                      {area.code}
+                    </div>
+                  </div>
+
+                  {/* Contenido derecha */}
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
+                      <p style={{ fontSize: 17, fontWeight: 900, color: '#F4EEDF', letterSpacing: -0.4, lineHeight: 1.1, flex: 1, minWidth: 0 }}>
                         {area.label}
                       </p>
-                      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: count > 0 ? 8 : 0, lineHeight: 1.4 }}>
-                        {area.description}
-                      </p>
-                      {count > 0 && (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: `rgba(${area.rgb},0.1)`, border: `1px solid rgba(${area.rgb},0.22)`, borderRadius: 20, padding: '5px 11px' }}>
-                          <CheckSquare size={10} color={area.color} />
-                          <span style={{ fontSize: 10, fontWeight: 700, color: area.color }}>
-                            {count} {count === 1 ? 'tarea activa' : 'tareas activas'}
-                          </span>
-                        </div>
-                      )}
+                      {/* Flecha */}
+                      <div style={{
+                        width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+                        background: `rgba(${area.rgb},0.15)`,
+                        border: `1.5px solid rgba(${area.rgb},0.4)`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 20, color: area.color, fontWeight: 900,
+                        boxShadow: `0 4px 16px rgba(${area.rgb},0.25)`,
+                      }}>›</div>
                     </div>
-
-                    {/* Flecha */}
-                    <div style={{
-                      width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-                      background: `rgba(${area.rgb},0.15)`,
-                      border: `1.5px solid rgba(${area.rgb},0.35)`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 20, color: area.color, fontWeight: 900,
-                      boxShadow: `0 4px 16px rgba(${area.rgb},0.25)`,
-                      marginTop: 2,
-                    }}>›</div>
+                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.38)', marginBottom: count > 0 ? 9 : 0, lineHeight: 1.4 }}>
+                      {area.description}
+                    </p>
+                    {count > 0 && (
+                      <div style={{ display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 5, background: `rgba(${area.rgb},0.1)`, border: `1px solid rgba(${area.rgb},0.22)`, borderRadius: 20, padding: '5px 11px' }}>
+                        <CheckSquare size={10} color={area.color} />
+                        <span style={{ fontSize: 10, fontWeight: 700, color: area.color }}>
+                          {count} {count === 1 ? 'tarea activa' : 'tareas activas'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
