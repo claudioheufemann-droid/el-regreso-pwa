@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Truck, Plus, History, BarChart3, Home } from 'lucide-react'
 
-const G = '#F97316'
-const G_RGB = '249,115,22'
+const G = '#D4AF37'
+const G_RGB = '212,175,55'
 
 const items = [
   { href: '/',                icon: Home,     label: 'Inicio',    exact: true  },

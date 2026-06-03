@@ -7,15 +7,15 @@ import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
 
-const F = '#F97316'
-const F_BORDER = 'rgba(249,115,22,0.28)'
+const F = '#D4AF37'
+const F_BORDER = 'rgba(212,175,55,0.28)'
 
 const NIVELES_COMB = [
-  { value: 'lleno',        label: 'Lleno',   fill: 6, color: '#4ADE80' },
-  { value: 'tres_cuartos', label: '3/4',     fill: 5, color: '#86EFAC' },
+  { value: 'lleno',        label: 'Lleno',   fill: 6, color: '#5A8A4A' },
+  { value: 'tres_cuartos', label: '3/4',     fill: 5, color: '#7CA86A' },
   { value: 'medio',        label: '1/2',     fill: 4, color: '#FBBF24' },
-  { value: 'cuarto',       label: '1/4',     fill: 2, color: '#F97316' },
-  { value: 'reserva',      label: 'Reserva', fill: 1, color: '#EF4444' },
+  { value: 'cuarto',       label: '1/4',     fill: 2, color: '#D4AF37' },
+  { value: 'reserva',      label: 'Reserva', fill: 1, color: '#B5543E' },
   { value: 'vacio',        label: 'Vacío',   fill: 0, color: '#6B0000' },
 ] as const
 
@@ -69,12 +69,12 @@ const ANGULOS_360 = [
 function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji: string; onCaptura: (url: string, file: File) => void; capturada: boolean }) {
   const ref = useRef<HTMLInputElement>(null)
   return (
-    <div onClick={() => ref.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 12px', borderRadius: 10, cursor: 'pointer', flexShrink: 0, background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `1px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.08)'}` }}>
+    <div onClick={() => ref.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 12px', borderRadius: 10, cursor: 'pointer', flexShrink: 0, background: capturada ? 'rgba(90,138,74,0.07)' : '#1C1C1C', border: `1px solid ${capturada ? '#5A8A4A' : 'rgba(255,255,255,0.08)'}` }}>
       <input ref={ref} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(URL.createObjectURL(f), f) }}
       />
       <span style={{ fontSize: 15 }}>{capturada ? '✅' : emoji}</span>
-      <span style={{ fontSize: 12, fontWeight: 700, color: capturada ? '#4ADE80' : 'var(--muted)', flex: 1 }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: capturada ? '#5A8A4A' : 'var(--muted)', flex: 1 }}>{label}</span>
       {!capturada && <Camera size={13} color="var(--muted)" />}
     </div>
   )
@@ -249,8 +249,8 @@ export default function CheckOutClient({ user, viaje }: Props) {
             capturada={!!fotoKmFin} />
         </div>
         {analizandoOdo && (
-          <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+          <p style={{ fontSize: 11, color: '#D4AF37', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #D4AF37', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
             Leyendo kilometraje…
           </p>
         )}
@@ -263,10 +263,10 @@ export default function CheckOutClient({ user, viaje }: Props) {
           value={kmFin} onChange={e => { setKmFin(e.target.value.replace(/\D/g, '')); setKmLeido(null) }}
           placeholder="Ej: 45250"
           type="text" inputMode="numeric"
-          style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${kmLeido ? '#4ADE80' : kmFin ? F_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', marginBottom: 4 }}
+          style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${kmLeido ? '#5A8A4A' : kmFin ? F_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', marginBottom: 4 }}
         />
         {kmLeido && !analizandoOdo && (
-          <p style={{ fontSize: 11, color: '#4ADE80', marginBottom: 12, textAlign: 'center' }}>✨ Leído de la foto por IA · puedes corregir si es necesario</p>
+          <p style={{ fontSize: 11, color: '#5A8A4A', marginBottom: 12, textAlign: 'center' }}>✨ Leído de la foto por IA · puedes corregir si es necesario</p>
         )}
         {!kmLeido && fotoKmFin && !analizandoOdo && (
           <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, textAlign: 'center' }}>Ingresa el km manualmente</p>
@@ -274,19 +274,19 @@ export default function CheckOutClient({ user, viaje }: Props) {
 
         {/* Km recorridos + desvío */}
         {kmFin && parseInt(kmFin) > (viaje.km_inicio ?? 0) && (
-          <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)' }}>
+          <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)' }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: F }}>
               Recorrido: {kmRecorridos?.toLocaleString('es-CL')} km
             </p>
             {desvioPorc !== null && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 {Math.abs(desvioPorc) > 25
-                  ? <AlertTriangle size={14} color="#FF5555" />
+                  ? <AlertTriangle size={14} color="#B5543E" />
                   : Math.abs(desvioPorc) > 10
-                  ? <AlertTriangle size={14} color="#F59E0B" />
-                  : <CheckCircle size={14} color="#4ADE80" />
+                  ? <AlertTriangle size={14} color="#D4AF37" />
+                  : <CheckCircle size={14} color="#5A8A4A" />
                 }
-                <p style={{ fontSize: 12, color: Math.abs(desvioPorc) > 25 ? '#FF5555' : Math.abs(desvioPorc) > 10 ? '#F59E0B' : '#4ADE80', fontWeight: 600 }}>
+                <p style={{ fontSize: 12, color: Math.abs(desvioPorc) > 25 ? '#B5543E' : Math.abs(desvioPorc) > 10 ? '#D4AF37' : '#5A8A4A', fontWeight: 600 }}>
                   Desvío: {desvio! > 0 ? '+' : ''}{desvio} km ({desvioPorc.toFixed(0)}%)
                   {Math.abs(desvioPorc) > 25 ? ' — Desvío alto' : Math.abs(desvioPorc) > 10 ? ' — Desvío moderado' : ' — Normal'}
                 </p>
@@ -298,7 +298,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
         {/* ── Inspección 360° ───────────────────────────────────────────────── */}
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
           Inspección 360° *
-          <span style={{ fontSize: 10, fontWeight: 500, color: fotos360ok ? '#4ADE80' : 'var(--muted)', marginLeft: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 500, color: fotos360ok ? '#5A8A4A' : 'var(--muted)', marginLeft: 8 }}>
             {Object.keys(fotos360).length}/4
           </span>
         </p>
@@ -319,8 +319,8 @@ export default function CheckOutClient({ user, viaje }: Props) {
         </div>
 
         {analizandoComb && (
-          <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+          <p style={{ fontSize: 11, color: '#D4AF37', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #D4AF37', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
             Leyendo nivel de estanque…
           </p>
         )}
@@ -346,13 +346,13 @@ export default function CheckOutClient({ user, viaje }: Props) {
         )}
 
         {/* ── Carga combustible (opcional) ─────────────────────────────────── */}
-        <button onClick={() => setShowCargaComb(s => !s)} style={{ width: '100%', padding: '13px 16px', borderRadius: 12, border: `1px solid ${showCargaComb ? F_BORDER : 'rgba(255,255,255,0.08)'}`, background: showCargaComb ? 'rgba(249,115,22,0.07)' : 'transparent', color: showCargaComb ? F : 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, marginBottom: showCargaComb ? 0 : 16 }}>
+        <button onClick={() => setShowCargaComb(s => !s)} style={{ width: '100%', padding: '13px 16px', borderRadius: 12, border: `1px solid ${showCargaComb ? F_BORDER : 'rgba(255,255,255,0.08)'}`, background: showCargaComb ? 'rgba(212,175,55,0.07)' : 'transparent', color: showCargaComb ? F : 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, marginBottom: showCargaComb ? 0 : 16 }}>
           <Fuel size={16} />
           Registrar carga de combustible (opcional)
         </button>
 
         {showCargaComb && (
-          <div style={{ background: '#131313', border: '1px solid rgba(249,115,22,0.15)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 16px', marginBottom: 16 }}>
+          <div style={{ background: '#131313', border: '1px solid rgba(212,175,55,0.15)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 16px', marginBottom: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               <div>
                 <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>Litros</label>
@@ -368,9 +368,9 @@ export default function CheckOutClient({ user, viaje }: Props) {
             <input ref={boletaRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
               onChange={e => { const f = e.target.files?.[0]; if (f) setFotoBoleta(URL.createObjectURL(f)) }}
             />
-            <div onClick={() => boletaRef.current?.click()} style={{ height: 60, borderRadius: 10, cursor: 'pointer', background: fotoBoleta ? 'rgba(74,222,128,0.07)' : 'rgba(0,0,0,0.3)', border: `1px solid ${fotoBoleta ? '#4ADE80' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              {fotoBoleta ? <CheckCircle size={18} color="#4ADE80" /> : <Camera size={16} color="var(--muted)" />}
-              <span style={{ fontSize: 12, color: fotoBoleta ? '#4ADE80' : 'var(--muted)', fontWeight: 600 }}>
+            <div onClick={() => boletaRef.current?.click()} style={{ height: 60, borderRadius: 10, cursor: 'pointer', background: fotoBoleta ? 'rgba(90,138,74,0.07)' : 'rgba(0,0,0,0.3)', border: `1px solid ${fotoBoleta ? '#5A8A4A' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              {fotoBoleta ? <CheckCircle size={18} color="#5A8A4A" /> : <Camera size={16} color="var(--muted)" />}
+              <span style={{ fontSize: 12, color: fotoBoleta ? '#5A8A4A' : 'var(--muted)', fontWeight: 600 }}>
                 {fotoBoleta ? 'Boleta capturada' : 'Foto de boleta (opcional)'}
               </span>
             </div>

@@ -61,7 +61,7 @@ export default async function VehiculoActivoPage({ params }: { params: Promise<{
         await (await sb).from('vehiculos').update({ estado: 'disponible' }).eq('id', vehiculoId)
         redirect('/flota')
       }}>
-        <button type="submit" style={{ padding: '14px 28px', borderRadius: 12, border: 'none', cursor: 'pointer', background: '#F97316', color: '#fff', fontSize: 15, fontWeight: 800 }}>
+        <button type="submit" style={{ padding: '14px 28px', borderRadius: 12, border: 'none', cursor: 'pointer', background: '#D4AF37', color: '#fff', fontSize: 15, fontWeight: 800 }}>
           Liberar vehículo
         </button>
       </form>

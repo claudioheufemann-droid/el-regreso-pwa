@@ -7,7 +7,7 @@ import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
-const F = '#F97316'
+const F = '#D4AF37'
 
 interface Parada {
   id: string
@@ -137,9 +137,9 @@ function InputDireccionValidada({ onConfirmar, onCancelar }: {
   }
 
   return (
-    <div style={{ background: '#141414', border: `1px solid rgba(249,115,22,0.28)`, borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
+    <div style={{ background: '#141414', border: `1px solid rgba(212,175,55,0.28)`, borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <MapPin size={14} color={seleccionada ? '#4ADE80' : 'var(--muted)'} style={{ flexShrink: 0 }} />
+        <MapPin size={14} color={seleccionada ? '#5A8A4A' : 'var(--muted)'} style={{ flexShrink: 0 }} />
         <input autoFocus value={query} onChange={e => handleChange(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !sugerencias.length && confirmar()}
           placeholder="Ej: Picarte 3000"
@@ -150,15 +150,15 @@ function InputDireccionValidada({ onConfirmar, onCancelar }: {
         </button>
       </div>
       {seleccionada && (
-        <div style={{ padding: '8px 14px', background: 'rgba(74,222,128,0.06)', borderBottom: '1px solid rgba(74,222,128,0.15)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <CheckCircle size={12} color="#4ADE80" />
-          <span style={{ fontSize: 11, color: '#4ADE80', fontWeight: 700 }}>Dirección verificada en el mapa</span>
+        <div style={{ padding: '8px 14px', background: 'rgba(90,138,74,0.06)', borderBottom: '1px solid rgba(90,138,74,0.15)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <CheckCircle size={12} color="#5A8A4A" />
+          <span style={{ fontSize: 11, color: '#5A8A4A', fontWeight: 700 }}>Dirección verificada en el mapa</span>
         </div>
       )}
       {sugerencias.map(s => (
         <div key={s.place_id} onMouseDown={() => elegir(s)}
           style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'flex-start', gap: 10 }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(249,115,22,0.08)')}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.08)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
           <MapPin size={13} color={F} style={{ flexShrink: 0, marginTop: 2 }} />
           <div style={{ minWidth: 0 }}>
@@ -176,7 +176,7 @@ function InputDireccionValidada({ onConfirmar, onCancelar }: {
       )}
       <div style={{ display: 'flex', gap: 6, padding: '10px 12px' }}>
         <button onMouseDown={confirmar} disabled={!query.trim()}
-          style={{ flex: 1, padding: '10px', borderRadius: 9, border: 'none', cursor: query.trim() ? 'pointer' : 'not-allowed', background: query.trim() ? (seleccionada ? '#4ADE80' : F) : 'rgba(255,255,255,0.06)', color: query.trim() ? (seleccionada ? '#000' : '#fff') : 'var(--muted)', fontSize: 13, fontWeight: 700 }}>
+          style={{ flex: 1, padding: '10px', borderRadius: 9, border: 'none', cursor: query.trim() ? 'pointer' : 'not-allowed', background: query.trim() ? (seleccionada ? '#5A8A4A' : F) : 'rgba(255,255,255,0.06)', color: query.trim() ? (seleccionada ? '#000' : '#fff') : 'var(--muted)', fontSize: 13, fontWeight: 700 }}>
           {seleccionada ? '✓ Confirmar dirección' : 'Agregar parada'}
         </button>
         <button onMouseDown={onCancelar} style={{ padding: '10px 14px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.06)', color: 'var(--muted)', fontSize: 13 }}>
@@ -261,17 +261,17 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 100 }}>
         {/* Banner viaje terminado */}
         {completado && (
-          <div style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <CheckCircle size={22} color="#4ADE80" style={{ flexShrink: 0 }} />
+          <div style={{ background: 'rgba(90,138,74,0.08)', border: '1px solid rgba(90,138,74,0.25)', borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <CheckCircle size={22} color="#5A8A4A" style={{ flexShrink: 0 }} />
             <div>
-              <p style={{ fontSize: 14, fontWeight: 900, color: '#4ADE80' }}>Viaje terminado</p>
+              <p style={{ fontSize: 14, fontWeight: 900, color: '#5A8A4A' }}>Viaje terminado</p>
               <p style={{ fontSize: 11, color: 'var(--muted)' }}>Este viaje fue completado exitosamente</p>
             </div>
           </div>
         )}
 
         {/* Info del viaje */}
-        <div style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.18)', borderRadius: 14, padding: '14px 16px' }}>
+        <div style={{ background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.18)', borderRadius: 14, padding: '14px 16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 3 }}>Conductor</p>
@@ -323,12 +323,12 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
           {paradas.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
               {paradas.map((p, i) => (
-                <div key={p.id} style={{ background: '#141414', border: `1px solid ${p.verificada ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(249,115,22,0.6)', minWidth: 16, marginTop: 2 }}>{i + 1}</span>
+                <div key={p.id} style={{ background: '#141414', border: `1px solid ${p.verificada ? 'rgba(90,138,74,0.2)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.6)', minWidth: 16, marginTop: 2 }}>{i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
-                      {p.verificada && <CheckCircle size={11} color="#4ADE80" style={{ flexShrink: 0 }} />}
+                      {p.verificada && <CheckCircle size={11} color="#5A8A4A" style={{ flexShrink: 0 }} />}
                     </div>
                     {p.direccion && p.direccion !== p.nombre && (
                       <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.direccion}</p>
@@ -363,9 +363,9 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
 
         {/* Google Maps — siempre visible */}
         <a href={urlGoogleMaps(paradas)} target="_blank" rel="noopener noreferrer"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '15px', borderRadius: 12, background: 'rgba(66,133,244,0.12)', border: '1px solid rgba(66,133,244,0.3)', color: '#6BA3F5', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '15px', borderRadius: 12, background: 'rgba(66,133,244,0.12)', border: '1px solid rgba(66,133,244,0.3)', color: '#F4EEDF', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6BA3F5"/>
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#F4EEDF"/>
           </svg>
           {paradas.length > 0 ? `Ver ruta en Google Maps (${paradas.length} paradas)` : 'Abrir Google Maps'}
         </a>
@@ -394,7 +394,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                 Cancelar
               </button>
               <button onClick={terminarViaje} disabled={guardando}
-                style={{ flex: 1, padding: '15px', borderRadius: 12, border: 'none', background: '#4ADE80', color: '#000', fontSize: 15, fontWeight: 900, cursor: 'pointer' }}>
+                style={{ flex: 1, padding: '15px', borderRadius: 12, border: 'none', background: '#5A8A4A', color: '#000', fontSize: 15, fontWeight: 900, cursor: 'pointer' }}>
                 {guardando ? 'Cerrando…' : 'Confirmar'}
               </button>
             </div>
@@ -406,9 +406,9 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
       <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', background: '#0F0F0F', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
         {completado ? (
           <>
-            <div style={{ flex: 1, padding: '16px', borderRadius: 14, background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <CheckCircle size={18} color="#4ADE80" />
-              <span style={{ fontSize: 15, fontWeight: 900, color: '#4ADE80' }}>Viaje terminado</span>
+            <div style={{ flex: 1, padding: '16px', borderRadius: 14, background: 'rgba(90,138,74,0.12)', border: '1px solid rgba(90,138,74,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <CheckCircle size={18} color="#5A8A4A" />
+              <span style={{ fontSize: 15, fontWeight: 900, color: '#5A8A4A' }}>Viaje terminado</span>
             </div>
             <button onClick={() => router.push('/flota')}
               style={{ flex: '0 0 auto', padding: '16px 20px', borderRadius: 14, border: 'none', background: F, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
@@ -418,14 +418,14 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
         ) : (
           <>
             <a href={urlGoogleMaps(paradas)} target="_blank" rel="noopener noreferrer"
-              style={{ flex: 1, padding: '16px', borderRadius: 14, background: 'rgba(66,133,244,0.15)', border: '1px solid rgba(66,133,244,0.35)', color: '#6BA3F5', fontSize: 15, fontWeight: 900, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+              style={{ flex: 1, padding: '16px', borderRadius: 14, background: 'rgba(66,133,244,0.15)', border: '1px solid rgba(66,133,244,0.35)', color: '#F4EEDF', fontSize: 15, fontWeight: 900, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6BA3F5"/>
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#F4EEDF"/>
               </svg>
               Iniciar viaje
             </a>
             <button onClick={() => setTerminando(true)}
-              style={{ flex: 1, padding: '16px', borderRadius: 14, border: 'none', background: '#4ADE80', color: '#000', fontSize: 15, fontWeight: 900, cursor: 'pointer' }}>
+              style={{ flex: 1, padding: '16px', borderRadius: 14, border: 'none', background: '#5A8A4A', color: '#000', fontSize: 15, fontWeight: 900, cursor: 'pointer' }}>
               Viaje terminado ✓
             </button>
           </>

@@ -10,16 +10,16 @@ import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
 
-const F = '#F97316'
-const F_DIM = 'rgba(249,115,22,0.12)'
-const F_BORDER = 'rgba(249,115,22,0.28)'
+const F = '#D4AF37'
+const F_DIM = 'rgba(212,175,55,0.12)'
+const F_BORDER = 'rgba(212,175,55,0.28)'
 
 const NIVELES_COMB = [
-  { value: 'lleno',        label: 'Lleno',   fill: 6, color: '#4ADE80' },
-  { value: 'tres_cuartos', label: '3/4',     fill: 5, color: '#86EFAC' },
+  { value: 'lleno',        label: 'Lleno',   fill: 6, color: '#5A8A4A' },
+  { value: 'tres_cuartos', label: '3/4',     fill: 5, color: '#7CA86A' },
   { value: 'medio',        label: '1/2',     fill: 4, color: '#FBBF24' },
-  { value: 'cuarto',       label: '1/4',     fill: 2, color: '#F97316' },
-  { value: 'reserva',      label: 'Reserva', fill: 1, color: '#EF4444' },
+  { value: 'cuarto',       label: '1/4',     fill: 2, color: '#D4AF37' },
+  { value: 'reserva',      label: 'Reserva', fill: 1, color: '#B5543E' },
   { value: 'vacio',        label: 'Vacío',   fill: 0, color: '#6B0000' },
 ] as const
 
@@ -145,7 +145,7 @@ function InputDireccionValidada({
     <div style={{ background: '#141414', border: `1px solid ${F_BORDER}`, borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
       {/* Input */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <MapPin size={14} color={seleccionada ? '#4ADE80' : 'var(--muted)'} style={{ flexShrink: 0 }} />
+        <MapPin size={14} color={seleccionada ? '#5A8A4A' : 'var(--muted)'} style={{ flexShrink: 0 }} />
         <input
           autoFocus
           value={query}
@@ -164,9 +164,9 @@ function InputDireccionValidada({
 
       {/* Verificada badge */}
       {seleccionada && (
-        <div style={{ padding: '8px 14px', background: 'rgba(74,222,128,0.06)', borderBottom: '1px solid rgba(74,222,128,0.15)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <CheckCircle size={12} color="#4ADE80" />
-          <span style={{ fontSize: 11, color: '#4ADE80', fontWeight: 700 }}>Dirección verificada en el mapa</span>
+        <div style={{ padding: '8px 14px', background: 'rgba(90,138,74,0.06)', borderBottom: '1px solid rgba(90,138,74,0.15)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <CheckCircle size={12} color="#5A8A4A" />
+          <span style={{ fontSize: 11, color: '#5A8A4A', fontWeight: 700 }}>Dirección verificada en el mapa</span>
         </div>
       )}
 
@@ -174,7 +174,7 @@ function InputDireccionValidada({
       {sugerencias.length > 0 && sugerencias.map(s => (
         <div key={s.place_id} onMouseDown={() => elegir(s)}
           style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'flex-start', gap: 10 }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(249,115,22,0.08)')}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.08)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
           <MapPin size={13} color={F} style={{ flexShrink: 0, marginTop: 2 }} />
           <div style={{ minWidth: 0 }}>
@@ -200,7 +200,7 @@ function InputDireccionValidada({
         <button
           onMouseDown={confirmar}
           disabled={!query.trim()}
-          style={{ flex: 1, padding: '10px', borderRadius: 9, border: 'none', cursor: query.trim() ? 'pointer' : 'not-allowed', background: query.trim() ? (seleccionada ? '#4ADE80' : F) : 'rgba(255,255,255,0.06)', color: query.trim() ? (seleccionada ? '#000' : '#fff') : 'var(--muted)', fontSize: 13, fontWeight: 700 }}>
+          style={{ flex: 1, padding: '10px', borderRadius: 9, border: 'none', cursor: query.trim() ? 'pointer' : 'not-allowed', background: query.trim() ? (seleccionada ? '#5A8A4A' : F) : 'rgba(255,255,255,0.06)', color: query.trim() ? (seleccionada ? '#000' : '#fff') : 'var(--muted)', fontSize: 13, fontWeight: 700 }}>
           {seleccionada ? '✓ Confirmar dirección' : 'Agregar parada'}
         </button>
         <button onMouseDown={onCancelar} style={{ padding: '10px 14px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.06)', color: 'var(--muted)', fontSize: 13 }}>
@@ -231,11 +231,11 @@ function StepBar({ paso, total }: { paso: number; total: number }) {
 function FotoSlot({ label, emoji, onCaptura, capturada }: { label: string; emoji: string; onCaptura: (url: string, file: File) => void; capturada: boolean }) {
   const ref = useRef<HTMLInputElement>(null)
   return (
-    <div onClick={() => ref.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 12px', borderRadius: 10, cursor: 'pointer', flexShrink: 0, background: capturada ? 'rgba(74,222,128,0.07)' : '#1C1C1C', border: `1px solid ${capturada ? '#4ADE80' : 'rgba(255,255,255,0.08)'}` }}>
+    <div onClick={() => ref.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 12px', borderRadius: 10, cursor: 'pointer', flexShrink: 0, background: capturada ? 'rgba(90,138,74,0.07)' : '#1C1C1C', border: `1px solid ${capturada ? '#5A8A4A' : 'rgba(255,255,255,0.08)'}` }}>
       <input ref={ref} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(URL.createObjectURL(f), f) }} />
       <span style={{ fontSize: 15 }}>{capturada ? '✅' : emoji}</span>
-      <span style={{ fontSize: 12, fontWeight: 700, color: capturada ? '#4ADE80' : 'var(--muted)', flex: 1 }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: capturada ? '#5A8A4A' : 'var(--muted)', flex: 1 }}>{label}</span>
       {!capturada && <Camera size={13} color="var(--muted)" />}
     </div>
   )
@@ -473,7 +473,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 0' }}>
             {disponibles.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                <AlertTriangle size={32} color="#F59E0B" style={{ margin: '0 auto 12px', display: 'block' }} />
+                <AlertTriangle size={32} color="#D4AF37" style={{ margin: '0 auto 12px', display: 'block' }} />
                 <p style={{ fontSize: 15, fontWeight: 700, color: '#F4EEDF', marginBottom: 6 }}>Sin vehículos disponibles</p>
                 <p style={{ fontSize: 13, color: 'var(--muted)' }}>Todos los vehículos están en uso o en mantención</p>
               </div>
@@ -539,8 +539,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
             <div style={{ background: '#111', borderRadius: 12, padding: 4, display: 'flex', gap: 3 }}>
               {(['reparto', 'tramite'] as const).map(t => {
                 const active = tipoViaje === t
-                const color = t === 'reparto' ? F : '#F59E0B'
-                const rgb = t === 'reparto' ? '249,115,22' : '245,158,11'
+                const color = t === 'reparto' ? F : '#D4AF37'
+                const rgb = t === 'reparto' ? '212,175,55' : '245,158,11'
                 return (
                   <button key={t} onClick={() => setTipoViaje(t)} style={{
                     flex: 1, padding: '11px 8px', borderRadius: 9, cursor: 'pointer',
@@ -594,12 +594,12 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               {paradas.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
                   {paradas.map((p, i) => (
-                    <div key={p.id} style={{ background: '#141414', border: `1px solid ${p.verificada ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(249,115,22,0.6)', minWidth: 16, marginTop: 2 }}>{i + 1}</span>
+                    <div key={p.id} style={{ background: '#141414', border: `1px solid ${p.verificada ? 'rgba(90,138,74,0.2)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.6)', minWidth: 16, marginTop: 2 }}>{i + 1}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
-                          {p.verificada && <CheckCircle size={11} color="#4ADE80" style={{ flexShrink: 0 }} />}
+                          {p.verificada && <CheckCircle size={11} color="#5A8A4A" style={{ flexShrink: 0 }} />}
                         </div>
                         {p.direccion && p.direccion !== p.nombre && (
                           <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.direccion}</p>
@@ -630,7 +630,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                   {clientesFiltrados.length > 0 ? clientesFiltrados.map(c => (
                     <div key={c.nombre_fantasia} onMouseDown={() => agregarCliente(c)}
                       style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(249,115,22,0.08)')}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.08)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                       <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>{c.nombre_fantasia}</p>
                       {(c.direccion || c.localidad) && (
@@ -668,8 +668,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                 </div>
               )}
               {cargandoExcel && (
-                <p style={{ fontSize: 11, color: '#F59E0B', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+                <p style={{ fontSize: 11, color: '#D4AF37', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #D4AF37', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
                   Leyendo Excel…
                 </p>
               )}
@@ -678,7 +678,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
             </div>
 
             {/* Resumen de ruta — solo lectura, calculado automáticamente */}
-            <div style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.07), rgba(249,115,22,0.02))', border: '1px solid rgba(249,115,22,0.18)', borderRadius: 14, padding: '16px' }}>
+            <div style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.07), rgba(212,175,55,0.02))', border: '1px solid rgba(212,175,55,0.18)', borderRadius: 14, padding: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Navigation2 size={14} color={F} />
@@ -701,7 +701,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                       {kmMostrado}
                       <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)', marginLeft: 4 }}>km</span>
                     </p>
-                    {kmCalculado && <p style={{ fontSize: 9, color: '#4ADE80', marginTop: 3 }}>✓ Calculado por la app</p>}
+                    {kmCalculado && <p style={{ fontSize: 9, color: '#5A8A4A', marginTop: 3 }}>✓ Calculado por la app</p>}
                     {!kmCalculado && kmPlanificado && <p style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3 }}>Ruta planificada</p>}
                   </div>
                   <div>
@@ -739,12 +739,12 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                     padding: '11px 14px', borderRadius: 10,
                     background: 'rgba(66,133,244,0.12)',
                     border: '1px solid rgba(66,133,244,0.3)',
-                    color: '#6BA3F5', fontSize: 13, fontWeight: 700,
+                    color: '#F4EEDF', fontSize: 13, fontWeight: 700,
                     textDecoration: 'none', width: '100%', boxSizing: 'border-box',
                   }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6BA3F5"/>
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#F4EEDF"/>
                   </svg>
                   Ver ruta en Google Maps
                 </a>
@@ -759,7 +759,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               <textarea value={motivoViaje} onChange={e => setMotivoViaje(e.target.value)}
                 placeholder={tipoViaje === 'tramite' ? 'Describe el motivo del trámite…' : 'Instrucciones, cliente principal, observaciones…'}
                 rows={2}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: '#141414', border: `1px solid ${motivoViaje.trim() ? 'rgba(249,115,22,0.3)' : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 14, resize: 'none', outline: 'none', boxSizing: 'border-box' }} />
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: '#141414', border: `1px solid ${motivoViaje.trim() ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 14, resize: 'none', outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
           </div>
@@ -785,8 +785,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               <FotoSlot label="Odómetro" emoji="🔢" onCaptura={(url, file) => { setFotoOdo(url); analizarOdometro(file) }} capturada={!!fotoOdo} />
             </div>
             {analizandoOdo && (
-              <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+              <p style={{ fontSize: 11, color: '#D4AF37', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #D4AF37', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
                 Leyendo kilometraje…
               </p>
             )}
@@ -796,22 +796,22 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
             </label>
             <input value={kmInicio} onChange={e => { setKmInicio(e.target.value.replace(/\D/g, '')); setKmLeido(null) }}
               placeholder={`Ej: ${vehiculo?.km_actual ?? 45000}`} type="text" inputMode="numeric"
-              style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${kmLeido ? '#4ADE80' : kmInicio ? F_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', letterSpacing: '-0.5px', marginBottom: 4 }} />
+              style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${kmLeido ? '#5A8A4A' : kmInicio ? F_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', letterSpacing: '-0.5px', marginBottom: 4 }} />
             {kmLeido && !analizandoOdo && (
-              <p style={{ fontSize: 11, color: '#4ADE80', marginBottom: 12, textAlign: 'center' }}>✨ Leído de la foto por IA · puedes corregir si es necesario</p>
+              <p style={{ fontSize: 11, color: '#5A8A4A', marginBottom: 12, textAlign: 'center' }}>✨ Leído de la foto por IA · puedes corregir si es necesario</p>
             )}
             {!kmLeido && fotoOdo && !analizandoOdo && (
               <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, textAlign: 'center' }}>Ingresa el km manualmente</p>
             )}
             {vehiculo && kmInicio && parseInt(kmInicio) < vehiculo.km_actual && (
-              <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 12, textAlign: 'center' }}>
+              <p style={{ fontSize: 11, color: '#D4AF37', marginBottom: 12, textAlign: 'center' }}>
                 ⚠ El valor es menor al km registrado ({vehiculo.km_actual.toLocaleString('es-CL')} km)
               </p>
             )}
 
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
               Inspección 360° *
-              <span style={{ fontSize: 10, fontWeight: 500, color: fotos360ok ? '#4ADE80' : 'var(--muted)', marginLeft: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 500, color: fotos360ok ? '#5A8A4A' : 'var(--muted)', marginLeft: 8 }}>
                 {Object.keys(fotos360).length}/4
               </span>
             </p>
@@ -833,8 +833,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
             ) : (
               <div style={{ marginBottom: 8 }}>
                 {analizandoComb ? (
-                  <p style={{ fontSize: 11, color: '#F59E0B', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
+                  <p style={{ fontSize: 11, color: '#D4AF37', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #D4AF37', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite' }} />
                     Leyendo nivel de estanque…
                   </p>
                 ) : (

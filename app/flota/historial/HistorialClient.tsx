@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ChevronDown, ChevronUp, MapPin, Truck, Clock, Navigation2, User } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 
-const F = '#F97316'
+const F = '#D4AF37'
 
 interface Parada { n: string; d: string }
 
@@ -55,10 +55,10 @@ function fmtDuracion(inicio: string, fin: string | null) {
 
 function EstadoBadge({ estado }: { estado: string }) {
   const cfg: Record<string, { color: string; bg: string; label: string }> = {
-    completado: { color: '#4ADE80', bg: 'rgba(74,222,128,0.12)', label: 'Completado' },
-    cerrado:    { color: '#4ADE80', bg: 'rgba(74,222,128,0.12)', label: 'Completado' },
-    en_curso:   { color: '#F59E0B', bg: 'rgba(245,158,11,0.12)', label: 'En curso' },
-    cancelado:  { color: '#EF4444', bg: 'rgba(239,68,68,0.12)',  label: 'Cancelado' },
+    completado: { color: '#5A8A4A', bg: 'rgba(90,138,74,0.12)', label: 'Completado' },
+    cerrado:    { color: '#5A8A4A', bg: 'rgba(90,138,74,0.12)', label: 'Completado' },
+    en_curso:   { color: '#D4AF37', bg: 'rgba(245,158,11,0.12)', label: 'En curso' },
+    cancelado:  { color: '#B5543E', bg: 'rgba(239,68,68,0.12)',  label: 'Cancelado' },
   }
   const c = cfg[estado] ?? { color: 'var(--muted)', bg: 'rgba(255,255,255,0.06)', label: estado }
   return (
@@ -103,7 +103,7 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
             <User size={13} color="var(--muted)" />
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>{viaje.conductor?.nombre?.split(' ')[0] ?? '—'}</span>
           </div>
-          <span style={{ fontSize: 11, color: viaje.tipo === 'reparto' ? F : '#F59E0B', fontWeight: 700, background: viaje.tipo === 'reparto' ? 'rgba(249,115,22,0.1)' : 'rgba(245,158,11,0.1)', padding: '2px 8px', borderRadius: 10 }}>
+          <span style={{ fontSize: 11, color: viaje.tipo === 'reparto' ? F : '#D4AF37', fontWeight: 700, background: viaje.tipo === 'reparto' ? 'rgba(212,175,55,0.1)' : 'rgba(245,158,11,0.1)', padding: '2px 8px', borderRadius: 10 }}>
             {viaje.tipo === 'reparto' ? '🚚 Reparto' : '🔧 Trámite'}
           </span>
         </div>
@@ -158,7 +158,7 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {paradas.map((p, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(249,115,22,0.5)', minWidth: 16, marginTop: 1 }}>{i + 1}</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.5)', minWidth: 16, marginTop: 1 }}>{i + 1}</span>
                     <div style={{ minWidth: 0 }}>
                       <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.n}</p>
                       {p.d && p.d !== p.n && (
@@ -188,10 +188,10 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
                 return `https://www.google.com/maps/dir/${base}/${stops}/${base}`
               })()}
               target="_blank" rel="noopener noreferrer"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', borderRadius: 10, background: 'rgba(66,133,244,0.1)', border: '1px solid rgba(66,133,244,0.25)', color: '#6BA3F5', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', borderRadius: 10, background: 'rgba(66,133,244,0.1)', border: '1px solid rgba(66,133,244,0.25)', color: '#F4EEDF', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6BA3F5"/>
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#F4EEDF"/>
               </svg>
               Ver ruta en Google Maps
             </a>
@@ -243,9 +243,9 @@ export default function HistorialClient({ user, viajes }: Props) {
       {/* Stats globales */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
         {[
-          { label: 'Total viajes', value: filtrados.length, color: F, rgb: '249,115,22' },
-          { label: 'Completados', value: completados, color: '#4ADE80', rgb: '74,222,128' },
-          { label: 'Km totales', value: `${totalKm} km`, color: '#F59E0B', rgb: '245,158,11' },
+          { label: 'Total viajes', value: filtrados.length, color: F, rgb: '212,175,55' },
+          { label: 'Completados', value: completados, color: '#5A8A4A', rgb: '90,138,74' },
+          { label: 'Km totales', value: `${totalKm} km`, color: '#D4AF37', rgb: '245,158,11' },
         ].map(s => (
           <div key={s.label} style={{ background: `linear-gradient(135deg, rgba(${s.rgb},0.09), rgba(${s.rgb},0.03))`, border: `1px solid rgba(${s.rgb},0.2)`, borderRadius: 12, padding: '12px 14px' }}>
             <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>{s.label}</p>

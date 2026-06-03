@@ -10,7 +10,7 @@ const TABS: PageTab[] = [
   { href: '/flota/admin',     label: 'Reportes'                  },
 ]
 
-const ORANGE = '#F97316'
+const ORANGE = '#D4AF37'
 
 export default function FlotaLayout({ children }: { children: React.ReactNode }) {
   return (

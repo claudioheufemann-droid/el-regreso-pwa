@@ -6,7 +6,7 @@ import { ChevronLeft, MapPin, Navigation, CheckCircle, AlertTriangle } from 'luc
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
-const F = '#F97316'
+const F = '#D4AF37'
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180
@@ -101,7 +101,7 @@ export default function LlegadaClient({ user, viaje }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(249,115,22,0.15)', padding: '14px 16px' }}>
+      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(212,175,55,0.15)', padding: '14px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={() => router.push('/flota')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
             <ChevronLeft size={18} /> Flota
@@ -116,10 +116,10 @@ export default function LlegadaClient({ user, viaje }: Props) {
       <div style={{ flex: 1, padding: '20px 16px' }}>
 
         {/* Destino declarado */}
-        <div style={{ background: '#131313', border: `1px solid ${confirmado ? 'rgba(74,222,128,0.25)' : 'rgba(249,115,22,0.2)'}`, borderRadius: 14, padding: '16px', marginBottom: 20 }}>
+        <div style={{ background: '#131313', border: `1px solid ${confirmado ? 'rgba(90,138,74,0.25)' : 'rgba(212,175,55,0.2)'}`, borderRadius: 14, padding: '16px', marginBottom: 20 }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>Destino declarado</p>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(249,115,22,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(212,175,55,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <MapPin size={18} color={F} />
             </div>
             <div>
@@ -135,9 +135,9 @@ export default function LlegadaClient({ user, viaje }: Props) {
 
         {/* Ya confirmado */}
         {confirmado && (
-          <div style={{ background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 14, padding: '24px 20px', textAlign: 'center' }}>
-            <CheckCircle size={44} color="#4ADE80" style={{ margin: '0 auto 14px', display: 'block' }} />
-            <p style={{ fontSize: 17, fontWeight: 900, color: '#4ADE80', marginBottom: 6 }}>Llegada confirmada</p>
+          <div style={{ background: 'rgba(90,138,74,0.07)', border: '1px solid rgba(90,138,74,0.3)', borderRadius: 14, padding: '24px 20px', textAlign: 'center' }}>
+            <CheckCircle size={44} color="#5A8A4A" style={{ margin: '0 auto 14px', display: 'block' }} />
+            <p style={{ fontSize: 17, fontWeight: 900, color: '#5A8A4A', marginBottom: 6 }}>Llegada confirmada</p>
             <p style={{ fontSize: 12, color: 'var(--muted)' }}>Ubicación GPS registrada en el sistema</p>
           </div>
         )}
@@ -146,7 +146,7 @@ export default function LlegadaClient({ user, viaje }: Props) {
         {!confirmado && (
           <>
             {!coords ? (
-              <div style={{ textAlign: 'center', padding: '36px 20px', background: '#0F0F0F', borderRadius: 16, border: '1px dashed rgba(249,115,22,0.2)', marginBottom: 20 }}>
+              <div style={{ textAlign: 'center', padding: '36px 20px', background: '#0F0F0F', borderRadius: 16, border: '1px dashed rgba(212,175,55,0.2)', marginBottom: 20 }}>
                 <Navigation size={40} color={F} style={{ margin: '0 auto 16px', display: 'block' }} />
                 <p style={{ fontSize: 16, fontWeight: 700, color: '#F4EEDF', marginBottom: 8 }}>¿Ya llegaste al destino?</p>
                 <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
@@ -155,17 +155,17 @@ export default function LlegadaClient({ user, viaje }: Props) {
                 </p>
               </div>
             ) : (
-              <div style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 14, padding: '14px 16px', marginBottom: 16 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#4ADE80', marginBottom: 6 }}>📍 Ubicación capturada</p>
+              <div style={{ background: 'rgba(90,138,74,0.06)', border: '1px solid rgba(90,138,74,0.25)', borderRadius: 14, padding: '14px 16px', marginBottom: 16 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#5A8A4A', marginBottom: 6 }}>📍 Ubicación capturada</p>
                 <p style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace', marginBottom: 10 }}>
                   {coords.lat.toFixed(6)},  {coords.lng.toFixed(6)}
                 </p>
                 {validacion !== null && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: validacion === 'ok' ? 'rgba(74,222,128,0.1)' : validacion === 'cerca' ? 'rgba(245,158,11,0.1)' : 'rgba(255,85,85,0.1)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: validacion === 'ok' ? 'rgba(90,138,74,0.1)' : validacion === 'cerca' ? 'rgba(245,158,11,0.1)' : 'rgba(181,84,62,0.1)' }}>
                     {validacion === 'ok'
-                      ? <CheckCircle size={15} color="#4ADE80" />
-                      : <AlertTriangle size={15} color={validacion === 'cerca' ? '#F59E0B' : '#FF5555'} />}
-                    <p style={{ fontSize: 12, fontWeight: 700, color: validacion === 'ok' ? '#4ADE80' : validacion === 'cerca' ? '#F59E0B' : '#FF5555' }}>
+                      ? <CheckCircle size={15} color="#5A8A4A" />
+                      : <AlertTriangle size={15} color={validacion === 'cerca' ? '#D4AF37' : '#B5543E'} />}
+                    <p style={{ fontSize: 12, fontWeight: 700, color: validacion === 'ok' ? '#5A8A4A' : validacion === 'cerca' ? '#D4AF37' : '#B5543E' }}>
                       {validacion === 'ok'
                         ? `Validado — estás en el destino (${(distancia! * 1000).toFixed(0)} m)`
                         : validacion === 'cerca'
@@ -178,8 +178,8 @@ export default function LlegadaClient({ user, viaje }: Props) {
             )}
 
             {gpsError && (
-              <div style={{ marginBottom: 16, padding: '12px 14px', background: 'rgba(255,85,85,0.08)', border: '1px solid rgba(255,85,85,0.2)', borderRadius: 10 }}>
-                <p style={{ fontSize: 12, color: '#FF5555' }}>⚠ {gpsError}</p>
+              <div style={{ marginBottom: 16, padding: '12px 14px', background: 'rgba(181,84,62,0.08)', border: '1px solid rgba(181,84,62,0.2)', borderRadius: 10 }}>
+                <p style={{ fontSize: 12, color: '#B5543E' }}>⚠ {gpsError}</p>
               </div>
             )}
           </>
@@ -202,7 +202,7 @@ export default function LlegadaClient({ user, viaje }: Props) {
             </button>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={confirmarLlegada} disabled={guardando} style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: guardando ? 'wait' : 'pointer', background: '#4ADE80', color: '#0A1A0A', fontSize: 16, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <button onClick={confirmarLlegada} disabled={guardando} style={{ width: '100%', padding: '17px', borderRadius: 14, border: 'none', cursor: guardando ? 'wait' : 'pointer', background: '#5A8A4A', color: '#0A1A0A', fontSize: 16, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
                 {guardando
                   ? <><span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: '50%', border: '3px solid rgba(0,0,0,0.25)', borderTopColor: '#0A1A0A', animation: 'spin 0.7s linear infinite' }} /> Confirmando…</>
                   : <><CheckCircle size={18} /> Confirmar llegada</>}

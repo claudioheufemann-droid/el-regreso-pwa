@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, AlertTriangle, CheckCircle, TrendingUp, Truck, Clock, Fuel } from 'lucide-react'
 
-const F = '#F97316'
-const F_BORDER = 'rgba(249,115,22,0.28)'
+const F = '#D4AF37'
+const F_BORDER = 'rgba(212,175,55,0.28)'
 
 interface Viaje {
   id: string
@@ -60,8 +60,8 @@ function DesvioChip({ km_teoricos, km_inicio, km_fin }: { km_teoricos: number | 
   const desvio = recorridos - km_teoricos
   const porc = (desvio / km_teoricos) * 100
   const abs = Math.abs(porc)
-  const color = abs > 25 ? '#FF5555' : abs > 10 ? '#F59E0B' : '#4ADE80'
-  const bg = abs > 25 ? 'rgba(255,85,85,0.12)' : abs > 10 ? 'rgba(245,158,11,0.12)' : 'rgba(74,222,128,0.1)'
+  const color = abs > 25 ? '#B5543E' : abs > 10 ? '#D4AF37' : '#5A8A4A'
+  const bg = abs > 25 ? 'rgba(181,84,62,0.12)' : abs > 10 ? 'rgba(245,158,11,0.12)' : 'rgba(90,138,74,0.1)'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: bg, borderRadius: 8, padding: '3px 8px', width: 'fit-content' }}>
       {abs > 10 ? <AlertTriangle size={11} color={color} /> : <CheckCircle size={11} color={color} />}
@@ -116,7 +116,7 @@ function ViajeCard({ v }: { v: Viaje }) {
       )}
 
       {(v.litros_carga || v.monto_combustible) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(249,115,22,0.07)', borderRadius: 8, padding: '5px 10px', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(212,175,55,0.07)', borderRadius: 8, padding: '5px 10px', marginBottom: 6 }}>
           <Fuel size={11} color={F} />
           <span style={{ fontSize: 11, color: F, fontWeight: 600 }}>
             {v.litros_carga ? `${v.litros_carga}L` : ''}
@@ -167,7 +167,7 @@ export default function AdminFlotaClient({ viajes, vehiculos }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(249,115,22,0.15)', padding: '14px 16px' }}>
+      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(212,175,55,0.15)', padding: '14px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={() => router.push('/flota')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
             <ChevronLeft size={18} /> Flota
@@ -185,8 +185,8 @@ export default function AdminFlotaClient({ viajes, vehiculos }: Props) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
           {[
             { icon: <Truck size={14} color={F} />, label: 'Vehículos', value: vehiculos.length },
-            { icon: <TrendingUp size={14} color='#4ADE80' />, label: 'Km (filtro)', value: totalKm.toLocaleString('es-CL') },
-            { icon: <AlertTriangle size={14} color='#FF5555' />, label: 'Alertas', value: conDesvio },
+            { icon: <TrendingUp size={14} color='#5A8A4A' />, label: 'Km (filtro)', value: totalKm.toLocaleString('es-CL') },
+            { icon: <AlertTriangle size={14} color='#B5543E' />, label: 'Alertas', value: conDesvio },
           ].map(k => (
             <div key={k.label} style={{ background: '#131313', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '12px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>{k.icon}<p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>{k.label}</p></div>
@@ -197,10 +197,10 @@ export default function AdminFlotaClient({ viajes, vehiculos }: Props) {
 
         {/* Alertas de desvío alto */}
         {conDesvio > 0 && (
-          <div style={{ background: 'rgba(255,85,85,0.07)', border: '1px solid rgba(255,85,85,0.25)', borderRadius: 12, padding: '12px 14px', marginBottom: 20 }}>
+          <div style={{ background: 'rgba(181,84,62,0.07)', border: '1px solid rgba(181,84,62,0.25)', borderRadius: 12, padding: '12px 14px', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <AlertTriangle size={14} color="#FF5555" />
-              <p style={{ fontSize: 12, fontWeight: 800, color: '#FF5555' }}>{conDesvio} viaje{conDesvio > 1 ? 's' : ''} con desvío alto (&gt;25%)</p>
+              <AlertTriangle size={14} color="#B5543E" />
+              <p style={{ fontSize: 12, fontWeight: 800, color: '#B5543E' }}>{conDesvio} viaje{conDesvio > 1 ? 's' : ''} con desvío alto (&gt;25%)</p>
             </div>
             {viajesReparto.filter(v => {
               if (!v.km_teoricos || !v.km_inicio || !v.km_fin) return false
@@ -222,7 +222,7 @@ export default function AdminFlotaClient({ viajes, vehiculos }: Props) {
           <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>Estado de flota</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {vehiculos.map(v => {
-              const estadoColor = v.estado === 'disponible' ? '#4ADE80' : v.estado === 'en_uso' ? F : '#F59E0B'
+              const estadoColor = v.estado === 'disponible' ? '#5A8A4A' : v.estado === 'en_uso' ? F : '#D4AF37'
               const estadoLabel = v.estado === 'disponible' ? 'Disponible' : v.estado === 'en_uso' ? 'En uso' : 'Mantención'
               return (
                 <div key={v.id} style={{ background: '#131313', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '10px 12px' }}>
@@ -253,7 +253,7 @@ export default function AdminFlotaClient({ viajes, vehiculos }: Props) {
 
         {/* Resumen del tab actual */}
         {totalComb > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(249,115,22,0.07)', border: F_BORDER, borderRadius: 10, padding: '8px 12px', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(212,175,55,0.07)', border: F_BORDER, borderRadius: 10, padding: '8px 12px', marginBottom: 14 }}>
             <Fuel size={13} color={F} />
             <p style={{ fontSize: 12, color: F, fontWeight: 600 }}>
               Combustible total: <strong>${totalComb.toLocaleString('es-CL')}</strong>
