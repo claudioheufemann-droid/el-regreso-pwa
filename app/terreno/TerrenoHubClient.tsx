@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, XCircle, Clock, ChevronRight, Bell, Users, Tag, Ban } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
+import AppHeader from '@/components/ui/AppHeader'
 
 const G = '#D4AF37'
 const G_RGB = '212,175,55'
@@ -214,30 +215,9 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
     <div style={{ background: '#050505', minHeight: '100vh', paddingBottom: 100 }}>
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
 
-        {/* ── HEADER ── */}
-        <div style={{ position: 'relative', paddingTop: 20, paddingBottom: 8, marginBottom: 20 }}>
-          {/* Campana */}
-          <div style={{ position: 'absolute', top: 20, right: 0, width: 38, height: 38, borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Bell size={17} color="rgba(255,255,255,0.5)" />
-          </div>
-
-          {/* Hero visual */}
-          <div style={{ position: 'absolute', top: 0, right: 36, opacity: 0.9 }}>
-            <IsometricHero />
-          </div>
-
-          {/* Texto */}
-          <div style={{ position: 'relative', zIndex: 2 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px', marginBottom: 6 }}>
-              {fechaCapitalizada}
-            </p>
-            <h1 style={{ fontSize: 32, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1px', lineHeight: 1.1, marginBottom: 6 }}>
-              Hola, <span style={{ color: G }}>{nombre}.</span>
-            </h1>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', fontWeight: 500 }}>
-              Aquí tienes el resumen de tu día 👋
-            </p>
-          </div>
+        {/* ── HEADER ESTÁNDAR ── */}
+        <div style={{ paddingTop: 16 }}>
+          <AppHeader eyebrow={fechaCapitalizada} title="Terreno" />
         </div>
 
         {/* ── VISITA EN PROGRESO ── */}

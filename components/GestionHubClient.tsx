@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { CheckSquare } from 'lucide-react'
+import AppHeader from '@/components/ui/AppHeader'
 
 const AREAS = [
   {
@@ -90,26 +91,8 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
     <div style={{ background: '#050505', minHeight: '100vh', paddingBottom: 100 }}>
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
 
-        {/* ── HEADER ── */}
-        <div style={{ position: 'relative', paddingTop: 'max(env(safe-area-inset-top), 16px)', paddingBottom: 0, marginBottom: 18 }}>
-          <div style={{ position: 'absolute', top: 0, right: 0 }}>
-            <GestionHero />
-          </div>
-          <div style={{ position: 'relative', zIndex: 2 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4px', marginBottom: 6 }}>
-              {fechaCap}
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <h1 style={{ fontSize: 30, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1px', lineHeight: 1 }}>
-                Gestión
-              </h1>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#D4AF37', display: 'inline-block', boxShadow: '0 0 10px #D4AF37', marginTop: 2 }} />
-            </div>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', maxWidth: 210 }}>
-              Administra y optimiza cada área.
-            </p>
-          </div>
-        </div>
+        {/* ── HEADER ESTÁNDAR ── */}
+        <AppHeader eyebrow={fechaCap} title="Gestión" />
 
         {/* ── ÁREA ACTIVA badge (no-admins) ── */}
         {userMacroArea && (() => {

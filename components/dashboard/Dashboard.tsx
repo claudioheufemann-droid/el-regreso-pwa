@@ -680,14 +680,6 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             })() : <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>Control de Gestión</div>}
           </div>
 
-          {/* Badge alertas */}
-          {(atrasadas + porAprobar) > 0 && (
-            <div className="pulse" style={{ padding: '6px 12px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#FF4444' }} />
-              <span style={{ fontSize: 12, fontWeight: 800, color: '#FF6B6B' }}>{atrasadas + porAprobar}</span>
-            </div>
-          )}
-
           {/* Refresh */}
           <button onClick={refreshTasks} className="touch-active" title="Actualizar"
             style={{ width: 38, height: 38, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--muted)', fontSize: 17, flexShrink: 0 }}>

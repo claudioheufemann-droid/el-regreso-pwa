@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Truck, Plus, AlertTriangle, CheckCircle, Clock, ChevronLeft, ChevronRight, Wrench } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import type { AppUser } from '@/lib/auth'
+import AppHeader from '@/components/ui/AppHeader'
 
 const F = '#D4AF37'
 const F_DIM = 'rgba(212,175,55,0.12)'
@@ -254,14 +255,10 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
   return (
     <div style={{ padding: isDesktop ? 'var(--sp-3)' : '20px 14px 16px', maxWidth: 800, margin: '0 auto', width: '100%' }}>
       {/* Header estándar */}
-      <div style={{ marginBottom: isDesktop ? 28 : 20 }}>
-        <p style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4px', marginBottom: 6, textTransform: 'capitalize' }}>
-          {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
-        </p>
-        <h1 style={{ fontSize: isDesktop ? 'var(--fs-title)' : 28, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1px', lineHeight: 1.1 }}>
-          Bitácora de Flota
-        </h1>
-      </div>
+      <AppHeader
+        eyebrow={new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
+        title="Logística"
+      />
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16 }}>

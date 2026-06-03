@@ -303,7 +303,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
               {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
             <div style={{ fontSize: 28, fontWeight: 900, color: CREAM, letterSpacing: -1, lineHeight: 1.1 }}>
-              Hola, <span style={{ color: GOLD }}>{firstName}</span> 👋
+              Resumen
             </div>
           </div>
           <button onClick={() => setShowNewTask(true)} style={{
