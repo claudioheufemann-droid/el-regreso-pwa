@@ -18,16 +18,16 @@ const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov'
 
 const TIPO_CFG: Record<TipoMision, { label: string; color: string; bg: string; border: string; icon: string; desc: string }> = {
   esta_semana:    { label: 'Esta semana',    color: '#D4AF37', bg: 'rgba(212,175,55,0.08)',  border: 'rgba(212,175,55,0.3)',  icon: '📅', desc: 'Compra estimada esta semana' },
-  proxima_semana: { label: 'Próxima semana', color: '#60A5FA', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.3)', icon: '📆', desc: 'Compra estimada próxima semana' },
+  proxima_semana: { label: 'Próxima semana', color: '#D4AF37', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.3)', icon: '📆', desc: 'Compra estimada próxima semana' },
   vencido:        { label: 'Llama ahora',    color: '#F87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.3)', icon: '🚨', desc: 'Ya se pasó su ciclo de compra' },
 }
 
 const ESTADO_CFG: Record<EstadoMision, { label: string; color: string; icon: string }> = {
   pendiente:              { label: 'Sin contactar',  color: '#6B7280', icon: '○' },
   contactado_pedido:      { label: 'Hizo pedido ✓', color: '#34D399', icon: '✓' },
-  contactado_sin_pedido:  { label: 'Contactado',    color: '#F59E0B', icon: '📞' },
+  contactado_sin_pedido:  { label: 'Contactado',    color: '#D4AF37', icon: '📞' },
   sin_respuesta:          { label: 'Sin respuesta',  color: '#94A3B8', icon: '🔇' },
-  pospuesto:              { label: 'Pospuesto',      color: '#A78BFA', icon: '⏰' },
+  pospuesto:              { label: 'Pospuesto',      color: '#8A6D1F', icon: '⏰' },
   auto_completado:        { label: 'Compró ✓ (auto)', color: '#34D399', icon: '⚡' },
 }
 
@@ -42,8 +42,8 @@ const TIPO_CLIENTE_CFG: Record<TipoCliente, {
 }> = {
   activo:   { label: 'Activo',   color: '#34D399', bg: 'rgba(52,211,153,0.1)',  border: 'rgba(52,211,153,0.3)',  icon: '🟢', estrategia: 'Recompra habitual — contactar para siguiente pedido.' },
   inactivo: { label: 'Inactivo', color: '#F87171', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.3)', icon: '🔴', estrategia: 'Cliente en riesgo de abandono — ofrecer propuesta de recuperación.' },
-  temporal: { label: 'Temporal', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)',  icon: '🟡', estrategia: 'Comprador esporádico — evaluar necesidad y construir relación.' },
-  nuevo:    { label: 'Nuevo',    color: '#60A5FA', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.3)',  icon: '🔵', estrategia: 'Primer seguimiento — entender preferencias y fidelizar.' },
+  temporal: { label: 'Temporal', color: '#D4AF37', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)',  icon: '🟡', estrategia: 'Comprador esporádico — evaluar necesidad y construir relación.' },
+  nuevo:    { label: 'Nuevo',    color: '#D4AF37', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.3)',  icon: '🔵', estrategia: 'Primer seguimiento — entender preferencias y fidelizar.' },
 }
 
 function TipoClienteBadge({ tipo, size = 'sm' }: { tipo: TipoCliente | null | undefined; size?: 'sm' | 'xs' }) {
@@ -97,7 +97,7 @@ function ProgressDonut({ done, total, size = 90 }: { done: number; total: number
   const r     = (size - 14) / 2; const cx = size / 2
   const circ  = 2 * Math.PI * r
   const dash  = circ * pct
-  const color = pct >= 0.8 ? '#34D399' : pct >= 0.5 ? '#F59E0B' : '#D4AF37'
+  const color = pct >= 0.8 ? '#34D399' : pct >= 0.5 ? '#D4AF37' : '#D4AF37'
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <circle cx={cx} cy={cx} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7"/>
@@ -121,7 +121,7 @@ function BotonesAccion({ mision, onActualizar, loading }: {
 
   const acciones: { estado: EstadoMision; label: string; color: string; icon: React.ReactNode }[] = [
     { estado: 'contactado_pedido',     label: 'Hizo pedido',   color: '#34D399', icon: <CheckCircle2 size={13}/> },
-    { estado: 'contactado_sin_pedido', label: 'Contactado',    color: '#F59E0B', icon: <Phone size={13}/> },
+    { estado: 'contactado_sin_pedido', label: 'Contactado',    color: '#D4AF37', icon: <Phone size={13}/> },
     { estado: 'sin_respuesta',         label: 'Sin respuesta', color: '#94A3B8', icon: <PhoneOff size={13}/> },
   ]
 
@@ -163,14 +163,14 @@ function BotonesAccion({ mision, onActualizar, loading }: {
         background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.25)',
       }}>
         <span style={{ fontSize: 16 }}>⏰</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#A78BFA', flex: 1 }}>Aún con stock</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#8A6D1F', flex: 1 }}>Aún con stock</span>
         <select
           value={diasPosp}
           onChange={e => setDiasPosp(Number(e.target.value))}
           disabled={loading}
           style={{
             background: 'var(--surface2)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 8,
-            color: '#A78BFA', fontSize: 12, fontWeight: 700, padding: '5px 8px', cursor: 'pointer', outline: 'none',
+            color: '#8A6D1F', fontSize: 12, fontWeight: 700, padding: '5px 8px', cursor: 'pointer', outline: 'none',
           }}
         >
           {DIAS_POSPONER.map(d => <option key={d} value={d} style={{ background: 'var(--surface)' }}>{d} días</option>)}
@@ -181,7 +181,7 @@ function BotonesAccion({ mision, onActualizar, loading }: {
           style={{
             padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 800,
             background: 'rgba(167,139,250,0.18)', border: '1px solid rgba(167,139,250,0.4)',
-            color: '#A78BFA', cursor: loading ? 'not-allowed' : 'pointer',
+            color: '#8A6D1F', cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
           Posponer
@@ -284,7 +284,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
             {mision.localidad && <p style={{ fontSize: 10, color: 'var(--muted)' }}>📍 {mision.localidad}</p>}
           </div>
           {mision.telefono && (
-            <button onClick={() => window.open(`tel:${mision.telefono}`)} style={quickBtn('#60A5FA')}>
+            <button onClick={() => window.open(`tel:${mision.telefono}`)} style={quickBtn('#D4AF37')}>
               <Phone size={14} />
             </button>
           )}
@@ -351,7 +351,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
             </p>
           )}
           {mision.cross_sell && (
-            <p style={{ fontSize: 12, color: '#A78BFA', fontWeight: 700 }}>
+            <p style={{ fontSize: 12, color: '#8A6D1F', fontWeight: 700 }}>
               🔀 Cross-sell: ofrécele <strong>{mision.cross_sell.categoria}</strong> ({mision.cross_sell.pct}% de negocios similares la compran)
             </p>
           )}
@@ -442,7 +442,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
             border: `1px solid ${mision.estado === 'pospuesto' ? 'rgba(167,139,250,0.4)' : 'rgba(167,139,250,0.15)'}`,
           }}>
             <span style={{ fontSize: 16 }}>⏰</span>
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: mision.estado === 'pospuesto' ? '#A78BFA' : 'var(--cream)' }}>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: mision.estado === 'pospuesto' ? '#8A6D1F' : 'var(--cream)' }}>
               Aún con Stock — Posponer
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -452,7 +452,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
                 disabled={loading}
                 style={{
                   background: 'var(--surface2)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 8,
-                  color: '#A78BFA', fontSize: 12, fontWeight: 700, padding: '5px 8px', cursor: 'pointer', outline: 'none',
+                  color: '#8A6D1F', fontSize: 12, fontWeight: 700, padding: '5px 8px', cursor: 'pointer', outline: 'none',
                 }}
               >
                 {DIAS_POSPONER.map(d => <option key={d} value={d} style={{ background: 'var(--surface)' }}>{d} días</option>)}
@@ -463,7 +463,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
                 style={{
                   padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 800,
                   background: 'rgba(167,139,250,0.2)', border: '1px solid rgba(167,139,250,0.4)',
-                  color: '#A78BFA', cursor: loading ? 'not-allowed' : 'pointer',
+                  color: '#8A6D1F', cursor: loading ? 'not-allowed' : 'pointer',
                 }}
               >
                 OK
@@ -634,7 +634,7 @@ function CompactCard({ mision, selected, onClick, onWA }: {
             {mision.telefono && (
               <button
                 onClick={e => { e.stopPropagation(); window.open(`tel:${mision.telefono}`) }}
-                style={quickBtn('#60A5FA')}
+                style={quickBtn('#D4AF37')}
               >
                 <Phone size={12} />
               </button>
@@ -801,7 +801,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
   const pct     = total > 0 ? Math.round((pedidos / total) * 100) : 0
   const STEPS   = isDesktop ? 8 : 5
   const filled  = Math.round((pct / 100) * STEPS)
-  const pColor  = pct >= 80 ? '#34D399' : pct >= 50 ? '#F59E0B' : '#D4AF37'
+  const pColor  = pct >= 80 ? '#34D399' : pct >= 50 ? '#D4AF37' : '#D4AF37'
 
   return (
     <div style={{
@@ -891,7 +891,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
         {[
           { label: '🚨 Llama ahora', value: vencidos, color: '#F87171', urgent: vencidos > 0 },
           { label: '📅 Esta semana', value: esSem,    color: '#D4AF37', urgent: false },
-          { label: '📆 Próxima sem.', value: proxSem, color: '#60A5FA', urgent: false },
+          { label: '📆 Próxima sem.', value: proxSem, color: '#D4AF37', urgent: false },
           { label: '✓ Con pedido',   value: pedidos,  color: '#34D399', urgent: false },
         ].map(({ label, value, color, urgent }) => (
           <div key={label} style={{
@@ -1036,7 +1036,7 @@ function ProximaView({ proxima, isDesktop }: { proxima: ProximaPreview[]; isDesk
   return (
     <div>
       <div style={{ padding: '10px 14px', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 12, marginBottom: 16 }}>
-        <p style={{ fontSize: 12, color: '#60A5FA', fontWeight: 700 }}>
+        <p style={{ fontSize: 12, color: '#D4AF37', fontWeight: 700 }}>
           📆 {enVentana.length} clientes con compra estimada la próxima semana — contáctalos antes de que llegue su ciclo
         </p>
       </div>
@@ -1062,7 +1062,7 @@ function ProximaView({ proxima, isDesktop }: { proxima: ProximaPreview[]; isDesk
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre_fantasia}</p>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 10, color: 'var(--muted)' }}>{p.vendedor_actual.split(' ')[0]}</span>
-                  {diasRestantes !== null && <span style={{ fontSize: 10, fontWeight: 700, color: '#60A5FA' }}>En {diasRestantes}d</span>}
+                  {diasRestantes !== null && <span style={{ fontSize: 10, fontWeight: 700, color: '#D4AF37' }}>En {diasRestantes}d</span>}
                   <span style={{ fontSize: 10, color: 'var(--muted)' }}>Ciclo {p.ciclo_promedio_dias}d</span>
                 </div>
               </div>
@@ -1306,7 +1306,7 @@ export default function MisionesClient({
               padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
               background: filtroVendedor === v ? 'rgba(96,165,250,0.15)' : 'var(--surface2)',
               border: `1px solid ${filtroVendedor === v ? 'rgba(96,165,250,0.4)' : 'var(--border)'}`,
-              color: filtroVendedor === v ? '#60A5FA' : 'var(--muted)', cursor: 'pointer',
+              color: filtroVendedor === v ? '#D4AF37' : 'var(--muted)', cursor: 'pointer',
             }}>{v.split(' ')[0]}</button>
           ))}
         </div>

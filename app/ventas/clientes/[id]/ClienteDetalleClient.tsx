@@ -64,10 +64,10 @@ interface Contacto {
 
 const RESULTADO_LABEL: Record<string, { label: string; color: string }> = {
   pedido:      { label: 'Hizo pedido', color: '#34D399' },
-  sin_pedido:  { label: 'Sin pedido',  color: '#F59E0B' },
+  sin_pedido:  { label: 'Sin pedido',  color: '#D4AF37' },
   no_estaba:   { label: 'No estaba',   color: '#94A3B8' },
   reclamo:     { label: 'Reclamo',     color: '#F87171' },
-  seguimiento: { label: 'Seguimiento', color: '#60A5FA' },
+  seguimiento: { label: 'Seguimiento', color: '#D4AF37' },
 }
 const TIPO_LABEL: Record<string, string> = {
   visita: 'Visita', llamada: 'Llamada', whatsapp: 'WhatsApp', nota: 'Nota',
@@ -130,23 +130,23 @@ const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov'
 const SEG_CFG: Record<string, { color: string; bg: string; label: string }> = {
   A: { color: '#D4AF37', bg: 'rgba(212,175,55,0.12)',   label: 'A' },
   B: { color: '#34D399', bg: 'rgba(52,211,153,0.12)',   label: 'B' },
-  C: { color: '#60A5FA', bg: 'rgba(96,165,250,0.12)',   label: 'C' },
-  D: { color: '#F59E0B', bg: 'rgba(245,158,11,0.12)',   label: 'D' },
+  C: { color: '#D4AF37', bg: 'rgba(96,165,250,0.12)',   label: 'C' },
+  D: { color: '#D4AF37', bg: 'rgba(245,158,11,0.12)',   label: 'D' },
   E: { color: '#F87171', bg: 'rgba(248,113,113,0.12)',  label: 'E' },
 }
 
 const ALERT_CFG: Record<string, { color: string; label: string; icon: string }> = {
   ok:            { color: '#34D399', label: 'Al día',        icon: '✓' },
-  proximo:       { color: '#F59E0B', label: 'Próximo',       icon: '⏰' },
+  proximo:       { color: '#D4AF37', label: 'Próximo',       icon: '⏰' },
   vencido:       { color: '#F87171', label: 'Vencido',       icon: '⚠' },
-  critico:       { color: '#EF4444', label: 'Crítico',       icon: '🔴' },
+  critico:       { color: '#B5543E', label: 'Crítico',       icon: '🔴' },
   sin_historial: { color: '#666',    label: 'Sin historial', icon: '—'  },
 }
 
 const ESTADO_CFG = {
   activo:     { label: 'Activo',     color: '#34D399', bg: 'rgba(52,211,153,0.1)',  dot: '#34D399' },
   inactivo:   { label: 'Inactivo',   color: '#888',    bg: 'rgba(255,255,255,0.06)', dot: '#555'   },
-  estacional: { label: 'Estacional', color: '#60A5FA', bg: 'rgba(96,165,250,0.1)',  dot: '#60A5FA' },
+  estacional: { label: 'Estacional', color: '#D4AF37', bg: 'rgba(96,165,250,0.1)',  dot: '#D4AF37' },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -205,16 +205,16 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
   // Color de la barra — cambia según si está sobre o bajo el umbral de seguridad
   const barColor = invPct > safetyInvPct + 10 ? '#34D399'  // verde: bien arriba del umbral
     : invPct > safetyInvPct           ? '#84CC16'            // lima: acercándose
-    : invPct > safetyInvPct / 2       ? '#F59E0B'            // naranja: en zona de seguridad
+    : invPct > safetyInvPct / 2       ? '#D4AF37'            // naranja: en zona de seguridad
     : invPct > 5                       ? '#F97316'            // rojo-naranja: casi vencido
-    : '#EF4444'                                              // rojo: vencido/crítico
+    : '#B5543E'                                              // rojo: vencido/crítico
 
   // El marcador visual del safety stock se pone al safetyInvPct% del lado izquierdo
   // (la barra va de LLENA izquierda → VACÍA derecha, el fill muestra invPct desde izq.)
   const safetyMarkerLeft = safetyInvPct  // % desde la izquierda = % restante en el umbral
 
   // Gradiente del track de fondo (visual)
-  const trackGradient = `linear-gradient(to right, #34D399 0%, #84CC16 ${100 - safetyInvPct - 10}%, #EAB308 ${100 - safetyInvPct}%, #F97316 ${100 - safetyInvPct / 2}%, #EF4444 100%)`
+  const trackGradient = `linear-gradient(to right, #34D399 0%, #84CC16 ${100 - safetyInvPct - 10}%, #EAB308 ${100 - safetyInvPct}%, #F97316 ${100 - safetyInvPct / 2}%, #B5543E 100%)`
 
   return (
     <div style={{
@@ -258,7 +258,7 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
             </p>
           ) : diasSin > 0 && (
             <p style={{ fontSize: 13, color: '#888' }}>
-              <span style={{ fontWeight: 800, color: '#EF4444' }}>{diasSin}d</span> sin comprar
+              <span style={{ fontWeight: 800, color: '#B5543E' }}>{diasSin}d</span> sin comprar
             </p>
           )}
         </div>
@@ -296,8 +296,8 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
               left: `${safetyMarkerLeft}%`,
               top: -4, bottom: -4,
               width: 2,
-              background: enZonaSeguridad ? '#EF4444' : '#F59E0B',
-              boxShadow: enZonaSeguridad ? '0 0 8px #EF4444' : '0 0 8px #F59E0B',
+              background: enZonaSeguridad ? '#B5543E' : '#D4AF37',
+              boxShadow: enZonaSeguridad ? '0 0 8px #B5543E' : '0 0 8px #D4AF37',
               zIndex: 2,
               borderRadius: 2,
             }} />
@@ -324,10 +324,10 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
               textAlign: 'center',
               minWidth: 80,
             }}>
-              <p style={{ fontSize: 10, color: enZonaSeguridad ? '#EF4444' : '#F59E0B', marginBottom: 2, fontWeight: 700 }}>
+              <p style={{ fontSize: 10, color: enZonaSeguridad ? '#B5543E' : '#D4AF37', marginBottom: 2, fontWeight: 700 }}>
                 Stock seguridad
               </p>
-              <p style={{ fontSize: 11, fontWeight: 800, color: enZonaSeguridad ? '#EF4444' : '#F59E0B' }}>
+              <p style={{ fontSize: 11, fontWeight: 800, color: enZonaSeguridad ? '#B5543E' : '#D4AF37' }}>
                 {SAFETY_DIAS}d antes
               </p>
             </div>
@@ -360,7 +360,7 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
         </div>
         <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
           <p style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>Días restantes</p>
-          <p style={{ fontSize: 18, fontWeight: 800, color: diasRestantes <= SAFETY_DIAS ? '#EF4444' : '#34D399' }}>
+          <p style={{ fontSize: 18, fontWeight: 800, color: diasRestantes <= SAFETY_DIAS ? '#B5543E' : '#34D399' }}>
             {diasRestantes > 0 ? `${diasRestantes}d` : 'Vencido'}
           </p>
         </div>
@@ -779,7 +779,7 @@ export default function ClienteDetalleClient({
 
                   {/* Vendedor */}
                   {cliente.vendedor && (
-                    <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(96,165,250,0.08)', color: '#60A5FA', border: '1px solid rgba(96,165,250,0.2)' }}>
+                    <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(96,165,250,0.08)', color: '#D4AF37', border: '1px solid rgba(96,165,250,0.2)' }}>
                       ⊕ {cliente.vendedor}
                     </span>
                   )}
@@ -830,11 +830,11 @@ export default function ClienteDetalleClient({
               accent
             />
             <KPICard
-              icon={<Clock size={14} color="#60A5FA" />}
+              icon={<Clock size={14} color="#D4AF37" />}
               label="FRECUENCIA"
               value={frecuencia?.ciclo_promedio_dias ? `Cada ${frecuencia.ciclo_promedio_dias} días` : '—'}
               sub="Ciclo promedio"
-              color="#60A5FA"
+              color="#D4AF37"
             />
             <KPICard
               icon={<ShoppingBag size={14} color="#34D399" />}
@@ -942,11 +942,11 @@ export default function ClienteDetalleClient({
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
                     {[
-                      { label: 'Litros totales',   value: frecuencia?.litros_totales ? `${frecuencia.litros_totales.toFixed(0)} L` : `${ventas.reduce((s,v)=>s+v.litros,0).toFixed(0)} L`, color: '#60A5FA' },
+                      { label: 'Litros totales',   value: frecuencia?.litros_totales ? `${frecuencia.litros_totales.toFixed(0)} L` : `${ventas.reduce((s,v)=>s+v.litros,0).toFixed(0)} L`, color: '#D4AF37' },
                       { label: 'Total pedidos',     value: String(frecuencia?.total_pedidos ?? pedidosUnicos.length), color: '#fff' },
                       { label: 'Revenue total',     value: frecuencia?.revenue_total ? fPeso(frecuencia.revenue_total) : fPeso(ventas.reduce((s,v)=>s+v.total_sin_impuesto,0)), color: GOLD },
                       { label: 'Ticket promedio',   value: pedidosUnicos.length ? fPeso(pedidosUnicos.reduce((s,p)=>s+p.venta,0)/pedidosUnicos.length) : '—', color: '#fff' },
-                      { label: 'Frecuencia',        value: frecuencia?.ciclo_promedio_dias ? `${frecuencia.ciclo_promedio_dias}d` : '—', color: '#60A5FA' },
+                      { label: 'Frecuencia',        value: frecuencia?.ciclo_promedio_dias ? `${frecuencia.ciclo_promedio_dias}d` : '—', color: '#D4AF37' },
                       { label: 'Cliente desde',     value: ventas.length ? fFecha(ventas[ventas.length-1].fecha_pedido) : '—', color: '#888' },
                     ].map((m, i) => (
                       <div key={i} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: '12px 14px' }}>
@@ -1068,7 +1068,7 @@ export default function ClienteDetalleClient({
                     <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
                       <div style={{ textAlign: 'right' }}>
                         <p style={{ fontSize: 11, color: '#555' }}>Litros</p>
-                        <p style={{ fontSize: 15, fontWeight: 700, color: '#60A5FA' }}>{p.litros.toFixed(1)} L</p>
+                        <p style={{ fontSize: 15, fontWeight: 700, color: '#D4AF37' }}>{p.litros.toFixed(1)} L</p>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <p style={{ fontSize: 11, color: '#555' }}>Venta</p>
@@ -1103,10 +1103,10 @@ export default function ClienteDetalleClient({
                             <p style={{ fontSize: 11, color: '#555' }}>{stats.count} pedidos</p>
                           </div>
                         </div>
-                        <p style={{ fontSize: 16, fontWeight: 800, color: '#60A5FA' }}>{stats.litros.toFixed(1)} L</p>
+                        <p style={{ fontSize: 16, fontWeight: 800, color: '#D4AF37' }}>{stats.litros.toFixed(1)} L</p>
                       </div>
                       <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${pct}%`, background: i === 0 ? GOLD : '#60A5FA', borderRadius: 4 }} />
+                        <div style={{ height: '100%', width: `${pct}%`, background: i === 0 ? GOLD : '#D4AF37', borderRadius: 4 }} />
                       </div>
                     </div>
                   )
@@ -1150,7 +1150,7 @@ export default function ClienteDetalleClient({
               <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
                 {([
                   { tipo: 'visita' as TipoContacto,   label: 'Visita',   icon: <MapPin size={14}/>,        color: '#34D399' },
-                  { tipo: 'llamada' as TipoContacto,  label: 'Llamada',  icon: <Phone size={14}/>,         color: '#60A5FA' },
+                  { tipo: 'llamada' as TipoContacto,  label: 'Llamada',  icon: <Phone size={14}/>,         color: '#D4AF37' },
                   { tipo: 'whatsapp' as TipoContacto, label: 'WhatsApp', icon: <MessageCircle size={14}/>, color: '#25D366' },
                   { tipo: 'nota' as TipoContacto,     label: 'Nota',     icon: <FileText size={14}/>,      color: '#D4AF37' },
                 ] as const).map(({ tipo, label, icon, color }) => (
@@ -1171,7 +1171,7 @@ export default function ClienteDetalleClient({
                 {contactos.map((c, i) => {
                   const resCfg = c.resultado ? RESULTADO_LABEL[c.resultado] : null
                   const tipoIcon = c.tipo === 'visita' ? <MapPin size={15} /> : c.tipo === 'llamada' ? <Phone size={15} /> : c.tipo === 'nota' ? <FileText size={15} /> : <MessageCircle size={15} />
-                  const tipoColor = c.tipo === 'visita' ? '#34D399' : c.tipo === 'llamada' ? '#60A5FA' : c.tipo === 'nota' ? '#D4AF37' : '#25D366'
+                  const tipoColor = c.tipo === 'visita' ? '#34D399' : c.tipo === 'llamada' ? '#D4AF37' : c.tipo === 'nota' ? '#D4AF37' : '#25D366'
                   return (
                     <div key={i} style={{
                       padding: '14px 18px', borderRadius: 14,
@@ -1303,12 +1303,12 @@ export default function ClienteDetalleClient({
                       {p.cargo && <p style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>{p.cargo}</p>}
                       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                         {p.telefono && (
-                          <a href={`tel:${p.telefono}`} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#60A5FA', textDecoration: 'none' }}>
+                          <a href={`tel:${p.telefono}`} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#D4AF37', textDecoration: 'none' }}>
                             <Phone size={12}/> {p.telefono}
                           </a>
                         )}
                         {p.email && (
-                          <a href={`mailto:${p.email}`} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#60A5FA', textDecoration: 'none' }}>
+                          <a href={`mailto:${p.email}`} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#D4AF37', textDecoration: 'none' }}>
                             <Mail size={12}/> {p.email}
                           </a>
                         )}

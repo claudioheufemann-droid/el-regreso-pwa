@@ -176,7 +176,7 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
   onMover: (ruta: string | null) => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const vc = cliente.vendedor ? (VENDEDOR_COLOR[cliente.vendedor] ?? '#A78BFA') : '#666'
+  const vc = cliente.vendedor ? (VENDEDOR_COLOR[cliente.vendedor] ?? '#8A6D1F') : '#666'
 
   return (
     <div

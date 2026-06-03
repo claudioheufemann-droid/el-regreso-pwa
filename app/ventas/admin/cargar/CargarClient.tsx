@@ -254,11 +254,11 @@ export default function CargarClient({ periodos }: Props) {
               display: 'flex', alignItems: 'center', gap: 10,
             }}>
               {tieneAdvertencias
-                ? <AlertTriangle size={17} style={{ color: '#F59E0B', flexShrink: 0 }} />
+                ? <AlertTriangle size={17} style={{ color: '#D4AF37', flexShrink: 0 }} />
                 : <CheckCircle size={17} style={{ color: '#34D399', flexShrink: 0 }} />
               }
               <div>
-                <p style={{ fontSize: 14, fontWeight: 700, color: tieneAdvertencias ? '#F59E0B' : '#34D399' }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: tieneAdvertencias ? '#D4AF37' : '#34D399' }}>
                   {tieneAdvertencias ? 'Validación con advertencias' : 'Validación correcta'}
                 </p>
                 <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
@@ -280,18 +280,18 @@ export default function CargarClient({ periodos }: Props) {
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.nombre}</span>
-                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(96,165,250,0.1)', color: '#60A5FA' }}>
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(96,165,250,0.1)', color: '#D4AF37' }}>
                         {v.filas} filas
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Droplets size={14} style={{ color: '#60A5FA' }} />
+                        <Droplets size={14} style={{ color: '#D4AF37' }} />
                         <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--cream)' }}>{v.litros.toFixed(1)}</span>
                         <span style={{ fontSize: 12, color: 'var(--muted)' }}>L totales</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Calendar size={13} style={{ color: '#A78BFA' }} />
+                        <Calendar size={13} style={{ color: '#8A6D1F' }} />
                         <span style={{ fontSize: 12, color: 'var(--muted)' }}>{v.fechas} {v.fechas === 1 ? 'día' : 'días'}</span>
                       </div>
                     </div>
@@ -299,12 +299,12 @@ export default function CargarClient({ periodos }: Props) {
                     {(v.filasSinLitros > 0 || v.litrosNegativos > 0) && (
                       <div style={{ marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                         {v.filasSinLitros > 0 && (
-                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(245,158,11,0.1)', color: '#F59E0B', fontWeight: 600 }}>
+                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(245,158,11,0.1)', color: '#D4AF37', fontWeight: 600 }}>
                             ⚠ {v.filasSinLitros} fila{v.filasSinLitros > 1 ? 's' : ''} sin litros
                           </span>
                         )}
                         {v.litrosNegativos > 0 && (
-                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(239,68,68,0.1)', color: '#F87171', fontWeight: 600 }}>
+                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(181,84,62,0.1)', color: '#F87171', fontWeight: 600 }}>
                             ↓ {v.litrosNegativos} devolución{v.litrosNegativos > 1 ? 'es' : ''}
                           </span>
                         )}
@@ -325,7 +325,7 @@ export default function CargarClient({ periodos }: Props) {
                             return (
                               <div key={df.fecha} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 12, color: 'var(--cream)', fontWeight: 600 }}>{fechaLegible}</span>
-                                <span style={{ fontSize: 12, color: '#60A5FA', fontWeight: 700 }}>{df.litros.toFixed(1)} L</span>
+                                <span style={{ fontSize: 12, color: '#D4AF37', fontWeight: 700 }}>{df.litros.toFixed(1)} L</span>
                               </div>
                             )
                           })}
@@ -343,7 +343,7 @@ export default function CargarClient({ periodos }: Props) {
                 borderRadius: 12, padding: '12px 16px',
                 background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)',
               }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: '#F59E0B', marginBottom: 8 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#D4AF37', marginBottom: 8 }}>
                   <AlertTriangle size={13} style={{ display: 'inline', marginRight: 5 }} />
                   {preview.advertenciasLitros.length} advertencia{preview.advertenciasLitros.length > 1 ? 's' : ''} de litros
                 </p>
@@ -376,8 +376,8 @@ export default function CargarClient({ periodos }: Props) {
                 display: 'flex', alignItems: 'center', gap: 8, borderRadius: 10, padding: '10px 14px',
                 background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)',
               }}>
-                <ShieldCheck size={13} style={{ color: '#60A5FA', flexShrink: 0 }} />
-                <p style={{ fontSize: 12, color: '#60A5FA' }}>
+                <ShieldCheck size={13} style={{ color: '#D4AF37', flexShrink: 0 }} />
+                <p style={{ fontSize: 12, color: '#D4AF37' }}>
                   <strong>{preview.clientesInternosExcluidos} filas internas excluidas</strong>
                   {' '}({preview.litrosInternosExcluidos.toFixed(2)} L) — movimientos de personal/PDV, no se cargarán.
                 </p>
@@ -390,8 +390,8 @@ export default function CargarClient({ periodos }: Props) {
                 display: 'flex', alignItems: 'center', gap: 8, borderRadius: 10, padding: '10px 14px',
                 background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)',
               }}>
-                <Copy size={13} style={{ color: '#F59E0B' }} />
-                <p style={{ fontSize: 12, color: '#F59E0B' }}>
+                <Copy size={13} style={{ color: '#D4AF37' }} />
+                <p style={{ fontSize: 12, color: '#D4AF37' }}>
                   {preview.duplicadosEnArchivo} fila{preview.duplicadosEnArchivo > 1 ? 's' : ''} duplicada{preview.duplicadosEnArchivo > 1 ? 's' : ''} en el archivo — serán ignoradas.
                 </p>
               </div>
@@ -475,11 +475,11 @@ export default function CargarClient({ periodos }: Props) {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <Droplets size={13} style={{ color: '#60A5FA' }} />
+                          <Droplets size={13} style={{ color: '#D4AF37' }} />
                           <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>{v.litros.toFixed(1)} L</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <Calendar size={12} style={{ color: '#A78BFA' }} />
+                          <Calendar size={12} style={{ color: '#8A6D1F' }} />
                           <span style={{ fontSize: 12, color: '#888' }}>
                             {v.fechas} {v.fechas === 1 ? 'día' : 'días'}
                           </span>
@@ -497,8 +497,8 @@ export default function CargarClient({ periodos }: Props) {
                 background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)',
                 marginBottom: 8,
               }}>
-                <ShieldCheck size={13} style={{ color: '#60A5FA', flexShrink: 0, marginTop: 1 }} />
-                <p style={{ fontSize: 12, color: '#60A5FA' }}>
+                <ShieldCheck size={13} style={{ color: '#D4AF37', flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 12, color: '#D4AF37' }}>
                   <strong>{result.clientesInternosExcluidos} filas internas excluidas</strong>
                   {' '}({result.litrosInternosExcluidos.toFixed(2)} L) — movimientos de personal/PDV, no cargados.
                 </p>
@@ -511,8 +511,8 @@ export default function CargarClient({ periodos }: Props) {
                 background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)',
                 marginBottom: 8,
               }}>
-                <Copy size={13} style={{ color: '#F59E0B', flexShrink: 0, marginTop: 1 }} />
-                <p style={{ fontSize: 12, color: '#F59E0B' }}>
+                <Copy size={13} style={{ color: '#D4AF37', flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 12, color: '#D4AF37' }}>
                   {result.duplicadosEnArchivo} fila{result.duplicadosEnArchivo > 1 ? 's' : ''} duplicada{result.duplicadosEnArchivo > 1 ? 's' : ''} ignoradas.
                 </p>
               </div>

@@ -64,18 +64,18 @@ function formatPeso(n: number) {
 }
 
 function getColorVendedor(vendedor: string) {
-  if (vendedor === 'Javier Badilla') return '#F59E0B'
-  if (vendedor === 'Carlos Urrejola') return '#60A5FA'
-  return '#A78BFA'
+  if (vendedor === 'Javier Badilla') return '#D4AF37'
+  if (vendedor === 'Carlos Urrejola') return '#D4AF37'
+  return '#8A6D1F'
 }
 
 // Salud: verde <7d, amarillo 8-15d, naranja 16-30d, rojo >30d
 function getColorSalud(dias: number | null): string {
   if (dias === null) return '#6B7280'
   if (dias <= 7)  return '#34D399'  // verde: excelente
-  if (dias <= 15) return '#F59E0B'  // amarillo: atención
+  if (dias <= 15) return '#D4AF37'  // amarillo: atención
   if (dias <= 30) return '#F97316'  // naranja: riesgo
-  return '#EF4444'                   // rojo: crítico
+  return '#B5543E'                   // rojo: crítico
 }
 
 function getSaludLabel(dias: number | null): string {
@@ -213,7 +213,7 @@ function PopupDetalle({ p, color, onWA }: {
           </div>
         )}
         {p.deuda_vencida > 0 && (
-          <div style={{ fontSize: 10, color: '#EF4444', marginTop: 3, fontWeight: 700 }}>
+          <div style={{ fontSize: 10, color: '#B5543E', marginTop: 3, fontWeight: 700 }}>
             ⚠ Deuda vencida: {formatPeso(p.deuda_vencida)}
           </div>
         )}
@@ -223,7 +223,7 @@ function PopupDetalle({ p, color, onWA }: {
       {!p.sin_compra && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 10 }}>
           <div style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
-            <div style={{ fontSize: 10, color: '#60A5FA', fontWeight: 600, marginBottom: 2 }}>LITROS</div>
+            <div style={{ fontSize: 10, color: '#D4AF37', fontWeight: 600, marginBottom: 2 }}>LITROS</div>
             <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{p.litros_total.toFixed(1)}</div>
           </div>
           <div style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
@@ -231,7 +231,7 @@ function PopupDetalle({ p, color, onWA }: {
             <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{p.pedidos_count}</div>
           </div>
           <div style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
-            <div style={{ fontSize: 10, color: '#A78BFA', fontWeight: 600, marginBottom: 2 }}>VENTA</div>
+            <div style={{ fontSize: 10, color: '#8A6D1F', fontWeight: 600, marginBottom: 2 }}>VENTA</div>
             <div style={{ fontSize: 11, fontWeight: 800, color: '#fff' }}>{formatPeso(p.total_sin_impuesto)}</div>
           </div>
         </div>
@@ -270,7 +270,7 @@ function PopupDetalle({ p, color, onWA }: {
                   <div style={{ fontSize: 12, color: '#eee', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prod.producto}</div>
                   {prod.envase && <div style={{ fontSize: 10, color: '#888' }}>{prod.envase}</div>}
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#60A5FA', marginLeft: 10, flexShrink: 0 }}>{prod.litros} L</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#D4AF37', marginLeft: 10, flexShrink: 0 }}>{prod.litros} L</div>
               </div>
             ))}
             {prods.length > 6 && <div style={{ fontSize: 10, color: '#777', textAlign: 'center', paddingTop: 4 }}>+{prods.length - 6} más</div>}
@@ -314,7 +314,7 @@ function PopupLead({ l, onWA }: { l: LeadPunto; onWA: (t: WATarget) => void }) {
   return (
     <div style={{ minWidth: 210, fontFamily: 'system-ui,sans-serif' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <span style={{ fontSize: 9, fontWeight: 800, color: '#A78BFA', background: 'rgba(167,139,250,0.15)', padding: '1px 7px', borderRadius: 10 }}>POSIBLE CLIENTE</span>
+        <span style={{ fontSize: 9, fontWeight: 800, color: '#8A6D1F', background: 'rgba(167,139,250,0.15)', padding: '1px 7px', borderRadius: 10 }}>POSIBLE CLIENTE</span>
         {l.rating != null && <span style={{ fontSize: 11, color: '#D97706' }}>★ {l.rating}</span>}
       </div>
       <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1a1a', marginBottom: 2 }}>{l.nombre}</div>
@@ -333,7 +333,7 @@ function PopupLead({ l, onWA }: { l: LeadPunto; onWA: (t: WATarget) => void }) {
         )}
         {l.telefono && (
           <button onClick={() => window.open(`tel:${l.telefono}`)}
-            style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #60A5FA', background: 'white', color: '#2563EB', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Llamar</button>
+            style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #D4AF37', background: 'white', color: '#2563EB', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Llamar</button>
         )}
       </div>
     </div>
@@ -430,7 +430,7 @@ export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz
             key={`lead-${l.id ?? i}`}
             center={[l.lat as number, l.lng as number]}
             radius={6}
-            pathOptions={{ color: '#A78BFA', fillColor: '#A78BFA', fillOpacity: 0.18, weight: 2, opacity: 0.95, dashArray: '2 2' }}
+            pathOptions={{ color: '#8A6D1F', fillColor: '#8A6D1F', fillOpacity: 0.18, weight: 2, opacity: 0.95, dashArray: '2 2' }}
           >
             <Popup closeButton maxWidth={290}>
               <PopupLead l={l} onWA={setWaTarget} />

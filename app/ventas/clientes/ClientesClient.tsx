@@ -77,10 +77,10 @@ function getEstado(c: Cliente): EstadoDisplay {
   if (c.estadoCliente === 'inactivo')
     return { label:'Inactivo',      color:'#6B7280', bg:'rgba(107,114,128,0.1)', border:'rgba(107,114,128,0.2)' }
   if ((c.deuda?.deuda_vencida ?? 0) > 0)
-    return { label:'Deuda alta',    color:'#EF4444', bg:'rgba(239,68,68,0.1)',   border:'rgba(239,68,68,0.2)'   }
+    return { label:'Deuda alta',    color:'#B5543E', bg:'rgba(181,84,62,0.1)',   border:'rgba(181,84,62,0.2)'   }
   const al = c.frecuencia?.alert_level
   if (al === 'critico' || al === 'vencido')
-    return { label:'Riesgo',        color:'#F59E0B', bg:'rgba(245,158,11,0.1)', border:'rgba(245,158,11,0.2)'  }
+    return { label:'Riesgo',        color:'#D4AF37', bg:'rgba(245,158,11,0.1)', border:'rgba(245,158,11,0.2)'  }
   const dc = diasDesde(c.ultimoContacto?.fecha)
   if (!c.ultimoContacto || dc === null || dc > 7)
     return { label:'Sin contacto',  color:'#9CA3AF', bg:'rgba(156,163,175,0.1)', border:'rgba(156,163,175,0.2)' }
@@ -96,8 +96,8 @@ function DonutResumen({ stats }: { stats: Stats }) {
   const total = stats.total || 1
   const items = [
     { label:'Al día',       count: stats.alDia,        color:'#34D399' },
-    { label:'Riesgo',       count: stats.riesgoCompra, color:'#F59E0B' },
-    { label:'Deuda alta',   count: stats.deudaAlta,    color:'#EF4444' },
+    { label:'Riesgo',       count: stats.riesgoCompra, color:'#D4AF37' },
+    { label:'Deuda alta',   count: stats.deudaAlta,    color:'#B5543E' },
     { label:'Sin contacto', count: stats.sinContacto,  color:'#6B7280' },
   ]
   let cum = -Math.PI/2
@@ -143,9 +143,9 @@ function Sidebar({ stats, actividad, onAlertaClick, onClienteClick }: {
   onClienteClick: (nombre: string) => void
 }) {
   const ALERTAS = [
-    { key:'deuda',       count:stats.deudaAlta,    icon:AlertTriangle, color:'#EF4444', bg:'rgba(239,68,68,0.05)',   border:'rgba(239,68,68,0.2)',   label:`${stats.deudaAlta} clientes`,    sub:'con deuda vencida',                  show: stats.deudaAlta > 0 },
-    { key:'sin_contacto',count:stats.sinContacto,  icon:PhoneOff,      color:'#F59E0B', bg:'rgba(245,158,11,0.05)', border:'rgba(245,158,11,0.2)',  label:`${stats.sinContacto} clientes`,  sub:'sin contacto hace más de 7 días',    show: stats.sinContacto > 0 },
-    { key:'riesgo',      count:stats.riesgoCompra, icon:Clock,         color:'#60A5FA', bg:'rgba(96,165,250,0.05)', border:'rgba(96,165,250,0.2)',  label:`${stats.riesgoCompra} clientes`, sub:'con riesgo de compra',               show: stats.riesgoCompra > 0 },
+    { key:'deuda',       count:stats.deudaAlta,    icon:AlertTriangle, color:'#B5543E', bg:'rgba(181,84,62,0.05)',   border:'rgba(181,84,62,0.2)',   label:`${stats.deudaAlta} clientes`,    sub:'con deuda vencida',                  show: stats.deudaAlta > 0 },
+    { key:'sin_contacto',count:stats.sinContacto,  icon:PhoneOff,      color:'#D4AF37', bg:'rgba(245,158,11,0.05)', border:'rgba(245,158,11,0.2)',  label:`${stats.sinContacto} clientes`,  sub:'sin contacto hace más de 7 días',    show: stats.sinContacto > 0 },
+    { key:'riesgo',      count:stats.riesgoCompra, icon:Clock,         color:'#D4AF37', bg:'rgba(96,165,250,0.05)', border:'rgba(96,165,250,0.2)',  label:`${stats.riesgoCompra} clientes`, sub:'con riesgo de compra',               show: stats.riesgoCompra > 0 },
   ]
 
   return (
@@ -175,7 +175,7 @@ function Sidebar({ stats, actividad, onAlertaClick, onClienteClick }: {
                 onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
                 <div style={{ width:28, height:28, borderRadius:8, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
                   background: isContacto?'rgba(37,211,102,0.1)':'rgba(96,165,250,0.1)' }}>
-                  {isContacto ? <MessageCircle size={13} color="#25D366"/> : <Zap size={13} color="#60A5FA"/>}
+                  {isContacto ? <MessageCircle size={13} color="#25D366"/> : <Zap size={13} color="#D4AF37"/>}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <p style={{ fontSize:11, fontWeight:600, color:'var(--cream)' }}>
@@ -185,7 +185,7 @@ function Sidebar({ stats, actividad, onAlertaClick, onClienteClick }: {
                     {a.cliente}
                   </p>
                   {a.tipo === 'pedido' && (
-                    <p style={{ fontSize:9, color:'#60A5FA', fontWeight:600 }}>{a.detalle}</p>
+                    <p style={{ fontSize:9, color:'#D4AF37', fontWeight:600 }}>{a.detalle}</p>
                   )}
                 </div>
                 <span style={{ fontSize:9, color:'#555', flexShrink:0, marginTop:2 }}>{fDias(dc)}</span>
@@ -199,7 +199,7 @@ function Sidebar({ stats, actividad, onAlertaClick, onClienteClick }: {
       {/* Alertas importantes */}
       <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:16, padding:'14px 16px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:12 }}>
-          <Bell size={12} color="#F59E0B"/>
+          <Bell size={12} color="#D4AF37"/>
           <p style={{ fontSize:11, fontWeight:800, color:'var(--cream)', letterSpacing:'0.04em' }}>ALERTAS IMPORTANTES</p>
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
@@ -243,9 +243,9 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
   const al        = c.frecuencia?.alert_level ?? 'sin_historial'
   const diasSin   = c.frecuencia?.dias_sin_compra ?? 0
 
-  const alertBorderColor = al === 'critico' ? '#EF4444'
+  const alertBorderColor = al === 'critico' ? '#B5543E'
     : al === 'vencido' ? '#F87171'
-    : al === 'proximo'  ? '#F59E0B'
+    : al === 'proximo'  ? '#D4AF37'
     : 'transparent'
 
   return (
@@ -301,7 +301,7 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
       <td style={{ padding:'10px 8px' }}>
         {saldo > 0 ? (
           <div>
-            <p style={{ fontSize:12, fontWeight:800, color: deuda>0 ? '#EF4444' : '#34D399' }}>{fPeso(saldo)}</p>
+            <p style={{ fontSize:12, fontWeight:800, color: deuda>0 ? '#B5543E' : '#34D399' }}>{fPeso(saldo)}</p>
             {deuda > 0 && <p style={{ fontSize:10, color:'#F87171' }}>vcda {fPeso(deuda)}</p>}
           </div>
         ) : <span style={{ fontSize:11, color:'#444' }}>—</span>}
@@ -367,9 +367,9 @@ function ClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; on
 
   // Barra de urgencia: % del ciclo consumido
   const pctConsumed = ciclo > 0 ? Math.min(100, Math.round((diasSin / ciclo) * 100)) : 0
-  const barColor = al === 'critico' ? '#EF4444'
+  const barColor = al === 'critico' ? '#B5543E'
     : al === 'vencido' ? '#F87171'
-    : al === 'proximo'  ? '#F59E0B'
+    : al === 'proximo'  ? '#D4AF37'
     : '#34D399'
 
   const waTarget: WATarget = { nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'general', cicloPromedioDias:c.frecuencia?.ciclo_promedio_dias, siguienteCompra:c.frecuencia?.siguiente_compra_estimada, subtitulo:c.categoria??undefined }
@@ -447,11 +447,11 @@ function ClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; on
 
         {/* Deuda badge (solo si tiene) */}
         {deudaV > 0 && (
-          <div style={{ background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.2)',
+          <div style={{ background:'rgba(181,84,62,0.07)', border:'1px solid rgba(181,84,62,0.2)',
             borderRadius:8, padding:'5px 10px', marginBottom:10,
             display:'flex', alignItems:'center', gap:6 }}>
-            <AlertTriangle size={11} color="#EF4444"/>
-            <span style={{ fontSize:11, fontWeight:700, color:'#EF4444' }}>Deuda vencida: {fPeso(deudaV)}</span>
+            <AlertTriangle size={11} color="#B5543E"/>
+            <span style={{ fontSize:11, fontWeight:700, color:'#B5543E' }}>Deuda vencida: {fPeso(deudaV)}</span>
           </div>
         )}
 
@@ -552,10 +552,10 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   const FILTROS = [
     { key:'todos',       label:`Todos`,       count: stats.total,        color:'var(--cream)', icon: null },
     { key:'contactados', label:'Contactados', count: stats.contactados7d, color:'#34D399',     icon:'✓'  },
-    { key:'deuda',       label:'Deuda',       count: stats.deudaAlta,    color:'#EF4444',     icon:'⚠'  },
-    { key:'pendientes',  label:'Pendientes',  count: stats.pendientes,    color:'#F59E0B',     icon:'⚠'  },
+    { key:'deuda',       label:'Deuda',       count: stats.deudaAlta,    color:'#B5543E',     icon:'⚠'  },
+    { key:'pendientes',  label:'Pendientes',  count: stats.pendientes,    color:'#D4AF37',     icon:'⚠'  },
     { key:'sin_contacto',label:'Sin contacto',count: stats.sinContacto,   color:'#9CA3AF',     icon:'✕'  },
-    { key:'riesgo',      label:'Riesgo compra',count:stats.riesgoCompra,  color:'#EF4444',     icon:'🔴' },
+    { key:'riesgo',      label:'Riesgo compra',count:stats.riesgoCompra,  color:'#B5543E',     icon:'🔴' },
   ]
 
   // Filtrar y ordenar
@@ -650,9 +650,9 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
       {/* ── KPI Cards ──────────────────────────────────────────────────── */}
       <div style={{ display:'grid', gridTemplateColumns:isDesktop?'repeat(4,1fr)':'repeat(2,1fr)', gap:10, marginBottom:20 }}>
         {[
-          { icon:Users,          label:'TOTAL CLIENTES',      val:stats.total,        sub:'100% cartera activa', color:'#60A5FA' },
+          { icon:Users,          label:'TOTAL CLIENTES',      val:stats.total,        sub:'100% cartera activa', color:'#D4AF37' },
           { icon:CheckCircle2,   label:'CONTACTADOS (7d)',     val:stats.contactados7d, sub:`${Math.round((stats.contactados7d/Math.max(stats.total,1))*100)}% del total`, color:'#34D399' },
-          { icon:Clock,          label:'PENDIENTES CONTACTO',  val:stats.pendientes,   sub:`${Math.round((stats.pendientes/Math.max(stats.total,1))*100)}% del total`, color:'#F59E0B' },
+          { icon:Clock,          label:'PENDIENTES CONTACTO',  val:stats.pendientes,   sub:`${Math.round((stats.pendientes/Math.max(stats.total,1))*100)}% del total`, color:'#D4AF37' },
           { icon:PhoneOff,       label:'SIN CONTACTO',         val:stats.sinContacto,  sub:`${Math.round((stats.sinContacto/Math.max(stats.total,1))*100)}% del total`, color:'#9CA3AF' },
         ].map(k=>(
           <div key={k.label} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:14, padding:'14px 16px' }}>

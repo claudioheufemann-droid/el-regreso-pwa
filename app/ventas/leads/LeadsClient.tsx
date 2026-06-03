@@ -15,14 +15,14 @@ interface Lead {
 }
 
 const ESTADOS: Record<string, { label: string; color: string }> = {
-  nuevo:      { label: 'Nuevo',      color: '#60A5FA' },
-  contactado: { label: 'Contactado', color: '#F59E0B' },
+  nuevo:      { label: 'Nuevo',      color: '#D4AF37' },
+  contactado: { label: 'Contactado', color: '#D4AF37' },
   convertido: { label: 'Convertido', color: '#34D399' },
   descartado: { label: 'Descartado', color: '#6B7280' },
 }
 const PRODUCTOS = ['all', 'Ambos', 'Cerveza Artesanal', 'Kombucha']
 
-function scoreColor(s: number) { return s >= 70 ? '#34D399' : s >= 45 ? '#F59E0B' : '#9CA3AF' }
+function scoreColor(s: number) { return s >= 70 ? '#34D399' : s >= 45 ? '#D4AF37' : '#9CA3AF' }
 
 export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
   const [leads, setLeads] = useState<Lead[]>([])
@@ -95,7 +95,7 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {isAdmin && (
-            <button onClick={importar} disabled={importing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', color: '#A78BFA', fontSize: 12, fontWeight: 700, cursor: importing ? 'not-allowed' : 'pointer' }}>
+            <button onClick={importar} disabled={importing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', color: '#8A6D1F', fontSize: 12, fontWeight: 700, cursor: importing ? 'not-allowed' : 'pointer' }}>
               <RefreshCw size={13} style={{ animation: importing ? 'spin 1s linear infinite' : 'none' }} /> {importing ? 'Analizando…' : 'Importar / analizar leads'}
             </button>
           )}
@@ -117,10 +117,10 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }} className="kpi-grid-4">
         {[
-          { icon: <Target size={16} />, c: '#60A5FA', label: 'Leads', v: kpis.total.toLocaleString('es-CL') },
+          { icon: <Target size={16} />, c: '#D4AF37', label: 'Leads', v: kpis.total.toLocaleString('es-CL') },
           { icon: <Droplets size={16} />, c: '#34D399', label: 'Potencial / mes', v: `${kpis.litros.toLocaleString('es-CL')} L` },
-          { icon: <MapPin size={16} />, c: '#A78BFA', label: 'Ciudades', v: kpis.ciudades },
-          { icon: <Phone size={16} />, c: '#F59E0B', label: 'Con teléfono', v: kpis.conTel.toLocaleString('es-CL') },
+          { icon: <MapPin size={16} />, c: '#8A6D1F', label: 'Ciudades', v: kpis.ciudades },
+          { icon: <Phone size={16} />, c: '#D4AF37', label: 'Con teléfono', v: kpis.conTel.toLocaleString('es-CL') },
         ].map(k => (
           <div key={k.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6, color: k.c }}>{k.icon}<span style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>{k.label}</span></div>
@@ -170,14 +170,14 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
                 <div style={{ flex: '1 1 220px', minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)' }}>{l.nombre}</span>
-                    {l.rating != null && <span style={{ fontSize: 11, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 2 }}><Star size={11} fill="#F59E0B" /> {l.rating}</span>}
+                    {l.rating != null && <span style={{ fontSize: 11, color: '#D4AF37', display: 'flex', alignItems: 'center', gap: 2 }}><Star size={11} fill="#D4AF37" /> {l.rating}</span>}
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 8px', borderRadius: 20, background: `${est.color}20`, color: est.color }}>{est.label}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>{l.categoria ?? l.tipo_buscado}</span>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>· 📍 {l.ciudad}</span>
-                    {l.categoria_mapeada && <span style={{ fontSize: 10, color: '#A78BFA' }}>≈ {l.categoria_mapeada}</span>}
-                    {l.producto_sugerido && <span style={{ fontSize: 10, color: '#60A5FA' }}>· {l.producto_sugerido}</span>}
+                    {l.categoria_mapeada && <span style={{ fontSize: 10, color: '#8A6D1F' }}>≈ {l.categoria_mapeada}</span>}
+                    {l.producto_sugerido && <span style={{ fontSize: 10, color: '#D4AF37' }}>· {l.producto_sugerido}</span>}
                   </div>
                 </div>
                 {/* Potencial */}
@@ -188,7 +188,7 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
                 {/* Acciones */}
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   {l.telefono && <button onClick={() => setWaTarget({ nombre: l.nombre, telefono: l.telefono!, contexto: 'mision' })} style={btn('#25D166')}><MessageCircle size={14} color="#25D166" /></button>}
-                  {l.telefono && <button onClick={() => window.open(`tel:${l.telefono}`)} style={btn('#60A5FA')}><Phone size={14} color="#60A5FA" /></button>}
+                  {l.telefono && <button onClick={() => window.open(`tel:${l.telefono}`)} style={btn('#D4AF37')}><Phone size={14} color="#D4AF37" /></button>}
                   {l.sitio_web && <button onClick={() => window.open(l.sitio_web!.startsWith('http') ? l.sitio_web! : `https://${l.sitio_web}`, '_blank')} style={btn('#9CA3AF')}><Globe size={14} color="#9CA3AF" /></button>}
                   <select value={l.estado} onChange={e => marcar(l.id, e.target.value)} onClick={e => e.stopPropagation()} style={{ ...selStyle, padding: '6px 8px', fontSize: 11 }}>
                     {Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k} style={{ background: 'var(--surface)' }}>{v.label}</option>)}

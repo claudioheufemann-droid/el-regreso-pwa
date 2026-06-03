@@ -174,7 +174,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
         {uploadError && (
           <div style={{
             marginTop: 12, padding: '10px 14px', borderRadius: 8,
-            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+            background: 'rgba(181,84,62,0.08)', border: '1px solid rgba(181,84,62,0.2)',
             display: 'flex', gap: 8, alignItems: 'flex-start',
           }}>
             <AlertTriangle size={15} style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }} />
@@ -185,7 +185,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
         {uploadStats && (
           <div style={{
             marginTop: 12, padding: '12px 16px', borderRadius: 8,
-            background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)',
+            background: 'rgba(90,138,74,0.06)', border: '1px solid rgba(90,138,74,0.15)',
           }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
               <CheckCircle2 size={15} style={{ color: '#4ade80' }} />

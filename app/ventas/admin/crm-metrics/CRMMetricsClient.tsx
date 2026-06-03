@@ -73,8 +73,8 @@ export default function CRMMetricsClient({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 32 }}>
           <KPICard icon={<TrendingUp size={20} />} label="Clientes" value={metrics.totalClientes} color="#D4AF37" />
           <KPICard icon={<CheckCircle2 size={20} />} label="Score promedio" value={`${metrics.avgSegment}/5`} color="#34D399" />
-          <KPICard icon={<Clock size={20} />} label="Follow-ups pendientes" value={metrics.pendienteFU} color="#F59E0B" highlight={metrics.pendienteFU > 10} />
-          <KPICard icon={<AlertCircle size={20} />} label="Tasa completación" value={`${metrics.fuCompletionRate}%`} color="#60A5FA" />
+          <KPICard icon={<Clock size={20} />} label="Follow-ups pendientes" value={metrics.pendienteFU} color="#D4AF37" highlight={metrics.pendienteFU > 10} />
+          <KPICard icon={<AlertCircle size={20} />} label="Tasa completación" value={`${metrics.fuCompletionRate}%`} color="#D4AF37" />
         </div>
 
         {/* Segmentation Distribution */}
@@ -84,7 +84,7 @@ export default function CRMMetricsClient({
             {(['A', 'B', 'C', 'D', 'E'] as const).map(seg => {
               const count = metrics.segmentCounts[seg]
               const pct = (count / metrics.totalClientes) * 100
-              const colors: Record<string, string> = { A: '#D4AF37', B: '#34D399', C: '#60A5FA', D: '#F59E0B', E: '#F87171' }
+              const colors: Record<string, string> = { A: '#D4AF37', B: '#34D399', C: '#D4AF37', D: '#D4AF37', E: '#F87171' }
               return (
                 <div key={seg} style={{ flex: 1, textAlign: 'center' }}>
                   <div style={{ background: colors[seg], height: `${Math.max(20, pct * 2)}px`, borderRadius: 4, marginBottom: 8 }} />
@@ -107,7 +107,7 @@ export default function CRMMetricsClient({
                   <p style={{ fontSize: 13, color: '#888', minWidth: 140 }}>{vendor}</p>
                   <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', height: 24, borderRadius: 6, overflow: 'hidden' }}>
                     <div style={{
-                      background: completionRate > 80 ? '#34D399' : completionRate > 50 ? '#F59E0B' : '#F87171',
+                      background: completionRate > 80 ? '#34D399' : completionRate > 50 ? '#D4AF37' : '#F87171',
                       height: '100%', width: `${completionRate}%`, borderRadius: 6,
                     }} />
                   </div>

@@ -66,9 +66,9 @@ const TILES: { value: TileTipo; label: string }[] = [
 
 const SALUD_LEGEND = [
   { color: '#34D399', label: 'Excelente (0-7 días)' },
-  { color: '#F59E0B', label: 'Atención (8-15 días)' },
+  { color: '#D4AF37', label: 'Atención (8-15 días)' },
   { color: '#F97316', label: 'Riesgo (16-30 días)'  },
-  { color: '#EF4444', label: 'Crítico (+30 días)'   },
+  { color: '#B5543E', label: 'Crítico (+30 días)'   },
 ]
 
 export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
@@ -211,7 +211,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
       {/* ─── Header + tile switch ─── */}
       <div style={{ padding: isDesktop ? '14px 20px' : '10px 14px', borderBottom: '1px solid #1A1A1A', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <MapPin size={isDesktop ? 22 : 18} style={{ color: '#F59E0B' }} />
+          <MapPin size={isDesktop ? 22 : 18} style={{ color: '#D4AF37' }} />
           <div>
             <h1 style={{ fontSize: isDesktop ? 20 : 16, fontWeight: 900, color: 'white', letterSpacing: '-0.5px', lineHeight: 1.1 }}>Mapa de Pedidos</h1>
             {isDesktop && <p style={{ fontSize: 12, color: '#666', marginTop: 1 }}>Visualiza ventas, clientes y oportunidades en el mapa</p>}
@@ -222,7 +222,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
           {/* Fecha */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#161616', borderRadius: 10, padding: '4px 6px', border: '1px solid #262626' }}>
             <button onClick={() => { setPlaying(false); const n = fechasDisponibles[fechaIdx + 1]; if (n) setFecha(n) }} disabled={fechaIdx >= fechasDisponibles.length - 1} style={navBtn(fechaIdx >= fechasDisponibles.length - 1)}><ChevronLeft size={15} /></button>
-            <Calendar size={13} style={{ color: '#F59E0B', flexShrink: 0 }} />
+            <Calendar size={13} style={{ color: '#D4AF37', flexShrink: 0 }} />
             <select value={fecha} onChange={e => { setPlaying(false); setFecha(e.target.value) }} style={{ background: 'transparent', border: 'none', color: 'white', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', outline: 'none', minWidth: 92 }}>
               {fechasDisponibles.map(f => <option key={f} value={f} style={{ background: '#161616' }}>{formatFecha(f)}</option>)}
             </select>
@@ -232,7 +232,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
           {/* Tile switch */}
           <div style={{ display: 'flex', background: '#161616', border: '1px solid #262626', borderRadius: 10, padding: 3, gap: 2 }}>
             {TILES.map(t => (
-              <button key={t.value} onClick={() => setTileTipo(t.value)} style={{ padding: '5px 11px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: tileTipo === t.value ? '#F59E0B' : 'transparent', color: tileTipo === t.value ? '#1a1200' : '#666' }}>{t.label}</button>
+              <button key={t.value} onClick={() => setTileTipo(t.value)} style={{ padding: '5px 11px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: tileTipo === t.value ? '#D4AF37' : 'transparent', color: tileTipo === t.value ? '#1a1200' : '#666' }}>{t.label}</button>
             ))}
           </div>
         </div>
@@ -240,11 +240,11 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
 
       {/* ─── KPI row ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(5, 1fr)' : 'repeat(2, 1fr)', gap: 10, padding: isDesktop ? '14px 20px 0' : '12px 14px 0', flexShrink: 0 }}>
-        <KPICard icon={<Droplets size={16} />} color="#60A5FA" label="Ventas del período" value={`${formatLitros(kpis.litros)} L`} />
+        <KPICard icon={<Droplets size={16} />} color="#D4AF37" label="Ventas del período" value={`${formatLitros(kpis.litros)} L`} />
         <KPICard icon={<Users size={16} />} color="#34D399" label="Clientes activos" value={kpis.clientes} />
-        <KPICard icon={<ShoppingCart size={16} />} color="#F59E0B" label="Pedidos" value={kpis.pedidos} />
-        <KPICard icon={<DollarSign size={16} />} color="#A78BFA" label="Ticket promedio" value={formatPeso(kpis.ticket)} />
-        <KPICard icon={<AlertTriangle size={16} />} color="#EF4444" label="Deuda total" value={formatPeso(deudaGlobal)} alert />
+        <KPICard icon={<ShoppingCart size={16} />} color="#D4AF37" label="Pedidos" value={kpis.pedidos} />
+        <KPICard icon={<DollarSign size={16} />} color="#8A6D1F" label="Ticket promedio" value={formatPeso(kpis.ticket)} />
+        <KPICard icon={<AlertTriangle size={16} />} color="#B5543E" label="Deuda total" value={formatPeso(deudaGlobal)} alert />
       </div>
 
       {/* ─── Filtros ─── */}
@@ -257,14 +257,14 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
         {/* Vendedor */}
         <div style={{ display: 'flex', gap: 3 }}>
           {VENDEDORES.map(v => (
-            <button key={v.value} onClick={() => setVendedor(v.value)} style={{ height: 36, padding: '0 15px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer', background: vendedor === v.value ? (VEND_COLOR[v.value] ?? '#F59E0B') : '#161616', color: vendedor === v.value ? '#000' : '#666' }}>{v.label}</button>
+            <button key={v.value} onClick={() => setVendedor(v.value)} style={{ height: 36, padding: '0 15px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer', background: vendedor === v.value ? (VEND_COLOR[v.value] ?? '#D4AF37') : '#161616', color: vendedor === v.value ? '#000' : '#666' }}>{v.label}</button>
           ))}
         </div>
 
         {/* Producto */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: productoFiltro !== 'all' ? 'rgba(245,158,11,0.12)' : '#161616', border: `1px solid ${productoFiltro !== 'all' ? 'rgba(245,158,11,0.35)' : '#262626'}`, borderRadius: 10, padding: '0 12px', height: 36 }}>
-          <Package size={14} style={{ color: productoFiltro !== 'all' ? '#F59E0B' : '#666' }} />
-          <select value={productoFiltro} onChange={e => setProductoFiltro(e.target.value)} style={{ background: 'transparent', border: 'none', color: productoFiltro !== 'all' ? '#F59E0B' : '#999', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', outline: 'none', maxWidth: 180 }}>
+          <Package size={14} style={{ color: productoFiltro !== 'all' ? '#D4AF37' : '#666' }} />
+          <select value={productoFiltro} onChange={e => setProductoFiltro(e.target.value)} style={{ background: 'transparent', border: 'none', color: productoFiltro !== 'all' ? '#D4AF37' : '#999', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', outline: 'none', maxWidth: 180 }}>
             <option value="all" style={{ background: '#161616' }}>Todos los productos</option>
             {productosDisponibles.map(p => <option key={p} value={p} style={{ background: '#161616' }}>{p}</option>)}
           </select>
@@ -283,12 +283,12 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
         </button>
 
         {/* Leads (posibles clientes) */}
-        <button onClick={() => setMostrarLeads(b => !b)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 36, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: mostrarLeads ? 'rgba(167,139,250,0.18)' : '#111', color: mostrarLeads ? '#A78BFA' : '#555', outline: mostrarLeads ? '1px solid rgba(167,139,250,0.4)' : '1px solid #222' }}>
+        <button onClick={() => setMostrarLeads(b => !b)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 36, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: mostrarLeads ? 'rgba(167,139,250,0.18)' : '#111', color: mostrarLeads ? '#8A6D1F' : '#555', outline: mostrarLeads ? '1px solid rgba(167,139,250,0.4)' : '1px solid #222' }}>
           <Target size={13} /> Leads{mostrarLeads && leads.length ? ` (${leadsFiltrados.length})` : ''}
         </button>
 
         {/* Rango */}
-        <button onClick={() => setModoRango(r => !r)} style={{ padding: '0 12px', height: 36, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: modoRango ? 'rgba(96,165,250,0.15)' : '#111', color: modoRango ? '#60A5FA' : '#555', outline: modoRango ? '1px solid rgba(96,165,250,0.3)' : '1px solid #222' }}>Rango</button>
+        <button onClick={() => setModoRango(r => !r)} style={{ padding: '0 12px', height: 36, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: modoRango ? 'rgba(96,165,250,0.15)' : '#111', color: modoRango ? '#D4AF37' : '#555', outline: modoRango ? '1px solid rgba(96,165,250,0.3)' : '1px solid #222' }}>Rango</button>
         {modoRango && (
           <select value={fechaFin || fecha} onChange={e => setFechaFin(e.target.value)} style={{ background: '#161616', border: '1px solid #262626', borderRadius: 10, color: 'white', fontSize: 12, fontWeight: 600, padding: '0 10px', height: 36, outline: 'none' }}>
             {fechasDisponibles.filter(f => f >= fecha).map(f => <option key={f} value={f} style={{ background: '#161616' }}>{formatFecha(f)}</option>)}
@@ -346,7 +346,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
           {/* Insights */}
           <Panel title="Insights de la zona" icon={<TrendingUp size={14} style={{ color: '#D4AF37' }} />}>
             {insights.zonaCaliente && (
-              <Insight icon={<Flame size={15} />} color="#EF4444" title="Zona caliente"
+              <Insight icon={<Flame size={15} />} color="#B5543E" title="Zona caliente"
                 body={`${insights.zonaCaliente.nombre} concentra el ${insights.zonaCaliente.pct}% de tus ventas del período.`} />
             )}
             {mostrarSinCompra && insights.zonasBlancas > 0 && (
@@ -354,7 +354,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
                 body={`${insights.zonasBlancas} clientes sin compra en este período — zonas blancas con potencial.`} />
             )}
             {insights.enRiesgo > 0 && (
-              <Insight icon={<AlertTriangle size={15} />} color="#F59E0B" title="Clientes en riesgo"
+              <Insight icon={<AlertTriangle size={15} />} color="#D4AF37" title="Clientes en riesgo"
                 body={`${insights.enRiesgo} clientes no compran hace más de 30 días.`} />
             )}
             {!insights.zonaCaliente && insights.enRiesgo === 0 && (
@@ -363,8 +363,8 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
           </Panel>
 
           {/* Capas activas */}
-          <Panel title="Capas activas" icon={<LayersIcon size={14} style={{ color: '#60A5FA' }} />}>
-            <CapaToggle label="Mapa de calor" color="#EF4444" active={capaViz === 'calor'} onClick={() => setCapaViz(capaViz === 'calor' ? 'pedidos' : 'calor')} />
+          <Panel title="Capas activas" icon={<LayersIcon size={14} style={{ color: '#D4AF37' }} />}>
+            <CapaToggle label="Mapa de calor" color="#B5543E" active={capaViz === 'calor'} onClick={() => setCapaViz(capaViz === 'calor' ? 'pedidos' : 'calor')} />
             <CapaToggle label="Salud de clientes" color="#34D399" active={capaViz === 'salud'} onClick={() => setCapaViz(capaViz === 'salud' ? 'pedidos' : 'salud')} />
             <CapaToggle label="Zonas blancas" color="#818cf8" active={mostrarSinCompra} onClick={() => setMostrarSinCompra(b => !b)} />
           </Panel>
@@ -438,7 +438,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
                     <span style={{ fontSize: 11, color: '#555', width: 14, fontWeight: 700 }}>{i + 1}</span>
                     <span style={{ fontSize: 12.5, color: '#ddd', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loc}</span>
                     <span style={{ fontSize: 12, color: '#aaa', fontWeight: 600, width: 64, textAlign: 'right' }}>{formatLitros(litros)} L</span>
-                    <span style={{ fontSize: 11, color: '#F59E0B', fontWeight: 700, width: 38, textAlign: 'right' }}>{pct}%</span>
+                    <span style={{ fontSize: 11, color: '#D4AF37', fontWeight: 700, width: 38, textAlign: 'right' }}>{pct}%</span>
                   </div>
                 )
               })}

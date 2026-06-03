@@ -801,7 +801,7 @@ function PeriodDropdown({ options, value, onChange, placeholder }: {
 
 const CAT_PRODUCTO: Record<string, { emoji: string; color: string }> = {
   'Cerveza':        { emoji: '🍺', color: '#D4AF37' },
-  'Kombucha':       { emoji: '🫧', color: '#4ADE80' },
+  'Kombucha':       { emoji: '🫧', color: '#5A8A4A' },
   'Sin categoría':  { emoji: '📦', color: '#6B7280' },
 }
 

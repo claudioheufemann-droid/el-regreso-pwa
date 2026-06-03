@@ -34,7 +34,7 @@ function formatFecha(s: string | null) {
 function diasColor(dias: number | null) {
   if (dias === null) return '#F87171'
   if (dias <= 7) return '#34D399'
-  if (dias <= 14) return '#F59E0B'
+  if (dias <= 14) return '#D4AF37'
   return '#F87171'
 }
 
@@ -82,7 +82,7 @@ export default function ReportesClient({ reporte }: Props) {
     <div style={{ padding: '24px 16px 60px', maxWidth: 1000, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-        <Shield size={20} style={{ color: '#A78BFA' }} />
+        <Shield size={20} style={{ color: '#8A6D1F' }} />
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 900, color: 'white', letterSpacing: '-0.5px' }}>
             Reporte de Comunicación
@@ -99,7 +99,7 @@ export default function ReportesClient({ reporte }: Props) {
           { label: 'Total clientes', val: reporte.length, color: 'white' },
           { label: 'Críticos (+14d)', val: criticos, color: '#F87171' },
           { label: 'Al día (≤7d)', val: aTiempo, color: '#34D399' },
-          { label: 'Contactos (90d)', val: totalContactos, color: '#A78BFA' },
+          { label: 'Contactos (90d)', val: totalContactos, color: '#8A6D1F' },
         ].map(k => (
           <div key={k.label} style={{ background: '#141414', border: '1px solid #222', borderRadius: 12, padding: '12px 14px' }}>
             <p style={{ fontSize: 10, color: '#888', marginBottom: 4, fontWeight: 600, letterSpacing: '0.03em' }}>
@@ -125,7 +125,7 @@ export default function ReportesClient({ reporte }: Props) {
               style={{
                 padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
                 border: 'none', cursor: 'pointer',
-                background: tab === t.key ? '#F59E0B' : 'transparent',
+                background: tab === t.key ? '#D4AF37' : 'transparent',
                 color: tab === t.key ? '#000' : '#888',
               }}
             >
@@ -197,7 +197,7 @@ export default function ReportesClient({ reporte }: Props) {
               <div>
                 <p style={{ fontSize: 13, fontWeight: 600, color: 'white', lineHeight: 1.2 }}>{r.nombre_fantasia}</p>
                 <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                  <span style={{ fontSize: 10, color: r.vendedor === 'Javier Badilla' ? '#F59E0B' : '#60A5FA', fontWeight: 600 }}>
+                  <span style={{ fontSize: 10, color: r.vendedor === 'Javier Badilla' ? '#D4AF37' : '#D4AF37', fontWeight: 600 }}>
                     {r.vendedor === 'Javier Badilla' ? 'Javier' : 'Carlos'}
                   </span>
                   {r.categoria && <span style={{ fontSize: 10, color: '#555' }}>{r.categoria}</span>}
@@ -209,7 +209,7 @@ export default function ReportesClient({ reporte }: Props) {
                 {r.ultimoContacto && <p style={{ fontSize: 10, color: '#555', marginTop: 1 }}>{formatFecha(r.ultimoContacto)}</p>}
               </div>
               <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#F59E0B' : '#34D399' }}>{r.contactos90d}</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#D4AF37' : '#34D399' }}>{r.contactos90d}</span>
               </div>
               <span style={{ fontSize: 12, color: '#888' }}>{formatFecha(r.ultimoPedido)}</span>
               <div>
@@ -239,7 +239,7 @@ export default function ReportesClient({ reporte }: Props) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 14, fontWeight: 700, color: 'white', lineHeight: 1.3, marginBottom: 3 }}>{r.nombre_fantasia}</p>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 10, color: r.vendedor === 'Javier Badilla' ? '#F59E0B' : '#60A5FA', fontWeight: 600 }}>
+                    <span style={{ fontSize: 10, color: r.vendedor === 'Javier Badilla' ? '#D4AF37' : '#D4AF37', fontWeight: 600 }}>
                       {r.vendedor === 'Javier Badilla' ? 'Javier' : 'Carlos'}
                     </span>
                     {r.categoria && <span style={{ fontSize: 10, color: '#555' }}>{r.categoria}</span>}
@@ -258,7 +258,7 @@ export default function ReportesClient({ reporte }: Props) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <MessageCircle size={10} color="#555" />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#F59E0B' : '#34D399' }}>{r.contactos90d}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#D4AF37' : '#34D399' }}>{r.contactos90d}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <ShoppingBag size={10} color="#555" />

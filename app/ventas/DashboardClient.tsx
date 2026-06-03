@@ -123,7 +123,7 @@ function DonutChart({ cerveza, kombucha, outros, size = 90 }: { cerveza: number;
   if (total === 0) return <div style={{ width: size, height: size, borderRadius: '50%', background: '#1C1C1C' }} />
   const pC = (cerveza / total) * 100
   const pK = (kombucha / total) * 100
-  const bg = `conic-gradient(#D4AF37 0% ${pC}%, #60A5FA ${pC}% ${pC + pK}%, #A78BFA ${pC + pK}% 100%)`
+  const bg = `conic-gradient(#D4AF37 0% ${pC}%, #D4AF37 ${pC}% ${pC + pK}%, #8A6D1F ${pC + pK}% 100%)`
   return (
     <div style={{ position: 'relative', width: size, height: size }}>
       <div style={{ width: size, height: size, borderRadius: '50%', background: bg }} />
@@ -401,7 +401,7 @@ function LineChart({ data, vendedores, colors, avatars }: { data: EvolutionDay[]
 // ── MetaBar ──────────────────────────────────────────────────────────────────
 function MetaBar({ vendedor, actual, meta, avatars }: { vendedor: string; actual: number; meta: number; avatars?: Record<string, string | null> }) {
   const pct = meta > 0 ? Math.min((actual / meta) * 100, 100) : 0
-  const color = vendedor.toLowerCase().includes('javier') ? '#D4AF37' : '#60A5FA'
+  const color = vendedor.toLowerCase().includes('javier') ? '#D4AF37' : '#D4AF37'
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -705,7 +705,7 @@ function ClientesHoyModal({
             </div>
             <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: '8px 14px' }}>
               <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.8px', marginBottom: 2 }}>LITROS TOTALES</p>
-              <p style={{ fontSize: 18, fontWeight: 800, color: '#60A5FA' }}>{totalLitros.toFixed(1)} L</p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: '#D4AF37' }}>{totalLitros.toFixed(1)} L</p>
             </div>
           </div>
         </div>
@@ -770,7 +770,7 @@ function ClientesHoyModal({
                           <p style={{ fontSize: 12, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.producto}</p>
                           {p.envase && <p style={{ fontSize: 10, color: 'var(--muted)' }}>{p.envase}</p>}
                         </div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#60A5FA', marginLeft: 12, flexShrink: 0 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#D4AF37', marginLeft: 12, flexShrink: 0 }}>
                           {p.litros.toFixed(2)} L
                         </span>
                       </div>
@@ -823,12 +823,12 @@ function ProductMixCard({ resumen }: { resumen: VendedorResumen[] }) {
               </div>
             )}
             {pK > 0 && (
-              <div style={{ width: `${pK}%`, background: '#60A5FA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: `${pK}%`, background: '#D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 9, fontWeight: 700, color: '#080808' }}>{Math.round(pK)}%</span>
               </div>
             )}
             {pO > 0 && (
-              <div style={{ width: `${pO}%`, background: '#A78BFA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: `${pO}%`, background: '#8A6D1F', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 9, fontWeight: 700, color: '#080808' }}>{Math.round(pO)}%</span>
               </div>
             )}
@@ -839,8 +839,8 @@ function ProductMixCard({ resumen }: { resumen: VendedorResumen[] }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
           {[
             { color: '#D4AF37', label: 'Cerveza', val: totalCerveza },
-            { color: '#60A5FA', label: 'Kombucha', val: totalKombucha },
-            { color: '#A78BFA', label: 'Otros', val: totalOtros },
+            { color: '#D4AF37', label: 'Kombucha', val: totalKombucha },
+            { color: '#8A6D1F', label: 'Otros', val: totalOtros },
           ].map(({ color, label, val }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -893,10 +893,10 @@ function VendedorCard({ data, color, fechaHoy, avatars }: { data: VendedorResume
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {[
-            { label: 'Litros', value: fL(data.litrosHoy), color: '#60A5FA' },
-            { label: 'Venta s/imp', value: fP(data.ventaHoy), color: '#4ADE80' },
+            { label: 'Litros', value: fL(data.litrosHoy), color: '#D4AF37' },
+            { label: 'Venta s/imp', value: fP(data.ventaHoy), color: '#5A8A4A' },
             { label: 'Latas Cerveza', value: String(data.latasCervezaHoy), color: 'var(--gold)' },
-            { label: 'Latas Kombucha', value: String(data.latasKombuchaHoy), color: '#4ADE80' },
+            { label: 'Latas Kombucha', value: String(data.latasKombuchaHoy), color: '#5A8A4A' },
           ].map(({ label, value, color: c }) => (
             <div key={label} style={{ background: 'var(--surface2)', borderRadius: 12, padding: '12px 14px' }}>
               <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>{label}</p>
@@ -911,17 +911,17 @@ function VendedorCard({ data, color, fechaHoy, avatars }: { data: VendedorResume
 
       {/* PERÍODO */}
       <div style={{ padding: '14px 18px 14px' }}>
-        <p style={{ fontSize: 9, fontWeight: 700, color: '#A78BFA', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 10 }}>
+        <p style={{ fontSize: 9, fontWeight: 700, color: '#8A6D1F', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 10 }}>
           Período acumulado
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
           <div style={{ background: 'var(--surface2)', borderRadius: 12, padding: '12px 14px' }}>
             <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>Litros</p>
-            <p style={{ fontSize: 18, fontWeight: 800, color: '#60A5FA', letterSpacing: '-0.5px' }}>{fL(data.litrosPeriodo)}</p>
+            <p style={{ fontSize: 18, fontWeight: 800, color: '#D4AF37', letterSpacing: '-0.5px' }}>{fL(data.litrosPeriodo)}</p>
           </div>
           <div style={{ background: 'var(--surface2)', borderRadius: 12, padding: '12px 14px' }}>
             <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>Venta s/imp</p>
-            <p style={{ fontSize: 18, fontWeight: 800, color: '#4ADE80', letterSpacing: '-0.5px' }}>{fP(data.ventaPeriodo)}</p>
+            <p style={{ fontSize: 18, fontWeight: 800, color: '#5A8A4A', letterSpacing: '-0.5px' }}>{fP(data.ventaPeriodo)}</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1146,7 +1146,7 @@ function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; o
   const proximos  = clientes.filter(c => c.alert_level === 'proximo')
 
   const tabData = tab === 'critico' ? criticos : tab === 'vencido' ? vencidos : proximos
-  const tabColor = tab === 'critico' ? '#EF4444' : tab === 'vencido' ? '#F87171' : '#F59E0B'
+  const tabColor = tab === 'critico' ? '#B5543E' : tab === 'vencido' ? '#F87171' : '#D4AF37'
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -1202,9 +1202,9 @@ function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; o
           {/* Summary chips */}
           <div style={{ display: 'flex', gap: 6 }}>
             {([
-              { key: 'critico', label: '🔴 Urgentes', count: criticos.length, color: '#EF4444' },
+              { key: 'critico', label: '🔴 Urgentes', count: criticos.length, color: '#B5543E' },
               { key: 'vencido', label: '⚠ Vencidos',  count: vencidos.length,  color: '#F87171' },
-              { key: 'proximo', label: '⏰ Próximos',  count: proximos.length,  color: '#F59E0B' },
+              { key: 'proximo', label: '⏰ Próximos',  count: proximos.length,  color: '#D4AF37' },
             ] as const).map(t => (
               <button
                 key={t.key}
@@ -1307,7 +1307,7 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
 
   return (
     <div style={{
-      background: 'var(--surface)', border: total > 0 ? '1px solid rgba(239,68,68,0.3)' : '1px solid var(--border)',
+      background: 'var(--surface)', border: total > 0 ? '1px solid rgba(181,84,62,0.3)' : '1px solid var(--border)',
       borderRadius: 20, overflow: 'hidden',
     }}>
       <div style={{ padding: '16px 18px 20px' }}>
@@ -1316,8 +1316,8 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
           <button
             onClick={() => router.push('/ventas/clientes')}
             style={{
-              fontSize: 11, fontWeight: 700, color: '#EF4444',
-              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
+              fontSize: 11, fontWeight: 700, color: '#B5543E',
+              background: 'rgba(181,84,62,0.1)', border: '1px solid rgba(181,84,62,0.2)',
               borderRadius: 8, padding: '4px 10px', cursor: 'pointer',
             }}
           >
@@ -1327,9 +1327,9 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
 
         {/* Contadores */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-          <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '12px 14px' }}>
-            <p style={{ fontSize: 10, color: '#EF4444', fontWeight: 700, marginBottom: 4 }}>🔴 CRÍTICOS</p>
-            <p style={{ fontSize: 28, fontWeight: 900, color: '#EF4444', lineHeight: 1 }}>{criticos.length}</p>
+          <div style={{ background: 'rgba(181,84,62,0.08)', border: '1px solid rgba(181,84,62,0.2)', borderRadius: 12, padding: '12px 14px' }}>
+            <p style={{ fontSize: 10, color: '#B5543E', fontWeight: 700, marginBottom: 4 }}>🔴 CRÍTICOS</p>
+            <p style={{ fontSize: 28, fontWeight: 900, color: '#B5543E', lineHeight: 1 }}>{criticos.length}</p>
             <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>+1.5× su ciclo</p>
           </div>
           <div style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 12, padding: '12px 14px' }}>
@@ -1386,7 +1386,7 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 800, color: isCritico ? '#EF4444' : '#F87171' }}>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: isCritico ? '#B5543E' : '#F87171' }}>
                         {c.dias_sin_compra}d
                       </p>
                       <p style={{ fontSize: 10, color: 'var(--muted)' }}>/{c.ciclo_promedio_dias}d</p>
@@ -1450,7 +1450,7 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${pctTotal}%`, borderRadius: 4,
-                  background: pctTotal === 100 ? '#34D399' : pctTotal > 60 ? '#F59E0B' : '#60A5FA', transition: 'width 0.4s' }} />
+                  background: pctTotal === 100 ? '#34D399' : pctTotal > 60 ? '#D4AF37' : '#D4AF37', transition: 'width 0.4s' }} />
               </div>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>
                 {misiones.filter(m=>m.estado==='completada').length}/{total} · {pctTotal}%
@@ -1485,7 +1485,7 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
                         <span style={{ fontSize: 10, fontWeight: 800, color: act ? c : 'var(--muted)' }}>{v.split(' ')[0]}</span>
                       </div>
                       <span style={{ fontSize: 9, color: 'var(--muted)' }}>{done2}/{ms.length}</span>
-                      {pend2 > 0 && <span style={{ fontSize: 8, color: '#EF4444', fontWeight: 700 }}>{pend2} pend.</span>}
+                      {pend2 > 0 && <span style={{ fontSize: 8, color: '#B5543E', fontWeight: 700 }}>{pend2} pend.</span>}
                     </button>
                   )
                 })}
@@ -1507,9 +1507,9 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
             {/* Contadores */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
               {[
-                { label: '🔴 Urgentes', count: criticos.length,  color: '#EF4444', bg: 'rgba(239,68,68,0.08)',    border: 'rgba(239,68,68,0.2)'    },
+                { label: '🔴 Urgentes', count: criticos.length,  color: '#B5543E', bg: 'rgba(181,84,62,0.08)',    border: 'rgba(181,84,62,0.2)'    },
                 { label: '⚠ Vencidos',  count: vencidos.length,  color: '#F87171', bg: 'rgba(248,113,113,0.06)', border: 'rgba(248,113,113,0.15)' },
-                { label: '⏰ Próximos', count: proximos.length,  color: '#F59E0B', bg: 'rgba(245,158,11,0.06)',  border: 'rgba(245,158,11,0.15)'  },
+                { label: '⏰ Próximos', count: proximos.length,  color: '#D4AF37', bg: 'rgba(245,158,11,0.06)',  border: 'rgba(245,158,11,0.15)'  },
               ].map(s => (
                 <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: '7px 4px', textAlign: 'center' }}>
                   <p style={{ fontSize: 9, color: s.color, fontWeight: 700, marginBottom: 2 }}>{s.label}</p>
@@ -1523,7 +1523,7 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
               PENDIENTES DE CONTACTO{vtab !== 'all' ? ` · ${vtab.split(' ')[0].toUpperCase()}` : ''}
             </p>
             {[...criticos, ...vencidos, ...proximos].slice(0, 4).map(c => {
-              const alertColor = c.alert_level === 'critico' ? '#EF4444' : c.alert_level === 'vencido' ? '#F87171' : '#F59E0B'
+              const alertColor = c.alert_level === 'critico' ? '#B5543E' : c.alert_level === 'vencido' ? '#F87171' : '#D4AF37'
               const segColor   = SEG_C[c.segmento] ?? '#888'
               const vendColor  = VC[c.vendedor] ?? '#888'
               return (
@@ -1581,8 +1581,8 @@ function DropSizeCard({ resumen, colors, avatars }: { resumen: VendedorResumen[]
               {/* 3 metric boxes */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
                 {[
-                  { label: 'Litros período', value: fL(v.litrosPeriodo), color: '#60A5FA' },
-                  { label: 'Venta s/imp período', value: fP(v.ventaPeriodo), color: '#4ADE80' },
+                  { label: 'Litros período', value: fL(v.litrosPeriodo), color: '#D4AF37' },
+                  { label: 'Venta s/imp período', value: fP(v.ventaPeriodo), color: '#5A8A4A' },
                   { label: 'Drop Size Hoy', value: fP(v.dropSize), color },
                 ].map(({ label, value, color: c }) => (
                   <div key={label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '10px 10px' }}>
@@ -1834,7 +1834,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                   </div>
                   {litrosMesAnterior > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#5A8A4A' : '#F87171' }}>
                         {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre}
                       </span>
                       <span style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
@@ -1875,7 +1875,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                     <span style={{ fontSize: 14, fontWeight: 700, color: '#A8870F' }}>L</span>
                   </div>
                   {litrosMesAnterior > 0 && (
-                    <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#5A8A4A' : '#F87171' }}>
                       {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre} ({litrosMesAnterior.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L)
                     </span>
                   )}

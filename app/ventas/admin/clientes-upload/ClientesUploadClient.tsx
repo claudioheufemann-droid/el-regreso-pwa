@@ -408,7 +408,7 @@ export default function ClientesUploadClient() {
           </div>
 
           {result.modo === 'replace' && (
-            <p style={{ fontSize: 12, color: '#F59E0B', marginTop: 10 }}>
+            <p style={{ fontSize: 12, color: '#D4AF37', marginTop: 10 }}>
               ⚠ Se eliminaron todos los clientes anteriores antes de la importación.
             </p>
           )}
@@ -421,7 +421,7 @@ export default function ClientesUploadClient() {
         background: 'var(--surface)', border: '1px solid var(--border)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <MapPin size={16} style={{ color: '#60A5FA' }} />
+          <MapPin size={16} style={{ color: '#D4AF37' }} />
           <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>
             Coordenadas para el mapa
           </p>
@@ -480,7 +480,7 @@ export default function ClientesUploadClient() {
               flex: 1, padding: '9px 16px', borderRadius: 10, fontSize: 12, fontWeight: 700,
               border: 'none', cursor: geocoding ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              background: geocoding ? 'var(--surface2)' : '#60A5FA',
+              background: geocoding ? 'var(--surface2)' : '#D4AF37',
               color: geocoding ? 'var(--muted)' : '#000',
               transition: 'all 0.15s',
             }}
