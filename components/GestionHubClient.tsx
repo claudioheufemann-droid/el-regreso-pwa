@@ -150,20 +150,20 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
               >
                 {/* Imagen de fondo */}
                 <div style={{ position: 'relative', height: 90 }}>
+                  {/* Fallback gradient (debajo) */}
+                  <div style={{ position: 'absolute', inset: 0, background: area.imgFallback, zIndex: 0 }} />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={area.img}
                     alt={area.label}
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', zIndex: 1 }}
                     onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                   />
-                  {/* Fallback gradient si no hay imagen */}
-                  <div style={{ position: 'absolute', inset: 0, background: area.imgFallback }} />
                   {/* Overlay degradado abajo */}
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(5,5,5,0.1) 0%, rgba(5,5,5,0.85) 100%)' }} />
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(5,5,5,0.1) 0%, rgba(5,5,5,0.85) 100%)', zIndex: 2 }} />
                   {/* Badge código — esquina inferior izquierda sobre imagen */}
                   <div style={{
-                    position: 'absolute', bottom: 10, left: 12,
+                    position: 'absolute', bottom: 10, left: 12, zIndex: 3,
                     width: 36, height: 36, borderRadius: 10,
                     background: `rgba(${area.rgb},0.9)`,
                     border: `1.5px solid rgba(255,255,255,0.15)`,
