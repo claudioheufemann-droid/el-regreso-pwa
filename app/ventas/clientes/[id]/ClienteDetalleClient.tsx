@@ -63,10 +63,10 @@ interface Contacto {
 }
 
 const RESULTADO_LABEL: Record<string, { label: string; color: string }> = {
-  pedido:      { label: 'Hizo pedido', color: '#34D399' },
+  pedido:      { label: 'Hizo pedido', color: '#5A8A4A' },
   sin_pedido:  { label: 'Sin pedido',  color: '#D4AF37' },
   no_estaba:   { label: 'No estaba',   color: '#94A3B8' },
-  reclamo:     { label: 'Reclamo',     color: '#F87171' },
+  reclamo:     { label: 'Reclamo',     color: '#B5543E' },
   seguimiento: { label: 'Seguimiento', color: '#D4AF37' },
 }
 const TIPO_LABEL: Record<string, string> = {
@@ -129,22 +129,22 @@ const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov'
 
 const SEG_CFG: Record<string, { color: string; bg: string; label: string }> = {
   A: { color: '#D4AF37', bg: 'rgba(212,175,55,0.12)',   label: 'A' },
-  B: { color: '#34D399', bg: 'rgba(52,211,153,0.12)',   label: 'B' },
+  B: { color: '#5A8A4A', bg: 'rgba(52,211,153,0.12)',   label: 'B' },
   C: { color: '#D4AF37', bg: 'rgba(96,165,250,0.12)',   label: 'C' },
   D: { color: '#D4AF37', bg: 'rgba(245,158,11,0.12)',   label: 'D' },
-  E: { color: '#F87171', bg: 'rgba(248,113,113,0.12)',  label: 'E' },
+  E: { color: '#B5543E', bg: 'rgba(248,113,113,0.12)',  label: 'E' },
 }
 
 const ALERT_CFG: Record<string, { color: string; label: string; icon: string }> = {
-  ok:            { color: '#34D399', label: 'Al día',        icon: '✓' },
+  ok:            { color: '#5A8A4A', label: 'Al día',        icon: '✓' },
   proximo:       { color: '#D4AF37', label: 'Próximo',       icon: '⏰' },
-  vencido:       { color: '#F87171', label: 'Vencido',       icon: '⚠' },
+  vencido:       { color: '#B5543E', label: 'Vencido',       icon: '⚠' },
   critico:       { color: '#B5543E', label: 'Crítico',       icon: '🔴' },
   sin_historial: { color: '#666',    label: 'Sin historial', icon: '—'  },
 }
 
 const ESTADO_CFG = {
-  activo:     { label: 'Activo',     color: '#34D399', bg: 'rgba(52,211,153,0.1)',  dot: '#34D399' },
+  activo:     { label: 'Activo',     color: '#5A8A4A', bg: 'rgba(52,211,153,0.1)',  dot: '#5A8A4A' },
   inactivo:   { label: 'Inactivo',   color: '#888',    bg: 'rgba(255,255,255,0.06)', dot: '#555'   },
   estacional: { label: 'Estacional', color: '#D4AF37', bg: 'rgba(96,165,250,0.1)',  dot: '#D4AF37' },
 }
@@ -203,7 +203,7 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
   const isWarning = enZonaSeguridad || ['proximo', 'vencido', 'critico'].includes(frecuencia.alert_level)
 
   // Color de la barra — cambia según si está sobre o bajo el umbral de seguridad
-  const barColor = invPct > safetyInvPct + 10 ? '#34D399'  // verde: bien arriba del umbral
+  const barColor = invPct > safetyInvPct + 10 ? '#5A8A4A'  // verde: bien arriba del umbral
     : invPct > safetyInvPct           ? '#84CC16'            // lima: acercándose
     : invPct > safetyInvPct / 2       ? '#D4AF37'            // naranja: en zona de seguridad
     : invPct > 5                       ? '#F97316'            // rojo-naranja: casi vencido
@@ -214,7 +214,7 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
   const safetyMarkerLeft = safetyInvPct  // % desde la izquierda = % restante en el umbral
 
   // Gradiente del track de fondo (visual)
-  const trackGradient = `linear-gradient(to right, #34D399 0%, #84CC16 ${100 - safetyInvPct - 10}%, #EAB308 ${100 - safetyInvPct}%, #F97316 ${100 - safetyInvPct / 2}%, #B5543E 100%)`
+  const trackGradient = `linear-gradient(to right, #5A8A4A 0%, #84CC16 ${100 - safetyInvPct - 10}%, #EAB308 ${100 - safetyInvPct}%, #F97316 ${100 - safetyInvPct / 2}%, #B5543E 100%)`
 
   return (
     <div style={{
@@ -360,7 +360,7 @@ function InventoryBar({ frecuencia }: { frecuencia: FrequencyStat }) {
         </div>
         <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
           <p style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>Días restantes</p>
-          <p style={{ fontSize: 18, fontWeight: 800, color: diasRestantes <= SAFETY_DIAS ? '#B5543E' : '#34D399' }}>
+          <p style={{ fontSize: 18, fontWeight: 800, color: diasRestantes <= SAFETY_DIAS ? '#B5543E' : '#5A8A4A' }}>
             {diasRestantes > 0 ? `${diasRestantes}d` : 'Vencido'}
           </p>
         </div>
@@ -837,11 +837,11 @@ export default function ClienteDetalleClient({
               color="#D4AF37"
             />
             <KPICard
-              icon={<ShoppingBag size={14} color="#34D399" />}
+              icon={<ShoppingBag size={14} color="#5A8A4A" />}
               label="ÚLTIMO PEDIDO"
               value={ultimaCompra ? fFecha(ultimaCompra, true) : '—'}
               sub={ultimoPedido ? `${fPeso(ultimoPedido.venta)} · ${ultimoPedido.litros.toFixed(0)} L` : undefined}
-              color="#34D399"
+              color="#5A8A4A"
             />
             <KPICard
               icon={<TrendingUp size={14} color={GOLD} />}
@@ -851,11 +851,11 @@ export default function ClienteDetalleClient({
               color={GOLD}
             />
             <KPICard
-              icon={<CreditCard size={14} color={deuda > 0 ? '#F87171' : '#34D399'} />}
+              icon={<CreditCard size={14} color={deuda > 0 ? '#B5543E' : '#5A8A4A'} />}
               label="DEUDA ACTUAL"
               value={deuda > 0 ? fPesoFull(deuda) : '$0'}
               sub={deuda > 0 ? (deudaVencida > 0 ? `$${Math.round(deudaVencida).toLocaleString('es-CL')} vencida` : 'Al día') : 'Al día'}
-              color={deuda > 0 ? '#F87171' : '#34D399'}
+              color={deuda > 0 ? '#B5543E' : '#5A8A4A'}
             />
           </div>
 
@@ -985,7 +985,7 @@ export default function ClienteDetalleClient({
                       ].map((d2, i) => (
                         <div key={i}>
                           <p style={{ fontSize: 10, color: '#444' }}>{d2.label}</p>
-                          <p style={{ fontSize: 14, fontWeight: 700, color: (d2 as { red?: boolean }).red ? '#F87171' : '#888' }}>{d2.value}</p>
+                          <p style={{ fontSize: 14, fontWeight: 700, color: (d2 as { red?: boolean }).red ? '#B5543E' : '#888' }}>{d2.value}</p>
                         </div>
                       ))}
                     </div>
@@ -1007,7 +1007,7 @@ export default function ClienteDetalleClient({
                     <ActivityItem
                       key={i}
                       icon={item.type === 'order'
-                        ? <ShoppingBag size={14} color="#34D399" />
+                        ? <ShoppingBag size={14} color="#5A8A4A" />
                         : <MessageCircle size={14} color="#25D366" />}
                       title={item.label}
                       sub={item.sub}
@@ -1058,7 +1058,7 @@ export default function ClienteDetalleClient({
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <ShoppingBag size={16} color="#34D399" />
+                        <ShoppingBag size={16} color="#5A8A4A" />
                       </div>
                       <div>
                         <p style={{ fontSize: 13, fontWeight: 700, color: '#ddd' }}>{fFecha(p.fecha, true)}</p>
@@ -1131,7 +1131,7 @@ export default function ClienteDetalleClient({
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setRegistrarTipo('visita')} style={{
                     minHeight: 44, padding: '0 16px', borderRadius: 12, border: '1px solid rgba(52,211,153,0.3)',
-                    background: 'rgba(52,211,153,0.08)', color: '#34D399', fontSize: 12, fontWeight: 700,
+                    background: 'rgba(52,211,153,0.08)', color: '#5A8A4A', fontSize: 12, fontWeight: 700,
                     cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
                   }}>
                     <MapPin size={14}/> Registrar
@@ -1149,7 +1149,7 @@ export default function ClienteDetalleClient({
               {/* Botones de acción rápida por tipo */}
               <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
                 {([
-                  { tipo: 'visita' as TipoContacto,   label: 'Visita',   icon: <MapPin size={14}/>,        color: '#34D399' },
+                  { tipo: 'visita' as TipoContacto,   label: 'Visita',   icon: <MapPin size={14}/>,        color: '#5A8A4A' },
                   { tipo: 'llamada' as TipoContacto,  label: 'Llamada',  icon: <Phone size={14}/>,         color: '#D4AF37' },
                   { tipo: 'whatsapp' as TipoContacto, label: 'WhatsApp', icon: <MessageCircle size={14}/>, color: '#25D366' },
                   { tipo: 'nota' as TipoContacto,     label: 'Nota',     icon: <FileText size={14}/>,      color: '#D4AF37' },
@@ -1171,7 +1171,7 @@ export default function ClienteDetalleClient({
                 {contactos.map((c, i) => {
                   const resCfg = c.resultado ? RESULTADO_LABEL[c.resultado] : null
                   const tipoIcon = c.tipo === 'visita' ? <MapPin size={15} /> : c.tipo === 'llamada' ? <Phone size={15} /> : c.tipo === 'nota' ? <FileText size={15} /> : <MessageCircle size={15} />
-                  const tipoColor = c.tipo === 'visita' ? '#34D399' : c.tipo === 'llamada' ? '#D4AF37' : c.tipo === 'nota' ? '#D4AF37' : '#25D366'
+                  const tipoColor = c.tipo === 'visita' ? '#5A8A4A' : c.tipo === 'llamada' ? '#D4AF37' : c.tipo === 'nota' ? '#D4AF37' : '#25D366'
                   return (
                     <div key={i} style={{
                       padding: '14px 18px', borderRadius: 14,
@@ -1337,13 +1337,13 @@ export default function ClienteDetalleClient({
                     const vencido = fu.fecha_recordatorio < new Date().toISOString().split('T')[0] && fu.estado === 'pendiente'
                     return (
                       <div key={fu.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 12, background: 'var(--surface2)', border: `1px solid ${vencido ? 'rgba(248,113,113,0.3)' : 'var(--border)'}`, marginBottom: 6 }}>
-                        <Bell size={14} color={fu.estado === 'completado' ? '#34D399' : vencido ? '#F87171' : '#D4AF37'}/>
+                        <Bell size={14} color={fu.estado === 'completado' ? '#5A8A4A' : vencido ? '#B5543E' : '#D4AF37'}/>
                         <div style={{ flex: 1 }}>
                           <p style={{ fontSize: 12, fontWeight: 700, color: fu.estado === 'completado' ? '#555' : 'var(--cream)', textDecoration: fu.estado === 'completado' ? 'line-through' : 'none' }}>{fu.nota}</p>
-                          <p style={{ fontSize: 10, color: vencido ? '#F87171' : '#555' }}>{fu.fecha_recordatorio}</p>
+                          <p style={{ fontSize: 10, color: vencido ? '#B5543E' : '#555' }}>{fu.fecha_recordatorio}</p>
                         </div>
                         <button onClick={() => toggleFollowUp(fu.id, fu.estado === 'completado' ? 'pendiente' : 'completado')}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: fu.estado === 'completado' ? '#34D399' : '#555', minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: fu.estado === 'completado' ? '#5A8A4A' : '#555', minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <CheckCircle2 size={15}/>
                         </button>
                         <button onClick={() => eliminarFollowUp(fu.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#444', minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1437,7 +1437,7 @@ export default function ClienteDetalleClient({
                   <ActivityItem
                     key={i}
                     icon={item.type === 'order'
-                      ? <ShoppingBag size={14} color="#34D399" />
+                      ? <ShoppingBag size={14} color="#5A8A4A" />
                       : <MessageCircle size={14} color="#25D366" />}
                     title={item.label}
                     sub={item.sub}

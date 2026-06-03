@@ -35,8 +35,8 @@ function cohorteLabel(c: string): string {
 }
 
 const SEG_TYPES = [
-  { key: 'activo',   label: 'Activos',   color: '#34D399', icon: '🟢', desc: 'Compradores regulares' },
-  { key: 'inactivo', label: 'Inactivos', color: '#F87171', icon: '🔴', desc: 'En riesgo de abandono' },
+  { key: 'activo',   label: 'Activos',   color: '#5A8A4A', icon: '🟢', desc: 'Compradores regulares' },
+  { key: 'inactivo', label: 'Inactivos', color: '#B5543E', icon: '🔴', desc: 'En riesgo de abandono' },
   { key: 'temporal', label: 'Temporales',color: '#D4AF37', icon: '🟡', desc: 'Compradores esporádicos' },
   { key: 'nuevo',    label: 'Nuevos',    color: '#D4AF37', icon: '🔵', desc: 'Incorporación reciente' },
 ] as const
@@ -117,8 +117,8 @@ function DonutChart({ completadas, vencidas, total }: { completadas: number; ven
   let offset = 0
   const segments = [
     { pct: pPend, color: '#D4AF37', label: 'Por completar' },
-    { pct: pComp, color: '#34D399', label: 'Completadas' },
-    { pct: pVenc, color: '#F87171', label: 'Vencidas' },
+    { pct: pComp, color: '#5A8A4A', label: 'Completadas' },
+    { pct: pVenc, color: '#B5543E', label: 'Vencidas' },
   ]
 
   return (
@@ -149,7 +149,7 @@ function Gauge({ pct }: { pct: number }) {
   const angle = 180
   const arcLen = Math.PI * r
   const fill = (pct / 100) * arcLen
-  const color = pct >= 80 ? '#34D399' : pct >= 50 ? '#D4AF37' : '#D4AF37'
+  const color = pct >= 80 ? '#5A8A4A' : pct >= 50 ? '#D4AF37' : '#D4AF37'
 
   function polarToCart(deg: number) {
     const rad = (deg * Math.PI) / 180
@@ -198,8 +198,8 @@ function KpiCard({ icon, color, label, value, pct, delta, deltaLabel, sparkData 
           <p style={{ fontSize: 32, fontWeight: 900, color, lineHeight: 1, marginBottom: 3 }}>{value}</p>
           {pct && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{pct}</p>}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-            {up ? <TrendingUp size={11} color="#34D399" /> : <TrendingDown size={11} color="#F87171" />}
-            <span style={{ fontSize: 11, color: up ? '#34D399' : '#F87171', fontWeight: 600 }}>
+            {up ? <TrendingUp size={11} color="#5A8A4A" /> : <TrendingDown size={11} color="#B5543E" />}
+            <span style={{ fontSize: 11, color: up ? '#5A8A4A' : '#B5543E', fontWeight: 600 }}>
               {up ? '+' : ''}{delta} {deltaLabel ?? 'vs semana anterior'}
             </span>
           </div>
@@ -329,7 +329,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }} className="kpi-grid-4">
         <KpiCard icon={<Users size={22}/>} color="#D4AF37" label="Misiones Totales"
           value={stats.total} delta={stats.dTotal} sparkData={stats.sparklines.total} />
-        <KpiCard icon={<Target size={22}/>} color="#34D399" label="Completadas"
+        <KpiCard icon={<Target size={22}/>} color="#5A8A4A" label="Completadas"
           value={stats.completadas}
           pct={`${pct}% del total`}
           delta={stats.dCompletadas} sparkData={stats.sparklines.completadas} />
@@ -348,13 +348,13 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <MiniKpi icon={<Droplets size={16}/>} color="#D4AF37" label="Volumen Rescatado"
           value={`${stats.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L`}
           sub={`${stats.dVolumen >= 0 ? '+' : ''}${stats.dVolumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L vs semana anterior`} />
-        <MiniKpi icon={<DollarSign size={16}/>} color="#34D399" label="Venta Estimada"
+        <MiniKpi icon={<DollarSign size={16}/>} color="#5A8A4A" label="Venta Estimada"
           value={fPeso(stats.venta)}
           sub={`${stats.dVenta >= 0 ? '+' : ''}${stats.dVenta}% vs semana anterior`} />
         <MiniKpi icon={<BarChart3 size={16}/>} color="#D4AF37" label="Ticket Promedio"
           value={fPeso(stats.ticket)}
           sub={`${stats.dTicket >= 0 ? '+' : ''}${stats.dTicket}% vs semana anterior`} />
-        <MiniKpi icon={<AlertTriangle size={16}/>} color="#F87171" label="Clientes en Riesgo"
+        <MiniKpi icon={<AlertTriangle size={16}/>} color="#B5543E" label="Clientes en Riesgo"
           value={`${stats.clientesEnRiesgo}`}
           sub="Sin compras > 30 días"
           link="Ver lista" onLink={() => router.push('/ventas/clientes')} />
@@ -426,7 +426,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.vendedor.split(' ')[0]}</span>
               </div>
               <span style={{ fontSize: 13, color: 'var(--muted)' }}>{v.asignadas}</span>
-              <span style={{ fontSize: 13, color: '#34D399', fontWeight: 700 }}>{v.completadas}</span>
+              <span style={{ fontSize: 13, color: '#5A8A4A', fontWeight: 700 }}>{v.completadas}</span>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
@@ -438,7 +438,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               <div style={{ textAlign: 'right' }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L</span>
                 {v.dVolumen !== 0 && (
-                  <p style={{ fontSize: 10, color: v.dVolumen > 0 ? '#34D399' : '#F87171', fontWeight: 600 }}>
+                  <p style={{ fontSize: 10, color: v.dVolumen > 0 ? '#5A8A4A' : '#B5543E', fontWeight: 600 }}>
                     {v.dVolumen > 0 ? '+' : ''}{v.dVolumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
                   </p>
                 )}
@@ -450,7 +450,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 1fr 100px', gap: 8, padding: '10px 4px 2px', alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>Total</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{stats.total}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#34D399' }}>{stats.completadas}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#5A8A4A' }}>{stats.completadas}</span>
             <span style={{ fontSize: 11, color: '#D4AF37', fontWeight: 700 }}>{pct}%</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', textAlign: 'right' }}>
               {stats.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
@@ -467,8 +467,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {[
               { color: '#D4AF37', label: 'Por completar', val: stats.porContactar, pct: stats.total > 0 ? Math.round(stats.porContactar/stats.total*100) : 0 },
-              { color: '#34D399', label: 'Completadas',   val: stats.completadas,  pct },
-              { color: '#F87171', label: 'Vencidas',      val: stats.vencidas,     pct: stats.total > 0 ? Math.round(stats.vencidas/stats.total*100) : 0 },
+              { color: '#5A8A4A', label: 'Completadas',   val: stats.completadas,  pct },
+              { color: '#B5543E', label: 'Vencidas',      val: stats.vencidas,     pct: stats.total > 0 ? Math.round(stats.vencidas/stats.total*100) : 0 },
             ].map(seg => (
               <div key={seg.label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: seg.color, flexShrink: 0 }} />
@@ -488,8 +488,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Meta semanal: <strong style={{ color: 'var(--cream)' }}>{stats.total} misiones</strong></p>
             {faltan > 0
-              ? <p style={{ fontSize: 11, color: '#F87171', fontWeight: 700 }}>Faltan {faltan} misiones para completar la meta</p>
-              : <p style={{ fontSize: 11, color: '#34D399', fontWeight: 800 }}>🎉 ¡Meta semanal completada!</p>
+              ? <p style={{ fontSize: 11, color: '#B5543E', fontWeight: 700 }}>Faltan {faltan} misiones para completar la meta</p>
+              : <p style={{ fontSize: 11, color: '#5A8A4A', fontWeight: 800 }}>🎉 ¡Meta semanal completada!</p>
             }
           </div>
         </div>
@@ -517,7 +517,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             <div key={c.nombre} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px 110px 80px', gap: 8, padding: '10px 0', borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
               {/* Nombre */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#F87171', flexShrink: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#B5543E', flexShrink: 0 }}>
                   {c.nombre.charAt(0)}
                 </div>
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</span>
@@ -525,7 +525,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               {/* Vendedor */}
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor.split(' ')[0]}</span>
               {/* Días */}
-              <span style={{ fontSize: 13, fontWeight: 700, color: c.diasSinCompra > 60 ? '#F87171' : '#D4AF37' }}>{c.diasSinCompra} días</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: c.diasSinCompra > 60 ? '#B5543E' : '#D4AF37' }}>{c.diasSinCompra} días</span>
               {/* Última compra */}
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.ultimaCompra ? formatFechaCorta(c.ultimaCompra) + ' 2026' : '—'}</span>
               {/* Acciones */}
@@ -557,12 +557,12 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             {/* En riesgo */}
             <div style={{ display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 12, background: 'rgba(248,113,113,0.05)', border: '1px solid rgba(248,113,113,0.15)' }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(248,113,113,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <AlertTriangle size={16} color="#F87171" />
+                <AlertTriangle size={16} color="#B5543E" />
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#F87171', marginBottom: 2 }}>{stats.clientesEnRiesgo} clientes en riesgo de fuga</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#B5543E', marginBottom: 2 }}>{stats.clientesEnRiesgo} clientes en riesgo de fuga</p>
                 <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Contacta esta semana para recuperar ventas.</p>
-                <button onClick={() => router.push('/ventas/clientes')} style={{ background: 'none', border: 'none', color: '#F87171', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>Ver lista →</button>
+                <button onClick={() => router.push('/ventas/clientes')} style={{ background: 'none', border: 'none', color: '#B5543E', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>Ver lista →</button>
               </div>
             </div>
 
@@ -614,10 +614,10 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <div style={{ marginTop: 14, background: 'var(--surface)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 16, padding: '18px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <TrendingDown size={18} style={{ color: '#F87171' }} />
+              <TrendingDown size={18} style={{ color: '#B5543E' }} />
               <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>Clientes con volumen a la baja</p>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#F87171', background: 'rgba(248,113,113,0.12)', padding: '3px 10px', borderRadius: 20 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#B5543E', background: 'rgba(248,113,113,0.12)', padding: '3px 10px', borderRadius: 20 }}>
               {stats.volumenBajaTotal} detectados
             </span>
           </div>
@@ -636,7 +636,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             <div key={c.nombre_fantasia} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 130px 90px 80px', gap: 8, padding: '10px 0', borderBottom: i < stats.volumenBaja.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
               {/* Nombre */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#F87171', flexShrink: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#B5543E', flexShrink: 0 }}>
                   {c.nombre_fantasia.charAt(0)}
                 </div>
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre_fantasia}</span>
@@ -645,12 +645,12 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual?.split(' ')[0] ?? '—'}</span>
               {/* Volumen reciente vs baseline */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
-                <span style={{ color: '#F87171', fontWeight: 700 }}>{c.litros_reciente}L</span>
+                <span style={{ color: '#B5543E', fontWeight: 700 }}>{c.litros_reciente}L</span>
                 <span style={{ color: '#555' }}>←</span>
                 <span style={{ color: 'var(--muted)' }}>{c.litros_baseline}L</span>
               </div>
               {/* Caída % */}
-              <span style={{ fontSize: 14, fontWeight: 800, color: '#F87171' }}>−{c.caida_pct}%</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#B5543E' }}>−{c.caida_pct}%</span>
               {/* Acciones */}
               <div style={{ display: 'flex', gap: 6 }}>
                 {c.telefono && (
@@ -736,10 +736,10 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <div style={{ marginTop: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <TrendingUp size={18} style={{ color: '#34D399' }} />
+              <TrendingUp size={18} style={{ color: '#5A8A4A' }} />
               <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>Retención por cohorte</p>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#34D399', background: 'rgba(52,211,153,0.12)', padding: '3px 10px', borderRadius: 20 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#5A8A4A', background: 'rgba(52,211,153,0.12)', padding: '3px 10px', borderRadius: 20 }}>
               {stats.repeatRateGlobal}% repite compra
             </span>
           </div>
@@ -767,9 +767,9 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               {/* Activos */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${c.activos_pct}%`, height: '100%', background: '#34D399', borderRadius: 3 }} />
+                  <div style={{ width: `${c.activos_pct}%`, height: '100%', background: '#5A8A4A', borderRadius: 3 }} />
                 </div>
-                <span style={{ fontSize: 11, color: '#34D399', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.activos} · {c.activos_pct}%</span>
+                <span style={{ fontSize: 11, color: '#5A8A4A', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.activos} · {c.activos_pct}%</span>
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{c.pedidos_prom}</span>
             </div>

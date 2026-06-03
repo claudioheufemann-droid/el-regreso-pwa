@@ -85,7 +85,7 @@ function EditableNombre({ nombre, onSave, onCancel }: {
         }}
       />
       <button onClick={() => onSave(val)}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#34D399', padding: 3 }}>
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5A8A4A', padding: 3 }}>
         <Check size={15} />
       </button>
       <button onClick={onCancel}
@@ -154,7 +154,7 @@ function RutaItem({ nombre, count, isSelected, isEditing, onSelect, onEdit, onSa
               onClick={e => { e.stopPropagation(); onDelete() }}
               title="Eliminar"
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: '2px 4px', borderRadius: 4 }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#F87171')}
+              onMouseEnter={e => (e.currentTarget.style.color = '#B5543E')}
               onMouseLeave={e => (e.currentTarget.style.color = '#555')}
             >
               <Trash2 size={11} />
@@ -256,7 +256,7 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
                   onClick={() => { onMover(null); setMenuOpen(false) }}
                   style={{
                     width: '100%', textAlign: 'left', padding: '8px 12px',
-                    background: 'none', border: 'none', color: '#F87171',
+                    background: 'none', border: 'none', color: '#B5543E',
                     fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'block',
                     borderTop: '1px solid #2A2A2A',
                   }}
@@ -282,8 +282,8 @@ function Toast({ message, type, onClose }: { message: string; type: 'error' | 's
       zIndex: 9999, display: 'flex', alignItems: 'center', gap: 10,
       padding: '12px 20px', borderRadius: 12,
       background: type === 'error' ? '#2A0A0A' : '#0A2A14',
-      border: `1px solid ${type === 'error' ? '#F87171' : '#34D399'}`,
-      color: type === 'error' ? '#F87171' : '#34D399',
+      border: `1px solid ${type === 'error' ? '#B5543E' : '#5A8A4A'}`,
+      color: type === 'error' ? '#B5543E' : '#5A8A4A',
       fontSize: 13, fontWeight: 600,
       boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
       maxWidth: 420,
@@ -559,14 +559,14 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
           }}
           onClick={() => setSelectedRuta('__sin_ruta__')}
         >
-          <MapPin size={13} style={{ color: selectedRuta === '__sin_ruta__' ? '#F87171' : '#444', flexShrink: 0 }} />
-          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: selectedRuta === '__sin_ruta__' ? '#F87171' : '#666' }}>
+          <MapPin size={13} style={{ color: selectedRuta === '__sin_ruta__' ? '#B5543E' : '#444', flexShrink: 0 }} />
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: selectedRuta === '__sin_ruta__' ? '#B5543E' : '#666' }}>
             Sin ruta asignada
           </span>
           <span style={{
             fontSize: 11, fontWeight: 800,
             background: sinRuta.length > 0 ? 'rgba(248,113,113,0.2)' : '#1A1A1A',
-            color: sinRuta.length > 0 ? '#F87171' : '#555',
+            color: sinRuta.length > 0 ? '#B5543E' : '#555',
             padding: '1px 7px', borderRadius: 20,
           }}>{sinRuta.length}</span>
         </div>
@@ -599,7 +599,7 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
           <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #1E1E1E' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
               <div>
-                <h2 style={{ fontSize: 14, fontWeight: 800, color: selectedRuta === '__sin_ruta__' ? '#F87171' : '#fff' }}>
+                <h2 style={{ fontSize: 14, fontWeight: 800, color: selectedRuta === '__sin_ruta__' ? '#B5543E' : '#fff' }}>
                   {currentRutaName}
                 </h2>
                 <p style={{ fontSize: 10, color: '#555', marginTop: 2 }}>
@@ -627,7 +627,7 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
                   color: seleccionados.size > 0
                     ? '#888'
                     : selectedRuta === '__sin_ruta__'
-                      ? '#F87171'
+                      ? '#B5543E'
                       : '#888',
                   cursor: 'pointer', whiteSpace: 'nowrap',
                 }}
@@ -644,8 +644,8 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
                 background: 'rgba(248,113,113,0.05)',
                 border: '1px solid rgba(248,113,113,0.18)',
               }}>
-                <AlertCircle size={13} style={{ color: '#F87171', flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: '#F87171', flex: 1, fontWeight: 600 }}>
+                <AlertCircle size={13} style={{ color: '#B5543E', flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: '#B5543E', flex: 1, fontWeight: 600 }}>
                   {clientesEnRuta.length} cliente{clientesEnRuta.length !== 1 ? 's' : ''} sin ruta — selecciona todos para asignar rápido
                 </span>
                 <button
@@ -653,7 +653,7 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
                   style={{
                     padding: '5px 12px', borderRadius: 7, fontSize: 11, fontWeight: 800,
                     background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.35)',
-                    color: '#F87171', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                    color: '#B5543E', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                   }}
                 >
                   Seleccionar todos →

@@ -122,7 +122,7 @@ export default function CalendarioMensual({ isAdmin, vendedorActual, isDesktop }
       {/* Leyenda tipos */}
       <div style={{ display: 'flex', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
         {[
-          { c: '#34D399', l: 'Activo' }, { c: '#D4AF37', l: 'Nuevo' },
+          { c: '#5A8A4A', l: 'Activo' }, { c: '#D4AF37', l: 'Nuevo' },
           { c: '#D4AF37', l: 'Temporal' },
         ].map(x => (
           <div key={x.l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -163,7 +163,7 @@ export default function CalendarioMensual({ isAdmin, vendedorActual, isDesktop }
                 const counts: Record<string, number> = {}
                 for (const p of lista) counts[p.tipo_cliente] = (counts[p.tipo_cliente] ?? 0) + 1
                 const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0]
-                return top === 'nuevo' ? '#D4AF37' : top === 'temporal' ? '#D4AF37' : '#34D399'
+                return top === 'nuevo' ? '#D4AF37' : top === 'temporal' ? '#D4AF37' : '#5A8A4A'
               })()
 
               return (
@@ -218,7 +218,7 @@ export default function CalendarioMensual({ isAdmin, vendedorActual, isDesktop }
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {seleccionados.map((p, i) => {
                   const segColor = SEG_COLOR[p.segmento] ?? '#6B7280'
-                  const tColor = p.tipo_cliente === 'nuevo' ? '#D4AF37' : p.tipo_cliente === 'temporal' ? '#D4AF37' : '#34D399'
+                  const tColor = p.tipo_cliente === 'nuevo' ? '#D4AF37' : p.tipo_cliente === 'temporal' ? '#D4AF37' : '#5A8A4A'
                   return (
                     <div key={`${p.nombre_fantasia}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: 'var(--surface2)' }}>
                       <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${segColor}20`, border: `1.5px solid ${segColor}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: segColor, flexShrink: 0 }}>

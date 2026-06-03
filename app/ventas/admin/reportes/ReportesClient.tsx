@@ -32,10 +32,10 @@ function formatFecha(s: string | null) {
 }
 
 function diasColor(dias: number | null) {
-  if (dias === null) return '#F87171'
-  if (dias <= 7) return '#34D399'
+  if (dias === null) return '#B5543E'
+  if (dias <= 7) return '#5A8A4A'
   if (dias <= 14) return '#D4AF37'
-  return '#F87171'
+  return '#B5543E'
 }
 
 function diasLabel(dias: number | null) {
@@ -97,8 +97,8 @@ export default function ReportesClient({ reporte }: Props) {
       <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
         {[
           { label: 'Total clientes', val: reporte.length, color: 'white' },
-          { label: 'Críticos (+14d)', val: criticos, color: '#F87171' },
-          { label: 'Al día (≤7d)', val: aTiempo, color: '#34D399' },
+          { label: 'Críticos (+14d)', val: criticos, color: '#B5543E' },
+          { label: 'Al día (≤7d)', val: aTiempo, color: '#5A8A4A' },
           { label: 'Contactos (90d)', val: totalContactos, color: '#8A6D1F' },
         ].map(k => (
           <div key={k.label} style={{ background: '#141414', border: '1px solid #222', borderRadius: 12, padding: '12px 14px' }}>
@@ -209,7 +209,7 @@ export default function ReportesClient({ reporte }: Props) {
                 {r.ultimoContacto && <p style={{ fontSize: 10, color: '#555', marginTop: 1 }}>{formatFecha(r.ultimoContacto)}</p>}
               </div>
               <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#D4AF37' : '#34D399' }}>{r.contactos90d}</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#D4AF37' : '#5A8A4A' }}>{r.contactos90d}</span>
               </div>
               <span style={{ fontSize: 12, color: '#888' }}>{formatFecha(r.ultimoPedido)}</span>
               <div>
@@ -258,7 +258,7 @@ export default function ReportesClient({ reporte }: Props) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <MessageCircle size={10} color="#555" />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#D4AF37' : '#34D399' }}>{r.contactos90d}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#D4AF37' : '#5A8A4A' }}>{r.contactos90d}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <ShoppingBag size={10} color="#555" />

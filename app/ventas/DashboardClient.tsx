@@ -1146,7 +1146,7 @@ function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; o
   const proximos  = clientes.filter(c => c.alert_level === 'proximo')
 
   const tabData = tab === 'critico' ? criticos : tab === 'vencido' ? vencidos : proximos
-  const tabColor = tab === 'critico' ? '#B5543E' : tab === 'vencido' ? '#F87171' : '#D4AF37'
+  const tabColor = tab === 'critico' ? '#B5543E' : tab === 'vencido' ? '#B5543E' : '#D4AF37'
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -1203,7 +1203,7 @@ function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; o
           <div style={{ display: 'flex', gap: 6 }}>
             {([
               { key: 'critico', label: '🔴 Urgentes', count: criticos.length, color: '#B5543E' },
-              { key: 'vencido', label: '⚠ Vencidos',  count: vencidos.length,  color: '#F87171' },
+              { key: 'vencido', label: '⚠ Vencidos',  count: vencidos.length,  color: '#B5543E' },
               { key: 'proximo', label: '⏰ Próximos',  count: proximos.length,  color: '#D4AF37' },
             ] as const).map(t => (
               <button
@@ -1333,8 +1333,8 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
             <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>+1.5× su ciclo</p>
           </div>
           <div style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 12, padding: '12px 14px' }}>
-            <p style={{ fontSize: 10, color: '#F87171', fontWeight: 700, marginBottom: 4 }}>⚠ VENCIDOS</p>
-            <p style={{ fontSize: 28, fontWeight: 900, color: '#F87171', lineHeight: 1 }}>{vencidos.length}</p>
+            <p style={{ fontSize: 10, color: '#B5543E', fontWeight: 700, marginBottom: 4 }}>⚠ VENCIDOS</p>
+            <p style={{ fontSize: 28, fontWeight: 900, color: '#B5543E', lineHeight: 1 }}>{vencidos.length}</p>
             <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>Superaron su ciclo</p>
           </div>
         </div>
@@ -1386,7 +1386,7 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 800, color: isCritico ? '#B5543E' : '#F87171' }}>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: isCritico ? '#B5543E' : '#B5543E' }}>
                         {c.dias_sin_compra}d
                       </p>
                       <p style={{ fontSize: 10, color: 'var(--muted)' }}>/{c.ciclo_promedio_dias}d</p>
@@ -1450,7 +1450,7 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${pctTotal}%`, borderRadius: 4,
-                  background: pctTotal === 100 ? '#34D399' : pctTotal > 60 ? '#D4AF37' : '#D4AF37', transition: 'width 0.4s' }} />
+                  background: pctTotal === 100 ? '#5A8A4A' : pctTotal > 60 ? '#D4AF37' : '#D4AF37', transition: 'width 0.4s' }} />
               </div>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>
                 {misiones.filter(m=>m.estado==='completada').length}/{total} · {pctTotal}%
@@ -1508,7 +1508,7 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
               {[
                 { label: '🔴 Urgentes', count: criticos.length,  color: '#B5543E', bg: 'rgba(181,84,62,0.08)',    border: 'rgba(181,84,62,0.2)'    },
-                { label: '⚠ Vencidos',  count: vencidos.length,  color: '#F87171', bg: 'rgba(248,113,113,0.06)', border: 'rgba(248,113,113,0.15)' },
+                { label: '⚠ Vencidos',  count: vencidos.length,  color: '#B5543E', bg: 'rgba(248,113,113,0.06)', border: 'rgba(248,113,113,0.15)' },
                 { label: '⏰ Próximos', count: proximos.length,  color: '#D4AF37', bg: 'rgba(245,158,11,0.06)',  border: 'rgba(245,158,11,0.15)'  },
               ].map(s => (
                 <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: '7px 4px', textAlign: 'center' }}>
@@ -1523,7 +1523,7 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
               PENDIENTES DE CONTACTO{vtab !== 'all' ? ` · ${vtab.split(' ')[0].toUpperCase()}` : ''}
             </p>
             {[...criticos, ...vencidos, ...proximos].slice(0, 4).map(c => {
-              const alertColor = c.alert_level === 'critico' ? '#B5543E' : c.alert_level === 'vencido' ? '#F87171' : '#D4AF37'
+              const alertColor = c.alert_level === 'critico' ? '#B5543E' : c.alert_level === 'vencido' ? '#B5543E' : '#D4AF37'
               const segColor   = SEG_C[c.segmento] ?? '#888'
               const vendColor  = VC[c.vendedor] ?? '#888'
               return (
@@ -1834,7 +1834,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                   </div>
                   {litrosMesAnterior > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#5A8A4A' : '#F87171' }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#5A8A4A' : '#B5543E' }}>
                         {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre}
                       </span>
                       <span style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
@@ -1875,7 +1875,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                     <span style={{ fontSize: 14, fontWeight: 700, color: '#A8870F' }}>L</span>
                   </div>
                   {litrosMesAnterior > 0 && (
-                    <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#5A8A4A' : '#F87171' }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#5A8A4A' : '#B5543E' }}>
                       {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre} ({litrosMesAnterior.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L)
                     </span>
                   )}

@@ -12,10 +12,10 @@ import { VEND_COLOR } from '@/lib/theme'
 // VEND_COLOR viene de lib/theme (fuente única de verdad)
 const CAT_COLOR: Record<string,string> = {
   'Bar':'#D4AF37','Minimarket':'#D4AF37','Cafetería':'#5A8A4A','Botillería':'#8A6D1F',
-  'Almacén':'#FB923C','Restaurante':'#F472B6','Supermercado':'#38BDF8','Distribuidor':'#86EFAC',
+  'Almacén':'#FB923C','Restaurante':'#F472B6','Supermercado':'#38BDF8','Distribuidor':'#7CA86A',
   'Cliente Directo':'#E879F9','Otros':'#6B7280',
 }
-const MIX_COLORS = ['#D4AF37','#D4AF37','#34D399','#F472B6','#8A6D1F','#FB923C','#38BDF8','#6B7280']
+const MIX_COLORS = ['#D4AF37','#D4AF37','#5A8A4A','#F472B6','#8A6D1F','#FB923C','#38BDF8','#6B7280']
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fL   = (n:number) => n>=1000?`${(n/1000).toFixed(1)}k`:n.toFixed(1)
@@ -62,8 +62,8 @@ function KpiCard({ icon:Icon, label, value, sub, deltaVal, spark, color, wide }:
       {sub&&<p style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>{sub}</p>}
       {deltaVal!==undefined&&(
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-          {pos?<TrendingUp size={11} color="#34D399"/>:<TrendingDown size={11} color="#F87171"/>}
-          <span style={{ fontSize:11, fontWeight:700, color:pos?'#34D399':'#F87171' }}>{pos?'+':''}{deltaVal}%</span>
+          {pos?<TrendingUp size={11} color="#5A8A4A"/>:<TrendingDown size={11} color="#B5543E"/>}
+          <span style={{ fontSize:11, fontWeight:700, color:pos?'#5A8A4A':'#B5543E' }}>{pos?'+':''}{deltaVal}%</span>
           <span style={{ fontSize:10, color:'var(--muted)' }}>vs ant.</span>
         </div>
       )}
@@ -336,7 +336,7 @@ function CatTable({ vendedor, cats, catClientes, color }: {
                 <td style={{ textAlign:'right', color:'var(--muted)', padding:'8px 4px' }}>{pct.toFixed(1)}%</td>
                 <td style={{ textAlign:'right', padding:'8px 0' }}>
                   {d.litrosAnterior>0
-                    ? <span style={{ color:d2>=0?'#34D399':'#F87171', fontWeight:700 }}>{d2>=0?'↑':'↓'}{Math.abs(d2)}%</span>
+                    ? <span style={{ color:d2>=0?'#5A8A4A':'#B5543E', fontWeight:700 }}>{d2>=0?'↑':'↓'}{Math.abs(d2)}%</span>
                     : <span style={{ color:'#555' }}>—</span>}
                 </td>
                 <td style={{ width:16 }}/>
@@ -371,7 +371,7 @@ function CatTable({ vendedor, cats, catClientes, color }: {
 function DivBar({ vendedor, div, color }: { vendedor:string; div:DivVend; color:string }) {
   const total=Object.values(div.categorias).reduce((s,v)=>s+v,0)
   const sorted=Object.entries(div.categorias).sort((a,b)=>b[1]-a[1])
-  const sc=div.score; const scColor=sc>=65?'#34D399':sc>=45?'#D4AF37':'#F87171'
+  const sc=div.score; const scColor=sc>=65?'#5A8A4A':sc>=45?'#D4AF37':'#B5543E'
   return (
     <div style={{ marginBottom:20 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
@@ -433,9 +433,9 @@ export default function AcumuladoClient({
 
   const metaTotal2 = Object.values(metasPorVendedor).reduce((s,v)=>s+v,0)||metaTotal
   const pctMeta    = metaTotal2>0?Math.round((kpis.litros/metaTotal2)*100):0
-  const metaColor  = pctMeta>=90?'#34D399':pctMeta>=70?'#D4AF37':'#F87171'
+  const metaColor  = pctMeta>=90?'#5A8A4A':pctMeta>=70?'#D4AF37':'#B5543E'
 
-  const insightColor = (t:string) => t==='positive'?'#34D399':t==='negative'?'#F87171':t==='warning'?'#D4AF37':'#D4AF37'
+  const insightColor = (t:string) => t==='positive'?'#5A8A4A':t==='negative'?'#B5543E':t==='warning'?'#D4AF37':'#D4AF37'
   const insightIcon  = (t:string) => t==='positive'?'↗':t==='negative'?'↘':t==='warning'?'⚡':'●'
 
   return (
@@ -454,7 +454,7 @@ export default function AcumuladoClient({
       {/* KPIs */}
       <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:20 }}>
         <KpiCard icon={Droplets}   label="Litros Vendidos"   value={`${fL(kpis.litros)} L`}        deltaVal={dlt(kpis.litros,kpis.litrosAnterior)} color="#D4AF37" spark={evolucion.map(d=>vendedoresScope.reduce((s,v)=>s+((d[v] as number)??0),0))}/>
-        <KpiCard icon={DollarSign} label="Facturación"       value={fP(kpis.venta)}                  deltaVal={dlt(kpis.venta,kpis.ventaAnterior)}   color="#34D399"/>
+        <KpiCard icon={DollarSign} label="Facturación"       value={fP(kpis.venta)}                  deltaVal={dlt(kpis.venta,kpis.ventaAnterior)}   color="#5A8A4A"/>
         <KpiCard icon={BarChart2}  label="Ticket Promedio"   value={fPk(kpis.ticketPromedio)}        deltaVal={dlt(kpis.ticketPromedio,kpis.ticketPromedioAnterior)} color="#D4AF37"/>
         <KpiCard icon={Users}      label="Clientes Activos"  value={String(kpis.clientesActivos)}    sub={`${kpis.clientesActivos-kpis.clientesActivosAnterior>=0?'+':''}${kpis.clientesActivos-kpis.clientesActivosAnterior} vs ant.`} color="#8A6D1F"/>
         <KpiCard icon={Award}      label="Categoría Líder"   value={kpis.categoriaLider}             sub={`${kpis.categoriaLiderPct}% del total`} deltaVal={kpis.categoriaLiderPct-kpis.categoriaLiderPctAnterior} color="#D4AF37" wide/>
@@ -490,7 +490,7 @@ export default function AcumuladoClient({
                 <p style={{ fontSize:9, fontWeight:700, color:'var(--muted)', letterSpacing:'0.08em', marginBottom:4 }}>{s.label}</p>
                 <p style={{ fontSize:14, fontWeight:800, color:'var(--cream)' }}>{s.value}</p>
                 {s.extra!==undefined&&s.extra!==null&&(
-                  <p style={{ fontSize:10, color:s.extra>=0?'#34D399':'#F87171', marginTop:2 }}>
+                  <p style={{ fontSize:10, color:s.extra>=0?'#5A8A4A':'#B5543E', marginTop:2 }}>
                     {s.extra>=0?'↑':'↓'}{Math.abs(s.extra)}% vs meta
                   </p>
                 )}
@@ -530,7 +530,7 @@ export default function AcumuladoClient({
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {alertas.map((a,i)=>{
-                  const bc=a.tipo==='danger'?'#B5543E':a.tipo==='warning'?'#D4AF37':a.tipo==='success'?'#34D399':'#D4AF37'
+                  const bc=a.tipo==='danger'?'#B5543E':a.tipo==='warning'?'#D4AF37':a.tipo==='success'?'#5A8A4A':'#D4AF37'
                   return (
                     <div key={i} style={{ display:'flex', gap:8, alignItems:'flex-start', borderLeft:`2px solid ${bc}`, paddingLeft:8 }}>
                       <div style={{ flex:1, minWidth:0 }}>
@@ -590,7 +590,7 @@ export default function AcumuladoClient({
                     <td style={{ padding:'8px 0', fontSize:12, fontWeight:600, color:'var(--cream)', maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.nombre}</td>
                     <td style={{ padding:'8px 4px', fontSize:10, color:'var(--muted)' }}>{c.categoria}</td>
                     <td style={{ padding:'8px 0', textAlign:'right', fontSize:12, fontWeight:700, color:'var(--cream)' }}>{fLn(c.litros)} L</td>
-                    <td style={{ padding:'8px 0', textAlign:'right', fontSize:11, fontWeight:700, color:d2===null?'#555':d2>=0?'#34D399':'#F87171' }}>
+                    <td style={{ padding:'8px 0', textAlign:'right', fontSize:11, fontWeight:700, color:d2===null?'#555':d2>=0?'#5A8A4A':'#B5543E' }}>
                       {d2!==null?`${d2>=0?'↑':'↓'}${Math.abs(d2)}%`:'—'}
                     </td>
                   </tr>
@@ -637,7 +637,7 @@ export default function AcumuladoClient({
               <div style={{ paddingTop:10, borderTop:'1px solid rgba(255,255,255,0.05)' }}>
                 <p style={{ fontSize:11, fontWeight:800, color:'var(--cream)' }}>
                   {fL(proyeccionFin)} L{' '}
-                  <span style={{ fontSize:10, color:dlt(proyeccionFin,metaTotal2)>=0?'#34D399':'#F87171', fontWeight:700 }}>
+                  <span style={{ fontSize:10, color:dlt(proyeccionFin,metaTotal2)>=0?'#5A8A4A':'#B5543E', fontWeight:700 }}>
                     {dlt(proyeccionFin,metaTotal2)>=0?'↑':'↓'}{Math.abs(dlt(proyeccionFin,metaTotal2))}% vs meta
                   </span>
                 </p>

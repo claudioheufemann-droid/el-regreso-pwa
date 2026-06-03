@@ -237,8 +237,8 @@ export default function CargarClient({ periodos }: Props) {
             display: 'flex', alignItems: 'flex-start', gap: 10,
             background: 'rgba(255,68,68,0.06)', border: '1px solid rgba(255,68,68,0.25)',
           }}>
-            <AlertCircle size={17} style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }} />
-            <p style={{ fontSize: 13, color: '#F87171' }}>{error}</p>
+            <AlertCircle size={17} style={{ color: '#B5543E', flexShrink: 0, marginTop: 1 }} />
+            <p style={{ fontSize: 13, color: '#B5543E' }}>{error}</p>
           </div>
         )}
 
@@ -255,10 +255,10 @@ export default function CargarClient({ periodos }: Props) {
             }}>
               {tieneAdvertencias
                 ? <AlertTriangle size={17} style={{ color: '#D4AF37', flexShrink: 0 }} />
-                : <CheckCircle size={17} style={{ color: '#34D399', flexShrink: 0 }} />
+                : <CheckCircle size={17} style={{ color: '#5A8A4A', flexShrink: 0 }} />
               }
               <div>
-                <p style={{ fontSize: 14, fontWeight: 700, color: tieneAdvertencias ? '#D4AF37' : '#34D399' }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: tieneAdvertencias ? '#D4AF37' : '#5A8A4A' }}>
                   {tieneAdvertencias ? 'Validación con advertencias' : 'Validación correcta'}
                 </p>
                 <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
@@ -304,7 +304,7 @@ export default function CargarClient({ periodos }: Props) {
                           </span>
                         )}
                         {v.litrosNegativos > 0 && (
-                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(181,84,62,0.1)', color: '#F87171', fontWeight: 600 }}>
+                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(181,84,62,0.1)', color: '#B5543E', fontWeight: 600 }}>
                             ↓ {v.litrosNegativos} devolución{v.litrosNegativos > 1 ? 'es' : ''}
                           </span>
                         )}
@@ -438,19 +438,19 @@ export default function CargarClient({ periodos }: Props) {
             background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.2)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-              <CheckCircle size={17} style={{ color: '#34D399' }} />
-              <span style={{ fontWeight: 700, color: '#34D399', fontSize: 14 }}>Carga completada</span>
+              <CheckCircle size={17} style={{ color: '#5A8A4A' }} />
+              <span style={{ fontWeight: 700, color: '#5A8A4A', fontSize: 14 }}>Carga completada</span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
               <div style={{ borderRadius: 10, padding: '10px 14px', background: 'rgba(52,211,153,0.07)' }}>
-                <p style={{ fontSize: 11, color: '#34D399', marginBottom: 4 }}>Registros insertados</p>
+                <p style={{ fontSize: 11, color: '#5A8A4A', marginBottom: 4 }}>Registros insertados</p>
                 <p style={{ fontSize: 24, fontWeight: 800, color: 'white' }}>{result.insertadas}</p>
               </div>
               <div style={{ borderRadius: 10, padding: '10px 14px', background: 'rgba(52,211,153,0.07)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                  <Calendar size={11} style={{ color: '#34D399' }} />
-                  <p style={{ fontSize: 11, color: '#34D399' }}>Rango de fechas</p>
+                  <Calendar size={11} style={{ color: '#5A8A4A' }} />
+                  <p style={{ fontSize: 11, color: '#5A8A4A' }}>Rango de fechas</p>
                 </div>
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>{formatFecha(result.fechaMin)}</p>
                 {result.fechaMin !== result.fechaMax && (
@@ -469,7 +469,7 @@ export default function CargarClient({ periodos }: Props) {
                     <div key={v.nombre} style={{ borderRadius: 10, padding: '10px 14px', background: 'rgba(52,211,153,0.07)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: 'white' }}>{v.nombre}</span>
-                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(52,211,153,0.15)', color: '#34D399' }}>
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(52,211,153,0.15)', color: '#5A8A4A' }}>
                           {v.filas} filas
                         </span>
                       </div>

@@ -65,7 +65,7 @@ const TILES: { value: TileTipo; label: string }[] = [
 ]
 
 const SALUD_LEGEND = [
-  { color: '#34D399', label: 'Excelente (0-7 días)' },
+  { color: '#5A8A4A', label: 'Excelente (0-7 días)' },
   { color: '#D4AF37', label: 'Atención (8-15 días)' },
   { color: '#F97316', label: 'Riesgo (16-30 días)'  },
   { color: '#B5543E', label: 'Crítico (+30 días)'   },
@@ -241,7 +241,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
       {/* ─── KPI row ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(5, 1fr)' : 'repeat(2, 1fr)', gap: 10, padding: isDesktop ? '14px 20px 0' : '12px 14px 0', flexShrink: 0 }}>
         <KPICard icon={<Droplets size={16} />} color="#D4AF37" label="Ventas del período" value={`${formatLitros(kpis.litros)} L`} />
-        <KPICard icon={<Users size={16} />} color="#34D399" label="Clientes activos" value={kpis.clientes} />
+        <KPICard icon={<Users size={16} />} color="#5A8A4A" label="Clientes activos" value={kpis.clientes} />
         <KPICard icon={<ShoppingCart size={16} />} color="#D4AF37" label="Pedidos" value={kpis.pedidos} />
         <KPICard icon={<DollarSign size={16} />} color="#8A6D1F" label="Ticket promedio" value={formatPeso(kpis.ticket)} />
         <KPICard icon={<AlertTriangle size={16} />} color="#B5543E" label="Deuda total" value={formatPeso(deudaGlobal)} alert />
@@ -330,7 +330,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
         {/* Sidebar */}
         <div style={{ width: isDesktop ? 300 : '100%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, overflowY: isDesktop ? 'auto' : 'visible', paddingBottom: isDesktop ? 14 : 0, marginTop: isDesktop ? 0 : 14 }}>
           {/* Salud del cliente */}
-          <Panel title="Salud del cliente" icon={<Heart size={14} style={{ color: '#34D399' }} />}>
+          <Panel title="Salud del cliente" icon={<Heart size={14} style={{ color: '#5A8A4A' }} />}>
             {SALUD_LEGEND.map(s => (
               <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
                 <div style={{ width: 9, height: 9, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
@@ -365,7 +365,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
           {/* Capas activas */}
           <Panel title="Capas activas" icon={<LayersIcon size={14} style={{ color: '#D4AF37' }} />}>
             <CapaToggle label="Mapa de calor" color="#B5543E" active={capaViz === 'calor'} onClick={() => setCapaViz(capaViz === 'calor' ? 'pedidos' : 'calor')} />
-            <CapaToggle label="Salud de clientes" color="#34D399" active={capaViz === 'salud'} onClick={() => setCapaViz(capaViz === 'salud' ? 'pedidos' : 'salud')} />
+            <CapaToggle label="Salud de clientes" color="#5A8A4A" active={capaViz === 'salud'} onClick={() => setCapaViz(capaViz === 'salud' ? 'pedidos' : 'salud')} />
             <CapaToggle label="Zonas blancas" color="#818cf8" active={mostrarSinCompra} onClick={() => setMostrarSinCompra(b => !b)} />
           </Panel>
         </div>

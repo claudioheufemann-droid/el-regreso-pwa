@@ -84,7 +84,7 @@ function getEstado(c: Cliente): EstadoDisplay {
   const dc = diasDesde(c.ultimoContacto?.fecha)
   if (!c.ultimoContacto || dc === null || dc > 7)
     return { label:'Sin contacto',  color:'#9CA3AF', bg:'rgba(156,163,175,0.1)', border:'rgba(156,163,175,0.2)' }
-  return { label:'Al día',          color:'#34D399', bg:'rgba(52,211,153,0.1)',  border:'rgba(52,211,153,0.2)'  }
+  return { label:'Al día',          color:'#5A8A4A', bg:'rgba(52,211,153,0.1)',  border:'rgba(52,211,153,0.2)'  }
 }
 
 // waUrl eliminado → se usa WAModal global
@@ -95,7 +95,7 @@ const ROWS_PER_PAGE = 10
 function DonutResumen({ stats }: { stats: Stats }) {
   const total = stats.total || 1
   const items = [
-    { label:'Al día',       count: stats.alDia,        color:'#34D399' },
+    { label:'Al día',       count: stats.alDia,        color:'#5A8A4A' },
     { label:'Riesgo',       count: stats.riesgoCompra, color:'#D4AF37' },
     { label:'Deuda alta',   count: stats.deudaAlta,    color:'#B5543E' },
     { label:'Sin contacto', count: stats.sinContacto,  color:'#6B7280' },
@@ -219,7 +219,7 @@ function Sidebar({ stats, actividad, onAlertaClick, onClienteClick }: {
             </button>
           ))}
           {ALERTAS.every(a=>!a.show) && (
-            <p style={{ fontSize:12, color:'#34D399', fontWeight:600, textAlign:'center', padding:'8px 0' }}>
+            <p style={{ fontSize:12, color:'#5A8A4A', fontWeight:600, textAlign:'center', padding:'8px 0' }}>
               ✓ Sin alertas críticas
             </p>
           )}
@@ -244,7 +244,7 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
   const diasSin   = c.frecuencia?.dias_sin_compra ?? 0
 
   const alertBorderColor = al === 'critico' ? '#B5543E'
-    : al === 'vencido' ? '#F87171'
+    : al === 'vencido' ? '#B5543E'
     : al === 'proximo'  ? '#D4AF37'
     : 'transparent'
 
@@ -301,8 +301,8 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
       <td style={{ padding:'10px 8px' }}>
         {saldo > 0 ? (
           <div>
-            <p style={{ fontSize:12, fontWeight:800, color: deuda>0 ? '#B5543E' : '#34D399' }}>{fPeso(saldo)}</p>
-            {deuda > 0 && <p style={{ fontSize:10, color:'#F87171' }}>vcda {fPeso(deuda)}</p>}
+            <p style={{ fontSize:12, fontWeight:800, color: deuda>0 ? '#B5543E' : '#5A8A4A' }}>{fPeso(saldo)}</p>
+            {deuda > 0 && <p style={{ fontSize:10, color:'#B5543E' }}>vcda {fPeso(deuda)}</p>}
           </div>
         ) : <span style={{ fontSize:11, color:'#444' }}>—</span>}
       </td>
@@ -312,7 +312,7 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
         {siguComp ? (
           <div>
             <p style={{ fontSize:11, color:'var(--cream)', fontWeight:600, marginBottom:2 }}>{fFecha(siguComp)}</p>
-            <span style={{ fontSize:9, padding:'1px 6px', borderRadius:10, background:'rgba(52,211,153,0.12)', color:'#34D399', fontWeight:700 }}>▸ estimado</span>
+            <span style={{ fontSize:9, padding:'1px 6px', borderRadius:10, background:'rgba(52,211,153,0.12)', color:'#5A8A4A', fontWeight:700 }}>▸ estimado</span>
           </div>
         ) : <span style={{ fontSize:11, color:'#444' }}>—</span>}
       </td>
@@ -326,7 +326,7 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
               color:'#25D366', fontSize:11, fontWeight:700, cursor:'pointer', width:'fit-content' }}>
             <MessageCircle size={13}/> WhatsApp
           </button>
-          <span style={{ fontSize:10, color: dcont !== null && dcont <= 7 ? '#34D399' : '#555' }}>
+          <span style={{ fontSize:10, color: dcont !== null && dcont <= 7 ? '#5A8A4A' : '#555' }}>
             {c.ultimoContacto ? fDias(dcont) : 'sin contacto'}
           </span>
         </div>
@@ -368,9 +368,9 @@ function ClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; on
   // Barra de urgencia: % del ciclo consumido
   const pctConsumed = ciclo > 0 ? Math.min(100, Math.round((diasSin / ciclo) * 100)) : 0
   const barColor = al === 'critico' ? '#B5543E'
-    : al === 'vencido' ? '#F87171'
+    : al === 'vencido' ? '#B5543E'
     : al === 'proximo'  ? '#D4AF37'
-    : '#34D399'
+    : '#5A8A4A'
 
   const waTarget: WATarget = { nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'general', cicloPromedioDias:c.frecuencia?.ciclo_promedio_dias, siguienteCompra:c.frecuencia?.siguiente_compra_estimada, subtitulo:c.categoria??undefined }
 
@@ -407,7 +407,7 @@ function ClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; on
               <span style={{ fontSize:10, color:vendColor, fontWeight:700 }}>{(c.vendedor??'').split(' ')[0]}</span>
               {c.ruta_despacho && <span style={{ fontSize:10, color:'#444' }}>· {c.ruta_despacho}</span>}
               {dcont !== null && dcont <= 7
-                ? <span style={{ fontSize:10, color:'#34D399', fontWeight:600 }}>· contactado {fDias(dcont)}</span>
+                ? <span style={{ fontSize:10, color:'#5A8A4A', fontWeight:600 }}>· contactado {fDias(dcont)}</span>
                 : <span style={{ fontSize:10, color:'#555' }}>· {c.ultimoContacto ? `contactado ${fDias(dcont)}` : 'sin contacto'}</span>
               }
             </div>
@@ -551,7 +551,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   // Chips de filtro con conteos
   const FILTROS = [
     { key:'todos',       label:`Todos`,       count: stats.total,        color:'var(--cream)', icon: null },
-    { key:'contactados', label:'Contactados', count: stats.contactados7d, color:'#34D399',     icon:'✓'  },
+    { key:'contactados', label:'Contactados', count: stats.contactados7d, color:'#5A8A4A',     icon:'✓'  },
     { key:'deuda',       label:'Deuda',       count: stats.deudaAlta,    color:'#B5543E',     icon:'⚠'  },
     { key:'pendientes',  label:'Pendientes',  count: stats.pendientes,    color:'#D4AF37',     icon:'⚠'  },
     { key:'sin_contacto',label:'Sin contacto',count: stats.sinContacto,   color:'#9CA3AF',     icon:'✕'  },
@@ -651,7 +651,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
       <div style={{ display:'grid', gridTemplateColumns:isDesktop?'repeat(4,1fr)':'repeat(2,1fr)', gap:10, marginBottom:20 }}>
         {[
           { icon:Users,          label:'TOTAL CLIENTES',      val:stats.total,        sub:'100% cartera activa', color:'#D4AF37' },
-          { icon:CheckCircle2,   label:'CONTACTADOS (7d)',     val:stats.contactados7d, sub:`${Math.round((stats.contactados7d/Math.max(stats.total,1))*100)}% del total`, color:'#34D399' },
+          { icon:CheckCircle2,   label:'CONTACTADOS (7d)',     val:stats.contactados7d, sub:`${Math.round((stats.contactados7d/Math.max(stats.total,1))*100)}% del total`, color:'#5A8A4A' },
           { icon:Clock,          label:'PENDIENTES CONTACTO',  val:stats.pendientes,   sub:`${Math.round((stats.pendientes/Math.max(stats.total,1))*100)}% del total`, color:'#D4AF37' },
           { icon:PhoneOff,       label:'SIN CONTACTO',         val:stats.sinContacto,  sub:`${Math.round((stats.sinContacto/Math.max(stats.total,1))*100)}% del total`, color:'#9CA3AF' },
         ].map(k=>(

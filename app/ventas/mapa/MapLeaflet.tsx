@@ -72,7 +72,7 @@ function getColorVendedor(vendedor: string) {
 // Salud: verde <7d, amarillo 8-15d, naranja 16-30d, rojo >30d
 function getColorSalud(dias: number | null): string {
   if (dias === null) return '#6B7280'
-  if (dias <= 7)  return '#34D399'  // verde: excelente
+  if (dias <= 7)  return '#5A8A4A'  // verde: excelente
   if (dias <= 15) return '#D4AF37'  // amarillo: atención
   if (dias <= 30) return '#F97316'  // naranja: riesgo
   return '#B5543E'                   // rojo: crítico
@@ -227,7 +227,7 @@ function PopupDetalle({ p, color, onWA }: {
             <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{p.litros_total.toFixed(1)}</div>
           </div>
           <div style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
-            <div style={{ fontSize: 10, color: '#34D399', fontWeight: 600, marginBottom: 2 }}>PEDIDOS</div>
+            <div style={{ fontSize: 10, color: '#5A8A4A', fontWeight: 600, marginBottom: 2 }}>PEDIDOS</div>
             <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{p.pedidos_count}</div>
           </div>
           <div style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
@@ -324,7 +324,7 @@ function PopupLead({ l, onWA }: { l: LeadPunto; onWA: (t: WATarget) => void }) {
       <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
         <div><div style={{ fontSize: 16, fontWeight: 900, color: '#059669' }}>~{l.litros_potencial} L</div><div style={{ fontSize: 9, color: '#999', textTransform: 'uppercase' }}>potencial/mes</div></div>
         <div><div style={{ fontSize: 16, fontWeight: 900, color: '#7C3AED' }}>{l.score_lead ?? 0}</div><div style={{ fontSize: 9, color: '#999', textTransform: 'uppercase' }}>score</div></div>
-        {l.producto_sugerido && <div><div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', marginTop: 3 }}>{l.producto_sugerido}</div><div style={{ fontSize: 9, color: '#999', textTransform: 'uppercase' }}>sugerido</div></div>}
+        {l.producto_sugerido && <div><div style={{ fontSize: 11, fontWeight: 700, color: '#D4AF37', marginTop: 3 }}>{l.producto_sugerido}</div><div style={{ fontSize: 9, color: '#999', textTransform: 'uppercase' }}>sugerido</div></div>}
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         {l.telefono && (
@@ -333,7 +333,7 @@ function PopupLead({ l, onWA }: { l: LeadPunto; onWA: (t: WATarget) => void }) {
         )}
         {l.telefono && (
           <button onClick={() => window.open(`tel:${l.telefono}`)}
-            style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #D4AF37', background: 'white', color: '#2563EB', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Llamar</button>
+            style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #D4AF37', background: 'white', color: '#D4AF37', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Llamar</button>
         )}
       </div>
     </div>

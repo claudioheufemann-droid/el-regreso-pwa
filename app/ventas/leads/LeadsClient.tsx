@@ -17,12 +17,12 @@ interface Lead {
 const ESTADOS: Record<string, { label: string; color: string }> = {
   nuevo:      { label: 'Nuevo',      color: '#D4AF37' },
   contactado: { label: 'Contactado', color: '#D4AF37' },
-  convertido: { label: 'Convertido', color: '#34D399' },
+  convertido: { label: 'Convertido', color: '#5A8A4A' },
   descartado: { label: 'Descartado', color: '#6B7280' },
 }
 const PRODUCTOS = ['all', 'Ambos', 'Cerveza Artesanal', 'Kombucha']
 
-function scoreColor(s: number) { return s >= 70 ? '#34D399' : s >= 45 ? '#D4AF37' : '#9CA3AF' }
+function scoreColor(s: number) { return s >= 70 ? '#5A8A4A' : s >= 45 ? '#D4AF37' : '#9CA3AF' }
 
 export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
   const [leads, setLeads] = useState<Lead[]>([])
@@ -109,7 +109,7 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
         <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, fontSize: 12, fontWeight: 600,
           background: importMsg.startsWith('✓') ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
           border: `1px solid ${importMsg.startsWith('✓') ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`,
-          color: importMsg.startsWith('✓') ? '#34D399' : '#F87171' }}>
+          color: importMsg.startsWith('✓') ? '#5A8A4A' : '#B5543E' }}>
           {importMsg}
         </div>
       )}
@@ -118,7 +118,7 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }} className="kpi-grid-4">
         {[
           { icon: <Target size={16} />, c: '#D4AF37', label: 'Leads', v: kpis.total.toLocaleString('es-CL') },
-          { icon: <Droplets size={16} />, c: '#34D399', label: 'Potencial / mes', v: `${kpis.litros.toLocaleString('es-CL')} L` },
+          { icon: <Droplets size={16} />, c: '#5A8A4A', label: 'Potencial / mes', v: `${kpis.litros.toLocaleString('es-CL')} L` },
           { icon: <MapPin size={16} />, c: '#8A6D1F', label: 'Ciudades', v: kpis.ciudades },
           { icon: <Phone size={16} />, c: '#D4AF37', label: 'Con teléfono', v: kpis.conTel.toLocaleString('es-CL') },
         ].map(k => (
@@ -142,7 +142,7 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
           <option value="all" style={{ background: 'var(--surface)' }}>Todas las ciudades</option>
           {ciudades.map(c => <option key={c} value={c} style={{ background: 'var(--surface)' }}>{c}</option>)}
         </select>
-        <button onClick={() => setEnZona(v => !v)} style={{ padding: '8px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: `1px solid ${enZona ? 'rgba(52,211,153,0.4)' : 'var(--border)'}`, background: enZona ? 'rgba(52,211,153,0.12)' : 'transparent', color: enZona ? '#34D399' : 'var(--muted)' }}>
+        <button onClick={() => setEnZona(v => !v)} style={{ padding: '8px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: `1px solid ${enZona ? 'rgba(52,211,153,0.4)' : 'var(--border)'}`, background: enZona ? 'rgba(52,211,153,0.12)' : 'transparent', color: enZona ? '#5A8A4A' : 'var(--muted)' }}>
           {enZona ? '✓ Solo zona de despacho' : 'Todas las zonas'}
         </button>
       </div>
@@ -182,7 +182,7 @@ export default function LeadsClient({ isAdmin }: { isAdmin: boolean }) {
                 </div>
                 {/* Potencial */}
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <p style={{ fontSize: 17, fontWeight: 900, color: '#34D399' }}>~{l.litros_potencial} L</p>
+                  <p style={{ fontSize: 17, fontWeight: 900, color: '#5A8A4A' }}>~{l.litros_potencial} L</p>
                   <p style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>potencial/mes</p>
                 </div>
                 {/* Acciones */}

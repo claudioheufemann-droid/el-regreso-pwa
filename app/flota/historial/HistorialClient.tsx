@@ -234,10 +234,10 @@ export default function HistorialClient({ user, viajes }: Props) {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', width: '100%', padding: '20px 16px', paddingBottom: 100 }}>
 
-      {/* Header */}
+      {/* Header estándar */}
       <div style={{ marginBottom: 20 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>Módulo flota</p>
-        <h1 style={{ fontSize: 24, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-0.5px' }}>Historial de viajes</h1>
+        <p style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4px', marginBottom: 6, textTransform: 'capitalize' }}>Módulo logística</p>
+        <h1 style={{ fontSize: 26, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1px', lineHeight: 1.1 }}>Historial de viajes</h1>
       </div>
 
       {/* Stats globales */}

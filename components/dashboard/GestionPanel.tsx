@@ -24,11 +24,11 @@ function statusColor(value: number, target: number, inverted = false): string {
   if (inverted) {
     if (value <= target * 0.5) return '#16A34A'
     if (value <= target)       return '#D97706'
-    return '#DC2626'
+    return '#B5543E'
   }
   if (ratio >= 1)    return '#16A34A'
   if (ratio >= 0.75) return '#D97706'
-  return '#DC2626'
+  return '#B5543E'
 }
 
 function StatusBadge({ ok }: { ok: boolean }) {
@@ -39,7 +39,7 @@ function StatusBadge({ ok }: { ok: boolean }) {
       background: ok ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)',
       border: `1px solid ${ok ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'}`,
       fontSize: 9, fontWeight: 800, letterSpacing: 1,
-      color: ok ? '#16A34A' : '#DC2626',
+      color: ok ? '#16A34A' : '#B5543E',
     }}>
       <span style={{ fontSize: 10 }}>{ok ? '✓' : '!'}</span>
       {ok ? 'CUMPLIDO' : 'NO CUMPLIDO'}
@@ -128,8 +128,8 @@ function RankRow({ rank, kpi, pimponeo, isBest, isWorst }: {
   isWorst: boolean
 }) {
   const cfg = AREA_CFG[kpi.area]
-  const otcrColor = kpi.otcr >= 85 ? '#16A34A' : kpi.otcr >= 60 ? '#D97706' : '#DC2626'
-  const accent = isBest ? '#16A34A' : isWorst ? '#DC2626' : 'transparent'
+  const otcrColor = kpi.otcr >= 85 ? '#16A34A' : kpi.otcr >= 60 ? '#D97706' : '#B5543E'
+  const accent = isBest ? '#16A34A' : isWorst ? '#B5543E' : 'transparent'
 
   return (
     <div style={{
@@ -148,7 +148,7 @@ function RankRow({ rank, kpi, pimponeo, isBest, isWorst }: {
         background: isBest ? 'rgba(22,163,74,0.15)' : isWorst ? 'rgba(220,38,38,0.15)' : 'rgba(128,128,128,0.1)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 9, fontWeight: 800,
-        color: isBest ? '#16A34A' : isWorst ? '#DC2626' : 'var(--muted)',
+        color: isBest ? '#16A34A' : isWorst ? '#B5543E' : 'var(--muted)',
       }}>{rank}</div>
 
       {/* Area */}
@@ -161,7 +161,7 @@ function RankRow({ rank, kpi, pimponeo, isBest, isWorst }: {
         }}>{cfg?.code ?? '?'}</div>
         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{kpi.area}</span>
         {isBest && <span style={{ fontSize: 8, color: '#16A34A', fontWeight: 700, flexShrink: 0 }}>↑ Mejor</span>}
-        {isWorst && <span style={{ fontSize: 8, color: '#DC2626', fontWeight: 700, flexShrink: 0 }}>↓ Peor</span>}
+        {isWorst && <span style={{ fontSize: 8, color: '#B5543E', fontWeight: 700, flexShrink: 0 }}>↓ Peor</span>}
       </div>
 
       {/* Red */}
@@ -205,7 +205,7 @@ function RankRow({ rank, kpi, pimponeo, isBest, isWorst }: {
 
       {/* Pimponeo */}
       <div style={{ textAlign: 'center' }}>
-        <span style={{ fontSize: 11, color: pimponeo >= 3 ? '#DC2626' : pimponeo >= 1.5 ? '#D97706' : 'var(--muted)' }}>
+        <span style={{ fontSize: 11, color: pimponeo >= 3 ? '#B5543E' : pimponeo >= 1.5 ? '#D97706' : 'var(--muted)' }}>
           {pimponeo > 0 ? pimponeo.toFixed(1) : '—'}
         </span>
       </div>
@@ -389,14 +389,14 @@ export default function GestionPanel({ tasks }: Props) {
                   label: '> 24h sin tomar',
                   value: reaction.pendingOver24h,
                   sub: 'requieren atención',
-                  color: reaction.pendingOver24h > 0 ? '#DC2626' : '#16A34A',
+                  color: reaction.pendingOver24h > 0 ? '#B5543E' : '#16A34A',
                   big: false,
                 },
                 {
                   label: '> 72h sin tomar',
                   value: reaction.pendingOver72h,
                   sub: 'riesgo de incumplimiento',
-                  color: reaction.pendingOver72h > 0 ? '#DC2626' : 'rgba(128,128,128,0.3)',
+                  color: reaction.pendingOver72h > 0 ? '#B5543E' : 'rgba(128,128,128,0.3)',
                   big: false,
                 },
               ].map(m => (
@@ -458,10 +458,10 @@ export default function GestionPanel({ tasks }: Props) {
           )}
           {worstArea && worstArea.area !== bestArea?.area && (
             <div style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 16, padding: '16px 18px' }}>
-              <div style={{ fontSize: 9, fontWeight: 800, color: '#DC2626', letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 10 }}>↓ Mayor Riesgo</div>
+              <div style={{ fontSize: 9, fontWeight: 800, color: '#B5543E', letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 10 }}>↓ Mayor Riesgo</div>
               <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>{worstArea.area}</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: '#DC2626', letterSpacing: -1, lineHeight: 1 }}>{worstArea.red}</div>
-              <div style={{ fontSize: 9, color: '#DC2626', marginTop: 4, opacity: 0.8 }}>tarea{worstArea.red !== 1 ? 's' : ''} en rojo · {worstArea.otcr}% efectividad</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#B5543E', letterSpacing: -1, lineHeight: 1 }}>{worstArea.red}</div>
+              <div style={{ fontSize: 9, color: '#B5543E', marginTop: 4, opacity: 0.8 }}>tarea{worstArea.red !== 1 ? 's' : ''} en rojo · {worstArea.otcr}% efectividad</div>
             </div>
           )}
         </div>
@@ -492,7 +492,7 @@ export default function GestionPanel({ tasks }: Props) {
             ? Math.round(macroKpis.reduce((s, a) => s + a.otcr, 0) / macroKpis.filter(a => a.otcr > 0).length)
             : 0
           const mRedPct = mTotal > 0 ? Math.round((mRed / mTotal) * 100) : 0
-          const mOtcrColor = mOtcr >= 85 ? '#16A34A' : mOtcr >= 60 ? '#D97706' : '#DC2626'
+          const mOtcrColor = mOtcr >= 85 ? '#16A34A' : mOtcr >= 60 ? '#D97706' : '#B5543E'
           const macroBest  = [...macroKpis].sort((a, b) => b.otcr - a.otcr || a.red - b.red)[0]
           const macroWorst = macroKpis[0]
 
@@ -536,7 +536,7 @@ export default function GestionPanel({ tasks }: Props) {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: 'rgba(128,128,128,0.08)', border: '1px solid rgba(128,128,128,0.15)' }}>
                     <span style={{ fontSize: 10, color: 'var(--muted)' }}>Riesgo</span>
-                    <span style={{ fontSize: 12, fontWeight: 900, color: mRed > 0 ? '#DC2626' : '#16A34A' }}>{mRedPct}%</span>
+                    <span style={{ fontSize: 12, fontWeight: 900, color: mRed > 0 ? '#B5543E' : '#16A34A' }}>{mRedPct}%</span>
                   </div>
                 </div>
               </div>
@@ -592,9 +592,9 @@ export default function GestionPanel({ tasks }: Props) {
                   )}
                   {macroWorst && macroWorst.red > 0 && macroWorst.area !== macroBest?.area && (
                     <div style={{ flex: 1, padding: '8px 12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.18)', borderRadius: 10 }}>
-                      <div style={{ fontSize: 8, fontWeight: 700, color: '#DC2626', letterSpacing: 1.2, marginBottom: 3 }}>↓ MAYOR RIESGO</div>
+                      <div style={{ fontSize: 8, fontWeight: 700, color: '#B5543E', letterSpacing: 1.2, marginBottom: 3 }}>↓ MAYOR RIESGO</div>
                       <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>{macroWorst.area}</div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#DC2626' }}>{macroWorst.red} tarea{macroWorst.red !== 1 ? 's' : ''} en rojo</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#B5543E' }}>{macroWorst.red} tarea{macroWorst.red !== 1 ? 's' : ''} en rojo</div>
                     </div>
                   )}
                 </div>

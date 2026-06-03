@@ -19,16 +19,16 @@ const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov'
 const TIPO_CFG: Record<TipoMision, { label: string; color: string; bg: string; border: string; icon: string; desc: string }> = {
   esta_semana:    { label: 'Esta semana',    color: '#D4AF37', bg: 'rgba(212,175,55,0.08)',  border: 'rgba(212,175,55,0.3)',  icon: '📅', desc: 'Compra estimada esta semana' },
   proxima_semana: { label: 'Próxima semana', color: '#D4AF37', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.3)', icon: '📆', desc: 'Compra estimada próxima semana' },
-  vencido:        { label: 'Llama ahora',    color: '#F87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.3)', icon: '🚨', desc: 'Ya se pasó su ciclo de compra' },
+  vencido:        { label: 'Llama ahora',    color: '#B5543E', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.3)', icon: '🚨', desc: 'Ya se pasó su ciclo de compra' },
 }
 
 const ESTADO_CFG: Record<EstadoMision, { label: string; color: string; icon: string }> = {
   pendiente:              { label: 'Sin contactar',  color: '#6B7280', icon: '○' },
-  contactado_pedido:      { label: 'Hizo pedido ✓', color: '#34D399', icon: '✓' },
+  contactado_pedido:      { label: 'Hizo pedido ✓', color: '#5A8A4A', icon: '✓' },
   contactado_sin_pedido:  { label: 'Contactado',    color: '#D4AF37', icon: '📞' },
   sin_respuesta:          { label: 'Sin respuesta',  color: '#94A3B8', icon: '🔇' },
   pospuesto:              { label: 'Pospuesto',      color: '#8A6D1F', icon: '⏰' },
-  auto_completado:        { label: 'Compró ✓ (auto)', color: '#34D399', icon: '⚡' },
+  auto_completado:        { label: 'Compró ✓ (auto)', color: '#5A8A4A', icon: '⚡' },
 }
 
 const DIAS_POSPONER = [3, 5, 7, 14]
@@ -40,8 +40,8 @@ const TIPO_CLIENTE_CFG: Record<TipoCliente, {
   label: string; color: string; bg: string; border: string
   icon: string; estrategia: string
 }> = {
-  activo:   { label: 'Activo',   color: '#34D399', bg: 'rgba(52,211,153,0.1)',  border: 'rgba(52,211,153,0.3)',  icon: '🟢', estrategia: 'Recompra habitual — contactar para siguiente pedido.' },
-  inactivo: { label: 'Inactivo', color: '#F87171', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.3)', icon: '🔴', estrategia: 'Cliente en riesgo de abandono — ofrecer propuesta de recuperación.' },
+  activo:   { label: 'Activo',   color: '#5A8A4A', bg: 'rgba(52,211,153,0.1)',  border: 'rgba(52,211,153,0.3)',  icon: '🟢', estrategia: 'Recompra habitual — contactar para siguiente pedido.' },
+  inactivo: { label: 'Inactivo', color: '#B5543E', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.3)', icon: '🔴', estrategia: 'Cliente en riesgo de abandono — ofrecer propuesta de recuperación.' },
   temporal: { label: 'Temporal', color: '#D4AF37', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)',  icon: '🟡', estrategia: 'Comprador esporádico — evaluar necesidad y construir relación.' },
   nuevo:    { label: 'Nuevo',    color: '#D4AF37', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.3)',  icon: '🔵', estrategia: 'Primer seguimiento — entender preferencias y fidelizar.' },
 }
@@ -97,7 +97,7 @@ function ProgressDonut({ done, total, size = 90 }: { done: number; total: number
   const r     = (size - 14) / 2; const cx = size / 2
   const circ  = 2 * Math.PI * r
   const dash  = circ * pct
-  const color = pct >= 0.8 ? '#34D399' : pct >= 0.5 ? '#D4AF37' : '#D4AF37'
+  const color = pct >= 0.8 ? '#5A8A4A' : pct >= 0.5 ? '#D4AF37' : '#D4AF37'
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <circle cx={cx} cy={cx} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7"/>
@@ -120,7 +120,7 @@ function BotonesAccion({ mision, onActualizar, loading }: {
   const isPedido = mision.estado === 'contactado_pedido'
 
   const acciones: { estado: EstadoMision; label: string; color: string; icon: React.ReactNode }[] = [
-    { estado: 'contactado_pedido',     label: 'Hizo pedido',   color: '#34D399', icon: <CheckCircle2 size={13}/> },
+    { estado: 'contactado_pedido',     label: 'Hizo pedido',   color: '#5A8A4A', icon: <CheckCircle2 size={13}/> },
     { estado: 'contactado_sin_pedido', label: 'Contactado',    color: '#D4AF37', icon: <Phone size={13}/> },
     { estado: 'sin_respuesta',         label: 'Sin respuesta', color: '#94A3B8', icon: <PhoneOff size={13}/> },
   ]
@@ -130,7 +130,7 @@ function BotonesAccion({ mision, onActualizar, loading }: {
       <button onClick={() => onActualizar(mision.id, 'pendiente')} disabled={loading} style={{
         padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
         background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)',
-        color: '#34D399', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+        color: '#5A8A4A', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
       }}>
         <CheckCircle2 size={13}/> Hizo pedido — Deshacer
       </button>
@@ -250,7 +250,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
               Detalle de Misión — <span style={{ color: tipoCfg.color }}>{tipoCfg.label}</span>
             </p>
             <h2 style={{
-              fontSize: 17, fontWeight: 900, color: isDone ? '#34D399' : 'var(--cream)',
+              fontSize: 17, fontWeight: 900, color: isDone ? '#5A8A4A' : 'var(--cream)',
               textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.2,
             }}>
               {mision.nombre_fantasia}
@@ -341,12 +341,12 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
                 {mision.litros_ultima_compra != null ? '0L' : '?'} el {fFecha(mision.siguiente_compra_estimada)}
               </strong>
               {(mision.dias_para_compra ?? 0) < 0 && (
-                <span style={{ color: '#F87171' }}>{' '}(Venció hace {Math.abs(mision.dias_para_compra ?? 0)}d)</span>
+                <span style={{ color: '#B5543E' }}>{' '}(Venció hace {Math.abs(mision.dias_para_compra ?? 0)}d)</span>
               )}
             </p>
           )}
           {mision.volumen_caida_pct != null && (
-            <p style={{ fontSize: 12, color: '#F87171', fontWeight: 700 }}>
+            <p style={{ fontSize: 12, color: '#B5543E', fontWeight: 700 }}>
               📉 Volumen a la baja: pidió −{mision.volumen_caida_pct}% vs su histórico
             </p>
           )}
@@ -367,7 +367,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 14 }}>🛒</span>
-              <span style={{ fontSize: 12, fontWeight: 800, color: '#34D399' }}>Pedido sugerido</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#5A8A4A' }}>Pedido sugerido</span>
             </div>
             {mision.siguiente_compra_estimada && (
               <span style={{ fontSize: 10, color: 'var(--muted)' }}>para el {fFecha(mision.siguiente_compra_estimada)}</span>
@@ -379,13 +379,13 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
                 <span style={{ fontSize: 12, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {p.producto}{p.envase ? <span style={{ color: 'var(--muted)' }}> · {p.envase}</span> : null}
                 </span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: '#34D399', flexShrink: 0 }}>~{p.litros} L</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#5A8A4A', flexShrink: 0 }}>~{p.litros} L</span>
               </div>
             ))}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(52,211,153,0.15)' }}>
             <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Total estimado</span>
-            <span style={{ fontSize: 13, fontWeight: 900, color: '#34D399' }}>
+            <span style={{ fontSize: 13, fontWeight: 900, color: '#5A8A4A' }}>
               ~{Math.round(mision.pedido_sugerido.reduce((s, p) => s + p.litros, 0) * 10) / 10} L
             </span>
           </div>
@@ -411,8 +411,8 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
           }}
             onClick={() => !loading && !isDone && registrar('contactado_pedido', { litros: litrosInput })}
           >
-            <CheckCircle2 size={16} color="#34D399" />
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: isDone ? '#34D399' : 'var(--cream)' }}>
+            <CheckCircle2 size={16} color="#5A8A4A" />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: isDone ? '#5A8A4A' : 'var(--cream)' }}>
               Venta Cerrada
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
@@ -425,7 +425,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
                 style={{
                   width: 52, textAlign: 'center', background: 'var(--surface2)',
                   border: '1px solid var(--border)', borderRadius: 8,
-                  color: '#34D399', fontSize: 13, fontWeight: 800, padding: '5px 0',
+                  color: '#5A8A4A', fontSize: 13, fontWeight: 800, padding: '5px 0',
                   outline: 'none',
                 }}
               />
@@ -480,14 +480,14 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
           }}
             onClick={() => !loading && registrar('sin_respuesta')}
           >
-            <PhoneOff size={16} color="#F87171" />
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: mision.estado === 'sin_respuesta' ? '#F87171' : 'var(--cream)' }}>
+            <PhoneOff size={16} color="#B5543E" />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: mision.estado === 'sin_respuesta' ? '#B5543E' : 'var(--cream)' }}>
               No Contestó
             </span>
             <span style={{
               minWidth: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: mision.estado === 'sin_respuesta' ? 'rgba(248,113,113,0.2)' : 'rgba(255,255,255,0.05)',
-              fontSize: 12, fontWeight: 800, color: '#F87171',
+              fontSize: 12, fontWeight: 800, color: '#B5543E',
             }}>
               {mision.intentos_contacto ?? 0}
             </span>
@@ -538,7 +538,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
             style={{
               marginTop: 10, width: '100%', padding: '9px 0', borderRadius: 10,
               background: 'transparent', border: '1px solid rgba(248,113,113,0.25)',
-              color: '#F87171', fontSize: 12, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+              color: '#B5543E', fontSize: 12, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
           >
@@ -584,7 +584,7 @@ function CompactCard({ mision, selected, onClick, onWA }: {
         background: selected
           ? 'rgba(212,175,55,0.08)'
           : isDone ? 'rgba(52,211,153,0.03)' : 'transparent',
-        borderLeft: selected ? '3px solid #D4AF37' : `3px solid ${isDone ? '#34D39930' : 'transparent'}`,
+        borderLeft: selected ? '3px solid #D4AF37' : `3px solid ${isDone ? '#5A8A4A30' : 'transparent'}`,
         transition: 'all 0.15s',
         opacity: isDone ? 0.65 : 1,
       }}
@@ -605,7 +605,7 @@ function CompactCard({ mision, selected, onClick, onWA }: {
         {/* Info */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{
-            fontSize: 13, fontWeight: 700, color: isDone ? '#34D399' : 'var(--cream)',
+            fontSize: 13, fontWeight: 700, color: isDone ? '#5A8A4A' : 'var(--cream)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             marginBottom: 2, textDecoration: isDone ? 'line-through' : 'none',
           }}>
@@ -621,7 +621,7 @@ function CompactCard({ mision, selected, onClick, onWA }: {
             )}
             <TipoClienteBadge tipo={mision.tipo_cliente} size="xs" />
             {mision.volumen_caida_pct != null && (
-              <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, background: 'rgba(248,113,113,0.12)', color: '#F87171', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, background: 'rgba(248,113,113,0.12)', color: '#B5543E', whiteSpace: 'nowrap' }}>
                 📉 −{mision.volumen_caida_pct}%
               </span>
             )}
@@ -699,7 +699,7 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo }:
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
             <span style={{
-              fontSize: 13, fontWeight: 800, color: isPedido ? '#34D399' : 'var(--cream)',
+              fontSize: 13, fontWeight: 800, color: isPedido ? '#5A8A4A' : 'var(--cream)',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               textDecoration: isPedido ? 'line-through' : 'none',
             }}>{mision.nombre_fantasia}</span>
@@ -708,7 +708,7 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo }:
                 ({mision.litros_ultima_compra}L{mision.dias_sin_compra ? ` · ${mision.dias_sin_compra}d` : ''})
               </span>
             )}
-            {isPedido && <CheckCircle2 size={13} color="#34D399" />}
+            {isPedido && <CheckCircle2 size={13} color="#5A8A4A" />}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: 10, color: estadoCfg.color, fontWeight: 600 }}>{estadoCfg.icon} {estadoCfg.label}</span>
@@ -739,7 +739,7 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo }:
         <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--border)' }}>
           <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, margin: '12px 0' }}>
             {[
-              { label: 'Sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#F87171' : 'var(--cream)' },
+              { label: 'Sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#B5543E' : 'var(--cream)' },
               { label: 'Último pedido', value: fFecha(mision.ultima_venta_fecha), color: 'var(--cream)' },
               { label: 'Venta', value: fPeso(mision.ultima_venta_monto), color: '#D4AF37' },
             ].map(({ label, value, color }) => (
@@ -770,7 +770,7 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo }:
               style={{
                 marginTop: 8, width: '100%', padding: '8px 0', borderRadius: 10,
                 background: 'transparent', border: '1px solid rgba(248,113,113,0.25)',
-                color: '#F87171', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                color: '#B5543E', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}
             >
@@ -801,7 +801,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
   const pct     = total > 0 ? Math.round((pedidos / total) * 100) : 0
   const STEPS   = isDesktop ? 8 : 5
   const filled  = Math.round((pct / 100) * STEPS)
-  const pColor  = pct >= 80 ? '#34D399' : pct >= 50 ? '#D4AF37' : '#D4AF37'
+  const pColor  = pct >= 80 ? '#5A8A4A' : pct >= 50 ? '#D4AF37' : '#D4AF37'
 
   return (
     <div style={{
@@ -832,7 +832,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div>
                   <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>COMPLETADAS</p>
-                  <p style={{ fontSize: 26, fontWeight: 900, color: '#34D399', lineHeight: 1 }}>{pct}%</p>
+                  <p style={{ fontSize: 26, fontWeight: 900, color: '#5A8A4A', lineHeight: 1 }}>{pct}%</p>
                 </div>
                 <ProgressDonut done={pedidos} total={total} size={80} />
               </div>
@@ -874,14 +874,14 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
           <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--muted)' }}>
             <span>Misiones Completadas: <strong style={{ color: 'var(--cream)' }}>{pedidos} / {total}</strong></span>
             {volumen > 0 && (
-              <span>Volumen Rescatado: <strong style={{ color: '#34D399' }}>{volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} Litros</strong></span>
+              <span>Volumen Rescatado: <strong style={{ color: '#5A8A4A' }}>{volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} Litros</strong></span>
             )}
           </div>
         </div>
       )}
       {/* Admin: solo volumen si hay */}
       {isAdmin && volumen > 0 && (
-        <p style={{ fontSize: 12, color: '#34D399', fontWeight: 700, marginBottom: 14 }}>
+        <p style={{ fontSize: 12, color: '#5A8A4A', fontWeight: 700, marginBottom: 14 }}>
           💧 Volumen rescatado: {volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
         </p>
       )}
@@ -889,10 +889,10 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
       {/* KPI chips */}
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: 8 }}>
         {[
-          { label: '🚨 Llama ahora', value: vencidos, color: '#F87171', urgent: vencidos > 0 },
+          { label: '🚨 Llama ahora', value: vencidos, color: '#B5543E', urgent: vencidos > 0 },
           { label: '📅 Esta semana', value: esSem,    color: '#D4AF37', urgent: false },
           { label: '📆 Próxima sem.', value: proxSem, color: '#D4AF37', urgent: false },
-          { label: '✓ Con pedido',   value: pedidos,  color: '#34D399', urgent: false },
+          { label: '✓ Con pedido',   value: pedidos,  color: '#5A8A4A', urgent: false },
         ].map(({ label, value, color, urgent }) => (
           <div key={label} style={{
             background: urgent && value > 0 ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.03)',
@@ -943,7 +943,7 @@ function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, onMarc
             </span>
           )}
           {completadas > 0 && (
-            <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: 'rgba(52,211,153,0.12)', color: '#34D399' }}>
+            <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: 'rgba(52,211,153,0.12)', color: '#5A8A4A' }}>
               {completadas} ✓
             </span>
           )}
@@ -984,7 +984,7 @@ function HistorialView({ historial }: { historial: HistorialSemana[] }) {
                 <p style={{ fontSize: 11, color: 'var(--muted)' }}>{sem.completadas} de {sem.total} con pedido — {pct}%</p>
               </div>
               <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: `${pct}%`, height: '100%', background: pct >= 80 ? '#34D399' : '#D4AF37', borderRadius: 4 }} />
+                <div style={{ width: `${pct}%`, height: '100%', background: pct >= 80 ? '#5A8A4A' : '#D4AF37', borderRadius: 4 }} />
               </div>
               {isOpen ? <ChevronDown size={15} color="var(--muted)" /> : <ChevronRight size={15} color="var(--muted)" />}
             </button>

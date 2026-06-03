@@ -626,7 +626,7 @@ export default function TaskCalendar({ tasks, onTaskClick, onNewTask }: Props) {
           {/* Mini KPIs — scroll horizontal en mobile */}
           <div style={{ display: 'flex', gap: 8, flex: 1, overflowX: isDesktop ? 'visible' : 'auto', paddingBottom: isDesktop ? 0 : 2 }}>
             {[
-              { color: '#DC2626', bg: 'rgba(220,38,38,0.12)', border: 'rgba(220,38,38,0.3)', icon: '🔴', value: kpiAtrasadas, label: 'Atrasadas' },
+              { color: '#B5543E', bg: 'rgba(220,38,38,0.12)', border: 'rgba(220,38,38,0.3)', icon: '🔴', value: kpiAtrasadas, label: 'Atrasadas' },
               { color: '#D97706', bg: 'rgba(217,119,6,0.12)',  border: 'rgba(217,119,6,0.3)',  icon: '🟡', value: kpiProximas,  label: 'Próximas\n(1-3 días)' },
               { color: '#22C55E', bg: 'rgba(34,197,94,0.12)',  border: 'rgba(34,197,94,0.3)',  icon: '✅', value: kpiCompletadas, label: 'Completadas' },
               { color: '#3B82F6', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.3)', icon: '🔵', value: kpiTotal,     label: 'Total tareas' },
@@ -834,7 +834,7 @@ export default function TaskCalendar({ tasks, onTaskClick, onNewTask }: Props) {
                         <div style={{ fontSize:7, color, fontWeight:700, letterSpacing:0.5 }}>{MONTHS_SHORT[parseInt(m)-1]}</div>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:12, fontWeight:700, color:'#60A5FA', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:3 }}>{t.titulo}</div>
+                        <div style={{ fontSize:12, fontWeight:700, color:'#D4AF37', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:3 }}>{t.titulo}</div>
                         <div style={{ fontSize:10, color:'#9CA3AF' }}>{relativeDate(t.plazo)}</div>
                         {resp && (
                           <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:5 }}>
@@ -867,9 +867,9 @@ export default function TaskCalendar({ tasks, onTaskClick, onNewTask }: Props) {
                     onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
                     <div style={{ width:28, height:28, borderRadius:8, background:'rgba(220,38,38,0.12)', border:'1px solid rgba(220,38,38,0.25)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, flexShrink:0 }}>🔴</div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:'#F87171', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:2 }}>{t.titulo}</div>
+                      <div style={{ fontSize:11, fontWeight:700, color:'#B5543E', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:2 }}>{t.titulo}</div>
                       <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                        <span style={{ fontSize:9, padding:'1px 6px', borderRadius:6, background:'rgba(220,38,38,0.12)', color:'#F87171', fontWeight:700 }}>Alta</span>
+                        <span style={{ fontSize:9, padding:'1px 6px', borderRadius:6, background:'rgba(220,38,38,0.12)', color:'#B5543E', fontWeight:700 }}>Alta</span>
                         <span style={{ fontSize:9, color:'#9CA3AF' }}>{parseInt(d)} {MONTHS_SHORT[parseInt(m)-1]}</span>
                       </div>
                     </div>
@@ -917,7 +917,7 @@ export default function TaskCalendar({ tasks, onTaskClick, onNewTask }: Props) {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:16, flexWrap:'wrap', gap:10 }}>
         <div style={{ display:'flex', gap: isDesktop ? 16 : 10, flexWrap:'wrap' }}>
           {[
-            { color:'#DC2626', label: isDesktop ? 'Vencida / Urgente (< 24h)' : 'Vencida' },
+            { color:'#B5543E', label: isDesktop ? 'Vencida / Urgente (< 24h)' : 'Vencida' },
             { color:'#D97706', label: isDesktop ? 'Próxima (1-3 días)' : 'Próxima' },
             { color:'#16A34A', label: isDesktop ? 'En tiempo (> 3 días)' : 'En tiempo' },
             { color:'#3B82F6', label:'Completada' },

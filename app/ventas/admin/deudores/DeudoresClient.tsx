@@ -177,8 +177,8 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
             background: 'rgba(181,84,62,0.08)', border: '1px solid rgba(181,84,62,0.2)',
             display: 'flex', gap: 8, alignItems: 'flex-start',
           }}>
-            <AlertTriangle size={15} style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }} />
-            <p style={{ fontSize: 13, color: '#F87171' }}>{uploadError}</p>
+            <AlertTriangle size={15} style={{ color: '#B5543E', flexShrink: 0, marginTop: 1 }} />
+            <p style={{ fontSize: 13, color: '#B5543E' }}>{uploadError}</p>
           </div>
         )}
 

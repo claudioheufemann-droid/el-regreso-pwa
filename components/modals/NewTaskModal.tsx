@@ -532,7 +532,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
 
             {/* Error */}
             {error && (
-              <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 14, fontSize: 12, color: '#FCA5A5' }}>
+              <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 14, fontSize: 12, color: '#B5543E' }}>
                 {error}
               </div>
             )}
@@ -568,7 +568,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
               <button type="button" onClick={handleSubmit} disabled={!canSubmit || loading} style={{
                 flex: 2.5, height: 54, borderRadius: 18, cursor: canSubmit ? 'pointer' : 'not-allowed',
                 background: canSubmit
-                  ? 'linear-gradient(135deg, #3B82F6, #2563EB)'
+                  ? 'linear-gradient(135deg, #3B82F6, #D4AF37)'
                   : 'rgba(255,255,255,0.06)',
                 border: 'none', fontSize: 14, fontWeight: 800,
                 color: canSubmit ? '#fff' : 'rgba(255,255,255,0.2)',
@@ -893,7 +893,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
               Cancelar
             </button>
             <button type="button" onClick={handleSubmit} disabled={!canSubmit || loading}
-              style={{ padding: '10px 28px', borderRadius: 10, cursor: canSubmit ? 'pointer' : 'not-allowed', background: canSubmit ? 'linear-gradient(135deg,#3B82F6,#2563EB)' : 'rgba(107,114,128,0.15)', border: 'none', fontSize: 13, fontWeight: 800, color: canSubmit ? '#fff' : '#6B7280', display: 'flex', alignItems: 'center', gap: 7, opacity: loading ? 0.7 : 1, boxShadow: canSubmit ? '0 4px 20px rgba(59,130,246,0.35)' : 'none', transition: 'all 0.2s' }}>
+              style={{ padding: '10px 28px', borderRadius: 10, cursor: canSubmit ? 'pointer' : 'not-allowed', background: canSubmit ? 'linear-gradient(135deg,#3B82F6,#D4AF37)' : 'rgba(107,114,128,0.15)', border: 'none', fontSize: 13, fontWeight: 800, color: canSubmit ? '#fff' : '#6B7280', display: 'flex', alignItems: 'center', gap: 7, opacity: loading ? 0.7 : 1, boxShadow: canSubmit ? '0 4px 20px rgba(59,130,246,0.35)' : 'none', transition: 'all 0.2s' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               {loading ? 'Creando...' : `Crear tarea${selectedIds.length > 1 ? ` (${selectedIds.length})` : ''}`}
             </button>

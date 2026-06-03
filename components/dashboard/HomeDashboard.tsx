@@ -763,7 +763,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{t.titulo}</div>
                       <div style={{ fontSize: 9, color: 'var(--muted)', marginBottom: 5 }}>Vence {daysLabel(t.plazo)} · {formatPlazo(t.plazo)}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 7, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#DC2626':'#D4AF37', fontWeight: 700 }}>{t.prioridad_maxima?'Alta':'Media'}</span>
+                        <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 7, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#B5543E':'#D4AF37', fontWeight: 700 }}>{t.prioridad_maxima?'Alta':'Media'}</span>
                         <div style={{ display: 'flex' }}>
                           {resps.slice(0,3).map((u,i) => (
                             <div key={u.id} style={{ width: 18, height: 18, borderRadius: '50%', background: `${cfg.color}30`, border: `1.5px solid ${cfg.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6, fontWeight: 800, color: cfg.color, marginLeft: i>0?-5:0 }}>{u.iniciales}</div>
@@ -841,7 +841,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{t.titulo}</div>
                       <div style={{ fontSize: 9, color: 'var(--muted)', marginBottom: 5 }}>Vence {daysLabel(t.plazo)} · {formatPlazo(t.plazo)}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 7, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#DC2626':'#D4AF37', fontWeight: 700 }}>{t.prioridad_maxima?'Alta':'Media'}</span>
+                        <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 7, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#B5543E':'#D4AF37', fontWeight: 700 }}>{t.prioridad_maxima?'Alta':'Media'}</span>
                         <div style={{ display: 'flex' }}>
                           {resps.slice(0,3).map((u,i) => (
                             <div key={u.id} style={{ width: 18, height: 18, borderRadius: '50%', background: `${cfg2.color}30`, border: `1.5px solid ${cfg2.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6, fontWeight: 800, color: cfg2.color, marginLeft: i>0?-5:0 }}>{u.iniciales}</div>
@@ -964,7 +964,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                 {/* PRIORIDAD — solo desktop */}
                 {isDesktop && (
                   <div>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#DC2626':'#D4AF37', border: `1px solid ${t.prioridad_maxima?'rgba(220,38,38,0.25)':'rgba(212,175,55,0.2)'}` }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#B5543E':'#D4AF37', border: `1px solid ${t.prioridad_maxima?'rgba(220,38,38,0.25)':'rgba(212,175,55,0.2)'}` }}>
                       {t.prioridad_maxima?'Alta':'Media'}
                     </span>
                   </div>
