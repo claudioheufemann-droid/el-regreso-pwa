@@ -259,147 +259,169 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
   const actVerb:  Record<string,string> = { completada:'completó', proceso:'inició', asignada:'asignó' }
 
   // ─────────────────────────────────────────────────────────────────
-  // MOBILE — layout ultra-compacto, todo en pantalla sin desborde
+  // MOBILE — premium dark redesign
   // ─────────────────────────────────────────────────────────────────
   if (!isDesktop) {
-    // Paleta simplificada: dorado/crema por defecto, solo rojo si hay atraso
-    const miniKpis = [
-      { value: kpiAsignadas,   label: 'Asignadas',   icon: '📋', filter: 'activas'    },
-      { value: kpiEnProceso,   label: 'En Proceso',  icon: '🔄', filter: 'en-proceso' },
-      { value: kpiCompletadas, label: 'Completadas', icon: '✅', filter: 'aprobar'    },
-      { value: kpiAtrasadas,   label: 'Atrasadas',   icon: '⚠️', filter: 'atraso', alert: kpiAtrasadas > 0 },
-    ]
-
     const pendientes = [...activeTasks]
       .filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada')
       .sort((a, b) => a.plazo.localeCompare(b.plazo))
-      .slice(0, 4)
+      .slice(0, 5)
 
-    function vColor(plazo: string) {
+    function vCol(plazo: string) {
       const d = Math.ceil((new Date(plazo).getTime() - Date.now()) / 86400000)
-      return d < 0 ? '#FF4444' : d <= 1 ? '#E67E22' : d <= 3 ? '#D4AF37' : 'var(--muted)'
+      return d < 0 ? '#FF4444' : d <= 1 ? '#E67E22' : d <= 3 ? '#D4AF37' : 'rgba(255,255,255,0.3)'
     }
-    function fPlazo(plazo: string) {
+    function fP(plazo: string) {
       const [, m, d] = plazo.split('-')
-      return `${parseInt(d)} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][parseInt(m)-1]}`
+      return { day: parseInt(d), mon: ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'][parseInt(m)-1] }
     }
+
+    const kpis = [
+      { value: kpiAsignadas,   label: 'Asignadas',   color: '#5B8AA8', rgb: '91,138,168',
+        icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M3 6h18v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> },
+      { value: kpiEnProceso,   label: 'En Proceso',  color: '#E67E22', rgb: '230,126,34',
+        icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E67E22" strokeWidth="2" strokeLinecap="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> },
+      { value: kpiCompletadas, label: 'Completadas', color: '#22C55E', rgb: '34,197,94',
+        icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> },
+      { value: kpiAtrasadas,   label: 'Atrasadas',   color: kpiAtrasadas > 0 ? '#E74C3C' : '#22C55E', rgb: kpiAtrasadas > 0 ? '231,76,60' : '34,197,94',
+        icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={kpiAtrasadas > 0 ? '#E74C3C' : '#22C55E'} strokeWidth="2" strokeLinecap="round"><path d="m10.29 3.86-8.26 14.28A1 1 0 0 0 2.9 20h16.2a1 1 0 0 0 .87-1.5L11.71 3.86a1 1 0 0 0-1.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg> },
+    ]
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 8 }}>
 
-        {/* Header saludo + acción */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        {/* ── HEADER ── */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 500, marginBottom: 5, textTransform: 'capitalize' }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 500, marginBottom: 6, textTransform: 'capitalize', letterSpacing: '0.3px' }}>
               {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
-            <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5, lineHeight: 1.1 }}>
-              Hola, {firstName} 👋
+            <div style={{ fontSize: 28, fontWeight: 900, color: '#F4EEDF', letterSpacing: -1, lineHeight: 1.1 }}>
+              Hola, <span style={{ color: '#D4AF37' }}>{firstName}</span> 👋
             </div>
           </div>
           <button onClick={() => setShowNewTask(true)} style={{
-            flexShrink: 0, padding: '11px 16px',
+            flexShrink: 0, padding: '12px 18px', marginTop: 4,
             background: 'linear-gradient(135deg, #D4AF37, #B8962E)',
-            color: '#0A0A0A', border: 'none', borderRadius: 14,
-            cursor: 'pointer', fontSize: 13, fontWeight: 800,
-            boxShadow: '0 4px 16px rgba(212,175,55,0.3)',
+            color: '#0A0A0A', border: 'none', borderRadius: 16,
+            cursor: 'pointer', fontSize: 13, fontWeight: 900,
+            boxShadow: '0 4px 20px rgba(212,175,55,0.35)',
+            letterSpacing: '-0.3px',
           }}>+ Nueva</button>
         </div>
 
-        {/* 4 KPI cards — paleta limpia */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {miniKpis.map(k => {
-            const isAlert = k.alert
-            return (
-              <button key={k.label} onClick={() => onNavigate(`filter:${k.filter}`)} style={{
-                background: isAlert ? 'rgba(231,76,60,0.08)' : 'var(--surface)',
-                border: `1px solid ${isAlert ? 'rgba(231,76,60,0.3)' : 'rgba(255,255,255,0.07)'}`,
-                borderRadius: 16, padding: '14px 14px',
-                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4,
-                cursor: 'pointer', textAlign: 'left',
+        {/* ── KPI CARDS — 2×2 compacto premium ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {kpis.map(k => (
+            <button key={k.label} onClick={() => onNavigate(`filter:${k.label.toLowerCase().replace(' ','-')}`)}
+              style={{
+                background: `linear-gradient(145deg, rgba(${k.rgb},0.07) 0%, rgba(10,10,14,0.95) 100%)`,
+                border: `1px solid rgba(${k.rgb},0.2)`,
+                borderRadius: 18, padding: '14px 14px 10px',
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0,
+                cursor: 'pointer', textAlign: 'left', position: 'relative', overflow: 'hidden',
+                boxShadow: `0 4px 20px rgba(${k.rgb},0.07)`,
                 WebkitTapHighlightColor: 'transparent',
               }}>
-                <div style={{ fontSize: 16, marginBottom: 2 }}>{k.icon}</div>
-                <div style={{
-                  fontSize: 32, fontWeight: 900, lineHeight: 1, letterSpacing: -1,
-                  color: isAlert ? '#FF6B6B' : 'var(--cream)',
-                }}>{k.value}</div>
-                <div style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: 1.1, textTransform: 'uppercase',
-                  color: isAlert ? '#FF6B6B' : 'rgba(255,255,255,0.35)',
-                }}>{k.label}</div>
-              </button>
-            )
-          })}
+              {/* Glow fondo */}
+              <div style={{ position: 'absolute', top: -10, right: -10, width: 50, height: 50, borderRadius: '50%', background: `rgba(${k.rgb},0.12)`, filter: 'blur(16px)', pointerEvents: 'none' }} />
+              {/* Icono */}
+              <div style={{ width: 28, height: 28, borderRadius: 9, background: `rgba(${k.rgb},0.12)`, border: `1px solid rgba(${k.rgb},0.22)`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                {k.icon}
+              </div>
+              {/* Número */}
+              <div style={{ fontSize: 30, fontWeight: 900, lineHeight: 1, letterSpacing: -1.5, color: k.color, marginBottom: 4 }}>{k.value}</div>
+              {/* Label */}
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>{k.label}</div>
+              {/* Barra inferior de color */}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2.5, background: `linear-gradient(90deg, rgba(${k.rgb},0.6), rgba(${k.rgb},0.2))`, borderRadius: '0 0 18px 18px' }} />
+            </button>
+          ))}
         </div>
 
-        {/* Stats compactos: donut mini + leyenda */}
-        <div style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* Mini donut */}
-          <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0 }}>
-            <svg width={52} height={52} style={{ transform: 'rotate(-90deg)' }}>
+        {/* ── PANEL RESUMEN ── */}
+        <div style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.04) 0%, rgba(10,10,14,0.98) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 20, padding: '16px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* Donut */}
+          <div style={{ position: 'relative', width: 64, height: 64, flexShrink: 0 }}>
+            <svg width={64} height={64} style={{ transform: 'rotate(-90deg)' }}>
               {(() => {
-                const r = 20, circ = 2 * Math.PI * r
+                const r = 26, circ = 2 * Math.PI * r
                 const segs = [
-                  { v: kpiCompletadas, c: '#D4AF37' }, { v: kpiEnProceso, c: 'rgba(212,175,55,0.5)' },
-                  { v: kpiAtrasadas, c: '#FF6B6B' },   { v: kpiAsignadas + kpiAprobar, c: 'rgba(255,255,255,0.15)' },
+                  { v: kpiCompletadas, c: '#22C55E' },
+                  { v: kpiEnProceso,   c: '#E67E22' },
+                  { v: kpiAtrasadas,   c: '#E74C3C' },
+                  { v: kpiAsignadas + kpiAprobar, c: 'rgba(255,255,255,0.1)' },
                 ]
                 const total = segs.reduce((s, x) => s + x.v, 0) || 1
                 let off = 0
                 return segs.map((s, i) => {
                   const dash = (s.v / total) * circ
-                  const el = <circle key={i} cx={26} cy={26} r={r} fill="none" stroke={s.c} strokeWidth={8} strokeDasharray={`${dash} ${circ}`} strokeDashoffset={circ - off} />
+                  const el = <circle key={i} cx={32} cy={32} r={r} fill="none" stroke={s.c} strokeWidth={9} strokeDasharray={`${dash} ${circ}`} strokeDashoffset={circ - off} />
                   off += dash; return el
                 })
               })()}
-              <circle cx={26} cy={26} r={20} fill="none" stroke="rgba(128,128,128,0.1)" strokeWidth={8} />
             </svg>
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--cream)', lineHeight: 1 }}>{kpiTotal}</div>
-              <div style={{ fontSize: 6, color: 'var(--muted)', marginTop: 1 }}>total</div>
+              <div style={{ fontSize: 15, fontWeight: 900, color: '#F4EEDF', lineHeight: 1 }}>{kpiTotal}</div>
+              <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>total</div>
             </div>
           </div>
-          {/* Leyenda compacta */}
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px' }}>
+
+          {/* Leyenda */}
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px' }}>
             {[
-              { label: 'Completas',  n: kpiCompletadas,            color: '#D4AF37' },
-              { label: 'En proceso', n: kpiEnProceso,               color: 'rgba(212,175,55,0.5)' },
-              { label: 'Atrasadas',  n: kpiAtrasadas,               color: '#FF6B6B' },
-              { label: 'Pendientes', n: kpiAsignadas + kpiAprobar,  color: 'rgba(255,255,255,0.2)' },
+              { label: 'Completas',  n: kpiCompletadas,           color: '#22C55E' },
+              { label: 'En proceso', n: kpiEnProceso,              color: '#E67E22' },
+              { label: 'Atrasadas',  n: kpiAtrasadas,              color: '#E74C3C' },
+              { label: 'Pendientes', n: kpiAsignadas + kpiAprobar, color: 'rgba(255,255,255,0.3)' },
             ].map(s => (
               <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)', flex: 1 }}>{s.label}</span>
-                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--cream)' }}>{s.n}</span>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', flex: 1, whiteSpace: 'nowrap' }}>{s.label}</span>
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#F4EEDF' }}>{s.n}</span>
               </div>
             ))}
           </div>
-          {/* Cumplimiento */}
-          <div style={{ flexShrink: 0, textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.07)', paddingLeft: 12 }}>
-            <div style={{ fontSize: 20, fontWeight: 900, color: cumplimiento >= 50 ? '#D4AF37' : '#FF6B6B', lineHeight: 1 }}>{cumplimiento}%</div>
-            <div style={{ fontSize: 8, color: 'var(--muted)', marginTop: 2 }}>cumplido</div>
+
+          {/* % Cumplimiento */}
+          <div style={{ flexShrink: 0, textAlign: 'center', paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, color: cumplimiento >= 50 ? '#D4AF37' : '#E74C3C' }}>{cumplimiento}%</div>
+            <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', marginTop: 3, letterSpacing: '0.5px' }}>CUMPLIDO</div>
+            <div style={{ marginTop: 6, width: 36, height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${cumplimiento}%`, background: cumplimiento >= 50 ? '#D4AF37' : '#E74C3C', borderRadius: 4 }} />
+            </div>
           </div>
         </div>
 
-        {/* Próximos vencimientos */}
+        {/* ── PRÓXIMOS VENCIMIENTOS ── */}
         {proximos.length > 0 && (
-          <div style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--cream)' }}>📅 Próximos vencimientos</span>
-              <button onClick={() => onNavigate('calendar')} style={{ fontSize: 10, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver calendario →</button>
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#D4AF37', boxShadow: '0 0 6px #D4AF37' }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#F4EEDF', letterSpacing: '0.3px' }}>Próximos vencimientos</span>
+              </div>
+              <button onClick={() => onNavigate('calendar')} style={{ fontSize: 10, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+                Ver calendario
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
             </div>
-            <div style={{ overflowX: 'auto', display: 'flex', gap: 8, padding: '10px 14px', scrollbarWidth: 'none' } as React.CSSProperties}>
+            <div style={{ overflowX: 'auto', display: 'flex', gap: 10, padding: '2px 16px 14px', scrollbarWidth: 'none' } as React.CSSProperties}>
               {proximos.map(t => {
-                const [, m, d] = t.plazo.split('-')
-                const MS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
-                const vCol = vColor(t.plazo)
+                const { day, mon } = fP(t.plazo)
+                const c = vCol(t.plazo)
                 return (
-                  <div key={t.id} onClick={() => setSelectedTask(t)}
-                    style={{ flexShrink: 0, background: `${vCol}09`, border: `1px solid ${vCol}25`, borderRadius: 12, padding: '10px 12px', minWidth: 130, cursor: 'pointer' }}>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: vCol, lineHeight: 1 }}>{parseInt(d)}</div>
-                    <div style={{ fontSize: 9, color: vCol, fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>{MS[parseInt(m)-1]}</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>{t.titulo}</div>
-                    <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4 }}>{t.prioridad_maxima ? '⚡ Alta' : '△ Media'}</div>
+                  <div key={t.id} onClick={() => setSelectedTask(t)} style={{
+                    flexShrink: 0, minWidth: 120, cursor: 'pointer',
+                    background: `rgba(${c === '#D4AF37' ? '212,175,55' : c === '#E67E22' ? '230,126,34' : c === '#FF4444' ? '255,68,68' : '255,255,255'},0.05)`,
+                    border: `1px solid ${c}28`, borderRadius: 14, padding: '12px 12px',
+                  }}>
+                    <div style={{ fontSize: 24, fontWeight: 900, color: c, lineHeight: 1 }}>{day}</div>
+                    <div style={{ fontSize: 9, color: c, fontWeight: 700, letterSpacing: '0.8px', marginBottom: 8 }}>{mon}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#F4EEDF', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>
+                      {t.titulo}
+                    </div>
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 5 }}>{t.prioridad_maxima ? '⚡ Alta' : '△ Media'}</div>
                   </div>
                 )
               })}
@@ -407,28 +429,44 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           </div>
         )}
 
-        {/* Tareas pendientes próximas */}
-        <div style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--cream)' }}>Tareas pendientes</span>
-            <button onClick={() => scrollToTable('todas')} style={{ fontSize: 10, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Ver todas →</button>
+        {/* ── TAREAS PENDIENTES ── */}
+        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(255,255,255,0.3)' }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#F4EEDF', letterSpacing: '0.3px' }}>Tareas pendientes</span>
+            </div>
+            <button onClick={() => scrollToTable('todas')} style={{ fontSize: 10, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+              Ver todas
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
           </div>
           {pendientes.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '16px', fontSize: 12, color: 'var(--muted)' }}>✅ Sin tareas pendientes</div>
+            <div style={{ textAlign: 'center', padding: '20px 16px', fontSize: 12, color: 'rgba(255,255,255,0.2)' }}>Sin tareas pendientes</div>
           ) : pendientes.map((t, idx) => {
             const stCfg = STATUS_CFG[t.estado as keyof typeof STATUS_CFG] ?? { color: '#888' }
             const cfg2 = AREA_CFG[t.area] ?? { color: '#888', code: '??' }
+            const { day, mon } = fP(t.plazo)
+            const vc = vCol(t.plazo)
             return (
               <div key={t.id} onClick={() => setSelectedTask(t)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: idx < pendientes.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', cursor: 'pointer' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: stCfg.color, flexShrink: 0 }} />
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: idx < pendientes.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none', cursor: 'pointer', transition: 'background 0.1s' }}
+                onTouchStart={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                onTouchEnd={e => (e.currentTarget.style.background = 'transparent')}>
+                {/* Estado dot */}
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: stCfg.color, flexShrink: 0, boxShadow: `0 0 6px ${stCfg.color}60` }} />
+                {/* Texto */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.titulo}</div>
-                  <div style={{ fontSize: 9, color: cfg2.color, marginTop: 1 }}>{t.area}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#F4EEDF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 2 }}>{t.titulo}</div>
+                  <div style={{ fontSize: 9, color: cfg2.color, fontWeight: 600 }}>{t.area}</div>
                 </div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: vColor(t.plazo), flexShrink: 0 }}>{fPlazo(t.plazo)}</div>
+                {/* Badge fecha */}
+                <div style={{ flexShrink: 0, textAlign: 'center', background: `${vc}12`, border: `1px solid ${vc}25`, borderRadius: 8, padding: '4px 8px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: vc, lineHeight: 1 }}>{day}</div>
+                  <div style={{ fontSize: 7, color: vc, fontWeight: 700, letterSpacing: '0.5px' }}>{mon}</div>
+                </div>
+                {/* Flecha */}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
               </div>
             )
           })}
