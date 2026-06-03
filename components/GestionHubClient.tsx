@@ -154,10 +154,9 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
                   <div style={{ position: 'absolute', inset: 0, background: area.imgFallback, zIndex: 0 }} />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={area.img}
+                    src={`${area.img}?v=2`}
                     alt={area.label}
                     style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', zIndex: 1 }}
-                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                   />
                   {/* Overlay degradado abajo */}
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(5,5,5,0.1) 0%, rgba(5,5,5,0.85) 100%)', zIndex: 2 }} />
