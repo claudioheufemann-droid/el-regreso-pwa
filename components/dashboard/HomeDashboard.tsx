@@ -267,9 +267,15 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
       .sort((a, b) => a.plazo.localeCompare(b.plazo))
       .slice(0, 5)
 
+    // ── Paleta cervecera monocromática ──
+    const GOLD = '#D4AF37'
+    const CREAM = '#F4EEDF'
+    const AMBER_DIM = '#8A6D1F'
+    const RED_DIM = '#B5543E'
+
     function vCol(plazo: string) {
       const d = Math.ceil((new Date(plazo).getTime() - Date.now()) / 86400000)
-      return d < 0 ? '#FF4444' : d <= 1 ? '#E67E22' : d <= 3 ? '#D4AF37' : 'rgba(255,255,255,0.3)'
+      return d < 0 ? RED_DIM : d <= 2 ? GOLD : 'rgba(255,255,255,0.3)'
     }
     function fP(plazo: string) {
       const [, m, d] = plazo.split('-')
@@ -277,14 +283,14 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
     }
 
     const kpis = [
-      { value: kpiAsignadas,   label: 'Asignadas',   color: '#5B8AA8', rgb: '91,138,168',
-        icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5B8AA8" strokeWidth="2" strokeLinecap="round"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M3 6h18v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> },
-      { value: kpiEnProceso,   label: 'En Proceso',  color: '#E67E22', rgb: '230,126,34',
-        icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E67E22" strokeWidth="2" strokeLinecap="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> },
-      { value: kpiCompletadas, label: 'Completadas', color: '#22C55E', rgb: '34,197,94',
-        icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> },
-      { value: kpiAtrasadas,   label: 'Atrasadas',   color: kpiAtrasadas > 0 ? '#E74C3C' : '#22C55E', rgb: kpiAtrasadas > 0 ? '231,76,60' : '34,197,94',
-        icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={kpiAtrasadas > 0 ? '#E74C3C' : '#22C55E'} strokeWidth="2" strokeLinecap="round"><path d="m10.29 3.86-8.26 14.28A1 1 0 0 0 2.9 20h16.2a1 1 0 0 0 .87-1.5L11.71 3.86a1 1 0 0 0-1.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg> },
+      { value: kpiAsignadas,   label: 'Asignadas',   filter: 'asignadas',
+        icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="1.7" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+      { value: kpiEnProceso,   label: 'En proceso',  filter: 'en-proceso',
+        icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="1.7" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg> },
+      { value: kpiCompletadas, label: 'Completadas', filter: 'completadas', active: true,
+        icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="1.7" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg> },
+      { value: kpiAtrasadas,   label: 'Atrasadas',   filter: 'atrasadas', alert: kpiAtrasadas > 0,
+        icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={kpiAtrasadas > 0 ? RED_DIM : GOLD} strokeWidth="1.7" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> },
     ]
 
     return (
@@ -293,178 +299,176 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
         {/* ── HEADER ── */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 500, marginBottom: 6, textTransform: 'capitalize', letterSpacing: '0.3px' }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 500, marginBottom: 6, textTransform: 'capitalize', letterSpacing: '0.4px' }}>
               {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: '#F4EEDF', letterSpacing: -1, lineHeight: 1.1 }}>
-              Hola, <span style={{ color: '#D4AF37' }}>{firstName}</span> 👋
+            <div style={{ fontSize: 28, fontWeight: 900, color: CREAM, letterSpacing: -1, lineHeight: 1.1 }}>
+              Hola, <span style={{ color: GOLD }}>{firstName}</span> 👋
             </div>
           </div>
           <button onClick={() => setShowNewTask(true)} style={{
             flexShrink: 0, padding: '12px 18px', marginTop: 4,
-            background: 'linear-gradient(135deg, #D4AF37, #B8962E)',
-            color: '#0A0A0A', border: 'none', borderRadius: 16,
+            background: 'linear-gradient(135deg, #E5C45A, #B8962E)',
+            color: '#0A0A0A', border: 'none', borderRadius: 14,
             cursor: 'pointer', fontSize: 13, fontWeight: 900,
-            boxShadow: '0 4px 20px rgba(212,175,55,0.35)',
+            boxShadow: '0 4px 18px rgba(212,175,55,0.28)',
             letterSpacing: '-0.3px',
           }}>+ Nueva</button>
         </div>
 
-        {/* ── KPI CARDS — fila de 4 compacta ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 7 }}>
+        {/* ── KPI CARDS — minimal monocromático ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
           {kpis.map(k => (
-            <button key={k.label} onClick={() => onNavigate(`filter:${k.label.toLowerCase().replace(' ','-')}`)}
+            <button key={k.label} onClick={() => onNavigate(`filter:${k.filter}`)}
               style={{
-                background: `linear-gradient(145deg, rgba(${k.rgb},0.08) 0%, rgba(10,10,14,0.95) 100%)`,
-                border: `1px solid rgba(${k.rgb},0.2)`,
-                borderRadius: 14, padding: '10px 8px 8px',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
-                cursor: 'pointer', textAlign: 'center', position: 'relative', overflow: 'hidden',
-                boxShadow: `0 2px 12px rgba(${k.rgb},0.07)`,
+                background: '#101010',
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 14, padding: '12px 8px 10px',
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0,
+                cursor: 'pointer', textAlign: 'left', position: 'relative', overflow: 'hidden',
                 WebkitTapHighlightColor: 'transparent',
               }}>
               {/* Icono */}
-              <div style={{ width: 22, height: 22, borderRadius: 7, background: `rgba(${k.rgb},0.12)`, border: `1px solid rgba(${k.rgb},0.22)`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 7 }}>
-                {k.icon}
-              </div>
+              <div style={{ marginBottom: 9, opacity: k.alert ? 1 : 0.85 }}>{k.icon}</div>
               {/* Número */}
-              <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, letterSpacing: -1, color: k.color, marginBottom: 4 }}>{k.value}</div>
+              <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1, letterSpacing: -1.5, color: k.alert ? RED_DIM : CREAM, marginBottom: 5 }}>{k.value}</div>
               {/* Label */}
-              <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 6 }}>{k.label}</div>
-              {/* Barra inferior */}
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, rgba(${k.rgb},0.6), rgba(${k.rgb},0.15))`, borderRadius: '0 0 14px 14px' }} />
+              <div style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.2px', lineHeight: 1.1 }}>{k.label}</div>
+              {/* Barra inferior — solo activa o alerta */}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: 2, background: k.active ? GOLD : k.alert ? RED_DIM : 'rgba(255,255,255,0.05)' }} />
             </button>
           ))}
         </div>
 
         {/* ── PANEL RESUMEN ── */}
-        <div style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.04) 0%, rgba(10,10,14,0.98) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 20, padding: '16px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          {/* Donut */}
-          <div style={{ position: 'relative', width: 64, height: 64, flexShrink: 0 }}>
-            <svg width={64} height={64} style={{ transform: 'rotate(-90deg)' }}>
+        <div style={{ background: '#101010', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18, padding: '16px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* Donut monocromático */}
+          <div style={{ position: 'relative', width: 66, height: 66, flexShrink: 0 }}>
+            <svg width={66} height={66} style={{ transform: 'rotate(-90deg)' }}>
+              <circle cx={33} cy={33} r={27} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={8} />
               {(() => {
-                const r = 26, circ = 2 * Math.PI * r
+                const r = 27, circ = 2 * Math.PI * r
                 const segs = [
-                  { v: kpiCompletadas, c: '#22C55E' },
-                  { v: kpiEnProceso,   c: '#E67E22' },
-                  { v: kpiAtrasadas,   c: '#E74C3C' },
+                  { v: kpiCompletadas, c: GOLD },
+                  { v: kpiEnProceso,   c: AMBER_DIM },
+                  { v: kpiAtrasadas,   c: RED_DIM },
                   { v: kpiAsignadas + kpiAprobar, c: 'rgba(255,255,255,0.1)' },
                 ]
                 const total = segs.reduce((s, x) => s + x.v, 0) || 1
                 let off = 0
                 return segs.map((s, i) => {
                   const dash = (s.v / total) * circ
-                  const el = <circle key={i} cx={32} cy={32} r={r} fill="none" stroke={s.c} strokeWidth={9} strokeDasharray={`${dash} ${circ}`} strokeDashoffset={circ - off} />
+                  const el = <circle key={i} cx={33} cy={33} r={r} fill="none" stroke={s.c} strokeWidth={8} strokeDasharray={`${dash} ${circ}`} strokeDashoffset={circ - off} />
                   off += dash; return el
                 })
               })()}
             </svg>
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontSize: 15, fontWeight: 900, color: '#F4EEDF', lineHeight: 1 }}>{kpiTotal}</div>
-              <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>total</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: CREAM, lineHeight: 1 }}>{kpiTotal}</div>
+              <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', marginTop: 1, letterSpacing: '0.5px' }}>TOTAL</div>
             </div>
           </div>
 
           {/* Leyenda */}
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px' }}>
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 10px' }}>
             {[
-              { label: 'Completas',  n: kpiCompletadas,           color: '#22C55E' },
-              { label: 'En proceso', n: kpiEnProceso,              color: '#E67E22' },
-              { label: 'Atrasadas',  n: kpiAtrasadas,              color: '#E74C3C' },
-              { label: 'Pendientes', n: kpiAsignadas + kpiAprobar, color: 'rgba(255,255,255,0.3)' },
+              { label: 'Completadas', n: kpiCompletadas,           color: GOLD },
+              { label: 'En proceso',  n: kpiEnProceso,              color: AMBER_DIM },
+              { label: 'Pendientes',  n: kpiAsignadas + kpiAprobar, color: 'rgba(255,255,255,0.25)' },
+              { label: 'Atrasadas',   n: kpiAtrasadas,              color: kpiAtrasadas > 0 ? RED_DIM : 'rgba(255,255,255,0.25)' },
             ].map(s => (
-              <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', flex: 1, whiteSpace: 'nowrap' }}>{s.label}</span>
-                <span style={{ fontSize: 10, fontWeight: 800, color: '#F4EEDF' }}>{s.n}</span>
+              <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.4)', flex: 1, whiteSpace: 'nowrap' }}>{s.label}</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: CREAM }}>{s.n}</span>
               </div>
             ))}
           </div>
 
           {/* % Cumplimiento */}
-          <div style={{ flexShrink: 0, textAlign: 'center', paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, color: cumplimiento >= 50 ? '#D4AF37' : '#E74C3C' }}>{cumplimiento}%</div>
-            <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', marginTop: 3, letterSpacing: '0.5px' }}>CUMPLIDO</div>
-            <div style={{ marginTop: 6, width: 36, height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${cumplimiento}%`, background: cumplimiento >= 50 ? '#D4AF37' : '#E74C3C', borderRadius: 4 }} />
-            </div>
+          <div style={{ flexShrink: 0, textAlign: 'center', paddingLeft: 13, borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1, color: GOLD }}>{cumplimiento}%</div>
+            <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', marginTop: 3, letterSpacing: '0.6px' }}>CUMPLIDO</div>
+            <svg width="48" height="20" viewBox="0 0 48 20" style={{ marginTop: 6, display: 'block' }}>
+              <polyline points="0,16 8,13 16,15 24,9 32,11 40,5 48,3" fill="none" stroke={GOLD} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
+            </svg>
           </div>
         </div>
 
-        {/* ── PRÓXIMOS VENCIMIENTOS ── */}
+        {/* ── PRÓXIMOS VENCIMIENTOS — agenda ejecutiva ── */}
         {proximos.length > 0 && (
-          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#D4AF37', boxShadow: '0 0 6px #D4AF37' }} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#F4EEDF', letterSpacing: '0.3px' }}>Próximos vencimientos</span>
+          <div style={{ background: '#101010', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="1.7" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <span style={{ fontSize: 12, fontWeight: 700, color: CREAM, letterSpacing: '0.2px' }}>Próximos vencimientos</span>
               </div>
-              <button onClick={() => onNavigate('calendar')} style={{ fontSize: 10, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+              <button onClick={() => onNavigate('calendar')} style={{ fontSize: 10.5, color: GOLD, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
                 Ver calendario
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
             </div>
-            <div style={{ overflowX: 'auto', display: 'flex', gap: 10, padding: '2px 16px 14px', scrollbarWidth: 'none' } as React.CSSProperties}>
-              {proximos.map(t => {
-                const { day, mon } = fP(t.plazo)
-                const c = vCol(t.plazo)
-                return (
-                  <div key={t.id} onClick={() => setSelectedTask(t)} style={{
-                    flexShrink: 0, minWidth: 120, cursor: 'pointer',
-                    background: `rgba(${c === '#D4AF37' ? '212,175,55' : c === '#E67E22' ? '230,126,34' : c === '#FF4444' ? '255,68,68' : '255,255,255'},0.05)`,
-                    border: `1px solid ${c}28`, borderRadius: 14, padding: '12px 12px',
-                  }}>
-                    <div style={{ fontSize: 24, fontWeight: 900, color: c, lineHeight: 1 }}>{day}</div>
-                    <div style={{ fontSize: 9, color: c, fontWeight: 700, letterSpacing: '0.8px', marginBottom: 8 }}>{mon}</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#F4EEDF', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>
-                      {t.titulo}
-                    </div>
-                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 5 }}>{t.prioridad_maxima ? '⚡ Alta' : '△ Media'}</div>
+            {proximos.map((t, idx) => {
+              const { day, mon } = fP(t.plazo)
+              const c = vCol(t.plazo)
+              return (
+                <div key={t.id} onClick={() => setSelectedTask(t)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', borderBottom: idx < proximos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', cursor: 'pointer' }}
+                  onTouchStart={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                  onTouchEnd={e => (e.currentTarget.style.background = 'transparent')}>
+                  {/* Fecha grande */}
+                  <div style={{ textAlign: 'center', minWidth: 30, flexShrink: 0 }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: c, lineHeight: 1 }}>{day}</div>
+                    <div style={{ fontSize: 8, color: c, fontWeight: 700, letterSpacing: '0.5px', marginTop: 2 }}>{mon}</div>
                   </div>
-                )
-              })}
-            </div>
+                  {/* Divisor */}
+                  <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.06)' }} />
+                  {/* Título */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: CREAM, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 2 }}>{t.titulo}</div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{t.prioridad_maxima ? 'Alta prioridad' : 'Media'}</div>
+                  </div>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+              )
+            })}
           </div>
         )}
 
-        {/* ── TAREAS PENDIENTES ── */}
-        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, overflow: 'hidden' }}>
+        {/* ── TAREAS PENDIENTES — lista ERP ── */}
+        <div style={{ background: '#101010', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(255,255,255,0.3)' }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#F4EEDF', letterSpacing: '0.3px' }}>Tareas pendientes</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="1.7" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span style={{ fontSize: 12, fontWeight: 700, color: CREAM, letterSpacing: '0.2px' }}>Tareas pendientes</span>
             </div>
-            <button onClick={() => scrollToTable('todas')} style={{ fontSize: 10, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+            <button onClick={() => scrollToTable('todas')} style={{ fontSize: 10.5, color: GOLD, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
               Ver todas
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
           </div>
           {pendientes.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '20px 16px', fontSize: 12, color: 'rgba(255,255,255,0.2)' }}>Sin tareas pendientes</div>
           ) : pendientes.map((t, idx) => {
-            const stCfg = STATUS_CFG[t.estado as keyof typeof STATUS_CFG] ?? { color: '#888' }
-            const cfg2 = AREA_CFG[t.area] ?? { color: '#888', code: '??' }
             const { day, mon } = fP(t.plazo)
             const vc = vCol(t.plazo)
             return (
               <div key={t.id} onClick={() => setSelectedTask(t)}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: idx < pendientes.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none', cursor: 'pointer', transition: 'background 0.1s' }}
-                onTouchStart={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '12px 16px', borderBottom: idx < pendientes.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', cursor: 'pointer' }}
+                onTouchStart={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
                 onTouchEnd={e => (e.currentTarget.style.background = 'transparent')}>
-                {/* Estado dot */}
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: stCfg.color, flexShrink: 0, boxShadow: `0 0 6px ${stCfg.color}60` }} />
+                {/* Círculo hueco */}
+                <div style={{ width: 16, height: 16, borderRadius: '50%', border: `1.5px solid ${vc === RED_DIM ? RED_DIM : 'rgba(212,175,55,0.5)'}`, flexShrink: 0 }} />
                 {/* Texto */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#F4EEDF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 2 }}>{t.titulo}</div>
-                  <div style={{ fontSize: 9, color: cfg2.color, fontWeight: 600 }}>{t.area}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: CREAM, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 2 }}>{t.titulo}</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{t.area}</div>
                 </div>
                 {/* Badge fecha */}
-                <div style={{ flexShrink: 0, textAlign: 'center', background: `${vc}12`, border: `1px solid ${vc}25`, borderRadius: 8, padding: '4px 8px' }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: vc, lineHeight: 1 }}>{day}</div>
-                  <div style={{ fontSize: 7, color: vc, fontWeight: 700, letterSpacing: '0.5px' }}>{mon}</div>
+                <div style={{ flexShrink: 0, background: vc === RED_DIM ? 'rgba(181,84,62,0.12)' : 'rgba(212,175,55,0.1)', border: `1px solid ${vc === RED_DIM ? 'rgba(181,84,62,0.3)' : 'rgba(212,175,55,0.22)'}`, borderRadius: 8, padding: '5px 9px' }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: vc === RED_DIM ? RED_DIM : GOLD, letterSpacing: '0.3px' }}>{day} {mon}</span>
                 </div>
-                {/* Flecha */}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
               </div>
             )
           })}
