@@ -120,11 +120,11 @@ function KPIPanel({ label, value, color, rgb, icon: Icon, yesterday }: {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Sparkline color={color} up={up} />
         <div style={{
-          background: up ? 'rgba(74,222,128,0.1)' : 'rgba(255,85,85,0.1)',
-          border: `1px solid ${up ? 'rgba(74,222,128,0.2)' : 'rgba(255,85,85,0.2)'}`,
+          background: up ? 'rgba(90,138,74,0.1)' : 'rgba(181,84,62,0.1)',
+          border: `1px solid ${up ? 'rgba(90,138,74,0.2)' : 'rgba(181,84,62,0.2)'}`,
           borderRadius: 6, padding: '2px 5px',
           fontSize: 8, fontWeight: 700,
-          color: up ? '#4ADE80' : '#FF5555',
+          color: up ? '#5A8A4A' : '#B5543E',
         }}>
           {up ? '↑' : '↓'} {pct}%
         </div>
@@ -139,8 +139,8 @@ function VisitaCard({ v, isLast }: { v: Visita; isLast: boolean }) {
   const conVenta = v.tiene_venta === true
   const sinVenta = v.tiene_venta === false
 
-  const color = enProgreso ? G : conVenta ? '#4ADE80' : '#FF5555'
-  const rgb = enProgreso ? G_RGB : conVenta ? '74,222,128' : '255,85,85'
+  const color = enProgreso ? G : conVenta ? '#5A8A4A' : '#B5543E'
+  const rgb = enProgreso ? G_RGB : conVenta ? '90,138,74' : '181,84,62'
   const label = enProgreso ? 'En progreso' : conVenta ? 'Completada' : 'Sin venta'
 
   return (
@@ -285,8 +285,8 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
         {/* ── KPIs ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 28 }}>
           <KPIPanel label="Visitas hoy" value={kpis.totalHoy} color="#F4EEDF" rgb="244,238,223" icon={Users} yesterday={0} />
-          <KPIPanel label="Con venta"   value={kpis.conVenta}  color="#4ADE80" rgb="74,222,128"  icon={Tag}   yesterday={0} />
-          <KPIPanel label="Sin venta"   value={kpis.sinVenta}  color="#FF5555" rgb="255,85,85"   icon={Ban}   yesterday={0} />
+          <KPIPanel label="Con venta"   value={kpis.conVenta}  color="#5A8A4A" rgb="90,138,74"  icon={Tag}   yesterday={0} />
+          <KPIPanel label="Sin venta"   value={kpis.sinVenta}  color="#B5543E" rgb="181,84,62"   icon={Ban}   yesterday={0} />
         </div>
 
         {/* ── VISITAS DEL DÍA ── */}

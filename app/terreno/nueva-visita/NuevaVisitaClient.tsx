@@ -443,7 +443,7 @@ function VentaImageModal({ items, clienteNombre, vendedorNombre, onClose }: {
               <p style={{ fontSize: 13, color: 'var(--muted)' }}>Generando imagen…</p>
             </div>
           )}
-          {estado === 'error' && <p style={{ fontSize: 13, color: '#FF5555', padding: 24 }}>Error al generar la imagen</p>}
+          {estado === 'error' && <p style={{ fontSize: 13, color: '#B5543E', padding: 24 }}>Error al generar la imagen</p>}
           {estado === 'listo' && previewUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={previewUrl} alt="Pedido" style={{ width: '100%', display: 'block' }} />
@@ -513,10 +513,10 @@ function DeudaSection({ clienteNombre }: { clienteNombre: string }) {
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
         borderRadius: 12, marginBottom: 16,
-        background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)',
+        background: 'rgba(90,138,74,0.06)', border: '1px solid rgba(90,138,74,0.2)',
       }}>
-        <CheckCircle size={16} color="#4ADE80" />
-        <p style={{ fontSize: 13, color: '#4ADE80', fontWeight: 600 }}>Cliente al día — sin deuda pendiente</p>
+        <CheckCircle size={16} color="#5A8A4A" />
+        <p style={{ fontSize: 13, color: '#5A8A4A', fontWeight: 600 }}>Cliente al día — sin deuda pendiente</p>
       </div>
     )
   }
@@ -528,26 +528,26 @@ function DeudaSection({ clienteNombre }: { clienteNombre: string }) {
         onClick={() => setExpanded(e => !e)}
         style={{
           display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', cursor: 'pointer',
-          background: 'rgba(255,85,85,0.08)', border: '1px solid rgba(255,85,85,0.3)',
+          background: 'rgba(181,84,62,0.08)', border: '1px solid rgba(181,84,62,0.3)',
           borderRadius: expanded ? '12px 12px 0 0' : 12,
         }}
       >
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(255,85,85,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <AlertTriangle size={18} color="#FF5555" />
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(181,84,62,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <AlertTriangle size={18} color="#B5543E" />
         </div>
         <div style={{ flex: 1 }}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: '#FF5555', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 2 }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#B5543E', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 2 }}>
             Saldo pendiente · {saldo.dias_credito} días de crédito
           </p>
           <p style={{ fontSize: 20, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-0.5px' }}>
             {fmtPrecioCLP(saldo.monto_deuda)}
           </p>
         </div>
-        <ChevronDown size={16} color="#FF5555" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
+        <ChevronDown size={16} color="#B5543E" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
       </div>
 
       {expanded && (
-        <div style={{ background: 'rgba(255,85,85,0.04)', border: '1px solid rgba(255,85,85,0.2)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '12px 16px' }}>
+        <div style={{ background: 'rgba(181,84,62,0.04)', border: '1px solid rgba(181,84,62,0.2)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '12px 16px' }}>
           {saldo.facturas_vencidas.length === 0 ? (
             <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '12px 0' }}>
               Sin detalle de facturas disponible
@@ -556,7 +556,7 @@ function DeudaSection({ clienteNombre }: { clienteNombre: string }) {
             <div key={i} style={{ padding: '10px 12px', borderRadius: 10, marginBottom: 6, background: 'rgba(0,0,0,0.25)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>Doc #{f.numero}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#FF5555', background: 'rgba(255,85,85,0.12)', padding: '2px 8px', borderRadius: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#B5543E', background: 'rgba(181,84,62,0.12)', padding: '2px 8px', borderRadius: 6 }}>
                   {f.dias_atraso}d atraso
                 </span>
               </div>
@@ -783,12 +783,12 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
             const d = seleccionado ? deudores.find(x => x.nombre_fantasia === seleccionado.nombre_fantasia) : null
             if (!d) return null
             const tieneDeuda = d.saldo_total > 0
-            const color = d.deuda_vencida > 0 ? '#EF4444' : '#F59E0B'
+            const color = d.deuda_vencida > 0 ? '#B5543E' : '#D4AF37'
             const rgb   = d.deuda_vencida > 0 ? '239,68,68' : '245,158,11'
             if (!tieneDeuda) return (
-              <div style={{ margin: '8px 0 4px', padding: '10px 14px', background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <CheckCircle size={14} color="#4ADE80" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#4ADE80' }}>Cliente al día — sin deuda pendiente</span>
+              <div style={{ margin: '8px 0 4px', padding: '10px 14px', background: 'rgba(90,138,74,0.07)', border: '1px solid rgba(90,138,74,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle size={14} color="#5A8A4A" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#5A8A4A' }}>Cliente al día — sin deuda pendiente</span>
               </div>
             )
             return (
@@ -809,7 +809,7 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
                   {d.deuda_vencida > 0 && (
                     <div>
                       <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Vencida</p>
-                      <p style={{ fontSize: 16, fontWeight: 900, color: '#EF4444', letterSpacing: '-0.5px' }}>
+                      <p style={{ fontSize: 16, fontWeight: 900, color: '#B5543E', letterSpacing: '-0.5px' }}>
                         {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(d.deuda_vencida)}
                       </p>
                     </div>
@@ -901,13 +901,13 @@ function Paso2Checkin({ onConfirmar }: {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
         {/* GPS */}
-        <div style={{ background: '#1C1C1C', borderRadius: 14, padding: '14px 16px', marginBottom: 20, border: `1px solid ${gps ? T_BORDER : gpsError ? 'rgba(255,77,77,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
+        <div style={{ background: '#1C1C1C', borderRadius: 14, padding: '14px 16px', marginBottom: 20, border: `1px solid ${gps ? T_BORDER : gpsError ? 'rgba(181,84,62,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: gps ? T_DIM : gpsError ? 'rgba(255,77,77,0.1)' : 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <MapPin size={18} color={gps ? T : gpsError ? '#FF4D4D' : 'var(--muted)'} />
+            <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: gps ? T_DIM : gpsError ? 'rgba(181,84,62,0.1)' : 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <MapPin size={18} color={gps ? T : gpsError ? '#B5543E' : 'var(--muted)'} />
             </div>
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: gps ? T : gpsError ? '#FF4D4D' : 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: gps ? T : gpsError ? '#B5543E' : 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 {gps ? 'Ubicación capturada' : gpsError ? 'GPS no disponible' : 'Capturando ubicación…'}
               </p>
               {gps && <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{gps.addr}</p>}
@@ -1253,8 +1253,8 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           )}
 
           {/* Sin venta */}
-          <div onClick={() => setSinVenta(true)} style={{ borderRadius: 14, padding: '16px', marginBottom: 16, cursor: 'pointer', background: sinVenta ? 'rgba(255,77,77,0.06)' : '#1C1C1C', border: `2px solid ${sinVenta ? 'rgba(255,77,77,0.4)' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <XCircle size={22} color={sinVenta ? '#FF4D4D' : 'var(--muted)'} />
+          <div onClick={() => setSinVenta(true)} style={{ borderRadius: 14, padding: '16px', marginBottom: 16, cursor: 'pointer', background: sinVenta ? 'rgba(181,84,62,0.06)' : '#1C1C1C', border: `2px solid ${sinVenta ? 'rgba(181,84,62,0.4)' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <XCircle size={22} color={sinVenta ? '#B5543E' : 'var(--muted)'} />
             <div>
               <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>Visita sin venta</p>
               <p style={{ fontSize: 12, color: 'var(--muted)' }}>Registrar motivo de no cierre</p>
@@ -1266,7 +1266,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 8 }}>Motivo</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {MOTIVOS_SIN_VENTA.map(m => (
-                  <div key={m} onClick={() => setMotivo(m)} style={{ padding: '12px 14px', borderRadius: 10, cursor: 'pointer', background: motivo === m ? 'rgba(255,77,77,0.08)' : '#1C1C1C', border: `1px solid ${motivo === m ? 'rgba(255,77,77,0.4)' : 'rgba(255,255,255,0.06)'}`, fontSize: 14, color: motivo === m ? '#FF4D4D' : '#F4EEDF', fontWeight: motivo === m ? 700 : 400 }}>
+                  <div key={m} onClick={() => setMotivo(m)} style={{ padding: '12px 14px', borderRadius: 10, cursor: 'pointer', background: motivo === m ? 'rgba(181,84,62,0.08)' : '#1C1C1C', border: `1px solid ${motivo === m ? 'rgba(181,84,62,0.4)' : 'rgba(255,255,255,0.06)'}`, fontSize: 14, color: motivo === m ? '#B5543E' : '#F4EEDF', fontWeight: motivo === m ? 700 : 400 }}>
                     {m}
                   </div>
                 ))}

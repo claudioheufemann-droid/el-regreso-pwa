@@ -56,15 +56,15 @@ function agruparPorFecha(visitas: Visita[]) {
 // ── Badge deuda ────────────────────────────────────────────────
 function DeudaBadge({ deudor }: { deudor: Deudor | undefined }) {
   if (!deudor || deudor.saldo_total <= 0) return (
-    <span style={{ fontSize: 10, fontWeight: 700, color: '#4ADE80', background: 'rgba(74,222,128,0.1)', padding: '2px 7px', borderRadius: 20 }}>Al día</span>
+    <span style={{ fontSize: 10, fontWeight: 700, color: '#5A8A4A', background: 'rgba(90,138,74,0.12)', padding: '2px 7px', borderRadius: 20 }}>Al día</span>
   )
   if (deudor.deuda_vencida > 0) return (
-    <span style={{ fontSize: 10, fontWeight: 700, color: '#EF4444', background: 'rgba(239,68,68,0.1)', padding: '2px 7px', borderRadius: 20 }}>
+    <span style={{ fontSize: 10, fontWeight: 700, color: '#B5543E', background: 'rgba(181,84,62,0.12)', padding: '2px 7px', borderRadius: 20 }}>
       ⚠ Vencida {fmtPesoCompact(deudor.deuda_vencida)}
     </span>
   )
   return (
-    <span style={{ fontSize: 10, fontWeight: 700, color: '#F59E0B', background: 'rgba(245,158,11,0.1)', padding: '2px 7px', borderRadius: 20 }}>
+    <span style={{ fontSize: 10, fontWeight: 700, color: '#D4AF37', background: 'rgba(212,175,55,0.1)', padding: '2px 7px', borderRadius: 20 }}>
       Saldo {fmtPesoCompact(deudor.saldo_total)}
     </span>
   )
@@ -72,8 +72,8 @@ function DeudaBadge({ deudor }: { deudor: Deudor | undefined }) {
 
 // ── Panel deuda del cliente ────────────────────────────────────
 function PanelDeuda({ deudor }: { deudor: Deudor }) {
-  const color = deudor.deuda_vencida > 0 ? '#EF4444' : deudor.saldo_total > 0 ? '#F59E0B' : '#4ADE80'
-  const rgb   = deudor.deuda_vencida > 0 ? '239,68,68' : deudor.saldo_total > 0 ? '245,158,11' : '74,222,128'
+  const color = deudor.deuda_vencida > 0 ? '#B5543E' : deudor.saldo_total > 0 ? '#D4AF37' : '#5A8A4A'
+  const rgb   = deudor.deuda_vencida > 0 ? '239,68,68' : deudor.saldo_total > 0 ? '245,158,11' : '90,138,74'
   const tramos = [
     { label: '< 14 días',    val: (deudor as any).deuda_menor_14_dias ?? 0 },
     { label: '15–29 días',   val: (deudor as any).deuda_entre_15_29_dias ?? 0 },
@@ -96,7 +96,7 @@ function PanelDeuda({ deudor }: { deudor: Deudor }) {
         </div>
         <div>
           <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>Deuda vencida</p>
-          <p style={{ fontSize: 18, fontWeight: 900, color: deudor.deuda_vencida > 0 ? '#EF4444' : '#4ADE80', letterSpacing: '-0.5px' }}>
+          <p style={{ fontSize: 18, fontWeight: 900, color: deudor.deuda_vencida > 0 ? '#B5543E' : '#5A8A4A', letterSpacing: '-0.5px' }}>
             {deudor.deuda_vencida > 0 ? fmtPeso(deudor.deuda_vencida) : 'Sin vencer'}
           </p>
         </div>
@@ -201,7 +201,7 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
             <div key={v.id} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 9, padding: '8px 10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#F4EEDF' }}>{fmtFecha(v.iniciada_at)}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: v.tiene_venta ? T : '#FF4D4D' }}>{v.tiene_venta ? fmtPeso(v.total_pedido ?? 0) : 'Sin venta'}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: v.tiene_venta ? T : '#B5543E' }}>{v.tiene_venta ? fmtPeso(v.total_pedido ?? 0) : 'Sin venta'}</span>
               </div>
               {(itemsPorVisita[v.id] ?? []).length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
@@ -258,7 +258,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
               <p style={{ fontSize: 14, fontWeight: 800, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
                 {visita.cliente_nombre}
               </p>
-              {visita.es_cliente_nuevo && <span style={{ fontSize: 9, fontWeight: 700, color: '#6BA3F5', background: 'rgba(107,163,245,0.12)', padding: '2px 6px', borderRadius: 10, flexShrink: 0 }}>NUEVO</span>}
+              {visita.es_cliente_nuevo && <span style={{ fontSize: 9, fontWeight: 700, color: '#F4EEDF', background: 'rgba(107,163,245,0.12)', padding: '2px 6px', borderRadius: 10, flexShrink: 0 }}>NUEVO</span>}
               <DeudaBadge deudor={deudor} />
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
@@ -275,7 +275,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
               </div>
             ) : (
               <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: '#FF4D4D' }}>Sin venta</p>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#B5543E' }}>Sin venta</p>
               </div>
             )}
             {open ? <ChevronUp size={14} color="var(--muted)" /> : <ChevronDown size={14} color="var(--muted)" />}
@@ -330,8 +330,8 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                   )}
                 </div>
               ) : visita.tiene_venta === false ? (
-                <div style={{ marginBottom: 12, padding: '10px 12px', background: 'rgba(255,77,77,0.06)', borderRadius: 10, border: '1px solid rgba(255,77,77,0.15)' }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: '#FF4D4D', marginBottom: 3 }}>Sin venta</p>
+                <div style={{ marginBottom: 12, padding: '10px 12px', background: 'rgba(181,84,62,0.06)', borderRadius: 10, border: '1px solid rgba(181,84,62,0.15)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: '#B5543E', marginBottom: 3 }}>Sin venta</p>
                   {visita.motivo_sin_venta && <p style={{ fontSize: 12, color: '#F4EEDF' }}>{visita.motivo_sin_venta}</p>}
                 </div>
               ) : null}
@@ -367,7 +367,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
               {/* GPS */}
               {visita.lat && visita.lng && (
                 <a href={`https://www.google.com/maps?q=${visita.lat},${visita.lng}`} target="_blank" rel="noopener noreferrer"
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'rgba(66,133,244,0.08)', border: '1px solid rgba(66,133,244,0.2)', borderRadius: 9, textDecoration: 'none', color: '#6BA3F5', fontSize: 12, fontWeight: 600 }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'rgba(66,133,244,0.08)', border: '1px solid rgba(66,133,244,0.2)', borderRadius: 9, textDecoration: 'none', color: '#F4EEDF', fontSize: 12, fontWeight: 600 }}>
                   <MapPin size={13} />
                   {visita.direccion_gps ?? 'Ver ubicación en Google Maps'}
                 </a>
@@ -395,7 +395,7 @@ function FiltroChip({ label, active, onClick, color }: { label: string; active: 
   return (
     <button onClick={onClick} style={{
       padding: '5px 12px', borderRadius: 20, border: `1px solid ${active ? c : 'rgba(255,255,255,0.1)'}`,
-      background: active ? `rgba(${c === T ? '212,175,55' : c === '#FF4D4D' ? '255,77,77' : '212,175,55'},0.12)` : 'transparent',
+      background: active ? `rgba(${c === T ? '212,175,55' : c === '#B5543E' ? '181,84,62' : '212,175,55'},0.12)` : 'transparent',
       color: active ? c : 'var(--muted)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
     }}>
       {label}
@@ -486,7 +486,7 @@ export default function HistorialClient({ user, visitas, items, vendedores, deud
             <div style={{ display: 'flex', gap: 6 }}>
               <FiltroChip label="Todos"     active={filtroResultado === 'todos'}     onClick={() => setFiltroResultado('todos')} />
               <FiltroChip label="Con venta" active={filtroResultado === 'con_venta'} onClick={() => setFiltroResultado('con_venta')} color={T} />
-              <FiltroChip label="Sin venta" active={filtroResultado === 'sin_venta'} onClick={() => setFiltroResultado('sin_venta')} color="#FF4D4D" />
+              <FiltroChip label="Sin venta" active={filtroResultado === 'sin_venta'} onClick={() => setFiltroResultado('sin_venta')} color="#B5543E" />
             </div>
           </div>
         </div>
@@ -498,11 +498,11 @@ export default function HistorialClient({ user, visitas, items, vendedores, deud
           {[
             { label: 'Visitas',     val: kpis.total,           color: '#F4EEDF' },
             { label: 'Con venta',   val: kpis.conVenta,        color: T },
-            { label: 'Sin venta',   val: kpis.sinVenta,        color: '#FF4D4D' },
+            { label: 'Sin venta',   val: kpis.sinVenta,        color: '#B5543E' },
             { label: 'Facturado',   val: kpis.totalFacturado > 0 ? fmtPesoCompact(kpis.totalFacturado) : '—', color: T },
-            { label: 'Unidades',    val: kpis.totalUnidades,   color: '#6BA3F5' },
+            { label: 'Unidades',    val: kpis.totalUnidades,   color: '#F4EEDF' },
           ].map(k => (
-            <div key={k.label} style={{ background: '#131313', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '12px 8px', textAlign: 'center' }}>
+            <div key={k.label} style={{ background: '#101010', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '12px 8px', textAlign: 'center' }}>
               <p style={{ fontSize: 20, fontWeight: 900, color: k.color, letterSpacing: '-0.5px' }}>{k.val}</p>
               <p style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{k.label}</p>
             </div>
