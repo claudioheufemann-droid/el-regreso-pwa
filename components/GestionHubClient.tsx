@@ -159,7 +159,7 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
                   </div>
 
                   {/* Imagen cuadrada izquierda */}
-                  <div style={{ position: 'relative', width: 110, height: 110, borderRadius: 16, overflow: 'hidden', flexShrink: 0 }}>
+                  <div style={{ position: 'relative', width: 110, height: 110, borderRadius: 16, overflow: 'hidden', flexShrink: 0, aspectRatio: '1 / 1', border: `1px solid rgba(${area.rgb},0.2)` }}>
                     {/* Fallback gradient */}
                     <div style={{ position: 'absolute', inset: 0, background: area.imgFallback, zIndex: 0 }} />
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -168,18 +168,6 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
                       alt={area.label}
                       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', zIndex: 1 }}
                     />
-                    {/* Badge código */}
-                    <div style={{
-                      position: 'absolute', bottom: 8, left: 8, zIndex: 2,
-                      width: 38, height: 38, borderRadius: 11,
-                      background: `rgba(${area.rgb},0.95)`,
-                      border: `1.5px solid rgba(255,255,255,0.18)`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 900, color: '#050505',
-                      boxShadow: `0 4px 16px rgba(${area.rgb},0.5)`,
-                    }}>
-                      {area.code}
-                    </div>
                   </div>
 
                   {/* Contenido derecha */}
