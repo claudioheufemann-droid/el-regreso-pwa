@@ -185,14 +185,14 @@ function ModuleCard({ href, color, rgb, title, subtitle, img, locked }: ModuleCa
   if (locked) return (
     <div style={{
       background: '#0D0D10', border: '1px solid rgba(255,255,255,0.04)',
-      borderRadius: 20, overflow: 'hidden',
-      display: 'flex', alignItems: 'stretch', minHeight: 110,
+      borderRadius: 16, overflow: 'hidden',
+      display: 'flex', alignItems: 'stretch', minHeight: 78,
       opacity: 0.35, cursor: 'not-allowed',
     }}>
-      <div style={{ width: 110, flexShrink: 0, background: 'rgba(255,255,255,0.03)' }} />
-      <div style={{ flex: 1, padding: '18px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <div style={{ fontSize: 17, fontWeight: 800, color: '#4A4A50', marginBottom: 4 }}>{title}</div>
-        <div style={{ fontSize: 12, color: '#2A2A30', lineHeight: 1.4 }}>{subtitle}</div>
+      <div style={{ width: 88, flexShrink: 0, background: 'rgba(255,255,255,0.03)' }} />
+      <div style={{ flex: 1, padding: '12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#4A4A50', marginBottom: 2 }}>{title}</div>
+        <div style={{ fontSize: 11, color: '#2A2A30', lineHeight: 1.4 }}>{subtitle}</div>
       </div>
     </div>
   )
@@ -217,12 +217,12 @@ function ModuleCard({ href, color, rgb, title, subtitle, img, locked }: ModuleCa
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'stretch',
-          minHeight: 110,
+          minHeight: 78,
           overflow: 'hidden',
         }}
       >
         {/* Imagen cuadrada izquierda */}
-        <div style={{ width: 110, minHeight: 110, flexShrink: 0, position: 'relative', overflow: 'hidden', alignSelf: 'stretch' }}>
+        <div style={{ width: 88, minHeight: 78, flexShrink: 0, position: 'relative', overflow: 'hidden', alignSelf: 'stretch' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={img}
@@ -232,22 +232,22 @@ function ModuleCard({ href, color, rgb, title, subtitle, img, locked }: ModuleCa
           {/* Fade hacia la derecha */}
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(to right, transparent 60%, #0E0E12 100%)',
+            background: 'linear-gradient(to right, transparent 50%, #0E0E12 100%)',
           }} />
         </div>
 
         {/* Texto */}
-        <div style={{ flex: 1, padding: '16px 14px 16px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
-          <div style={{ fontSize: 19, fontWeight: 900, color: '#F4EEDF', marginBottom: 5, letterSpacing: -0.4, lineHeight: 1.1 }}>{title}</div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', lineHeight: 1.5 }}>{subtitle}</div>
+        <div style={{ flex: 1, padding: '12px 12px 12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 900, color: '#F4EEDF', marginBottom: 2, letterSpacing: -0.3, lineHeight: 1.1 }}>{title}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.38)', lineHeight: 1.4 }}>{subtitle}</div>
         </div>
 
         {/* Botón flecha */}
         <div style={{
-          flexShrink: 0, display: 'flex', alignItems: 'center', paddingRight: 16,
+          flexShrink: 0, display: 'flex', alignItems: 'center', paddingRight: 14,
         }}>
           <div style={{
-            width: 36, height: 36, borderRadius: 12,
+            width: 32, height: 32, borderRadius: 11,
             background: `rgba(${rgb}, 0.18)`,
             border: `1.5px solid rgba(${rgb}, 0.4)`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -275,18 +275,18 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
     <div style={{
       minHeight: '100svh',
       background: '#07070D',
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      padding: 'env(safe-area-inset-top, 44px) 20px 40px',
+      display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+      padding: 'max(env(safe-area-inset-top), 16px) 18px 20px',
       fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
 
         {/* ── HEADER ── */}
-        <div style={{ textAlign: 'center', padding: '28px 0 32px' }}>
+        <div style={{ textAlign: 'center', padding: '4px 0 16px' }}>
           {/* Logos — ambas marcas */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, marginBottom: 10 }}>
             {/* El Regreso */}
-            <div style={{ position: 'relative', width: 180, height: 180, flexShrink: 0 }}>
+            <div style={{ position: 'relative', width: 90, height: 90, flexShrink: 0 }}>
               <Image
                 src="/logo.png"
                 alt="El Regreso Beer Co."
@@ -296,18 +296,18 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
               />
             </div>
             {/* Separador */}
-            <div style={{ width: 1, height: 70, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.18), transparent)', flexShrink: 0 }} />
+            <div style={{ width: 1, height: 48, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.18), transparent)', flexShrink: 0 }} />
             {/* La Ida */}
-            <LaIdaLogo />
+            <LaIdaLogo size={64} />
           </div>
 
           {/* Nombre empresa */}
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: '#F4EEDF', letterSpacing: -0.8, margin: '0 0 8px', lineHeight: 1.1 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 900, color: '#F4EEDF', letterSpacing: -0.6, margin: '0 0 4px', lineHeight: 1.1 }}>
             El Regreso Beer
           </h1>
 
           {/* Saludo */}
-          <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.45)', margin: '0 0 12px', fontWeight: 500 }}>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', margin: '0 0 10px', fontWeight: 500 }}>
             Hola, <span style={{ color: '#D4AF37', fontWeight: 800 }}>{firstName}</span> 👋
           </p>
 
@@ -328,7 +328,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
         </div>
 
         {/* ── MODULE CARDS ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
           <ModuleCard
             href="/ventas"
@@ -385,11 +385,11 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
           onClick={handleLogout}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            width: '100%', marginTop: 20, padding: '16px',
+            width: '100%', marginTop: 12, padding: '11px',
             background: 'rgba(255,255,255,0.03)',
             border: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: 18, cursor: 'pointer',
-            fontSize: 14, fontWeight: 700,
+            borderRadius: 14, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700,
             color: 'rgba(255,255,255,0.3)',
             transition: 'all 0.15s',
           }}
@@ -401,7 +401,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
         </button>
 
         {/* ── FOOTER ── */}
-        <div style={{ textAlign: 'center', marginTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <div style={{ textAlign: 'center', marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5">
             <circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/>
           </svg>
