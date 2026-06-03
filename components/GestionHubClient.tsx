@@ -12,6 +12,8 @@ const AREAS = [
     rgb: '230,126,34',
     code: 'AC',
     href: '/gestion/comercial',
+    img: '/gestion-comercial.jpg',
+    imgFallback: 'linear-gradient(135deg, #1a0e00 0%, #2d1a00 50%, #1a0e00 100%)',
   },
   {
     key: 'administracion',
@@ -21,6 +23,8 @@ const AREAS = [
     rgb: '91,138,168',
     code: 'AD',
     href: '/gestion/administracion',
+    img: '/gestion-admin.jpg',
+    imgFallback: 'linear-gradient(135deg, #00111a 0%, #001d2b 50%, #00111a 100%)',
   },
   {
     key: 'produccion',
@@ -30,6 +34,8 @@ const AREAS = [
     rgb: '46,204,113',
     code: 'PR',
     href: '/gestion/produccion',
+    img: '/gestion-produccion.jpg',
+    imgFallback: 'linear-gradient(135deg, #001a0a 0%, #002b11 50%, #001a0a 100%)',
   },
 ]
 
@@ -39,62 +45,37 @@ interface Props {
   userMacroArea: string | null
 }
 
-/* ── Hero isométrico — módulos/productividad ── */
+/* ── Hero chart ── */
 function GestionHero() {
   return (
-    <svg width="150" height="130" viewBox="0 0 150 130" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Grid base */}
-      {[0,1,2,3].map(i => (
-        <line key={`h${i}`} x1={10 + i*30} y1={20} x2={10 + i*30} y2={100}
-          stroke="#D4AF37" strokeOpacity="0.06" strokeWidth="0.8"/>
-      ))}
-      {[0,1,2,3].map(i => (
-        <line key={`v${i}`} x1={10} y1={20 + i*25} x2={130} y2={20 + i*25}
-          stroke="#D4AF37" strokeOpacity="0.06" strokeWidth="0.8"/>
-      ))}
-      {/* Panel central — ventana app */}
-      <rect x="28" y="18" width="80" height="72" rx="8"
-        fill="#D4AF37" fillOpacity="0.06" stroke="#D4AF37" strokeOpacity="0.2" strokeWidth="1"/>
-      {/* Barra superior */}
-      <rect x="28" y="18" width="80" height="14" rx="8"
-        fill="#D4AF37" fillOpacity="0.15"/>
-      <rect x="28" y="25" width="80" height="7" rx="0"
-        fill="#D4AF37" fillOpacity="0.15"/>
-      {/* Dot indicadores */}
-      <circle cx="38" cy="25" r="3" fill="#E67E22" fillOpacity="0.8"/>
-      <circle cx="48" cy="25" r="3" fill="#5B8AA8" fillOpacity="0.8"/>
-      <circle cx="58" cy="25" r="3" fill="#2ECC71" fillOpacity="0.8"/>
-      {/* Barras KPI dentro */}
-      <rect x="36" y="42" width="10" height="36" rx="3" fill="#E67E22" fillOpacity="0.35"/>
-      <rect x="52" y="52" width="10" height="26" rx="3" fill="#5B8AA8" fillOpacity="0.35"/>
-      <rect x="68" y="46" width="10" height="32" rx="3" fill="#2ECC71" fillOpacity="0.35"/>
-      <rect x="84" y="56" width="10" height="22" rx="3" fill="#D4AF37" fillOpacity="0.35"/>
+    <svg width="140" height="110" viewBox="0 0 140 110" fill="none">
+      {/* Barras */}
+      <rect x="10" y="55" width="18" height="42" rx="4" fill="#E67E22" fillOpacity="0.7"/>
+      <rect x="34" y="38" width="18" height="59" rx="4" fill="#5B8AA8" fillOpacity="0.7"/>
+      <rect x="58" y="28" width="18" height="69" rx="4" fill="#2ECC71" fillOpacity="0.7"/>
+      <rect x="82" y="44" width="18" height="53" rx="4" fill="#D4AF37" fillOpacity="0.7"/>
+      <rect x="106" y="18" width="18" height="79" rx="4" fill="#D4AF37" fillOpacity="0.9"/>
       {/* Línea tendencia */}
-      <path d="M36 60 Q52 48 68 52 Q84 56 100 44"
-        stroke="#D4AF37" strokeWidth="1.5" strokeDasharray="3 2"
-        strokeOpacity="0.6" fill="none" strokeLinecap="round"/>
-      {/* Puntos en línea */}
-      <circle cx="36" cy="60" r="2.5" fill="#D4AF37" fillOpacity="0.8"/>
-      <circle cx="68" cy="52" r="2.5" fill="#D4AF37" fillOpacity="0.8"/>
-      <circle cx="100" cy="44" r="3" fill="#D4AF37" fillOpacity="1"/>
-      {/* Glow punto final */}
-      <circle cx="100" cy="44" r="7" fill="#D4AF37" fillOpacity="0.1"/>
-      {/* Partículas */}
-      <circle cx="18" cy="35" r="1.5" fill="#D4AF37" fillOpacity="0.3"/>
-      <circle cx="130" cy="70" r="1.5" fill="#D4AF37" fillOpacity="0.25"/>
-      <circle cx="22" cy="80" r="1" fill="#D4AF37" fillOpacity="0.2"/>
-      <circle cx="135" cy="40" r="1" fill="#D4AF37" fillOpacity="0.2"/>
+      <path d="M19 55 Q43 38 67 28 Q91 44 115 18" stroke="#D4AF37" strokeWidth="2" fill="none" strokeLinecap="round"/>
+      {/* Puntos */}
+      <circle cx="19" cy="55" r="3" fill="#D4AF37"/>
+      <circle cx="67" cy="28" r="3" fill="#D4AF37"/>
+      <circle cx="115" cy="18" r="5" fill="#D4AF37"/>
+      <circle cx="115" cy="18" r="9" fill="#D4AF37" fillOpacity="0.15"/>
+      {/* Línea base */}
+      <line x1="6" y1="97" x2="134" y2="97" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
     </svg>
   )
 }
 
-/* ── Sparkline por área ── */
-function AreaSparkline({ color }: { color: string }) {
+/* ── Sparkline ── */
+function Spark({ color }: { color: string }) {
   return (
-    <svg width="70" height="24" viewBox="0 0 70 24" fill="none" style={{ opacity: 0.4 }}>
-      <path d="M0,18 C10,16 15,12 25,10 C35,8 40,14 50,8 C58,4 64,6 70,4"
-        stroke={color} strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-      <circle cx="70" cy="4" r="2.5" fill={color}/>
+    <svg width="80" height="28" viewBox="0 0 80 28" fill="none">
+      <path d="M0 22 C10 20 15 14 25 12 C35 10 40 16 52 8 C62 2 70 6 80 4"
+        stroke={color} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.6"/>
+      <circle cx="80" cy="4" r="3" fill={color} opacity="0.8"/>
+      <circle cx="80" cy="4" r="6" fill={color} opacity="0.12"/>
     </svg>
   )
 }
@@ -102,7 +83,7 @@ function AreaSparkline({ color }: { color: string }) {
 export default function GestionHubClient({ userName, taskCounts, userMacroArea }: Props) {
   const router = useRouter()
   const fecha = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
-  const fechaCapitalizada = fecha.charAt(0).toUpperCase() + fecha.slice(1)
+  const fechaCap = fecha.charAt(0).toUpperCase() + fecha.slice(1)
   const visibleAreas = AREAS.filter(a => userMacroArea === null || a.key === userMacroArea)
 
   return (
@@ -110,22 +91,21 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
 
         {/* ── HEADER ── */}
-        <div style={{ position: 'relative', paddingTop: 'max(env(safe-area-inset-top), 20px)', paddingBottom: 8, marginBottom: 24 }}>
-          {/* Hero */}
-          <div style={{ position: 'absolute', top: 0, right: 0, opacity: 0.9 }}>
+        <div style={{ position: 'relative', paddingTop: 'max(env(safe-area-inset-top), 22px)', paddingBottom: 4, marginBottom: 28 }}>
+          <div style={{ position: 'absolute', top: 0, right: 0 }}>
             <GestionHero />
           </div>
-
-          {/* Texto */}
           <div style={{ position: 'relative', zIndex: 2 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px', marginBottom: 6 }}>
-              {fechaCapitalizada}
+            <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4px', marginBottom: 6 }}>
+              {fechaCap}
             </p>
-            <h1 style={{ fontSize: 36, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1.5px', lineHeight: 1, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-              Gestión
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#D4AF37', display: 'inline-block', boxShadow: '0 0 10px #D4AF37', marginBottom: 4 }} />
-            </h1>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', fontWeight: 500, maxWidth: 200 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <h1 style={{ fontSize: 38, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1.5px', lineHeight: 1 }}>
+                Gestión
+              </h1>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#D4AF37', display: 'inline-block', boxShadow: '0 0 12px #D4AF37', marginTop: 4 }} />
+            </div>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.32)', fontWeight: 400, maxWidth: 210, lineHeight: 1.5 }}>
               Administra y optimiza cada área de tu negocio.
             </p>
           </div>
@@ -136,11 +116,7 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
           const mac = AREAS.find(a => a.key === userMacroArea)
           if (!mac) return null
           return (
-            <div style={{
-              background: `rgba(${mac.rgb},0.06)`, border: `1px solid rgba(${mac.rgb},0.2)`,
-              borderRadius: 16, padding: '12px 16px', marginBottom: 20,
-              display: 'flex', alignItems: 'center', gap: 12,
-            }}>
+            <div style={{ background: `rgba(${mac.rgb},0.06)`, border: `1px solid rgba(${mac.rgb},0.2)`, borderRadius: 16, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 36, height: 36, borderRadius: 11, background: `rgba(${mac.rgb},0.12)`, border: `1px solid rgba(${mac.rgb},0.25)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, color: mac.color, flexShrink: 0 }}>
                 {mac.code}
               </div>
@@ -152,88 +128,100 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
           )
         })()}
 
-        {/* ── CARDS DE ÁREAS ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {visibleAreas.map((area, idx) => {
+        {/* ── CARDS ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {visibleAreas.map(area => {
             const count = taskCounts[area.key] ?? 0
             return (
               <div
                 key={area.key}
                 onClick={() => router.push(area.href)}
                 style={{
-                  background: `linear-gradient(135deg, rgba(${area.rgb},0.07) 0%, rgba(8,8,8,0.95) 100%)`,
-                  border: `1px solid rgba(${area.rgb},0.22)`,
-                  borderRadius: 22,
-                  padding: '22px 20px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 18,
-                  position: 'relative',
+                  borderRadius: 24,
+                  border: `1px solid rgba(${area.rgb},0.25)`,
                   overflow: 'hidden',
-                  boxShadow: `0 4px 32px rgba(${area.rgb},0.08)`,
-                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  boxShadow: `0 8px 40px rgba(${area.rgb},0.08)`,
+                  transition: 'transform 0.15s',
                 }}
-                onTouchStart={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(0.985)' }}
+                onTouchStart={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(0.982)' }}
                 onTouchEnd={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)' }}
               >
-                {/* Glow fondo */}
-                <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: `rgba(${area.rgb},0.1)`, filter: 'blur(25px)', pointerEvents: 'none' }} />
-
-                {/* Sparkline decorativa fondo */}
-                <div style={{ position: 'absolute', bottom: 14, right: 60, pointerEvents: 'none' }}>
-                  <AreaSparkline color={area.color} />
+                {/* Imagen de fondo */}
+                <div style={{ position: 'relative', height: 130 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={area.img}
+                    alt={area.label}
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  />
+                  {/* Fallback gradient si no hay imagen */}
+                  <div style={{ position: 'absolute', inset: 0, background: area.imgFallback }} />
+                  {/* Overlay degradado abajo */}
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(5,5,5,0.1) 0%, rgba(5,5,5,0.85) 100%)' }} />
+                  {/* Badge código — esquina inferior izquierda sobre imagen */}
+                  <div style={{
+                    position: 'absolute', bottom: 12, left: 14,
+                    width: 44, height: 44, borderRadius: 13,
+                    background: `rgba(${area.rgb},0.9)`,
+                    border: `1.5px solid rgba(255,255,255,0.15)`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 14, fontWeight: 900, color: '#050505',
+                    backdropFilter: 'blur(8px)',
+                    boxShadow: `0 4px 16px rgba(${area.rgb},0.5)`,
+                  }}>
+                    {area.code}
+                  </div>
                 </div>
 
-                {/* Badge código */}
+                {/* Contenido inferior */}
                 <div style={{
-                  width: 64, height: 64, borderRadius: 18, flexShrink: 0,
-                  background: `rgba(${area.rgb},0.1)`,
-                  border: `1.5px solid rgba(${area.rgb},0.28)`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 18, fontWeight: 900, color: area.color, letterSpacing: 1,
-                  boxShadow: `0 4px 20px rgba(${area.rgb},0.18)`,
-                  position: 'relative', zIndex: 1,
+                  background: `linear-gradient(135deg, rgba(${area.rgb},0.06) 0%, #0a0a0a 100%)`,
+                  padding: '16px 18px 18px',
+                  position: 'relative',
                 }}>
-                  {area.code}
-                </div>
+                  {/* Sparkline fondo */}
+                  <div style={{ position: 'absolute', bottom: 16, right: 64, pointerEvents: 'none' }}>
+                    <Spark color={area.color} />
+                  </div>
 
-                {/* Texto */}
-                <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
-                  <p style={{ fontSize: 17, fontWeight: 900, color: '#F4EEDF', marginBottom: 5, letterSpacing: -0.4 }}>
-                    {area.label}
-                  </p>
-                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: count > 0 ? 10 : 0, lineHeight: 1.5 }}>
-                    {area.description}
-                  </p>
-                  {count > 0 && (
-                    <div style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      background: `rgba(${area.rgb},0.1)`, border: `1px solid rgba(${area.rgb},0.22)`,
-                      borderRadius: 20, padding: '4px 10px',
-                    }}>
-                      <CheckSquare size={10} color={area.color} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: area.color }}>
-                        {count} {count === 1 ? 'tarea activa' : 'tareas activas'}
-                      </span>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 20, fontWeight: 900, color: '#F4EEDF', letterSpacing: -0.5, marginBottom: 5, lineHeight: 1.1 }}>
+                        {area.label}
+                      </p>
+                      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', marginBottom: count > 0 ? 12 : 0, lineHeight: 1.5 }}>
+                        {area.description}
+                      </p>
+                      {count > 0 && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: `rgba(${area.rgb},0.1)`, border: `1px solid rgba(${area.rgb},0.22)`, borderRadius: 20, padding: '5px 11px' }}>
+                          <CheckSquare size={10} color={area.color} />
+                          <span style={{ fontSize: 10, fontWeight: 700, color: area.color }}>
+                            {count} {count === 1 ? 'tarea activa' : 'tareas activas'}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                {/* Flecha circular */}
-                <div style={{
-                  width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                  background: `rgba(${area.rgb},0.12)`,
-                  border: `1.5px solid rgba(${area.rgb},0.3)`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: area.color, fontSize: 18, fontWeight: 900,
-                  boxShadow: `0 2px 12px rgba(${area.rgb},0.2)`,
-                  position: 'relative', zIndex: 1,
-                }}>›</div>
+                    {/* Flecha */}
+                    <div style={{
+                      width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
+                      background: `rgba(${area.rgb},0.15)`,
+                      border: `1.5px solid rgba(${area.rgb},0.35)`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 20, color: area.color, fontWeight: 900,
+                      boxShadow: `0 4px 16px rgba(${area.rgb},0.25)`,
+                      marginTop: 2,
+                    }}>›</div>
+                  </div>
+                </div>
               </div>
             )
           })}
         </div>
+
       </div>
     </div>
   )
