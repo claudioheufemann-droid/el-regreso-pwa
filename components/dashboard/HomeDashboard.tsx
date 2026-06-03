@@ -310,31 +310,29 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           }}>+ Nueva</button>
         </div>
 
-        {/* ── KPI CARDS — 2×2 compacto premium ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {/* ── KPI CARDS — fila de 4 compacta ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 7 }}>
           {kpis.map(k => (
             <button key={k.label} onClick={() => onNavigate(`filter:${k.label.toLowerCase().replace(' ','-')}`)}
               style={{
-                background: `linear-gradient(145deg, rgba(${k.rgb},0.07) 0%, rgba(10,10,14,0.95) 100%)`,
+                background: `linear-gradient(145deg, rgba(${k.rgb},0.08) 0%, rgba(10,10,14,0.95) 100%)`,
                 border: `1px solid rgba(${k.rgb},0.2)`,
-                borderRadius: 18, padding: '14px 14px 10px',
-                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0,
-                cursor: 'pointer', textAlign: 'left', position: 'relative', overflow: 'hidden',
-                boxShadow: `0 4px 20px rgba(${k.rgb},0.07)`,
+                borderRadius: 14, padding: '10px 8px 8px',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
+                cursor: 'pointer', textAlign: 'center', position: 'relative', overflow: 'hidden',
+                boxShadow: `0 2px 12px rgba(${k.rgb},0.07)`,
                 WebkitTapHighlightColor: 'transparent',
               }}>
-              {/* Glow fondo */}
-              <div style={{ position: 'absolute', top: -10, right: -10, width: 50, height: 50, borderRadius: '50%', background: `rgba(${k.rgb},0.12)`, filter: 'blur(16px)', pointerEvents: 'none' }} />
               {/* Icono */}
-              <div style={{ width: 28, height: 28, borderRadius: 9, background: `rgba(${k.rgb},0.12)`, border: `1px solid rgba(${k.rgb},0.22)`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+              <div style={{ width: 22, height: 22, borderRadius: 7, background: `rgba(${k.rgb},0.12)`, border: `1px solid rgba(${k.rgb},0.22)`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 7 }}>
                 {k.icon}
               </div>
               {/* Número */}
-              <div style={{ fontSize: 30, fontWeight: 900, lineHeight: 1, letterSpacing: -1.5, color: k.color, marginBottom: 4 }}>{k.value}</div>
+              <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, letterSpacing: -1, color: k.color, marginBottom: 4 }}>{k.value}</div>
               {/* Label */}
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>{k.label}</div>
-              {/* Barra inferior de color */}
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2.5, background: `linear-gradient(90deg, rgba(${k.rgb},0.6), rgba(${k.rgb},0.2))`, borderRadius: '0 0 18px 18px' }} />
+              <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 6 }}>{k.label}</div>
+              {/* Barra inferior */}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, rgba(${k.rgb},0.6), rgba(${k.rgb},0.15))`, borderRadius: '0 0 14px 14px' }} />
             </button>
           ))}
         </div>
