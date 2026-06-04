@@ -90,7 +90,7 @@ export default function LoginPage() {
         ══════════════════════════════════════ */}
         <div style={{
           position: 'relative',
-          flex: '0 0 42%',
+          flex: '0 0 38%',
           overflow: 'hidden',
           background: 'radial-gradient(ellipse at 50% 30%, #1a1610 0%, #0A0806 55%, #050402 100%)',
         }}>
@@ -160,26 +160,30 @@ export default function LoginPage() {
         </div>
 
         {/* ══════════════════════════════════════
-            CARD — ocupa el 58% restante
+            SECCIÓN INFERIOR — fondo negro
+            Card con borde dorado + footer abajo afuera
         ══════════════════════════════════════ */}
         <div style={{
           flex: 1,
-          background: '#161411',
-          borderRadius: '20px 20px 0 0',
-          marginTop: -18,
+          background: '#0A0806',
+          marginTop: -24,
+          position: 'relative',
+          zIndex: 2,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          overflowY: 'auto',
-          padding: '18px 20px 12px',
+          justifyContent: 'space-between',
+          overflow: 'hidden',
+          padding: '0 16px 0',
         }}>
+          {/* ── CARD borde dorado ── */}
           <div style={{
-            width:'100%', maxWidth:420, display:'flex', flexDirection:'column', flex:1,
-            border:'1px solid rgba(212,175,55,0.35)',
-            borderRadius:18,
-            background:'rgba(212,175,55,0.018)',
-            boxShadow:'0 0 0 1px rgba(212,175,55,0.06), 0 8px 32px rgba(0,0,0,0.4)',
-            padding:'20px 18px 16px',
+            width:'100%', maxWidth:440, display:'flex', flexDirection:'column',
+            border:'1px solid rgba(212,175,55,0.4)',
+            borderRadius:20,
+            background:'#13110D',
+            boxShadow:'0 10px 40px rgba(0,0,0,0.5)',
+            padding:'20px 18px 18px',
           }}>
 
             {/* Bienvenido */}
@@ -319,31 +323,33 @@ export default function LoginPage() {
               </button>
 
             </form>
-
-            {/* Footer */}
-            <div style={{ marginTop:'auto', paddingTop:14,
-              display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
-              <div style={{ width:30, height:30, borderRadius:'50%',
-                background:'rgba(212,175,55,0.07)', border:'1px solid rgba(212,175,55,0.14)',
-                display:'flex', alignItems:'center', justifyContent:'center', marginBottom:4 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2l3 9H9l3-9z" fill="rgba(212,175,55,0.55)"/>
-                  <path d="M12 11v10" stroke="rgba(212,175,55,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
-                  <path d="M9 15c-2-1-3-3-3-5h6" stroke="rgba(212,175,55,0.45)" strokeWidth="1.3" strokeLinecap="round" fill="none"/>
-                  <path d="M15 15c2-1 3-3 3-5h-6" stroke="rgba(212,175,55,0.45)" strokeWidth="1.3" strokeLinecap="round" fill="none"/>
-                </svg>
-              </div>
-              <p style={{ fontSize:12, color:'rgba(244,238,223,0.5)', fontWeight:600, margin:0 }}>
-                Cervecería El Regreso
-              </p>
-              <p style={{ fontSize:10.5, color:'rgba(255,255,255,0.18)', margin:0, fontWeight:400 }}>
-                Plataforma Corporativa
-              </p>
-              <p style={{ fontSize:9.5, color:'rgba(212,175,55,0.38)', margin:'3px 0 0',
-                fontWeight:600, letterSpacing:'1.5px' }}>v2.0</p>
-            </div>
-
           </div>
+
+          {/* ── FOOTER (afuera de la card, sobre fondo negro) ── */}
+          <div style={{
+            display:'flex', flexDirection:'column', alignItems:'center', gap:2,
+            padding:'10px 0 max(env(safe-area-inset-bottom),10px)',
+          }}>
+            <div style={{ width:30, height:30, borderRadius:'50%',
+              background:'rgba(212,175,55,0.07)', border:'1px solid rgba(212,175,55,0.14)',
+              display:'flex', alignItems:'center', justifyContent:'center', marginBottom:4 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2l3 9H9l3-9z" fill="rgba(212,175,55,0.55)"/>
+                <path d="M12 11v10" stroke="rgba(212,175,55,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M9 15c-2-1-3-3-3-5h6" stroke="rgba(212,175,55,0.45)" strokeWidth="1.3" strokeLinecap="round" fill="none"/>
+                <path d="M15 15c2-1 3-3 3-5h-6" stroke="rgba(212,175,55,0.45)" strokeWidth="1.3" strokeLinecap="round" fill="none"/>
+              </svg>
+            </div>
+            <p style={{ fontSize:12, color:'rgba(244,238,223,0.5)', fontWeight:600, margin:0 }}>
+              Cervecería El Regreso
+            </p>
+            <p style={{ fontSize:10.5, color:'rgba(255,255,255,0.18)', margin:0, fontWeight:400 }}>
+              Plataforma Corporativa
+            </p>
+            <p style={{ fontSize:9.5, color:'rgba(212,175,55,0.38)', margin:'3px 0 0',
+              fontWeight:600, letterSpacing:'1.5px' }}>v2.0</p>
+          </div>
+
         </div>
       </div>
     </>
