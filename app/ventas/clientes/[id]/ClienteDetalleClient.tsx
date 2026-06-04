@@ -11,6 +11,7 @@ import {
   Bell, Users, Trash2, Plus,
 } from 'lucide-react'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import AppHeader from '@/components/ui/AppHeader'
 import RegistrarContactoModal, { type TipoContacto } from '@/components/ui/RegistrarContactoModal'
 import FollowUpModal, { type FollowUp } from '@/components/ui/FollowUpModal'
 
@@ -705,17 +706,16 @@ export default function ClienteDetalleClient({
       )}
 
       <div style={{ minHeight: '100vh', background: '#090909', color: '#fff' }}>
-        {/* ── Back button (mobile) ── */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px 0',
-        }}>
-          <button onClick={() => router.back()}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: 0 }}>
-            <ArrowLeft size={16} /> Volver a clientes
-          </button>
-        </div>
-
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '16px 20px 80px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '16px 16px 80px' }}>
+          <AppHeader
+            title="Detalle Cliente"
+            extraAction={
+              <button onClick={() => router.back()}
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', color: '#888', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, padding: '7px 12px', borderRadius: 9 }}>
+                <ArrowLeft size={14} /> Volver
+              </button>
+            }
+          />
 
           {/* ══════════════════════════════════════════════════════════════════
               CUSTOMER HEADER

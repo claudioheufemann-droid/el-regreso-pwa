@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { ArrowLeft, TrendingUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import AppHeader from '@/components/ui/AppHeader'
 
 interface Cliente { nombre_fantasia: string | null; vendedor: string | null }
 interface Frequencia { nombre: string | null; segmento: string | null; alert_level: string | null; ciclo_promedio_dias: number | null; dias_sin_compra: number | null }
@@ -57,18 +58,19 @@ export default function CRMMetricsClient({
 
   return (
     <div style={{ minHeight: '100vh', background: '#090909', color: '#fff' }}>
-      {/* Header */}
-      <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <button onClick={() => router.back()} style={{
-          background: 'none', border: 'none', cursor: 'pointer', color: '#666', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 12,
-        }}>
-          <ArrowLeft size={16} /> Volver
-        </button>
-        <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 2 }}>CRM Metrics</h1>
-        <p style={{ fontSize: 13, color: '#666' }}>Overview de scores, follow-ups y vendedores</p>
-      </div>
-
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '16px 16px 60px' }}>
+        <AppHeader
+          title="CRM Metrics"
+          extraAction={
+            <button onClick={() => router.back()} style={{
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+              cursor: 'pointer', color: '#888', display: 'flex', alignItems: 'center', gap: 5,
+              fontSize: 12, fontWeight: 700, padding: '7px 12px', borderRadius: 9,
+            }}>
+              <ArrowLeft size={14} /> Volver
+            </button>
+          }
+        />
         {/* KPI Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 32 }}>
           <KPICard icon={<TrendingUp size={20} />} label="Clientes" value={metrics.totalClientes} color="#D4AF37" />

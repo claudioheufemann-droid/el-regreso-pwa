@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { VEND_COLOR as VENDEDOR_COLOR } from '@/lib/theme'
+import AppHeader from '@/components/ui/AppHeader'
 
 interface Cliente {
   id: number
@@ -752,11 +753,8 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
   )
 
   return (
-    <div style={{ padding: '20px 20px 60px', maxWidth: 1400, margin: '0 auto' }}>
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>Rutas de despacho</h1>
-        <p style={{ fontSize: 12, color: '#555', marginTop: 3 }}>Crea rutas, asigna y mueve clientes entre ellas</p>
-      </div>
+    <div style={{ padding: '16px 16px 60px', maxWidth: 1400, margin: '0 auto' }}>
+      <AppHeader title="Rutas de despacho" />
 
       {isDesktop ? (
         <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>

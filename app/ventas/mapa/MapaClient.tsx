@@ -10,6 +10,7 @@ import {
 import { VEND_COLOR } from '@/lib/theme'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import type { Punto, CapaViz, TileTipo, LeadPunto } from './MapLeaflet'
+import AppHeader from '@/components/ui/AppHeader'
 
 const MapLeaflet = dynamic(() => import('./MapLeaflet'), {
   ssr: false,
@@ -208,15 +209,24 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0A0A0A', overflow: isDesktop ? 'hidden' : 'auto' }}>
 
-      {/* ─── Header + tile switch ─── */}
-      <div style={{ padding: isDesktop ? '14px 20px' : '10px 14px', borderBottom: '1px solid #1A1A1A', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <MapPin size={isDesktop ? 22 : 18} style={{ color: '#D4AF37' }} />
-          <div>
-            <h1 style={{ fontSize: isDesktop ? 20 : 16, fontWeight: 900, color: 'white', letterSpacing: '-0.5px', lineHeight: 1.1 }}>Mapa de Pedidos</h1>
-            {isDesktop && <p style={{ fontSize: 12, color: '#666', marginTop: 1 }}>Visualiza ventas, clientes y oportunidades en el mapa</p>}
-          </div>
+      {/* ─── AppHeader móvil ─── */}
+      {!isDesktop && (
+        <div style={{ padding: '16px 16px 0', flexShrink: 0 }}>
+          <AppHeader title="Mapa" />
         </div>
+      )}
+
+      {/* ─── Header + tile switch ─── */}
+      <div style={{ padding: isDesktop ? '14px 20px' : '8px 14px', borderBottom: '1px solid #1A1A1A', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
+        {isDesktop && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <MapPin size={22} style={{ color: '#D4AF37' }} />
+            <div>
+              <h1 style={{ fontSize: 20, fontWeight: 900, color: 'white', letterSpacing: '-0.5px', lineHeight: 1.1 }}>Mapa de Pedidos</h1>
+              <p style={{ fontSize: 12, color: '#666', marginTop: 1 }}>Visualiza ventas, clientes y oportunidades en el mapa</p>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           {/* Fecha */}

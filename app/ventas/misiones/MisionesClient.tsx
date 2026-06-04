@@ -1423,7 +1423,7 @@ export default function MisionesClient({
 
   // ── Mobile: columna simple ──────────────────────────────────────────────────
   return (
-    <div style={{ padding: '12px 12px 80px', maxWidth: 680, margin: '0 auto' }}>
+    <div style={{ padding: '16px 16px 90px', maxWidth: 680, margin: '0 auto' }}>
       <AppHeader title="Misiones" />
       <HeaderResumen misiones={misionesFiltradas} semana={semana} vendedorActual={vendedorActual} isAdmin={isAdmin} isDesktop={false} />
 

@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useUser } from '@/lib/userContext'
 import { useRouter } from 'next/navigation'
+import AppHeader from '@/components/ui/AppHeader'
 import { useEffect } from 'react'
 import { Shield, Clock, MessageCircle, ShoppingBag, Search } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
@@ -79,19 +80,8 @@ export default function ReportesClient({ reporte }: Props) {
   if (!isAdmin) return null
 
   return (
-    <div style={{ padding: '24px 16px 60px', maxWidth: 1000, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-        <Shield size={20} style={{ color: '#8A6D1F' }} />
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, color: 'white', letterSpacing: '-0.5px' }}>
-            Reporte de Comunicación
-          </h1>
-          <p style={{ fontSize: 13, color: '#888', marginTop: 2 }}>
-            Periodicidad de contacto con clientes · últimos 90 días
-          </p>
-        </div>
-      </div>
+    <div style={{ padding: '16px 16px 60px', maxWidth: 1000, margin: '0 auto' }}>
+      <AppHeader title="Reporte de Comunicación" />
 
       {/* KPIs */}
       <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
