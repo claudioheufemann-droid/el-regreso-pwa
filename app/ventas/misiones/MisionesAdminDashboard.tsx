@@ -409,6 +409,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             </button>
           </div>
 
+          <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ minWidth: 460 }}>
           {/* Encabezado tabla */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 1fr 100px', gap: 8, padding: '0 4px 8px', borderBottom: '1px solid var(--border)', marginBottom: 6 }}>
             {['VENDEDOR', 'ASIG.', 'COMPL.', '% CUMPL.', 'VOLUMEN'].map(h => (
@@ -456,6 +458,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               {stats.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
             </span>
           </div>
+          </div>
+          </div>
         </div>
 
         {/* Distribución donut */}
@@ -502,6 +506,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 20px' }}>
           <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)', marginBottom: 14 }}>Top 5 clientes en riesgo</p>
 
+          <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ minWidth: 520 }}>
           {/* Header tabla */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px 110px 80px', gap: 8, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
             {['CLIENTE', 'VENDEDOR', 'DÍAS S/C', 'ÚLT. PEDIDO', 'ACCIÓN'].map(h => (
@@ -547,6 +553,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               </div>
             </div>
           ))}
+          </div>
+          </div>
         </div>
 
         {/* Oportunidades de mejora */}
@@ -625,6 +633,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             Siguen comprando pero pidieron menos en sus últimos pedidos — señal temprana de fuga. Contáctalos antes de que se venzan.
           </p>
 
+          <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ minWidth: 540 }}>
           {/* Header tabla */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 130px 90px 80px', gap: 8, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
             {['CLIENTE', 'VENDEDOR', 'VOLUMEN/PEDIDO', 'CAÍDA', 'ACCIÓN'].map(h => (
@@ -668,6 +678,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               </div>
             </div>
           ))}
+          </div>
+          </div>
         </div>
       )}
 
@@ -687,6 +699,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             Categorías que compran negocios similares pero este cliente aún no — venta nueva concreta.
           </p>
 
+          <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ minWidth: 520 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 1fr 120px 80px', gap: 8, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
             {['CLIENTE', 'VENDEDOR', 'OFRECER', 'PARES QUE COMPRAN', 'ACCIÓN'].map(h => (
               <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</span>
@@ -728,6 +742,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               </div>
             </div>
           ))}
+          </div>
+          </div>
         </div>
       )}
 
@@ -747,6 +763,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             Clientes agrupados por mes de su primera compra. ¿Cuántos volvieron y siguen comprando?
           </p>
 
+          <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ minWidth: 480 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '90px 80px 1fr 1fr 90px', gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
             {['COHORTE', 'CLIENTES', 'REPITIERON', 'SIGUEN ACTIVOS', 'PED. PROM'].map(h => (
               <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</span>
@@ -774,6 +792,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{c.pedidos_prom}</span>
             </div>
           ))}
+          </div>
+          </div>
         </div>
       )}
 

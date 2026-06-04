@@ -119,7 +119,12 @@ body {
    del documento en iOS. 'clip' recorta sin crear contenedor de scroll. */
 @media (max-width: 1023px) {
   body { overflow-x: clip; }
-  main { max-width: 100%; overflow-x: clip; }
+  /* min-width:0 es CLAVE: <main> es flex item; sin esto NO se encoge por
+     debajo del ancho de su contenido más ancho (tablas anchas) y estira
+     toda la página fuera de la pantalla. Con min-width:0 se ajusta al viewport
+     y el contenido ancho se recorta/scrollea en vez de empujar el layout. */
+  main { max-width: 100vw; min-width: 0; overflow-x: clip; }
+  main > * { min-width: 0; max-width: 100%; }
 }
 
 /* ── Safe area para el notch (iPhone) ──
