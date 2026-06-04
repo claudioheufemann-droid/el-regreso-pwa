@@ -85,14 +85,18 @@ export default function LoginPage() {
 
         {/* ══════════════════════════════════════
             HERO — 42% de la pantalla
+            👉 Sube tu imagen del camión a:
+               public/vehicles/hero-login.jpg
+            (fondo oscuro de respaldo mientras no esté)
         ══════════════════════════════════════ */}
         <div style={{
           position: 'relative',
           flex: '0 0 42%',
           overflow: 'hidden',
+          background: 'radial-gradient(ellipse at 50% 30%, #1a1610 0%, #0A0806 55%, #050402 100%)',
         }}>
           <Image
-            src="/vehicles/fleet.jpg"
+            src="/vehicles/hero-login.jpg"
             alt="El Regreso Beer Co."
             fill
             style={{ objectFit:'cover', objectPosition:'center 38%', filter:'brightness(0.6) saturate(0.85) contrast(1.08)' }}
