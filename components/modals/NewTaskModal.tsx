@@ -729,7 +729,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
         </div>
 
         {/* BODY */}
-        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 0, padding: '16px 28px 0' }}>
+        <div className="grid-stack-mobile" style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 0, padding: '16px 28px 0' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingRight: 20, borderRight: '1px solid rgba(255,255,255,0.05)' }}>
             <div>
               <label style={LBL}>Título *</label>

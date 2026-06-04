@@ -72,7 +72,7 @@ export default function CRMMetricsClient({
           }
         />
         {/* KPI Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 32 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 16, marginBottom: 32 }}>
           <KPICard icon={<TrendingUp size={20} />} label="Clientes" value={metrics.totalClientes} color="#D4AF37" />
           <KPICard icon={<CheckCircle2 size={20} />} label="Score promedio" value={`${metrics.avgSegment}/5`} color="#5A8A4A" />
           <KPICard icon={<Clock size={20} />} label="Follow-ups pendientes" value={metrics.pendienteFU} color="#D4AF37" highlight={metrics.pendienteFU > 10} />

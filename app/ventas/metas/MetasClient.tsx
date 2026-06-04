@@ -953,7 +953,7 @@ function ProductosSection({ productos, vista, label }: {
       </div>
 
       {/* Cards grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(340px, 100%), 1fr))', gap: 20 }}>
         {productos.map(cat => (
           <CategoriaProductoCard key={cat.categoria} cat={cat} />
         ))}

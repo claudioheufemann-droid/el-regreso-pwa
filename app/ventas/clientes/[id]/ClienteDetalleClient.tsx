@@ -818,7 +818,7 @@ export default function ClienteDetalleClient({
           ══════════════════════════════════════════════════════════════════ */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))',
             gap: 10, marginBottom: 20,
           }}>
             <KPICard

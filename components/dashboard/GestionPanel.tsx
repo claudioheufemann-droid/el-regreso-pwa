@@ -549,6 +549,9 @@ export default function GestionPanel({ tasks }: Props) {
                 {mBlue > 0   && <div style={{ flex: mBlue,   background: SEMAPHORE_HEX.blue   }} />}
               </div>
 
+              {/* Tabla con scroll horizontal en móvil (8 columnas no caben) */}
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <div style={{ minWidth: 360 }}>
               {/* Column headers */}
               <div style={{
                 display: 'grid',
@@ -578,6 +581,8 @@ export default function GestionPanel({ tasks }: Props) {
                     isWorst={kpi.area === macroWorst?.area && macroWorst?.red > 0 && kpi.area !== macroBest?.area}
                   />
                 ))}
+              </div>
+              </div>
               </div>
 
               {/* Macro footer: best / worst */}
