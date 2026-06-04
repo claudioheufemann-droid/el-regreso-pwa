@@ -4,58 +4,32 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff } from 'lucide-react'
-
-function LaIdaLogoLogin() {
-  const [useImg, setUseImg] = useState(true)
-  if (useImg) {
-    return (
-      <div style={{ position: 'relative', width: 100, height: 100, flexShrink: 0 }}>
-        <Image src="/logo-laida.png" alt="La Ida Kombucha" fill
-          style={{ objectFit: 'contain', filter: 'invert(1) drop-shadow(0 0 10px rgba(255,255,255,0.2))' }}
-          onError={() => setUseImg(false)} priority />
-      </div>
-    )
-  }
-  return (
-    <svg width="100" height="100" viewBox="0 0 200 200" fill="none">
-      <path d="M20 110 A80 80 0 0 1 180 110" stroke="white" strokeWidth="7" fill="none" strokeLinecap="round"/>
-      <path d="M40 110 L75 55 L100 80 L125 45 L160 110Z" fill="white" opacity="0.9"/>
-      <path d="M85 110 Q100 130 130 155 Q150 165 170 168" stroke="white" strokeWidth="5" strokeLinecap="round" fill="none" opacity="0.9"/>
-      <line x1="112" y1="138" x2="112" y2="155" stroke="white" strokeWidth="3" strokeLinecap="round"/>
-      <rect x="108" y="130" width="14" height="9" rx="2" fill="white" opacity="0.9"/>
-      <rect x="18" y="150" width="164" height="38" rx="8" fill="white"/>
-      <text x="100" y="164" textAnchor="middle" fontSize="10" fontWeight="900" fill="#0a0a0a" fontFamily="system-ui" letterSpacing="2">LA IDA</text>
-      <text x="100" y="178" textAnchor="middle" fontSize="8" fontWeight="700" fill="#333" fontFamily="system-ui" letterSpacing="3">KOMBUCHA</text>
-    </svg>
-  )
-}
+import { Eye, EyeOff, Mail, Lock } from 'lucide-react'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [googleLoading, setGoogleLoading] = useState(false)
-  const router = useRouter()
+  const [email, setEmail]           = useState('')
+  const [password, setPassword]     = useState('')
+  const [showPassword, setShowPass] = useState(false)
+  const [error, setError]           = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [googleLoading, setGLoading]= useState(false)
+  const router   = useRouter()
   const supabase = createClient()
 
   async function handleGoogleLogin() {
-    setGoogleLoading(true)
+    setGLoading(true)
     setError('')
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: { hd: 'elregresobeer.com' }, // restringe al dominio corporativo
+        queryParams: { hd: 'elregresobeer.com' },
       },
     })
     if (oauthError) {
       setError('Error al conectar con Google. Intenta con email y contraseña.')
-      setGoogleLoading(false)
+      setGLoading(false)
     }
-    // Si no hay error, el navegador redirige a Google — no hacemos nada más
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -73,11 +47,7 @@ export default function LoginPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const { data: profile } = await supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single()
-
+        .from('users').select('is_admin').eq('id', user.id).single()
       router.push(profile?.is_admin ? '/' : '/ventas')
     } else {
       router.push('/')
@@ -86,206 +56,460 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      style={{
+    <>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg) }
+          to   { transform: rotate(360deg) }
+        }
+        .lr-input::placeholder { color: rgba(255,255,255,0.18); }
+        .lr-input:-webkit-autofill,
+        .lr-input:-webkit-autofill:hover,
+        .lr-input:-webkit-autofill:focus {
+          -webkit-box-shadow: 0 0 0px 1000px #0C0A07 inset;
+          -webkit-text-fill-color: #E8DFC8;
+          transition: background-color 5000s ease-in-out 0s;
+        }
+        .lr-input:focus { outline: none; }
+        .lr-btn-submit:hover:not(:disabled) {
+          background: #C9A430 !important;
+          box-shadow: 0 8px 28px rgba(212,175,55,0.22) !important;
+        }
+        .lr-btn-google:hover:not(:disabled) {
+          background: rgba(255,255,255,0.04) !important;
+          border-color: rgba(255,255,255,0.18) !important;
+        }
+        .lr-forgot:hover { color: #D4AF37 !important; }
+        @media (min-width: 900px) {
+          .lr-root { flex-direction: row !important; }
+          .lr-hero { width: 55% !important; height: 100vh !important; max-height: none !important; flex-shrink: 0 !important; }
+          .lr-panel { width: 45% !important; justify-content: center !important; padding-top: 0 !important; overflow-y: auto; }
+          .lr-panel-inner { margin-top: 0 !important; }
+          .lr-subtitle { margin-top: 0 !important; }
+        }
+      `}</style>
+
+      <div className="lr-root" style={{
         minHeight: '100vh',
-        background: '#0A0A0A',
+        background: '#050402',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px 20px',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-      }}
-    >
-      <div style={{ width: '100%', maxWidth: 480 }}>
+        fontFamily: "'system-ui', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      }}>
 
-        {/* Logos — El Regreso + La Ida */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 28 }}>
-          <div style={{ position: 'relative', width: 110, height: 110, flexShrink: 0 }}>
-            <Image
-              src="/logo.png"
-              alt="El Regreso Beer Co."
-              fill
-              style={{ objectFit: 'contain', filter: 'drop-shadow(0 0 24px rgba(212,175,55,0.55))' }}
-              priority
-            />
-          </div>
-          <div style={{ width: 1, height: 70, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.18), transparent)', flexShrink: 0 }} />
-          <LaIdaLogoLogin />
-        </div>
-
-        {/* Title */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h1 style={{
-            fontSize: 28, fontWeight: 900, letterSpacing: '3px',
-            color: '#D4AF37', textTransform: 'uppercase', margin: 0,
-            lineHeight: 1.1,
-          }}>
-            El Regreso Control
-          </h1>
-          <p style={{
-            fontSize: 11, color: '#7A7268', marginTop: 8,
-            letterSpacing: '3px', textTransform: 'uppercase', fontWeight: 500,
-          }}>
-            Sistema Operativo Ejecutivo
-          </p>
-        </div>
-
-        {/* Form Card */}
-        <div style={{
-          background: '#141414',
-          border: '1px solid rgba(212,175,55,0.15)',
-          borderRadius: 20,
-          padding: '32px 28px',
+        {/* ════════════════════════════════════════════
+            HERO
+        ════════════════════════════════════════════ */}
+        <div className="lr-hero" style={{
+          position: 'relative',
+          width: '100%',
+          height: '52vh',
+          minHeight: 300,
+          maxHeight: 480,
+          overflow: 'hidden',
+          flexShrink: 0,
         }}>
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Background image */}
+          <Image
+            src="/vehicles/fleet.jpg"
+            alt="El Regreso Beer Co. — Flota de distribución"
+            fill
+            style={{ objectFit: 'cover', objectPosition: 'center 35%' }}
+            priority
+          />
 
-            {/* Email */}
-            <div>
-              <label style={{
-                display: 'block', fontSize: 10, fontWeight: 700,
-                color: '#D4AF37', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 8,
-              }}>
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="tu@elregresobeer.com"
-                required
-                autoComplete="email"
+          {/* Cinematic overlays */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(180deg, rgba(5,4,2,0.5) 0%, rgba(5,4,2,0.1) 30%, rgba(5,4,2,0.7) 75%, #050402 100%)',
+          }} />
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'radial-gradient(ellipse 80% 60% at 50% 50%, transparent 40%, rgba(5,4,2,0.35) 100%)',
+          }} />
+
+          {/* Hero brand content */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            padding: 'env(safe-area-inset-top, 20px) 24px 56px',
+            gap: 14,
+          }}>
+            {/* Logo */}
+            <div style={{ position: 'relative', width: 86, height: 86 }}>
+              <Image
+                src="/logo.png"
+                alt="El Regreso Beer Co."
+                fill
                 style={{
-                  width: '100%', padding: '14px 16px',
-                  background: '#F5F0E8', border: '1px solid rgba(212,175,55,0.2)',
-                  borderRadius: 12, fontSize: 15, color: '#1A1410',
-                  outline: 'none', boxSizing: 'border-box',
-                  fontFamily: 'inherit',
+                  objectFit: 'contain',
+                  filter: 'drop-shadow(0 0 22px rgba(212,175,55,0.55)) drop-shadow(0 2px 12px rgba(0,0,0,0.9))',
                 }}
-                onFocus={e => e.target.style.borderColor = '#D4AF37'}
-                onBlur={e => e.target.style.borderColor = 'rgba(212,175,55,0.2)'}
+                priority
               />
             </div>
 
-            {/* Password */}
-            <div>
-              <label style={{
-                display: 'block', fontSize: 10, fontWeight: 700,
-                color: '#D4AF37', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 8,
+            {/* Typography */}
+            <div style={{ textAlign: 'center', userSelect: 'none' }}>
+              <p style={{
+                fontSize: 9.5, fontWeight: 600, letterSpacing: '5px',
+                color: 'rgba(212,175,55,0.55)', textTransform: 'uppercase',
+                margin: '0 0 6px',
               }}>
-                Contraseña
-              </label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••••"
-                  required
-                  autoComplete="current-password"
-                  style={{
-                    width: '100%', padding: '14px 48px 14px 16px',
-                    background: '#F5F0E8', border: '1px solid rgba(212,175,55,0.2)',
-                    borderRadius: 12, fontSize: 15, color: '#1A1410',
-                    outline: 'none', boxSizing: 'border-box',
-                    fontFamily: 'inherit',
-                  }}
-                  onFocus={e => e.target.style.borderColor = '#D4AF37'}
-                  onBlur={e => e.target.style.borderColor = 'rgba(212,175,55,0.2)'}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  style={{
-                    position: 'absolute', right: 14, top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: '#8A7A60', padding: 4, display: 'flex',
-                  }}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+                Cervecería
+              </p>
+              <h1 style={{
+                fontSize: 'clamp(30px, 7.5vw, 44px)',
+                fontWeight: 900, letterSpacing: '5px',
+                color: '#F4EEDF', textTransform: 'uppercase',
+                margin: '0 0 4px', lineHeight: 1,
+                textShadow: '0 2px 24px rgba(0,0,0,0.9)',
+              }}>
+                EL REGRESO
+              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                <div style={{ width: 28, height: 1, background: 'rgba(212,175,55,0.35)' }} />
+                <p style={{
+                  fontSize: 'clamp(13px, 3.2vw, 18px)',
+                  fontWeight: 300, letterSpacing: '10px',
+                  color: '#D4AF37', textTransform: 'uppercase',
+                  margin: 0,
+                }}>
+                  CONTROL
+                </p>
+                <div style={{ width: 28, height: 1, background: 'rgba(212,175,55,0.35)' }} />
               </div>
             </div>
-
-            {/* Error */}
-            {error && (
-              <p style={{
-                fontSize: 12, color: '#FF6B6B', textAlign: 'center',
-                background: 'rgba(255,107,107,0.08)', padding: '10px 14px',
-                borderRadius: 8, margin: 0,
-              }}>
-                {error}
-              </p>
-            )}
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading || googleLoading}
-              style={{
-                width: '100%', padding: '16px',
-                background: loading ? '#8A7030' : '#D4AF37',
-                border: 'none', borderRadius: 12,
-                fontSize: 12, fontWeight: 800, letterSpacing: '2.5px',
-                textTransform: 'uppercase', color: '#0A0A0A',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                transition: 'background 0.15s, transform 0.1s',
-                marginTop: 4,
-              }}
-              onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLElement).style.background = '#C9A430' }}
-              onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLElement).style.background = '#D4AF37' }}
-            >
-              {loading ? 'Verificando...' : 'Ingresar al Sistema'}
-            </button>
-
-            {/* Separador */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ flex: 1, height: 1, background: 'rgba(212,175,55,0.15)' }} />
-              <span style={{ fontSize: 10, color: '#5A5248', letterSpacing: 1, textTransform: 'uppercase' }}>o</span>
-              <div style={{ flex: 1, height: 1, background: 'rgba(212,175,55,0.15)' }} />
-            </div>
-
-            {/* Google OAuth */}
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={googleLoading || loading}
-              style={{
-                width: '100%', padding: '14px 16px',
-                background: googleLoading ? '#1C1C1C' : '#1F1F1F',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: 12,
-                fontSize: 13, fontWeight: 700, color: '#E8DFC8',
-                cursor: googleLoading ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                transition: 'background 0.15s',
-                opacity: googleLoading ? 0.6 : 1,
-              }}
-              onMouseEnter={e => { if (!googleLoading) (e.currentTarget as HTMLElement).style.background = '#2A2A2A' }}
-              onMouseLeave={e => { if (!googleLoading) (e.currentTarget as HTMLElement).style.background = '#1F1F1F' }}
-            >
-              {/* Google icon */}
-              <svg width="18" height="18" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              {googleLoading ? 'Redirigiendo a Google...' : 'Continuar con Google Workspace'}
-            </button>
-          </form>
+          </div>
         </div>
 
-        {/* Footer */}
-        <p style={{
-          textAlign: 'center', fontSize: 11, color: '#3A3530',
-          marginTop: 24, letterSpacing: '0.5px',
+        {/* ════════════════════════════════════════════
+            PANEL LOGIN
+        ════════════════════════════════════════════ */}
+        <div className="lr-panel" style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: '0 20px 48px',
         }}>
-          Acceso restringido — Cervecería El Regreso
-        </p>
+
+          <div className="lr-panel-inner" style={{
+            width: '100%',
+            maxWidth: 440,
+            marginTop: -16,
+          }}>
+
+            {/* Subtitle */}
+            <p className="lr-subtitle" style={{
+              textAlign: 'center',
+              fontSize: 10, color: 'rgba(212,175,55,0.38)',
+              letterSpacing: '2px', textTransform: 'uppercase',
+              margin: '0 0 24px', fontWeight: 500,
+            }}>
+              Plataforma de Gestión Comercial y Operacional
+            </p>
+
+            {/* ── Card ── */}
+            <div style={{
+              background: 'rgba(13, 11, 8, 0.96)',
+              border: '1px solid rgba(212,175,55,0.1)',
+              borderRadius: 22,
+              padding: '28px 24px 24px',
+              boxShadow: `
+                0 32px 80px rgba(0,0,0,0.85),
+                0 0 0 1px rgba(255,255,255,0.025) inset,
+                0 1px 0 rgba(255,255,255,0.04) inset
+              `,
+            }}>
+
+              {/* Card header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginBottom: 26 }}>
+                <div style={{
+                  width: 42, height: 42, borderRadius: '50%',
+                  background: 'rgba(212,175,55,0.07)',
+                  border: '1px solid rgba(212,175,55,0.18)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
+                    stroke="rgba(212,175,55,0.75)" strokeWidth="1.5"
+                    strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 style={{
+                    fontSize: 17, fontWeight: 700,
+                    color: '#F0EAD8', margin: 0, lineHeight: 1.25,
+                    letterSpacing: '-0.2px',
+                  }}>
+                    Bienvenido
+                  </h2>
+                  <p style={{
+                    fontSize: 12, color: 'rgba(255,255,255,0.28)',
+                    margin: '2px 0 0', fontWeight: 400, lineHeight: 1.4,
+                  }}>
+                    Ingresa tus credenciales para continuar.
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                {/* ── Email ── */}
+                <div>
+                  <label style={{
+                    display: 'block', fontSize: 9, fontWeight: 700,
+                    color: 'rgba(212,175,55,0.5)', letterSpacing: '2.5px',
+                    textTransform: 'uppercase', marginBottom: 7,
+                  }}>
+                    Correo Corporativo
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Mail size={14} style={{
+                      position: 'absolute', left: 13, top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: 'rgba(255,255,255,0.2)', pointerEvents: 'none',
+                    }} />
+                    <input
+                      className="lr-input"
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="tu@elregresobeer.com"
+                      required
+                      autoComplete="email"
+                      style={{
+                        width: '100%', padding: '13px 16px 13px 40px',
+                        background: '#0C0A07',
+                        border: '1px solid rgba(255,255,255,0.07)',
+                        borderRadius: 11, fontSize: 14, color: '#E8DFC8',
+                        boxSizing: 'border-box', fontFamily: 'inherit',
+                        transition: 'border-color 0.2s, background 0.2s',
+                      }}
+                      onFocus={e => {
+                        e.target.style.borderColor = 'rgba(212,175,55,0.4)'
+                        e.target.style.background   = '#131008'
+                      }}
+                      onBlur={e => {
+                        e.target.style.borderColor = 'rgba(255,255,255,0.07)'
+                        e.target.style.background   = '#0C0A07'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* ── Password ── */}
+                <div>
+                  <label style={{
+                    display: 'block', fontSize: 9, fontWeight: 700,
+                    color: 'rgba(212,175,55,0.5)', letterSpacing: '2.5px',
+                    textTransform: 'uppercase', marginBottom: 7,
+                  }}>
+                    Contraseña
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Lock size={14} style={{
+                      position: 'absolute', left: 13, top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: 'rgba(255,255,255,0.2)', pointerEvents: 'none',
+                    }} />
+                    <input
+                      className="lr-input"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="Ingresa tu contraseña"
+                      required
+                      autoComplete="current-password"
+                      style={{
+                        width: '100%', padding: '13px 46px 13px 40px',
+                        background: '#0C0A07',
+                        border: '1px solid rgba(255,255,255,0.07)',
+                        borderRadius: 11, fontSize: 14, color: '#E8DFC8',
+                        boxSizing: 'border-box', fontFamily: 'inherit',
+                        transition: 'border-color 0.2s, background 0.2s',
+                      }}
+                      onFocus={e => {
+                        e.target.style.borderColor = 'rgba(212,175,55,0.4)'
+                        e.target.style.background   = '#131008'
+                      }}
+                      onBlur={e => {
+                        e.target.style.borderColor = 'rgba(255,255,255,0.07)'
+                        e.target.style.background   = '#0C0A07'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(v => !v)}
+                      style={{
+                        position: 'absolute', right: 12, top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'rgba(255,255,255,0.22)', padding: 4,
+                        display: 'flex', alignItems: 'center',
+                      }}
+                    >
+                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Forgot password */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -2 }}>
+                  <button
+                    type="button"
+                    className="lr-forgot"
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      fontSize: 11, color: 'rgba(212,175,55,0.42)',
+                      fontWeight: 500, padding: 0, fontFamily: 'inherit',
+                      transition: 'color 0.15s',
+                    }}
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </div>
+
+                {/* Error */}
+                {error && (
+                  <p style={{
+                    fontSize: 12, color: '#FF7070', textAlign: 'center',
+                    background: 'rgba(255,107,107,0.06)', padding: '10px 14px',
+                    borderRadius: 9, margin: 0,
+                    border: '1px solid rgba(255,107,107,0.14)',
+                  }}>
+                    {error}
+                  </p>
+                )}
+
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={loading || googleLoading}
+                  className="lr-btn-submit"
+                  style={{
+                    width: '100%', padding: '15px 20px',
+                    background: loading ? 'rgba(212,175,55,0.45)' : '#D4AF37',
+                    border: 'none', borderRadius: 11,
+                    fontSize: 12, fontWeight: 700, letterSpacing: '2px',
+                    textTransform: 'uppercase', color: '#0A0700',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    transition: 'background 0.15s, box-shadow 0.15s',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                    marginTop: 4,
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5"
+                        style={{ animation: 'spin 0.8s linear infinite', flexShrink: 0 }}>
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                      </svg>
+                      Verificando...
+                    </>
+                  ) : (
+                    <>
+                      Ingresar
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                      </svg>
+                    </>
+                  )}
+                </button>
+
+                {/* Divider */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '2px 0' }}>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.05)' }} />
+                  <span style={{
+                    fontSize: 10, color: 'rgba(255,255,255,0.18)',
+                    letterSpacing: '1px', textTransform: 'uppercase',
+                  }}>o</span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.05)' }} />
+                </div>
+
+                {/* Google */}
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={googleLoading || loading}
+                  className="lr-btn-google"
+                  style={{
+                    width: '100%', padding: '13px 16px',
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.09)',
+                    borderRadius: 11,
+                    fontSize: 13, fontWeight: 600, color: '#BFB59A',
+                    cursor: googleLoading ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                    transition: 'background 0.15s, border-color 0.15s',
+                    opacity: googleLoading ? 0.55 : 1,
+                  }}
+                >
+                  <svg width="17" height="17" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  {googleLoading ? 'Redirigiendo a Google...' : 'Continuar con Google Workspace'}
+                </button>
+
+              </form>
+            </div>
+
+            {/* ── Footer ── */}
+            <div style={{
+              marginTop: 36,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+            }}>
+              {/* Shield icon */}
+              <div style={{
+                width: 34, height: 34, borderRadius: '50%',
+                background: 'rgba(212,175,55,0.06)',
+                border: '1px solid rgba(212,175,55,0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: 6,
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                    stroke="rgba(212,175,55,0.55)" strokeWidth="1.5"
+                    strokeLinecap="round" strokeLinejoin="round"
+                  />
+                  {/* Wheat grain detail */}
+                  <path d="M9 11.5c1-1 2.5-1 3 0M12 11.5v3" stroke="rgba(212,175,55,0.55)" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <p style={{
+                fontSize: 13, color: 'rgba(244,238,223,0.55)',
+                fontWeight: 600, margin: 0, letterSpacing: '0.2px',
+              }}>
+                Cervecería El Regreso
+              </p>
+              <p style={{
+                fontSize: 11, color: 'rgba(255,255,255,0.17)',
+                margin: 0, fontWeight: 400,
+              }}>
+                Plataforma Corporativa
+              </p>
+              <p style={{
+                fontSize: 10, color: 'rgba(212,175,55,0.35)',
+                margin: '5px 0 0', fontWeight: 600, letterSpacing: '1.5px',
+              }}>
+                v2.0
+              </p>
+            </div>
+
+          </div>
+        </div>
+
       </div>
-    </div>
+    </>
   )
 }
