@@ -99,7 +99,7 @@ export default function LoginPage() {
             src="/vehicles/hero-login.jpg"
             alt="El Regreso Beer Co."
             fill
-            style={{ objectFit:'cover', objectPosition:'center 38%', filter:'brightness(0.6) saturate(0.85) contrast(1.08)' }}
+            style={{ objectFit:'cover', objectPosition:'center center', filter:'brightness(0.6) saturate(0.85) contrast(1.08)' }}
             priority
           />
 
@@ -138,27 +138,22 @@ export default function LoginPage() {
             display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
             paddingTop:'max(env(safe-area-inset-top),12px)',
             paddingBottom: 40,
-            gap: 10,
+            gap: 12,
           }}>
-            <div style={{ position:'relative', width:74, height:74 }}>
+            <div style={{ position:'relative', width:104, height:104 }}>
               <Image src="/logo.png" alt="El Regreso" fill
                 style={{ objectFit:'contain',
-                  filter:'drop-shadow(0 0 16px rgba(212,175,55,0.65)) drop-shadow(0 2px 8px rgba(0,0,0,0.9))' }}
+                  filter:'drop-shadow(0 0 20px rgba(212,175,55,0.6)) drop-shadow(0 2px 10px rgba(0,0,0,0.9))' }}
                 priority/>
             </div>
             <div style={{ textAlign:'center', userSelect:'none' }}>
-              <p style={{ fontSize:9, fontWeight:600, letterSpacing:'5px', color:'rgba(212,175,55,0.5)',
-                textTransform:'uppercase', margin:'0 0 4px' }}>Cervecería</p>
-              <h1 style={{ fontSize:'clamp(26px,6.5vw,38px)', fontWeight:900, letterSpacing:'5px',
-                color:'#FFFFFF', textTransform:'uppercase', margin:'0 0 2px', lineHeight:1,
+              <h1 style={{ fontSize:'clamp(30px,7.5vw,40px)', fontWeight:800, letterSpacing:'4px',
+                color:'#FFFFFF', textTransform:'uppercase', margin:'0 0 4px', lineHeight:1,
                 textShadow:'0 2px 20px rgba(0,0,0,0.9)' }}>EL REGRESO</h1>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:9, marginTop:4 }}>
-                <div style={{ width:18, height:1, background:'rgba(212,175,55,0.45)' }}/>
-                <p style={{ fontSize:'clamp(12px,3vw,17px)', fontWeight:300, letterSpacing:'9px',
-                  color:'#D4AF37', textTransform:'uppercase', margin:0 }}>CONTROL</p>
-                <div style={{ width:18, height:1, background:'rgba(212,175,55,0.45)' }}/>
-              </div>
-              <p style={{ fontSize:11, color:'rgba(255,255,255,0.42)', margin:'8px 0 0', fontWeight:400 }}>
+              <p style={{ fontSize:'clamp(16px,4vw,22px)', fontWeight:400, letterSpacing:'14px',
+                color:'#D4AF37', textTransform:'uppercase', margin:'0 0 0 14px', lineHeight:1 }}>CONTROL</p>
+              <div style={{ width:44, height:2, background:'#D4AF37', borderRadius:2, margin:'12px auto 0' }}/>
+              <p style={{ fontSize:13, color:'rgba(255,255,255,0.5)', margin:'12px 0 0', fontWeight:400 }}>
                 Plataforma de Gestión Comercial y Operacional
               </p>
             </div>
@@ -182,12 +177,12 @@ export default function LoginPage() {
           <div style={{ width:'100%', maxWidth:420, display:'flex', flexDirection:'column', flex:1 }}>
 
             {/* Bienvenido */}
-            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16 }}>
-              <div style={{ width:40, height:40, borderRadius:'50%', flexShrink:0,
-                background:'rgba(212,175,55,0.07)', border:'1px solid rgba(212,175,55,0.2)',
+            <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:18 }}>
+              <div style={{ width:52, height:52, borderRadius:15, flexShrink:0,
+                background:'rgba(212,175,55,0.07)', border:'1px solid rgba(212,175,55,0.22)',
                 display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                  stroke="rgba(212,175,55,0.75)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                  stroke="rgba(212,175,55,0.8)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                   <circle cx="12" cy="7" r="4"/>
                 </svg>
