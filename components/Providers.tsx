@@ -26,6 +26,37 @@ export default function Providers({
     }
   }, [])
 
+  // Forzar actualización de caché cuando hay nueva versión del SW
+  useEffect(() => {
+    const CURRENT_CACHE = 'el-regreso-v20'
+    const FLAG = 'sw-cache-cleared-v20'
+
+    if (!('serviceWorker' in navigator) || sessionStorage.getItem(FLAG)) return
+
+    async function clearAndUpdate() {
+      try {
+        // Revisar si existe caché vieja
+        const keys = await caches.keys()
+        const hasOld = keys.some(k => k !== CURRENT_CACHE)
+        if (!hasOld) return
+
+        // Forzar update del SW registrado
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map(r => r.update()))
+
+        // Borrar todas las caches viejas
+        await Promise.all(keys.filter(k => k !== CURRENT_CACHE).map(k => caches.delete(k)))
+
+        sessionStorage.setItem(FLAG, '1')
+        window.location.reload()
+      } catch {
+        // Silencioso — no bloquear la app
+      }
+    }
+
+    clearAndUpdate()
+  }, [])
+
   return (
     <UserProvider initialUser={initialUser}>
       {children}
