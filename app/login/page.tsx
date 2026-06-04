@@ -98,15 +98,18 @@ export default function LoginPage() {
             src="/vehicles/hero-login.jpg"
             alt="El Regreso Beer Co."
             fill
-            style={{ objectFit:'cover', objectPosition:'center center', filter:'brightness(0.6) saturate(0.85) contrast(1.08)' }}
+            sizes="180vw"
+            style={{ objectFit:'cover', objectPosition:'center center',
+              transform:'scale(1.45)', transformOrigin:'center 6%',
+              filter:'brightness(0.66) saturate(0.88) contrast(1.06)' }}
             priority
           />
 
-          {/* Gradiente */}
+          {/* Gradiente — oscuro arriba (texto), claro al medio (camión), oscuro abajo */}
           <div style={{ position:'absolute', inset:0,
-            background:'linear-gradient(180deg, rgba(5,4,2,0.42) 0%, rgba(5,4,2,0.08) 28%, rgba(5,4,2,0.6) 72%, #050402 100%)' }} />
+            background:'linear-gradient(180deg, rgba(5,4,2,0.82) 0%, rgba(5,4,2,0.52) 30%, rgba(5,4,2,0.12) 54%, rgba(5,4,2,0.5) 82%, #0A0806 100%)' }} />
           <div style={{ position:'absolute', inset:0,
-            background:'linear-gradient(90deg, rgba(5,4,2,0.38) 0%, transparent 30%, transparent 70%, rgba(5,4,2,0.38) 100%)' }} />
+            background:'linear-gradient(90deg, rgba(5,4,2,0.4) 0%, transparent 28%, transparent 72%, rgba(5,4,2,0.4) 100%)' }} />
 
           {/* Overlay datos SVG */}
           <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none' }}
@@ -131,28 +134,30 @@ export default function LoginPage() {
             ))}
           </svg>
 
-          {/* Logo + título */}
+          {/* Logo + título — arriba, sobre el cielo oscuro */}
           <div style={{
             position:'absolute', inset:0,
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start',
             paddingTop:'max(env(safe-area-inset-top),12px)',
-            paddingBottom: 40,
-            gap: 12,
+            gap: 6,
+            zIndex: 2,
           }}>
-            <div style={{ position:'relative', width:104, height:104 }}>
-              <Image src="/logo.png" alt="El Regreso" fill
+            <div style={{ position:'relative', width:80, height:80 }}>
+              <Image src="/logo.png" alt="El Regreso" fill sizes="80px"
                 style={{ objectFit:'contain',
-                  filter:'drop-shadow(0 0 20px rgba(212,175,55,0.6)) drop-shadow(0 2px 10px rgba(0,0,0,0.9))' }}
+                  filter:'drop-shadow(0 0 18px rgba(212,175,55,0.6)) drop-shadow(0 2px 10px rgba(0,0,0,0.95))' }}
                 priority/>
             </div>
             <div style={{ textAlign:'center', userSelect:'none' }}>
-              <h1 style={{ fontSize:'clamp(30px,7.5vw,40px)', fontWeight:800, letterSpacing:'4px',
-                color:'#FFFFFF', textTransform:'uppercase', margin:'0 0 4px', lineHeight:1,
-                textShadow:'0 2px 20px rgba(0,0,0,0.9)' }}>EL REGRESO</h1>
-              <p style={{ fontSize:'clamp(16px,4vw,22px)', fontWeight:400, letterSpacing:'14px',
-                color:'#D4AF37', textTransform:'uppercase', margin:'0 0 0 14px', lineHeight:1 }}>CONTROL</p>
-              <div style={{ width:44, height:2, background:'#D4AF37', borderRadius:2, margin:'12px auto 0' }}/>
-              <p style={{ fontSize:13, color:'rgba(255,255,255,0.5)', margin:'12px 0 0', fontWeight:400 }}>
+              <h1 style={{ fontSize:'clamp(28px,7vw,38px)', fontWeight:800, letterSpacing:'4px',
+                color:'#FFFFFF', textTransform:'uppercase', margin:'0 0 3px', lineHeight:1,
+                textShadow:'0 2px 18px rgba(0,0,0,0.95)' }}>EL REGRESO</h1>
+              <p style={{ fontSize:'clamp(15px,3.8vw,20px)', fontWeight:400, letterSpacing:'13px',
+                color:'#D4AF37', textTransform:'uppercase', margin:'0 0 0 13px', lineHeight:1,
+                textShadow:'0 2px 14px rgba(0,0,0,0.95)' }}>CONTROL</p>
+              <div style={{ width:40, height:2, background:'#D4AF37', borderRadius:2, margin:'9px auto 0' }}/>
+              <p style={{ fontSize:12.5, color:'rgba(255,255,255,0.6)', margin:'9px 0 0', fontWeight:400,
+                textShadow:'0 1px 10px rgba(0,0,0,0.95)' }}>
                 Plataforma de Gestión Comercial y Operacional
               </p>
             </div>
