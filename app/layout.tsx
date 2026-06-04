@@ -53,6 +53,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="apple-touch-startup-image" href="/icons/icon-512x512.png" />
       </head>
       <body className="min-h-screen">
+        {/* Forzar actualización del SW antes de que React monte */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            if (!('serviceWorker' in navigator)) return;
+            // Recargar automáticamente cuando un nuevo SW toma control
+            navigator.serviceWorker.addEventListener('controllerchange', function() {
+              window.location.reload();
+            });
+            // Forzar búsqueda de nueva versión inmediatamente
+            navigator.serviceWorker.ready.then(function(reg) {
+              reg.update().catch(function(){});
+            }).catch(function(){});
+          })();
+        `}} />
         <Providers initialUser={user}>
           {children}
         </Providers>
