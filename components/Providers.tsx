@@ -14,6 +14,23 @@ export default function Providers({
   children: ReactNode
   initialUser: AppUser | null
 }) {
+  // Cuando el SW nuevo toma control → recargar para mostrar contenido actualizado
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    let reloading = false
+    const onControllerChange = () => {
+      if (reloading) return
+      reloading = true
+      window.location.reload()
+    }
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
+    // Forzar que el SW nuevo instale y tome control inmediatamente
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.update())
+    }).catch(() => {})
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+  }, [])
+
   // Limpiar badge al abrir la app
   useEffect(() => {
     if ('clearAppBadge' in navigator) {
