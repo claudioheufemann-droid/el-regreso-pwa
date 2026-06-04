@@ -73,9 +73,8 @@ export default function LoginPage() {
 
       {/* ── Contenedor fijo — sin scroll ── */}
       <div style={{
-        height: '100vh',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ...(typeof CSS !== 'undefined' && (CSS as any).supports?.('height','100dvh') ? { height:'100dvh' } : {}),
+        height: '100dvh',
+        minHeight: '100dvh',
         background: '#050402',
         display: 'flex',
         flexDirection: 'column',
@@ -174,7 +173,14 @@ export default function LoginPage() {
           overflowY: 'auto',
           padding: '18px 20px 12px',
         }}>
-          <div style={{ width:'100%', maxWidth:420, display:'flex', flexDirection:'column', flex:1 }}>
+          <div style={{
+            width:'100%', maxWidth:420, display:'flex', flexDirection:'column', flex:1,
+            border:'1px solid rgba(212,175,55,0.35)',
+            borderRadius:18,
+            background:'rgba(212,175,55,0.018)',
+            boxShadow:'0 0 0 1px rgba(212,175,55,0.06), 0 8px 32px rgba(0,0,0,0.4)',
+            padding:'20px 18px 16px',
+          }}>
 
             {/* Bienvenido */}
             <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:18 }}>
