@@ -27,14 +27,17 @@ interface ClienteDetalle {
   nombre: string
   canal: string | null
   litros: number
+  monto: number
   pedidos: number
+  lineas: number
   ultimoPedido: string
-  productos: { producto: string; categoria: string; litros: number }[]
+  productos: { producto: string; categoria: string; litros: number; monto: number; cantidad: number }[]
 }
 
 interface VentaRow {
   vendedor_actual: string
   litros: number
+  total_sin_impuesto?: number | null
   categoria_negocio: string | null
   nombre_fantasia?: string | null
   categoria_producto?: string | null
@@ -1173,15 +1176,22 @@ const CANAL_DOT: Record<string, string> = {
   'Distribuidor':  '#38BDF8',
 }
 
+const fmtPesoCompact = (n: number) =>
+  new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', notation: 'compact', maximumFractionDigits: 1 }).format(n)
+const fmtPesoFull = (n: number) =>
+  new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
+
 function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; rangeLabel: string }) {
   const [busqueda, setBusqueda] = useState('')
-  const [orden, setOrden]       = useState<'litros' | 'nombre' | 'canal'>('litros')
+  const [orden, setOrden]       = useState<'monto' | 'litros' | 'nombre' | 'canal'>('monto')
   const [expandido, setExpandido] = useState<string | null>(null)
   const [verTodos, setVerTodos]   = useState(false)
 
   if (!clientes.length) return null
 
   const totalLitros = clientes.reduce((s, c) => s + c.litros, 0)
+  const totalMonto  = clientes.reduce((s, c) => s + c.monto, 0)
+  const hasMonto    = totalMonto > 0
 
   const filtrados = clientes
     .filter(c => c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -1189,7 +1199,8 @@ function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; 
     .sort((a, b) => {
       if (orden === 'nombre')  return a.nombre.localeCompare(b.nombre)
       if (orden === 'canal')   return (a.canal ?? '').localeCompare(b.canal ?? '')
-      return b.litros - a.litros
+      if (orden === 'litros')  return b.litros - a.litros
+      return b.monto - a.monto
     })
 
   const visibles = verTodos ? filtrados : filtrados.slice(0, 10)
@@ -1203,12 +1214,14 @@ function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; 
             Locales Vendidos
           </h2>
           <p style={{ fontSize: 13, color: 'var(--muted)' }}>
-            {rangeLabel} · <strong style={{ color: 'var(--cream)' }}>{clientes.length}</strong> locales · <strong style={{ color: 'var(--gold)' }}>{totalLitros.toFixed(1)} L</strong>
+            {rangeLabel} · <strong style={{ color: 'var(--cream)' }}>{clientes.length}</strong> locales
+            {' · '}<strong style={{ color: 'var(--gold)' }}>{totalLitros.toFixed(1)} L</strong>
+            {hasMonto && <> · <strong style={{ color: '#34D399' }}>{fmtPesoCompact(totalMonto)}</strong></>}
           </p>
         </div>
         {/* Sort */}
         <div style={{ display: 'flex', gap: 4 }}>
-          {([['litros','Litros'],['nombre','A-Z'],['canal','Canal']] as [typeof orden, string][]).map(([k, label]) => (
+          {([['monto','$Monto'],['litros','Litros'],['nombre','A-Z'],['canal','Canal']] as [typeof orden, string][]).map(([k, label]) => (
             <button key={k} onClick={() => setOrden(k)} style={{
               padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
               background: orden === k ? 'var(--gold)' : 'var(--surface)',
@@ -1278,10 +1291,13 @@ function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; 
                   </div>
                 </div>
 
-                {/* Litros + barra */}
-                <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 80 }}>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.3px' }}>{c.litros.toFixed(1)} L</div>
-                  <div style={{ fontSize: 9, color: 'var(--muted)' }}>{pct.toFixed(1)}% del total</div>
+                {/* Monto + Litros */}
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  {hasMonto && c.monto > 0 && (
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#34D399', letterSpacing: '-0.3px' }}>{fmtPesoCompact(c.monto)}</div>
+                  )}
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>{c.litros.toFixed(1)} L</div>
+                  <div style={{ fontSize: 9, color: 'rgba(128,128,128,0.5)' }}>{pct.toFixed(1)}% vol.</div>
                 </div>
 
                 {/* Expand arrow */}
@@ -1300,38 +1316,63 @@ function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; 
                   <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 8 }}>
                     Productos vendidos
                   </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {/* Cabecera tabla */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 48px 60px 80px', gap: 6, padding: '0 0 6px', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 6 }}>
+                    {['Producto','Cant.','Litros','Monto'].map(h => (
+                      <div key={h} style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase', textAlign: h !== 'Producto' ? 'right' : 'left' }}>{h}</div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {c.productos.map(p => {
-                      const pPct = c.litros > 0 ? (p.litros / c.litros) * 100 : 0
                       const catColor = p.categoria === 'Cerveza' ? '#D4AF37' : p.categoria === 'Kombucha' ? '#5A8A4A' : '#6B7280'
                       return (
-                        <div key={p.producto} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{
-                            fontSize: 9, fontWeight: 700, color: catColor,
-                            background: `${catColor}12`, border: `1px solid ${catColor}25`,
-                            padding: '2px 6px', borderRadius: 6, flexShrink: 0, whiteSpace: 'nowrap',
-                          }}>{p.categoria}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {p.producto}
+                        <div key={p.producto} style={{ display: 'grid', gridTemplateColumns: '1fr 48px 60px 80px', gap: 6, alignItems: 'center' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <div style={{ width: 5, height: 5, borderRadius: '50%', background: catColor, flexShrink: 0 }} />
+                              <span style={{ fontSize: 11, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {p.producto}
+                              </span>
                             </div>
-                            <div style={{ height: 3, background: 'rgba(128,128,128,0.1)', borderRadius: 3, marginTop: 3 }}>
-                              <div style={{ height: '100%', width: `${pPct}%`, background: catColor, borderRadius: 3, opacity: 0.7 }} />
-                            </div>
+                            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 1, paddingLeft: 10 }}>{p.categoria}</div>
                           </div>
-                          <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{p.litros.toFixed(1)} L</span>
-                            <span style={{ fontSize: 9, color: 'var(--muted)', marginLeft: 4 }}>({pPct.toFixed(0)}%)</span>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{p.cantidad}</span>
+                            <div style={{ fontSize: 8, color: 'var(--muted)' }}>líneas</div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>{p.litros.toFixed(1)}</span>
+                            <div style={{ fontSize: 8, color: 'var(--muted)' }}>L</div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            {p.monto > 0
+                              ? <><span style={{ fontSize: 12, fontWeight: 700, color: '#34D399' }}>{fmtPesoCompact(p.monto)}</span></>
+                              : <span style={{ fontSize: 10, color: 'rgba(128,128,128,0.3)' }}>—</span>
+                            }
                           </div>
                         </div>
                       )
                     })}
                   </div>
-                  {c.ultimoPedido && (
-                    <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                      Último pedido: {fmtFecha(c.ultimoPedido)}
-                    </p>
-                  )}
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      <div>
+                        <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>Total litros</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>{c.litros.toFixed(1)} L</div>
+                      </div>
+                      {c.monto > 0 && (
+                        <div>
+                          <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>Total venta</div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: '#34D399' }}>{fmtPesoFull(c.monto)}</div>
+                        </div>
+                      )}
+                    </div>
+                    {c.ultimoPedido && (
+                      <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                        Último pedido: {fmtFecha(c.ultimoPedido)}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1593,26 +1634,34 @@ export default function MetasClient({
 
   // ── Compute base clientes from props ─────────────────────────────────────────
   const baseClientes = useMemo<ClienteDetalle[]>(() => {
-    const map = new Map<string, { canal: string | null; litros: number; fechas: Set<string>; prods: Map<string, { categoria: string; litros: number }> }>()
+    type PEntry = { canal: string | null; litros: number; monto: number; fechas: Set<string>; lineas: number; prods: Map<string, { categoria: string; litros: number; monto: number; cantidad: number }> }
+    const map = new Map<string, PEntry>()
     for (const v of ventasMes) {
-      const nombre = v.nombre_fantasia?.trim() || 'Sin nombre'
-      if (!map.has(nombre)) map.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, fechas: new Set(), prods: new Map() })
+      const nombre = (v.nombre_fantasia ?? '').trim() || 'Sin nombre'
+      if (!map.has(nombre)) map.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, monto: 0, fechas: new Set(), lineas: 0, prods: new Map() })
       const e = map.get(nombre)!
       e.litros += v.litros ?? 0
+      e.monto  += v.total_sin_impuesto ?? 0
+      e.lineas += 1
       if (v.fecha_pedido) e.fechas.add(v.fecha_pedido)
-      const prod = v.producto?.trim() || 'Sin nombre'
-      const cat  = v.categoria_producto?.trim() || 'Sin categoría'
-      if (!e.prods.has(prod)) e.prods.set(prod, { categoria: cat, litros: 0 })
-      e.prods.get(prod)!.litros += v.litros ?? 0
+      const prod = (v.producto ?? '').trim() || 'Sin nombre'
+      const cat  = (v.categoria_producto ?? '').trim() || 'Sin categoría'
+      if (!e.prods.has(prod)) e.prods.set(prod, { categoria: cat, litros: 0, monto: 0, cantidad: 0 })
+      const p = e.prods.get(prod)!
+      p.litros   += v.litros ?? 0
+      p.monto    += v.total_sin_impuesto ?? 0
+      p.cantidad += 1
     }
     return [...map.entries()]
       .map(([nombre, e]) => ({
         nombre, canal: e.canal,
         litros: Math.round(e.litros * 10) / 10,
+        monto: Math.round(e.monto),
         pedidos: e.fechas.size,
+        lineas: e.lineas,
         ultimoPedido: [...e.fechas].sort().at(-1) ?? '',
         productos: [...e.prods.entries()]
-          .map(([producto, { categoria, litros }]) => ({ producto, categoria, litros: Math.round(litros * 10) / 10 }))
+          .map(([producto, { categoria, litros, monto, cantidad }]) => ({ producto, categoria, litros: Math.round(litros * 10) / 10, monto, cantidad }))
           .sort((a, b) => b.litros - a.litros),
       }))
       .filter(c => c.litros > 0)

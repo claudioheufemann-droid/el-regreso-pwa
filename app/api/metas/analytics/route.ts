@@ -20,6 +20,7 @@ interface VentaAPI {
   vendedor_actual: string
   categoria_negocio: string | null
   litros: number | null
+  total_sin_impuesto: number | null
   nombre_fantasia: string | null
   fecha_pedido: string | null
   categoria_producto: string | null
@@ -115,7 +116,7 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Ventas en el rango ───────────────────────────────────────────────────────
-  const selectFields = 'vendedor_actual, categoria_negocio, litros, nombre_fantasia, fecha_pedido, categoria_producto, producto'
+  const selectFields = 'vendedor_actual, categoria_negocio, litros, total_sin_impuesto, nombre_fantasia, fecha_pedido, categoria_producto, producto'
 
   async function fetchVentasPaginado(fechaIni: string, fechaFin: string): Promise<VentaAPI[]> {
     const rows: VentaAPI[] = []
@@ -213,37 +214,51 @@ export async function GET(req: NextRequest) {
   const clientesMap = new Map<string, {
     canal: string | null
     litros: number
+    monto: number
     fechas: Set<string>
-    prods: Map<string, { categoria: string; litros: number }>
+    lineas: number
+    prods: Map<string, { categoria: string; litros: number; monto: number; cantidad: number }>
   }>()
 
   for (const v of ventas) {
     const nombre = (v.nombre_fantasia ?? '').trim() || 'Sin nombre'
     if (!clientesMap.has(nombre)) {
-      clientesMap.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, fechas: new Set(), prods: new Map() })
+      clientesMap.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, monto: 0, fechas: new Set(), lineas: 0, prods: new Map() })
     }
     const e = clientesMap.get(nombre)!
     e.litros += v.litros ?? 0
+    e.monto  += v.total_sin_impuesto ?? 0
+    e.lineas += 1
     if (v.fecha_pedido) e.fechas.add(v.fecha_pedido)
     const prod = (v.producto ?? '').trim() || 'Sin nombre'
     const cat  = (v.categoria_producto ?? '').trim() || 'Sin categoría'
-    if (!e.prods.has(prod)) e.prods.set(prod, { categoria: cat, litros: 0 })
-    e.prods.get(prod)!.litros += v.litros ?? 0
+    if (!e.prods.has(prod)) e.prods.set(prod, { categoria: cat, litros: 0, monto: 0, cantidad: 0 })
+    const p = e.prods.get(prod)!
+    p.litros   += v.litros ?? 0
+    p.monto    += v.total_sin_impuesto ?? 0
+    p.cantidad += 1
   }
 
   const clientesDetalle = [...clientesMap.entries()]
     .map(([nombre, e]) => ({
       nombre,
       canal: e.canal,
-      litros: Math.round(e.litros * 10) / 10,
+      litros:  Math.round(e.litros * 10) / 10,
+      monto:   Math.round(e.monto),
       pedidos: e.fechas.size,
+      lineas:  e.lineas,
       ultimoPedido: [...e.fechas].sort().at(-1) ?? '',
       productos: [...e.prods.entries()]
-        .map(([producto, { categoria, litros }]) => ({ producto, categoria, litros: Math.round(litros * 10) / 10 }))
-        .sort((a, b) => b.litros - a.litros),
+        .map(([producto, { categoria, litros, monto, cantidad }]) => ({
+          producto, categoria,
+          litros:   Math.round(litros * 10) / 10,
+          monto:    Math.round(monto),
+          cantidad,
+        }))
+        .sort((a, b) => b.monto - a.monto),
     }))
     .filter(c => c.litros > 0)
-    .sort((a, b) => b.litros - a.litros)
+    .sort((a, b) => b.monto - a.monto)
 
   return NextResponse.json({
     analytics,
