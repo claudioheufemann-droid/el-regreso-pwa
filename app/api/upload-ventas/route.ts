@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import * as XLSX from 'xlsx'
-import { esClienteExcluido } from '@/lib/types'
+import { esClienteExcluido, VENDEDORES_DB } from '@/lib/types'
 
-const VENDEDORES_VALIDOS = ['Javier Badilla', 'Carlos Urrejola']
+const VENDEDORES_VALIDOS: string[] = [...VENDEDORES_DB]
 
 // Alias local para mantener compatibilidad con el nombre anterior
 const esClienteInterno = esClienteExcluido

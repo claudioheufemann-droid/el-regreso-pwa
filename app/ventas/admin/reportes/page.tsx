@@ -8,7 +8,7 @@ export default async function ReportesPage() {
   const { data: clientes } = await supabase
     .from('clientes')
     .select('nombre_fantasia, vendedor, ruta_despacho, categoria, telefono')
-    .in('vendedor', ['Javier Badilla', 'Carlos Urrejola'])
+    .in('vendedor', ['Javier Badilla', 'Carlos Urrejola', 'Vendedor 1'])
     .order('nombre_fantasia')
 
   // Todos los contactos (últimos 90 días)

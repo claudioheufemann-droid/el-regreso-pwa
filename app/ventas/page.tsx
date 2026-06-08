@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, esClienteExcluido } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_DB, esClienteExcluido } from '@/lib/types'
 import DashboardClient from './DashboardClient'
 
 export const revalidate = 120
@@ -40,9 +40,8 @@ export default async function DashboardPage({
   const supabase = await createClient()
   const appUser = await getServerUser()
 
-  const vendedoresScope = appUser?.isAdmin
-    ? VENDEDORES
-    : VENDEDORES.filter(v => v === appUser?.nombre)
+  // Siempre usamos todos los vendedores DB para el scope consolidado
+  const vendedoresScope: string[] = [...VENDEDORES_DB]
 
   const scope = vendedoresScope.length ? vendedoresScope : ['__none__']
 
@@ -352,11 +351,7 @@ export default async function DashboardPage({
     litrosMesAnteriorPorVendedor[vend] = litros
   }
 
-  // Avatares de vendedores (usersAvatars ya cargado en FASE A)
-  const vendedorAvatars: Record<string, string | null> = {
-    'Javier Badilla':  usersAvatars?.find(u => u.nombre === 'Javier B.')?.avatar_url  ?? null,
-    'Carlos Urrejola': usersAvatars?.find(u => u.nombre === 'Carlos U.')?.avatar_url ?? null,
-  }
+  const vendedorAvatars: Record<string, string | null> = { 'Vendedor 1': null }
 
   return (
     <DashboardClient

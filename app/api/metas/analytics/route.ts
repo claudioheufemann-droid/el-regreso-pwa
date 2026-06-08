@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { VENDEDORES, CLIENTES_EXCLUIR } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_DB, CLIENTES_EXCLUIR } from '@/lib/types'
 import {
   getDiasHabiles,
   getDiasHabilesTranscurridos,
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
       const { data: ultima } = await supabase
         .from('ventas')
         .select('fecha_pedido')
-        .in('vendedor_actual', VENDEDORES)
+        .in('vendedor_actual', VENDEDORES_DB)
         .order('fecha_pedido', { ascending: false })
         .limit(1)
         .single()
@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
     const PAGE = 1000
     while (true) {
       const { data } = await supabase.from('ventas').select(selectFields)
-        .in('vendedor_actual', VENDEDORES)
+        .in('vendedor_actual', VENDEDORES_DB)
         .gte('fecha_pedido', fechaIni).lte('fecha_pedido', fechaFin)
         .order('fecha_pedido', { ascending: true })
         .range(offset, offset + PAGE - 1)
@@ -147,12 +147,11 @@ export async function GET(req: NextRequest) {
   const productosPeriodo = computeProductos(ventas)
 
   // ── Analytics por vendedor ───────────────────────────────────────────────────
+  // Consolidar todos los vendedores DB bajo 'Vendedor 1'
   const analytics: AnalyticsVendedor[] = VENDEDORES.map(vendedor => {
-    const mV = todasMetas.filter(m => m.vendedor === vendedor)
-    const metaTotal = mV.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
-
-    const vV    = ventas.filter(v => v.vendedor_actual === vendedor)
-    const realizado = vV.reduce((s, v) => s + (v.litros ?? 0), 0)
+    const metaTotal = todasMetas.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
+    const realizado = ventas.reduce((s, v) => s + (v.litros ?? 0), 0)
+    const mV = todasMetas
 
     const diasHabiles       = dh.length
     const diasTranscurridos = dhTrans
@@ -165,6 +164,7 @@ export async function GET(req: NextRequest) {
     const mensaje   = getMensajePredictivo(faltante, diasRestantes)
 
     const allCanales = [...new Set(mV.map(m => m.categoria_negocio))]
+    const vV = ventas
 
     const porCanal: AnalyticsCanal[] = allCanales.map(canal => {
       const metaCanal = mV.filter(m => m.categoria_negocio === canal).reduce((s, m) => s + (m.meta_litros ?? 0), 0)

@@ -48,9 +48,8 @@ function formatLitros(n: number) {
 }
 
 const VENDEDORES = [
-  { value: 'all',             label: 'Todos'  },
-  { value: 'Javier Badilla',  label: 'Javier' },
-  { value: 'Carlos Urrejola', label: 'Carlos' },
+  { value: 'all',        label: 'Todos'      },
+  { value: 'Vendedor 1', label: 'Vendedor 1' },
 ]
 
 const CAPAS: { value: CapaViz; label: string; icon: React.ReactNode }[] = [
@@ -197,10 +196,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
 
   // ── Resumen por territorio ───────────────────────────────
   const territorios = useMemo(() => {
-    return ['Javier Badilla', 'Carlos Urrejola'].map(v => {
-      const pts = conVenta.filter(p => p.vendedor_actual === v)
-      return { vendedor: v, litros: pts.reduce((s, p) => s + p.litros_total, 0), clientes: pts.length }
-    })
+    return [{ vendedor: 'Vendedor 1', litros: conVenta.reduce((s, p) => s + p.litros_total, 0), clientes: conVenta.length }]
   }, [conVenta])
 
   const hayDatos = conVenta.length > 0

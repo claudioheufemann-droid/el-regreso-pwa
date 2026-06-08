@@ -52,21 +52,16 @@ export default async function MetasPage() {
   const semInicio = metasSemanales?.[0]?.fecha_inicio  ?? fechaRef
   const semFin    = metasSemanales?.[0]?.fecha_fin     ?? fechaRef
 
-  // Ventas cacheadas (compartidas entre usuarios). Metas siempre usa todos los vendedores.
-  const [ventasMesRaw, ventasSemanaRaw, { data: usersData }] = await Promise.all([
+  const [ventasMesRaw, ventasSemanaRaw] = await Promise.all([
     getVentasRango(mesInicio, fechaRef),
     getVentasRango(semInicio, fechaRef),
-    supabase.from('users').select('nombre, avatar_url').in('nombre', ['Javier B.', 'Carlos U.']),
   ])
-  // Coerción de litros (cache lo expone como number|null)
   const ventasMes    = ventasMesRaw.map(v => ({ ...v, litros: v.litros ?? 0 }))
   const ventasSemana = ventasSemanaRaw.map(v => ({ ...v, litros: v.litros ?? 0 }))
 
-  // Mapa nombre_completo → avatar_url para los vendedores
-  // El nombre en ventas es "Javier Badilla" / "Carlos Urrejola" pero en users es "Javier B." / "Carlos U."
+  // Sin avatar individual — consolidado bajo Vendedor 1
   const vendedorAvatars: Record<string, string | null> = {
-    'Javier Badilla': usersData?.find(u => u.nombre === 'Javier B.')?.avatar_url ?? null,
-    'Carlos Urrejola': usersData?.find(u => u.nombre === 'Carlos U.')?.avatar_url ?? null,
+    'Vendedor 1': null,
   }
 
   return (

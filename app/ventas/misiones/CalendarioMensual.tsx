@@ -25,9 +25,8 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 const DIAS_SEM = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 
 const VENDEDORES = [
-  { value: 'all', label: 'Todos' },
-  { value: 'Javier Badilla', label: 'Javier' },
-  { value: 'Carlos Urrejola', label: 'Carlos' },
+  { value: 'all',        label: 'Todos'      },
+  { value: 'Vendedor 1', label: 'Vendedor 1' },
 ]
 
 function ymd(d: Date): string {

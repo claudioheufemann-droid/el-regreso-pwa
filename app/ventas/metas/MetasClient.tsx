@@ -1278,10 +1278,11 @@ export default function MetasClient({
     const dhSem = getDiasHabiles(new Date(semanaInicio), new Date(semanaFin + 'T23:59:59'))
 
     return vendedores.map(vendedor => {
-      const mSem = metasSemanales.filter(m => m.vendedor === vendedor)
-      const mMes = metasMensuales.filter(m => m.vendedor === vendedor)
-      const vMes = ventasMes.filter(v => v.vendedor_actual === vendedor)
-      const vSem = ventasSemana.filter(v => v.vendedor_actual === vendedor)
+      // Consolidado: todas las metas y ventas sin filtrar por nombre individual
+      const mSem = metasSemanales
+      const mMes = metasMensuales
+      const vMes = ventasMes
+      const vSem = ventasSemana
       const vHoy = vMes.filter(v => v.fecha_pedido === fechaRef)
 
       const metaSemTotal = mSem.reduce((s, m) => s + (m.meta_litros ?? 0), 0)

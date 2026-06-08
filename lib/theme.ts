@@ -1,17 +1,13 @@
 /**
  * Tokens de color centralizados para toda la app.
- * Fuente única de verdad — antes estaban duplicados/divergentes en 10+ archivos
- * (Carlos aparecía dorado, verde o azul según la vista).
- *
- * Canon de vendedores: igual que la vista Mapa (la que tiene leyenda dedicada).
- *   Javier Badilla → ámbar   #F59E0B
- *   Carlos Urrejola → azul   #60A5FA
  */
 
 // ── Color por vendedor ──────────────────────────────────────────────────────
 export const VEND_COLOR: Record<string, string> = {
-  'Javier Badilla':  '#F59E0B',
-  'Carlos Urrejola': '#60A5FA',
+  'Vendedor 1':      '#D4AF37',
+  // Aliases para datos históricos en BD
+  'Javier Badilla':  '#D4AF37',
+  'Carlos Urrejola': '#D4AF37',
 }
 
 /** Color del vendedor con fallback estable (no usar índices ni azar). */

@@ -128,8 +128,7 @@ export default function ReportesClient({ reporte }: Props) {
         <div style={{ display: 'flex', gap: 4 }}>
           {[
             { value: 'all', label: 'Todos' },
-            { value: 'Javier Badilla', label: 'Javier' },
-            { value: 'Carlos Urrejola', label: 'Carlos' },
+            { value: 'Vendedor 1', label: 'Vendedor 1' },
           ].map(op => (
             <button
               key={op.value}
@@ -187,8 +186,8 @@ export default function ReportesClient({ reporte }: Props) {
               <div>
                 <p style={{ fontSize: 13, fontWeight: 600, color: 'white', lineHeight: 1.2 }}>{r.nombre_fantasia}</p>
                 <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                  <span style={{ fontSize: 10, color: r.vendedor === 'Javier Badilla' ? '#D4AF37' : '#D4AF37', fontWeight: 600 }}>
-                    {r.vendedor === 'Javier Badilla' ? 'Javier' : 'Carlos'}
+                  <span style={{ fontSize: 10, color: '#D4AF37', fontWeight: 600 }}>
+                    Vendedor 1
                   </span>
                   {r.categoria && <span style={{ fontSize: 10, color: '#555' }}>{r.categoria}</span>}
                 </div>
@@ -229,8 +228,8 @@ export default function ReportesClient({ reporte }: Props) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 14, fontWeight: 700, color: 'white', lineHeight: 1.3, marginBottom: 3 }}>{r.nombre_fantasia}</p>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 10, color: r.vendedor === 'Javier Badilla' ? '#D4AF37' : '#D4AF37', fontWeight: 600 }}>
-                      {r.vendedor === 'Javier Badilla' ? 'Javier' : 'Carlos'}
+                    <span style={{ fontSize: 10, color: '#D4AF37', fontWeight: 600 }}>
+                      Vendedor 1
                     </span>
                     {r.categoria && <span style={{ fontSize: 10, color: '#555' }}>{r.categoria}</span>}
                     {r.ruta_despacho && <span style={{ fontSize: 10, color: '#555' }}>Ruta: {r.ruta_despacho}</span>}
