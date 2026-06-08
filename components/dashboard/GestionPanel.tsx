@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { RcTask, AREA_CFG, MACRO_AREAS, MacroKey } from '@/lib/gestion-types'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
   calcAreaKpis,
   calcSemaphoreDistribution,
@@ -17,8 +18,6 @@ const ALL_AREAS = (Object.values(MACRO_AREAS) as typeof MACRO_AREAS[MacroKey][])
 
 interface Props { tasks: RcTask[] }
 
-// ── Helpers ───────────────────────────────────────────────────
-
 function statusColor(value: number, target: number, inverted = false): string {
   const ratio = value / target
   if (inverted) {
@@ -31,18 +30,19 @@ function statusColor(value: number, target: number, inverted = false): string {
   return '#B5543E'
 }
 
-function StatusBadge({ ok }: { ok: boolean }) {
+function StatusBadge({ ok, compact }: { ok: boolean; compact?: boolean }) {
   return (
     <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      padding: '3px 10px', borderRadius: 100,
+      display: 'inline-flex', alignItems: 'center', gap: compact ? 3 : 5,
+      padding: compact ? '2px 7px' : '3px 10px', borderRadius: 100,
       background: ok ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)',
       border: `1px solid ${ok ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'}`,
-      fontSize: 9, fontWeight: 800, letterSpacing: 1,
+      fontSize: compact ? 8 : 9, fontWeight: 800, letterSpacing: compact ? 0.5 : 1,
       color: ok ? '#16A34A' : '#B5543E',
+      flexShrink: 0, whiteSpace: 'nowrap' as const,
     }}>
-      <span style={{ fontSize: 10 }}>{ok ? '✓' : '!'}</span>
-      {ok ? 'CUMPLIDO' : 'NO CUMPLIDO'}
+      <span style={{ fontSize: compact ? 8 : 10 }}>{ok ? '✓' : '!'}</span>
+      {compact ? (ok ? 'OK' : 'NO') : (ok ? 'CUMPLIDO' : 'NO CUMPLIDO')}
     </div>
   )
 }
@@ -71,29 +71,30 @@ interface KpiCardProps {
   barValue?: number
   barMax?: number
   sub?: string
+  isMobile?: boolean
 }
 
-function KpiCard({ title, description, formula, value, unit, target, targetMet, color, barValue, barMax, sub }: KpiCardProps) {
+function KpiCard({ title, description, formula, value, unit, target, targetMet, color, barValue, barMax, sub, isMobile }: KpiCardProps) {
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 20, padding: '22px 22px 18px',
-      display: 'flex', flexDirection: 'column', gap: 14,
+      borderRadius: 16, padding: isMobile ? '14px 12px 12px' : '22px 22px 18px',
+      display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 14,
       borderTop: `3px solid ${color}`,
     }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', letterSpacing: -0.3, marginBottom: 4 }}>{title}</div>
-          <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5 }}>{description}</div>
+          <div style={{ fontSize: isMobile ? 11 : 13, fontWeight: 800, color: 'var(--cream)', letterSpacing: -0.3, marginBottom: isMobile ? 0 : 4, lineHeight: 1.3 }}>{title}</div>
+          {!isMobile && <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5, marginTop: 4 }}>{description}</div>}
         </div>
-        <StatusBadge ok={targetMet} />
+        <StatusBadge ok={targetMet} compact={isMobile} />
       </div>
 
       {/* Main number */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
-        <span style={{ fontSize: 48, fontWeight: 900, lineHeight: 1, letterSpacing: -2, color }}>{value}</span>
-        {unit && <span style={{ fontSize: 18, fontWeight: 700, color, marginBottom: 4, opacity: 0.7 }}>{unit}</span>}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
+        <span style={{ fontSize: isMobile ? 34 : 48, fontWeight: 900, lineHeight: 1, letterSpacing: -1, color }}>{value}</span>
+        {unit && <span style={{ fontSize: isMobile ? 13 : 18, fontWeight: 700, color, marginBottom: 3, opacity: 0.7 }}>{unit}</span>}
       </div>
 
       {/* Progress bar */}
@@ -104,16 +105,16 @@ function KpiCard({ title, description, formula, value, unit, target, targetMet, 
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, borderTop: '1px solid rgba(128,128,128,0.08)' }}>
         <div>
-          <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Fórmula</div>
-          <div style={{ fontSize: 9, color: 'var(--muted)', fontStyle: 'italic' }}>{formula}</div>
+          <div style={{ fontSize: 7, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Fórmula</div>
+          <div style={{ fontSize: isMobile ? 8 : 9, color: 'var(--muted)', fontStyle: 'italic' }}>{formula}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Meta</div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)' }}>{target}</div>
+          <div style={{ fontSize: 7, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Meta</div>
+          <div style={{ fontSize: isMobile ? 9 : 10, fontWeight: 700, color: 'var(--muted)' }}>{target}</div>
         </div>
       </div>
 
-      {sub && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: -8 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: isMobile ? 9 : 10, color: 'var(--muted)', marginTop: -4 }}>{sub}</div>}
     </div>
   )
 }
@@ -216,6 +217,8 @@ function RankRow({ rank, kpi, pimponeo, isBest, isWorst }: {
 // ── Main component ────────────────────────────────────────────
 
 export default function GestionPanel({ tasks }: Props) {
+  const isDesktop = useIsDesktop()
+  const isMobile = !isDesktop
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
 
   useEffect(() => {
@@ -247,36 +250,36 @@ export default function GestionPanel({ tasks }: Props) {
   const bestArea  = ranked.length > 0 ? [...ranked].sort((a, b) => b.otcr - a.otcr || a.red - b.red)[0]  : null
   const worstArea = ranked.length > 0 ? ranked[0] : null
 
-  // Global pimponeo avg
   const totalComments = Object.values(commentCounts).reduce((s, n) => s + n, 0)
   const pimponeoProm  = activeTasks.length > 0 ? Math.round((totalComments / activeTasks.length) * 10) / 10 : 0
 
-  // Red %
   const redPct   = dist.total > 0 ? Math.round((dist.red / dist.total) * 100) : 0
   const today    = new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
+  const sectionGap = isMobile ? 20 : 32
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: sectionGap }}>
 
       {/* ── Page header ── */}
-      <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 20 }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--gold)', letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 8 }}>
+      <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: isMobile ? 14 : 20 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--gold)', letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 6 }}>
           Panel de Gestión
         </div>
-        <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--cream)', letterSpacing: -1, lineHeight: 1, marginBottom: 6 }}>
+        <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5, lineHeight: 1, marginBottom: 4 }}>
           Reporte de Desempeño
         </div>
-        <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'capitalize' }}>{today}</div>
-        <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'capitalize' }}>{today}</div>
+        <div style={{ display: 'flex', gap: isMobile ? 10 : 16, marginTop: 10, flexWrap: 'wrap' }}>
           {[
             { label: 'Total tareas', value: dist.total, color: 'var(--cream)' },
             { label: 'Activas', value: dist.red + dist.yellow + dist.green, color: 'var(--cream)' },
             { label: 'Completadas', value: dist.blue, color: SEMAPHORE_HEX.blue },
             { label: 'Áreas evaluadas', value: ranked.length, color: 'var(--gold)' },
           ].map(s => (
-            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 16, fontWeight: 900, color: s.color }}>{s.value}</span>
-              <span style={{ fontSize: 10, color: 'var(--muted)' }}>{s.label}</span>
+            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: isMobile ? 14 : 16, fontWeight: 900, color: s.color }}>{s.value}</span>
+              <span style={{ fontSize: 9, color: 'var(--muted)' }}>{s.label}</span>
             </div>
           ))}
         </div>
@@ -284,12 +287,11 @@ export default function GestionPanel({ tasks }: Props) {
 
       {/* ── KPI Cards 2×2 ── */}
       <div>
-        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 16 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: isMobile ? 10 : 16 }}>
           Indicadores Clave de Desempeño
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: isMobile ? 10 : 14 }}>
 
-          {/* OTCR */}
           <KpiCard
             title="Efectividad de Entrega"
             description="Tareas completadas sin haber registrado retrasos sobre el total cerrado"
@@ -301,9 +303,9 @@ export default function GestionPanel({ tasks }: Props) {
             color={statusColor(globalOtcr.rate, 85)}
             barValue={globalOtcr.onTime}
             barMax={globalOtcr.total}
+            isMobile={isMobile}
           />
 
-          {/* Tareas en rojo */}
           <KpiCard
             title="Nivel de Riesgo"
             description="Porcentaje de tareas vencidas o con menos de 24h de plazo sobre el total activo"
@@ -316,9 +318,9 @@ export default function GestionPanel({ tasks }: Props) {
             barValue={dist.red}
             barMax={dist.red + dist.yellow + dist.green || 1}
             sub={`${dist.red} tarea${dist.red !== 1 ? 's' : ''} en estado crítico`}
+            isMobile={isMobile}
           />
 
-          {/* Productividad neta */}
           <KpiCard
             title="Productividad Neta"
             description="Relación entre tareas cerradas y creadas durante la semana actual"
@@ -330,10 +332,10 @@ export default function GestionPanel({ tasks }: Props) {
             color={statusColor(netProd.ratio, 1)}
             barValue={netProd.closed}
             barMax={Math.max(netProd.created, netProd.closed, 1)}
-            sub={`${netProd.closed} cerradas · ${netProd.created} creadas esta semana`}
+            sub={`${netProd.closed} cerradas · ${netProd.created} creadas`}
+            isMobile={isMobile}
           />
 
-          {/* Pimponeo */}
           <KpiCard
             title="Índice de Pimponeo"
             description="Promedio de comentarios por tarea. Alto índice indica ambigüedad o falta de claridad en las instrucciones"
@@ -345,43 +347,46 @@ export default function GestionPanel({ tasks }: Props) {
             color={statusColor(pimponeoProm, 2, true)}
             barValue={Math.min(pimponeoProm, 5)}
             barMax={5}
-            sub={`${totalComments} comentarios en ${activeTasks.length} tareas`}
+            sub={`${totalComments} comentarios · ${activeTasks.length} tareas`}
+            isMobile={isMobile}
           />
 
-          {/* Tiempo de Reacción — full width */}
+          {/* Velocidad de Adopción — full width */}
           <div style={{
             gridColumn: '1 / -1',
             background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 20, padding: '22px 22px 18px',
+            borderRadius: 16, padding: isMobile ? '14px 12px 12px' : '22px 22px 18px',
             borderTop: `3px solid ${statusColor(reaction.avgPendingDays, 1, true)}`,
           }}>
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 18 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', letterSpacing: -0.3, marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: isMobile ? 12 : 18 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: isMobile ? 11 : 13, fontWeight: 800, color: 'var(--cream)', letterSpacing: -0.3, marginBottom: isMobile ? 0 : 4, lineHeight: 1.3 }}>
                   Velocidad de Adopción
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5 }}>
-                  Tiempo entre la asignación de la tarea y que el responsable la inicia (cambia a En Proceso)
-                </div>
+                {!isMobile && (
+                  <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5, marginTop: 4 }}>
+                    Tiempo entre la asignación de la tarea y que el responsable la inicia (cambia a En Proceso)
+                  </div>
+                )}
               </div>
-              <StatusBadge ok={reaction.avgPendingDays <= 1 && reaction.pendingOver24h === 0} />
+              <StatusBadge ok={reaction.avgPendingDays <= 1 && reaction.pendingOver24h === 0} compact={isMobile} />
             </div>
 
-            {/* Métricas en fila */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 18 }}>
+            {/* Métricas — 2 col en móvil, 4 col en desktop */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: isMobile ? 8 : 12, marginBottom: isMobile ? 12 : 18 }}>
               {[
                 {
                   label: 'Espera promedio',
                   value: reaction.pending > 0 ? `${reaction.avgPendingDays}d` : '—',
-                  sub: 'tareas asignadas sin iniciar',
+                  sub: 'sin iniciar',
                   color: statusColor(reaction.avgPendingDays, 1, true),
                   big: true,
                 },
                 {
                   label: 'Sin iniciar',
                   value: reaction.pending,
-                  sub: 'en estado Asignada ahora',
+                  sub: 'en estado Asignada',
                   color: reaction.pending > 0 ? '#D97706' : '#16A34A',
                   big: false,
                 },
@@ -395,20 +400,19 @@ export default function GestionPanel({ tasks }: Props) {
                 {
                   label: '> 72h sin tomar',
                   value: reaction.pendingOver72h,
-                  sub: 'riesgo de incumplimiento',
+                  sub: 'riesgo alto',
                   color: reaction.pendingOver72h > 0 ? '#B5543E' : 'rgba(128,128,128,0.3)',
                   big: false,
                 },
               ].map(m => (
-                <div key={m.label} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8 }}>{m.label}</div>
-                  <div style={{ fontSize: m.big ? 36 : 28, fontWeight: 900, color: m.color, letterSpacing: -1.5, lineHeight: 1, marginBottom: 4 }}>{m.value}</div>
+                <div key={m.label} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, padding: isMobile ? '10px 10px' : '14px 16px' }}>
+                  <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>{m.label}</div>
+                  <div style={{ fontSize: m.big ? (isMobile ? 26 : 36) : (isMobile ? 22 : 28), fontWeight: 900, color: m.color, letterSpacing: -1, lineHeight: 1, marginBottom: 3 }}>{m.value}</div>
                   <div style={{ fontSize: 9, color: 'var(--muted)' }}>{m.sub}</div>
                 </div>
               ))}
             </div>
 
-            {/* Real data note + barra visual de pendingOver */}
             {reaction.pending > 0 && (
               <div>
                 <ProgressBar
@@ -418,27 +422,27 @@ export default function GestionPanel({ tasks }: Props) {
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
                   <span style={{ fontSize: 9, color: 'var(--muted)' }}>Recién asignadas (≤ 24h)</span>
-                  <span style={{ fontSize: 9, color: 'var(--muted)' }}>Sin iniciar ({reaction.pending} total)</span>
+                  <span style={{ fontSize: 9, color: 'var(--muted)' }}>Sin iniciar ({reaction.pending})</span>
                 </div>
               </div>
             )}
 
-            <div style={{ paddingTop: 14, borderTop: '1px solid rgba(128,128,128,0.08)', display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
+            <div style={{ paddingTop: 12, borderTop: '1px solid rgba(128,128,128,0.08)', display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
               <div>
-                <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Fórmula</div>
-                <div style={{ fontSize: 9, color: 'var(--muted)', fontStyle: 'italic' }}>
-                  avg(started_at − created_at) · proxy: días en estado Asignada
+                <div style={{ fontSize: 7, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Fórmula</div>
+                <div style={{ fontSize: isMobile ? 8 : 9, color: 'var(--muted)', fontStyle: 'italic' }}>
+                  avg(started_at − created_at) · proxy: días en Asignada
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Meta</div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)' }}>≤ 1 día · 0 tareas &gt; 24h</div>
+                <div style={{ fontSize: 7, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Meta</div>
+                <div style={{ fontSize: isMobile ? 9 : 10, fontWeight: 700, color: 'var(--muted)' }}>≤ 1d · 0 &gt; 24h</div>
               </div>
             </div>
 
             {reaction.samplesReal > 0 && (
-              <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.15)', borderRadius: 10, fontSize: 10, color: '#16A34A' }}>
-                ✓ Dato exacto disponible para {reaction.samplesReal} tarea{reaction.samplesReal !== 1 ? 's' : ''} — promedio real: {reaction.avgDays}d desde asignación hasta inicio
+              <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.15)', borderRadius: 10, fontSize: 9, color: '#16A34A' }}>
+                ✓ Dato exacto para {reaction.samplesReal} tarea{reaction.samplesReal !== 1 ? 's' : ''} — promedio real: {reaction.avgDays}d
               </div>
             )}
           </div>
@@ -447,31 +451,31 @@ export default function GestionPanel({ tasks }: Props) {
 
       {/* ── Best / Worst spotlight ── */}
       {(bestArea || worstArea) && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isMobile ? 8 : 12 }}>
           {bestArea && (
-            <div style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.2)', borderRadius: 16, padding: '16px 18px' }}>
-              <div style={{ fontSize: 9, fontWeight: 800, color: '#16A34A', letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 10 }}>↑ Mejor Área</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>{bestArea.area}</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: '#16A34A', letterSpacing: -1, lineHeight: 1 }}>{bestArea.otcr}%</div>
-              <div style={{ fontSize: 9, color: '#16A34A', marginTop: 4, opacity: 0.8 }}>efectividad · {bestArea.red} tarea{bestArea.red !== 1 ? 's' : ''} en rojo</div>
+            <div style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.2)', borderRadius: 14, padding: isMobile ? '12px 12px' : '16px 18px' }}>
+              <div style={{ fontSize: 8, fontWeight: 800, color: '#16A34A', letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 }}>↑ Mejor Área</div>
+              <div style={{ fontSize: isMobile ? 12 : 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>{bestArea.area}</div>
+              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 900, color: '#16A34A', letterSpacing: -1, lineHeight: 1 }}>{bestArea.otcr}%</div>
+              <div style={{ fontSize: 9, color: '#16A34A', marginTop: 4, opacity: 0.8 }}>{bestArea.red} en rojo</div>
             </div>
           )}
           {worstArea && worstArea.area !== bestArea?.area && (
-            <div style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 16, padding: '16px 18px' }}>
-              <div style={{ fontSize: 9, fontWeight: 800, color: '#B5543E', letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 10 }}>↓ Mayor Riesgo</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>{worstArea.area}</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: '#B5543E', letterSpacing: -1, lineHeight: 1 }}>{worstArea.red}</div>
-              <div style={{ fontSize: 9, color: '#B5543E', marginTop: 4, opacity: 0.8 }}>tarea{worstArea.red !== 1 ? 's' : ''} en rojo · {worstArea.otcr}% efectividad</div>
+            <div style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 14, padding: isMobile ? '12px 12px' : '16px 18px' }}>
+              <div style={{ fontSize: 8, fontWeight: 800, color: '#B5543E', letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 }}>↓ Mayor Riesgo</div>
+              <div style={{ fontSize: isMobile ? 12 : 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>{worstArea.area}</div>
+              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 900, color: '#B5543E', letterSpacing: -1, lineHeight: 1 }}>{worstArea.red}</div>
+              <div style={{ fontSize: 9, color: '#B5543E', marginTop: 4, opacity: 0.8 }}>{worstArea.otcr}% efectividad</div>
             </div>
           )}
         </div>
       )}
 
       {/* ── Ranking por macro-área ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 12 : 16 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 2 }}>Ranking por Área</div>
-          <div style={{ fontSize: 10, color: 'var(--muted)' }}>Agrupado por unidad de negocio · mayor riesgo primero dentro de cada grupo</div>
+          <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 2 }}>Ranking por Área</div>
+          <div style={{ fontSize: 10, color: 'var(--muted)' }}>Mayor riesgo primero · agrupado por unidad de negocio</div>
         </div>
 
         {(Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][]).map(([macroKey, macro]) => {
@@ -482,7 +486,6 @@ export default function GestionPanel({ tasks }: Props) {
 
           if (macroKpis.length === 0) return null
 
-          // Subtotales del grupo
           const mTotal  = macroKpis.reduce((s, a) => s + a.total, 0)
           const mRed    = macroKpis.reduce((s, a) => s + a.red, 0)
           const mYellow = macroKpis.reduce((s, a) => s + a.yellow, 0)
@@ -497,51 +500,49 @@ export default function GestionPanel({ tasks }: Props) {
           const macroWorst = macroKpis[0]
 
           return (
-            <div key={macroKey} style={{ background: 'var(--surface)', border: `1px solid ${macro.color}30`, borderRadius: 20, overflow: 'hidden' }}>
+            <div key={macroKey} style={{ background: 'var(--surface)', border: `1px solid ${macro.color}30`, borderRadius: 16, overflow: 'hidden' }}>
 
               {/* Macro header */}
               <div style={{
-                padding: '16px 20px',
+                padding: isMobile ? '12px 14px' : '16px 20px',
                 background: `${macro.color}08`,
                 borderBottom: `1px solid ${macro.color}20`,
-                display: 'flex', alignItems: 'center', gap: 14,
+                display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 14,
               }}>
-                {/* Icon */}
                 <div style={{
-                  width: 40, height: 40, borderRadius: 13, flexShrink: 0,
+                  width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, borderRadius: 11, flexShrink: 0,
                   background: `${macro.color}18`, border: `1px solid ${macro.color}35`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 900, color: macro.color,
+                  fontSize: isMobile ? 9 : 11, fontWeight: 900, color: macro.color,
                 }}>{macro.code}</div>
 
-                {/* Name + subtitle */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.4 }}>{macro.label}</div>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                  <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.4 }}>{macro.label}</div>
+                  <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>
                     {mTotal} tareas · {macroKpis.length} área{macroKpis.length !== 1 ? 's' : ''}
                   </div>
                 </div>
 
-                {/* Subtotals chips */}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  {mRed > 0 && (
+                {/* Chips — en móvil solo OTCR y Riesgo */}
+                <div style={{ display: 'flex', gap: isMobile ? 5 : 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {mRed > 0 && !isMobile && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.25)' }}>
                       <div style={{ width: 6, height: 6, borderRadius: '50%', background: SEMAPHORE_HEX.red }} />
                       <span style={{ fontSize: 11, fontWeight: 800, color: SEMAPHORE_HEX.red }}>{mRed}</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: `${mOtcrColor}12`, border: `1px solid ${mOtcrColor}30` }}>
-                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>OTCR</span>
-                    <span style={{ fontSize: 12, fontWeight: 900, color: mOtcrColor }}>{mOtcr > 0 ? `${mOtcr}%` : '—'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, padding: isMobile ? '3px 7px' : '4px 10px', borderRadius: 20, background: `${mOtcrColor}12`, border: `1px solid ${mOtcrColor}30` }}>
+                    <span style={{ fontSize: 9, color: 'var(--muted)' }}>OTCR</span>
+                    <span style={{ fontSize: isMobile ? 10 : 12, fontWeight: 900, color: mOtcrColor }}>{mOtcr > 0 ? `${mOtcr}%` : '—'}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: 'rgba(128,128,128,0.08)', border: '1px solid rgba(128,128,128,0.15)' }}>
-                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Riesgo</span>
-                    <span style={{ fontSize: 12, fontWeight: 900, color: mRed > 0 ? '#B5543E' : '#16A34A' }}>{mRedPct}%</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, padding: isMobile ? '3px 7px' : '4px 10px', borderRadius: 20, background: 'rgba(128,128,128,0.08)', border: '1px solid rgba(128,128,128,0.15)' }}>
+                    <span style={{ fontSize: 9, color: 'var(--muted)' }}>R</span>
+                    <span style={{ fontSize: isMobile ? 10 : 12, fontWeight: 900, color: mRed > 0 ? '#B5543E' : '#16A34A' }}>{mRedPct}%</span>
                   </div>
                 </div>
               </div>
 
-              {/* Progress bar of group */}
+              {/* Progress bar */}
               <div style={{ height: 3, background: 'rgba(128,128,128,0.08)', display: 'flex' }}>
                 {mRed > 0    && <div style={{ flex: mRed,    background: SEMAPHORE_HEX.red    }} />}
                 {mYellow > 0 && <div style={{ flex: mYellow, background: SEMAPHORE_HEX.yellow }} />}
@@ -549,10 +550,9 @@ export default function GestionPanel({ tasks }: Props) {
                 {mBlue > 0   && <div style={{ flex: mBlue,   background: SEMAPHORE_HEX.blue   }} />}
               </div>
 
-              {/* Tabla con scroll horizontal en móvil (8 columnas no caben) */}
+              {/* Tabla con scroll horizontal */}
               <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
               <div style={{ minWidth: 360 }}>
-              {/* Column headers */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '28px 1fr 40px 40px 40px 40px 56px 56px',
@@ -569,7 +569,6 @@ export default function GestionPanel({ tasks }: Props) {
                 ))}
               </div>
 
-              {/* Area rows */}
               <div style={{ padding: '6px 8px 8px' }}>
                 {macroKpis.map((kpi, idx) => (
                   <RankRow
@@ -585,21 +584,21 @@ export default function GestionPanel({ tasks }: Props) {
               </div>
               </div>
 
-              {/* Macro footer: best / worst */}
+              {/* Footer: best / worst */}
               {(macroBest || macroWorst) && (
-                <div style={{ padding: '10px 16px 14px', borderTop: '1px solid rgba(128,128,128,0.07)', display: 'flex', gap: 10 }}>
+                <div style={{ padding: isMobile ? '8px 12px 10px' : '10px 16px 14px', borderTop: '1px solid rgba(128,128,128,0.07)', display: 'flex', gap: 8 }}>
                   {macroBest && macroBest.otcr > 0 && (
-                    <div style={{ flex: 1, padding: '8px 12px', background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.18)', borderRadius: 10 }}>
-                      <div style={{ fontSize: 8, fontWeight: 700, color: '#16A34A', letterSpacing: 1.2, marginBottom: 3 }}>↑ MEJOR</div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>{macroBest.area}</div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#16A34A' }}>{macroBest.otcr}% efectividad</div>
+                    <div style={{ flex: 1, padding: '8px 10px', background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.18)', borderRadius: 10 }}>
+                      <div style={{ fontSize: 7, fontWeight: 700, color: '#16A34A', letterSpacing: 1.2, marginBottom: 3 }}>↑ MEJOR</div>
+                      <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: 800, color: 'var(--cream)' }}>{macroBest.area}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#16A34A' }}>{macroBest.otcr}%</div>
                     </div>
                   )}
                   {macroWorst && macroWorst.red > 0 && macroWorst.area !== macroBest?.area && (
-                    <div style={{ flex: 1, padding: '8px 12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.18)', borderRadius: 10 }}>
-                      <div style={{ fontSize: 8, fontWeight: 700, color: '#B5543E', letterSpacing: 1.2, marginBottom: 3 }}>↓ MAYOR RIESGO</div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>{macroWorst.area}</div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#B5543E' }}>{macroWorst.red} tarea{macroWorst.red !== 1 ? 's' : ''} en rojo</div>
+                    <div style={{ flex: 1, padding: '8px 10px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.18)', borderRadius: 10 }}>
+                      <div style={{ fontSize: 7, fontWeight: 700, color: '#B5543E', letterSpacing: 1.2, marginBottom: 3 }}>↓ MAYOR RIESGO</div>
+                      <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: 800, color: 'var(--cream)' }}>{macroWorst.area}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#B5543E' }}>{macroWorst.red} en rojo</div>
                     </div>
                   )}
                 </div>
@@ -609,7 +608,7 @@ export default function GestionPanel({ tasks }: Props) {
         })}
 
         {/* Legend */}
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 4 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', paddingTop: 4 }}>
           {[
             { label: 'OTCR: Efectividad de entrega (meta ≥ 85%)' },
             { label: 'Ping: Comentarios promedio por tarea (meta < 2)' },

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 
+const APP_URL = 'https://el-regreso-pwa.vercel.app'
+
 export default function InstalarPage() {
   const [os, setOs] = useState<'ios' | 'android' | 'other'>('other')
   const [installed, setInstalled] = useState(false)
@@ -37,11 +39,41 @@ export default function InstalarPage() {
       <div style={styles.card}>
 
         {/* Logo + título */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 28 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
           <Image src="/logo.png" alt="El Regreso" width={72} height={72}
             style={{ filter: 'invert(1)', borderRadius: 18, marginBottom: 12, border: '1px solid rgba(212,175,55,0.3)' }} />
           <h1 style={styles.title}>El Regreso Control</h1>
           <p style={styles.sub}>Instala la app en tu celular</p>
+        </div>
+
+        {/* URL para compartir / QR */}
+        <div style={{
+          marginBottom: 24, padding: '16px 18px', background: 'rgba(212,175,55,0.06)',
+          borderRadius: 16, border: '1px solid rgba(212,175,55,0.18)',
+        }}>
+          <div style={{ fontSize: 9, color: 'rgba(212,175,55,0.6)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 }}>
+            Comparte este enlace con tu equipo
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              flex: 1, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(212,175,55,0.2)',
+              borderRadius: 8, padding: '9px 12px', fontSize: 11, color: '#D4AF37',
+              fontFamily: 'monospace', letterSpacing: 0.3, overflow: 'hidden',
+              textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {APP_URL}/instalar
+            </div>
+            <button
+              onClick={() => navigator.clipboard?.writeText(APP_URL + '/instalar')}
+              style={{
+                flexShrink: 0, padding: '9px 14px', background: '#D4AF37',
+                border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 800,
+                color: '#0A0A0A', cursor: 'pointer',
+              }}
+            >
+              Copiar
+            </button>
+          </div>
         </div>
 
         {/* Tabs OS */}
@@ -74,7 +106,7 @@ export default function InstalarPage() {
                 icon: '🌐',
                 title: 'Abre Safari',
                 desc: 'Busca Safari en tu iPhone y abre esta página:',
-                extra: <div style={styles.urlBox}>el-regreso-pwa.vercel.app/instalar</div>,
+                extra: <div style={styles.urlBox}>{APP_URL}/instalar</div>,
               },
               {
                 n: '2',
@@ -149,7 +181,7 @@ export default function InstalarPage() {
                 icon: '🌐',
                 title: 'Abre Chrome',
                 desc: 'Abre esta página en Google Chrome:',
-                extra: <div style={styles.urlBox}>el-regreso-pwa.vercel.app</div>,
+                extra: <div style={styles.urlBox}>{APP_URL}</div>,
               },
               {
                 n: '2',
