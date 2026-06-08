@@ -2,13 +2,9 @@ name: Misiones Semanal — Auto-generación
 
 on:
   schedule:
-    # Cada lunes 8:00am hora Chile (13:00 UTC en verano, 12:00 UTC en invierno)
-    # Usamos 12:00 UTC para cubrir ambos casos (mejor tarde que nunca)
-    - cron: '0 12 * * 1'
-  # También se dispara diariamente para actualizar clasificaciones esta_semana/proxima_semana
-  # (un cliente puede pasar de proxima_semana a esta_semana al cruzar el umbral de 7 días)
+    # Lunes a viernes a las 12:00 UTC (09:00 Chile verano / 08:00 invierno)
     - cron: '0 12 * * 1-5'
-  # Permite disparar manualmente desde GitHub
+  # Permite disparar manualmente desde GitHub Actions
   workflow_dispatch:
 
 jobs:
@@ -22,12 +18,12 @@ jobs:
           echo "Trigger: ${{ github.event_name }}"
           echo "Fecha: $(date -u '+%Y-%m-%d %H:%M UTC')"
 
-      - name: Generar misiones de la semana
+      - name: Generar misiones
         run: |
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.MISIONES_CRON_SECRET }}" \
             -H "Content-Type: application/json" \
-            "${{ secrets.NEXT_PUBLIC_APP_URL }}/api/misiones/cron")
+            "https://el-regreso-pwa.vercel.app/api/misiones/cron")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | head -1)
@@ -36,17 +32,20 @@ jobs:
           echo "Response: $BODY"
 
           if [ "$HTTP_CODE" != "200" ]; then
-            echo "❌ Error al generar misiones (HTTP $HTTP_CODE)"
+            echo "Error al generar misiones (HTTP $HTTP_CODE)"
             exit 1
           fi
 
-          echo "✅ Misiones generadas exitosamente"
+          echo "Misiones generadas exitosamente"
           echo "$BODY" | python3 -c "
 import json, sys
-d = json.load(sys.stdin)
-print(f\"  Semana: {d.get('semana', '?')}\")
-print(f\"  Total alertas: {d.get('total_alertas', 0)}\")
-print(f\"  Esta semana: {d.get('por_tipo', {}).get('esta_semana', 0)}\")
-print(f\"  Próxima semana: {d.get('por_tipo', {}).get('proxima_semana', 0)}\")
-print(f\"  Vencidos: {d.get('por_tipo', {}).get('vencido', 0)}\")
-" 2>/dev/null || echo "$BODY"
+try:
+    d = json.load(sys.stdin)
+    print(f'  Semana: {d.get(\"semana\", \"?\")}')
+    print(f'  Total alertas: {d.get(\"total_alertas\", 0)}')
+    print(f'  Esta semana: {d.get(\"por_tipo\", {}).get(\"esta_semana\", 0)}')
+    print(f'  Proxima semana: {d.get(\"por_tipo\", {}).get(\"proxima_semana\", 0)}')
+    print(f'  Vencidos: {d.get(\"por_tipo\", {}).get(\"vencido\", 0)}')
+except Exception:
+    pass
+" 2>/dev/null || true
