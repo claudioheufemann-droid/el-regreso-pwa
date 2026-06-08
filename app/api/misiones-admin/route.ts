@@ -153,8 +153,9 @@ export async function GET(req: NextRequest) {
     if (e) e.volAnt += v.litros ?? 0
   }
   const VEND_COLORS: Record<string, string> = {
-    'Javier Badilla': '#F59E0B',
-    'Carlos Urrejola': '#60A5FA',
+    'Vendedor 1':      '#D4AF37',
+    'Javier Badilla':  '#D4AF37',
+    'Carlos Urrejola': '#D4AF37',
   }
   const DEFAULT_COLORS = ['#A78BFA', '#F87171', '#34D399', '#FB923C', '#38BDF8']
   let colorIdx = 0

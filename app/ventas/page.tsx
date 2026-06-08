@@ -69,7 +69,7 @@ export default async function DashboardPage({
     supabase.from('ventas').select('fecha_pedido').in('vendedor_actual', scope).gte('fecha_pedido', hace90.toISOString().split('T')[0]).order('fecha_pedido', { ascending: false }).limit(2000),
     supabase.rpc('get_pending_call_alerts', { p_vendedor, p_nivel_minimo: 'proximo' }),
     supabase.from('misiones').select('vendedor, alert_level, estado, score, segmento, nombre_fantasia, dias_sin_compra').eq('semana', semanaLunes).in('vendedor', misionesScope),
-    supabase.from('users').select('nombre, avatar_url').in('nombre', ['Javier B.', 'Carlos U.']),
+    supabase.from('users').select('nombre, avatar_url').in('nombre', ['Vendedor 1']),
   ])
 
   const ultimaFechaStr = ultimaFecha?.fecha_pedido ?? new Date().toISOString().split('T')[0]

@@ -63,10 +63,8 @@ function formatPeso(n: number) {
   return '$' + Math.round(n).toLocaleString('es-CL')
 }
 
-function getColorVendedor(vendedor: string) {
-  if (vendedor === 'Javier Badilla') return '#D4AF37'
-  if (vendedor === 'Carlos Urrejola') return '#D4AF37'
-  return '#8A6D1F'
+function getColorVendedor(_vendedor: string) {
+  return '#D4AF37'
 }
 
 // Salud: verde <7d, amarillo 8-15d, naranja 16-30d, rojo >30d

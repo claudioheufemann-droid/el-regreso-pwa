@@ -126,7 +126,7 @@ export default function ClientesUploadClient() {
        'Juan Pérez', 'Calle Falsa 123', 'Santiago', 'Santiago', '8320000', 'IVA',
        'Calle Falsa 123', 'Santiago', 'Santiago', '0', 'Lun-Vie 9-18',
        'Sin notas', '1', 'https://maps.google.com/?q=...', 'Lista A',
-       'CLI-001', 'Javier Badilla', '30', '0', '0', 'Particular',
+       'CLI-001', 'Vendedor 1', '30', '0', '0', 'Particular',
        'Bar', 'Contado', 'Expendio de bebidas'],
     ]
     const ws = XLSX.utils.aoa_to_sheet(wsData)

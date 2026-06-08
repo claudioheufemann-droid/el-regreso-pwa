@@ -586,7 +586,7 @@ export default function CargarClient({ periodos }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
                 'Hoja "Datos" con columnas estándar',
-                'VendedorActual: Javier Badilla / Carlos Urrejola',
+                'VendedorActual: Vendedor 1 (o nombre real del vendedor)',
                 'FechaPedido para la fecha del pedido',
                 'Litros y TotalSImp$ para montos',
               ].map(txt => (

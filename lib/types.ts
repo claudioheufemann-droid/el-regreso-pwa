@@ -3,13 +3,15 @@ export type Vendedor = 'Vendedor 1'
 // Nombre display unificado
 export const VENDEDORES: Vendedor[] = ['Vendedor 1']
 
-// Nombres reales en la BD (para queries a ventas)
+// Nombres históricos en la BD — necesarios para queries sobre datos pasados
+// (los registros de ventas anteriores siguen con estos nombres)
 export const VENDEDORES_DB = ['Javier Badilla', 'Carlos Urrejola'] as const
 
-// Mapeo BD → display
+// Mapeo BD → display (ambos se consolidan en Vendedor 1)
 export const VENDEDOR_DISPLAY: Record<string, string> = {
   'Javier Badilla':  'Vendedor 1',
   'Carlos Urrejola': 'Vendedor 1',
+  'Vendedor 1':      'Vendedor 1',
 }
 
 export const CATEGORIAS_NEGOCIO = [

@@ -218,7 +218,7 @@ export async function POST(req: NextRequest) {
 
   if (registros.length === 0) {
     return NextResponse.json(
-      { error: 'No se encontraron ventas de Javier Badilla o Carlos Urrejola en el archivo' },
+      { error: 'No se encontraron ventas de vendedores válidos en el archivo' },
       { status: 400 }
     )
   }
