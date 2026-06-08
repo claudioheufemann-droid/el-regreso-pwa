@@ -23,13 +23,23 @@ import AppHeader from '@/components/ui/AppHeader'
 
 type Vista = 'diario' | 'semanal' | 'mensual'
 
+interface ClienteDetalle {
+  nombre: string
+  canal: string | null
+  litros: number
+  pedidos: number
+  ultimoPedido: string
+  productos: { producto: string; categoria: string; litros: number }[]
+}
+
 interface VentaRow {
   vendedor_actual: string
   litros: number
   categoria_negocio: string | null
-  fecha_pedido: string
+  nombre_fantasia?: string | null
   categoria_producto?: string | null
   producto?: string | null
+  fecha_pedido: string
 }
 
 interface ProductoItem { nombre: string; litros: number }
@@ -1150,6 +1160,203 @@ function buildPacingData(
   })
 }
 
+// ─── Locales Vendidos ─────────────────────────────────────────────────────────
+
+const CANAL_DOT: Record<string, string> = {
+  'Bar':           '#D4AF37',
+  'Supermercado':  '#60A5FA',
+  'Minimarket':    '#34D399',
+  'Restaurante':   '#F97316',
+  'Botillería':    '#A78BFA',
+  'Cafetería':     '#FB7185',
+  'Almacén':       '#94A3B8',
+  'Distribuidor':  '#38BDF8',
+}
+
+function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; rangeLabel: string }) {
+  const [busqueda, setBusqueda] = useState('')
+  const [orden, setOrden]       = useState<'litros' | 'nombre' | 'canal'>('litros')
+  const [expandido, setExpandido] = useState<string | null>(null)
+  const [verTodos, setVerTodos]   = useState(false)
+
+  if (!clientes.length) return null
+
+  const totalLitros = clientes.reduce((s, c) => s + c.litros, 0)
+
+  const filtrados = clientes
+    .filter(c => c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+                 (c.canal ?? '').toLowerCase().includes(busqueda.toLowerCase()))
+    .sort((a, b) => {
+      if (orden === 'nombre')  return a.nombre.localeCompare(b.nombre)
+      if (orden === 'canal')   return (a.canal ?? '').localeCompare(b.canal ?? '')
+      return b.litros - a.litros
+    })
+
+  const visibles = verTodos ? filtrados : filtrados.slice(0, 10)
+
+  return (
+    <div style={{ marginTop: 40 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', marginBottom: 3 }}>
+            Locales Vendidos
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--muted)' }}>
+            {rangeLabel} · <strong style={{ color: 'var(--cream)' }}>{clientes.length}</strong> locales · <strong style={{ color: 'var(--gold)' }}>{totalLitros.toFixed(1)} L</strong>
+          </p>
+        </div>
+        {/* Sort */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {([['litros','Litros'],['nombre','A-Z'],['canal','Canal']] as [typeof orden, string][]).map(([k, label]) => (
+            <button key={k} onClick={() => setOrden(k)} style={{
+              padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+              background: orden === k ? 'var(--gold)' : 'var(--surface)',
+              color: orden === k ? '#080808' : 'var(--muted)',
+            }}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Búsqueda */}
+      <div style={{ position: 'relative', marginBottom: 14 }}>
+        <input
+          type="text"
+          placeholder="Buscar local o canal…"
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          style={{
+            width: '100%', padding: '10px 14px 10px 36px', borderRadius: 10,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            color: 'var(--cream)', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+          }}
+          onFocus={e => (e.target.style.borderColor = 'var(--gold)')}
+          onBlur={e => (e.target.style.borderColor = 'var(--border)')}
+        />
+        <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}
+          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+      </div>
+
+      {/* Lista */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {visibles.map((c, idx) => {
+          const isOpen = expandido === c.nombre
+          const pct = totalLitros > 0 ? (c.litros / totalLitros) * 100 : 0
+          const dotColor = CANAL_DOT[c.canal ?? ''] ?? '#6B7280'
+
+          return (
+            <div key={c.nombre} style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 14, overflow: 'hidden',
+              borderLeft: `3px solid ${dotColor}`,
+            }}>
+              {/* Row principal */}
+              <div
+                onClick={() => setExpandido(isOpen ? null : c.nombre)}
+                style={{ padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+              >
+                {/* Rank */}
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                  background: idx < 3 ? `${dotColor}20` : 'rgba(128,128,128,0.08)',
+                  border: `1px solid ${idx < 3 ? dotColor + '40' : 'rgba(128,128,128,0.12)'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 800, color: idx < 3 ? dotColor : 'var(--muted)',
+                }}>{idx + 1}</div>
+
+                {/* Nombre + canal */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.nombre}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>{c.canal ?? 'Sin canal'}</span>
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>· {c.pedidos} pedido{c.pedidos !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+
+                {/* Litros + barra */}
+                <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 80 }}>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.3px' }}>{c.litros.toFixed(1)} L</div>
+                  <div style={{ fontSize: 9, color: 'var(--muted)' }}>{pct.toFixed(1)}% del total</div>
+                </div>
+
+                {/* Expand arrow */}
+                <ChevronDown size={14} color="var(--muted)"
+                  style={{ flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+              </div>
+
+              {/* Barra de litros */}
+              <div style={{ height: 3, background: 'rgba(128,128,128,0.08)' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: dotColor, opacity: 0.6, transition: 'width 0.4s ease' }} />
+              </div>
+
+              {/* Productos expandidos */}
+              {isOpen && (
+                <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 8 }}>
+                    Productos vendidos
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {c.productos.map(p => {
+                      const pPct = c.litros > 0 ? (p.litros / c.litros) * 100 : 0
+                      const catColor = p.categoria === 'Cerveza' ? '#D4AF37' : p.categoria === 'Kombucha' ? '#5A8A4A' : '#6B7280'
+                      return (
+                        <div key={p.producto} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{
+                            fontSize: 9, fontWeight: 700, color: catColor,
+                            background: `${catColor}12`, border: `1px solid ${catColor}25`,
+                            padding: '2px 6px', borderRadius: 6, flexShrink: 0, whiteSpace: 'nowrap',
+                          }}>{p.categoria}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {p.producto}
+                            </div>
+                            <div style={{ height: 3, background: 'rgba(128,128,128,0.1)', borderRadius: 3, marginTop: 3 }}>
+                              <div style={{ height: '100%', width: `${pPct}%`, background: catColor, borderRadius: 3, opacity: 0.7 }} />
+                            </div>
+                          </div>
+                          <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{p.litros.toFixed(1)} L</span>
+                            <span style={{ fontSize: 9, color: 'var(--muted)', marginLeft: 4 }}>({pPct.toFixed(0)}%)</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {c.ultimoPedido && (
+                    <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      Último pedido: {fmtFecha(c.ultimoPedido)}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Ver más / Ver menos */}
+      {filtrados.length > 10 && (
+        <button
+          onClick={() => setVerTodos(v => !v)}
+          style={{
+            marginTop: 12, width: '100%', padding: '10px 0',
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            borderRadius: 10, fontSize: 12, fontWeight: 700,
+            color: 'var(--muted)', cursor: 'pointer',
+          }}
+        >
+          {verTodos ? 'Ver menos ↑' : `Ver ${filtrados.length - 10} locales más ↓`}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function MetasClient({
@@ -1162,6 +1369,7 @@ export default function MetasClient({
   const [rangeFin, setRangeFin]       = useState<string>(mesFin)
   const [rangeAnalytics, setRangeAnalytics] = useState<AnalyticsExtended[] | null>(null)
   const [rangeProductos, setRangeProductos] = useState<ProductoCategoria[] | null>(null)
+  const [rangeClientes, setRangeClientes]   = useState<ClienteDetalle[] | null>(null)
   const [loading, setLoading]         = useState(false)
 
   // Ciclos contables (24 del mes → 23 del mes siguiente) disponibles en la BD
@@ -1217,6 +1425,7 @@ export default function MetasClient({
       })
       setRangeAnalytics(extendidos)
       setRangeProductos(data.productosPeriodo ?? [])
+      setRangeClientes(data.clientesDetalle ?? [])
     } finally {
       setLoading(false)
     }
@@ -1228,6 +1437,7 @@ export default function MetasClient({
     if (ini === mesInicio && fin === mesFin) {
       setRangeAnalytics(null)
       setRangeProductos(null)
+      setRangeClientes(null)
     } else {
       fetchForRange(ini, fin)
     }
@@ -1381,9 +1591,38 @@ export default function MetasClient({
   // ── Compute base product breakdown from props ────────────────────────────────
   const baseProductos = useMemo(() => computeProductos(ventasMes), [ventasMes])
 
+  // ── Compute base clientes from props ─────────────────────────────────────────
+  const baseClientes = useMemo<ClienteDetalle[]>(() => {
+    const map = new Map<string, { canal: string | null; litros: number; fechas: Set<string>; prods: Map<string, { categoria: string; litros: number }> }>()
+    for (const v of ventasMes) {
+      const nombre = v.nombre_fantasia?.trim() || 'Sin nombre'
+      if (!map.has(nombre)) map.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, fechas: new Set(), prods: new Map() })
+      const e = map.get(nombre)!
+      e.litros += v.litros ?? 0
+      if (v.fecha_pedido) e.fechas.add(v.fecha_pedido)
+      const prod = v.producto?.trim() || 'Sin nombre'
+      const cat  = v.categoria_producto?.trim() || 'Sin categoría'
+      if (!e.prods.has(prod)) e.prods.set(prod, { categoria: cat, litros: 0 })
+      e.prods.get(prod)!.litros += v.litros ?? 0
+    }
+    return [...map.entries()]
+      .map(([nombre, e]) => ({
+        nombre, canal: e.canal,
+        litros: Math.round(e.litros * 10) / 10,
+        pedidos: e.fechas.size,
+        ultimoPedido: [...e.fechas].sort().at(-1) ?? '',
+        productos: [...e.prods.entries()]
+          .map(([producto, { categoria, litros }]) => ({ producto, categoria, litros: Math.round(litros * 10) / 10 }))
+          .sort((a, b) => b.litros - a.litros),
+      }))
+      .filter(c => c.litros > 0)
+      .sort((a, b) => b.litros - a.litros)
+  }, [ventasMes])
+
   // ── Derived display values ────────────────────────────────────────────────────
   const activeAnalytics = rangeAnalytics ?? analytics
   const productosVista  = rangeProductos ?? baseProductos
+  const activeClientes  = rangeClientes  ?? baseClientes
   const sinMetas = activeAnalytics.every(a => a.metaMensual === 0)
 
   const totalReal = activeAnalytics.reduce((s, a) => s + a.realizadoMes, 0)
@@ -1500,6 +1739,9 @@ export default function MetasClient({
               <VendedorCard key={a.vendedor} analytics={a} rangeLabel={rangeLabel} avatarUrl={vendedorAvatars?.[a.vendedor]} />
             ))}
           </div>
+
+          {/* Locales vendidos */}
+          <LocalesSection clientes={activeClientes} rangeLabel={rangeLabel} />
 
           {/* Sección de productos */}
           <ProductosSection

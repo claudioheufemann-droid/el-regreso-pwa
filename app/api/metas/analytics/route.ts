@@ -209,12 +209,49 @@ export async function GET(req: NextRequest) {
     }
   })
 
+  // ── Detalle por local (nombre_fantasia) ─────────────────────────────────────
+  const clientesMap = new Map<string, {
+    canal: string | null
+    litros: number
+    fechas: Set<string>
+    prods: Map<string, { categoria: string; litros: number }>
+  }>()
+
+  for (const v of ventas) {
+    const nombre = (v.nombre_fantasia ?? '').trim() || 'Sin nombre'
+    if (!clientesMap.has(nombre)) {
+      clientesMap.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, fechas: new Set(), prods: new Map() })
+    }
+    const e = clientesMap.get(nombre)!
+    e.litros += v.litros ?? 0
+    if (v.fecha_pedido) e.fechas.add(v.fecha_pedido)
+    const prod = (v.producto ?? '').trim() || 'Sin nombre'
+    const cat  = (v.categoria_producto ?? '').trim() || 'Sin categoría'
+    if (!e.prods.has(prod)) e.prods.set(prod, { categoria: cat, litros: 0 })
+    e.prods.get(prod)!.litros += v.litros ?? 0
+  }
+
+  const clientesDetalle = [...clientesMap.entries()]
+    .map(([nombre, e]) => ({
+      nombre,
+      canal: e.canal,
+      litros: Math.round(e.litros * 10) / 10,
+      pedidos: e.fechas.size,
+      ultimoPedido: [...e.fechas].sort().at(-1) ?? '',
+      productos: [...e.prods.entries()]
+        .map(([producto, { categoria, litros }]) => ({ producto, categoria, litros: Math.round(litros * 10) / 10 }))
+        .sort((a, b) => b.litros - a.litros),
+    }))
+    .filter(c => c.litros > 0)
+    .sort((a, b) => b.litros - a.litros)
+
   return NextResponse.json({
     analytics,
     rangeInicio,
     rangeFin,
     sinMetas: false,
     productosPeriodo,
+    clientesDetalle,
     // Legacy compat
     productosMes: productosPeriodo,
     productosSemana: productosPeriodo,
