@@ -203,7 +203,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
 
   // ════════════════════════════════════════════════════════
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0A0A0A', overflow: isDesktop ? 'hidden' : 'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: isDesktop ? '100vh' : '100%', background: '#0A0A0A', overflow: isDesktop ? 'hidden' : 'auto' }}>
 
       {/* ─── AppHeader móvil ─── */}
       {!isDesktop && (
@@ -310,9 +310,9 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
       </div>
 
       {/* ─── Main: mapa + sidebar ─── */}
-      <div style={{ flex: 1, display: 'flex', gap: 14, padding: isDesktop ? '0 20px' : '0 14px', minHeight: isDesktop ? 0 : 460 }}>
+      <div style={{ flex: 1, display: 'flex', gap: 14, padding: isDesktop ? '0 20px' : '0 14px', minWidth: 0 }}>
         {/* Mapa */}
-        <div style={{ flex: 1, position: 'relative', borderRadius: 16, overflow: 'hidden', border: '1px solid #1A1A1A', minHeight: isDesktop ? 0 : 420 }}>
+        <div style={{ flex: 1, position: 'relative', borderRadius: 16, overflow: 'hidden', border: '1px solid #1A1A1A', minHeight: isDesktop ? 0 : '500px', minWidth: 0 }}>
           {loading && (
             <div style={{ position: 'absolute', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(10,10,10,0.6)', backdropFilter: 'blur(2px)' }}>
               <div style={{ textAlign: 'center', color: '#888' }}>

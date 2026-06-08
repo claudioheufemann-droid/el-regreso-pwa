@@ -20,6 +20,8 @@ interface Viaje {
   iniciado_at: string
   completado_at: string | null
   destino_declarado: string | null
+  foto_checkin: string | null
+  foto_checkout: string | null
   vehiculo: { id?: string; nombre: string; patente: string | null } | null
   conductor: { id?: string; nombre: string } | null
 }
@@ -177,6 +179,41 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 4 }}>Notas</p>
               <p style={{ fontSize: 13, color: '#F4EEDF' }}>{viaje.motivo}</p>
+            </div>
+          )}
+
+          {/* Fotos */}
+          {(viaje.foto_checkin || viaje.foto_checkout) && (
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>
+                📸 Fotos del viaje
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                {viaje.foto_checkin && (
+                  <div style={{ borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <a href={viaje.foto_checkin} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={viaje.foto_checkin}
+                        alt="Check-in"
+                        style={{ width: '100%', height: '120px', objectFit: 'cover', display: 'block' }}
+                      />
+                      <div style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700, color: 'var(--muted)' }}>Check-in</div>
+                    </a>
+                  </div>
+                )}
+                {viaje.foto_checkout && (
+                  <div style={{ borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <a href={viaje.foto_checkout} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={viaje.foto_checkout}
+                        alt="Check-out"
+                        style={{ width: '100%', height: '120px', objectFit: 'cover', display: 'block' }}
+                      />
+                      <div style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700, color: 'var(--muted)' }}>Check-out</div>
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

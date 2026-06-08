@@ -664,12 +664,13 @@ function quickBtn(color: string): React.CSSProperties {
 }
 
 // ── Tarjeta mobile (expandible) ───────────────────────────────────────────────
-function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo }: {
+function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, isDesktop }: {
   mision: MisionEnriquecida
   onActualizar: OnActualizar
   onWA: (m: MisionEnriquecida) => void
   loadingId: string | null
   onMarcarInactivo?: (m: MisionEnriquecida) => void
+  isDesktop: boolean
 }) {
   const [open, setOpen] = useState(false)
   const segColor  = SEG_COLOR[mision.segmento] ?? '#6B7280'
@@ -687,10 +688,10 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo }:
     }}>
       {/* Header clickable */}
       <div onClick={() => setOpen(v => !v)} style={{
-        padding: '13px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+        padding: isDesktop ? '13px 14px' : '10px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
       }}>
         <div style={{
-          width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+          width: isDesktop ? 40 : 36, height: isDesktop ? 40 : 36, borderRadius: '50%', flexShrink: 0,
           background: `${segColor}18`, border: `2px solid ${segColor}40`,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         }}>
@@ -737,8 +738,8 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo }:
 
       {/* Detalle */}
       {open && (
-        <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--border)' }}>
-          <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, margin: '12px 0' }}>
+        <div style={{ padding: isDesktop ? '0 14px 14px' : '0 12px 12px', borderTop: '1px solid var(--border)' }}>
+          <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: 8, margin: '12px 0' }}>
             {[
               { label: 'Sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#B5543E' : 'var(--cream)' },
               { label: 'Último pedido', value: fFecha(mision.ultima_venta_fecha), color: 'var(--cream)' },
@@ -910,7 +911,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
 }
 
 // ── Sección mobile ────────────────────────────────────────────────────────────
-function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, onMarcarInactivo, defaultOpen = true }: {
+function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, onMarcarInactivo, defaultOpen = true, isDesktop }: {
   tipo: TipoMision
   misiones: MisionEnriquecida[]
   onActualizar: OnActualizar
@@ -918,6 +919,7 @@ function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, onMarc
   loadingId: string | null
   onMarcarInactivo?: (m: MisionEnriquecida) => void
   defaultOpen?: boolean
+  isDesktop: boolean
 }) {
   const [open, setOpen] = useState(defaultOpen)
   if (!misiones.length) return null
@@ -954,7 +956,7 @@ function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, onMarc
       {open && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {misiones.map(m => (
-            <MisionCard key={m.id} mision={m} onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} />
+            <MisionCard key={m.id} mision={m} onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} isDesktop={isDesktop} />
           ))}
         </div>
       )}
@@ -1432,8 +1434,8 @@ export default function MisionesClient({
 
       {tab === 'semana' && (
         <div>
-          <SeccionMisiones tipo="vencido"      misiones={porTipo.vencido}      onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} />
-          <SeccionMisiones tipo="esta_semana"  misiones={porTipo.esta_semana}  onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} />
+          <SeccionMisiones tipo="vencido"      misiones={porTipo.vencido}      onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} isDesktop={isDesktop} />
+          <SeccionMisiones tipo="esta_semana"  misiones={porTipo.esta_semana}  onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} isDesktop={isDesktop} />
           {misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length === 0 && (
             <div style={{ textAlign: 'center', padding: '36px 16px' }}>
               <p style={{ fontSize: 28, marginBottom: 8 }}>🎉</p>
