@@ -10,6 +10,8 @@ import {
   ChevronDown, ChevronRight, Target, Minus, Plus, ArrowLeft, Sparkles, UserX,
 } from 'lucide-react'
 import type { MisionEnriquecida, ProximaPreview, HistorialSemana, EstadoMision, TipoMision } from './page'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
+const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { SEG_COLOR } from '@/lib/theme'
@@ -1064,7 +1066,7 @@ function ProximaView({ proxima, isDesktop }: { proxima: ProximaPreview[]; isDesk
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre_fantasia}</p>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>{p.vendedor_actual.split(' ')[0]}</span>
+                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>{dspV(p.vendedor_actual)}</span>
                   {diasRestantes !== null && <span style={{ fontSize: 10, fontWeight: 700, color: '#D4AF37' }}>En {diasRestantes}d</span>}
                   <span style={{ fontSize: 10, color: 'var(--muted)' }}>Ciclo {p.ciclo_promedio_dias}d</span>
                 </div>

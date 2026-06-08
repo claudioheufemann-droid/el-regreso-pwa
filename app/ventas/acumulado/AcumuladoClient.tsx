@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import type { KpiData, EvoDia, CatRow, TopCliente, MixItem, InsightItem, AlertaItem, DivVend, EvoDetalle, CatClientes, MixDetalle, ClienteDet } from './page'
 import type { Periodo } from '@/lib/types'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
+const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import { TrendingUp, TrendingDown, Users, Award, DollarSign, Droplets, Bell, Lightbulb, ChevronRight, ChevronDown, BarChart2, Target, X } from 'lucide-react'
 import { VEND_COLOR } from '@/lib/theme'
 import AppHeader from '@/components/ui/AppHeader'
@@ -303,7 +305,7 @@ function CatTable({ vendedor, cats, catClientes, color }: {
     <div style={{ flex:1, minWidth:0 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:12 }}>
         <div>
-          <p style={{ fontSize:13, fontWeight:900, color, letterSpacing:'0.03em' }}>{vendedor.toUpperCase()}</p>
+          <p style={{ fontSize:13, fontWeight:900, color, letterSpacing:'0.03em' }}>{dspV(vendedor).toUpperCase()}</p>
           <p style={{ fontSize:10, color:'var(--muted)' }}>{totalLitros>0?Math.round((totalLitros/totalLitros)*100):0}% del total</p>
         </div>
         <p style={{ fontSize:22, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.5px' }}>{fLn(totalLitros)} L</p>
@@ -376,7 +378,7 @@ function DivBar({ vendedor, div, color }: { vendedor:string; div:DivVend; color:
   return (
     <div style={{ marginBottom:20 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-        <p style={{ fontSize:12, fontWeight:800, color }}>{vendedor.toUpperCase()}</p>
+        <p style={{ fontSize:12, fontWeight:800, color }}>{dspV(vendedor).toUpperCase()}</p>
         <div style={{ background:`${scColor}20`, border:`1px solid ${scColor}40`, borderRadius:8, padding:'2px 10px' }}>
           <span style={{ fontSize:12, fontWeight:900, color:scColor }}>Score {sc}/100</span>
         </div>
@@ -474,7 +476,7 @@ export default function AcumuladoClient({
               {vendedoresScope.map(v=>(
                 <div key={v} style={{ display:'flex', alignItems:'center', gap:5 }}>
                   <div style={{ width:18, height:2, background:VEND_COLOR[v]??'#888', borderRadius:2 }}/>
-                  <span style={{ fontSize:10, color:'var(--muted)' }}>{v.split(' ')[0]}</span>
+                  <span style={{ fontSize:10, color:'var(--muted)' }}>{dspV(v)}</span>
                 </div>
               ))}
             </div>

@@ -4,7 +4,10 @@ import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, ChevronUp, Users, Calendar, X, MapPin, Target } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
-import { Periodo } from '@/lib/types'
+import { Periodo, VENDEDOR_DISPLAY } from '@/lib/types'
+
+/** Muestra "Vendedor 1" en lugar del nombre real de la BD */
+const dspVendedor = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import type { EvolutionDay, ProductRank, ProductBuyer } from './page'
 import { VEND_COLOR as VEND_COLOR_THEME, SEG_COLOR as SEG_COLOR_THEME } from '@/lib/theme'
 import AppHeader from '@/components/ui/AppHeader'
@@ -886,7 +889,7 @@ function VendedorCard({ data, color, fechaHoy, avatars }: { data: VendedorResume
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px 12px' }}>
         <VendedorAvatar vendedor={data.vendedor} color={color} size={42} avatars={avatars} />
         <div>
-          <h2 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 16, letterSpacing: '-0.3px' }}>{data.vendedor}</h2>
+          <h2 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 16, letterSpacing: '-0.3px' }}>{dspVendedor(data.vendedor)}</h2>
           <p style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Vendedor Canal</p>
         </div>
       </div>
@@ -1542,7 +1545,7 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
                     {c.nombre_fantasia}
                   </p>
                   {vtab === 'all' && (
-                    <span style={{ fontSize: 9, color: vendColor, fontWeight: 700, flexShrink: 0 }}>{c.vendedor.split(' ')[0]}</span>
+                    <span style={{ fontSize: 9, color: vendColor, fontWeight: 700, flexShrink: 0 }}>{dspVendedor(c.vendedor)}</span>
                   )}
                   <p style={{ fontSize: 11, fontWeight: 800, color: alertColor, flexShrink: 0 }}>{c.dias_sin_compra}d</p>
                 </div>
@@ -1579,7 +1582,7 @@ function DropSizeCard({ resumen, colors, avatars }: { resumen: VendedorResumen[]
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                 <VendedorAvatar vendedor={v.vendedor} color={color} size={36} avatars={avatars} />
                 <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.vendedor}</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{dspVendedor(v.vendedor)}</p>
                   <p style={{ fontSize: 10, color: 'var(--muted)' }}>Vendedor Canal</p>
                 </div>
               </div>
@@ -1756,7 +1759,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 9, fontWeight: 800, color, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 2 }}>
-                  {v.vendedor.split(' ')[0]} {v.vendedor.split(' ')[1]?.charAt(0) ?? ''}.
+                  {dspVendedor(v.vendedor)}
                 </p>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 2 }}>
                   <span style={{ fontSize: compact ? 18 : 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px' }}>

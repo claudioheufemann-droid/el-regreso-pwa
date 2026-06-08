@@ -8,6 +8,8 @@ import {
   Flame, Target, TrendingUp, Eye, EyeOff, Layers as LayersIcon, Package,
 } from 'lucide-react'
 import { VEND_COLOR } from '@/lib/theme'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
+const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import type { Punto, CapaViz, TileTipo, LeadPunto } from './MapLeaflet'
 import AppHeader from '@/components/ui/AppHeader'
@@ -415,7 +417,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
                 <div key={t.vendedor} style={{ background: '#0E0E0E', borderRadius: 10, padding: 12, border: `1px solid ${color}25` }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
-                    <span style={{ fontSize: 12, color, fontWeight: 700 }}>{t.vendedor.split(' ')[0]}</span>
+                    <span style={{ fontSize: 12, color, fontWeight: 700 }}>{dspV(t.vendedor)}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
                     <span style={{ fontSize: 22, fontWeight: 900, color: 'white' }}>{formatLitros(t.litros)} L</span>
