@@ -27,8 +27,8 @@ export default async function MetasPage() {
   ] = await Promise.all([
     supabase.from('metas').select('*').eq('tipo', 'semanal').lte('fecha_inicio', fechaRef).gte('fecha_fin', fechaRef),
     supabase.from('metas').select('*').eq('tipo', 'mensual').lte('fecha_inicio', fechaRef).gte('fecha_fin', fechaRef),
-    supabase.from('metas').select('semana_numero, fecha_inicio, fecha_fin').eq('tipo', 'semanal').gte('fecha_inicio', '2026-05-01').lte('fecha_fin', '2026-07-31').order('fecha_inicio'),
-    supabase.from('metas').select('fecha_inicio, fecha_fin').eq('tipo', 'mensual').gte('fecha_inicio', '2026-05-01').lte('fecha_fin', '2026-07-31').order('fecha_inicio'),
+    supabase.from('metas').select('semana_numero, fecha_inicio, fecha_fin').eq('tipo', 'semanal').order('fecha_inicio'),
+    supabase.from('metas').select('fecha_inicio, fecha_fin').eq('tipo', 'mensual').order('fecha_inicio'),
     supabase.from('periodos').select('*').eq('activo', true).single(),
   ])
 

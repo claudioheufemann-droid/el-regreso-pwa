@@ -413,41 +413,13 @@ function BarraDual({ meta, realizado, esperado, semaforo }: {
   )
 }
 
-function CanalRow({ c, vista, canalDiario }: { c: AnalyticsCanal; vista: Vista; canalDiario?: CanalDiario }) {
-  const color = CANAL_COLORS[c.canal] ?? '#6B7280'
-
-  if (vista === 'diario') {
-    if (!canalDiario || canalDiario.metaDiaria <= 0) return null
-    const pct = calcularCumplimiento(canalDiario.realHoy, canalDiario.metaDiaria)
-    return (
-      <div style={{
-        padding: '11px 14px', borderRadius: 12, background: 'var(--surface2)',
-        borderLeft: `3px solid ${SEMAFORO_COLORS[canalDiario.semaforo]}`,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: color }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)' }}>{c.canal}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fmt(canalDiario.realHoy)} / {fmt(canalDiario.metaDiaria)} L</span>
-            <span style={{
-              fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 100,
-              background: SEMAFORO_BG[canalDiario.semaforo], color: SEMAFORO_COLORS[canalDiario.semaforo],
-              border: `1px solid ${SEMAFORO_COLORS[canalDiario.semaforo]}40`,
-            }}>{pct.toFixed(0)}%</span>
-          </div>
-        </div>
-        <BarraDual meta={canalDiario.metaDiaria} realizado={canalDiario.realHoy} esperado={canalDiario.metaDiaria} semaforo={canalDiario.semaforo} />
-      </div>
-    )
-  }
-
-  const meta     = vista === 'mensual' ? c.metaMensual     : c.metaSemanal
-  const real     = vista === 'mensual' ? c.realizadoMes    : c.realizadoSemana
-  const esperado = vista === 'mensual' ? c.metaEsperadaMes : c.metaEsperadaSemana
-  const pct      = vista === 'mensual' ? c.pctMes          : c.pctSemana
-  const semaforo = vista === 'mensual' ? c.semaforoMes     : c.semaforoSemana
+function CanalRow({ c }: { c: AnalyticsCanal }) {
+  const color    = CANAL_COLORS[c.canal] ?? '#6B7280'
+  const meta     = c.metaMensual
+  const real     = c.realizadoMes
+  const esperado = c.metaEsperadaMes
+  const pct      = c.pctMes
+  const semaforo = c.semaforoMes
   if (meta <= 0) return null
 
   return (
@@ -476,25 +448,17 @@ function CanalRow({ c, vista, canalDiario }: { c: AnalyticsCanal; vista: Vista; 
 
 // ─── VendedorCard ─────────────────────────────────────────────────────────────
 
-function VendedorCard({ analytics, vista, avatarUrl }: { analytics: AnalyticsExtended; vista: Vista; avatarUrl?: string | null }) {
-  const isDiario  = vista === 'diario'
-  const esMensual = vista === 'mensual'
-
-  const meta      = isDiario  ? analytics.metaDiaria
-                  : esMensual ? analytics.metaMensual           : analytics.metaSemanal
-  const real      = isDiario  ? analytics.realizadoHoy
-                  : esMensual ? analytics.realizadoMes          : analytics.realizadoSemana
-  const esperado  = isDiario  ? analytics.metaDiaria
-                  : esMensual ? analytics.metaEsperadaMes       : analytics.metaEsperadaSemana
-  const pct       = isDiario  ? calcularCumplimiento(analytics.realizadoHoy, analytics.metaDiaria)
-                  : esMensual ? analytics.pctCumplimientoMes    : analytics.pctCumplimientoSemana
-  const semaforo  = isDiario  ? analytics.semaforoDiario
-                  : esMensual ? analytics.semaforoMes           : analytics.semaforoSemana
-  const faltante  = esMensual ? analytics.faltanteMes           : analytics.faltanteSemana
-  const diasRest  = esMensual ? analytics.diasRestantesMes      : analytics.diasRestantesSemana
-  const diasTrans = esMensual ? analytics.diasTranscurridosMes  : analytics.diasTranscurridosSemana
-  const diasTotal = esMensual ? analytics.diasHabilesMes        : analytics.diasHabilesSemana
-  const promNec   = esMensual ? analytics.promedioNecesarioDiarioMes : analytics.promedioNecesarioDiarioSemana
+function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: AnalyticsExtended; rangeLabel: string; avatarUrl?: string | null }) {
+  const meta      = analytics.metaMensual
+  const real      = analytics.realizadoMes
+  const esperado  = analytics.metaEsperadaMes
+  const pct       = analytics.pctCumplimientoMes
+  const semaforo  = analytics.semaforoMes
+  const faltante  = analytics.faltanteMes
+  const diasRest  = analytics.diasRestantesMes
+  const diasTrans = analytics.diasTranscurridosMes
+  const diasTotal = analytics.diasHabilesMes
+  const promNec   = analytics.promedioNecesarioDiarioMes
   const metaCumplida = real >= meta && meta > 0
 
   return (
@@ -543,62 +507,27 @@ function VendedorCard({ analytics, vista, avatarUrl }: { analytics: AnalyticsExt
         </div>
       </div>
 
-      {/* Chart — reactive según vista */}
-      <div style={{ padding: '0 20px 4px' }}>
-        {isDiario && (
-          <GaugeChart pct={pct} semaforo={semaforo} meta={meta} realizado={real} />
-        )}
-        {vista === 'semanal' && analytics.barDataSemana.length > 0 && (
-          <WeekBarChart
-            data={analytics.barDataSemana}
-            metaDiaria={analytics.metaDiaria}
-            semaforo={semaforo}
-          />
-        )}
-        {esMensual && analytics.pacingDataMes.length >= 2 && (
-          <PacingLineChart
-            data={analytics.pacingDataMes}
-            meta={analytics.metaMensual}
-            semaforo={semaforo}
-          />
-        )}
-      </div>
-
-      {/* Leyenda del chart */}
-      {(vista === 'semanal' || esMensual) && (
-        <div style={{ padding: '0 20px 10px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-          {vista === 'semanal' ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 3, background: SEMAFORO_COLORS.verde }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>≥95% meta</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 3, background: SEMAFORO_COLORS.amarillo }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>75–95%</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 3, background: SEMAFORO_COLORS.rojo }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>&lt;75%</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 12, height: 6, borderRadius: 2, background: 'rgba(255,255,255,0.06)' }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>Fondo = meta diaria</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 16, height: 6, borderRadius: 3, background: SEMAFORO_COLORS[semaforo], opacity: 0.5 }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>Realizado acumulado</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 16, height: 1.5, borderTop: '1.5px dashed rgba(255,255,255,0.28)' }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>Pacing ideal</span>
-              </div>
-            </>
-          )}
-        </div>
+      {/* Pacing chart del período seleccionado */}
+      {analytics.pacingDataMes.length >= 2 && (
+        <>
+          <div style={{ padding: '0 20px 4px' }}>
+            <PacingLineChart
+              data={analytics.pacingDataMes}
+              meta={analytics.metaMensual}
+              semaforo={semaforo}
+            />
+          </div>
+          <div style={{ padding: '0 20px 10px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 16, height: 6, borderRadius: 3, background: SEMAFORO_COLORS[semaforo], opacity: 0.5 }} />
+              <span style={{ fontSize: 10, color: 'var(--muted)' }}>Realizado acumulado</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 16, height: 1.5, borderTop: '1.5px dashed rgba(255,255,255,0.28)' }} />
+              <span style={{ fontSize: 10, color: 'var(--muted)' }}>Pacing ideal</span>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Progress bar */}
@@ -611,11 +540,9 @@ function VendedorCard({ analytics, vista, avatarUrl }: { analytics: AnalyticsExt
           <span style={{ fontSize: 10, color: 'var(--muted)' }}>
             Meta: <strong style={{ color: 'var(--cream)' }}>{fmt(meta)} L</strong>
           </span>
-          {!isDiario && (
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-              Esperado: <strong style={{ color: 'var(--cream)' }}>{fmt(esperado)} L</strong>
-            </span>
-          )}
+          <span style={{ fontSize: 10, color: 'var(--muted)' }}>
+            Esperado: <strong style={{ color: 'var(--cream)' }}>{fmt(esperado)} L</strong>
+          </span>
         </div>
       </div>
 
@@ -638,24 +565,22 @@ function VendedorCard({ analytics, vista, avatarUrl }: { analytics: AnalyticsExt
       </div>
 
       {/* Días hábiles bar */}
-      {!isDiario && (
-        <div style={{ padding: '0 20px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>Días hábiles transcurridos</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{diasTrans} / {diasTotal}</span>
-          </div>
-          <div style={{ height: 4, borderRadius: 4, background: 'rgba(255,255,255,0.06)' }}>
-            <div style={{
-              height: '100%', borderRadius: 4,
-              width: diasTotal > 0 ? `${(diasTrans / diasTotal) * 100}%` : '0%',
-              background: 'rgba(255,255,255,0.18)',
-            }} />
-          </div>
+      <div style={{ padding: '0 20px 14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+          <span style={{ fontSize: 10, color: 'var(--muted)' }}>Días hábiles transcurridos</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{diasTrans} / {diasTotal}</span>
         </div>
-      )}
+        <div style={{ height: 4, borderRadius: 4, background: 'rgba(255,255,255,0.06)' }}>
+          <div style={{
+            height: '100%', borderRadius: 4,
+            width: diasTotal > 0 ? `${(diasTrans / diasTotal) * 100}%` : '0%',
+            background: 'rgba(255,255,255,0.18)',
+          }} />
+        </div>
+      </div>
 
       {/* Proyección */}
-      {!isDiario && !metaCumplida && diasRest > 0 && (
+      {!metaCumplida && diasRest > 0 && (
         <div style={{
           margin: '0 20px 14px', padding: '10px 14px', borderRadius: 12,
           background: SEMAFORO_BG[semaforo], border: `1px solid ${SEMAFORO_COLORS[semaforo]}30`,
@@ -690,108 +615,233 @@ function VendedorCard({ analytics, vista, avatarUrl }: { analytics: AnalyticsExt
       {/* Canales */}
       <div style={{ padding: '0 20px 20px' }}>
         <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 10 }}>
-          Por canal · {vista}
+          Por canal · {rangeLabel}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {isDiario
-            ? analytics.porCanalHoy.map(cd => (
-                <CanalRow
-                  key={cd.canal}
-                  c={analytics.porCanal.find(c => c.canal === cd.canal) ?? { canal: cd.canal } as AnalyticsCanal}
-                  vista={vista}
-                  canalDiario={cd}
-                />
-              ))
-            : analytics.porCanal.map(c => (
-                <CanalRow key={c.canal} c={c} vista={vista} />
-              ))
-          }
+          {analytics.porCanal.map(c => (
+            <CanalRow key={c.canal} c={c} />
+          ))}
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Dropdown de período ──────────────────────────────────────────────────────
+// ─── DateRangePicker ──────────────────────────────────────────────────────────
 
-interface DropOption { value: string; label: string; group?: string }
+const MESES_CAL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const DIAS_CAL  = ['L','M','X','J','V','S','D']
 
-function PeriodDropdown({ options, value, onChange, placeholder }: {
-  options: DropOption[]
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
+function fmtRangeBtn(ini: string, fin: string) {
+  const [,mi,di] = ini.split('-')
+  const [yf,mf,df] = fin.split('-')
+  const M = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+  return `${parseInt(di)} ${M[parseInt(mi)-1]} → ${parseInt(df)} ${M[parseInt(mf)-1]} ${yf}`
+}
+
+function DateRangePicker({ inicio, fin, presets, onChange }: {
+  inicio: string
+  fin: string
+  presets: { label: string; inicio: string; fin: string }[]
+  onChange: (ini: string, fin: string) => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen]         = useState(false)
+  const [step, setStep]         = useState<'start' | 'end'>('start')
+  const [draft, setDraft]       = useState({ inicio, fin })
+  const [hover, setHover]       = useState<string | null>(null)
+  const [viewYear, setViewYear] = useState(parseInt(inicio.split('-')[0]))
+  const [viewMonth, setViewMonth] = useState(parseInt(inicio.split('-')[1]) - 1)
   const ref = useRef<HTMLDivElement>(null)
-  const selected = options.find(o => o.value === value)
 
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false); setStep('start')
+      }
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
 
-  const groups: { name: string; items: DropOption[] }[] = []
-  options.forEach(opt => {
-    const g = opt.group ?? ''
-    let grp = groups.find(x => x.name === g)
-    if (!grp) { grp = { name: g, items: [] }; groups.push(grp) }
-    grp.items.push(opt)
-  })
+  // Reset draft when picker opens
+  useEffect(() => { if (open) { setDraft({ inicio, fin }); setStep('start') } }, [open, inicio, fin])
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+
+  function handleDay(dateStr: string) {
+    if (step === 'start') {
+      setDraft({ inicio: dateStr, fin: dateStr })
+      setStep('end')
+    } else {
+      const [a, b] = dateStr < draft.inicio ? [dateStr, draft.inicio] : [draft.inicio, dateStr]
+      setDraft({ inicio: a, fin: b })
+      setStep('start')
+    }
+  }
+
+  function handleApply() {
+    onChange(draft.inicio, draft.fin)
+    setOpen(false); setStep('start')
+  }
+
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const firstDow    = new Date(viewYear, viewMonth, 1).getDay()
+  const startOffset = firstDow === 0 ? 6 : firstDow - 1 // Monday = 0
+
+  function dayStr(d: number) {
+    return `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+  }
+  function inRange(s: string) {
+    const lo = step === 'end' && hover && hover > draft.inicio ? draft.inicio : draft.inicio
+    const hi = step === 'end' && hover && hover > draft.inicio ? hover : (step === 'end' && hover ? draft.inicio : draft.fin)
+    return s > lo && s < hi
+  }
+  function isSelected(s: string) {
+    return s === draft.inicio || s === draft.fin
+  }
+  function isEdge(s: string) {
+    if (step === 'end' && hover) {
+      const lo = hover < draft.inicio ? hover : draft.inicio
+      const hi = hover < draft.inicio ? draft.inicio : hover
+      return s === lo || s === hi
+    }
+    return s === draft.inicio || s === draft.fin
+  }
+  function inHoverRange(s: string) {
+    if (step !== 'end' || !hover) return false
+    const lo = hover < draft.inicio ? hover : draft.inicio
+    const hi = hover < draft.inicio ? draft.inicio : hover
+    return s > lo && s < hi
+  }
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+    <div ref={ref} style={{ position: 'relative' }}>
+      {/* Trigger button */}
       <button
         onClick={() => setOpen(v => !v)}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 14px', borderRadius: 10,
-          background: 'var(--surface)', border: '1px solid var(--border)',
+          padding: '9px 16px', borderRadius: 10,
+          background: open ? 'rgba(212,175,55,0.1)' : 'var(--surface)',
+          border: `1px solid ${open ? 'var(--gold)' : 'var(--border)'}`,
           color: 'var(--cream)', fontSize: 13, fontWeight: 600,
-          cursor: 'pointer', whiteSpace: 'nowrap', transition: 'border-color 0.15s',
-          borderColor: open ? 'var(--gold)' : 'var(--border)',
+          cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s',
         }}
       >
-        <span>{selected?.label ?? placeholder ?? '—'}</span>
-        <ChevronDown size={14} color="var(--muted)" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+        <Calendar size={14} color={open ? 'var(--gold)' : 'var(--muted)'} />
+        <span style={{ color: open ? 'var(--gold)' : 'var(--cream)' }}>{fmtRangeBtn(inicio, fin)}</span>
+        <ChevronDown size={13} color="var(--muted)" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
       </button>
 
+      {/* Calendar dropdown */}
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200,
+          position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 300,
           background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 12, minWidth: 200, maxHeight: 300, overflowY: 'auto',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          borderRadius: 16, padding: '16px',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.6)',
+          minWidth: 300,
         }}>
-          {groups.map(grp => (
-            <div key={grp.name}>
-              {grp.name && (
-                <p style={{ padding: '8px 14px 4px', fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase' }}>
-                  {grp.name}
-                </p>
-              )}
-              {grp.items.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => { onChange(opt.value); setOpen(false) }}
-                  style={{
-                    display: 'block', width: '100%', textAlign: 'left',
-                    padding: '9px 14px', fontSize: 13, fontWeight: opt.value === value ? 700 : 400,
-                    color: opt.value === value ? 'var(--gold)' : 'var(--cream)',
-                    background: opt.value === value ? 'var(--gold-dim)' : 'transparent',
-                    border: 'none', cursor: 'pointer', transition: 'background 0.1s',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = opt.value === value ? 'var(--gold-dim)' : 'rgba(255,255,255,0.04)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = opt.value === value ? 'var(--gold-dim)' : 'transparent')}
-                >
-                  {opt.label}
-                </button>
-              ))}
+
+          {/* Presets */}
+          {presets.length > 0 && (
+            <div style={{ marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {presets.map(p => {
+                const active = p.inicio === inicio && p.fin === fin
+                return (
+                  <button
+                    key={p.label}
+                    onClick={() => { setDraft({ inicio: p.inicio, fin: p.fin }); setStep('start') }}
+                    style={{
+                      padding: '5px 11px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                      border: `1px solid ${active ? 'var(--gold)' : 'rgba(255,255,255,0.1)'}`,
+                      background: active ? 'rgba(212,175,55,0.12)' : 'transparent',
+                      color: active ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer',
+                    }}
+                  >{p.label}</button>
+                )
+              })}
             </div>
-          ))}
+          )}
+
+          {/* Month header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <button onClick={prevMonth} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>‹</button>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>
+              {MESES_CAL[viewMonth]} {viewYear}
+            </span>
+            <button onClick={nextMonth} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>›</button>
+          </div>
+
+          {/* Day-of-week headers */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: 4 }}>
+            {DIAS_CAL.map(d => (
+              <div key={d} style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, color: 'var(--muted)', padding: '0 0 6px', letterSpacing: '0.5px' }}>{d}</div>
+            ))}
+          </div>
+
+          {/* Days grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px 0' }}>
+            {/* Empty slots */}
+            {Array.from({ length: startOffset }).map((_, i) => <div key={`e${i}`} />)}
+            {/* Days */}
+            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+              const s = dayStr(d)
+              const sel   = isEdge(s)
+              const range = inRange(s) || inHoverRange(s)
+              const today = s === new Date().toISOString().split('T')[0]
+
+              return (
+                <button
+                  key={d}
+                  onClick={() => handleDay(s)}
+                  onMouseEnter={() => step === 'end' && setHover(s)}
+                  onMouseLeave={() => setHover(null)}
+                  style={{
+                    padding: '6px 0', textAlign: 'center', border: 'none', cursor: 'pointer',
+                    borderRadius: sel ? 8 : range ? 0 : 8,
+                    background: sel
+                      ? 'var(--gold)'
+                      : range ? 'rgba(212,175,55,0.15)' : 'transparent',
+                    color: sel ? '#080808' : today ? 'var(--gold)' : 'var(--cream)',
+                    fontSize: 13, fontWeight: sel ? 800 : today ? 700 : 400,
+                    outline: today && !sel ? '1px solid rgba(212,175,55,0.4)' : 'none',
+                  }}
+                >{d}</button>
+              )
+            })}
+          </div>
+
+          {/* Draft range label */}
+          <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 10, background: 'var(--surface2)', fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+            {step === 'start'
+              ? <span>Selecciona la <strong style={{ color: 'var(--cream)' }}>fecha de inicio</strong></span>
+              : <span>Inicio: <strong style={{ color: 'var(--gold)' }}>{fmtFecha(draft.inicio)}</strong> → selecciona la <strong style={{ color: 'var(--cream)' }}>fecha de término</strong></span>
+            }
+          </div>
+
+          {/* Apply button */}
+          <button
+            onClick={handleApply}
+            disabled={step === 'end'}
+            style={{
+              marginTop: 10, width: '100%', padding: '11px 0',
+              borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 800,
+              background: step === 'end' ? 'rgba(255,255,255,0.06)' : 'var(--gold)',
+              color: step === 'end' ? 'var(--muted)' : '#080808',
+              cursor: step === 'end' ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            {step === 'end' ? 'Selecciona fecha de término…' : 'Aplicar período →'}
+          </button>
         </div>
       )}
     </div>
@@ -914,8 +964,8 @@ function CategoriaProductoCard({ cat }: { cat: ProductoCategoria }) {
   )
 }
 
-function ProductosSection({ productos, vista, label }: {
-  productos: ProductoCategoria[]; vista: Vista; label: string
+function ProductosSection({ productos, label }: {
+  productos: ProductoCategoria[]; label: string
 }) {
   if (!productos.length) return null
   const totalLitros = productos.reduce((s, c) => s + c.total, 0)
@@ -1035,27 +1085,86 @@ export default function MetasClient({
   periodo, vendedores, periodosSemanas, periodosMeses, vendedorAvatars,
 }: Props) {
   const isDesktop = useIsDesktop()
-  const [vista, setVista] = useState<Vista>('semanal')
-  const [navDate, setNavDate] = useState<string>(fechaRef)
-  const [navAnalytics, setNavAnalytics] = useState<AnalyticsExtended[] | null>(null)
-  const [navMeta, setNavMeta] = useState<{ semanaLabel: string; mesNombre: string; fecha: string } | null>(null)
-  const [navProductos, setNavProductos] = useState<{ mes: ProductoCategoria[]; semana: ProductoCategoria[]; dia: ProductoCategoria[] } | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [rangeInicio, setRangeInicio] = useState<string>(mesInicio)
+  const [rangeFin, setRangeFin]       = useState<string>(mesFin)
+  const [rangeAnalytics, setRangeAnalytics] = useState<AnalyticsExtended[] | null>(null)
+  const [rangeProductos, setRangeProductos] = useState<ProductoCategoria[] | null>(null)
+  const [loading, setLoading]         = useState(false)
 
-  // Re-fetch when switching vista while on a non-default date
-  useEffect(() => {
-    if (navDate !== fechaRef && navAnalytics !== null) {
-      fetchForDate(navDate)
-    }
+  // Ciclos contables (24 del mes → 23 del mes siguiente) disponibles en la BD
+  const ciclosPreset = useMemo(() => {
+    const seen = new Set<string>()
+    return [...periodosMeses, ...periodosSemanas.reduce<{ fecha_inicio: string; fecha_fin: string }[]>((acc, s) => {
+      const key = `${s.fecha_inicio}|${s.fecha_fin}`
+      if (!seen.has(key)) { seen.add(key); acc.push(s) }
+      return acc
+    }, [])].filter(p => {
+      const key = `${p.fecha_inicio}|${p.fecha_fin}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }).map(p => {
+      const [,mi,di] = p.fecha_inicio.split('-')
+      const [,mf,df] = p.fecha_fin.split('-')
+      const M = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+      return {
+        label: `${parseInt(di)} ${M[parseInt(mi)-1]} – ${parseInt(df)} ${M[parseInt(mf)-1]}`,
+        inicio: p.fecha_inicio,
+        fin: p.fecha_fin,
+      }
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vista])
+  }, [])
 
+  const fetchForRange = useCallback(async (ini: string, fin: string) => {
+    setLoading(true)
+    try {
+      const res  = await fetch(`/api/metas/analytics?inicio=${ini}&fin=${fin}`)
+      const data = await res.json()
+
+      if (data.sinMetas || !data.analytics?.length) {
+        setRangeAnalytics([])
+        setRangeProductos([])
+        return
+      }
+
+      const dhRange = getDiasHabiles(new Date(ini), new Date(fin + 'T23:59:59'))
+      const extendidos: AnalyticsExtended[] = (data.analytics as AnalyticsVendedor[]).map(a => {
+        const ventasCrudas: { fecha: string; litros: number }[] = a.ventasDiariasRaw ?? []
+        const pacingDataMes = buildPacingData(dhRange, a.metaMensual, ventasCrudas, fin)
+        return {
+          ...a,
+          realizadoHoy: 0,
+          metaDiaria: dhRange.length > 0 ? a.metaMensual / dhRange.length : 0,
+          semaforoDiario: a.semaforoMes,
+          porCanalHoy: [],
+          barDataSemana: [],
+          pacingDataMes,
+        }
+      })
+      setRangeAnalytics(extendidos)
+      setRangeProductos(data.productosPeriodo ?? [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  function handleRangeChange(ini: string, fin: string) {
+    setRangeInicio(ini)
+    setRangeFin(fin)
+    if (ini === mesInicio && fin === mesFin) {
+      setRangeAnalytics(null)
+      setRangeProductos(null)
+    } else {
+      fetchForRange(ini, fin)
+    }
+  }
+
+  // ── Legacy fetchForDate (kept for backward compat, currently unused) ──────────
   const fetchForDate = useCallback(async (fecha: string) => {
     if (fecha === fechaRef) {
-      setNavAnalytics(null)
-      setNavMeta(null)
-      setNavProductos(null)
-      setNavDate(fechaRef)
+      setRangeAnalytics(null)
+      setRangeProductos(null)
       return
     }
     setLoading(true)
@@ -1063,130 +1172,31 @@ export default function MetasClient({
       const res = await fetch(`/api/metas/analytics?fecha=${fecha}`)
       const data = await res.json()
       if (data.sinMetas || !data.analytics?.length) {
-        setNavAnalytics([])
-        setNavMeta({ semanaLabel: '', mesNombre: '', fecha })
-        setNavProductos({ mes: [], semana: [], dia: [] })
+        setRangeAnalytics([])
+        setRangeProductos([])
       } else {
-        const fechaD = new Date(fecha + 'T12:00:00')
-        const mesN = `${MESES_NOMBRE[fechaD.getMonth()]} ${fechaD.getFullYear()}`
-
-        const extendidos: AnalyticsExtended[] = data.analytics.map((a: AnalyticsVendedor) => {
-          const dhSemTotal = a.diasHabilesSemana
-          const metaDiaria = dhSemTotal > 0
-            ? a.metaSemanal / dhSemTotal
-            : a.diasHabilesMes > 0 ? a.metaMensual / a.diasHabilesMes : 0
-
-          const realizadoHoy = a.realizadoHoy ?? 0
-          const apiCanalesHoy: { canal: string; realHoy: number }[] = a.porCanalHoy ?? []
-          const ventasCrudas: { fecha: string; litros: number }[] = a.ventasDiariasRaw ?? []
-
-          const porCanalHoy: CanalDiario[] = a.porCanal
-            .filter(c => c.metaSemanal > 0)
-            .map(c => {
-              const mD = dhSemTotal > 0 ? c.metaSemanal / dhSemTotal : 0
-              const rH = apiCanalesHoy.find(p => p.canal === c.canal)?.realHoy ?? 0
-              return { canal: c.canal, realHoy: rH, metaDiaria: mD, semaforo: getEstadoSemaforo(rH, mD), color: CANAL_COLORS[c.canal] ?? '#6B7280' }
-            })
-            .sort((x, y) => y.metaDiaria - x.metaDiaria)
-
-          // Build chart data from API's ventasDiariasRaw
-          // We need dhSem and dhMes ranges — use semanaLabel + mesActivo from API response
-          // Fallback: use the date +/- context to find period boundaries
-          const semIni = a.semanaLabel?.match(/(\d{4}-\d{2}-\d{2})/)
-            ? a.semanaLabel.match(/(\d{4}-\d{2}-\d{2})/)![1]
-            : fecha
-          // Build dhSem from the period info we have
-          // Since we don't have exact dhSem from API, derive from API analytics fields
-          const dhSemCount = a.diasHabilesSemana
-          const dhMesCount = a.diasHabilesMes
-
-          // Approximate: build from meta proportional data
-          // We use ventasCrudas grouped by week/month for bar + pacing
-          const barDataSemana: BarDia[] = (() => {
-            // Find unique working days in ventasCrudas that fall in [semanaInicio, semanaFin]
-            // Since we don't have exact week boundaries, use dias from ventas
-            // Build 5-slot array based on day-of-week
-            const ventasPorDia = new Map<string, number>()
-            ventasCrudas.forEach(v => {
-              const existing = ventasPorDia.get(v.fecha) ?? 0
-              ventasPorDia.set(v.fecha, existing + v.litros)
-            })
-            // Get week of fechaRef: Mon-Fri
-            const fD = new Date(fecha + 'T12:00:00')
-            const dow = fD.getDay() // 0=Sun,1=Mon,...
-            const mondayOffset = dow === 0 ? -6 : 1 - dow
-            const monday = new Date(fD)
-            monday.setDate(fD.getDate() + mondayOffset)
-            return Array.from({ length: 5 }, (_, i) => {
-              const day = new Date(monday)
-              day.setDate(monday.getDate() + i)
-              const dia = day.toISOString().split('T')[0]
-              return {
-                dia, label: DIA_LABELS[i],
-                litros: ventasPorDia.get(dia) ?? 0,
-                isToday: dia === fecha,
-                isFuture: dia > fecha,
-              }
-            })
-          })()
-
-          const pacingDataMes: PacingDia[] = (() => {
-            if (dhMesCount === 0) return []
-            // Group all ventasCrudas acumulativamente
-            const ventasPorDia = new Map<string, number>()
-            ventasCrudas.forEach(v => {
-              const existing = ventasPorDia.get(v.fecha) ?? 0
-              ventasPorDia.set(v.fecha, existing + v.litros)
-            })
-            // Get all unique days sorted
-            const allDias = [...ventasPorDia.keys()].sort()
-            if (allDias.length === 0) return []
-            // Build pacing from mesInicio to mesFin using dhMesCount
-            // We approximate using the sorted venta days
-            let acum = 0
-            const totalMeta = a.metaMensual
-            return allDias.map((dia, idx) => {
-              acum += ventasPorDia.get(dia) ?? 0
-              return {
-                dia,
-                label: fmtFecha(dia),
-                realAcum: acum,
-                metaIdeal: dhMesCount > 0 ? totalMeta * (idx + 1) / dhMesCount : 0,
-                isFuture: dia > fecha,
-              }
-            })
-          })()
-
+        const ini = data.rangeInicio ?? mesInicio
+        const fin = data.rangeFin    ?? mesFin
+        const dhRange = getDiasHabiles(new Date(ini), new Date(fin + 'T23:59:59'))
+        const extendidos: AnalyticsExtended[] = (data.analytics as AnalyticsVendedor[]).map(a => {
+          const pacingDataMes = buildPacingData(dhRange, a.metaMensual, a.ventasDiariasRaw ?? [], fin)
           return {
             ...a,
-            realizadoHoy,
-            metaDiaria,
-            semaforoDiario: getEstadoSemaforo(realizadoHoy, metaDiaria),
-            porCanalHoy,
-            barDataSemana,
+            realizadoHoy: 0,
+            metaDiaria: dhRange.length > 0 ? a.metaMensual / dhRange.length : 0,
+            semaforoDiario: a.semaforoMes,
+            porCanalHoy: [],
+            barDataSemana: [],
             pacingDataMes,
           }
         })
-
-        setNavAnalytics(extendidos)
-        setNavMeta({ semanaLabel: data.analytics[0]?.semanaLabel ?? '', mesNombre: mesN, fecha })
-        setNavProductos({
-          mes:    data.productosMes    ?? [],
-          semana: data.productosSemana ?? [],
-          dia:    data.productosDia    ?? [],
-        })
+        setRangeAnalytics(extendidos)
+        setRangeProductos(data.productosPeriodo ?? [])
       }
     } finally {
       setLoading(false)
     }
-    setNavDate(fecha)
-  }, [fechaRef])
-
-  function navigate(dir: 1 | -1) {
-    const next = navStep(navDate, vista, dir)
-    fetchForDate(next)
-    setNavDate(next)
-  }
+  }, [fechaRef, mesInicio, mesFin])
 
   // ── Compute base analytics from props ────────────────────────────────────────
   const analytics = useMemo<AnalyticsExtended[]>(() => {
@@ -1295,68 +1305,21 @@ export default function MetasClient({
   }, [metasSemanales, metasMensuales, ventasMes, ventasSemana, fechaRef, mesInicio, mesFin, semanaInicio, semanaFin, vendedores])
 
   // ── Compute base product breakdown from props ────────────────────────────────
-  const baseProductos = useMemo(() => ({
-    mes:    computeProductos(ventasMes),
-    semana: computeProductos(ventasSemana),
-    dia:    computeProductos(ventasSemana.filter(v => v.fecha_pedido === fechaRef)),
-  }), [ventasMes, ventasSemana, fechaRef])
+  const baseProductos = useMemo(() => computeProductos(ventasMes), [ventasMes])
 
   // ── Derived display values ────────────────────────────────────────────────────
-  const activeAnalytics = navAnalytics ?? analytics
-  const productosActivos = navProductos ?? baseProductos
-  const productosVista = vista === 'diario' ? productosActivos.dia
-    : vista === 'mensual' ? productosActivos.mes
-    : productosActivos.semana
-  const sinMetas = activeAnalytics.every(a => a.metaMensual === 0 && a.metaSemanal === 0)
+  const activeAnalytics = rangeAnalytics ?? analytics
+  const productosVista  = rangeProductos ?? baseProductos
+  const sinMetas = activeAnalytics.every(a => a.metaMensual === 0)
 
-  const totalReal = activeAnalytics.reduce((s, a) =>
-    s + (vista === 'mensual' ? a.realizadoMes : vista === 'diario' ? a.realizadoHoy : a.realizadoSemana), 0)
-  const totalMeta = activeAnalytics.reduce((s, a) =>
-    s + (vista === 'mensual' ? a.metaMensual : vista === 'diario' ? a.metaDiaria : a.metaSemanal), 0)
-  const totalEsp = activeAnalytics.reduce((s, a) =>
-    s + (vista === 'mensual' ? a.metaEsperadaMes : vista === 'diario' ? a.metaDiaria : a.metaEsperadaSemana), 0)
+  const totalReal = activeAnalytics.reduce((s, a) => s + a.realizadoMes, 0)
+  const totalMeta = activeAnalytics.reduce((s, a) => s + a.metaMensual, 0)
+  const totalEsp  = activeAnalytics.reduce((s, a) => s + a.metaEsperadaMes, 0)
   const pctEquipo = calcularCumplimiento(totalReal, totalMeta)
   const semEquipo = getEstadoSemaforo(totalReal, totalEsp)
 
-  const mesNombreBase = mesInicio
-    ? `${MESES_NOMBRE[parseInt(mesInicio.split('-')[1]) - 1]} ${mesInicio.split('-')[0]}`
-    : ''
-  const semanaLabelBase = analytics[0]?.semanaLabel ?? ''
-  const semanaLabel = navMeta?.semanaLabel ?? semanaLabelBase
-  const mesNombre   = navMeta?.mesNombre   ?? mesNombreBase
-  const diaLabel    = fmtFecha(navDate)
-
-  const equipoLabel = vista === 'diario' ? `Día · ${diaLabel}`
-    : vista === 'semanal' ? `Equipo · ${semanaLabel}`
-    : `Equipo · ${mesNombre}`
-
-  const tabs: { key: Vista; label: string }[] = [
-    { key: 'diario',  label: 'Día' },
-    { key: 'semanal', label: 'Semana' },
-    { key: 'mensual', label: 'Mes' },
-  ]
-
-  const opcionesSemanas: DropOption[] = periodosSemanas.map(s => {
-    const mesIdx = parseInt(s.fecha_inicio.split('-')[1]) - 1
-    const year   = s.fecha_inicio.split('-')[0]
-    const group  = `${MESES_FULL[mesIdx]} ${year}`
-    const label  = `S${s.semana_numero} · ${fmtFecha(s.fecha_inicio)} – ${fmtFecha(s.fecha_fin)}`
-    return { value: s.fecha_inicio, label, group }
-  })
-
-  const opcionesMeses: DropOption[] = periodosMeses.map(m => {
-    const mesIdx = parseInt(m.fecha_inicio.split('-')[1]) - 1
-    const year   = m.fecha_inicio.split('-')[0]
-    return { value: m.fecha_inicio, label: `${MESES_FULL[mesIdx]} ${year}` }
-  })
-
-  const activeSemanaValue = periodosSemanas.find(s =>
-    navDate >= s.fecha_inicio && navDate <= s.fecha_fin
-  )?.fecha_inicio ?? semanaInicio
-
-  const activeMesValue = periodosMeses.find(m =>
-    navDate >= m.fecha_inicio && navDate <= m.fecha_fin
-  )?.fecha_inicio ?? mesInicio
+  const rangeLabel = fmtRangeBtn(rangeInicio, rangeFin)
+  const equipoLabel = `Equipo · ${rangeLabel}`
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -1366,7 +1329,7 @@ export default function MetasClient({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -10 }}>
           <Calendar size={13} color="var(--muted)" />
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-            Trimestre Mayo–Julio 2026 · Escenario optimista · Días hábiles L-V
+            {rangeLabel} · Días hábiles L-V
           </span>
         </div>
       </div>
@@ -1378,17 +1341,11 @@ export default function MetasClient({
         }}>
           <Target size={36} style={{ color: 'var(--muted)', margin: '0 auto 12px' }} />
           <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--cream)', marginBottom: 6 }}>
-            Sin metas cargadas para la fecha actual
+            Sin metas cargadas para el período seleccionado
           </p>
           <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
-            Ejecuta el script de importación desde la raíz del proyecto:
+            Intenta seleccionar un rango de fechas diferente o carga las metas en el panel de administración.
           </p>
-          <code style={{
-            display: 'inline-block', padding: '8px 16px', borderRadius: 8,
-            background: 'var(--surface2)', color: 'var(--gold)', fontSize: 13, fontFamily: 'monospace',
-          }}>
-            node scripts/import-metas-trimestre.mjs
-          </code>
         </div>
       ) : (
         <>
@@ -1414,7 +1371,7 @@ export default function MetasClient({
             {[
               { label: 'Realizado', value: `${fmt(totalReal)} L` },
               { label: 'Meta', value: `${fmt(totalMeta)} L` },
-              ...(vista !== 'diario' ? [{ label: 'Esperado', value: `${fmt(totalEsp)} L` }] : []),
+              { label: 'Esperado', value: `${fmt(totalEsp)} L` },
             ].map(({ label, value }) => (
               <div key={label}>
                 <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>{label}</p>
@@ -1426,78 +1383,32 @@ export default function MetasClient({
             </div>
           </div>
 
-          {/* Tabs + selectores de período */}
+          {/* Selector de rango de fechas + leyenda */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {/* Tabs */}
-              <div style={{ display: 'flex', borderRadius: 12, padding: 4, background: 'var(--surface)', gap: 2 }}>
-                {tabs.map(tab => (
-                  <button key={tab.key}
-                    onClick={() => setVista(tab.key)}
-                    style={{
-                      padding: '8px 18px', borderRadius: 9, fontSize: 13, fontWeight: 600,
-                      border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                      background: vista === tab.key ? 'var(--gold)' : 'transparent',
-                      color: vista === tab.key ? '#080808' : 'var(--muted)',
-                      transition: 'all 0.15s',
-                    }}
-                  >{tab.label}</button>
-                ))}
-              </div>
-
-              {/* Selector de período */}
-              {vista === 'diario' && (
-                <input
-                  type="date"
-                  value={navDate}
-                  onChange={e => {
-                    const v = e.target.value
-                    if (v) { setNavDate(v); fetchForDate(v) }
-                  }}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10,
-                    background: 'var(--surface)', border: '1px solid var(--border)',
-                    color: 'var(--cream)', fontSize: 13, fontWeight: 600,
-                    cursor: 'pointer', colorScheme: 'dark', outline: 'none',
-                  }}
-                  onFocus={e => (e.target.style.borderColor = 'var(--gold)')}
-                  onBlur={e => (e.target.style.borderColor = 'var(--border)')}
-                />
-              )}
-
-              {vista === 'semanal' && opcionesSemanas.length > 0 && (
-                <PeriodDropdown
-                  options={opcionesSemanas}
-                  value={activeSemanaValue}
-                  onChange={v => { setNavDate(v); fetchForDate(v) }}
-                />
-              )}
-
-              {vista === 'mensual' && opcionesMeses.length > 0 && (
-                <PeriodDropdown
-                  options={opcionesMeses}
-                  value={activeMesValue}
-                  onChange={v => { setNavDate(v); fetchForDate(v) }}
-                />
-              )}
-
-              {navDate !== fechaRef && (
+              <DateRangePicker
+                inicio={rangeInicio}
+                fin={rangeFin}
+                presets={ciclosPreset}
+                onChange={handleRangeChange}
+              />
+              {(rangeInicio !== mesInicio || rangeFin !== mesFin) && (
                 <button
-                  onClick={() => { fetchForDate(fechaRef); setNavDate(fechaRef) }}
+                  onClick={() => handleRangeChange(mesInicio, mesFin)}
                   style={{
                     padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600,
                     border: '1px solid var(--gold)', background: 'transparent',
                     color: 'var(--gold)', cursor: 'pointer',
                   }}
                 >
-                  Hoy
+                  Período actual
                 </button>
               )}
               {loading && <span style={{ fontSize: 11, color: 'var(--muted)' }}>Cargando…</span>}
             </div>
 
             {/* Leyenda semáforos */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
               {(['verde', 'amarillo', 'rojo'] as EstadoSemaforo[]).map(e => (
                 <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEMAFORO_COLORS[e] }} />
@@ -1512,14 +1423,13 @@ export default function MetasClient({
           {/* Grid de vendedores */}
           <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(auto-fit, minmax(400px, 1fr))' : '1fr', gap: isDesktop ? 24 : 14 }}>
             {activeAnalytics.map(a => (
-              <VendedorCard key={a.vendedor} analytics={a} vista={vista} avatarUrl={vendedorAvatars?.[a.vendedor]} />
+              <VendedorCard key={a.vendedor} analytics={a} rangeLabel={rangeLabel} avatarUrl={vendedorAvatars?.[a.vendedor]} />
             ))}
           </div>
 
           {/* Sección de productos */}
           <ProductosSection
             productos={productosVista}
-            vista={vista}
             label={equipoLabel}
           />
         </>
