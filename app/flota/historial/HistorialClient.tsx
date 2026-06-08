@@ -139,7 +139,7 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* Métricas detalladas */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
             {[
               { label: 'KM inicio', value: viaje.km_inicio?.toLocaleString('es-CL') ?? '—' },
               { label: 'KM llegada', value: viaje.km_fin?.toLocaleString('es-CL') ?? '—' },
@@ -276,7 +276,7 @@ export default function HistorialClient({ user, viajes }: Props) {
       <AppHeader eyebrow="Módulo logística" title="Historial de viajes" />
 
       {/* Stats globales */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
+      <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
         {[
           { label: 'Total viajes', value: filtrados.length, color: F, rgb: '212,175,55' },
           { label: 'Completados', value: completados, color: '#5A8A4A', rgb: '90,138,74' },

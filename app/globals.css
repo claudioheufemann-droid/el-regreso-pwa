@@ -291,10 +291,63 @@ input::placeholder, textarea::placeholder { color: #5A5248; }
   overflow: hidden;
 }
 
-/* Safe area */
-.pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+/* Safe area — consolidadas, sin duplicados */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
-.safe-top    { padding-top: env(safe-area-inset-top, 0px); }
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px);  }
+
+/* ── Tap targets mínimos (WCAG 44×44px) ──────────────────────────────────
+   Usar .tap en botones pequeños, .tap-lg en CTAs principales */
+.tap    { min-height: 44px; min-width: 44px; display: flex; align-items: center; justify-content: center; }
+.tap-lg { min-height: 52px; min-width: 52px; display: flex; align-items: center; justify-content: center; }
+
+/* Botón primario estandarizado mobile */
+.btn-primary {
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #E5C45A, #B8962E);
+  color: #0A0A0A;
+  font-size: 14px;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  letter-spacing: -0.2px;
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  box-shadow: 0 4px 18px rgba(212,175,55,0.28);
+  transition: opacity 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-primary:active { opacity: 0.85; transform: scale(0.98); }
+
+/* Input estandarizado mobile — altura cómoda para dedo */
+.input-mobile {
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 16px; /* 16px evita zoom en iOS al enfocar */
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--cream);
+  font-family: inherit;
+  width: 100%;
+  outline: none;
+  -webkit-appearance: none;
+}
+.input-mobile:focus { border-color: rgba(212,175,55,0.5); }
+
+/* Contenedor de formulario mobile */
+.form-mobile {
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 0 20px;
+}
+
+/* Label de campo */
+.field-label {
+  font-size: 11px; font-weight: 700;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin-bottom: 6px; display: block;
+}
 
 /* ── Mobile responsive helpers ── */
 @media (max-width: 639px) {

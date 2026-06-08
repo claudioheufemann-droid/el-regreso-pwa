@@ -655,7 +655,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
               {/* Botones agregar */}
               {!modoAdd && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
                   <button onClick={() => setModoAdd('cliente')} style={addBtnStyle}>
                     <Search size={13} /> Cliente
                   </button>

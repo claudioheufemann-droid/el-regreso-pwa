@@ -622,7 +622,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   const SORT_LABELS: Record<string, string> = { recientes:'Más recientes', score:'Mayor score', nombre:'A → Z', deuda:'Mayor deuda' }
 
   return (
-    <div style={{ padding: isDesktop?'24px 28px 60px':'14px 14px 80px', maxWidth: isDesktop?1400:640, margin:'0 auto', width:'100%' }}>
+    <div style={{ padding: isDesktop?'24px 28px 60px':'16px 16px 100px', maxWidth: isDesktop?1400:640, margin:'0 auto', width:'100%' }}>
 
       {/* ── Encabezado estándar ────────────────────────────────────────── */}
       <AppHeader eyebrow={`Cartera${periodo ? ` · ${periodo.nombre}` : ''}`} title="Clientes" />

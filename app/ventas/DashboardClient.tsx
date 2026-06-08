@@ -167,15 +167,17 @@ function DayDetailModal({
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+        background: 'rgba(0,0,0,0.80)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        padding: '0',
       }}
       onClick={onClose}
     >
       <div
         style={{
           background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 20, width: '100%', maxWidth: 380, overflow: 'hidden',
+          borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 520, overflow: 'hidden',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -532,17 +534,18 @@ function ProductDetailModal({
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '20px',
+        background: 'rgba(0,0,0,0.80)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        padding: 0,
       }}
       onClick={onClose}
     >
       <div
         style={{
           background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 20, width: '100%', maxWidth: 480, maxHeight: '80vh',
+          borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 520, maxHeight: '88vh',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -674,8 +677,9 @@ function ClientesHoyModal({
       <div
         style={{
           background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 20, width: '100%', maxWidth: 460, maxHeight: '82vh',
+          borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 520, maxHeight: '88vh',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -1644,7 +1648,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
     : { display: 'flex', flexDirection: 'column' as const, gap: 14 }
 
   return (
-    <div style={{ padding: isDesktop ? '20px 24px 60px' : '12px 12px 80px', maxWidth: 1400, margin: '0 auto' }}>
+    <div style={{ padding: isDesktop ? '20px 24px 60px' : '16px 16px 100px', maxWidth: 1400, margin: '0 auto' }}>
 
       {/* === HEADER ESTÁNDAR === */}
       <AppHeader

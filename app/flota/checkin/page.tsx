@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import CheckInClient from './CheckInClient'
+import CheckInClient from './CheckinClient'
 
 export const dynamic = 'force-dynamic'
 
