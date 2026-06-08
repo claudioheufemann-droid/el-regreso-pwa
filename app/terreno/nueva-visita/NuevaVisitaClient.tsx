@@ -41,6 +41,7 @@ const FOTO_SLOTS: FotoSlot[] = [
 // ─── Imágenes de producto ─────────────────────────────────────
 
 const PRODUCTO_IMAGENES: Record<string, string> = {
+  'Nitro Coffee':                '/productos/cerveza/porter.jpg',
   'Kombucha Berry Menta':        '/productos/kombucha/berry-menta.png',
   'Kombucha Detox':              '/productos/kombucha/detox.png',
   'Kombucha Lemon':              '/productos/kombucha/lemon-fresh.png',
@@ -98,6 +99,7 @@ interface CatalogoInfo {
 }
 
 const CATALOGO_INFO: Record<string, CatalogoInfo> = {
+  'Nitro Coffee':                { estilo: 'Nitro Cold Brew',           precio_lata: 0,    precio_barril: 120000, envase_ml: 470, descripcion: 'Cold brew de café con nitrógeno. Cremoso, suave y con notas a chocolate y avellana.' },
   'Arboretum':                   { estilo: 'Kölsch',                   precio_lata: 2100, precio_barril: 83000,  envase_ml: 470, descripcion: 'Color amarillo pajizo, aromas a grano y pan con notas florales. Super ligera y fácil de beber.' },
   'Mocho English':               { estilo: 'English Red Ale',          precio_lata: 2100, precio_barril: 83000,  envase_ml: 470, abv: '5.5%', ibu: '25', descripcion: 'Rojizo brillante con aromas a galleta, almendras y caramelo. Retrogusto semi dulce y tostado.' },
   'La Barra APA':                { estilo: 'American Pale Ale',        precio_lata: 2250, precio_barril: 90000,  envase_ml: 470, descripcion: 'Dorado intenso y cítrico con lúpulos Citra y Cascade. Amargor medio y final seco.' },
@@ -1148,10 +1150,12 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   carritoInicial?: ItemCarrito[]
   onCerrar: (carrito: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string) => void
 }) {
-  const [tabCat, setTabCat] = useState<'Cerveza' | 'Kombucha'>('Cerveza')
+  const [tabCat, setTabCat]     = useState<'Cerveza' | 'Kombucha'>('Cerveza')
+  const [tabEnvase, setTabEnvase] = useState<'lata' | 'barril'>('lata')
   const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(() => {
     const m = new Map<string, ItemCarrito>()
-    for (const i of carritoInicial ?? []) m.set(i.producto, i)
+    // Key: "producto|envase" para permitir lata y barril del mismo producto
+    for (const i of carritoInicial ?? []) m.set(`${i.producto}|${i.envase}`, i)
     return m
   })
   const [showCierre, setShowCierre] = useState(false)
@@ -1163,26 +1167,39 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   const [showImagenModal, setShowImagenModal] = useState(false)
 
   // Siempre usa CATALOGO_INFO como fuente de verdad — evita depender de la BD
+  const esBarril = tabEnvase === 'barril'
+  const envaseName = esBarril ? 'Barril 30L' : 'Lata'
+
   const prodsFiltrados: Producto[] = Object.entries(CATALOGO_INFO)
     .filter(([, info]) => {
       const esKom = info.estilo.toLowerCase().includes('kombucha')
-      return tabCat === 'Kombucha' ? esKom : !esKom
+      if (tabCat === 'Kombucha' ? !esKom : esKom) return false
+      // En modo barril: solo mostrar los que tienen precio de barril
+      if (esBarril && info.precio_barril <= 0) return false
+      // En modo lata: solo mostrar los que tienen precio de lata
+      if (!esBarril && info.precio_lata <= 0) return false
+      return true
     })
     .map(([nombre, info]) => ({
       producto: nombre,
       categoria_producto: info.estilo.toLowerCase().includes('kombucha') ? 'Kombucha' : 'Cerveza',
-      envase: 'Lata',
+      envase: envaseName,
     }))
     .sort((a, b) => a.producto.localeCompare(b.producto))
+
+  function cartKey(producto: string, envase: string) { return `${producto}|${envase}` }
 
   function ajustar(prod: Producto, delta: number) {
     setCarrito(prev => {
       const next = new Map(prev)
-      const key = prod.producto
+      const key = cartKey(prod.producto, prod.envase ?? envaseName)
       const actual = next.get(key)?.cantidad ?? 0
       const nueva = actual + delta
       if (nueva <= 0) { next.delete(key); return next }
-      next.set(key, { producto: prod.producto, categoria: prod.categoria_producto ?? '', envase: prod.envase ?? '', cantidad: nueva, precio: CATALOGO_INFO[prod.producto]?.precio_lata ?? 0 })
+      const precio = esBarril
+        ? (CATALOGO_INFO[prod.producto]?.precio_barril ?? 0)
+        : (CATALOGO_INFO[prod.producto]?.precio_lata ?? 0)
+      next.set(key, { producto: prod.producto, categoria: prod.categoria_producto ?? '', envase: prod.envase ?? envaseName, cantidad: nueva, precio })
       return next
     })
   }
@@ -1336,6 +1353,36 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
         </button>
       </div>
 
+      {/* Toggle Lata / Barril */}
+      <div style={{ display: 'flex', gap: 6, margin: '8px 16px 0' }}>
+        {([['lata', '🥫 Lata'], ['barril', '🛢️ Barril 30L']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTabEnvase(key)}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
+              background: tabEnvase === key ? (key === 'barril' ? '#5A3E1B' : 'rgba(212,175,55,0.15)') : '#1C1C1C',
+              color: tabEnvase === key ? C : 'var(--muted)',
+              fontSize: 13, fontWeight: 700,
+              outline: tabEnvase === key ? `1px solid ${C_BORDER}` : 'none',
+              transition: 'all 0.15s',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Info barril */}
+      {esBarril && (
+        <div style={{ margin: '8px 16px 0', padding: '8px 12px', borderRadius: 10, background: 'rgba(90,62,27,0.3)', border: '1px solid rgba(212,175,55,0.2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>🛢️</span>
+          <span style={{ fontSize: 11, color: 'rgba(212,175,55,0.8)' }}>
+            Barril de <strong style={{ color: C }}>30 litros</strong> · Precio con IVA incluido
+          </span>
+        </div>
+      )}
+
       {/* Lista productos */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
         {prodsFiltrados.length === 0 ? (
@@ -1346,24 +1393,31 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {prodsFiltrados.map(p => {
-              const cant = carrito.get(p.producto)?.cantidad ?? 0
+              const key = cartKey(p.producto, p.envase ?? envaseName)
+              const cant  = carrito.get(key)?.cantidad ?? 0
+              const info  = CATALOGO_INFO[p.producto]
+              const precio = esBarril ? (info?.precio_barril ?? 0) : (info?.precio_lata ?? 0)
+              const unidadLabel = esBarril ? '/ barril' : '/ lata'
               return (
-                <div key={p.producto} style={{ background: cant > 0 ? C_DIM : '#1C1C1C', border: `1px solid ${cant > 0 ? C_BORDER : 'rgba(255,255,255,0.06)'}`, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}>
+                <div key={key} style={{ background: cant > 0 ? C_DIM : '#1C1C1C', border: `1px solid ${cant > 0 ? C_BORDER : 'rgba(255,255,255,0.06)'}`, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}>
                   <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} size={46} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{p.producto}</p>
-                    {CATALOGO_INFO[p.producto]?.estilo && (
-                      <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>{CATALOGO_INFO[p.producto].estilo}</p>
+                    {info?.estilo && (
+                      <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
+                        {info.estilo}
+                        {esBarril && <span style={{ marginLeft: 6, color: C, fontWeight: 700 }}>· 30 L</span>}
+                      </p>
                     )}
-                    {CATALOGO_INFO[p.producto]?.precio_lata && (
+                    {precio > 0 && (
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                         <p style={{ fontSize: 17, fontWeight: 900, color: C, letterSpacing: '-0.5px', lineHeight: 1 }}>
-                          {fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)}
-                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>/ lata</span>
+                          {fmtPrecioCLP(precio)}
+                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>{unidadLabel}</span>
                         </p>
                         {cant > 0 && (
                           <p style={{ fontSize: 17, fontWeight: 900, color: C, letterSpacing: '-0.5px', lineHeight: 1, opacity: 0.65 }}>
-                            = {fmtPrecioCLP(cant * CATALOGO_INFO[p.producto].precio_lata)}
+                            = {fmtPrecioCLP(cant * precio)}
                           </p>
                         )}
                       </div>
@@ -1376,8 +1430,8 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
                       onchange={n => {
                         setCarrito(prev => {
                           const next = new Map(prev)
-                          if (n <= 0) { next.delete(p.producto); return next }
-                          next.set(p.producto, { producto: p.producto, categoria: p.categoria_producto ?? '', envase: p.envase ?? '', cantidad: n, precio: CATALOGO_INFO[p.producto]?.precio_lata ?? 0 })
+                          if (n <= 0) { next.delete(key); return next }
+                          next.set(key, { producto: p.producto, categoria: p.categoria_producto ?? '', envase: p.envase ?? envaseName, cantidad: n, precio })
                           return next
                         })
                       }}
@@ -1395,9 +1449,12 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
         {showCartDetail && items.length > 0 && (
           <div style={{ background: '#131313', border: `1px solid ${C_BORDER}`, borderRadius: '14px 14px 0 0', overflow: 'hidden', marginBottom: -1 }}>
             {items.map((item, i) => (
-              <div key={item.producto} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+              <div key={`${item.producto}|${item.envase}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
                 <ProductoThumb nombre={item.producto} categoria={item.categoria} size={30} />
-                <p style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{item.producto}</p>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto}</p>
+                  {item.envase && <p style={{ fontSize: 10, color: 'var(--muted)' }}>{item.envase}</p>}
+                </div>
                 <span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>×{item.cantidad}</span>
                 {item.precio > 0 && (
                   <span style={{ fontSize: 13, fontWeight: 800, color: C, flexShrink: 0, minWidth: 64, textAlign: 'right' }}>
