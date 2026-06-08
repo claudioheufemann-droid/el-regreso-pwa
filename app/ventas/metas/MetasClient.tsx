@@ -313,7 +313,10 @@ function PacingLineChart({ data, meta, semaforo }: {
   const currentPct = meta > 0 && lastReal ? Math.round((lastReal.realAcum / meta) * 100) : 0
 
   return (
-    <svg width={W} height={H + 32} viewBox={`0 0 ${W} ${H + 32}`} style={{ display: 'block', margin: '0 auto' }}>
+    <svg width={W} height={H + 32} viewBox={`0 0 ${W} ${H + 32}`}
+      style={{ display: 'block', width: '100%', maxWidth: W, margin: '0 auto' }}
+      preserveAspectRatio="xMidYMid meet"
+    >
       <defs>
         <linearGradient id={`area-grad-${semaforo}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.35" />
@@ -490,7 +493,7 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       <div style={{ height: 4, background: SEMAFORO_COLORS[semaforo] }} />
 
       {/* Header */}
-      <div style={{ padding: '18px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '14px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {avatarUrl ? (
             <div style={{
@@ -520,7 +523,7 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <p style={{ fontSize: 30, fontWeight: 900, color: SEMAFORO_COLORS[semaforo], letterSpacing: '-1px', lineHeight: 1 }}>
+          <p style={{ fontSize: 26, fontWeight: 900, color: SEMAFORO_COLORS[semaforo], letterSpacing: '-1px', lineHeight: 1 }}>
             {pct.toFixed(0)}%
           </p>
           <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>cumplimiento</p>
@@ -551,33 +554,37 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       )}
 
       {/* Progress bar */}
-      <div style={{ padding: '0 20px 14px' }}>
+      <div style={{ padding: '0 16px 14px' }}>
         <BarraDual meta={meta} realizado={real} esperado={esperado} semaforo={semaforo} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
-          <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-            Real: <strong style={{ color: 'var(--cream)' }}>{fmt(real)} L</strong>
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-            Meta: <strong style={{ color: 'var(--cream)' }}>{fmt(meta)} L</strong>
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-            Esperado: <strong style={{ color: 'var(--cream)' }}>{fmt(esperado)} L</strong>
-          </span>
+        {/* Real / Meta / Esperado — 2 filas en móvil */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginTop: 14 }}>
+          {[
+            { label: 'Real',     value: `${fmt(real)} L`,     color: SEMAFORO_COLORS[semaforo] },
+            { label: 'Meta',     value: `${fmt(meta)} L`,     color: 'var(--cream)' },
+            { label: 'Esperado', value: `${fmt(esperado)} L`, color: 'var(--muted)' },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+              <div style={{ fontSize: 11, fontWeight: 800, color, letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* KPI chips */}
-      <div className="kpi-grid-3" style={{ padding: '0 20px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+      {/* KPI chips — 3 columnas compactas */}
+      <div style={{ padding: '0 16px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
         {[
-          { label: 'Meta', value: `${fmt(meta)} L` },
-          { label: 'Realizado', value: `${fmt(real)} L` },
-          { label: metaCumplida ? '✓ Logrado' : 'Faltante', value: metaCumplida ? `+${fmt(real - meta)} L` : `${fmt(Math.max(0, meta - real))} L` },
-        ].map(({ label, value }) => (
-          <div key={label} style={{ background: 'var(--surface2)', borderRadius: 12, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 4 }}>
+          { label: 'Meta',      value: `${fmt(meta)} L`,                                                               accent: false },
+          { label: 'Realizado', value: `${fmt(real)} L`,                                                               accent: false },
+          { label: metaCumplida ? '✓ OK' : 'Faltante',
+            value: metaCumplida ? `+${fmt(real - meta)} L` : `${fmt(Math.max(0, meta - real))} L`,
+            accent: metaCumplida },
+        ].map(({ label, value, accent }) => (
+          <div key={label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '8px 6px', textAlign: 'center' }}>
+            <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.6px', textTransform: 'uppercase', marginBottom: 3 }}>
               {label}
             </p>
-            <p style={{ fontSize: 14, fontWeight: 800, color: metaCumplida && label.startsWith('✓') ? '#4A7A3A' : 'var(--cream)', letterSpacing: '-0.3px' }}>
+            <p style={{ fontSize: 12, fontWeight: 800, color: accent ? '#4A7A3A' : 'var(--cream)', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {value}
             </p>
           </div>
@@ -748,6 +755,13 @@ function DateRangePicker({ inicio, fin, presets, onChange }: {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
+      {/* Overlay oscuro en móvil cuando está abierto */}
+      {open && (
+        <div
+          onClick={() => setOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 299 }}
+        />
+      )}
       {/* Trigger button */}
       <button
         onClick={() => setOpen(v => !v)}
@@ -768,11 +782,13 @@ function DateRangePicker({ inicio, fin, presets, onChange }: {
       {/* Calendar dropdown */}
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 300,
+          position: 'fixed', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 300,
           background: 'var(--surface)', border: '1px solid var(--border)',
           borderRadius: 16, padding: '0',
-          boxShadow: '0 12px 48px rgba(0,0,0,0.7)',
-          minWidth: 320, overflow: 'hidden',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.9)',
+          width: 'min(340px, 95vw)', overflow: 'hidden',
         }}>
 
           {/* ── Campos Inicio / Fin ── */}
@@ -1784,34 +1800,60 @@ export default function MetasClient({
           <div style={{
             background: 'linear-gradient(135deg, #110D00 0%, #1C1500 100%)',
             border: `1px solid ${SEMAFORO_COLORS[semEquipo]}40`,
-            borderRadius: 20, padding: isDesktop ? '20px 28px' : '16px 18px', marginBottom: isDesktop ? 24 : 14,
-            display: 'flex', alignItems: isDesktop ? 'center' : 'flex-start', gap: isDesktop ? 40 : 16, flexWrap: 'wrap',
+            borderRadius: 20, padding: isDesktop ? '20px 28px' : '14px 16px',
+            marginBottom: isDesktop ? 24 : 14,
           }}>
-            <div>
-              <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.6)', letterSpacing: '1.8px', textTransform: 'uppercase', marginBottom: 6 }}>
-                {equipoLabel}
-              </p>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 40, fontWeight: 900, color: SEMAFORO_COLORS[semEquipo], letterSpacing: '-1.5px', lineHeight: 1 }}>
-                  {pctEquipo.toFixed(0)}%
-                </span>
-                <span style={{ fontSize: 14, color: 'var(--muted)' }}>cumplimiento</span>
+            {isDesktop ? (
+              /* Desktop: fila horizontal */
+              <div style={{ display: 'flex', alignItems: 'center', gap: 40 }}>
+                <div>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.6)', letterSpacing: '1.8px', textTransform: 'uppercase', marginBottom: 6 }}>{equipoLabel}</p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: 40, fontWeight: 900, color: SEMAFORO_COLORS[semEquipo], letterSpacing: '-1.5px', lineHeight: 1 }}>{pctEquipo.toFixed(0)}%</span>
+                    <span style={{ fontSize: 14, color: 'var(--muted)' }}>cumplimiento</span>
+                  </div>
+                </div>
+                <div style={{ width: 1, height: 48, background: 'var(--border)', flexShrink: 0 }} />
+                {[
+                  { label: 'Realizado', value: `${fmt(totalReal)} L` },
+                  { label: 'Meta',      value: `${fmt(totalMeta)} L` },
+                  { label: 'Esperado',  value: `${fmt(totalEsp)} L`  },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>{label}</p>
+                    <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.5px' }}>{value}</p>
+                  </div>
+                ))}
+                <div style={{ marginLeft: 'auto' }}><SemaforoDot estado={semEquipo} /></div>
               </div>
-            </div>
-            {isDesktop && <div style={{ width: 1, height: 48, background: 'var(--border)', flexShrink: 0 }} />}
-            {[
-              { label: 'Realizado', value: `${fmt(totalReal)} L` },
-              { label: 'Meta', value: `${fmt(totalMeta)} L` },
-              { label: 'Esperado', value: `${fmt(totalEsp)} L` },
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>{label}</p>
-                <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.5px' }}>{value}</p>
-              </div>
-            ))}
-            <div style={{ marginLeft: 'auto' }}>
-              <SemaforoDot estado={semEquipo} />
-            </div>
+            ) : (
+              /* Mobile: compacto */
+              <>
+                <p style={{ fontSize: 8, fontWeight: 700, color: 'rgba(212,175,55,0.5)', letterSpacing: '1.6px', textTransform: 'uppercase', marginBottom: 8 }}>
+                  {equipoLabel}
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 36, fontWeight: 900, color: SEMAFORO_COLORS[semEquipo], letterSpacing: '-1.5px', lineHeight: 1 }}>{pctEquipo.toFixed(0)}%</span>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>cumplimiento</span>
+                  </div>
+                  <SemaforoDot estado={semEquipo} />
+                </div>
+                {/* 3 KPIs en grid compacto */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {[
+                    { label: 'Realizado', value: `${fmt(totalReal)} L`, color: SEMAFORO_COLORS[semEquipo] },
+                    { label: 'Meta',      value: `${fmt(totalMeta)} L`, color: 'var(--cream)' },
+                    { label: 'Esperado',  value: `${fmt(totalEsp)} L`,  color: 'var(--muted)' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '8px 10px' }}>
+                      <p style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 3 }}>{label}</p>
+                      <p style={{ fontSize: 13, fontWeight: 800, color, letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Selector de rango de fechas + leyenda */}
@@ -1838,17 +1880,32 @@ export default function MetasClient({
               {loading && <span style={{ fontSize: 11, color: 'var(--muted)' }}>Cargando…</span>}
             </div>
 
-            {/* Leyenda semáforos */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              {(['verde', 'amarillo', 'rojo'] as EstadoSemaforo[]).map(e => (
-                <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEMAFORO_COLORS[e] }} />
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                    {SEMAFORO_LABELS[e]} ({e === 'verde' ? '≥95%' : e === 'amarillo' ? '75–95%' : '<75%'} vs esperado)
-                  </span>
-                </div>
-              ))}
-            </div>
+            {/* Leyenda semáforos — solo desktop */}
+            {isDesktop && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                {(['verde', 'amarillo', 'rojo'] as EstadoSemaforo[]).map(e => (
+                  <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEMAFORO_COLORS[e] }} />
+                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                      {SEMAFORO_LABELS[e]} ({e === 'verde' ? '≥95%' : e === 'amarillo' ? '75–95%' : '<75%'} vs esperado)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Leyenda compacta móvil */}
+            {!isDesktop && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                {(['verde', 'amarillo', 'rojo'] as EstadoSemaforo[]).map(e => (
+                  <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: SEMAFORO_COLORS[e] }} />
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>
+                      {e === 'verde' ? '≥95%' : e === 'amarillo' ? '75–95%' : '<75%'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Grid de vendedores */}
