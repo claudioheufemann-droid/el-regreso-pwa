@@ -25,6 +25,18 @@ interface VentaAPI {
   fecha_pedido: string | null
   categoria_producto: string | null
   producto: string | null
+  envase: string | null
+}
+
+/** Retorna litros por unidad según el texto del envase. */
+function litrosPorUnidad(envase: string | null): number | null {
+  if (!envase) return null
+  const s = envase.toLowerCase()
+  const cc = s.match(/(\d+(?:[.,]\d+)?)\s*cc/)
+  if (cc) return parseFloat(cc[1].replace(',', '.')) / 1000
+  const li = s.match(/(\d+(?:[.,]\d+)?)\s*l\b/)
+  if (li) return parseFloat(li[1].replace(',', '.'))
+  return null
 }
 
 export interface ProductoItem { nombre: string; litros: number }
@@ -116,7 +128,7 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Ventas en el rango ───────────────────────────────────────────────────────
-  const selectFields = 'vendedor_actual, categoria_negocio, litros, total_sin_impuesto, nombre_fantasia, fecha_pedido, categoria_producto, producto'
+  const selectFields = 'vendedor_actual, categoria_negocio, litros, total_sin_impuesto, nombre_fantasia, fecha_pedido, categoria_producto, producto, envase'
 
   async function fetchVentasPaginado(fechaIni: string, fechaFin: string): Promise<VentaAPI[]> {
     const rows: VentaAPI[] = []
@@ -211,32 +223,43 @@ export async function GET(req: NextRequest) {
   })
 
   // ── Detalle por local (nombre_fantasia) ─────────────────────────────────────
+  type ProdEntry = { categoria: string; envase: string | null; litros: number; monto: number; unidades: number | null }
   const clientesMap = new Map<string, {
     canal: string | null
     litros: number
     monto: number
     fechas: Set<string>
-    lineas: number
-    prods: Map<string, { categoria: string; litros: number; monto: number; cantidad: number }>
+    prods: Map<string, ProdEntry>
   }>()
 
   for (const v of ventas) {
     const nombre = (v.nombre_fantasia ?? '').trim() || 'Sin nombre'
     if (!clientesMap.has(nombre)) {
-      clientesMap.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, monto: 0, fechas: new Set(), lineas: 0, prods: new Map() })
+      clientesMap.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, monto: 0, fechas: new Set(), prods: new Map() })
     }
     const e = clientesMap.get(nombre)!
-    e.litros += v.litros ?? 0
-    e.monto  += v.total_sin_impuesto ?? 0
-    e.lineas += 1
+    const litros = v.litros ?? 0
+    const monto  = v.total_sin_impuesto ?? 0
+    e.litros += litros
+    e.monto  += monto
     if (v.fecha_pedido) e.fechas.add(v.fecha_pedido)
-    const prod = (v.producto ?? '').trim() || 'Sin nombre'
-    const cat  = (v.categoria_producto ?? '').trim() || 'Sin categoría'
-    if (!e.prods.has(prod)) e.prods.set(prod, { categoria: cat, litros: 0, monto: 0, cantidad: 0 })
-    const p = e.prods.get(prod)!
-    p.litros   += v.litros ?? 0
-    p.monto    += v.total_sin_impuesto ?? 0
-    p.cantidad += 1
+
+    // Clave: producto + envase para distinguir presentaciones
+    const prod   = (v.producto ?? '').trim() || 'Sin nombre'
+    const cat    = (v.categoria_producto ?? '').trim() || 'Sin categoría'
+    const envase = (v.envase ?? '').trim() || null
+    const key    = `${prod}||${envase ?? ''}`
+
+    if (!e.prods.has(key)) e.prods.set(key, { categoria: cat, envase, litros: 0, monto: 0, unidades: null })
+    const p = e.prods.get(key)!
+    p.litros += litros
+    p.monto  += monto
+
+    // Calcular unidades acumulando
+    const lpu = litrosPorUnidad(envase)
+    if (lpu && lpu > 0) {
+      p.unidades = Math.round(p.litros / lpu)
+    }
   }
 
   const clientesDetalle = [...clientesMap.entries()]
@@ -246,14 +269,14 @@ export async function GET(req: NextRequest) {
       litros:  Math.round(e.litros * 10) / 10,
       monto:   Math.round(e.monto),
       pedidos: e.fechas.size,
-      lineas:  e.lineas,
       ultimoPedido: [...e.fechas].sort().at(-1) ?? '',
       productos: [...e.prods.entries()]
-        .map(([producto, { categoria, litros, monto, cantidad }]) => ({
-          producto, categoria,
+        .map(([key, { categoria, envase, litros, monto, unidades }]) => ({
+          producto: key.split('||')[0],   // reconstruir desde la clave
+          categoria, envase,
           litros:   Math.round(litros * 10) / 10,
           monto:    Math.round(monto),
-          cantidad,
+          unidades,
         }))
         .sort((a, b) => b.monto - a.monto),
     }))

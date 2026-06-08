@@ -29,9 +29,15 @@ interface ClienteDetalle {
   litros: number
   monto: number
   pedidos: number
-  lineas: number
   ultimoPedido: string
-  productos: { producto: string; categoria: string; litros: number; monto: number; cantidad: number }[]
+  productos: {
+    producto: string
+    categoria: string
+    envase: string | null
+    litros: number
+    monto: number
+    unidades: number | null
+  }[]
 }
 
 interface VentaRow {
@@ -42,6 +48,7 @@ interface VentaRow {
   nombre_fantasia?: string | null
   categoria_producto?: string | null
   producto?: string | null
+  envase?: string | null
   fecha_pedido: string
 }
 
@@ -1317,16 +1324,18 @@ function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; 
                     Productos vendidos
                   </p>
                   {/* Cabecera tabla */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 48px 60px 80px', gap: 6, padding: '0 0 6px', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 6 }}>
-                    {['Producto','Cant.','Litros','Monto'].map(h => (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px 60px 90px', gap: 6, padding: '0 0 6px', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 6 }}>
+                    {['Producto','Unidades','Litros','Monto'].map(h => (
                       <div key={h} style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase', textAlign: h !== 'Producto' ? 'right' : 'left' }}>{h}</div>
                     ))}
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {c.productos.map(p => {
                       const catColor = p.categoria === 'Cerveza' ? '#D4AF37' : p.categoria === 'Kombucha' ? '#5A8A4A' : '#6B7280'
+                      const key = `${p.producto}||${p.envase ?? ''}`
                       return (
-                        <div key={p.producto} style={{ display: 'grid', gridTemplateColumns: '1fr 48px 60px 80px', gap: 6, alignItems: 'center' }}>
+                        <div key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 72px 60px 90px', gap: 6, alignItems: 'center' }}>
+                          {/* Nombre + envase */}
                           <div style={{ minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                               <div style={{ width: 5, height: 5, borderRadius: '50%', background: catColor, flexShrink: 0 }} />
@@ -1334,19 +1343,29 @@ function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; 
                                 {p.producto}
                               </span>
                             </div>
-                            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 1, paddingLeft: 10 }}>{p.categoria}</div>
+                            {p.envase && (
+                              <div style={{ fontSize: 9, color: 'var(--gold)', marginTop: 1, paddingLeft: 10, opacity: 0.7 }}>{p.envase}</div>
+                            )}
                           </div>
+                          {/* Unidades */}
                           <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{p.cantidad}</span>
-                            <div style={{ fontSize: 8, color: 'var(--muted)' }}>líneas</div>
+                            {p.unidades != null
+                              ? <>
+                                  <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>{p.unidades.toLocaleString('es-CL')}</span>
+                                  <div style={{ fontSize: 8, color: 'var(--muted)' }}>unidades</div>
+                                </>
+                              : <span style={{ fontSize: 11, color: 'rgba(128,128,128,0.3)' }}>—</span>
+                            }
                           </div>
+                          {/* Litros */}
                           <div style={{ textAlign: 'right' }}>
                             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>{p.litros.toFixed(1)}</span>
                             <div style={{ fontSize: 8, color: 'var(--muted)' }}>L</div>
                           </div>
+                          {/* Monto */}
                           <div style={{ textAlign: 'right' }}>
                             {p.monto > 0
-                              ? <><span style={{ fontSize: 12, fontWeight: 700, color: '#34D399' }}>{fmtPesoCompact(p.monto)}</span></>
+                              ? <span style={{ fontSize: 12, fontWeight: 700, color: '#34D399' }}>{fmtPeso(p.monto)}</span>
                               : <span style={{ fontSize: 10, color: 'rgba(128,128,128,0.3)' }}>—</span>
                             }
                           </div>
@@ -1661,38 +1680,61 @@ export default function MetasClient({
 
   // ── Compute base clientes from props ─────────────────────────────────────────
   const baseClientes = useMemo<ClienteDetalle[]>(() => {
-    type PEntry = { canal: string | null; litros: number; monto: number; fechas: Set<string>; lineas: number; prods: Map<string, { categoria: string; litros: number; monto: number; cantidad: number }> }
-    const map = new Map<string, PEntry>()
+    type PEntry = { categoria: string; envase: string | null; litros: number; monto: number }
+    type CEntry = { canal: string | null; litros: number; monto: number; fechas: Set<string>; prods: Map<string, PEntry> }
+    const map = new Map<string, CEntry>()
+
     for (const v of ventasMes) {
       const nombre = (v.nombre_fantasia ?? '').trim() || 'Sin nombre'
-      if (!map.has(nombre)) map.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, monto: 0, fechas: new Set(), lineas: 0, prods: new Map() })
+      if (!map.has(nombre)) map.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, monto: 0, fechas: new Set(), prods: new Map() })
       const e = map.get(nombre)!
-      e.litros += v.litros ?? 0
-      e.monto  += v.total_sin_impuesto ?? 0
-      e.lineas += 1
+      const litros = v.litros ?? 0
+      const monto  = v.total_sin_impuesto ?? 0
+      e.litros += litros
+      e.monto  += monto
       if (v.fecha_pedido) e.fechas.add(v.fecha_pedido)
-      const prod = (v.producto ?? '').trim() || 'Sin nombre'
-      const cat  = (v.categoria_producto ?? '').trim() || 'Sin categoría'
-      if (!e.prods.has(prod)) e.prods.set(prod, { categoria: cat, litros: 0, monto: 0, cantidad: 0 })
-      const p = e.prods.get(prod)!
-      p.litros   += v.litros ?? 0
-      p.monto    += v.total_sin_impuesto ?? 0
-      p.cantidad += 1
+      const prod   = (v.producto ?? '').trim() || 'Sin nombre'
+      const cat    = (v.categoria_producto ?? '').trim() || 'Sin categoría'
+      const envase = (v.envase ?? '').trim() || null
+      const key    = `${prod}||${envase ?? ''}`
+      if (!e.prods.has(key)) e.prods.set(key, { categoria: cat, envase, litros: 0, monto: 0 })
+      const p = e.prods.get(key)!
+      p.litros += litros
+      p.monto  += monto
     }
+
+    function litrosPorUnidad(envase: string | null): number | null {
+      if (!envase) return null
+      const s = envase.toLowerCase()
+      const cc = s.match(/(\d+(?:[.,]\d+)?)\s*cc/)
+      if (cc) return parseFloat(cc[1].replace(',', '.')) / 1000
+      const li = s.match(/(\d+(?:[.,]\d+)?)\s*l\b/)
+      if (li) return parseFloat(li[1].replace(',', '.'))
+      return null
+    }
+
     return [...map.entries()]
       .map(([nombre, e]) => ({
         nombre, canal: e.canal,
         litros: Math.round(e.litros * 10) / 10,
         monto: Math.round(e.monto),
         pedidos: e.fechas.size,
-        lineas: e.lineas,
         ultimoPedido: [...e.fechas].sort().at(-1) ?? '',
         productos: [...e.prods.entries()]
-          .map(([producto, { categoria, litros, monto, cantidad }]) => ({ producto, categoria, litros: Math.round(litros * 10) / 10, monto, cantidad }))
-          .sort((a, b) => b.litros - a.litros),
+          .map(([key, { categoria, envase, litros, monto }]) => {
+            const lpu = litrosPorUnidad(envase)
+            return {
+              producto: key.split('||')[0],
+              categoria, envase,
+              litros: Math.round(litros * 10) / 10,
+              monto: Math.round(monto),
+              unidades: lpu && lpu > 0 ? Math.round(litros / lpu) : null,
+            }
+          })
+          .sort((a, b) => b.monto - a.monto),
       }))
       .filter(c => c.litros > 0)
-      .sort((a, b) => b.litros - a.litros)
+      .sort((a, b) => b.monto - a.monto)
   }, [ventasMes])
 
   // ── Derived display values ────────────────────────────────────────────────────
