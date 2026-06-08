@@ -501,7 +501,7 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       <div style={{ height: 4, background: SEMAFORO_COLORS[semaforo] }} />
 
       {/* Header */}
-      <div style={{ padding: '14px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '16px 18px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {avatarUrl ? (
             <div style={{
@@ -541,14 +541,14 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       {/* Pacing chart del período seleccionado */}
       {analytics.pacingDataMes.length >= 2 && (
         <>
-          <div style={{ padding: '0 10px 4px' }}>
+          <div style={{ padding: '0 14px 4px' }}>
             <PacingLineChart
               data={analytics.pacingDataMes}
               meta={analytics.metaMensual}
               semaforo={semaforo}
             />
           </div>
-          <div style={{ padding: '0 14px 10px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{ padding: '0 18px 10px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <div style={{ width: 16, height: 6, borderRadius: 3, background: SEMAFORO_COLORS[semaforo], opacity: 0.5 }} />
               <span style={{ fontSize: 10, color: 'var(--muted)' }}>Realizado acumulado</span>
@@ -562,7 +562,7 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       )}
 
       {/* Progress bar */}
-      <div style={{ padding: '0 16px 14px' }}>
+      <div style={{ padding: '0 18px 14px' }}>
         <BarraDual meta={meta} realizado={real} esperado={esperado} semaforo={semaforo} />
         {/* Real / Meta / Esperado */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginTop: 12 }}>
@@ -583,7 +583,7 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       </div>
 
       {/* KPI chips — META / REALIZADO / FALTANTE */}
-      <div style={{ padding: '0 14px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+      <div style={{ padding: '0 18px 16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         {[
           { label: 'Meta',      num: meta,                         extra: '',   accent: false },
           { label: 'Realizado', num: real,                         extra: '',   accent: false },
@@ -607,7 +607,7 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       </div>
 
       {/* Días hábiles bar */}
-      <div style={{ padding: '0 20px 14px' }}>
+      <div style={{ padding: '0 18px 14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
           <span style={{ fontSize: 10, color: 'var(--muted)' }}>Días hábiles transcurridos</span>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{diasTrans} / {diasTotal}</span>
@@ -624,7 +624,7 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       {/* Proyección */}
       {!metaCumplida && diasRest > 0 && (
         <div style={{
-          margin: '0 20px 14px', padding: '10px 14px', borderRadius: 12,
+          margin: '0 18px 14px', padding: '10px 14px', borderRadius: 12,
           background: SEMAFORO_BG[semaforo], border: `1px solid ${SEMAFORO_COLORS[semaforo]}30`,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
@@ -644,7 +644,7 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       {/* Meta cumplida */}
       {metaCumplida && (
         <div style={{
-          margin: '0 20px 14px', padding: '10px 14px', borderRadius: 12,
+          margin: '0 18px 14px', padding: '10px 14px', borderRadius: 12,
           background: 'rgba(74,122,58,0.1)', border: '1px solid rgba(74,122,58,0.3)',
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
@@ -655,7 +655,7 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       )}
 
       {/* Canales */}
-      <div style={{ padding: '0 20px 20px' }}>
+      <div style={{ padding: '0 18px 20px' }}>
         <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 10 }}>
           Por canal · {rangeLabel}
         </p>
@@ -1785,7 +1785,7 @@ export default function MetasClient({
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="px-4 pt-6 pb-24 lg:px-12 lg:pt-10" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+    <div className="px-5 pt-6 pb-28 lg:px-12 lg:pt-10" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
         <AppHeader title="Metas Comerciales" />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -10 }}>
