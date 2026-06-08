@@ -873,11 +873,12 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
 // ─── Paso 2: Check-in GPS + Fotos ────────────────────────────
 
 function Paso2Checkin({ onConfirmar }: {
-  onConfirmar: (coords: { lat: number; lng: number; addr: string }, fotos: Record<string, string>) => void
+  onConfirmar: (coords: { lat: number; lng: number; addr: string }, fotos: Record<string, string>, fotosFiles: Record<string, File>) => void
 }) {
   const [gps, setGps] = useState<{ lat: number; lng: number; addr: string } | null>(null)
   const [gpsError, setGpsError] = useState(false)
   const [fotos, setFotos] = useState<Record<string, string>>({})
+  const [fotosFiles, setFotosFiles] = useState<Record<string, File>>({})
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => {
@@ -892,6 +893,7 @@ function Paso2Checkin({ onConfirmar }: {
     const file = e.target.files?.[0]
     if (!file) return
     setFotos(prev => ({ ...prev, [key]: URL.createObjectURL(file) }))
+    setFotosFiles(prev => ({ ...prev, [key]: file }))
   }
 
   const fotosListas = FOTO_SLOTS.filter(s => fotos[s.key]).length
@@ -954,7 +956,7 @@ function Paso2Checkin({ onConfirmar }: {
       </div>
 
       <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
-        <button onClick={() => gps && onConfirmar(gps, fotos)} disabled={!listo} style={{
+        <button onClick={() => gps && onConfirmar(gps, fotos, fotosFiles)} disabled={!listo} style={{
           width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed',
           background: listo ? T : 'rgba(255,255,255,0.06)', color: listo ? '#080808' : 'var(--muted)',
           fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px', transition: 'all 0.2s',
@@ -1485,9 +1487,47 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     setPaso(2)
   }
 
-  async function onCheckinConfirmado(coords: { lat: number; lng: number; addr: string }, _fotos: Record<string, string>) {
+  async function onCheckinConfirmado(
+    coords: { lat: number; lng: number; addr: string },
+    _fotos: Record<string, string>,
+    fotosFiles: Record<string, File>,
+  ) {
     setGps(coords)
-    if (visitaId) await supabase.from('visitas_terreno').update({ lat: coords.lat, lng: coords.lng, direccion_gps: coords.addr }).eq('id', visitaId)
+    if (!visitaId) { setPaso(3); return }
+
+    // Subir fotos a Supabase Storage y obtener URLs públicas
+    const photoUrls: Record<string, string | null> = {
+      foto_exterior: null,
+      foto_exhibicion: null,
+      foto_competencia: null,
+    }
+    const keyMap: Record<string, string> = {
+      exterior: 'foto_exterior',
+      exhibicion: 'foto_exhibicion',
+      competencia: 'foto_competencia',
+    }
+    await Promise.all(
+      Object.entries(fotosFiles).map(async ([key, file]) => {
+        const path = `${visitaId}/${key}.jpg`
+        const { error } = await supabase.storage
+          .from('terreno-fotos')
+          .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
+        if (!error) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('terreno-fotos')
+            .getPublicUrl(path)
+          photoUrls[keyMap[key]] = publicUrl
+        }
+      })
+    )
+
+    await supabase.from('visitas_terreno').update({
+      lat: coords.lat,
+      lng: coords.lng,
+      direccion_gps: coords.addr,
+      ...photoUrls,
+    }).eq('id', visitaId)
+
     setPaso(3)
   }
 

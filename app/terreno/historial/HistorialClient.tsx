@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { MapPin, CheckCircle, XCircle, Filter, ChevronDown, ChevronUp, Package, TrendingUp, AlertTriangle, Clock } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import { useIsDesktop } from '@/lib/useIsDesktop'
@@ -237,6 +237,150 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
   )
 }
 
+// ── Lightbox de fotos ──────────────────────────────────────────
+interface FotoEntry { src: string; label: string }
+
+function FotoLightbox({ fotos, startIdx, onClose }: { fotos: FotoEntry[]; startIdx: number; onClose: () => void }) {
+  const [idx, setIdx] = useState(startIdx)
+  const prev = () => setIdx(i => (i - 1 + fotos.length) % fotos.length)
+  const next = () => setIdx(i => (i + 1) % fotos.length)
+  const foto = fotos[idx]
+
+  // Cerrar con tecla Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.95)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      {/* Botón cerrar */}
+      <button
+        onClick={onClose}
+        style={{
+          position: 'absolute', top: 'max(16px, env(safe-area-inset-top, 16px))', right: 16,
+          width: 36, height: 36, borderRadius: '50%',
+          background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
+          color: '#fff', fontSize: 18, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        ×
+      </button>
+
+      {/* Contador */}
+      <div style={{
+        position: 'absolute', top: 'max(16px, env(safe-area-inset-top, 16px))', left: 16,
+        fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.5)',
+        background: 'rgba(0,0,0,0.5)', padding: '4px 10px', borderRadius: 20,
+      }}>
+        {idx + 1} / {fotos.length}
+      </div>
+
+      {/* Imagen principal */}
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ width: '100%', maxWidth: 520, padding: '0 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={foto.src}
+          alt={foto.label}
+          style={{
+            width: '100%', maxHeight: '70vh',
+            objectFit: 'contain', borderRadius: 12,
+            border: '1px solid rgba(255,255,255,0.08)',
+          }}
+        />
+
+        {/* Label */}
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', letterSpacing: 0.3 }}>
+          {foto.label}
+        </div>
+
+        {/* Navegación */}
+        {fotos.length > 1 && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button
+              onClick={prev}
+              style={{
+                padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)',
+                background: 'rgba(255,255,255,0.07)', color: '#fff', fontSize: 13,
+                fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              ← Anterior
+            </button>
+            <button
+              onClick={next}
+              style={{
+                padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)',
+                background: 'rgba(255,255,255,0.07)', color: '#fff', fontSize: 13,
+                fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              Siguiente →
+            </button>
+          </div>
+        )}
+
+        {/* Puntos indicadores */}
+        {fotos.length > 1 && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            {fotos.map((_, i) => (
+              <div
+                key={i}
+                onClick={() => setIdx(i)}
+                style={{
+                  width: i === idx ? 20 : 6, height: 6,
+                  borderRadius: 3, cursor: 'pointer',
+                  background: i === idx ? T : 'rgba(255,255,255,0.2)',
+                  transition: 'all 0.2s',
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Thumbnails barra inferior */}
+      {fotos.length > 1 && (
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'absolute', bottom: 'max(24px, env(safe-area-inset-bottom, 24px))',
+            display: 'flex', gap: 8,
+          }}
+        >
+          {fotos.map((f, i) => (
+            <div
+              key={f.label}
+              onClick={() => setIdx(i)}
+              style={{
+                width: 52, height: 52, borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
+                border: `2px solid ${i === idx ? T : 'rgba(255,255,255,0.15)'}`,
+                transition: 'border-color 0.2s', flexShrink: 0,
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={f.src} alt={f.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Card de visita ─────────────────────────────────────────────
 function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPorVisita, vendedorNombre }: {
   visita: Visita; items: Item[]; deudor: Deudor | undefined
@@ -245,11 +389,20 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
 }) {
   const [open, setOpen] = useState(false)
   const [tabDetalle, setTabDetalle] = useState<'pedido' | 'cliente'>('pedido')
+  const [lightbox, setLightbox] = useState<{ idx: number } | null>(null)
 
   const totalItems = items.reduce((s, i) => s + i.cantidad, 0)
-  const fotos = [visita.foto_exterior, visita.foto_exhibicion, visita.foto_competencia].filter(Boolean) as string[]
+  const fotoEntries: FotoEntry[] = [
+    { src: visita.foto_exterior   ?? '', label: 'Exterior'    },
+    { src: visita.foto_exhibicion ?? '', label: 'Exhibición'  },
+    { src: visita.foto_competencia ?? '', label: 'Competencia' },
+  ].filter(f => f.src)
 
   return (
+    <>
+    {lightbox && (
+      <FotoLightbox fotos={fotoEntries} startIdx={lightbox.idx} onClose={() => setLightbox(null)} />
+    )}
     <div style={{ background: '#111', border: `1px solid ${visita.tiene_venta ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.06)'}`, borderRadius: 14, overflow: 'hidden' }}>
       {/* Header — siempre visible */}
       <div onClick={() => setOpen(!open)} style={{ padding: '12px 14px', cursor: 'pointer' }}>
@@ -261,6 +414,11 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
               </p>
               {visita.es_cliente_nuevo && <span style={{ fontSize: 9, fontWeight: 700, color: '#F4EEDF', background: 'rgba(107,163,245,0.12)', padding: '2px 6px', borderRadius: 10, flexShrink: 0 }}>NUEVO</span>}
               <DeudaBadge deudor={deudor} />
+              {fotoEntries.length > 0 && (
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.7)', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)', padding: '2px 6px', borderRadius: 10, flexShrink: 0 }}>
+                  📷 {fotoEntries.length}
+                </span>
+              )}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fmtHora(visita.iniciada_at)}{visita.completada_at ? ` → ${fmtHora(visita.completada_at)}` : ''}</span>
@@ -345,21 +503,45 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 </div>
               )}
 
-              {/* Fotos */}
-              {fotos.length > 0 && (
+              {/* Fotos — abre lightbox */}
+              {fotoEntries.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
-                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 6 }}>Fotos ({fotos.length})</p>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {[
-                      { src: visita.foto_exterior,    label: 'Exterior' },
-                      { src: visita.foto_exhibicion,  label: 'Exhibición' },
-                      { src: visita.foto_competencia, label: 'Competencia' },
-                    ].filter(f => f.src).map(f => (
-                      <a key={f.label} href={f.src!} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0, textDecoration: 'none' }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={f.src!} alt={f.label} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }} />
-                        <p style={{ fontSize: 9, color: 'var(--muted)', textAlign: 'center', marginTop: 3 }}>{f.label}</p>
-                      </a>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+                    Fotos del local ({fotoEntries.length})
+                  </p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {fotoEntries.map((f, i) => (
+                      <button
+                        key={f.label}
+                        onClick={() => setLightbox({ idx: i })}
+                        style={{
+                          flexShrink: 0, background: 'none', border: 'none',
+                          padding: 0, cursor: 'pointer', textAlign: 'center',
+                        }}
+                      >
+                        <div style={{
+                          width: 80, height: 80, borderRadius: 10, overflow: 'hidden',
+                          border: '1px solid rgba(212,175,55,0.2)',
+                          position: 'relative',
+                        }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={f.src}
+                            alt={f.label}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                          {/* Overlay con lupa */}
+                          <div style={{
+                            position: 'absolute', inset: 0,
+                            background: 'rgba(0,0,0,0)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'background 0.2s',
+                          }}>
+                            <span style={{ fontSize: 18, opacity: 0.7 }}>🔍</span>
+                          </div>
+                        </div>
+                        <p style={{ fontSize: 9, color: T, textAlign: 'center', marginTop: 4, fontWeight: 600 }}>{f.label}</p>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -387,6 +569,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
         </div>
       )}
     </div>
+    </>
   )
 }
 
