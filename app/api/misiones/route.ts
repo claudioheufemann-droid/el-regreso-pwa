@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { calcularVolumen, calcularPrioridad } from '@/lib/misiones'
+import { sendPushToAllAdmins } from '@/lib/push'
 
 /** Devuelve el lunes de la semana actual */
 function getMondayOfWeek(date: Date): string {
@@ -235,6 +236,19 @@ export async function POST(req: Request) {
     }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // 🔔 Notificar a admins cuando se cierra una misión con pedido
+    if (estado === 'contactado_pedido' && mision.nombre_fantasia) {
+      sendPushToAllAdmins({
+        title: `🎯 Pedido confirmado — ${mision.nombre_fantasia}`,
+        body: typeof litros === 'number'
+          ? `${litros}L registrados por ${user?.nombre?.split(' ')[0] ?? 'vendedor'}`
+          : `Pedido anotado por ${user?.nombre?.split(' ')[0] ?? 'vendedor'}`,
+        url: '/ventas/misiones',
+        tag: 'mision_pedido',
+      }).catch(() => {})
+    }
+
     return NextResponse.json({ ok: true, snooze_until: update.snooze_until ?? null })
   }
 

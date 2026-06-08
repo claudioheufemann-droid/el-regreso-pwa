@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { notificar } from '@/lib/notificar'
 import {
   Truck, Camera, CheckCircle, ChevronLeft, MapPin, Clock,
   AlertTriangle, Plus, X, FileSpreadsheet, Navigation2, Search,
@@ -435,6 +436,14 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
         .eq('id', vehiculo.id)
 
       if (errVeh) throw new Error(errVeh.message)
+
+      // 🔔 Notificar a todos que un camión salió
+      notificar({
+        event: 'camion_salida',
+        title: `🚚 ${vehiculo.nombre} en ruta`,
+        body: `${user.nombre?.split(' ')[0] ?? 'Conductor'} salió${tipoViaje === 'reparto' ? ' en reparto' : ` — ${motivoViaje}`}`,
+        url: '/flota',
+      })
 
       router.push(`/flota/vehiculo/${vehiculo.id}`)
     } catch (e) {

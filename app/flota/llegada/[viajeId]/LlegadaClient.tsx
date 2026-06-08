@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, MapPin, Navigation, CheckCircle, AlertTriangle } from 'lucide-react'
+import { notificar } from '@/lib/notificar'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 
@@ -86,6 +87,15 @@ export default function LlegadaClient({ user, viaje }: Props) {
         destino_lng: coords.lng,
         llegada_confirmada_at: new Date().toISOString(),
       }).eq('id', viaje.id)
+
+      // 🔔 Notificar a todos que el camión llegó
+      notificar({
+        event: 'camion_llegada',
+        title: `✅ ${viaje.vehiculos?.nombre ?? 'Camión'} regresó`,
+        body: `Llegada confirmada · ${fmtDuracion(viaje.iniciado_at)}`,
+        url: '/flota',
+      })
+
       setConfirmado(true)
       setTimeout(() => router.push('/flota'), 1800)
     } finally {

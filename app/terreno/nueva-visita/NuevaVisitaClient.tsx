@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { notificar } from '@/lib/notificar'
 import { useRouter } from 'next/navigation'
 import {
   MapPin, Camera, CheckCircle, XCircle, ChevronLeft, ChevronDown,
@@ -1661,6 +1662,25 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
           items.map(i => ({ visita_id: visitaId, producto: i.producto, categoria: i.categoria, envase: i.envase, cantidad: i.cantidad, precio_unit: i.precio, subtotal: i.cantidad * i.precio }))
         )
       }
+
+      // 🔔 Notificar según resultado
+      if (tienVenta) {
+        const fmtCLP = (n: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
+        notificar({
+          event: 'visita_completada',
+          title: `✅ Venta en ${cliente?.nombre ?? 'local'}`,
+          body: `${fmtCLP(total)} · ${items.length} producto${items.length !== 1 ? 's' : ''}`,
+          url: '/terreno/historial',
+        })
+      } else if (motivo) {
+        notificar({
+          event: 'visita_sin_venta',
+          title: `📍 Visita sin venta — ${cliente?.nombre ?? 'local'}`,
+          body: motivo,
+          url: '/terreno/historial',
+        })
+      }
+
       router.push('/terreno')
     } finally {
       setGuardando(false)

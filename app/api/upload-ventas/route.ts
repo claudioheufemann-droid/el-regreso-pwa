@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import * as XLSX from 'xlsx'
 import { esClienteExcluido, VENDEDORES_DB } from '@/lib/types'
+import { sendPushToAllAdmins } from '@/lib/push'
 
 const VENDEDORES_VALIDOS: string[] = [...VENDEDORES_DB]
 
@@ -289,6 +290,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
     insertadas += data?.length ?? batch.length
+  }
+
+  // 🔔 Notificación a admins cuando se cargan ventas
+  if (insertadas > 0) {
+    sendPushToAllAdmins({
+      title: '📊 Ventas cargadas',
+      body: `Se insertaron ${insertadas} registros de ventas`,
+      url: '/ventas',
+      tag: 'venta_cargada',
+    }).catch(() => {})
   }
 
   return NextResponse.json({
