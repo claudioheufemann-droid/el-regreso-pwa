@@ -698,15 +698,17 @@ function CantidadInput({
 // ─── Step indicator ───────────────────────────────────────────
 
 function StepBar({ paso, total }: { paso: number; total: number }) {
+  const pct = Math.round((paso / total) * 100)
   return (
-    <div style={{ display: 'flex', gap: 4, padding: '0 20px' }}>
-      {Array.from({ length: total }).map((_, i) => (
-        <div key={i} style={{
-          flex: 1, height: 3, borderRadius: 2,
-          background: i < paso ? T : 'rgba(255,255,255,0.1)',
-          transition: 'background 0.3s',
+    <div style={{ padding: '0 20px' }}>
+      <div style={{ height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{
+          height: '100%', width: `${pct}%`, borderRadius: 2,
+          background: 'linear-gradient(90deg, #B8962E 0%, #D4AF37 60%, #F0D060 100%)',
+          boxShadow: '0 0 10px rgba(212,175,55,0.7)',
+          transition: 'width 0.5s cubic-bezier(0.16,1,0.3,1)',
         }} />
-      ))}
+      </div>
     </div>
   )
 }
@@ -1329,62 +1331,107 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   // Pantalla catálogo
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Tabs + botón catálogo WA */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 16px 0' }}>
-        <div style={{ flex: 1, display: 'flex', borderRadius: 12, background: '#1C1C1C', padding: 4, gap: 4 }}>
-          {(['Cerveza', 'Kombucha'] as const).map(cat => (
-            <button key={cat} onClick={() => setTabCat(cat)} style={{
-              flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
-              background: tabCat === cat ? C : 'transparent',
-              color: tabCat === cat ? '#fff' : 'var(--muted)',
-              fontSize: 14, fontWeight: 700, transition: 'all 0.15s',
-            }}>
-              {cat === 'Cerveza' ? '🍺' : '🫧'} {cat}
-            </button>
-          ))}
+      {/* ── Selectors premium ── */}
+      <div style={{ padding: '20px 18px 0' }}>
+
+        {/* Selector PRODUCTO */}
+        <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.22)', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 8 }}>PRODUCTO</p>
+        <div style={{
+          display: 'flex',
+          background: 'rgba(255,255,255,0.035)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 18, padding: 5,
+          backdropFilter: 'blur(20px)',
+        }}>
+          {([
+            { key: 'Cerveza', label: 'Cerveza', icon: '🍺' },
+            { key: 'Kombucha', label: 'Kombucha', icon: '🫧' },
+          ] as const).map(opt => {
+            const active = tabCat === opt.key
+            return (
+              <button key={opt.key} onClick={() => setTabCat(opt.key)} style={{
+                flex: 1, padding: '13px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
+                background: active
+                  ? 'linear-gradient(145deg, rgba(212,175,55,0.22) 0%, rgba(212,175,55,0.10) 100%)'
+                  : 'transparent',
+                boxShadow: active
+                  ? '0 0 24px rgba(212,175,55,0.12), inset 0 0 0 1px rgba(212,175,55,0.22)'
+                  : 'none',
+                transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ fontSize: 22, lineHeight: 1 }}>{opt.icon}</span>
+                <span style={{ fontSize: 13, fontWeight: active ? 600 : 500, color: active ? '#F0D060' : 'rgba(255,255,255,0.3)', letterSpacing: '-0.1px', transition: 'color 0.2s' }}>
+                  {opt.label}
+                </span>
+              </button>
+            )
+          })}
         </div>
-        {/* Botón enviar catálogo */}
+
+        {/* Selector FORMATO */}
+        <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.22)', letterSpacing: '2px', textTransform: 'uppercase', marginTop: 16, marginBottom: 8 }}>FORMATO</p>
+        <div style={{
+          display: 'flex',
+          background: 'rgba(255,255,255,0.035)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 18, padding: 5,
+          backdropFilter: 'blur(20px)',
+        }}>
+          {([
+            { key: 'lata',   label: 'Lata',       icon: '🥫' },
+            { key: 'barril', label: 'Barril 30L',  icon: '🛢️' },
+          ] as const).map(opt => {
+            const active = tabEnvase === opt.key
+            return (
+              <button key={opt.key} onClick={() => setTabEnvase(opt.key)} style={{
+                flex: 1, padding: '13px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
+                background: active
+                  ? 'linear-gradient(145deg, rgba(212,175,55,0.22) 0%, rgba(212,175,55,0.10) 100%)'
+                  : 'transparent',
+                boxShadow: active
+                  ? '0 0 24px rgba(212,175,55,0.12), inset 0 0 0 1px rgba(212,175,55,0.22)'
+                  : 'none',
+                transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ fontSize: 22, lineHeight: 1 }}>{opt.icon}</span>
+                <span style={{ fontSize: 13, fontWeight: active ? 600 : 500, color: active ? '#F0D060' : 'rgba(255,255,255,0.3)', letterSpacing: '-0.1px', transition: 'color 0.2s' }}>
+                  {opt.label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Info barril */}
+        {esBarril && (
+          <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 12, background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.12)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14 }}>🛢️</span>
+            <span style={{ fontSize: 11, color: 'rgba(212,175,55,0.65)', fontWeight: 500 }}>
+              Barril de <strong style={{ color: '#D4AF37' }}>30 litros</strong> · Precio con IVA incluido
+            </span>
+          </div>
+        )}
+
+        {/* Botón enviar catálogo por WA */}
         <button
           onClick={() => setWaModal('catalogo')}
-          title="Enviar catálogo por WhatsApp"
-          style={{ width: 44, height: 44, borderRadius: 12, border: `1px solid rgba(37,211,102,0.3)`, background: 'rgba(37,211,102,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+          style={{
+            marginTop: 12, width: '100%', padding: '11px 0',
+            borderRadius: 14, border: '1px solid rgba(37,211,102,0.18)',
+            background: 'rgba(37,211,102,0.05)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            cursor: 'pointer',
+          }}
         >
-          <Share2 size={18} color={WA} />
+          <Share2 size={14} color={WA} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: WA }}>Enviar catálogo por WhatsApp</span>
         </button>
       </div>
 
-      {/* Toggle Lata / Barril */}
-      <div style={{ display: 'flex', gap: 6, margin: '8px 16px 0' }}>
-        {([['lata', '🥫 Lata'], ['barril', '🛢️ Barril 30L']] as const).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTabEnvase(key)}
-            style={{
-              flex: 1, padding: '8px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
-              background: tabEnvase === key ? (key === 'barril' ? '#5A3E1B' : 'rgba(212,175,55,0.15)') : '#1C1C1C',
-              color: tabEnvase === key ? C : 'var(--muted)',
-              fontSize: 13, fontWeight: 700,
-              outline: tabEnvase === key ? `1px solid ${C_BORDER}` : 'none',
-              transition: 'all 0.15s',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Info barril */}
-      {esBarril && (
-        <div style={{ margin: '8px 16px 0', padding: '8px 12px', borderRadius: 10, background: 'rgba(90,62,27,0.3)', border: '1px solid rgba(212,175,55,0.2)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 16 }}>🛢️</span>
-          <span style={{ fontSize: 11, color: 'rgba(212,175,55,0.8)' }}>
-            Barril de <strong style={{ color: C }}>30 litros</strong> · Precio con IVA incluido
-          </span>
-        </div>
-      )}
-
       {/* Lista productos */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }}>
         {prodsFiltrados.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <Package size={32} color="var(--muted)" style={{ margin: '0 auto 10px' }} />
@@ -1394,31 +1441,41 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {prodsFiltrados.map(p => {
               const key = cartKey(p.producto, p.envase ?? envaseName)
-              const cant  = carrito.get(key)?.cantidad ?? 0
-              const info  = CATALOGO_INFO[p.producto]
+              const cant   = carrito.get(key)?.cantidad ?? 0
+              const info   = CATALOGO_INFO[p.producto]
               const precio = esBarril ? (info?.precio_barril ?? 0) : (info?.precio_lata ?? 0)
               const unidadLabel = esBarril ? '/ barril' : '/ lata'
               return (
-                <div key={key} style={{ background: cant > 0 ? C_DIM : '#1C1C1C', border: `1px solid ${cant > 0 ? C_BORDER : 'rgba(255,255,255,0.06)'}`, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}>
-                  <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} size={46} />
+                <div key={key} style={{
+                  background: cant > 0
+                    ? 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.04) 100%)'
+                    : 'rgba(255,255,255,0.025)',
+                  border: `1px solid ${cant > 0 ? 'rgba(212,175,55,0.18)' : 'rgba(255,255,255,0.055)'}`,
+                  borderRadius: 18,
+                  padding: '14px 16px',
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
+                  boxShadow: cant > 0 ? '0 0 20px rgba(212,175,55,0.07)' : 'none',
+                }}>
+                  <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} size={48} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{p.producto}</p>
-                    {info?.estilo && (
-                      <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
-                        {info.estilo}
-                        {esBarril && <span style={{ marginLeft: 6, color: C, fontWeight: 700 }}>· 30 L</span>}
-                      </p>
-                    )}
+                    <p style={{ fontSize: 14, fontWeight: 600, color: '#F0EDE8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2, letterSpacing: '-0.2px' }}>
+                      {p.producto}
+                    </p>
+                    <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 6, fontWeight: 500 }}>
+                      {info?.estilo}
+                      {esBarril && <span style={{ marginLeft: 6, color: 'rgba(212,175,55,0.6)', fontWeight: 600 }}>· 30 L</span>}
+                    </p>
                     {precio > 0 && (
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                        <p style={{ fontSize: 17, fontWeight: 900, color: C, letterSpacing: '-0.5px', lineHeight: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <span style={{ fontSize: 16, fontWeight: 700, color: '#D4AF37', letterSpacing: '-0.4px', lineHeight: 1 }}>
                           {fmtPrecioCLP(precio)}
-                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>{unidadLabel}</span>
-                        </p>
+                        </span>
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: 500 }}>{unidadLabel}</span>
                         {cant > 0 && (
-                          <p style={{ fontSize: 17, fontWeight: 900, color: C, letterSpacing: '-0.5px', lineHeight: 1, opacity: 0.65 }}>
-                            = {fmtPrecioCLP(cant * precio)}
-                          </p>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(212,175,55,0.55)', letterSpacing: '-0.2px' }}>
+                            · {fmtPrecioCLP(cant * precio)}
+                          </span>
                         )}
                       </div>
                     )}
@@ -1613,18 +1670,46 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
   const pasoLabel = ['', 'Cliente', 'Check-In', cliente?.esNuevo ? 'Catálogo' : 'Vista 360°', 'Catálogo'][paso]
 
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(212,175,55,0.15)', padding: '14px 16px 10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <button onClick={() => paso > 1 ? setPaso(paso - 1) : router.push('/terreno')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
-            <ChevronLeft size={18} /> {paso === 1 ? 'Cancelar' : 'Atrás'}
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #07060F 0%, #0A0810 40%, #070612 100%)', display: 'flex', flexDirection: 'column' }}>
+      {/* Header premium glass */}
+      <div style={{
+        background: 'rgba(10,8,20,0.85)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
+        paddingBottom: 14,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', marginBottom: 16 }}>
+          {/* Back button: glass circle */}
+          <button
+            onClick={() => paso > 1 ? setPaso(paso - 1) : router.push('/terreno')}
+            style={{
+              width: 38, height: 38, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.09)',
+              backdropFilter: 'blur(12px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            <ChevronLeft size={18} color="rgba(255,255,255,0.75)" />
           </button>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 14, fontWeight: 800, color: '#F4EEDF' }}>{cliente ? cliente.nombre : 'Nueva Visita'}</p>
-            <p style={{ fontSize: 11, color: 'var(--muted)' }}>Paso {paso}/{totalPasos} · {pasoLabel}</p>
+
+          {/* Title center */}
+          <div style={{ textAlign: 'center', flex: 1, padding: '0 12px' }}>
+            <p style={{ fontSize: 16, fontWeight: 700, color: '#F8F6F0', letterSpacing: '-0.4px', lineHeight: 1.2 }}>
+              {cliente ? cliente.nombre : 'Nueva Visita'}
+            </p>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 500, marginTop: 3, letterSpacing: '0.1px' }}>
+              Paso {paso}/{totalPasos} · {pasoLabel}
+            </p>
           </div>
-          <div style={{ width: 60 }} />
+
+          {/* Share placeholder (mismo tamaño que el back para centrar) */}
+          <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Share2 size={15} color="rgba(255,255,255,0.4)" />
+          </div>
         </div>
         <StepBar paso={paso} total={totalPasos} />
       </div>
