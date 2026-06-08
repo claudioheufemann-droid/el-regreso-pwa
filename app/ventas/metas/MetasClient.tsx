@@ -645,81 +645,86 @@ function DateRangePicker({ inicio, fin, presets, onChange }: {
   presets: { label: string; inicio: string; fin: string }[]
   onChange: (ini: string, fin: string) => void
 }) {
-  const [open, setOpen]         = useState(false)
-  const [step, setStep]         = useState<'start' | 'end'>('start')
-  const [draft, setDraft]       = useState({ inicio, fin })
-  const [hover, setHover]       = useState<string | null>(null)
-  const [viewYear, setViewYear] = useState(parseInt(inicio.split('-')[0]))
+  const [open, setOpen]           = useState(false)
+  // which field is active: 'inicio' or 'fin'
+  const [activeField, setActive]  = useState<'inicio' | 'fin'>('inicio')
+  const [draftIni, setDraftIni]   = useState(inicio)
+  const [draftFin, setDraftFin]   = useState(fin)
+  const [hover, setHover]         = useState<string | null>(null)
+  const [viewYear, setViewYear]   = useState(parseInt(inicio.split('-')[0]))
   const [viewMonth, setViewMonth] = useState(parseInt(inicio.split('-')[1]) - 1)
   const ref = useRef<HTMLDivElement>(null)
 
+  // Close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false); setStep('start')
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     if (open) document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // Reset draft when picker opens
-  useEffect(() => { if (open) { setDraft({ inicio, fin }); setStep('start') } }, [open, inicio, fin])
+  // Sync draft when picker opens
+  useEffect(() => {
+    if (open) {
+      setDraftIni(inicio); setDraftFin(fin)
+      setViewYear(parseInt(inicio.split('-')[0]))
+      setViewMonth(parseInt(inicio.split('-')[1]) - 1)
+      setActive('inicio')
+    }
+  }, [open, inicio, fin])
 
-  function prevMonth() {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
-    else setViewMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
-    else setViewMonth(m => m + 1)
+  function goMonth(delta: number) {
+    let m = viewMonth + delta, y = viewYear
+    if (m < 0)  { m += 12; y-- }
+    if (m > 11) { m -= 12; y++ }
+    setViewMonth(m); setViewYear(y)
   }
 
   function handleDay(dateStr: string) {
-    if (step === 'start') {
-      setDraft({ inicio: dateStr, fin: dateStr })
-      setStep('end')
+    if (activeField === 'inicio') {
+      setDraftIni(dateStr)
+      // auto-fix if ini > fin
+      if (dateStr > draftFin) setDraftFin(dateStr)
+      setActive('fin')
     } else {
-      const [a, b] = dateStr < draft.inicio ? [dateStr, draft.inicio] : [draft.inicio, dateStr]
-      setDraft({ inicio: a, fin: b })
-      setStep('start')
+      setDraftFin(dateStr)
+      // auto-fix if fin < ini
+      if (dateStr < draftIni) setDraftIni(dateStr)
+      setActive('inicio')
     }
   }
 
   function handleApply() {
-    onChange(draft.inicio, draft.fin)
-    setOpen(false); setStep('start')
+    const [a, b] = draftIni <= draftFin ? [draftIni, draftFin] : [draftFin, draftIni]
+    onChange(a, b)
+    setOpen(false)
   }
 
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
-  const firstDow    = new Date(viewYear, viewMonth, 1).getDay()
-  const startOffset = firstDow === 0 ? 6 : firstDow - 1 // Monday = 0
+  // Jump calendar to a specific month
+  function jumpTo(dateStr: string) {
+    const [y, m] = dateStr.split('-')
+    setViewYear(parseInt(y)); setViewMonth(parseInt(m) - 1)
+  }
+
+  const daysInMonth  = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const firstDow     = new Date(viewYear, viewMonth, 1).getDay()
+  const startOffset  = firstDow === 0 ? 6 : firstDow - 1
 
   function dayStr(d: number) {
     return `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
   }
-  function inRange(s: string) {
-    const lo = step === 'end' && hover && hover > draft.inicio ? draft.inicio : draft.inicio
-    const hi = step === 'end' && hover && hover > draft.inicio ? hover : (step === 'end' && hover ? draft.inicio : draft.fin)
-    return s > lo && s < hi
-  }
-  function isSelected(s: string) {
-    return s === draft.inicio || s === draft.fin
-  }
-  function isEdge(s: string) {
-    if (step === 'end' && hover) {
-      const lo = hover < draft.inicio ? hover : draft.inicio
-      const hi = hover < draft.inicio ? draft.inicio : hover
-      return s === lo || s === hi
-    }
-    return s === draft.inicio || s === draft.fin
-  }
-  function inHoverRange(s: string) {
-    if (step !== 'end' || !hover) return false
-    const lo = hover < draft.inicio ? hover : draft.inicio
-    const hi = hover < draft.inicio ? draft.inicio : hover
-    return s > lo && s < hi
-  }
+
+  // Range boundaries (considering hover preview)
+  const previewFin = activeField === 'fin' && hover ? hover : null
+  const lo = previewFin && previewFin < draftIni ? previewFin : draftIni
+  const hi = previewFin && previewFin > draftIni ? previewFin : draftFin
+
+  function isStart(s: string)  { return s === draftIni }
+  function isEnd(s: string)    { return s === draftFin }
+  function inRange(s: string)  { return s > lo && s < hi }
+
+  const canApply = draftIni.length === 10 && draftFin.length === 10 && draftIni <= draftFin
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -745,103 +750,171 @@ function DateRangePicker({ inicio, fin, presets, onChange }: {
         <div style={{
           position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 300,
           background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 16, padding: '16px',
-          boxShadow: '0 12px 48px rgba(0,0,0,0.6)',
-          minWidth: 300,
+          borderRadius: 16, padding: '0',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.7)',
+          minWidth: 320, overflow: 'hidden',
         }}>
 
-          {/* Presets */}
-          {presets.length > 0 && (
-            <div style={{ marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {presets.map(p => {
-                const active = p.inicio === inicio && p.fin === fin
-                return (
-                  <button
-                    key={p.label}
-                    onClick={() => { setDraft({ inicio: p.inicio, fin: p.fin }); setStep('start') }}
-                    style={{
-                      padding: '5px 11px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                      border: `1px solid ${active ? 'var(--gold)' : 'rgba(255,255,255,0.1)'}`,
-                      background: active ? 'rgba(212,175,55,0.12)' : 'transparent',
-                      color: active ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer',
-                    }}
-                  >{p.label}</button>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Month header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <button onClick={prevMonth} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>‹</button>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>
-              {MESES_CAL[viewMonth]} {viewYear}
-            </span>
-            <button onClick={nextMonth} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>›</button>
-          </div>
-
-          {/* Day-of-week headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: 4 }}>
-            {DIAS_CAL.map(d => (
-              <div key={d} style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, color: 'var(--muted)', padding: '0 0 6px', letterSpacing: '0.5px' }}>{d}</div>
-            ))}
-          </div>
-
-          {/* Days grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px 0' }}>
-            {/* Empty slots */}
-            {Array.from({ length: startOffset }).map((_, i) => <div key={`e${i}`} />)}
-            {/* Days */}
-            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
-              const s = dayStr(d)
-              const sel   = isEdge(s)
-              const range = inRange(s) || inHoverRange(s)
-              const today = s === new Date().toISOString().split('T')[0]
-
+          {/* ── Campos Inicio / Fin ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid var(--border)' }}>
+            {(['inicio', 'fin'] as const).map(field => {
+              const val   = field === 'inicio' ? draftIni : draftFin
+              const label = field === 'inicio' ? 'Inicio' : 'Fin'
+              const active = activeField === field
               return (
                 <button
-                  key={d}
-                  onClick={() => handleDay(s)}
-                  onMouseEnter={() => step === 'end' && setHover(s)}
-                  onMouseLeave={() => setHover(null)}
-                  style={{
-                    padding: '6px 0', textAlign: 'center', border: 'none', cursor: 'pointer',
-                    borderRadius: sel ? 8 : range ? 0 : 8,
-                    background: sel
-                      ? 'var(--gold)'
-                      : range ? 'rgba(212,175,55,0.15)' : 'transparent',
-                    color: sel ? '#080808' : today ? 'var(--gold)' : 'var(--cream)',
-                    fontSize: 13, fontWeight: sel ? 800 : today ? 700 : 400,
-                    outline: today && !sel ? '1px solid rgba(212,175,55,0.4)' : 'none',
+                  key={field}
+                  onClick={() => {
+                    setActive(field)
+                    // jump calendar to the field's month
+                    if (val.length === 10) jumpTo(val)
                   }}
-                >{d}</button>
+                  style={{
+                    padding: '12px 14px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                    background: active ? 'rgba(212,175,55,0.08)' : 'transparent',
+                    borderBottom: `2px solid ${active ? 'var(--gold)' : 'transparent'}`,
+                    borderRight: field === 'inicio' ? '1px solid var(--border)' : 'none',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{ fontSize: 9, fontWeight: 700, color: active ? 'var(--gold)' : 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
+                    {label} {active && '←'}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: val ? 'var(--cream)' : 'rgba(255,255,255,0.2)' }}>
+                    {val ? fmtFecha(val) : '— —'}
+                  </div>
+                </button>
               )
             })}
           </div>
 
-          {/* Draft range label */}
-          <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 10, background: 'var(--surface2)', fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
-            {step === 'start'
-              ? <span>Selecciona la <strong style={{ color: 'var(--cream)' }}>fecha de inicio</strong></span>
-              : <span>Inicio: <strong style={{ color: 'var(--gold)' }}>{fmtFecha(draft.inicio)}</strong> → selecciona la <strong style={{ color: 'var(--cream)' }}>fecha de término</strong></span>
-            }
-          </div>
+          <div style={{ padding: '14px 16px' }}>
 
-          {/* Apply button */}
-          <button
-            onClick={handleApply}
-            disabled={step === 'end'}
-            style={{
-              marginTop: 10, width: '100%', padding: '11px 0',
-              borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 800,
-              background: step === 'end' ? 'rgba(255,255,255,0.06)' : 'var(--gold)',
-              color: step === 'end' ? 'var(--muted)' : '#080808',
-              cursor: step === 'end' ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s',
-            }}
-          >
-            {step === 'end' ? 'Selecciona fecha de término…' : 'Aplicar período →'}
-          </button>
+            {/* Presets */}
+            {presets.length > 0 && (
+              <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {presets.map(p => {
+                  const active = p.inicio === inicio && p.fin === fin
+                  return (
+                    <button
+                      key={p.label}
+                      onClick={() => {
+                        setDraftIni(p.inicio); setDraftFin(p.fin); setActive('inicio')
+                        jumpTo(p.inicio)
+                      }}
+                      style={{
+                        padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600,
+                        border: `1px solid ${active ? 'var(--gold)' : 'rgba(255,255,255,0.1)'}`,
+                        background: active ? 'rgba(212,175,55,0.12)' : 'transparent',
+                        color: active ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer',
+                      }}
+                    >{p.label}</button>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* ── Navegación de mes ── */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              {/* Prev buttons */}
+              <div style={{ display: 'flex', gap: 2 }}>
+                <button
+                  onClick={() => goMonth(-12)}
+                  title="Año anterior"
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}
+                >«</button>
+                <button
+                  onClick={() => goMonth(-1)}
+                  title="Mes anterior"
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--cream)', cursor: 'pointer', fontSize: 16, fontWeight: 700 }}
+                >‹</button>
+              </div>
+
+              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.3px' }}>
+                {MESES_CAL[viewMonth]} {viewYear}
+              </span>
+
+              {/* Next buttons */}
+              <div style={{ display: 'flex', gap: 2 }}>
+                <button
+                  onClick={() => goMonth(1)}
+                  title="Mes siguiente"
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--cream)', cursor: 'pointer', fontSize: 16, fontWeight: 700 }}
+                >›</button>
+                <button
+                  onClick={() => goMonth(12)}
+                  title="Año siguiente"
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}
+                >»</button>
+              </div>
+            </div>
+
+            {/* Day-of-week headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: 4 }}>
+              {DIAS_CAL.map(d => (
+                <div key={d} style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, color: 'var(--muted)', paddingBottom: 6, letterSpacing: '0.5px' }}>{d}</div>
+              ))}
+            </div>
+
+            {/* Days grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '1px 0' }}>
+              {Array.from({ length: startOffset }).map((_, i) => <div key={`e${i}`} />)}
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                const s       = dayStr(d)
+                const isIni   = isStart(s)
+                const isFin   = isEnd(s)
+                const inRng   = inRange(s)
+                const isToday = s === new Date().toISOString().split('T')[0]
+                const isSel   = isIni || isFin
+
+                return (
+                  <button
+                    key={d}
+                    onClick={() => handleDay(s)}
+                    onMouseEnter={() => setHover(s)}
+                    onMouseLeave={() => setHover(null)}
+                    style={{
+                      padding: '7px 0', textAlign: 'center', border: 'none', cursor: 'pointer',
+                      position: 'relative',
+                      borderRadius: isSel ? 8 : inRng ? 0 : 6,
+                      background: isSel
+                        ? 'var(--gold)'
+                        : inRng ? 'rgba(212,175,55,0.18)' : 'transparent',
+                      color: isSel ? '#080808' : isToday ? 'var(--gold)' : 'var(--cream)',
+                      fontSize: 13, fontWeight: isSel ? 900 : isToday ? 700 : 400,
+                      outline: isToday && !isSel ? '1px solid rgba(212,175,55,0.5)' : 'none',
+                      transition: 'background 0.1s',
+                    }}
+                  >
+                    {d}
+                    {/* indicator dot for inicio/fin */}
+                    {isIni && (
+                      <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', fontSize: 7, color: '#080808', fontWeight: 900, lineHeight: 1 }}>I</div>
+                    )}
+                    {isFin && !isIni && (
+                      <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', fontSize: 7, color: '#080808', fontWeight: 900, lineHeight: 1 }}>F</div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Apply */}
+            <button
+              onClick={handleApply}
+              disabled={!canApply}
+              style={{
+                marginTop: 14, width: '100%', padding: '12px 0',
+                borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 800,
+                background: canApply ? 'var(--gold)' : 'rgba(255,255,255,0.06)',
+                color: canApply ? '#080808' : 'var(--muted)',
+                cursor: canApply ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s',
+              }}
+            >
+              {canApply ? `Aplicar: ${fmtFecha(draftIni)} → ${fmtFecha(draftFin)} →` : 'Selecciona inicio y fin'}
+            </button>
+          </div>
         </div>
       )}
     </div>
