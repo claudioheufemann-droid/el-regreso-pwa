@@ -1176,10 +1176,10 @@ const CANAL_DOT: Record<string, string> = {
   'Distribuidor':  '#38BDF8',
 }
 
-const fmtPesoCompact = (n: number) =>
-  new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', notation: 'compact', maximumFractionDigits: 0 }).format(n)
-const fmtPesoFull = (n: number) =>
+const fmtPeso = (n: number) =>
   new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
+const fmtPesoCompact = fmtPeso
+const fmtPesoFull    = fmtPeso
 
 function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; rangeLabel: string }) {
   const [busqueda, setBusqueda] = useState('')
