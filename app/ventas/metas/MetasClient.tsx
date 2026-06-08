@@ -1406,12 +1406,38 @@ export default function MetasClient({
   periodo, vendedores, periodosSemanas, periodosMeses, vendedorAvatars,
 }: Props) {
   const isDesktop = useIsDesktop()
-  const [rangeInicio, setRangeInicio] = useState<string>(mesInicio)
-  const [rangeFin, setRangeFin]       = useState<string>(mesFin)
+
+  // Persistir rango en localStorage para que sobreviva navegación y recarga
+  const STORAGE_KEY = 'metas-range'
+  const [rangeInicio, setRangeInicio] = useState<string>(() => {
+    if (typeof window === 'undefined') return mesInicio
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null')
+      if (saved?.inicio && saved?.fin) return saved.inicio
+    } catch {}
+    return mesInicio
+  })
+  const [rangeFin, setRangeFin] = useState<string>(() => {
+    if (typeof window === 'undefined') return mesFin
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null')
+      if (saved?.inicio && saved?.fin) return saved.fin
+    } catch {}
+    return mesFin
+  })
   const [rangeAnalytics, setRangeAnalytics] = useState<AnalyticsExtended[] | null>(null)
   const [rangeProductos, setRangeProductos] = useState<ProductoCategoria[] | null>(null)
   const [rangeClientes, setRangeClientes]   = useState<ClienteDetalle[] | null>(null)
   const [loading, setLoading]         = useState(false)
+
+  // Cargar datos si el rango guardado es diferente al default
+  useEffect(() => {
+    if (rangeInicio !== mesInicio || rangeFin !== mesFin) {
+      fetchForRange(rangeInicio, rangeFin)
+    }
+  // Solo al montar
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Ciclos contables (24 del mes → 23 del mes siguiente) disponibles en la BD
   const ciclosPreset = useMemo(() => {
@@ -1475,6 +1501,7 @@ export default function MetasClient({
   function handleRangeChange(ini: string, fin: string) {
     setRangeInicio(ini)
     setRangeFin(fin)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ inicio: ini, fin })) } catch {}
     if (ini === mesInicio && fin === mesFin) {
       setRangeAnalytics(null)
       setRangeProductos(null)
