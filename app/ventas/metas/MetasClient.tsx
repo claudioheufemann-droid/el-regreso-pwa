@@ -129,6 +129,14 @@ interface Props {
 }
 
 function fmt(n: number) { return n.toFixed(1) }
+/** Número compacto para chips en móvil: sin decimales cero, con separador de miles */
+function fmtL(n: number) {
+  const rounded = Math.round(n * 10) / 10
+  const str = rounded % 1 === 0
+    ? new Intl.NumberFormat('es-CL').format(Math.round(rounded))
+    : new Intl.NumberFormat('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(rounded)
+  return str
+}
 
 function fmtFecha(d: string) {
   const [, m, day] = d.split('-')
@@ -533,14 +541,14 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       {/* Pacing chart del período seleccionado */}
       {analytics.pacingDataMes.length >= 2 && (
         <>
-          <div style={{ padding: '0 20px 4px' }}>
+          <div style={{ padding: '0 10px 4px' }}>
             <PacingLineChart
               data={analytics.pacingDataMes}
               meta={analytics.metaMensual}
               semaforo={semaforo}
             />
           </div>
-          <div style={{ padding: '0 20px 10px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{ padding: '0 14px 10px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <div style={{ width: 16, height: 6, borderRadius: 3, background: SEMAFORO_COLORS[semaforo], opacity: 0.5 }} />
               <span style={{ fontSize: 10, color: 'var(--muted)' }}>Realizado acumulado</span>
@@ -556,37 +564,44 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
       {/* Progress bar */}
       <div style={{ padding: '0 16px 14px' }}>
         <BarraDual meta={meta} realizado={real} esperado={esperado} semaforo={semaforo} />
-        {/* Real / Meta / Esperado — 2 filas en móvil */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginTop: 14 }}>
+        {/* Real / Meta / Esperado */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginTop: 12 }}>
           {[
-            { label: 'Real',     value: `${fmt(real)} L`,     color: SEMAFORO_COLORS[semaforo] },
-            { label: 'Meta',     value: `${fmt(meta)} L`,     color: 'var(--cream)' },
-            { label: 'Esperado', value: `${fmt(esperado)} L`, color: 'var(--muted)' },
+            { label: 'Real',     value: fmtL(real),     color: SEMAFORO_COLORS[semaforo] },
+            { label: 'Meta',     value: fmtL(meta),     color: 'var(--cream)' },
+            { label: 'Esperado', value: fmtL(esperado), color: 'var(--muted)' },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-              <div style={{ fontSize: 11, fontWeight: 800, color, letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+              <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center' }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color, letterSpacing: '-0.3px' }}>{value}</span>
+                <span style={{ fontSize: 8, color, opacity: 0.6 }}>L</span>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* KPI chips — 3 columnas compactas */}
-      <div style={{ padding: '0 16px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+      {/* KPI chips — META / REALIZADO / FALTANTE */}
+      <div style={{ padding: '0 14px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
         {[
-          { label: 'Meta',      value: `${fmt(meta)} L`,                                                               accent: false },
-          { label: 'Realizado', value: `${fmt(real)} L`,                                                               accent: false },
+          { label: 'Meta',      num: meta,                         extra: '',   accent: false },
+          { label: 'Realizado', num: real,                         extra: '',   accent: false },
           { label: metaCumplida ? '✓ OK' : 'Faltante',
-            value: metaCumplida ? `+${fmt(real - meta)} L` : `${fmt(Math.max(0, meta - real))} L`,
+            num: metaCumplida ? real - meta : Math.max(0, meta - real),
+            extra: metaCumplida ? '+' : '',
             accent: metaCumplida },
-        ].map(({ label, value, accent }) => (
-          <div key={label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '8px 6px', textAlign: 'center' }}>
-            <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.6px', textTransform: 'uppercase', marginBottom: 3 }}>
+        ].map(({ label, num, extra, accent }) => (
+          <div key={label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+            <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.6px', textTransform: 'uppercase', marginBottom: 5 }}>
               {label}
             </p>
-            <p style={{ fontSize: 12, fontWeight: 800, color: accent ? '#4A7A3A' : 'var(--cream)', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {value}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center', minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 900, color: accent ? '#4A7A3A' : 'var(--cream)', letterSpacing: '-0.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {extra}{fmtL(num)}
+              </span>
+              <span style={{ fontSize: 9, color: accent ? '#4A7A3A' : 'var(--muted)', flexShrink: 0 }}>L</span>
+            </div>
           </div>
         ))}
       </div>
@@ -1770,7 +1785,7 @@ export default function MetasClient({
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="px-4 pt-8 pb-16 lg:px-12 lg:pt-10" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+    <div className="px-4 pt-6 pb-24 lg:px-12 lg:pt-10" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
         <AppHeader title="Metas Comerciales" />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -10 }}>
@@ -1840,15 +1855,18 @@ export default function MetasClient({
                   <SemaforoDot estado={semEquipo} />
                 </div>
                 {/* 3 KPIs en grid compacto */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
                   {[
-                    { label: 'Realizado', value: `${fmt(totalReal)} L`, color: SEMAFORO_COLORS[semEquipo] },
-                    { label: 'Meta',      value: `${fmt(totalMeta)} L`, color: 'var(--cream)' },
-                    { label: 'Esperado',  value: `${fmt(totalEsp)} L`,  color: 'var(--muted)' },
+                    { label: 'Realizado', value: fmtL(totalReal), color: SEMAFORO_COLORS[semEquipo] },
+                    { label: 'Meta',      value: fmtL(totalMeta), color: 'var(--cream)' },
+                    { label: 'Esperado',  value: fmtL(totalEsp),  color: 'var(--muted)' },
                   ].map(({ label, value, color }) => (
-                    <div key={label} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '8px 10px' }}>
-                      <p style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 3 }}>{label}</p>
-                      <p style={{ fontSize: 13, fontWeight: 800, color, letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</p>
+                    <div key={label} style={{ background: 'rgba(0,0,0,0.25)', borderRadius: 10, padding: '8px 8px' }}>
+                      <p style={{ fontSize: 8, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 3 }}>{label}</p>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, flexWrap: 'nowrap', minWidth: 0 }}>
+                        <span style={{ fontSize: 14, fontWeight: 900, color, letterSpacing: '-0.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>
+                        <span style={{ fontSize: 9, color, opacity: 0.7, flexShrink: 0 }}>L</span>
+                      </div>
                     </div>
                   ))}
                 </div>
