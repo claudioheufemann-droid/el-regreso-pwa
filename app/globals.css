@@ -133,12 +133,29 @@ body {
   main [style*="flex"] > * { min-width: 0; }
 }
 
-/* ── Safe area para el notch (iPhone) ──
-   Empuja el contenido del header debajo del notch en todas las pantallas */
-.mobile-safe-top { padding-top: env(safe-area-inset-top, 0px); }
+/* ── Safe area para el notch / Dynamic Island (iPhone) ──
+   Requiere viewport-fit=cover en el <meta viewport> para que
+   env(safe-area-inset-*) tenga valores no-cero en iOS. */
+
+/* HTML necesita height: 100% para que safe-area funcione en PWA standalone */
+html { height: 100%; }
+
+.mobile-safe-top  { padding-top:    env(safe-area-inset-top,    0px); }
+.mobile-safe-bot  { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.mobile-safe-left { padding-left:   env(safe-area-inset-left,   0px); }
+.mobile-safe-x    { padding-left:   env(safe-area-inset-left,   0px);
+                    padding-right:  env(safe-area-inset-right,  0px); }
+
 @media (min-width: 1024px) {
-  .mobile-safe-top { padding-top: 0; }
+  .mobile-safe-top  { padding-top:    0; }
+  .mobile-safe-bot  { padding-bottom: 0; }
+  .mobile-safe-left { padding-left:   0; }
+  .mobile-safe-x    { padding-left:   0; padding-right: 0; }
 }
+
+/* Utilidad para contenedores que necesitan respetar la barra inferior */
+.pb-safe { padding-bottom: max(80px, calc(64px + env(safe-area-inset-bottom, 0px))); }
+@media (min-width: 1024px) { .pb-safe { padding-bottom: 24px; } }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -412,6 +429,39 @@ input::placeholder, textarea::placeholder { color: #5A5248; }
   padding: 12px 18px; font-size: 13px; font-weight: 900; cursor: pointer;
   letter-spacing: -0.3px; box-shadow: 0 4px 18px rgba(212,175,55,0.28);
 }
+
+/* ── Sistema Tipográfico Unificado El Regreso ──────────────────────────────
+   JERARQUÍA:
+   .ty-hero        → 36px / 900   Números KPI grandes (dashboard hero)
+   .ty-h1          → 28px / 900   Títulos de sección (AppHeader)
+   .ty-h2          → 20px / 800   Títulos de card / subsección
+   .ty-h3          → 16px / 700   Títulos de item
+   .ty-h4          → 14px / 700   Subtítulos y labels de sección
+   .ty-body        → 14px / 500   Texto normal
+   .ty-body-sm     → 13px / 500   Texto secundario
+   .ty-label       → 11px / 600   Labels de campo, eyebrow
+   .ty-caption     → 10px / 500   Notas, fechas, contexto
+   .ty-micro       → 9px  / 600   Uppercase labels (UPPERCASE + letterSpacing)
+   .ty-nano        → 8px  / 700   Badges muy pequeños
+   ─────────────────────────────────────────────────────────────────────── */
+.ty-hero     { font-size: 36px;  font-weight: 900; letter-spacing: -1.5px; line-height: 1;   }
+.ty-h1       { font-size: 28px;  font-weight: 900; letter-spacing: -1px;   line-height: 1.1; }
+.ty-h2       { font-size: 20px;  font-weight: 800; letter-spacing: -0.5px; line-height: 1.2; }
+.ty-h3       { font-size: 16px;  font-weight: 700; letter-spacing: -0.2px; line-height: 1.3; }
+.ty-h4       { font-size: 14px;  font-weight: 700; letter-spacing: -0.1px; line-height: 1.4; }
+.ty-body     { font-size: 14px;  font-weight: 500; letter-spacing:  0;     line-height: 1.5; }
+.ty-body-sm  { font-size: 13px;  font-weight: 500; letter-spacing:  0;     line-height: 1.5; }
+.ty-label    { font-size: 11px;  font-weight: 600; letter-spacing:  0.3px; line-height: 1.4; }
+.ty-caption  { font-size: 10px;  font-weight: 500; letter-spacing:  0.1px; line-height: 1.4; }
+.ty-micro    { font-size:  9px;  font-weight: 700; letter-spacing:  0.8px; line-height: 1;   text-transform: uppercase; }
+.ty-nano     { font-size:  8px;  font-weight: 700; letter-spacing:  0.5px; line-height: 1;   }
+
+/* Colores semánticos de texto */
+.ty-primary   { color: var(--rg-cream); }
+.ty-secondary { color: var(--rg-text-2); }
+.ty-tertiary  { color: var(--rg-text-3); }
+.ty-gold      { color: var(--rg-gold);   }
+.ty-muted     { color: var(--muted);     }
 
 /* Bottom nav flotante estándar (pill glass) */
 .rg-nav {

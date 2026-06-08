@@ -402,7 +402,7 @@ function LineChart({ data, vendedores, colors, avatars }: { data: EvolutionDay[]
 // ── MetaBar ──────────────────────────────────────────────────────────────────
 function MetaBar({ vendedor, actual, meta, avatars }: { vendedor: string; actual: number; meta: number; avatars?: Record<string, string | null> }) {
   const pct = meta > 0 ? Math.min((actual / meta) * 100, 100) : 0
-  const color = vendedor.toLowerCase().includes('javier') ? '#D4AF37' : '#D4AF37'
+  const color = '#D4AF37'
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
