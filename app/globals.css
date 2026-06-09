@@ -2,17 +2,25 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #080808;
-  --surface: #0F0F0F;
+  --bg: #0A0A0A;
+  --surface: #111111;
   --surface2: #181818;
   --gold: #D4AF37;
   --gold-dim: rgba(212, 175, 55, 0.12);
   --gold-hover: rgba(212, 175, 55, 0.06);
-  --cream: #F0EDE8;
+  --cream: #F4EEDF;
   --muted: #6B6560;
   --dim: #252220;
   --border: rgba(255, 255, 255, 0.08);
   --border-subtle: rgba(255, 255, 255, 0.05);
+
+  /* ── Colores semánticos de estado ── */
+  --green: #4ADE80;
+  --green-dim: #5A8A4A;
+  --red: #F87171;
+  --red-dim: #B5543E;
+  --orange: #F97316;
+  --blue: #60A5FA;
 
   /* ── Spacing compacto ── */
   --card-pad:    10px 12px;
@@ -48,12 +56,12 @@
   --safe-green: #4A7A3A;
 
   /* ── Sistema El Regreso (identidad cervecera premium) ── */
-  --rg-carbon: #101010;          /* superficie de card estándar */
-  --rg-carbon-2: #0A0A0A;        /* fondo profundo */
+  --rg-carbon: var(--surface);    /* superficie de card estándar */
+  --rg-carbon-2: var(--bg);       /* fondo profundo */
   --rg-gold: #D4AF37;            /* dorado corporativo */
   --rg-amber-dim: #8A6D1F;       /* ámbar apagado (secundario) */
   --rg-red-dim: #B5543E;         /* rojo apagado (alertas, no neón) */
-  --rg-cream: #F4EEDF;           /* texto principal */
+  --rg-cream: var(--cream);       /* texto principal */
   --rg-text-2: rgba(255,255,255,0.4);  /* texto secundario */
   --rg-text-3: rgba(255,255,255,0.25); /* texto terciario */
   --rg-hairline: rgba(255,255,255,0.06); /* separadores */

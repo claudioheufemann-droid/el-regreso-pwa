@@ -325,7 +325,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
           )}
           {!loading && !hayDatos && !mostrarSinCompra && (
             <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-              <div style={{ textAlign: 'center', background: 'rgba(22,22,22,0.92)', borderRadius: 16, padding: '20px 28px', border: '1px solid #2A2A2A' }}>
+              <div style={{ textAlign: 'center', background: 'rgba(10,10,10,0.92)', borderRadius: 16, padding: '20px 28px', border: '1px solid var(--border)' }}>
                 <MapPin size={28} style={{ color: '#444', margin: '0 auto 8px' }} />
                 <p style={{ fontSize: 14, color: '#888', fontWeight: 600 }}>Sin ventas para este período</p>
                 <p style={{ fontSize: 12, color: '#555', marginTop: 4 }}>Selecciona otro día o activa zonas blancas</p>
@@ -381,7 +381,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
 
       {/* ─── Línea de tiempo ─── */}
       <div style={{ padding: isDesktop ? '14px 20px' : '14px', flexShrink: 0 }}>
-        <div style={{ background: '#121212', border: '1px solid #1E1E1E', borderRadius: 14, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
           <button onClick={() => { if (fechaIdx <= 0) setFecha(fechasDisponibles[fechasDisponibles.length - 1]); setPlaying(p => !p) }} style={{ width: 40, height: 40, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#D4AF37', color: '#1a1200', flexShrink: 0 }}>
             {playing ? <Pause size={18} /> : <Play size={18} style={{ marginLeft: 2 }} />}
           </button>
@@ -407,7 +407,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
       {/* ─── Bottom: territorio + ranking ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 14, padding: isDesktop ? '0 20px 20px' : '0 14px 20px', flexShrink: 0 }}>
         {/* Territorios */}
-        <div style={{ background: '#121212', border: '1px solid #1E1E1E', borderRadius: 14, padding: 16 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: '#ccc', marginBottom: 12 }}>Resumen por territorio</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {territorios.map(t => {
@@ -433,7 +433,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
         </div>
 
         {/* Ranking de zonas */}
-        <div style={{ background: '#121212', border: '1px solid #1E1E1E', borderRadius: 14, padding: 16 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: '#ccc', marginBottom: 12 }}>Ranking de zonas <span style={{ color: '#555', fontWeight: 500 }}>(por litros)</span></p>
           {insights.rankingLocalidades.length === 0 ? (
             <p style={{ fontSize: 12, color: '#555' }}>Sin datos de zonas.</p>
@@ -473,7 +473,7 @@ function KPICard({ icon, color, label, value, alert }: { icon: React.ReactNode; 
   return (
     <div style={{ background: '#121212', border: `1px solid ${alert ? color + '33' : '#1E1E1E'}`, borderRadius: 14, padding: '13px 15px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-        <span style={{ fontSize: 11, color: alert ? color : '#777', fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 11, color: alert ? color : 'var(--muted)', fontWeight: 600 }}>{label}</span>
         <div style={{ color }}>{icon}</div>
       </div>
       <div style={{ fontSize: 22, fontWeight: 900, color: alert ? color : 'white', letterSpacing: '-0.5px' }}>{value}</div>
@@ -483,10 +483,10 @@ function KPICard({ icon, color, label, value, alert }: { icon: React.ReactNode; 
 
 function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ background: '#121212', border: '1px solid #1E1E1E', borderRadius: 14, padding: 14 }}>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 11 }}>
         {icon}
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#ccc' }}>{title}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{title}</span>
       </div>
       {children}
     </div>

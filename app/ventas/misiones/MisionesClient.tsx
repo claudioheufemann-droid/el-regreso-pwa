@@ -833,7 +833,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #0D0A00 0%, #1C1500 100%)',
+      background: 'var(--surface)',
       border: '1px solid rgba(212,175,55,0.2)',
       borderRadius: isDesktop ? 20 : 16, padding: isDesktop ? '20px 28px' : '12px 14px', marginBottom: isDesktop ? 20 : 12,
     }}>

@@ -306,7 +306,7 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
             <Plus size={18} color={F} />
           </div>
           <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 14, fontWeight: 800, color: '#F4EEDF' }}>Registrar salida</p>
+            <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>Registrar salida</p>
             <p style={{ fontSize: 11, color: 'var(--muted)' }}>Tomar llaves · Check-in obligatorio</p>
           </div>
           <ChevronRight size={16} color={F} />
@@ -357,7 +357,7 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
               <div style={{ flex: 1, minWidth: 0, padding: '14px 14px 14px 10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF', marginBottom: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.nombre}</p>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.nombre}</p>
                     {v.modelo && <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.modelo}{v.color ? ` · ${v.color}` : ''}</p>}
                   </div>
                   <EstadoChip estado={v.estado} />
@@ -367,7 +367,7 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
                   {v.patente && (
                     <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 7, padding: '3px 9px', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
                       <span style={{ fontSize: 7, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase' }}>Patente</span>
-                      <span style={{ fontSize: 13, fontWeight: 900, color: '#F4EEDF', letterSpacing: '1.5px' }}>{v.patente}</span>
+                      <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--cream)', letterSpacing: '1.5px' }}>{v.patente}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>

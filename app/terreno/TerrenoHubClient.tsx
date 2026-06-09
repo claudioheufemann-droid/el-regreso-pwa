@@ -179,7 +179,7 @@ function VisitaCard({ v, isLast }: { v: Visita; isLast: boolean }) {
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: '#F4EEDF', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {v.cliente_nombre}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -212,7 +212,7 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
   const fechaCapitalizada = fecha.charAt(0).toUpperCase() + fecha.slice(1)
 
   return (
-    <div style={{ background: '#050505', minHeight: '100vh', paddingBottom: 100 }}>
+    <div style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 100 }}>
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
 
         {/* ── HEADER ESTÁNDAR ── */}
@@ -248,7 +248,7 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
               <p style={{ fontSize: 9, fontWeight: 700, color: G, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 4 }}>
                 Visita en progreso
               </p>
-              <p style={{ fontSize: 17, fontWeight: 800, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
+              <p style={{ fontSize: 17, fontWeight: 800, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
                 {visitaEnProgreso.cliente_nombre}
               </p>
               <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
@@ -264,7 +264,7 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
 
         {/* ── KPIs ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 28 }}>
-          <KPIPanel label="Visitas hoy" value={kpis.totalHoy} color="#F4EEDF" rgb="244,238,223" icon={Users} yesterday={0} />
+          <KPIPanel label="Visitas hoy" value={kpis.totalHoy} color="var(--cream)" rgb="244,238,223" icon={Users} yesterday={0} />
           <KPIPanel label="Con venta"   value={kpis.conVenta}  color="#5A8A4A" rgb="90,138,74"  icon={Tag}   yesterday={0} />
           <KPIPanel label="Sin venta"   value={kpis.sinVenta}  color="#B5543E" rgb="181,84,62"   icon={Ban}   yesterday={0} />
         </div>
@@ -299,7 +299,7 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
               <div style={{ width: 52, height: 52, borderRadius: 18, background: `rgba(${G_RGB},0.1)`, border: `1px solid rgba(${G_RGB},0.2)`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
                 <MapPin size={24} color={G} />
               </div>
-              <p style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 6, letterSpacing: '-0.3px' }}>Sin visitas hoy</p>
+              <p style={{ fontSize: 16, fontWeight: 800, color: 'var(--cream)', marginBottom: 6, letterSpacing: '-0.3px' }}>Sin visitas hoy</p>
               <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5, marginBottom: 20 }}>
                 Registra tu primera visita del día
               </p>

@@ -140,13 +140,13 @@ function PanelDeuda({ deudor }: { deudor: Deudor }) {
         {deudor.ultimo_pago && (
           <div>
             <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Último pago</p>
-            <p style={{ fontSize: 12, fontWeight: 700, color: '#F4EEDF' }}>{fmtFecha(deudor.ultimo_pago)}</p>
+            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{fmtFecha(deudor.ultimo_pago)}</p>
           </div>
         )}
         {deudor.limite_cta_cte && deudor.limite_cta_cte > 0 && (
           <div>
             <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Límite</p>
-            <p style={{ fontSize: 12, fontWeight: 700, color: '#F4EEDF' }}>{fmtPeso(deudor.limite_cta_cte)}</p>
+            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{fmtPeso(deudor.limite_cta_cte)}</p>
           </div>
         )}
       </div>
@@ -156,7 +156,7 @@ function PanelDeuda({ deudor }: { deudor: Deudor }) {
           {tramos.map(t => (
             <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{t.label}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#F4EEDF' }}>{fmtPeso(t.val)}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{fmtPeso(t.val)}</span>
             </div>
           ))}
         </div>
@@ -206,7 +206,7 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {topSorted.map(([prod, cant]) => (
               <div key={prod} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'rgba(255,255,255,0.025)', borderRadius: 8 }}>
-                <span style={{ fontSize: 12, color: '#F4EEDF' }}>{prod}</span>
+                <span style={{ fontSize: 12, color: 'var(--cream)' }}>{prod}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: T }}>{cant} ud.</span>
               </div>
             ))}
@@ -225,7 +225,7 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
           {visitasCliente.slice(0, 20).map(v => (
             <div key={v.id} style={{ background: 'rgba(255,255,255,0.025)', borderRadius: 10, padding: '9px 12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#F4EEDF' }}>{fmtFecha(v.iniciada_at)}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{fmtFecha(v.iniciada_at)}</span>
                 <span style={{ fontSize: 11, fontWeight: 800, color: v.tiene_venta ? T : '#F87171' }}>{v.tiene_venta ? fmtPeso(v.total_pedido ?? 0) : 'Sin venta'}</span>
               </div>
               {(itemsPorVisita[v.id] ?? []).length > 0 && (
@@ -248,7 +248,7 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
           {ventasHist.slice(0, 30).map((v, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: 'rgba(255,255,255,0.025)', borderRadius: 9 }}>
               <div>
-                <p style={{ fontSize: 12, fontWeight: 700, color: '#F4EEDF' }}>{v.producto}</p>
+                <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{v.producto}</p>
                 <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{v.fecha_pedido ? fmtFecha(v.fecha_pedido) : '—'}{v.litros ? ` · ${v.litros}L` : ''}</p>
               </div>
               <p style={{ fontSize: 12, fontWeight: 700, color: T }}>{v.total_sin_impuesto ? fmtCompact(v.total_sin_impuesto) : '—'}</p>
@@ -280,7 +280,7 @@ function FotoLightbox({ fotos, startIdx, onClose }: { fotos: FotoEntry[]; startI
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, padding: '0 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={foto.src} alt={foto.label} style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }} />
-        <p style={{ fontSize: 13, fontWeight: 600, color: '#F4EEDF' }}>{foto.label}</p>
+        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)' }}>{foto.label}</p>
         {fotos.length > 1 && (
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={prev} style={{ padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>← Anterior</button>
@@ -480,7 +480,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 ) : visita.tiene_venta === false ? (
                   <div style={{ marginBottom: 12, padding: '12px 14px', background: 'rgba(248,113,113,0.05)', borderRadius: 12, border: '1px solid rgba(248,113,113,0.15)' }}>
                     <p style={{ fontSize: 11, fontWeight: 700, color: '#F87171', marginBottom: 4 }}>Sin venta</p>
-                    {visita.motivo_sin_venta && <p style={{ fontSize: 12, color: '#F4EEDF' }}>{visita.motivo_sin_venta}</p>}
+                    {visita.motivo_sin_venta && <p style={{ fontSize: 12, color: 'var(--cream)' }}>{visita.motivo_sin_venta}</p>}
                   </div>
                 ) : null}
 
@@ -515,7 +515,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 {/* GPS */}
                 {visita.lat && visita.lng && (
                   <a href={`https://www.google.com/maps?q=${visita.lat},${visita.lng}`} target="_blank" rel="noopener noreferrer"
-                    style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px', background: 'rgba(66,133,244,0.07)', border: '1px solid rgba(66,133,244,0.18)', borderRadius: 12, textDecoration: 'none', color: '#F4EEDF', fontSize: 12, fontWeight: 600 }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px', background: 'rgba(66,133,244,0.07)', border: '1px solid rgba(66,133,244,0.18)', borderRadius: 12, textDecoration: 'none', color: 'var(--cream)', fontSize: 12, fontWeight: 600 }}>
                     <MapPin size={13} color="#60A5FA" />
                     {visita.direccion_gps ?? 'Ver ubicación en Google Maps'}
                   </a>
@@ -593,7 +593,7 @@ export default function HistorialClient({ user, visitas, items, vendedores, deud
   const conversionRate = kpis.total > 0 ? Math.round((kpis.conVenta / kpis.total) * 100) : 0
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #0A090F 0%, #080808 100%)', paddingBottom: 90 }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100 }}>
 
       {/* ── Header ── */}
       <div style={{ padding: isDesktop ? '20px 28px 0' : '16px 20px 0' }}>

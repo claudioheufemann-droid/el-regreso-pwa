@@ -58,7 +58,7 @@ function KpiCard({ icon:Icon, label, value, sub, deltaVal, spark, color, wide, p
     // ── Tarjeta ancha: Categoría Líder ──
     return (
       <div style={{
-        background:'#0F0F0F', border:'1px solid rgba(255,255,255,0.07)',
+        background:'var(--surface)', border:'1px solid var(--border)',
         borderTop:`2px solid ${color}`, borderRadius:14,
         padding:'10px 14px', width:'100%',
       }}>
@@ -97,7 +97,7 @@ function KpiCard({ icon:Icon, label, value, sub, deltaVal, spark, color, wide, p
   // ── Tarjeta normal ──
   return (
     <div style={{
-      background:'#0F0F0F', border:'1px solid rgba(255,255,255,0.07)',
+      background:'var(--surface)', border:'1px solid var(--border)',
       borderTop:`2px solid ${color}80`, borderRadius:14,
       padding:'11px 13px', minWidth:0, flex:'1 1 140px',
     }}>
@@ -508,7 +508,7 @@ export default function AcumuladoClient({
         display:'flex', alignItems:'center', gap:8,
         marginBottom: isDesktop ? 16 : 12,
         padding:'8px 12px',
-        background:'#0F0F0F', border:'1px solid rgba(255,255,255,0.07)',
+        background:'var(--surface)', border:'1px solid var(--border)',
         borderRadius:12, flexWrap:'wrap',
       }}>
         <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, fontWeight:700, color:'rgba(212,175,55,0.8)' }}>
@@ -548,7 +548,7 @@ export default function AcumuladoClient({
 
         {/* Evolución */}
         <div style={{
-          background:'#0F0F0F', border:'1px solid rgba(255,255,255,0.07)',
+          background:'var(--surface)', border:'1px solid var(--border)',
           borderTop:'2px solid rgba(212,175,55,0.4)', borderRadius:16,
           padding: isDesktop ? '14px 18px 12px' : '12px 14px',
         }}>

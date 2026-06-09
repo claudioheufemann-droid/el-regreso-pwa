@@ -88,7 +88,7 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
   const visibleAreas = AREAS.filter(a => userMacroArea === null || a.key === userMacroArea)
 
   return (
-    <div style={{ background: '#050505', minHeight: '100vh', paddingBottom: 100 }}>
+    <div style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 100 }}>
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
 
         {/* ── HEADER ESTÁNDAR ── */}
@@ -105,7 +105,7 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
               </div>
               <div>
                 <p style={{ fontSize: 9, fontWeight: 700, color: mac.color, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 2 }}>Tu área asignada</p>
-                <p style={{ fontSize: 14, fontWeight: 800, color: '#F4EEDF' }}>{mac.label}</p>
+                <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>{mac.label}</p>
               </div>
             </div>
           )
@@ -156,7 +156,7 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
                   {/* Contenido derecha */}
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
-                      <p style={{ fontSize: 17, fontWeight: 900, color: '#F4EEDF', letterSpacing: -0.4, lineHeight: 1.1, flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 17, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.4, lineHeight: 1.1, flex: 1, minWidth: 0 }}>
                         {area.label}
                       </p>
                       {/* Flecha */}

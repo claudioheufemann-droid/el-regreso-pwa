@@ -84,7 +84,7 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
         {/* Fila 1: fecha + estado */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <p style={{ fontSize: 13, fontWeight: 800, color: '#F4EEDF' }}>{fmtFecha(viaje.iniciado_at)}</p>
+            <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>{fmtFecha(viaje.iniciado_at)}</p>
             <p style={{ fontSize: 11, color: 'var(--muted)' }}>{fmtHora(viaje.iniciado_at)}{viaje.completado_at ? ` → ${fmtHora(viaje.completado_at)}` : ''}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -97,7 +97,7 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <Truck size={13} color={F} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#F4EEDF' }}>{viaje.vehiculo?.nombre ?? '—'}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{viaje.vehiculo?.nombre ?? '—'}</span>
             {viaje.vehiculo?.patente && (
               <span style={{ fontSize: 10, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', padding: '1px 6px', borderRadius: 4 }}>{viaje.vehiculo.patente}</span>
             )}
@@ -147,7 +147,7 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
             ].map(m => (
               <div key={m.label} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: '10px 12px' }}>
                 <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>{m.label}</p>
-                <p style={{ fontSize: 15, fontWeight: 900, color: '#F4EEDF' }}>{m.value}</p>
+                <p style={{ fontSize: 15, fontWeight: 900, color: 'var(--cream)' }}>{m.value}</p>
               </div>
             ))}
           </div>
@@ -163,7 +163,7 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
                   <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
                     <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.5)', minWidth: 16, marginTop: 1 }}>{i + 1}</span>
                     <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.n}</p>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.n}</p>
                       {p.d && p.d !== p.n && (
                         <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.d}</p>
                       )}
@@ -178,7 +178,7 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
           {viaje.motivo && (
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 4 }}>Notas</p>
-              <p style={{ fontSize: 13, color: '#F4EEDF' }}>{viaje.motivo}</p>
+              <p style={{ fontSize: 13, color: 'var(--cream)' }}>{viaje.motivo}</p>
             </div>
           )}
 
@@ -226,10 +226,10 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
                 return `https://www.google.com/maps/dir/${base}/${stops}/${base}`
               })()}
               target="_blank" rel="noopener noreferrer"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', borderRadius: 10, background: 'rgba(66,133,244,0.1)', border: '1px solid rgba(66,133,244,0.25)', color: '#F4EEDF', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', borderRadius: 10, background: 'rgba(66,133,244,0.1)', border: '1px solid rgba(66,133,244,0.25)', color: 'var(--cream)', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#F4EEDF"/>
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="var(--cream)"/>
               </svg>
               Ver ruta en Google Maps
             </a>
@@ -265,7 +265,7 @@ export default function HistorialClient({ user, viajes }: Props) {
 
   const selectStyle: React.CSSProperties = {
     padding: '8px 12px', borderRadius: 10, background: '#161616',
-    border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF',
+    border: '1px solid rgba(255,255,255,0.08)', color: 'var(--cream)',
     fontSize: 13, outline: 'none', cursor: 'pointer',
   }
 

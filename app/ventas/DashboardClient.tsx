@@ -821,7 +821,7 @@ function ProductMixCard({ resumen, compact = false }: { resumen: VendedorResumen
     // ── Versión COMPACTA HORIZONTAL (mobile dashboard) ──
     return (
       <div style={{
-        background: '#0F0F0F',
+        background: 'var(--surface)',
         border: '1px solid rgba(255,255,255,0.07)',
         borderTop: `2px solid ${C_CERV}`,
         borderRadius: 16,
@@ -862,7 +862,7 @@ function ProductMixCard({ resumen, compact = false }: { resumen: VendedorResumen
   // ── Versión COMPLETA (desktop / ver más) ──
   return (
     <div style={{
-      background: '#0F0F0F', border: '1px solid rgba(255,255,255,0.07)',
+      background: 'var(--surface)', border: '1px solid var(--border)',
       borderTop: `2px solid ${C_CERV}`, borderRadius: 16, overflow: 'hidden',
     }}>
       <div style={{ padding: '14px 16px 18px' }}>
@@ -900,7 +900,7 @@ function VendedoresLeaderboard({ resumen, colors, avatars }: { resumen: Vendedor
   if (!resumen.length) return null
   return (
     <div style={{
-      background: '#0F0F0F',
+      background: 'var(--surface)',
       border: '1px solid rgba(255,255,255,0.07)',
       borderTop: '2px solid rgba(212,175,55,0.5)',
       borderRadius: 16, overflow: 'hidden',
@@ -1253,7 +1253,7 @@ function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; o
         onClick={e => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 560,
-          background: '#111', border: '1px solid rgba(212,175,55,0.2)',
+          background: 'var(--surface)', border: '1px solid rgba(212,175,55,0.2)',
           borderRadius: '24px 24px 0 0',
           maxHeight: '85vh', display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
@@ -1896,7 +1896,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         if (!isDesktop) return null // mobile usa el nuevo KPI grid
         return (
           <div style={{
-            background: 'linear-gradient(135deg, #110D00 0%, #1C1500 50%, #0D0A00 100%)',
+            background: 'var(--surface)',
             border: '1px solid rgba(212,175,55,0.25)',
             borderRadius: 20,
             padding: '18px 24px',
@@ -1962,7 +1962,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '10px 14px', marginBottom: 8,
-          background: '#0F0F0F', border: '1px solid rgba(255,255,255,0.07)',
+          background: 'var(--surface)', border: '1px solid var(--border)',
           borderRadius: 12,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1994,7 +1994,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         const totalClientesPeriodo = resumen.reduce((s, v) => s + v.clientesPeriodoCount, 0)
 
         const cardStyle: React.CSSProperties = {
-          background: '#0F0F0F',
+          background: 'var(--surface)',
           border: '1px solid rgba(255,255,255,0.07)',
           borderRadius: 14,
           padding: '12px 14px',
