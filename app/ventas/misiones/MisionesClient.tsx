@@ -266,7 +266,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
                 cursor: mision.cliente_id != null ? 'pointer' : 'default',
               }}>
               {mision.nombre_fantasia}
-              {mision.cliente_id != null && <ChevronRight size={16} style={{ color: '#D4AF37', flexShrink: 0 }} />}
+              {mision.cliente_id != null && <ChevronRight size={16} style={{ color: 'var(--muted)', flexShrink: 0 }} />}
             </h2>
           </div>
           {/* Seg badge */}
@@ -837,7 +837,8 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
   return (
     <div style={{
       background: 'var(--surface)',
-      border: '1px solid rgba(212,175,55,0.2)',
+      border: '1px solid var(--border)',
+      boxShadow: 'var(--shadow-1)',
       borderRadius: isDesktop ? 20 : 16, padding: isDesktop ? '20px 28px' : '12px 14px', marginBottom: isDesktop ? 20 : 12,
     }}>
       {/* Fila superior: título + global status */}
@@ -863,7 +864,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div>
                   <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>COMPLETADAS</p>
-                  <p style={{ fontSize: 26, fontWeight: 900, color: 'var(--green-dim)', lineHeight: 1 }}>{pct}%</p>
+                  <p style={{ fontSize: 26, fontWeight: 900, color: 'var(--green-dim)', lineHeight: 1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.04em' }}>{pct}%</p>
                 </div>
                 <ProgressDonut done={pedidos} total={total} size={80} />
               </div>
@@ -931,7 +932,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
             borderRadius: isDesktop ? 12 : 10, padding: isDesktop ? '12px 14px' : '7px 4px', textAlign: 'center', minWidth: 0,
           }}>
             <p style={{ fontSize: isDesktop ? 9 : 8.5, color: 'var(--muted)', fontWeight: 700, marginBottom: isDesktop ? 4 : 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</p>
-            <p style={{ fontSize: isDesktop ? 26 : 18, fontWeight: 900, color }}>{value}</p>
+            <p style={{ fontSize: isDesktop ? 26 : 18, fontWeight: 900, color, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.04em' }}>{value}</p>
           </div>
         ))}
       </div>

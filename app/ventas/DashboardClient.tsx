@@ -225,7 +225,7 @@ function DayDetailModal({
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: 20, fontWeight: 900, color, letterSpacing: '-0.5px' }}>{litros.toFixed(1)}<span style={{ fontSize: 13, fontWeight: 600, marginLeft: 3 }}>L</span></p>
+                    <p style={{ fontSize: 20, fontWeight: 900, color, letterSpacing: '-0.05em', fontVariantNumeric: 'tabular-nums' }}>{litros.toFixed(1)}<span style={{ fontSize: 13, fontWeight: 600, marginLeft: 3 }}>L</span></p>
                     <p style={{ fontSize: 10, color: 'var(--muted)' }}>{pct.toFixed(0)}% del total</p>
                   </div>
                 </div>
@@ -246,7 +246,7 @@ function DayDetailModal({
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(212,175,55,0.7)', letterSpacing: '0.8px' }}>TOTAL EQUIPO</span>
-          <span style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-1px' }}>
+          <span style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', fontVariantNumeric: 'tabular-nums' }}>
             {total.toFixed(1)} <span style={{ fontSize: 14, fontWeight: 600 }}>L</span>
           </span>
         </div>
@@ -931,7 +931,7 @@ function VendedoresLeaderboard({ resumen, colors, avatars }: { resumen: Vendedor
               </div>
               {/* Litros + pct */}
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ fontSize: 14, fontWeight: 900, color: '#F0EDE8', letterSpacing: '-0.4px' }}>
+                <p style={{ fontSize: 14, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.05em', fontVariantNumeric: 'tabular-nums' }}>
                   {v.litrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}<span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginLeft: 2 }}>L</span>
                 </p>
                 <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{pct.toFixed(1)}% del total</p>
@@ -1414,13 +1414,13 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
         {/* Contadores */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
           <div style={{ background: 'rgba(181,84,62,0.08)', border: '1px solid rgba(181,84,62,0.2)', borderRadius: 12, padding: '12px 14px' }}>
-            <p style={{ fontSize: 10, color: '#B5543E', fontWeight: 700, marginBottom: 4 }}>🔴 CRÍTICOS</p>
-            <p style={{ fontSize: 28, fontWeight: 900, color: '#B5543E', lineHeight: 1 }}>{criticos.length}</p>
+            <p style={{ fontSize: 10, color: 'var(--red-dim)', fontWeight: 700, marginBottom: 4 }}>CRÍTICOS</p>
+            <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--red-dim)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{criticos.length}</p>
             <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>+1.5× su ciclo</p>
           </div>
           <div style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 12, padding: '12px 14px' }}>
-            <p style={{ fontSize: 10, color: '#B5543E', fontWeight: 700, marginBottom: 4 }}>⚠ VENCIDOS</p>
-            <p style={{ fontSize: 28, fontWeight: 900, color: '#B5543E', lineHeight: 1 }}>{vencidos.length}</p>
+            <p style={{ fontSize: 10, color: 'var(--red-dim)', fontWeight: 700, marginBottom: 4 }}>VENCIDOS</p>
+            <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--red-dim)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{vencidos.length}</p>
             <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>Superaron su ciclo</p>
           </div>
         </div>
@@ -1880,7 +1880,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                 <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.55)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 3 }}>
                   Meta Mensual
                 </p>
-                <p style={{ fontSize: small ? 18 : 26, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1px', lineHeight: 1, marginBottom: 3 }}>
+                <p style={{ fontSize: small ? 18 : 26, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, marginBottom: 3, fontVariantNumeric: 'tabular-nums' }}>
                   {pctMeta}%
                 </p>
                 <p style={{ fontSize: small ? 9 : 10, color: '#555', fontWeight: 600, lineHeight: 1.3 }}>
@@ -1897,7 +1897,8 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         return (
           <div style={{
             background: 'var(--surface)',
-            border: '1px solid rgba(212,175,55,0.25)',
+            border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow-1)',
             borderRadius: 20,
             padding: '18px 24px',
             marginBottom: 20,
@@ -1920,14 +1921,14 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                     Litros en {mesNombre} {anio}
                   </p>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 5 }}>
-                    <span style={{ fontSize: 42, fontWeight: 900, color: '#D4AF37', letterSpacing: '-2px', lineHeight: 1 }}>
+                    <span style={{ fontSize: 42, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                       {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                     </span>
                     <span style={{ fontSize: 16, fontWeight: 700, color: '#A8870F' }}>L</span>
                   </div>
                   {litrosMesAnterior > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#5A8A4A' : '#B5543E' }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? 'var(--green-dim)' : 'var(--red-dim)' }}>
                         {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre}
                       </span>
                       <span style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
@@ -2010,7 +2011,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                   Litros · {mesNombre}
                 </p>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                  <span style={{ fontSize: 26, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1.2px', lineHeight: 1 }}>
+                  <span style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                     {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                   </span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(212,175,55,0.6)' }}>L</span>
@@ -2038,10 +2039,10 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                       <circle cx={donutCx} cy={donutCy} r={donutR} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={sw}/>
                       <circle cx={donutCx} cy={donutCy} r={donutR} fill="none" stroke="#D4AF37" strokeWidth={sw}
                         strokeLinecap="round" strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={circ/4}/>
-                      <text x={donutCx} y={donutCy+4} textAnchor="middle" fill="#D4AF37" fontSize={9} fontWeight="900" fontFamily="inherit">{pctMeta}%</text>
+                      <text x={donutCx} y={donutCy+4} textAnchor="middle" fill="var(--gold)" fontSize={9} fontWeight="900" fontFamily="inherit">{pctMeta}%</text>
                     </svg>
                     <div>
-                      <p style={{ fontSize: 24, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1px', lineHeight: 1 }}>{pctMeta}%</p>
+                      <p style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{pctMeta}%</p>
                       <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 3 }}>
                         {fL(totalLitrosPeriodo)} / {fL(metaTotalEquipo)}
                       </p>
