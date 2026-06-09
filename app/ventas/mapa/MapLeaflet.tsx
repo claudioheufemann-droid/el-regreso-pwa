@@ -151,6 +151,25 @@ function RecenterMap({ puntos }: { puntos: Punto[] }) {
   return null
 }
 
+// ── Forzar recálculo de tamaño (Leaflet renderiza 0px si el contenedor se
+//    dimensiona después de montar — típico en móvil y con carga dinámica) ──
+function MapResizer() {
+  const map = useMap()
+  useEffect(() => {
+    const fix = () => map.invalidateSize()
+    const t1 = setTimeout(fix, 150)
+    const t2 = setTimeout(fix, 500)
+    window.addEventListener('resize', fix)
+    window.addEventListener('orientationchange', fix)
+    return () => {
+      clearTimeout(t1); clearTimeout(t2)
+      window.removeEventListener('resize', fix)
+      window.removeEventListener('orientationchange', fix)
+    }
+  }, [map])
+  return null
+}
+
 // ── Popup detalle ───────────────────────────────────────────
 
 function PopupDetalle({ p, color, onWA }: {
@@ -358,6 +377,7 @@ export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz
         style={{ height: '100%', width: '100%', background: '#111' }}
         zoomControl={true}
       >
+        <MapResizer />
         <TileLayer key={tileTipo} url={tile.url} attribution={tile.attribution} />
         {/* Capa de etiquetas para modo híbrido */}
         {tileTipo === 'hibrido' && (

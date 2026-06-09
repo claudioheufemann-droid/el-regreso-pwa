@@ -314,7 +314,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
       {/* ─── Main: mapa + sidebar ─── */}
       <div style={{ flex: 1, display: 'flex', gap: 14, padding: isDesktop ? '0 20px' : '0 14px', minWidth: 0 }}>
         {/* Mapa */}
-        <div style={{ flex: 1, position: 'relative', borderRadius: 16, overflow: 'hidden', border: '1px solid #1A1A1A', minHeight: isDesktop ? 0 : '500px', minWidth: 0 }}>
+        <div style={{ flex: 1, position: 'relative', borderRadius: 16, overflow: 'hidden', border: '1px solid #1A1A1A', height: isDesktop ? undefined : '72dvh', minHeight: isDesktop ? 0 : '420px', minWidth: 0 }}>
           {loading && (
             <div style={{ position: 'absolute', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(10,10,10,0.6)', backdropFilter: 'blur(2px)' }}>
               <div style={{ textAlign: 'center', color: '#888' }}>

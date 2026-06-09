@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import AppHeader from '@/components/ui/AppHeader'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import RegistrarContactoModal, { type TipoContacto } from '@/components/ui/RegistrarContactoModal'
 import FollowUpModal, { type FollowUp } from '@/components/ui/FollowUpModal'
 
@@ -536,6 +537,7 @@ export default function ClienteDetalleClient({
   estadoCliente = 'activo', notaEstado = null, isAdmin = false,
 }: Props) {
   const router = useRouter()
+  const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'contacts' | 'personas' | 'notes' | 'activity'>('overview')
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const [registrarTipo, setRegistrarTipo] = useState<TipoContacto | null>(null)
@@ -722,18 +724,18 @@ export default function ClienteDetalleClient({
           ══════════════════════════════════════════════════════════════════ */}
           <div style={{
             display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-            gap: 16, marginBottom: 20, flexWrap: 'wrap',
+            gap: isDesktop ? 16 : 10, marginBottom: isDesktop ? 20 : 14, flexWrap: 'wrap',
           }}>
             {/* Avatar + info */}
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: isDesktop ? 16 : 11, alignItems: 'flex-start' }}>
               {/* Segmento avatar */}
               <div style={{
-                width: 64, height: 64, borderRadius: 18, flexShrink: 0,
+                width: isDesktop ? 64 : 48, height: isDesktop ? 64 : 48, borderRadius: isDesktop ? 18 : 14, flexShrink: 0,
                 background: segCfg.bg, border: `2px solid ${segCfg.color}40`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexDirection: 'column', gap: 1,
               }}>
-                <span style={{ fontSize: 22, fontWeight: 900, color: segCfg.color, lineHeight: 1 }}>
+                <span style={{ fontSize: isDesktop ? 22 : 17, fontWeight: 900, color: segCfg.color, lineHeight: 1 }}>
                   {getInitial(cliente.nombre_fantasia ?? 'C')}
                 </span>
                 <span style={{ fontSize: 9, fontWeight: 800, color: segCfg.color, letterSpacing: '0.04em' }}>
@@ -897,7 +899,7 @@ export default function ClienteDetalleClient({
             <div className="grid-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
 
               {/* Col 1 — Customer Info */}
-              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18, padding: 20 }}>
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: isDesktop ? 18 : 14, padding: isDesktop ? 20 : 13 }}>
                 <p style={{ fontSize: 11, fontWeight: 800, color: '#555', letterSpacing: '0.08em', marginBottom: 16 }}>INFORMACIÓN GENERAL</p>
 
                 {/* Mini map placeholder */}
@@ -937,7 +939,7 @@ export default function ClienteDetalleClient({
 
               {/* Col 2 — Commercial Summary */}
               <div>
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18, padding: 20, marginBottom: 16 }}>
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: isDesktop ? 18 : 14, padding: isDesktop ? 20 : 13, marginBottom: 16 }}>
                   <p style={{ fontSize: 11, fontWeight: 800, color: '#555', letterSpacing: '0.08em', marginBottom: 16 }}>RESUMEN COMERCIAL</p>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
@@ -958,7 +960,7 @@ export default function ClienteDetalleClient({
                 </div>
 
                 {/* Estado selector (admin) */}
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18, padding: 20 }}>
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: isDesktop ? 18 : 14, padding: isDesktop ? 20 : 13 }}>
                   <p style={{ fontSize: 11, fontWeight: 800, color: '#555', letterSpacing: '0.08em', marginBottom: 12 }}>ESTADO DEL CLIENTE</p>
                   <EstadoSelector
                     nombreFantasia={cliente.nombre_fantasia ?? ''}
@@ -972,7 +974,7 @@ export default function ClienteDetalleClient({
 
                 {/* Admin: profitability */}
                 {isAdmin && deuda > 0 && (
-                  <div style={{ background: 'rgba(248,113,113,0.05)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 18, padding: 20, marginTop: 16 }}>
+                  <div style={{ background: 'rgba(248,113,113,0.05)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: isDesktop ? 18 : 14, padding: isDesktop ? 20 : 13, marginTop: 16 }}>
                     <p style={{ fontSize: 11, fontWeight: 800, color: '#555', letterSpacing: '0.08em', marginBottom: 12 }}>DEUDA DETALLADA</p>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                       {[
@@ -994,7 +996,7 @@ export default function ClienteDetalleClient({
               </div>
 
               {/* Col 3 — Recent Activity */}
-              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18, padding: 20 }}>
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: isDesktop ? 18 : 14, padding: isDesktop ? 20 : 13 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <p style={{ fontSize: 11, fontWeight: 800, color: '#555', letterSpacing: '0.08em' }}>ÚLTIMA ACTIVIDAD</p>
                   <button onClick={() => setActiveTab('activity')} style={{ background: 'none', border: 'none', color: GOLD, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1431,7 +1433,7 @@ export default function ClienteDetalleClient({
               TAB: ACTIVITY (unified timeline)
           ══════════════════════════════════════════════════════════════════ */}
           {activeTab === 'activity' && (
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18, padding: 24 }}>
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: isDesktop ? 18 : 14, padding: isDesktop ? 24 : 14 }}>
               <div>
                 {timeline.map((item, i) => (
                   <ActivityItem

@@ -693,18 +693,18 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
     <div style={{
       background: isPedido ? 'rgba(52,211,153,0.04)' : 'var(--surface)',
       border: `1px solid ${isPedido ? 'rgba(52,211,153,0.2)' : 'var(--border)'}`,
-      borderRadius: 16, opacity: isPedido ? 0.75 : 1,
+      borderRadius: isDesktop ? 16 : 13, opacity: isPedido ? 0.75 : 1,
     }}>
       {/* Header clickable */}
       <div onClick={() => setOpen(v => !v)} style={{
-        padding: isDesktop ? '13px 14px' : '10px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+        padding: isDesktop ? '13px 14px' : '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: isDesktop ? 10 : 8,
       }}>
         <div style={{
-          width: isDesktop ? 40 : 36, height: isDesktop ? 40 : 36, borderRadius: '50%', flexShrink: 0,
+          width: isDesktop ? 40 : 32, height: isDesktop ? 40 : 32, borderRadius: '50%', flexShrink: 0,
           background: `${segColor}18`, border: `2px solid ${segColor}40`,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         }}>
-          <span style={{ fontSize: 13, fontWeight: 900, color: segColor, lineHeight: 1 }}>{mision.segmento}</span>
+          <span style={{ fontSize: isDesktop ? 13 : 12, fontWeight: 900, color: segColor, lineHeight: 1 }}>{mision.segmento}</span>
           <span style={{ fontSize: 8, color: segColor, opacity: 0.7 }}>{mision.score}</span>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -818,10 +818,10 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
     <div style={{
       background: 'linear-gradient(135deg, #0D0A00 0%, #1C1500 100%)',
       border: '1px solid rgba(212,175,55,0.2)',
-      borderRadius: 20, padding: isDesktop ? '20px 28px' : '16px 18px', marginBottom: 20,
+      borderRadius: isDesktop ? 20 : 16, padding: isDesktop ? '20px 28px' : '12px 14px', marginBottom: isDesktop ? 20 : 12,
     }}>
       {/* Fila superior: título + global status */}
-      <div style={{ display: 'flex', alignItems: isDesktop ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: isDesktop ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: isDesktop ? 14 : 10, flexWrap: 'wrap' }}>
         <div>
           <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
             PROGRESO SEMANAL
@@ -937,10 +937,10 @@ function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, onMarc
   const completadas = misiones.filter(m => esCompletada(m.estado)).length
 
   return (
-    <div style={{ marginBottom: 18 }}>
+    <div style={{ marginBottom: isDesktop ? 18 : 12 }}>
       <button onClick={() => setOpen(v => !v)} style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-        marginBottom: open ? 10 : 0, padding: '9px 14px', borderRadius: 12,
+        marginBottom: open ? (isDesktop ? 10 : 8) : 0, padding: isDesktop ? '9px 14px' : '8px 12px', borderRadius: 12,
         border: `1px solid ${cfg.border}`, background: cfg.bg, cursor: 'pointer', textAlign: 'left',
       }}>
         <span style={{ fontSize: 15 }}>{cfg.icon}</span>
@@ -963,7 +963,7 @@ function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, onMarc
         </div>
       </button>
       {open && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? 8 : 6 }}>
           {misiones.map(m => (
             <MisionCard key={m.id} mision={m} onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} isDesktop={isDesktop} />
           ))}

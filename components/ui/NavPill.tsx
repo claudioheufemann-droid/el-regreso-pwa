@@ -26,7 +26,7 @@ interface NavPillProps {
 export function NavPill({ items, pathname }: NavPillProps) {
   return (
     <nav
-      className="lg:hidden"
+      className="lg:hidden navpill-scroll"
       style={{
         position:        'fixed',
         bottom:          'max(16px, env(safe-area-inset-bottom, 16px))',
@@ -43,9 +43,15 @@ export function NavPill({ items, pathname }: NavPillProps) {
         padding:         '7px 8px',
         boxShadow:       '0 8px 40px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04)',
         zIndex:          50,
-        maxWidth:        'calc(100vw - 32px)',
+        maxWidth:        'calc(100vw - 24px)',
+        overflowX:       'auto',
+        scrollbarWidth:  'none',            // Firefox
+        msOverflowStyle: 'none',            // IE/Edge
+        WebkitOverflowScrolling: 'touch',   // momentum scroll iOS
+        scrollSnapType:  'x proximity',
       } as React.CSSProperties}
     >
+      <style>{`.navpill-scroll::-webkit-scrollbar{display:none}`}</style>
       {items.map(({ href, icon: Icon, label, exact }) => {
         const active = exact
           ? pathname === href
