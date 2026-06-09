@@ -46,30 +46,86 @@ function Spark({ values, color }: { values:number[]; color:string }) {
   )
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ icon:Icon, label, value, sub, deltaVal, spark, color, wide }:{
+// ── KPI Card compacta ─────────────────────────────────────────────────────────
+function KpiCard({ icon:Icon, label, value, sub, deltaVal, spark, color, wide, progress }:{
   icon:React.ElementType; label:string; value:string; sub?:string
-  deltaVal?:number; spark?:number[]; color:string; wide?:boolean
+  deltaVal?:number; spark?:number[]; color:string; wide?:boolean; progress?:number
 }) {
-  const pos=(deltaVal??0)>=0
-  return (
-    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:16, padding:'16px 18px', flex:`1 1 ${wide?220:150}px` }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-          <Icon size={13} color={color} />
-          <span style={{ fontSize:9, fontWeight:700, color:'var(--muted)', letterSpacing:'0.08em', textTransform:'uppercase' }}>{label}</span>
+  const pos = (deltaVal ?? 0) >= 0
+  const hasDelta = deltaVal !== undefined
+
+  if (wide) {
+    // ── Tarjeta ancha: Categoría Líder ──
+    return (
+      <div style={{
+        background:'#0F0F0F', border:'1px solid rgba(255,255,255,0.07)',
+        borderTop:`2px solid ${color}`, borderRadius:14,
+        padding:'10px 14px', width:'100%',
+      }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          {/* Icono */}
+          <div style={{ width:28, height:28, borderRadius:8, background:`${color}15`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <Icon size={13} color={color} />
+          </div>
+          {/* Contenido */}
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
+              <span style={{ fontSize:9, fontWeight:700, color:'rgba(255,255,255,0.35)', letterSpacing:'0.8px', textTransform:'uppercase' }}>{label}</span>
+              {hasDelta && (
+                <span style={{ fontSize:10, fontWeight:700, color:pos?'#4ADE80':'#F87171' }}>
+                  {pos?'↗+':'↘'}{hasDelta&&deltaVal!==0?Math.abs(deltaVal??0)+'%':'0%'}
+                  <span style={{ fontSize:9, color:'rgba(255,255,255,0.25)', marginLeft:4 }}>vs ant.</span>
+                </span>
+              )}
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <p style={{ fontSize:16, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.4px', whiteSpace:'nowrap' }}>{value}</p>
+              {sub&&<p style={{ fontSize:10, color:'rgba(255,255,255,0.35)', flexShrink:0 }}>{sub}</p>}
+              {/* Barra de progreso */}
+              {progress!==undefined&&(
+                <div style={{ flex:1, height:4, background:'rgba(255,255,255,0.06)', borderRadius:2, overflow:'hidden', minWidth:60 }}>
+                  <div style={{ height:'100%', width:`${Math.min(progress,100)}%`, background:color, borderRadius:2, transition:'width 0.5s ease' }}/>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        {spark&&<Spark values={spark} color={color}/>}
       </div>
-      <p style={{ fontSize:26, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.8px', lineHeight:1, marginBottom:4 }}>{value}</p>
-      {sub&&<p style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>{sub}</p>}
-      {deltaVal!==undefined&&(
+    )
+  }
+
+  // ── Tarjeta normal ──
+  return (
+    <div style={{
+      background:'#0F0F0F', border:'1px solid rgba(255,255,255,0.07)',
+      borderTop:`2px solid ${color}80`, borderRadius:14,
+      padding:'11px 13px', minWidth:0, flex:'1 1 140px',
+    }}>
+      {/* Fila 1: icono + label + delta */}
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:7 }}>
+        <div style={{ width:22, height:22, borderRadius:7, background:`${color}15`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <Icon size={11} color={color} />
+        </div>
+        <span style={{ fontSize:9, fontWeight:700, color:'rgba(255,255,255,0.32)', letterSpacing:'0.7px', textTransform:'uppercase', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          {label}
+        </span>
+        {hasDelta&&spark&&<Spark values={spark} color={color}/>}
+      </div>
+      {/* Fila 2: valor grande */}
+      <p style={{ fontSize:24, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.8px', lineHeight:1, marginBottom: hasDelta ? 5 : (sub ? 3 : 0) }}>
+        {value}
+      </p>
+      {sub&&!hasDelta&&<p style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:3 }}>{sub}</p>}
+      {/* Fila 3: delta + vs ant */}
+      {hasDelta&&(
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-          {pos?<TrendingUp size={11} color="#5A8A4A"/>:<TrendingDown size={11} color="#B5543E"/>}
-          <span style={{ fontSize:11, fontWeight:700, color:pos?'#5A8A4A':'#B5543E' }}>{pos?'+':''}{deltaVal}%</span>
-          <span style={{ fontSize:10, color:'var(--muted)' }}>vs ant.</span>
+          <span style={{ fontSize:11, fontWeight:800, color:pos?'#4ADE80':'#F87171' }}>
+            {pos?'↗+':'↘'}{Math.abs(deltaVal??0)}%
+          </span>
+          <span style={{ fontSize:9, color:'rgba(255,255,255,0.25)' }}>vs ant.</span>
         </div>
       )}
+      {sub&&hasDelta&&<p style={{ fontSize:9, color:'rgba(255,255,255,0.25)', marginTop:2 }}>{sub}</p>}
     </div>
   )
 }
@@ -442,57 +498,84 @@ export default function AcumuladoClient({
   const insightIcon  = (t:string) => t==='positive'?'↗':t==='negative'?'↘':t==='warning'?'⚡':'●'
 
   return (
-    <div style={{ padding:isDesktop?'24px 28px 60px':'14px 14px 80px', maxWidth:1280, margin:'0 auto', width:'100%' }}>
+    <div style={{ padding:isDesktop?'24px 28px 60px':'16px 16px 100px', maxWidth:1280, margin:'0 auto', width:'100%' }}>
 
       {/* Encabezado estándar */}
       <AppHeader eyebrow={periodo?.nombre ?? 'Período'} title="Período Acumulado" />
-      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20, flexWrap:'wrap' }}>
-        <span style={{ background:'rgba(255,255,255,0.05)', border:'1px solid var(--border)', borderRadius:8, padding:'4px 10px', fontSize:11, color:'var(--muted)', fontWeight:600 }}>
+
+      {/* Selector período compacto */}
+      <div style={{
+        display:'flex', alignItems:'center', gap:8,
+        marginBottom: isDesktop ? 16 : 12,
+        padding:'8px 12px',
+        background:'#0F0F0F', border:'1px solid rgba(255,255,255,0.07)',
+        borderRadius:12, flexWrap:'wrap',
+      }}>
+        <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, fontWeight:700, color:'rgba(212,175,55,0.8)' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M7 16L12 7l5 9M3 21h18"/></svg>
           VS {periodoAnteriorNombre}
         </span>
-        {periodo&&<span style={{ fontSize:11, color:'var(--muted)' }}>{periodo.fecha_inicio} — {periodo.fecha_fin}</span>}
+        {periodo&&(
+          <>
+            <div style={{ width:1, height:14, background:'rgba(255,255,255,0.1)' }}/>
+            <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:'rgba(255,255,255,0.35)' }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              {periodo.fecha_inicio} — {periodo.fecha_fin}
+            </span>
+          </>
+        )}
       </div>
 
-      {/* KPIs */}
-      <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:20 }}>
-        <KpiCard icon={Droplets}   label="Litros Vendidos"   value={`${fL(kpis.litros)} L`}        deltaVal={dlt(kpis.litros,kpis.litrosAnterior)} color="#D4AF37" spark={evolucion.map(d=>vendedoresScope.reduce((s,v)=>s+((d[v] as number)??0),0))}/>
-        <KpiCard icon={DollarSign} label="Facturación"       value={fP(kpis.venta)}                  deltaVal={dlt(kpis.venta,kpis.ventaAnterior)}   color="#5A8A4A"/>
-        <KpiCard icon={BarChart2}  label="Ticket Promedio"   value={fPk(kpis.ticketPromedio)}        deltaVal={dlt(kpis.ticketPromedio,kpis.ticketPromedioAnterior)} color="#D4AF37"/>
-        <KpiCard icon={Users}      label="Clientes Activos"  value={String(kpis.clientesActivos)}    sub={`${kpis.clientesActivos-kpis.clientesActivosAnterior>=0?'+':''}${kpis.clientesActivos-kpis.clientesActivosAnterior} vs ant.`} color="#8A6D1F"/>
-        <KpiCard icon={Award}      label="Categoría Líder"   value={kpis.categoriaLider}             sub={`${kpis.categoriaLiderPct}% del total`} deltaVal={kpis.categoriaLiderPct-kpis.categoriaLiderPctAnterior} color="#D4AF37" wide/>
+      {/* KPIs — grid 2×2 + fila categoría líder */}
+      <div style={{ display:'flex', flexDirection:'column', gap: isDesktop ? 10 : 8, marginBottom: isDesktop ? 16 : 12 }}>
+        {/* Grilla 2×2 */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap: isDesktop ? 10 : 8 }}>
+          <KpiCard icon={Droplets}   label="Litros Vendidos"  value={`${fL(kpis.litros)} L`}     deltaVal={dlt(kpis.litros,kpis.litrosAnterior)}   color="#D4AF37" spark={evolucion.map(d=>vendedoresScope.reduce((s,v)=>s+((d[v] as number)??0),0))}/>
+          <KpiCard icon={DollarSign} label="Facturación"      value={fP(kpis.venta)}               deltaVal={dlt(kpis.venta,kpis.ventaAnterior)}     color="#4ADE80"/>
+          <KpiCard icon={BarChart2}  label="Ticket Promedio"  value={fPk(kpis.ticketPromedio)}     deltaVal={dlt(kpis.ticketPromedio,kpis.ticketPromedioAnterior)} color="#D4AF37"/>
+          <KpiCard icon={Users}      label="Clientes Activos" value={String(kpis.clientesActivos)} sub={`${kpis.clientesActivos-kpis.clientesActivosAnterior>=0?'+':''}${kpis.clientesActivos-kpis.clientesActivosAnterior} vs ant.`} color="#60A5FA"/>
+        </div>
+        {/* Categoría Líder — fila completa */}
+        <KpiCard icon={Award} label="Categoría Líder" value={kpis.categoriaLider}
+          sub={`${kpis.categoriaLiderPct}% del total`}
+          deltaVal={kpis.categoriaLiderPct-kpis.categoriaLiderPctAnterior}
+          progress={kpis.categoriaLiderPct}
+          color="#D4AF37" wide/>
       </div>
 
       {/* Evolución + Insights/Alertas */}
-      <div style={{ display:isDesktop?'grid':'flex', gridTemplateColumns:'1fr 280px', flexDirection:'column', gap:14, marginBottom:14 }}>
+      <div style={{ display:isDesktop?'grid':'flex', gridTemplateColumns:'1fr 280px', flexDirection:'column', gap:10, marginBottom:10 }}>
 
         {/* Evolución */}
-        <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20, padding:'16px 18px 14px' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-            <div>
-              <p style={{ fontSize:13, fontWeight:800, color:'var(--cream)' }}>EVOLUCIÓN DE LITROS VENDIDOS</p>
-              <p style={{ fontSize:10, color:'var(--muted)' }}>Pasa el cursor sobre el gráfico para ver el detalle del día</p>
-            </div>
-            <div style={{ display:'flex', gap:10 }}>
+        <div style={{
+          background:'#0F0F0F', border:'1px solid rgba(255,255,255,0.07)',
+          borderTop:'2px solid rgba(212,175,55,0.4)', borderRadius:16,
+          padding: isDesktop ? '14px 18px 12px' : '12px 14px',
+        }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+            <p style={{ fontSize:11, fontWeight:800, color:'rgba(255,255,255,0.7)', letterSpacing:'0.5px' }}>EVOLUCIÓN DE LITROS VENDIDOS</p>
+            <div style={{ display:'flex', gap:8 }}>
               {vendedoresScope.map(v=>(
-                <div key={v} style={{ display:'flex', alignItems:'center', gap:5 }}>
-                  <div style={{ width:18, height:2, background:VEND_COLOR[v]??'#888', borderRadius:2 }}/>
-                  <span style={{ fontSize:10, color:'var(--muted)' }}>{dspV(v)}</span>
+                <div key={v} style={{ display:'flex', alignItems:'center', gap:4 }}>
+                  <div style={{ width:16, height:2, background:VEND_COLOR[v]??'#888', borderRadius:2 }}/>
+                  <span style={{ fontSize:10, color:'rgba(255,255,255,0.4)' }}>{dspV(v)}</span>
                 </div>
               ))}
             </div>
           </div>
+          <p style={{ fontSize:9, color:'rgba(255,255,255,0.25)', marginBottom:8 }}>Toca el gráfico para ver el detalle del día</p>
           <LineChart data={evolucion} vendedores={vendedoresScope} evoDetalle={evoDetalle}/>
-          <div className="kpi-grid-3" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginTop:14, paddingTop:14, borderTop:'1px solid rgba(255,255,255,0.05)' }}>
+          <div className="kpi-grid-3" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginTop:10, paddingTop:10, borderTop:'1px solid rgba(255,255,255,0.05)' }}>
             {[
-              { label:'PROMEDIO DIARIO',       value:`${fLn(promedioDiario)} L` },
-              { label:'MEJOR DÍA',             value:mejorDia?`${fF(mejorDia.fecha)} — ${fLn(mejorDia.total)} L`:'—' },
-              { label:'PROYECCIÓN FIN DE MES', value:`${fL(proyeccionFin)} L`, extra:metaTotal2>0?dlt(proyeccionFin,metaTotal2):null },
+              { label:'PROMEDIO DIARIO',   value:`${fLn(promedioDiario)} L` },
+              { label:'MEJOR DÍA',         value:mejorDia?`${fF(mejorDia.fecha)} — ${fLn(mejorDia.total)} L`:'—' },
+              { label:'PROYECCIÓN',        value:`${fL(proyeccionFin)} L`, extra:metaTotal2>0?dlt(proyeccionFin,metaTotal2):null },
             ].map(s=>(
               <div key={s.label}>
-                <p style={{ fontSize:9, fontWeight:700, color:'var(--muted)', letterSpacing:'0.08em', marginBottom:4 }}>{s.label}</p>
-                <p style={{ fontSize:14, fontWeight:800, color:'var(--cream)' }}>{s.value}</p>
+                <p style={{ fontSize:8, fontWeight:700, color:'rgba(255,255,255,0.3)', letterSpacing:'0.6px', textTransform:'uppercase', marginBottom:3 }}>{s.label}</p>
+                <p style={{ fontSize:13, fontWeight:800, color:'var(--cream)' }}>{s.value}</p>
                 {s.extra!==undefined&&s.extra!==null&&(
-                  <p style={{ fontSize:10, color:s.extra>=0?'#5A8A4A':'#B5543E', marginTop:2 }}>
+                  <p style={{ fontSize:9, color:s.extra>=0?'#4ADE80':'#F87171', marginTop:2 }}>
                     {s.extra>=0?'↑':'↓'}{Math.abs(s.extra)}% vs meta
                   </p>
                 )}
