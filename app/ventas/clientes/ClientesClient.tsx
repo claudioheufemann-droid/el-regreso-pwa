@@ -13,6 +13,7 @@ import type { ActividadItem } from './page'
 import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { VEND_COLOR, SEG_COLOR } from '@/lib/theme'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface FrequencyStat {
@@ -565,7 +566,8 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
     let res = clientes.filter(c => c.estadoCliente !== 'inactivo')
 
     if (vendEfectivo !== 'all')
-      res = res.filter(c => c.vendedor === vendEfectivo)
+      // clientes.vendedor tiene nombres reales; el filtro usa el display ("Vendedor 1")
+      res = res.filter(c => (VENDEDOR_DISPLAY[c.vendedor ?? ''] ?? c.vendedor) === vendEfectivo)
 
     if (busqueda.trim()) {
       const b = busqueda.toLowerCase()

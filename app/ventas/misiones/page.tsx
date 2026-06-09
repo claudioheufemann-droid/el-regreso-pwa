@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES } from '@/lib/types'
+import { VENDEDORES_DB } from '@/lib/types'
 import { getVolumenBajaCached, getCrossSellCached, getPedidoSugeridoCached, getUltimaVentasCached } from '@/lib/misionesCache'
 import MisionesClient from './MisionesClient'
 
@@ -123,8 +123,10 @@ export default async function MisionesPage() {
   const semanaNext = getMondayOfWeek(new Date(Date.now() + 7 * 86400000))
   const semana4ago = getMondayOfWeek(new Date(Date.now() - 28 * 86400000))
 
-  const vendedoresScope = appUser?.isAdmin ? VENDEDORES : [appUser?.nombre ?? '__none__']
-  const p_vendedor      = appUser?.isAdmin ? null : (appUser?.nombre ?? null)
+  // misiones.vendedor / client_scores.vendedor_actual guardan nombres REALES.
+  // Equipo consolidado en un vendedor → todos ven la cartera del equipo.
+  const vendedoresScope: string[] = [...VENDEDORES_DB]
+  const p_vendedor = null
 
   // Queries en paralelo
   const [

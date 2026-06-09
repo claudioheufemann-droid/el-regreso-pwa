@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, esClienteExcluido } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_DB, esClienteExcluido } from '@/lib/types'
 import ClientesClient from './ClientesClient'
 
 export const revalidate = 120
@@ -22,6 +22,10 @@ export default async function ClientesPage() {
   const appUser  = await getServerUser()
 
   const vendedoresScope = appUser?.isAdmin ? VENDEDORES : VENDEDORES.filter(v => v === appUser?.nombre)
+  // El campo clientes.vendedor guarda nombres REALES (Javier/Carlos), no el display
+  // "Vendedor 1". Para el query usamos VENDEDORES_DB; si no, no matchea y la lista
+  // sale vacía. (Equipo consolidado en un vendedor → todos ven la cartera del equipo.)
+  const scopeDB: string[] = [...VENDEDORES_DB]
 
   const { data: periodo } = await supabase
     .from('periodos').select('id, nombre, fecha_inicio, fecha_fin').eq('activo', true).single()
@@ -38,7 +42,7 @@ export default async function ClientesPage() {
   ] = await Promise.all([
     supabase.from('clientes')
       .select('id, nombre_fantasia, razon_social, categoria, vendedor, localidad, localidad_entrega, ruta_despacho, telefono, lat, lng')
-      .in('vendedor', vendedoresScope.length ? vendedoresScope : ['__none__'])
+      .in('vendedor', scopeDB)
       .order('nombre_fantasia'),
     supabase.from('clientes_estado').select('nombre_fantasia, estado, nota'),
     supabase.rpc('get_client_scores'),
