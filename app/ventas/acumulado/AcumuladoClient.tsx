@@ -79,7 +79,7 @@ function KpiCard({ icon:Icon, label, value, sub, deltaVal, spark, color, wide, p
               )}
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <p style={{ fontSize:16, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.4px', whiteSpace:'nowrap' }}>{value}</p>
+              <p style={{ fontSize:16, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.05em', whiteSpace:'nowrap', fontVariantNumeric:'tabular-nums' }}>{value}</p>
               {sub&&<p style={{ fontSize:10, color:'rgba(255,255,255,0.35)', flexShrink:0 }}>{sub}</p>}
               {/* Barra de progreso */}
               {progress!==undefined&&(
@@ -112,14 +112,14 @@ function KpiCard({ icon:Icon, label, value, sub, deltaVal, spark, color, wide, p
         {hasDelta&&spark&&<Spark values={spark} color={color}/>}
       </div>
       {/* Fila 2: valor grande */}
-      <p style={{ fontSize:24, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.8px', lineHeight:1, marginBottom: hasDelta ? 5 : (sub ? 3 : 0) }}>
+      <p style={{ fontSize:24, fontWeight:900, color:'var(--cream)', letterSpacing:'-0.05em', lineHeight:1, marginBottom: hasDelta ? 5 : (sub ? 3 : 0), fontVariantNumeric:'tabular-nums' }}>
         {value}
       </p>
       {sub&&!hasDelta&&<p style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:3 }}>{sub}</p>}
       {/* Fila 3: delta + vs ant */}
       {hasDelta&&(
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-          <span style={{ fontSize:11, fontWeight:800, color:pos?'#4ADE80':'#F87171' }}>
+          <span style={{ fontSize:11, fontWeight:800, color:pos?'var(--green)':'var(--red)' }}>
             {pos?'↗+':'↘'}{Math.abs(deltaVal??0)}%
           </span>
           <span style={{ fontSize:9, color:'rgba(255,255,255,0.25)' }}>vs ant.</span>

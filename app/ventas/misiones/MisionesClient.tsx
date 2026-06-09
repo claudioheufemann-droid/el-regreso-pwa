@@ -696,6 +696,11 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
     <div style={{
       background: isPedido ? 'rgba(74,222,128,0.03)' : 'var(--surface)',
       border: `1px solid ${isPedido ? 'rgba(74,222,128,0.15)' : 'var(--border)'}`,
+      borderLeft: isPedido ? '3px solid var(--green-dim)'
+        : mision.tipo === 'vencido'       ? '3px solid var(--red)'
+        : mision.tipo === 'esta_semana'   ? '3px solid var(--gold)'
+        : mision.tipo === 'proxima_semana'? '3px solid var(--blue)'
+        : '1px solid var(--border)',
       borderRadius: 12,
       opacity: isPedido ? 0.72 : 1,
     }}>
@@ -766,19 +771,24 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
         </div>
       </div>
 
-      {/* Panel expandido */}
-      {open && (
+      {/* Panel expandido — CSS Grid para transición smooth sin framer-motion */}
+      <div style={{
+        display: 'grid',
+        gridTemplateRows: open ? '1fr' : '0fr',
+        transition: 'grid-template-rows 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+      }}>
+        <div style={{ overflow: 'hidden' }}>
         <div style={{ padding: '0 12px 12px', borderTop: '1px solid var(--border-subtle)' }}>
           {/* KPIs inline — 3 columnas compactas */}
           <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, margin: '10px 0' }}>
             {[
-              { label: 'Sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#F87171' : 'var(--cream)' },
+              { label: 'Sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? 'var(--red)' : 'var(--cream)' },
               { label: 'Último ped.', value: fFecha(mision.ultima_venta_fecha), color: 'var(--cream)' },
-              { label: 'Venta',       value: fPeso(mision.ultima_venta_monto), color: '#D4AF37' },
+              { label: 'Venta',       value: fPeso(mision.ultima_venta_monto), color: 'var(--gold)' },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ background: 'var(--surface2)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
                 <p style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>{label}</p>
-                <p style={{ fontSize: 11, fontWeight: 800, color }}>{value}</p>
+                <p style={{ fontSize: 11, fontWeight: 800, color, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
               </div>
             ))}
           </div>
@@ -809,7 +819,8 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
             </button>
           )}
         </div>
-      )}
+        </div>
+      </div>
     </div>
   )
 }

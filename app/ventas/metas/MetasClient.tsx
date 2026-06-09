@@ -177,7 +177,8 @@ function GaugeChart({ pct, semaforo, meta, realizado }: {
       )}
       {/* % — centrado en el espacio interior del arco */}
       <text x={cx} y={cy - 26} textAnchor="middle" fill={color}
-        fontSize="36" fontWeight="900" fontFamily="inherit">
+        fontSize="36" fontWeight="900" fontFamily="inherit"
+        style={{ fontVariantNumeric: 'tabular-nums' }}>
         {pct.toFixed(0)}%
       </text>
       {/* Litros — debajo del % */}

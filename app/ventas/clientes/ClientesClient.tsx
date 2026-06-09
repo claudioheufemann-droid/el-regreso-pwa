@@ -77,16 +77,16 @@ type EstadoDisplay = { label: string; color: string; bg: string; border: string 
 
 function getEstado(c: Cliente): EstadoDisplay {
   if (c.estadoCliente === 'inactivo')
-    return { label:'Inactivo',      color:'#6B7280', bg:'rgba(107,114,128,0.1)', border:'rgba(107,114,128,0.2)' }
+    return { label:'Inactivo',      color:'var(--muted)',     bg:'rgba(107,114,128,0.1)', border:'rgba(107,114,128,0.2)' }
   if ((c.deuda?.deuda_vencida ?? 0) > 0)
-    return { label:'Deuda alta',    color:'#B5543E', bg:'rgba(181,84,62,0.1)',   border:'rgba(181,84,62,0.2)'   }
+    return { label:'Deuda alta',    color:'var(--red-dim)',   bg:'rgba(181,84,62,0.1)',   border:'rgba(181,84,62,0.2)'   }
   const al = c.frecuencia?.alert_level
   if (al === 'critico' || al === 'vencido')
-    return { label:'Riesgo',        color:'#D4AF37', bg:'rgba(245,158,11,0.1)', border:'rgba(245,158,11,0.2)'  }
+    return { label:'Riesgo',        color:'var(--gold)',      bg:'rgba(245,158,11,0.1)', border:'rgba(245,158,11,0.2)'  }
   const dc = diasDesde(c.ultimoContacto?.fecha)
   if (!c.ultimoContacto || dc === null || dc > 7)
-    return { label:'Sin contacto',  color:'#9CA3AF', bg:'rgba(156,163,175,0.1)', border:'rgba(156,163,175,0.2)' }
-  return { label:'Al día',          color:'#5A8A4A', bg:'rgba(52,211,153,0.1)',  border:'rgba(52,211,153,0.2)'  }
+    return { label:'Sin contacto',  color:'var(--muted)',     bg:'rgba(156,163,175,0.1)', border:'rgba(156,163,175,0.2)' }
+  return { label:'Al día',          color:'var(--green-dim)', bg:'rgba(52,211,153,0.1)',  border:'rgba(52,211,153,0.2)'  }
 }
 
 // waUrl eliminado → se usa WAModal global
@@ -97,10 +97,10 @@ const ROWS_PER_PAGE = 10
 function DonutResumen({ stats }: { stats: Stats }) {
   const total = stats.total || 1
   const items = [
-    { label:'Al día',       count: stats.alDia,        color:'#5A8A4A' },
-    { label:'Riesgo',       count: stats.riesgoCompra, color:'#D4AF37' },
-    { label:'Deuda alta',   count: stats.deudaAlta,    color:'#B5543E' },
-    { label:'Sin contacto', count: stats.sinContacto,  color:'#6B7280' },
+    { label:'Al día',       count: stats.alDia,        color:'#5A8A4A'  },
+    { label:'Riesgo',       count: stats.riesgoCompra, color:'#D4AF37'  },
+    { label:'Deuda alta',   count: stats.deudaAlta,    color:'#B5543E'  },
+    { label:'Sin contacto', count: stats.sinContacto,  color:'#6B6560'  },
   ]
   let cum = -Math.PI/2
   const R=44; const r=26; const cx=52; const cy=52
