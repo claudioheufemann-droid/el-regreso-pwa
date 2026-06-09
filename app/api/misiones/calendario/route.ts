@@ -26,5 +26,22 @@ export async function GET(req: NextRequest) {
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ pedidos: data ?? [] })
+
+  const pedidos = (data ?? []) as { nombre_fantasia: string }[]
+
+  // Adjuntar cliente_id (clientes.id) para poder enlazar al perfil desde el calendario
+  const nombres = [...new Set(pedidos.map(p => p.nombre_fantasia).filter(Boolean))]
+  const idMap = new Map<string, number>()
+  if (nombres.length) {
+    const { data: cli } = await supabase
+      .from('clientes')
+      .select('id, nombre_fantasia')
+      .in('nombre_fantasia', nombres)
+    for (const c of cli ?? []) {
+      if (c.nombre_fantasia) idMap.set(c.nombre_fantasia, c.id)
+    }
+  }
+
+  const conId = pedidos.map(p => ({ ...p, cliente_id: idMap.get(p.nombre_fantasia) ?? null }))
+  return NextResponse.json({ pedidos: conId })
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Loader2, MessageCircle, Phone, Droplets, CalendarDays } from 'lucide-react'
 import { SEG_COLOR } from '@/lib/theme'
 
@@ -13,6 +14,7 @@ interface PedidoEsperado {
   litros_por_pedido: number | null
   fecha_esperada: string
   es_primera: boolean
+  cliente_id: number | null
 }
 
 interface Props {
@@ -34,6 +36,7 @@ function ymd(d: Date): string {
 }
 
 export default function CalendarioMensual({ isAdmin, vendedorActual, isDesktop }: Props) {
+  const router = useRouter()
   const hoy = new Date()
   const [year, setYear] = useState(hoy.getFullYear())
   const [month, setMonth] = useState(hoy.getMonth()) // 0-11
@@ -218,8 +221,15 @@ export default function CalendarioMensual({ isAdmin, vendedorActual, isDesktop }
                 {seleccionados.map((p, i) => {
                   const segColor = SEG_COLOR[p.segmento] ?? '#6B7280'
                   const tColor = p.tipo_cliente === 'nuevo' ? '#D4AF37' : p.tipo_cliente === 'temporal' ? '#D4AF37' : '#5A8A4A'
+                  const clickable = p.cliente_id != null
                   return (
-                    <div key={`${p.nombre_fantasia}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: 'var(--surface2)' }}>
+                    <div key={`${p.nombre_fantasia}-${i}`}
+                      onClick={clickable ? () => router.push(`/ventas/clientes/${p.cliente_id}`) : undefined}
+                      role={clickable ? 'button' : undefined}
+                      title={clickable ? 'Ver perfil del cliente' : undefined}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: 'var(--surface2)', cursor: clickable ? 'pointer' : 'default', transition: 'background 0.15s' }}
+                      onMouseEnter={clickable ? e => { e.currentTarget.style.background = 'rgba(212,175,55,0.10)' } : undefined}
+                      onMouseLeave={clickable ? e => { e.currentTarget.style.background = 'var(--surface2)' } : undefined}>
                       <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${segColor}20`, border: `1.5px solid ${segColor}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: segColor, flexShrink: 0 }}>
                         {p.segmento}
                       </div>
@@ -235,6 +245,7 @@ export default function CalendarioMensual({ isAdmin, vendedorActual, isDesktop }
                           <Droplets size={12} /> {Math.round(p.litros_por_pedido)}L
                         </span>
                       )}
+                      {clickable && <ChevronRight size={15} style={{ color: 'var(--muted)', flexShrink: 0 }} />}
                     </div>
                   )
                 })}
