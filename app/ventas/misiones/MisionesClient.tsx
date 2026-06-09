@@ -897,21 +897,21 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
         </p>
       )}
 
-      {/* KPI chips */}
-      <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: 8 }}>
+      {/* KPI chips — en móvil 4 columnas compactas (caben en una fila) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: isDesktop ? 8 : 6, minWidth: 0 }}>
         {[
-          { label: '🚨 Llama ahora', value: vencidos, color: '#B5543E', urgent: vencidos > 0 },
-          { label: '📅 Esta semana', value: esSem,    color: '#D4AF37', urgent: false },
-          { label: '📆 Próxima sem.', value: proxSem, color: '#D4AF37', urgent: false },
-          { label: '✓ Con pedido',   value: pedidos,  color: '#5A8A4A', urgent: false },
+          { label: isDesktop ? '🚨 Llama ahora' : '🚨 Ahora', value: vencidos, color: '#B5543E', urgent: vencidos > 0 },
+          { label: isDesktop ? '📅 Esta semana' : '📅 Sem.',  value: esSem,    color: '#D4AF37', urgent: false },
+          { label: isDesktop ? '📆 Próxima sem.' : '📆 Próx.', value: proxSem, color: '#D4AF37', urgent: false },
+          { label: isDesktop ? '✓ Con pedido' : '✓ Pedido',   value: pedidos,  color: '#5A8A4A', urgent: false },
         ].map(({ label, value, color, urgent }) => (
           <div key={label} style={{
             background: urgent && value > 0 ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.03)',
             border: `1px solid ${urgent && value > 0 ? 'rgba(248,113,113,0.25)' : 'rgba(255,255,255,0.07)'}`,
-            borderRadius: 12, padding: isDesktop ? '12px 14px' : '10px 12px', textAlign: 'center',
+            borderRadius: isDesktop ? 12 : 10, padding: isDesktop ? '12px 14px' : '7px 4px', textAlign: 'center', minWidth: 0,
           }}>
-            <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>{label}</p>
-            <p style={{ fontSize: isDesktop ? 26 : 22, fontWeight: 900, color }}>{value}</p>
+            <p style={{ fontSize: isDesktop ? 9 : 8.5, color: 'var(--muted)', fontWeight: 700, marginBottom: isDesktop ? 4 : 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</p>
+            <p style={{ fontSize: isDesktop ? 26 : 18, fontWeight: 900, color }}>{value}</p>
           </div>
         ))}
       </div>
@@ -1434,7 +1434,7 @@ export default function MisionesClient({
 
   // ── Mobile: columna simple ──────────────────────────────────────────────────
   return (
-    <div style={{ padding: '16px 16px 90px', maxWidth: 680, margin: '0 auto' }}>
+    <div style={{ padding: '12px 12px 90px', width: '100%', maxWidth: 680, margin: '0 auto', boxSizing: 'border-box', overflowX: 'hidden' }}>
       <AppHeader title="Misiones" />
       <HeaderResumen misiones={misionesFiltradas} semana={semana} vendedorActual={vendedorActual} isAdmin={isAdmin} isDesktop={false} />
 

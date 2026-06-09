@@ -292,7 +292,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           </h2>
           <p style={{ fontSize: 12, color: 'var(--muted)' }}>📅 {rangoSemana(semana)}</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {/* Week selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '7px 12px' }}>
             <Calendar size={13} style={{ color: '#D4AF37' }} />
