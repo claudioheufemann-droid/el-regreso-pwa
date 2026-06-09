@@ -1317,16 +1317,26 @@ function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; 
                   fontSize: 10, fontWeight: 800, color: idx < 3 ? dotColor : 'var(--muted)',
                 }}>{idx + 1}</div>
 
-                {/* Nombre + canal */}
+                {/* Nombre + canal + fecha */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {c.nombre}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
                     <div style={{ width: 5, height: 5, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
                     <span style={{ fontSize: 10, color: 'var(--muted)' }}>{c.canal ?? 'Sin canal'}</span>
                     <span style={{ fontSize: 10, color: 'var(--muted)' }}>· {c.pedidos} pedido{c.pedidos !== 1 ? 's' : ''}</span>
                   </div>
+                  {c.ultimoPedido && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ color: 'rgba(212,175,55,0.45)', flexShrink: 0 }}>
+                        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                      </svg>
+                      <span style={{ fontSize: 9, color: 'rgba(212,175,55,0.5)', fontWeight: 600 }}>
+                        Última compra: {fmtFecha(c.ultimoPedido)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Monto + Litros */}
@@ -1362,7 +1372,7 @@ function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; 
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {c.productos.map(p => {
-                      const catColor = p.categoria === 'Cerveza' ? '#D4AF37' : p.categoria === 'Kombucha' ? '#5A8A4A' : '#6B7280'
+                      const catColor = p.categoria === 'Cerveza' ? '#D4AF37' : p.categoria === 'Kombucha' ? '#34D399' : '#6B7280'
                       const key = `${p.producto}||${p.envase ?? ''}`
                       return (
                         <div key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 72px 60px 90px', gap: 6, alignItems: 'center' }}>
