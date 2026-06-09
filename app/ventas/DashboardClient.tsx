@@ -801,80 +801,152 @@ function ClientesHoyModal({
 }
 
 // ── ProductMixCard ───────────────────────────────────────────────────────────
-function ProductMixCard({ resumen }: { resumen: VendedorResumen[] }) {
-  const totalCerveza = resumen.reduce((s, v) => s + v.litrosCerveza, 0)
+function ProductMixCard({ resumen, compact = false }: { resumen: VendedorResumen[]; compact?: boolean }) {
+  const totalCerveza  = resumen.reduce((s, v) => s + v.litrosCerveza,  0)
   const totalKombucha = resumen.reduce((s, v) => s + v.litrosKombucha, 0)
-  const totalLitros = resumen.reduce((s, v) => s + v.litrosHoy, 0)
-  const totalOtros = Math.max(0, totalLitros - totalCerveza - totalKombucha)
+  const totalLitros   = resumen.reduce((s, v) => s + v.litrosHoy,      0)
+  const totalOtros    = Math.max(0, totalLitros - totalCerveza - totalKombucha)
   const totalClientes = resumen.reduce((s, v) => s + v.clientesHoyCount, 0)
   const total = totalCerveza + totalKombucha + totalOtros
+  function pct(n: number) { return total > 0 ? Math.round((n / total) * 100) : 0 }
+  const pC = pct(totalCerveza), pK = pct(totalKombucha), pO = pct(totalOtros)
 
-  function pct(n: number) { return total > 0 ? (n / total) * 100 : 0 }
-  const pC = pct(totalCerveza)
-  const pK = pct(totalKombucha)
-  const pO = pct(totalOtros)
+  const cats = [
+    { color: C_CERV, label: 'Cerveza',  val: totalCerveza,  p: pC },
+    { color: C_KOMB, label: 'Kombucha', val: totalKombucha, p: pK },
+    { color: 'rgba(255,255,255,0.18)', label: 'Otros', val: totalOtros, p: pO },
+  ]
 
-  return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 20, overflow: 'hidden',
-    }}>
-      <div style={{ height: 3, background: 'var(--gold)', borderRadius: '20px 20px 0 0' }} />
-      <div style={{ padding: '16px 18px 20px' }}>
-        <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 14, marginBottom: 16 }}>Product Mix</h3>
+  if (compact) {
+    // ── Versión COMPACTA HORIZONTAL (mobile dashboard) ──
+    return (
+      <div style={{
+        background: '#0F0F0F',
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderTop: `2px solid ${C_CERV}`,
+        borderRadius: 16,
+        padding: '14px 16px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {/* Donut compacto */}
+          <div style={{ flexShrink: 0 }}>
+            <DonutChart cerveza={totalCerveza} kombucha={totalKombucha} outros={totalOtros} size={76} />
+          </div>
 
-        {/* Donut centered */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-          <DonutChart cerveza={totalCerveza} kombucha={totalKombucha} outros={totalOtros} size={100} />
-        </div>
-
-        {/* Segmented bars */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', height: 18, borderRadius: 9, overflow: 'hidden', gap: 1 }}>
-            {pC > 0 && (
-              <div style={{ width: `${pC}%`, background: C_CERV, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#080808' }}>{Math.round(pC)}%</span>
+          {/* Lista de categorías */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.6px', textTransform: 'uppercase' }}>Product Mix</span>
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>
+                <span style={{ color: C_CERV, fontWeight: 700 }}>{totalClientes}</span> clientes
+              </span>
+            </div>
+            {cats.filter(c => c.val > 0 || c.label !== 'Otros').map(({ color, label, val, p }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', flex: 1 }}>{label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.8)' }}>{fL(val)}</span>
+                <span style={{
+                  fontSize: 10, fontWeight: 700,
+                  color, background: `${color}18`,
+                  padding: '1px 6px', borderRadius: 6, minWidth: 32, textAlign: 'center',
+                }}>{p}%</span>
               </div>
-            )}
-            {pK > 0 && (
-              <div style={{ width: `${pK}%`, background: C_KOMB, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#080808' }}>{Math.round(pK)}%</span>
-              </div>
-            )}
-            {pO > 0 && (
-              <div style={{ width: `${pO}%`, background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.5)' }}>{Math.round(pO)}%</span>
-              </div>
-            )}
+            ))}
           </div>
         </div>
+      </div>
+    )
+  }
 
-        {/* Legend */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-          {[
-            { color: C_CERV, label: 'Cerveza',  val: totalCerveza  },
-            { color: C_KOMB, label: 'Kombucha', val: totalKombucha },
-            { color: 'rgba(255,255,255,0.2)', label: 'Otros', val: totalOtros },
-          ].map(({ color, label, val }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{label}</span>
+  // ── Versión COMPLETA (desktop / ver más) ──
+  return (
+    <div style={{
+      background: '#0F0F0F', border: '1px solid rgba(255,255,255,0.07)',
+      borderTop: `2px solid ${C_CERV}`, borderRadius: 16, overflow: 'hidden',
+    }}>
+      <div style={{ padding: '14px 16px 18px' }}>
+        <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 13, marginBottom: 14 }}>Product Mix</h3>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14 }}>
+          <DonutChart cerveza={totalCerveza} kombucha={totalKombucha} outros={totalOtros} size={88} />
+          <div style={{ flex: 1 }}>
+            {cats.map(({ color, label, val, p }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', flex: 1 }}>{label}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{fL(val)}</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color, minWidth: 28, textAlign: 'right' }}>{p}%</span>
               </div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{fL(val)}</span>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-
-        {/* Clientes hoy */}
-        <div style={{
-          background: 'var(--surface2)', borderRadius: 10, padding: '8px 12px',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
+        <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', gap: 1 }}>
+          {pC > 0 && <div style={{ width: `${pC}%`, background: C_CERV }} />}
+          {pK > 0 && <div style={{ width: `${pK}%`, background: C_KOMB }} />}
+          {pO > 0 && <div style={{ width: `${pO}%`, background: 'rgba(255,255,255,0.08)' }} />}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <span style={{ fontSize: 11, color: 'var(--muted)' }}>Clientes hoy</span>
           <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)' }}>{totalClientes}</span>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── VendedoresLeaderboard (mobile compacto) ───────────────────────────────────
+function VendedoresLeaderboard({ resumen, colors, avatars }: { resumen: VendedorResumen[]; colors: Record<string,string>; avatars?: Record<string,string|null> }) {
+  const totalLitros = resumen.reduce((s, v) => s + v.litrosPeriodo, 0)
+  if (!resumen.length) return null
+  return (
+    <div style={{
+      background: '#0F0F0F',
+      border: '1px solid rgba(255,255,255,0.07)',
+      borderTop: '2px solid rgba(212,175,55,0.5)',
+      borderRadius: 16, overflow: 'hidden',
+    }}>
+      <div style={{ padding: '12px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.6px', textTransform: 'uppercase' }}>
+          Vendedores
+        </span>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>período</span>
+      </div>
+      {resumen.map((v, i) => {
+        const color = colors[v.vendedor] ?? '#D4AF37'
+        const pct   = totalLitros > 0 ? (v.litrosPeriodo / totalLitros) * 100 : 0
+        return (
+          <div key={v.vendedor} style={{
+            padding: '10px 16px',
+            borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+              {/* Avatar */}
+              <VendedorAvatar vendedor={v.vendedor} color={color} size={34} avatars={avatars} />
+              {/* Nombre */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#F0EDE8', letterSpacing: '-0.1px' }}>
+                  {dspVendedor(v.vendedor)}
+                </p>
+                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Vendedor Canal</p>
+              </div>
+              {/* Litros + pct */}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ fontSize: 14, fontWeight: 900, color: '#F0EDE8', letterSpacing: '-0.4px' }}>
+                  {v.litrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}<span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginLeft: 2 }}>L</span>
+                </p>
+                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{pct.toFixed(1)}% del total</p>
+              </div>
+              <svg width="6" height="10" viewBox="0 0 6 10" fill="none" style={{ color:'rgba(255,255,255,0.2)',flexShrink:0 }}>
+                <path d="M1 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </div>
+            {/* Barra de progreso */}
+            <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.05)', marginLeft: 46, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 2, transition: 'width 0.6s ease' }} />
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1821,13 +1893,14 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
 
         const Sep = () => <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(212,175,55,0.15)', margin: '0 4px' }} />
 
+        if (!isDesktop) return null // mobile usa el nuevo KPI grid
         return (
           <div style={{
             background: 'linear-gradient(135deg, #110D00 0%, #1C1500 50%, #0D0A00 100%)',
             border: '1px solid rgba(212,175,55,0.25)',
             borderRadius: 20,
-            padding: isDesktop ? '18px 24px' : '12px 14px',
-            marginBottom: isDesktop ? 20 : 10,
+            padding: '18px 24px',
+            marginBottom: 20,
           }}>
             {/* Top row: fecha + selector */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -1879,85 +1952,189 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                 {metaTotalEquipo > 0 && <><Sep /><DonutMeta /></>}
               </div>
 
-            ) : (
-              /* ══ MOBILE: layout compacto ══ */
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-                {/* Fila 1: total + meta en la misma línea */}
-                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
-                  <div>
-                    <p style={{ fontSize: 8, color: 'rgba(212,175,55,0.5)', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 2 }}>
-                      Litros en {mesNombre} {anio}
-                    </p>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{ fontSize: 28, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1.2px', lineHeight: 1 }}>
-                        {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                      </span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#A8870F' }}>L</span>
-                    </div>
-                    {litrosMesAnterior > 0 && (
-                      <span style={{ fontSize: 10, fontWeight: 700, color: diffTotal >= 0 ? '#5A8A4A' : '#B5543E' }}>
-                        {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre}
-                      </span>
-                    )}
-                  </div>
-                  {metaTotalEquipo > 0 && <DonutMeta small />}
-                </div>
-
-                {/* Divisor */}
-                <div style={{ height: 1, background: 'rgba(212,175,55,0.10)' }} />
-
-                {/* Fila 2: vendedores en 2 columnas compactas */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {resumen.map(v => (
-                    <VendedorBannerBlock key={v.vendedor} v={v} compact />
-                  ))}
-                </div>
-              </div>
-            )}
+            ) : null /* Mobile: usa el nuevo KPI grid abajo */ }
           </div>
         )
       })()}
 
-      {/* === MAIN GRID (4 cols desktop) === */}
-      <div style={gridStyle4}>
-        {/* Col 1: Product Mix */}
-        <ProductMixCard resumen={resumen} />
+      {/* ── Selector de fecha MOBILE ── */}
+      {!isDesktop && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 14px', marginBottom: 8,
+          background: '#0F0F0F', border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Calendar size={13} color="rgba(212,175,55,0.6)" />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>
+              {formatFecha(fechaHoy)}{periodo ? ` · ${periodo.nombre}` : ''}
+            </span>
+          </div>
+          <DateSelector fechaActual={fechaHoy} fechasDisponibles={fechasDisponibles} />
+        </div>
+      )}
 
-        {/* Col 2-3: Vendedor cards */}
-        {resumen.map(v => (
-          <VendedorCard key={v.vendedor} data={v} color={VEND_COLOR[v.vendedor] ?? '#D4AF37'} fechaHoy={fechaHoy} avatars={vendedorAvatars} />
-        ))}
+      {/* ══ MOBILE: Nueva grilla KPI compacta ══ */}
+      {!isDesktop && (() => {
+        const mesNombre = periodo?.fecha_inicio
+          ? ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][new Date(periodo.fecha_inicio + 'T12:00:00').getMonth()]
+          : ''
+        const anio = periodo?.fecha_inicio ? new Date(periodo.fecha_inicio + 'T12:00:00').getFullYear() : ''
+        const mesAnteriorNombre = periodo?.fecha_inicio
+          ? (() => { const d = new Date(periodo.fecha_inicio + 'T12:00:00'); d.setMonth(d.getMonth()-1); return ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][d.getMonth()] })()
+          : ''
+        const diffTotal = litrosMesAnterior > 0 ? totalLitrosPeriodo - litrosMesAnterior : 0
+        const diffPct   = litrosMesAnterior > 0 ? (diffTotal / litrosMesAnterior) * 100 : 0
+        const metaTotalEquipo = resumen.reduce((s, v) => s + v.metaLitros, 0)
+        const pctMeta = metaTotalEquipo > 0 ? Math.min(Math.round((totalLitrosPeriodo / metaTotalEquipo) * 100), 100) : 0
+        const donutR = 24, donutCx = 28, donutCy = 28, sw = 5
+        const circ = 2 * Math.PI * donutR
+        const dash = (pctMeta / 100) * circ
+        const totalClientesPeriodo = resumen.reduce((s, v) => s + v.clientesPeriodoCount, 0)
 
-        {/* Col 4: Metas */}
-        <MetasCard resumen={resumen} periodo={periodo} avatars={vendedorAvatars} />
-      </div>
+        const cardStyle: React.CSSProperties = {
+          background: '#0F0F0F',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 14,
+          padding: '12px 14px',
+        }
 
-      {/* === BOTTOM GRID (2-col evolution + sidebar cards) === */}
-      <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '2fr 1fr 1fr' : '1fr', gap: 12, marginBottom: 12 }}>
-        {/* Col 1 (wide): Evolution */}
-        <EvolutionCard
-          evolution={evolution}
-          vendedores={vendedoresScope}
-          colors={VEND_COLOR}
-          avatars={vendedorAvatars}
-        />
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+            {/* Row 1: Litros + Meta */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {/* Litros */}
+              <div style={{ ...cardStyle, borderTop: `2px solid ${C_CERV}` }}>
+                <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(212,175,55,0.5)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 6 }}>
+                  Litros · {mesNombre}
+                </p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                  <span style={{ fontSize: 26, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1.2px', lineHeight: 1 }}>
+                    {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(212,175,55,0.6)' }}>L</span>
+                </div>
+                {litrosMesAnterior > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                    <span style={{ fontSize: 9, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
+                      {diffTotal >= 0 ? '↑' : '↓'}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
+                      {Math.abs(diffPct).toFixed(1)}% vs {mesAnteriorNombre}
+                    </span>
+                  </div>
+                )}
+              </div>
 
-        {/* Col 2: Ranking */}
-        <RankingCard productRanking={productRanking} productDetail={productDetail} fechaHoy={fechaHoy} />
+              {/* Meta */}
+              <div style={{ ...cardStyle, borderTop: `2px solid rgba(212,175,55,0.4)` }}>
+                <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 6 }}>
+                  Meta Mensual
+                </p>
+                {metaTotalEquipo > 0 ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <svg width={56} height={56} style={{ flexShrink: 0 }}>
+                      <circle cx={donutCx} cy={donutCy} r={donutR} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={sw}/>
+                      <circle cx={donutCx} cy={donutCy} r={donutR} fill="none" stroke="#D4AF37" strokeWidth={sw}
+                        strokeLinecap="round" strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={circ/4}/>
+                      <text x={donutCx} y={donutCy+4} textAnchor="middle" fill="#D4AF37" fontSize={9} fontWeight="900" fontFamily="inherit">{pctMeta}%</text>
+                    </svg>
+                    <div>
+                      <p style={{ fontSize: 24, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1px', lineHeight: 1 }}>{pctMeta}%</p>
+                      <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 3 }}>
+                        {fL(totalLitrosPeriodo)} / {fL(metaTotalEquipo)}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', marginTop: 8 }}>Sin metas</p>
+                )}
+              </div>
+            </div>
 
-        {/* Col 3: Drop Size */}
-        <DropSizeCard resumen={resumen} colors={VEND_COLOR} avatars={vendedorAvatars} />
-      </div>
+            {/* Row 2: Vendedores */}
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${resumen.length}, 1fr)`, gap: 8 }}>
+              {resumen.map(v => {
+                const color = VEND_COLOR[v.vendedor] ?? '#D4AF37'
+                const pctVend = totalLitrosPeriodo > 0 ? (v.litrosPeriodo / totalLitrosPeriodo) * 100 : 0
+                return (
+                  <div key={v.vendedor} style={{ ...cardStyle, borderTop: `2px solid ${color}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <VendedorAvatar vendedor={v.vendedor} color={color} size={28} avatars={vendedorAvatars} />
+                      <span style={{ fontSize: 9, fontWeight: 700, color, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                        {dspVendedor(v.vendedor)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                      <span style={{ fontSize: 20, fontWeight: 900, color: '#F0EDE8', letterSpacing: '-0.8px' }}>
+                        {v.litrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                      </span>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>L</span>
+                    </div>
+                    <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+                      {pctVend.toFixed(1)}% del total
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
-      {/* === RISK ROW === */}
-      <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap: 12, marginBottom: 12 }}>
-        {/* Clientes en riesgo */}
-        <RiesgoClientesCard clientes={riesgoClientes} colors={VEND_COLOR} />
+      {/* ═══ DESKTOP: grid original ═══ */}
+      {isDesktop && (
+        <>
+          <div style={gridStyle4}>
+            <ProductMixCard resumen={resumen} />
+            {resumen.map(v => (
+              <VendedorCard key={v.vendedor} data={v} color={VEND_COLOR[v.vendedor] ?? '#D4AF37'} fechaHoy={fechaHoy} avatars={vendedorAvatars} />
+            ))}
+            <MetasCard resumen={resumen} periodo={periodo} avatars={vendedorAvatars} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <EvolutionCard evolution={evolution} vendedores={vendedoresScope} colors={VEND_COLOR} avatars={vendedorAvatars} />
+            <RankingCard productRanking={productRanking} productDetail={productDetail} fechaHoy={fechaHoy} />
+            <DropSizeCard resumen={resumen} colors={VEND_COLOR} avatars={vendedorAvatars} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <RiesgoClientesCard clientes={riesgoClientes} colors={VEND_COLOR} />
+            <MisionesWidgetCard misiones={misionesResumen} />
+          </div>
+        </>
+      )}
 
-        {/* Misiones de la semana */}
-        <MisionesWidgetCard misiones={misionesResumen} />
-      </div>
+      {/* ═══ MOBILE: nuevo layout compacto premium ═══ */}
+      {!isDesktop && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Product Mix — horizontal compact */}
+          <ProductMixCard resumen={resumen} compact />
+
+          {/* Vendedores leaderboard */}
+          <VendedoresLeaderboard resumen={resumen} colors={VEND_COLOR} avatars={vendedorAvatars} />
+
+          {/* Divider visual */}
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.04)', margin: '4px 0' }} />
+
+          {/* Evolución compacta */}
+          <EvolutionCard evolution={evolution} vendedores={vendedoresScope} colors={VEND_COLOR} avatars={vendedorAvatars} />
+
+          {/* Misiones + Riesgo */}
+          <MisionesWidgetCard misiones={misionesResumen} />
+          <RiesgoClientesCard clientes={riesgoClientes} colors={VEND_COLOR} />
+
+          {/* Ranking + Drop Size */}
+          <RankingCard productRanking={productRanking} productDetail={productDetail} fechaHoy={fechaHoy} />
+          <DropSizeCard resumen={resumen} colors={VEND_COLOR} avatars={vendedorAvatars} />
+
+          {/* Tarjetas full detalle — accesibles con scroll */}
+          {resumen.map(v => (
+            <VendedorCard key={v.vendedor} data={v} color={VEND_COLOR[v.vendedor] ?? '#D4AF37'} fechaHoy={fechaHoy} avatars={vendedorAvatars} />
+          ))}
+          <MetasCard resumen={resumen} periodo={periodo} avatars={vendedorAvatars} />
+        </div>
+      )}
     </div>
   )
 }
