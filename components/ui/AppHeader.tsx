@@ -27,7 +27,7 @@ export default function AppHeader({ eyebrow, title, extraAction }: AppHeaderProp
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '2px 0 0', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingTop: 'env(safe-area-inset-top, 0px)', marginBottom: 14 }}>
         <div style={{ minWidth: 0 }}>
           {eyebrow && (
             <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.4px', marginBottom: 4, textTransform: 'capitalize' }}>
@@ -46,7 +46,7 @@ export default function AppHeader({ eyebrow, title, extraAction }: AppHeaderProp
             onClick={() => setShowSettings(true)}
             aria-label="Configuración"
             style={{
-              width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+              width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
               border: '1.5px solid rgba(212,175,55,0.4)', cursor: 'pointer', padding: 0,
               background: user?.avatarUrl ? 'transparent' : 'linear-gradient(135deg, #D4AF37, #B8962E)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',

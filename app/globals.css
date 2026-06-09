@@ -181,7 +181,7 @@ input, select, textarea {
   border: 1px solid var(--input-border);
   border-radius: 8px;
   padding: 12px 14px;
-  font-size: 15px;
+  font-size: 16px; /* 16px mínimo — evita zoom automático en iOS al enfocar */
   font-family: inherit;
   outline: none;
   width: 100%;

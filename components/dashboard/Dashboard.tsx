@@ -14,6 +14,7 @@ import GestionPanel from '@/components/dashboard/GestionPanel'
 import HomeDashboard from '@/components/dashboard/HomeDashboard'
 import NewTaskModal from '@/components/modals/NewTaskModal'
 import { createClient } from '@/lib/supabase/client'
+import { LayoutGrid, User, CalendarDays, BarChart3, type LucideIcon } from 'lucide-react'
 
 interface Props {
   initialTasks: RcTask[]
@@ -316,11 +317,11 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   // ─────────────────────────────────────────────
   // CONTENIDO PRINCIPAL (compartido mobile/desktop)
   // ─────────────────────────────────────────────
-  const navItems: { key: View; icon: string; label: string; adminOnly?: boolean }[] = [
-    { key: 'home',       icon: '▦',  label: 'Resumen' },
-    { key: 'mis-tareas', icon: '👤', label: 'Mis Tareas' },
-    { key: 'calendar',   icon: '📅', label: 'Calendario' },
-    { key: 'analytics',  icon: '◈',  label: 'Gestión', adminOnly: true },
+  const navItems: { key: View; icon: LucideIcon; label: string; adminOnly?: boolean }[] = [
+    { key: 'home',       icon: LayoutGrid,   label: 'Resumen' },
+    { key: 'mis-tareas', icon: User,         label: 'Mis Tareas' },
+    { key: 'calendar',   icon: CalendarDays, label: 'Calendario' },
+    { key: 'analytics',  icon: BarChart3,    label: 'Gestión', adminOnly: true },
   ]
   const visibleNavItems = navItems.filter(n => !n.adminOnly || isAdmin)
 
@@ -528,7 +529,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                     textAlign: 'left', transition: 'background 0.15s',
                   }}
                 >
-                  <span style={{ fontSize: 15, lineHeight: 1 }}>{item.icon}</span>
+                  <item.icon size={16} strokeWidth={isActive ? 2.5 : 1.8} />
                   <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? 'var(--gold)' : 'var(--muted)' }}>
                     {item.label}
                   </span>
@@ -738,7 +739,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: '0.3px' }}>Inicio</span>
         </button>
 
-        {visibleNavItems.map(({ key, icon, label }) => {
+        {visibleNavItems.map(({ key, icon: Icon, label }) => {
           const active = view === key || (key === 'home' && view === 'filter')
           return (
             <button key={key} onClick={() => setView(key)} style={{
@@ -751,7 +752,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
               minWidth: 52,
             }}>
               <div style={{ position: 'relative' }}>
-                <span style={{ fontSize: 17 }}>{icon}</span>
+                <Icon size={19} strokeWidth={active ? 2.5 : 1.8} />
                 {active && (
                   <div style={{ position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: '50%', background: '#D4AF37', boxShadow: '0 0 6px #D4AF37' }} />
                 )}

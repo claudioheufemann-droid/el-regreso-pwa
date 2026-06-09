@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import AppHeader from '@/components/ui/AppHeader'
 
@@ -216,7 +216,7 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
 
         {/* ── HEADER ESTÁNDAR ── */}
-        <div style={{ paddingTop: 16 }}>
+        <div style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))' }}>
           <AppHeader eyebrow={fechaCapitalizada} title="Terreno" />
         </div>
 
@@ -290,17 +290,32 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
               ))}
             </div>
           ) : (
+            /* Estado vacío con CTA principal siempre visible above the fold */
             <div style={{
-              background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)',
-              borderRadius: 20, padding: '36px 24px', textAlign: 'center',
+              background: `linear-gradient(135deg, rgba(${G_RGB},0.06) 0%, rgba(10,10,10,0.95) 100%)`,
+              border: `1px solid rgba(${G_RGB},0.18)`,
+              borderRadius: 22, padding: '28px 20px', textAlign: 'center',
             }}>
-              <div style={{ width: 48, height: 48, borderRadius: 16, background: `rgba(${G_RGB},0.08)`, border: `1px solid rgba(${G_RGB},0.15)`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-                <Clock size={22} color={G} />
+              <div style={{ width: 52, height: 52, borderRadius: 18, background: `rgba(${G_RGB},0.1)`, border: `1px solid rgba(${G_RGB},0.2)`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+                <MapPin size={24} color={G} />
               </div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>Sin visitas hoy</p>
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', lineHeight: 1.5 }}>
-                Usa <span style={{ color: G, fontWeight: 600 }}>Nueva Visita</span> para comenzar
+              <p style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF', marginBottom: 6, letterSpacing: '-0.3px' }}>Sin visitas hoy</p>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5, marginBottom: 20 }}>
+                Registra tu primera visita del día
               </p>
+              <Link href="/terreno/nueva-visita" style={{ textDecoration: 'none', display: 'block' }}>
+                <div style={{
+                  background: `linear-gradient(135deg, #E5C45A, #B8962E)`,
+                  borderRadius: 14, padding: '14px 20px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  boxShadow: `0 4px 20px rgba(${G_RGB},0.3)`,
+                }}>
+                  <Plus size={18} color="#050505" strokeWidth={2.5} />
+                  <span style={{ fontSize: 15, fontWeight: 900, color: '#050505', letterSpacing: '-0.2px' }}>
+                    Nueva Visita
+                  </span>
+                </div>
+              </Link>
             </div>
           )}
         </div>
