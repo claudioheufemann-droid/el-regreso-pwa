@@ -34,7 +34,7 @@ export default function AppHeader({ eyebrow, title, extraAction }: AppHeaderProp
               {eyebrow}
             </p>
           )}
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: '#F0EDE8', letterSpacing: '-0.8px', lineHeight: 1.1 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px', lineHeight: 1.1 }}>
             {title}
           </h1>
         </div>

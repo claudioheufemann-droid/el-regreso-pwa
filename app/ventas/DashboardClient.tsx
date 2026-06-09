@@ -130,10 +130,10 @@ function formatFecha(s: string) {
 // ── DonutChart ───────────────────────────────────────────────────────────────
 function DonutChart({ cerveza, kombucha, outros, size = 90 }: { cerveza: number; kombucha: number; outros: number; size?: number }) {
   const total = cerveza + kombucha + outros
-  if (total === 0) return <div style={{ width: size, height: size, borderRadius: '50%', background: '#1C1C1C' }} />
+  if (total === 0) return <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--surface2)' }} />
   const pC = (cerveza / total) * 100
   const pK = (kombucha / total) * 100
-  const bg = `conic-gradient(${C_CERV} 0% ${pC}%, ${C_KOMB} ${pC}% ${pC + pK}%, #2A2A2A ${pC + pK}% 100%)`
+  const bg = `conic-gradient(${C_CERV} 0% ${pC}%, ${C_KOMB} ${pC}% ${pC + pK}%, rgba(255,255,255,0.06) ${pC + pK}% 100%)`
   return (
     <div style={{ position: 'relative', width: size, height: size }}>
       <div style={{ width: size, height: size, borderRadius: '50%', background: bg }} />
@@ -241,7 +241,7 @@ function DayDetailModal({
         {/* Total */}
         <div style={{
           margin: '0 20px 20px', padding: '12px 16px', borderRadius: 12,
-          background: 'linear-gradient(135deg, #110D00, #1C1500)',
+          background: 'var(--gold-dim)',
           border: '1px solid rgba(212,175,55,0.2)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
@@ -484,7 +484,7 @@ function DateSelector({ fechaActual, fechasDisponibles }: { fechaActual: string;
           <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
           <div style={{
             position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 100,
-            background: '#1A1500', border: '1px solid rgba(212,175,55,0.25)',
+            background: 'var(--surface2)', border: '1px solid rgba(212,175,55,0.25)',
             borderRadius: 12, minWidth: 180, maxHeight: 320, overflowY: 'auto',
             boxShadow: '0 12px 40px rgba(0,0,0,0.7)',
           }}>

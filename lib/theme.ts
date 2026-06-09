@@ -12,8 +12,8 @@ export const VEND_COLOR: Record<string, string> = {
 
 /** Color del vendedor con fallback estable (no usar índices ni azar). */
 export function vendColor(nombre: string | null | undefined): string {
-  if (!nombre) return '#A78BFA'
-  return VEND_COLOR[nombre] ?? '#A78BFA'
+  if (!nombre) return '#6B7280'
+  return VEND_COLOR[nombre] ?? '#6B7280'
 }
 
 // ── Color por segmento RFM (A = mejor … E = peor) ───────────────────────────
