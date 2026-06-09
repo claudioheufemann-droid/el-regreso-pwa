@@ -691,101 +691,118 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
 
   return (
     <div style={{
-      background: isPedido ? 'rgba(52,211,153,0.04)' : 'var(--surface)',
-      border: `1px solid ${isPedido ? 'rgba(52,211,153,0.2)' : 'var(--border)'}`,
-      borderRadius: isDesktop ? 16 : 13, opacity: isPedido ? 0.75 : 1,
+      background: isPedido ? 'rgba(74,222,128,0.03)' : 'var(--surface)',
+      border: `1px solid ${isPedido ? 'rgba(74,222,128,0.15)' : 'var(--border)'}`,
+      borderRadius: 12,
+      opacity: isPedido ? 0.72 : 1,
     }}>
-      {/* Header clickable */}
+      {/* Header clickable — touch target ≥ 44px */}
       <div onClick={() => setOpen(v => !v)} style={{
-        padding: isDesktop ? '13px 14px' : '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: isDesktop ? 10 : 8,
+        padding: isDesktop ? '11px 14px' : '8px 12px',
+        minHeight: 44,
+        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
       }}>
+        {/* Segmento pill */}
         <div style={{
-          width: isDesktop ? 40 : 32, height: isDesktop ? 40 : 32, borderRadius: '50%', flexShrink: 0,
-          background: `${segColor}18`, border: `2px solid ${segColor}40`,
+          width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+          background: `${segColor}15`, border: `1.5px solid ${segColor}35`,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         }}>
-          <span style={{ fontSize: isDesktop ? 13 : 12, fontWeight: 900, color: segColor, lineHeight: 1 }}>{mision.segmento}</span>
-          <span style={{ fontSize: 8, color: segColor, opacity: 0.7 }}>{mision.score}</span>
+          <span style={{ fontSize: 10, fontWeight: 900, color: segColor, lineHeight: 1 }}>{mision.segmento}</span>
+          <span style={{ fontSize: 7, color: segColor, opacity: 0.6 }}>{mision.score}</span>
         </div>
+
+        {/* Contenido central */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
+          {/* Nombre */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
             <span style={{
-              fontSize: 13, fontWeight: 800, color: isPedido ? '#5A8A4A' : 'var(--cream)',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              fontSize: 12, fontWeight: 700, color: isPedido ? '#4ADE80' : 'var(--cream)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               textDecoration: isPedido ? 'line-through' : 'none',
             }}>{mision.nombre_fantasia}</span>
             {mision.litros_ultima_compra != null && !isPedido && (
-              <span style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                ({mision.litros_ultima_compra}L{mision.dias_sin_compra ? ` · ${mision.dias_sin_compra}d` : ''})
+              <span style={{ fontSize: 9, color: 'var(--muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {mision.litros_ultima_compra}L{mision.dias_sin_compra ? ` · ${mision.dias_sin_compra}d` : ''}
               </span>
             )}
-            {isPedido && <CheckCircle2 size={13} color="#5A8A4A" />}
+            {isPedido && <CheckCircle2 size={11} color="#4ADE80" />}
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: estadoCfg.color, fontWeight: 600 }}>{estadoCfg.icon} {estadoCfg.label}</span>
+          {/* Meta: estado + tipo + badge días */}
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+            <span style={{ fontSize: 9, color: estadoCfg.color, fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {estadoCfg.icon} {estadoCfg.label}
+            </span>
             {dl && (
-              <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 7px', borderRadius: 20, background: tipoCfg.bg, color: tipoCfg.color }}>
+              <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, background: tipoCfg.bg, color: tipoCfg.color, whiteSpace: 'nowrap' }}>
                 {dl}
               </span>
             )}
             <TipoClienteBadge tipo={mision.tipo_cliente} size="xs" />
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+
+        {/* Acciones derecha */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
           {!isPedido && (
-            <button onClick={e => { e.stopPropagation(); onWA(mision) }} style={{
-              width: 30, height: 30, borderRadius: '50%',
-              border: '1px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.08)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-            }}>
-              <MessageCircle size={14} color="#25D166" />
+            <button
+              onClick={e => { e.stopPropagation(); onWA(mision) }}
+              style={{
+                width: 30, height: 30, borderRadius: '50%',
+                border: '1px solid rgba(37,211,102,0.25)', background: 'rgba(37,211,102,0.07)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+            >
+              <MessageCircle size={13} color="#25D166" />
             </button>
           )}
-          {open ? <ChevronDown size={15} color="var(--muted)" /> : <ChevronRight size={15} color="var(--muted)" />}
+          {open
+            ? <ChevronDown size={13} color="rgba(255,255,255,0.25)" />
+            : <ChevronRight size={13} color="rgba(255,255,255,0.25)" />
+          }
         </div>
       </div>
 
-      {/* Detalle */}
+      {/* Panel expandido */}
       {open && (
-        <div style={{ padding: isDesktop ? '0 14px 14px' : '0 12px 12px', borderTop: '1px solid var(--border)' }}>
-          <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: 8, margin: '12px 0' }}>
+        <div style={{ padding: '0 12px 12px', borderTop: '1px solid var(--border-subtle)' }}>
+          {/* KPIs inline — 3 columnas compactas */}
+          <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, margin: '10px 0' }}>
             {[
-              { label: 'Sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#B5543E' : 'var(--cream)' },
-              { label: 'Último pedido', value: fFecha(mision.ultima_venta_fecha), color: 'var(--cream)' },
-              { label: 'Venta', value: fPeso(mision.ultima_venta_monto), color: '#D4AF37' },
+              { label: 'Sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#F87171' : 'var(--cream)' },
+              { label: 'Último ped.', value: fFecha(mision.ultima_venta_fecha), color: 'var(--cream)' },
+              { label: 'Venta',       value: fPeso(mision.ultima_venta_monto), color: '#D4AF37' },
             ].map(({ label, value, color }) => (
-              <div key={label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '8px', textAlign: 'center' }}>
-                <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>{label}</p>
-                <p style={{ fontSize: 12, fontWeight: 800, color }}>{value}</p>
+              <div key={label} style={{ background: 'var(--surface2)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                <p style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>{label}</p>
+                <p style={{ fontSize: 11, fontWeight: 800, color }}>{value}</p>
               </div>
             ))}
           </div>
           {mision.siguiente_compra_estimada && (
-            <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
-              <Calendar size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-              Próxima compra: <strong style={{ color: tipoCfg.color }}>{fFecha(mision.siguiente_compra_estimada)}</strong>
+            <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Calendar size={10} />
+              Próxima: <strong style={{ color: tipoCfg.color, marginLeft: 3 }}>{fFecha(mision.siguiente_compra_estimada)}</strong>
             </p>
           )}
           {mision.nota && (
-            <div style={{ padding: '7px 10px', borderRadius: 10, background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.2)', marginBottom: 10 }}>
-              <p style={{ fontSize: 11, color: '#A08830', fontStyle: 'italic' }}>💬 {mision.nota}</p>
+            <div style={{ padding: '6px 9px', borderRadius: 8, background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.15)', marginBottom: 8 }}>
+              <p style={{ fontSize: 10, color: '#A08830', fontStyle: 'italic' }}>💬 {mision.nota}</p>
             </div>
           )}
           <BotonesAccion mision={mision} onActualizar={onActualizar} loading={loading} />
           {onMarcarInactivo && (
             <button
-              onClick={() => {
-                if (window.confirm(`¿Marcar a "${mision.nombre_fantasia}" como INACTIVO?`)) onMarcarInactivo(mision)
-              }}
+              onClick={() => { if (window.confirm(`¿Marcar "${mision.nombre_fantasia}" como INACTIVO?`)) onMarcarInactivo(mision) }}
               disabled={loading}
               style={{
-                marginTop: 8, width: '100%', padding: '8px 0', borderRadius: 10,
-                background: 'transparent', border: '1px solid rgba(248,113,113,0.25)',
-                color: '#B5543E', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                marginTop: 7, width: '100%', minHeight: 36,
+                background: 'transparent', border: '1px solid rgba(248,113,113,0.2)',
+                borderRadius: 9, color: '#F87171', fontSize: 10, fontWeight: 700,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
               }}
             >
-              <UserX size={12} /> Marcar inactivo
+              <UserX size={11} /> Marcar inactivo
             </button>
           )}
         </div>

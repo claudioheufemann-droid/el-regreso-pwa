@@ -27,14 +27,14 @@ export default function AppHeader({ eyebrow, title, extraAction }: AppHeaderProp
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '4px 0 0', marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '2px 0 0', marginBottom: 14 }}>
         <div style={{ minWidth: 0 }}>
           {eyebrow && (
-            <p style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4px', marginBottom: 6, textTransform: 'capitalize' }}>
+            <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.4px', marginBottom: 4, textTransform: 'capitalize' }}>
               {eyebrow}
             </p>
           )}
-          <h1 style={{ fontSize: 28, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-1px', lineHeight: 1.1 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 900, color: '#F0EDE8', letterSpacing: '-0.8px', lineHeight: 1.1 }}>
             {title}
           </h1>
         </div>
