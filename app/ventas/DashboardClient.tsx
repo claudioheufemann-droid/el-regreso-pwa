@@ -12,6 +12,12 @@ import type { EvolutionDay, ProductRank, ProductBuyer } from './page'
 import { VEND_COLOR as VEND_COLOR_THEME, SEG_COLOR as SEG_COLOR_THEME } from '@/lib/theme'
 import AppHeader from '@/components/ui/AppHeader'
 
+// ── Colores del sistema ───────────────────────────────────────────────────────
+/** Dorado para Cerveza · corporativo El Regreso */
+const C_CERV = '#D4AF37'
+/** Verde-teal para Kombucha · botánico, vivo */
+const C_KOMB = '#34D399'
+
 interface ProductoDetalle {
   producto: string
   envase: string | null
@@ -127,7 +133,7 @@ function DonutChart({ cerveza, kombucha, outros, size = 90 }: { cerveza: number;
   if (total === 0) return <div style={{ width: size, height: size, borderRadius: '50%', background: '#1C1C1C' }} />
   const pC = (cerveza / total) * 100
   const pK = (kombucha / total) * 100
-  const bg = `conic-gradient(#D4AF37 0% ${pC}%, #D4AF37 ${pC}% ${pC + pK}%, #8A6D1F ${pC + pK}% 100%)`
+  const bg = `conic-gradient(${C_CERV} 0% ${pC}%, ${C_KOMB} ${pC}% ${pC + pK}%, #2A2A2A ${pC + pK}% 100%)`
   return (
     <div style={{ position: 'relative', width: size, height: size }}>
       <div style={{ width: size, height: size, borderRadius: '50%', background: bg }} />
@@ -826,18 +832,18 @@ function ProductMixCard({ resumen }: { resumen: VendedorResumen[] }) {
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', height: 18, borderRadius: 9, overflow: 'hidden', gap: 1 }}>
             {pC > 0 && (
-              <div style={{ width: `${pC}%`, background: '#D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: `${pC}%`, background: C_CERV, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 9, fontWeight: 700, color: '#080808' }}>{Math.round(pC)}%</span>
               </div>
             )}
             {pK > 0 && (
-              <div style={{ width: `${pK}%`, background: '#D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: `${pK}%`, background: C_KOMB, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 9, fontWeight: 700, color: '#080808' }}>{Math.round(pK)}%</span>
               </div>
             )}
             {pO > 0 && (
-              <div style={{ width: `${pO}%`, background: '#8A6D1F', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#080808' }}>{Math.round(pO)}%</span>
+              <div style={{ width: `${pO}%`, background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.5)' }}>{Math.round(pO)}%</span>
               </div>
             )}
           </div>
@@ -846,9 +852,9 @@ function ProductMixCard({ resumen }: { resumen: VendedorResumen[] }) {
         {/* Legend */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
           {[
-            { color: '#D4AF37', label: 'Cerveza', val: totalCerveza },
-            { color: '#D4AF37', label: 'Kombucha', val: totalKombucha },
-            { color: '#8A6D1F', label: 'Otros', val: totalOtros },
+            { color: C_CERV, label: 'Cerveza',  val: totalCerveza  },
+            { color: C_KOMB, label: 'Kombucha', val: totalKombucha },
+            { color: 'rgba(255,255,255,0.2)', label: 'Otros', val: totalOtros },
           ].map(({ color, label, val }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -903,8 +909,8 @@ function VendedorCard({ data, color, fechaHoy, avatars }: { data: VendedorResume
           {[
             { label: 'Litros', value: fL(data.litrosHoy), color: '#D4AF37' },
             { label: 'Venta s/imp', value: fP(data.ventaHoy), color: '#5A8A4A' },
-            { label: 'Latas Cerveza', value: String(data.latasCervezaHoy), color: 'var(--gold)' },
-            { label: 'Latas Kombucha', value: String(data.latasKombuchaHoy), color: '#5A8A4A' },
+            { label: 'Latas Cerveza',  value: String(data.latasCervezaHoy),  color: C_CERV },
+            { label: 'Latas Kombucha', value: String(data.latasKombuchaHoy), color: C_KOMB },
           ].map(({ label, value, color: c }) => (
             <div key={label} style={{ background: 'var(--surface2)', borderRadius: 12, padding: '12px 14px' }}>
               <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>{label}</p>
@@ -1761,11 +1767,11 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                 <p style={{ fontSize: 9, fontWeight: 800, color, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 2 }}>
                   {dspVendedor(v.vendedor)}
                 </p>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 2 }}>
-                  <span style={{ fontSize: compact ? 18 : 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, marginBottom: 2 }}>
+                  <span style={{ fontSize: compact ? 16 : 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px' }}>
                     {v.litrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                   </span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>L</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)' }}>L</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ fontSize: 10, color: '#555', fontWeight: 600, whiteSpace: 'nowrap' }}>
@@ -1802,11 +1808,11 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
                 <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.55)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 3 }}>
                   Meta Mensual
                 </p>
-                <p style={{ fontSize: small ? 20 : 26, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1px', lineHeight: 1, marginBottom: 3 }}>
+                <p style={{ fontSize: small ? 18 : 26, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1px', lineHeight: 1, marginBottom: 3 }}>
                   {pctMeta}%
                 </p>
-                <p style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
-                  {totalLitrosPeriodo.toFixed(1)} / {metaTotalEquipo.toFixed(1)} L
+                <p style={{ fontSize: small ? 9 : 10, color: '#555', fontWeight: 600, lineHeight: 1.3 }}>
+                  {fL(totalLitrosPeriodo)} / {fL(metaTotalEquipo)}
                 </p>
               </div>
             </div>
@@ -1820,8 +1826,8 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
             background: 'linear-gradient(135deg, #110D00 0%, #1C1500 50%, #0D0A00 100%)',
             border: '1px solid rgba(212,175,55,0.25)',
             borderRadius: 20,
-            padding: isDesktop ? '18px 24px' : '14px 16px',
-            marginBottom: isDesktop ? 20 : 14,
+            padding: isDesktop ? '18px 24px' : '12px 14px',
+            marginBottom: isDesktop ? 20 : 10,
           }}>
             {/* Top row: fecha + selector */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -1874,44 +1880,39 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
               </div>
 
             ) : (
-              /* ══ MOBILE: apilado en 3 filas ══ */
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              /* ══ MOBILE: layout compacto ══ */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-                {/* Fila 1: total período */}
-                <div>
-                  <p style={{ fontSize: 9, color: 'rgba(212,175,55,0.55)', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 4 }}>
-                    Litros en {mesNombre} {anio}
-                  </p>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 4 }}>
-                    <span style={{ fontSize: 34, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1.5px', lineHeight: 1 }}>
-                      {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                    </span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#A8870F' }}>L</span>
+                {/* Fila 1: total + meta en la misma línea */}
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
+                  <div>
+                    <p style={{ fontSize: 8, color: 'rgba(212,175,55,0.5)', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 2 }}>
+                      Litros en {mesNombre} {anio}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontSize: 28, fontWeight: 900, color: '#D4AF37', letterSpacing: '-1.2px', lineHeight: 1 }}>
+                        {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#A8870F' }}>L</span>
+                    </div>
+                    {litrosMesAnterior > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: diffTotal >= 0 ? '#5A8A4A' : '#B5543E' }}>
+                        {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre}
+                      </span>
+                    )}
                   </div>
-                  {litrosMesAnterior > 0 && (
-                    <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? '#5A8A4A' : '#B5543E' }}>
-                      {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre} ({litrosMesAnterior.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L)
-                    </span>
-                  )}
+                  {metaTotalEquipo > 0 && <DonutMeta small />}
                 </div>
 
                 {/* Divisor */}
-                <div style={{ height: 1, background: 'rgba(212,175,55,0.12)' }} />
+                <div style={{ height: 1, background: 'rgba(212,175,55,0.10)' }} />
 
-                {/* Fila 2: vendedores en 2 columnas */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {/* Fila 2: vendedores en 2 columnas compactas */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {resumen.map(v => (
                     <VendedorBannerBlock key={v.vendedor} v={v} compact />
                   ))}
                 </div>
-
-                {/* Fila 3: meta mensual (horizontal, compacto) */}
-                {metaTotalEquipo > 0 && (
-                  <>
-                    <div style={{ height: 1, background: 'rgba(212,175,55,0.12)' }} />
-                    <DonutMeta small />
-                  </>
-                )}
               </div>
             )}
           </div>
