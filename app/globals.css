@@ -134,9 +134,14 @@ body {
   /* Fix global de raíz: los hijos de cualquier contenedor grid o flex reciben
      min-width:0 para que las celdas se ENCOJAN en vez de desbordar la pantalla
      (el default min-width:auto = min-content desborda con repeat(N,1fr) y flex).
-     Las tablas densas con scroll horizontal usan minWidth inline (prevalece). */
-  main [style*="grid"] > *,
-  main [style*="flex"] > * { min-width: 0; }
+     SIN scope a 'main' — así cubre también Gestión (que no usa <main>) y
+     cualquier página top-level. Las tablas con scroll horizontal usan minWidth
+     inline (prevalece sobre esta regla). */
+  [style*="grid-template"] > *,
+  [style*="display:grid"] > *,
+  [style*="display: grid"] > *,
+  [style*="display:flex"] > *,
+  [style*="display: flex"] > * { min-width: 0; }
 }
 
 /* ── Safe area para el notch / Dynamic Island (iPhone) ──
