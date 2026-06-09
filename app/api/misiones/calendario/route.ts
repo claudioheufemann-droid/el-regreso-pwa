@@ -27,16 +27,32 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const pedidos = (data ?? []) as { nombre_fantasia: string }[]
+  let pedidos = (data ?? []) as { nombre_fantasia: string }[]
 
-  // Adjuntar cliente_id (clientes.id) para poder enlazar al perfil desde el calendario
   const nombres = [...new Set(pedidos.map(p => p.nombre_fantasia).filter(Boolean))]
-  const idMap = new Map<string, number>()
+
+  // Filtrar CLIENTES INACTIVOS (>90 días sin comprar) — solo activos en el calendario.
+  // La vista aún puede marcarlos "activo" si no se corrió la migración de 90 días,
+  // así que filtramos por dias_sin_compra en vivo desde client_scores.
   if (nombres.length) {
+    const { data: scores } = await supabase
+      .from('client_scores')
+      .select('nombre_fantasia, dias_sin_compra')
+      .in('nombre_fantasia', nombres)
+    const inactivos = new Set(
+      (scores ?? []).filter(s => (s.dias_sin_compra ?? 0) > 90).map(s => s.nombre_fantasia)
+    )
+    if (inactivos.size) pedidos = pedidos.filter(p => !inactivos.has(p.nombre_fantasia))
+  }
+
+  // Adjuntar cliente_id (clientes.id) para enlazar al perfil desde el calendario
+  const nombresAct = [...new Set(pedidos.map(p => p.nombre_fantasia).filter(Boolean))]
+  const idMap = new Map<string, number>()
+  if (nombresAct.length) {
     const { data: cli } = await supabase
       .from('clientes')
       .select('id, nombre_fantasia')
-      .in('nombre_fantasia', nombres)
+      .in('nombre_fantasia', nombresAct)
     for (const c of cli ?? []) {
       if (c.nombre_fantasia) idMap.set(c.nombre_fantasia, c.id)
     }

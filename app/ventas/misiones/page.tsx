@@ -224,6 +224,7 @@ export default async function MisionesPage() {
   const misiones: MisionEnriquecida[] = (misionesRaw ?? [])
     .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap))
     .filter(m => !inactivosManuales.has(m.nombre_fantasia))
+    .filter(m => (m.dias_sin_compra ?? 0) <= 90) // solo activos (≤3 meses sin comprar)
     .filter(m => !(m.estado === 'pospuesto' && m.snooze_until && m.snooze_until > hoyStr))
     .sort((a, b) => {
       if (a.estado !== b.estado) return a.estado === 'pendiente' ? -1 : 1
@@ -244,8 +245,9 @@ export default async function MisionesPage() {
     .sort((a, b) => b[0].localeCompare(a[0]))
     .map(([s, ms]) => ({ semana: s, total: ms.length, completadas: ms.filter(m=>m.estado==='contactado_pedido'||m.estado==='auto_completado').length, misiones: ms }))
 
-  // Preview próxima semana (alertas no guardadas aún)
-  const proxima: ProximaPreview[] = (proximaRaw ?? []) as ProximaPreview[]
+  // Preview próxima semana (alertas no guardadas aún) — solo clientes activos (≤90 días)
+  const proxima: ProximaPreview[] = ((proximaRaw ?? []) as ProximaPreview[])
+    .filter(p => (p.dias_sin_compra ?? 0) <= 90)
 
   // Consejos del día
   const pendientesAlta = misiones.filter(m => m.prioridad==='Alta' && m.estado==='pendiente')
