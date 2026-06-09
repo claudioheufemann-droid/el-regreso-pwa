@@ -8,13 +8,11 @@ import AreaCard from './AreaCard'
 import TaskDetailModal from '@/components/modals/TaskDetailModal'
 import TaskCalendar from '@/components/calendar/TaskCalendar'
 import TaskRow from '@/components/area/TaskRow'
-import Logo from '@/components/ui/Logo'
-import SettingsPanel from '@/components/ui/SettingsPanel'
+import AppHeader from '@/components/ui/AppHeader'
 import GestionPanel from '@/components/dashboard/GestionPanel'
 import HomeDashboard from '@/components/dashboard/HomeDashboard'
 import NewTaskModal from '@/components/modals/NewTaskModal'
-import { createClient } from '@/lib/supabase/client'
-import { LayoutGrid, User, CalendarDays, BarChart3, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, User, CalendarDays, BarChart3, RefreshCw, type LucideIcon } from 'lucide-react'
 
 interface Props {
   initialTasks: RcTask[]
@@ -174,7 +172,6 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   const [selectedTask, setSelectedTask] = useState<RcTask | null>(null)
   const [view, setView] = useState<View>('home')
   const [filterKey, setFilterKey] = useState<FilterKey>('activas')
-  const [showSettings, setShowSettings] = useState(false)
   const [showNewTask, setShowNewTask] = useState(false)
   // Áreas disponibles para crear tareas según el módulo activo
   const availableTaskAreas: string[] = (() => {
@@ -188,9 +185,6 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   const [expandedMacros, setExpandedMacros] = useState<Set<MacroKey>>(
     () => new Set(Object.keys(MACRO_AREAS) as MacroKey[])
   )
-  const [expandedSidebarMacros, setExpandedSidebarMacros] = useState<Set<MacroKey>>(
-    () => new Set(Object.keys(MACRO_AREAS) as MacroKey[])
-  )
   function toggleMacro(key: MacroKey) {
     setExpandedMacros(prev => {
       const next = new Set(prev)
@@ -198,14 +192,6 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
       return next
     })
   }
-  function toggleSidebarMacro(key: MacroKey) {
-    setExpandedSidebarMacros(prev => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
-  }
-
   // Derivar nombres de áreas de forma explícita y segura (sin "as" casts)
   const macroAreaNames: string[] | null = (() => {
     if (!currentMacroArea) return null
@@ -306,13 +292,6 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
   const dayName = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][today.getDay()]
   const monthName = ['enero','feb','marzo','abril','mayo','junio','julio','agosto','sep','octubre','nov','dic'][today.getMonth()]
-  const initials = userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    window.location.href = '/login'
-  }
 
   // ─────────────────────────────────────────────
   // CONTENIDO PRINCIPAL (compartido mobile/desktop)
@@ -327,9 +306,39 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
   function ContentArea() {
     return (
-      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* ── Tabs de vista — solo desktop ── */}
+        <div className="hidden lg:flex" style={{
+          borderBottom: '1px solid var(--border)',
+          padding: '0 24px',
+          flexShrink: 0,
+        }}>
+          <button
+            onClick={() => router.push(backHref ?? '/gestion')}
+            style={{ padding: '10px 14px', fontSize: 12, fontWeight: 500, color: 'var(--muted)', cursor: 'pointer', background: 'none', border: 'none', borderBottom: '2px solid transparent' }}
+          >
+            ← Hub
+          </button>
+          {visibleNavItems.map(item => {
+            const active = view === item.key || (item.key === 'home' && view === 'filter')
+            return (
+              <button key={item.key} onClick={() => setView(item.key)} style={{
+                padding: '10px 14px', fontSize: 12,
+                fontWeight: active ? 700 : 500,
+                color: active ? 'var(--gold)' : 'var(--muted)',
+                cursor: 'pointer', background: 'none', border: 'none',
+                borderBottom: active ? '2px solid var(--gold)' : '2px solid transparent',
+                transition: 'color 0.15s',
+              }}>
+                {item.label}
+              </button>
+            )
+          })}
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
         <div style={{
-          padding: isDesktop ? '48px 56px 80px' : '16px 14px 100px',
+          padding: isDesktop ? '24px 40px 80px' : '16px 14px 100px',
           maxWidth: isDesktop ? (view === 'calendar' ? 1200 : view === 'home' ? 1300 : 860) : 600,
           margin: '0 auto',
           width: '100%',
@@ -454,195 +463,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           )}
 
         </div>
-      </div>
-    )
-  }
-
-  // ─────────────────────────────────────────────
-  // LAYOUT DESKTOP — sidebar + contenido
-  // ─────────────────────────────────────────────
-  if (isDesktop) {
-    return (
-      <div style={{ display: 'flex', height: '100vh', background: 'var(--bg)' }}>
-
-        {/* Sidebar */}
-        <aside style={{
-          width: 'var(--sidebar-w)', minWidth: 'var(--sidebar-w)', flexShrink: 0,
-          background: 'var(--surface)',
-          borderRight: '1px solid var(--border)',
-          display: 'flex', flexDirection: 'column',
-          overflowY: 'auto',
-        }}>
-          {/* Logo + título + back to hub */}
-          <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: currentMacroArea ? 8 : 10 }}>
-              <Logo size={28} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>El Regreso</p>
-                <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>Gestión</p>
-              </div>
-            </div>
-            {currentMacroArea && (() => {
-              const mac = Object.entries(MACRO_AREAS).find(([k]) => k === currentMacroArea)
-              if (!mac) return null
-              const [, macData] = mac
-              return (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 8, background: `${macData.color}10`, border: `1px solid ${macData.color}28`, marginBottom: 10 }}>
-                  <div style={{ width: 18, height: 18, borderRadius: 5, background: `${macData.color}20`, border: `1px solid ${macData.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 900, color: macData.color, flexShrink: 0 }}>{macData.code}</div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: macData.color, letterSpacing: '0.6px' }}>{macData.label}</span>
-                </div>
-              )
-            })()}
-            <a
-              href={backHref}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '6px 10px', borderRadius: 9,
-                background: 'rgba(212,175,55,0.06)',
-                border: '1px solid rgba(212,175,55,0.12)',
-                color: '#A08830', fontSize: 11, fontWeight: 600,
-                textDecoration: 'none',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.12)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.06)')}
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-              {backHref === '/' ? 'Cambiar módulo' : '← Volver'}
-            </a>
-          </div>
-
-          {/* Nav */}
-          <nav style={{ padding: '10px 8px', flex: 1 }}>
-            <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '2px 10px 6px', textTransform: 'uppercase' }}>Navegación</div>
-            {visibleNavItems.map(item => {
-              const isActive = view === item.key || (item.key === 'home' && view === 'filter')
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => setView(item.key)}
-                  className={`sidebar-nav-item${isActive ? ' active' : ''}`}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    width: '100%', padding: '9px 12px', borderRadius: 10,
-                    border: 'none', cursor: 'pointer', marginBottom: 2,
-                    background: isActive ? 'rgba(212,175,55,0.1)' : 'transparent',
-                    textAlign: 'left', transition: 'background 0.15s',
-                  }}
-                >
-                  <item.icon size={16} strokeWidth={isActive ? 2.5 : 1.8} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? 'var(--gold)' : 'var(--muted)' }}>
-                    {item.label}
-                  </span>
-                  {item.key === 'home' && (atrasadas + porAprobar) > 0 && (
-                    <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, color: '#FF7070', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 10, padding: '1px 6px' }}>
-                      {atrasadas + porAprobar}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-
-            {/* Filtros rápidos */}
-            <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '10px 10px 6px', textTransform: 'uppercase' }}>Filtros Rápidos</div>
-            {([
-              { key: 'activas',     label: 'Activas',    value: activas,    color: 'var(--cream)' },
-              { key: 'en-proceso',  label: 'En Proceso', value: enProceso,  color: '#E67E22' },
-              { key: 'aprobar',     label: 'Por Aprobar',value: porAprobar, color: '#D4AF37' },
-              { key: 'atraso',      label: 'En Atraso',  value: atrasadas,  color: '#FF6B6B' },
-            ] as { key: FilterKey; label: string; value: number; color: string }[]).map(s => (
-              <button
-                key={s.key}
-                onClick={() => { setFilterKey(s.key); setView('filter') }}
-                className="sidebar-nav-item touch-active"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 9,
-                  width: '100%', padding: '7px 12px', borderRadius: 10,
-                  border: 'none', cursor: 'pointer', marginBottom: 2,
-                  background: view === 'filter' && filterKey === s.key ? `${s.color}15` : 'transparent',
-                  textAlign: 'left', transition: 'background 0.15s',
-                }}
-              >
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>{s.label}</span>
-                {s.value > 0 && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: s.color }}>{s.value}</span>
-                )}
-              </button>
-            ))}
-
-            {/* Áreas agrupadas por macro */}
-            {(Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][])
-              .filter(([key]) => currentMacroArea === null || currentMacroArea === key)
-              .map(([key, macro]) => {
-                const isSidebarExpanded = expandedSidebarMacros.has(key)
-                const isAdminView = currentMacroArea === null
-                return (
-                  <div key={key}>
-                    {/* Macro label — clickable for admins */}
-                    {isAdminView ? (
-                      <button
-                        onClick={() => toggleSidebarMacro(key)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 6,
-                          width: '100%', padding: '10px 10px 4px', border: 'none',
-                          background: 'transparent', cursor: 'pointer', textAlign: 'left',
-                        }}
-                      >
-                        <span style={{ fontSize: 8, color: macro.color, letterSpacing: 1.8, textTransform: 'uppercase', fontWeight: 700, flex: 1 }}>{macro.label}</span>
-                        <span style={{ fontSize: 10, color: macro.color, transition: 'transform 0.2s', display: 'inline-block', transform: isSidebarExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▾</span>
-                      </button>
-                    ) : (
-                      <div style={{ fontSize: 8, color: macro.color, letterSpacing: 1.8, padding: '10px 10px 4px', textTransform: 'uppercase', fontWeight: 700 }}>Áreas</div>
-                    )}
-                    {(!isAdminView || isSidebarExpanded) && macro.areas.map(area => {
-                      const areaCfg = AREA_CFG[area]
-                      const count = tasks.filter(t => t.area === area && t.estado !== 'Completada').length
-                      return (
-                        <button key={area} onClick={() => router.push(`/gestion/area/${encodeURIComponent(area)}`)} className="sidebar-nav-item touch-active"
-                          style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '7px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', marginBottom: 2, background: 'transparent', textAlign: 'left', transition: 'background 0.15s' }}>
-                          <div style={{ width: 20, height: 20, borderRadius: 6, background: `${areaCfg.color}18`, border: `1px solid ${areaCfg.color}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: areaCfg.color, flexShrink: 0 }}>
-                            {areaCfg.code}
-                          </div>
-                          <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{area}</span>
-                          {count > 0 && <span style={{ fontSize: 10, color: areaCfg.color, fontWeight: 700 }}>{count}</span>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )
-              })
-            }
-          </nav>
-
-          {/* Footer sidebar: usuario + acciones */}
-          <div style={{ borderTop: '1px solid rgba(128,128,128,0.1)', padding: '10px 14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#0A0A0A', flexShrink: 0 }}>
-                {initials}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
-                <div style={{ fontSize: 9, color: 'var(--muted)' }}>{isAdmin ? '★ Admin' : 'Usuario'}</div>
-              </div>
-              <button onClick={refreshTasks} className="touch-active" title="Actualizar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 14, padding: 4 }}>↻</button>
-            </div>
-            <button onClick={() => setShowSettings(true)} className="touch-active" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 10, border: 'none', background: 'rgba(128,128,128,0.07)', cursor: 'pointer', marginBottom: 5 }}>
-              <span style={{ fontSize: 13 }}>⚙</span>
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Configuración</span>
-            </button>
-            <button onClick={handleLogout} className="touch-active" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 10, border: 'none', background: 'rgba(255,68,68,0.06)', cursor: 'pointer' }}>
-              <span style={{ fontSize: 13 }}>🚪</span>
-              <span style={{ fontSize: 11, color: '#FF6B6B' }}>Cerrar Sesión</span>
-            </button>
-          </div>
-        </aside>
-
-        {/* Contenido principal */}
-        <ContentArea />
-
-        {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} avatarUrl={users.find(u => u.email === userEmail)?.avatar_url} />}
-        {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
-        {showNewTask && <NewTaskModal defaultArea={defaultNewTaskArea} availableAreas={availableTaskAreas} users={users} onClose={() => setShowNewTask(false)} onCreated={(t) => { setTasks(prev => [t, ...prev]); setShowNewTask(false) }} />}
+        </div>
       </div>
     )
   }
@@ -653,62 +474,37 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
 
-      {/* ── Topbar mobile moderno ── */}
-      {/* safe-top solo en el spacer, para no pisar el padding de contenido */}
-      <div style={{
-        background: 'linear-gradient(180deg, #13131a 0%, var(--surface) 100%)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
-        flexShrink: 0,
-        paddingTop: 'env(safe-area-inset-top, 44px)',
-      }}>
-        {/* Fila superior: logo+nombre / acciones */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '16px 18px 10px', gap: 12 }}>
-          <Logo size={34} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.3, lineHeight: 1.1 }}>
-              El Regreso
-            </div>
-            {currentMacroArea ? (() => {
-              const mac = Object.entries(MACRO_AREAS).find(([k]) => k === currentMacroArea)
-              if (!mac) return null
-              const [, macData] = mac
-              return (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: macData.color }} />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: macData.color, letterSpacing: 0.3 }}>{macData.label}</span>
-                </div>
-              )
-            })() : <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>Control de Gestión</div>}
-          </div>
-
-          {/* Refresh */}
-          <button onClick={refreshTasks} className="touch-active" title="Actualizar"
-            style={{ width: 38, height: 38, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--muted)', fontSize: 17, flexShrink: 0 }}>
-            ↻
-          </button>
-
-          {/* Avatar / Configuración */}
-          <div onClick={() => setShowSettings(true)} className="touch-active" style={{
-            width: 38, height: 38, borderRadius: 12,
-            background: isAdmin ? 'linear-gradient(135deg, #D4AF37, #B8962E)' : 'linear-gradient(135deg, #C06A1A, #A0551A)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 800, color: '#0A0A0A',
-            flexShrink: 0, cursor: 'pointer', position: 'relative',
-            boxShadow: isAdmin ? '0 2px 12px rgba(212,175,55,0.3)' : '0 2px 12px rgba(192,106,26,0.3)',
-          }}>
-            {initials}
-            {isAdmin && <div style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: '50%', background: '#0A0A0A', border: '1.5px solid #D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#D4AF37' }}>★</div>}
-          </div>
-        </div>
-
+      {/* ── Header estándar — igual que todos los módulos ── */}
+      <div style={{ padding: '0 18px', flexShrink: 0 }}>
+        <AppHeader
+          eyebrow={new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
+          title={currentMacroArea
+            ? (Object.entries(MACRO_AREAS).find(([k]) => k === currentMacroArea)?.[1]?.label ?? 'Gestión')
+            : 'Gestión'
+          }
+          extraAction={
+            <button
+              onClick={refreshTasks}
+              title="Actualizar"
+              style={{
+                width: 38, height: 38,
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: 'var(--muted)',
+              }}
+            >
+              <RefreshCw size={17} />
+            </button>
+          }
+        />
       </div>
-
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} avatarUrl={users.find(u => u.email === userEmail)?.avatar_url} />}
 
       <ContentArea />
 
-      {/* ── Bottom nav flotante — vistas del área ── */}
-      <nav style={{
+      {/* ── Bottom nav flotante — solo mobile, desktop usa tabs ── */}
+      <nav className="lg:hidden" style={{
         position: 'fixed',
         bottom: 'max(16px, env(safe-area-inset-bottom))',
         left: '50%',
@@ -764,6 +560,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
       </nav>
 
       {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
+      {showNewTask && <NewTaskModal defaultArea={defaultNewTaskArea} availableAreas={availableTaskAreas} users={users} onClose={() => setShowNewTask(false)} onCreated={(t) => { setTasks(prev => [t, ...prev]); setShowNewTask(false) }} />}
     </div>
   )
 }
