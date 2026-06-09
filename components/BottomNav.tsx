@@ -5,7 +5,7 @@ import { BarChart2, Users, Map, Upload, Home, Target, TrendingUp } from 'lucide-
 import { useUser } from '@/lib/userContext'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
-// Máx 5 ítems — caben perfectamente en 390px sin overflow
+// NavPill con scroll horizontal — soporta 6-7 ítems con fades laterales
 const VENDEDOR_ITEMS: NavItem[] = [
   { href: '/',                icon: Home,       label: 'Inicio',   exact: true },
   { href: '/ventas',          icon: BarChart2,  label: 'Hoy',      exact: true },
@@ -21,6 +21,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { href: '/ventas/misiones',     icon: Target,     label: 'Misiones'              },
   { href: '/ventas/clientes',     icon: Users,      label: 'Clientes'              },
   { href: '/ventas/metas',        icon: TrendingUp, label: 'Metas'                 },
+  { href: '/ventas/mapa',         icon: Map,        label: 'Mapa'                  },
   { href: '/ventas/admin/cargar', icon: Upload,     label: 'Cargar'                },
 ]
 
