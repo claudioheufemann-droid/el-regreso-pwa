@@ -13,5 +13,7 @@ const ITEMS: NavItem[] = [
 
 export default function GestionBottomNav() {
   const pathname = usePathname()
+  // Solo mostrar en el hub /gestion — las sub-páginas usan el nav interno del Dashboard
+  if (pathname !== '/gestion') return null
   return <NavPill items={ITEMS} pathname={pathname} />
 }
