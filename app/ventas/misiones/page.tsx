@@ -49,6 +49,7 @@ export interface MisionEnriquecida {
   ruta_despacho: string | null
   localidad: string | null
   telefono: string | null
+  cliente_id: number | null   // clientes.id → enlace al perfil
   ultima_venta_fecha: string | null
   ultima_venta_monto: number
   prioridad: 'Alta' | 'Media' | 'Baja'
@@ -70,15 +71,15 @@ export interface HistorialSemana {
 }
 
 function enriquecerMision(
-  m: Omit<MisionEnriquecida, 'ruta_despacho'|'localidad'|'telefono'|'ultima_venta_fecha'|'ultima_venta_monto'|'prioridad'|'frecuencia_texto'|'dias_para_compra'|'tipo_cliente'|'volumen_caida_pct'|'cross_sell'|'pedido_sugerido'>,
-  clienteMap: Map<string, { ruta_despacho: string|null; localidad: string|null; telefono: string|null }>,
+  m: Omit<MisionEnriquecida, 'ruta_despacho'|'localidad'|'telefono'|'cliente_id'|'ultima_venta_fecha'|'ultima_venta_monto'|'prioridad'|'frecuencia_texto'|'dias_para_compra'|'tipo_cliente'|'volumen_caida_pct'|'cross_sell'|'pedido_sugerido'>,
+  clienteMap: Map<string, { ruta_despacho: string|null; localidad: string|null; telefono: string|null; cliente_id: number|null }>,
   ventaMap: Map<string, { fecha: string; monto: number }>,
   tipoClienteMap: Map<string, 'activo' | 'inactivo' | 'temporal' | 'nuevo'>,
   volBajaMap: Map<string, number>,
   crossSellMap: Map<string, { categoria: string; pct: number }>,
   pedidoSugMap: Map<string, { producto: string; envase: string | null; litros: number }[]>
 ): MisionEnriquecida {
-  const cli = clienteMap.get(m.nombre_fantasia) ?? { ruta_despacho:null, localidad:null, telefono:null }
+  const cli = clienteMap.get(m.nombre_fantasia) ?? { ruta_despacho:null, localidad:null, telefono:null, cliente_id:null }
   const vta = ventaMap.get(m.nombre_fantasia)
   const tipo_cliente = tipoClienteMap.get(m.nombre_fantasia) ?? null
   const volumen_caida_pct = volBajaMap.get(m.nombre_fantasia) ?? null
@@ -156,9 +157,9 @@ export default async function MisionesPage() {
     // Preview próxima semana: alertas activas
     supabase.rpc('get_pending_call_alerts', { p_vendedor, p_nivel_minimo: 'proximo' }),
 
-    // Datos de clientes (ruta, localidad, teléfono)
+    // Datos de clientes (id para perfil, ruta, localidad, teléfono)
     supabase.from('clientes')
-      .select('nombre_fantasia, ruta_despacho, localidad, localidad_entrega, telefono')
+      .select('id, nombre_fantasia, ruta_despacho, localidad, localidad_entrega, telefono')
       .in('vendedor', vendedoresScope.length ? vendedoresScope : ['__none__']),
 
     // Último pedido por cliente — cacheado por scope (TTL 10 min)
@@ -181,10 +182,10 @@ export default async function MisionesPage() {
   ])
 
   // Mapas de lookup
-  const clienteMap = new Map<string, { ruta_despacho: string|null; localidad: string|null; telefono: string|null }>()
+  const clienteMap = new Map<string, { ruta_despacho: string|null; localidad: string|null; telefono: string|null; cliente_id: number|null }>()
   for (const c of clientesRaw ?? [])
     if (c.nombre_fantasia)
-      clienteMap.set(c.nombre_fantasia, { ruta_despacho: c.ruta_despacho??null, localidad: c.localidad_entrega||c.localidad||null, telefono: c.telefono??null })
+      clienteMap.set(c.nombre_fantasia, { ruta_despacho: c.ruta_despacho??null, localidad: c.localidad_entrega||c.localidad||null, telefono: c.telefono??null, cliente_id: c.id ?? null })
 
   const ventaMap = new Map<string, { fecha: string; monto: number }>()
   for (const v of ventasRaw ?? [])

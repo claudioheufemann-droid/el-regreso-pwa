@@ -206,6 +206,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
   const [litrosInput, setLitrosInput] = useState(50)
   const [diasPosp, setDiasPospD] = useState(5)
   const [saving, setSaving] = useState(false)
+  const router = useRouter()
 
   async function registrar(estado: EstadoMision, opts?: ActualizarOpts) {
     if (!mision) return
@@ -252,11 +253,17 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
             <p style={{ fontSize: 10, fontWeight: 800, color: tipoCfg.color, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>
               Detalle de Misión — <span style={{ color: tipoCfg.color }}>{tipoCfg.label}</span>
             </p>
-            <h2 style={{
-              fontSize: 17, fontWeight: 900, color: isDone ? '#5A8A4A' : 'var(--cream)',
-              textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.2,
-            }}>
+            <h2
+              onClick={mision.cliente_id != null ? () => router.push(`/ventas/clientes/${mision.cliente_id}`) : undefined}
+              title={mision.cliente_id != null ? 'Ver perfil del cliente' : undefined}
+              style={{
+                fontSize: 17, fontWeight: 900, color: isDone ? '#5A8A4A' : 'var(--cream)',
+                textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.2,
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                cursor: mision.cliente_id != null ? 'pointer' : 'default',
+              }}>
               {mision.nombre_fantasia}
+              {mision.cliente_id != null && <ChevronRight size={16} style={{ color: '#D4AF37', flexShrink: 0 }} />}
             </h2>
           </div>
           {/* Seg badge */}
