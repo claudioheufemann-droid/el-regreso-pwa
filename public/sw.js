@@ -1,7 +1,7 @@
 // El Regreso Control — Service Worker
-// Maneja push notifications + caché offline + badge de ícono
+// Maneja push notifications + caché offline + badge de ícono con número
 
-const CACHE_NAME = 'el-regreso-v26'
+const CACHE_NAME = 'el-regreso-v27'
 const OFFLINE_URL = '/offline'
 
 const STATIC_ASSETS = [
@@ -57,12 +57,27 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
-// ── Push: mostrar notificación + badge en ícono ────────────────────────
+// ── Helpers de badge ──────────────────────────────────────────────────
+async function actualizarBadge() {
+  try {
+    const notifs = await self.registration.getNotifications()
+    const count = notifs.length
+    if (self.navigator?.setAppBadge) {
+      if (count > 0) {
+        await self.navigator.setAppBadge(count)
+      } else {
+        await self.navigator.clearAppBadge().catch(() => {})
+      }
+    }
+  } catch {}
+}
+
+// ── Push: mostrar notificación + badge numérico en ícono ──────────────
 self.addEventListener('push', (event) => {
   let data = {
     title: 'El Regreso Control',
-    body: 'Tienes una nueva notificación',
-    url: '/gestion',
+    body: 'Nueva actividad en la app',
+    url: '/',
     tag: 'default',
     taskId: null,
     requireInteraction: false,
@@ -73,70 +88,77 @@ self.addEventListener('push', (event) => {
     catch { data.body = event.data.text() }
   }
 
-  // URL de destino — si viene taskId, navegar directo a la tarea
   const targetUrl = data.taskId
     ? `/gestion?task=${data.taskId}`
-    : (data.url || '/gestion')
+    : (data.url || '/')
 
   event.waitUntil(
-    Promise.all([
-      // Mostrar la notificación
-      self.registration.showNotification(data.title, {
-        body: data.body,
-        icon: '/icons/icon-192x192.png',
-        badge: '/icons/icon-72x72.png',
-        tag: data.tag,
-        data: { url: targetUrl, taskId: data.taskId },
-        requireInteraction: data.requireInteraction,
-        vibrate: [200, 100, 200],
-        actions: data.taskId ? [
-          { action: 'open', title: 'Ver tarea' },
-          { action: 'dismiss', title: 'Ignorar' },
-        ] : [],
-      }),
-      // Incrementar badge en el ícono de la app
-      self.navigator?.setAppBadge
-        ? self.navigator.setAppBadge().catch(() => {})
-        : Promise.resolve(),
-    ])
+    // 1. Mostrar la notificación
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icons/icon-192x192.png',
+      badge: '/icons/icon-72x72.png',
+      tag: data.tag,
+      data: { url: targetUrl, taskId: data.taskId },
+      requireInteraction: data.requireInteraction ?? false,
+      vibrate: [150, 80, 150],
+      actions: data.taskId ? [
+        { action: 'open',    title: 'Ver' },
+        { action: 'dismiss', title: 'Ignorar' },
+      ] : [],
+    })
+    // 2. Después de mostrarla, actualizar el badge con el total acumulado
+    .then(() => actualizarBadge())
   )
 })
 
 // ── Click en notificación ──────────────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
+  if (event.action === 'dismiss') {
+    // Solo actualizar el badge (bajó en 1 al cerrar)
+    event.waitUntil(actualizarBadge())
+    return
+  }
 
-  // Si el usuario tocó "Ignorar", no hacer nada
-  if (event.action === 'dismiss') return
-
-  const url = event.notification.data?.url ?? '/gestion'
+  const url = event.notification.data?.url ?? '/'
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Limpiar badge al abrir
-      if (self.navigator?.clearAppBadge) {
-        self.navigator.clearAppBadge().catch(() => {})
-      }
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        // Recalcular badge (la notif ya se cerró)
+        actualizarBadge()
 
-      // Si ya hay una ventana de la app abierta, navegar ahí
-      for (const client of clientList) {
-        if (client.url.includes(location.origin) && 'focus' in client) {
-          client.navigate(url)
-          client.focus()
-          return
+        // Si ya hay ventana abierta, navegar ahí
+        for (const client of clientList) {
+          if (client.url.includes(location.origin) && 'focus' in client) {
+            client.navigate(url)
+            client.focus()
+            return
+          }
         }
-      }
-      // Si no hay ventana, abrir una nueva con la URL de la tarea
-      if (clients.openWindow) return clients.openWindow(url)
-    })
+        // Si no hay ventana, abrir una nueva
+        if (clients.openWindow) return clients.openWindow(url)
+      })
   )
 })
 
-// ── Cuando la app se abre, limpiar badge ───────────────────────────────
+// ── Cuando la app se abre → limpiar badge ─────────────────────────────
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'CLEAR_BADGE') {
     if (self.navigator?.clearAppBadge) {
       self.navigator.clearAppBadge().catch(() => {})
     }
+  }
+  if (event.data?.type === 'APP_OPENED') {
+    // El usuario abrió la app: limpiar badge y cerrar todas las notifs visibles
+    event.waitUntil(
+      self.registration.getNotifications().then(notifs => {
+        notifs.forEach(n => n.close())
+        if (self.navigator?.clearAppBadge) {
+          self.navigator.clearAppBadge().catch(() => {})
+        }
+      })
+    )
   }
 })

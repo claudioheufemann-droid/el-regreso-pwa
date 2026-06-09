@@ -1,8 +1,9 @@
 'use client'
 
 /**
- * NotifPrompt — aparece automáticamente si el usuario no tiene
- * notificaciones activadas. Se descarta y no vuelve a aparecer.
+ * NotifPrompt — aparece automáticamente en TODOS los módulos.
+ * Solicita permiso de notificaciones para recibir alertas de:
+ * ventas, camiones, visitas, misiones, tareas.
  */
 import { useState, useEffect } from 'react'
 
@@ -14,24 +15,43 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 export default function NotifPrompt() {
-  const [show, setShow] = useState(false)
+  const [show, setShow]       = useState(false)
   const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState(false)
+  const [done, setDone]       = useState(false)
 
   useEffect(() => {
-    // No mostrar si: no soportado, ya granted, ya descartado
     if (!('Notification' in window) || !('serviceWorker' in navigator)) return
-    if (Notification.permission === 'granted') return
+    // Ya está activo — no mostrar
+    if (Notification.permission === 'granted') {
+      // Pero sí enviar APP_OPENED para limpiar badge al abrir
+      navigator.serviceWorker.ready.then(reg => {
+        reg.active?.postMessage({ type: 'APP_OPENED' })
+      }).catch(() => {})
+      return
+    }
+    // Bloqueado — no podemos hacer nada
     if (Notification.permission === 'denied') return
-    if (localStorage.getItem('notif-prompt-dismissed') === 'true') return
+    // Ya descartado en este dispositivo — no volver a molestar (por 7 días)
+    const dismissed = localStorage.getItem('notif-dismissed-until')
+    if (dismissed && Date.now() < parseInt(dismissed)) return
 
-    // Esperar 3s para no aparecer inmediatamente al entrar
-    const t = setTimeout(() => setShow(true), 3000)
+    // Mostrar prompt después de 2s
+    const t = setTimeout(() => setShow(true), 2000)
     return () => clearTimeout(t)
   }, [])
 
+  // Enviar APP_OPENED al SW cada vez que el usuario usa la app
+  // (limpia el badge del ícono)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    navigator.serviceWorker.ready.then(reg => {
+      reg.active?.postMessage({ type: 'APP_OPENED' })
+    }).catch(() => {})
+  }, [])
+
   function dismiss() {
-    localStorage.setItem('notif-prompt-dismissed', 'true')
+    // Recordar por 7 días
+    localStorage.setItem('notif-dismissed-until', String(Date.now() + 7 * 86400000))
     setShow(false)
   }
 
@@ -45,7 +65,7 @@ export default function NotifPrompt() {
       if (permission !== 'granted') { setLoading(false); dismiss(); return }
 
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      if (!vapidKey) { setLoading(false); dismiss(); return }
+      if (!vapidKey) { setLoading(false); return }
 
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -58,8 +78,9 @@ export default function NotifPrompt() {
         body: JSON.stringify(sub.toJSON()),
       })
 
+      localStorage.removeItem('notif-dismissed-until')
       setDone(true)
-      setTimeout(() => setShow(false), 2000)
+      setTimeout(() => setShow(false), 2200)
     } catch (e) {
       console.error('Push subscribe error:', e)
       setLoading(false)
@@ -71,54 +92,69 @@ export default function NotifPrompt() {
 
   return (
     <div style={{
-      position: 'fixed', bottom: 80, left: 12, right: 12, zIndex: 9000,
-      background: '#111827',
-      border: '1px solid rgba(59,130,246,0.35)',
-      borderRadius: 18,
+      position: 'fixed',
+      bottom: 'max(90px, calc(80px + env(safe-area-inset-bottom, 0px)))',
+      left: 14, right: 14, zIndex: 9000,
+      background: 'linear-gradient(135deg, #0F0E1A 0%, #111018 100%)',
+      border: '1px solid rgba(212,175,55,0.3)',
+      borderRadius: 20,
       padding: '16px 18px',
-      boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(59,130,246,0.15)',
+      boxShadow: '0 12px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(212,175,55,0.08)',
       display: 'flex', alignItems: 'flex-start', gap: 14,
-      animation: 'slideUp 0.3s ease',
+      animation: 'slideUp 0.35s cubic-bezier(0.16,1,0.3,1)',
     }}>
-      <style>{`
-        @keyframes slideUp {
-          from { transform: translateY(20px); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-      `}</style>
+      <style>{`@keyframes slideUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
 
       {/* Ícono */}
-      <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+      <div style={{
+        width: 44, height: 44, borderRadius: 13, flexShrink: 0,
+        background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+      }}>
         🔔
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
         {done ? (
           <>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#4ADE80', marginBottom: 2 }}>✓ Notificaciones activadas</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Recibirás alertas de tareas en este dispositivo.</div>
+            <p style={{ fontSize: 14, fontWeight: 800, color: '#4ADE80', marginBottom: 3 }}>
+              ✓ Notificaciones activadas
+            </p>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>
+              Recibirás alertas de ventas, camiones, visitas y tareas.
+            </p>
           </>
         ) : (
           <>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#F4EEDF', marginBottom: 3 }}>Activar notificaciones</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, marginBottom: 12 }}>
-              Recibe alertas cuando te asignen tareas, haya comentarios o vencimientos.
-            </div>
+            <p style={{ fontSize: 14, fontWeight: 800, color: '#F0EDE8', marginBottom: 4 }}>
+              Activar notificaciones
+            </p>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.55, marginBottom: 14 }}>
+              Entérate al instante de ventas cargadas, camiones en ruta, visitas completadas, misiones con pedido y nuevas tareas.
+            </p>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={activate} disabled={loading} style={{
-                flex: 1, padding: '10px 0', borderRadius: 12, border: 'none', cursor: 'pointer',
-                background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
-                color: '#fff', fontSize: 13, fontWeight: 800,
-                opacity: loading ? 0.7 : 1,
-                boxShadow: '0 4px 16px rgba(59,130,246,0.35)',
-              }}>
-                {loading ? 'Activando...' : 'Activar ahora'}
+              <button
+                onClick={activate}
+                disabled={loading}
+                style={{
+                  flex: 1, padding: '11px 0', borderRadius: 13, border: 'none', cursor: 'pointer',
+                  background: 'linear-gradient(135deg, #E5C45A, #B8962E)',
+                  color: '#080808', fontSize: 13, fontWeight: 900,
+                  opacity: loading ? 0.7 : 1,
+                  boxShadow: '0 4px 18px rgba(212,175,55,0.3)',
+                  letterSpacing: '-0.2px',
+                }}
+              >
+                {loading ? 'Activando…' : 'Activar ahora'}
               </button>
-              <button onClick={dismiss} style={{
-                padding: '10px 14px', borderRadius: 12, cursor: 'pointer',
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                color: 'rgba(255,255,255,0.4)', fontSize: 12,
-              }}>
+              <button
+                onClick={dismiss}
+                style={{
+                  padding: '11px 16px', borderRadius: 13, cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                  color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: 600,
+                }}
+              >
                 Después
               </button>
             </div>
@@ -126,9 +162,13 @@ export default function NotifPrompt() {
         )}
       </div>
 
-      {/* Cerrar */}
       {!done && (
-        <button onClick={dismiss} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.25)', cursor: 'pointer', fontSize: 16, flexShrink: 0, lineHeight: 1, padding: 0 }}>✕</button>
+        <button
+          onClick={dismiss}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', cursor: 'pointer', fontSize: 18, flexShrink: 0, lineHeight: 1, padding: 0 }}
+        >
+          ×
+        </button>
       )}
     </div>
   )
