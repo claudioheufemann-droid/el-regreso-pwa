@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, MessageCircle, Phone, TrendingUp, TrendingDown, Users, Target, Droplets, DollarSign, AlertTriangle, Calendar, MapPin, BarChart3, ChevronDown, Sparkles } from 'lucide-react'
+import { RefreshCw, MessageCircle, Phone, TrendingUp, TrendingDown, Users, Target, Droplets, DollarSign, AlertTriangle, Calendar, MapPin, BarChart3, ChevronDown, Sparkles, CheckCircle2, XCircle, Clock, ShoppingBag } from 'lucide-react'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -35,11 +35,11 @@ function cohorteLabel(c: string): string {
 }
 
 const SEG_TYPES = [
-  { key: 'activo',   label: 'Activos',   color: '#5A8A4A', icon: '🟢', desc: 'Compradores regulares' },
-  { key: 'inactivo', label: 'Inactivos', color: '#B5543E', icon: '🔴', desc: 'En riesgo de abandono' },
-  { key: 'temporal', label: 'Temporales',color: '#D4AF37', icon: '🟡', desc: 'Compradores esporádicos' },
-  { key: 'nuevo',    label: 'Nuevos',    color: '#D4AF37', icon: '🔵', desc: 'Incorporación reciente' },
-] as const
+  { key: 'activo',   label: 'Activos',    color: '#5A8A4A', icon: <CheckCircle2 size={14} />, desc: 'Compradores regulares' },
+  { key: 'inactivo', label: 'Inactivos',  color: '#B5543E', icon: <XCircle size={14} />,      desc: 'En riesgo de abandono' },
+  { key: 'temporal', label: 'Temporales', color: '#D4AF37', icon: <Clock size={14} />,         desc: 'Compradores esporádicos' },
+  { key: 'nuevo',    label: 'Nuevos',     color: '#60A5FA', icon: <Sparkles size={14} />,      desc: 'Incorporación reciente' },
+]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -288,9 +288,9 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h2 style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', marginBottom: 3 }}>
-            🎯 Misiones de la semana
+            Misiones de la semana
           </h2>
-          <p style={{ fontSize: 12, color: 'var(--muted)' }}>📅 {rangoSemana(semana)}</p>
+          <p style={{ fontSize: 12, color: 'var(--muted)' }}>{rangoSemana(semana)}</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {/* Week selector */}
@@ -378,7 +378,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 return (
                   <div key={s.key} style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${s.color}25`, borderRadius: 12, padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                      <span style={{ fontSize: 15 }}>{s.icon}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', color: s.color }}>{s.icon}</span>
                       <span style={{ fontSize: 11, fontWeight: 800, color: s.color }}>{s.label}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -719,7 +719,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 </div>
               </div>
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual?.split(' ')[0] ?? '—'}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#8A6D1F' }}>🍺 {c.categoria_sugerida}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#8A6D1F' }}>{c.categoria_sugerida}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
                   <div style={{ width: `${c.peers_pct}%`, height: '100%', background: '#8A6D1F', borderRadius: 3 }} />

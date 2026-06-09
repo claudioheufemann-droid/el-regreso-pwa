@@ -1296,7 +1296,7 @@ export default function MisionesClient({
   const vendedores = useMemo(() => [...new Set(misiones.map(m => m.vendedor))], [misiones])
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
-    ...(isAdmin ? [{ key: 'resumen' as Tab, label: '📊 Resumen Admin' }] : []),
+    ...(isAdmin ? [{ key: 'resumen' as Tab, label: 'Resumen Admin' }] : []),
     { key: 'semana',    label: 'Esta semana',    count: misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length },
     { key: 'calendario', label: '📅 Calendario' },
     { key: 'proxima',   label: 'Próxima semana', count: proxima.filter(p => { if (!p.siguiente_compra_estimada) return false; const hoy = new Date(); const d7 = new Date(hoy); d7.setDate(d7.getDate()+7); const d14 = new Date(hoy); d14.setDate(d14.getDate()+14); const d = new Date(p.siguiente_compra_estimada + 'T12:00:00'); return d >= d7 && d <= d14 }).length },
