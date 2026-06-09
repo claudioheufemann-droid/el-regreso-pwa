@@ -685,6 +685,70 @@ input::placeholder, textarea::placeholder { color: #5A5248; }
   .p-compact   { padding: 10px 12px !important; }
 }
 
+/* ── Filter chip — botón filtro togglable (44px touch target) ── */
+.filter-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 0 16px;
+  border-radius: var(--radius-md);
+  font-size: 12px; font-weight: 700;
+  border: none; cursor: pointer;
+  background: var(--surface);
+  color: var(--muted);
+  outline: 1px solid var(--border);
+  white-space: nowrap; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, outline-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-chip.active {
+  background: var(--gold-dim);
+  color: var(--gold);
+  outline-color: rgba(212,175,55,0.3);
+}
+.filter-chip:active { opacity: 0.75; transform: scale(0.97); }
+
+/* ── Segmented picker (Mapa/Satélite/Híbrido, Capas, Vistas) ── */
+.seg-picker {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.seg-picker-btn {
+  padding: 7px 14px;
+  border-radius: calc(var(--radius-md) - 3px);
+  border: none; cursor: pointer;
+  font-size: 12px; font-weight: 700;
+  background: transparent;
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  display: flex; align-items: center; gap: 5px;
+}
+.seg-picker-btn.active { background: var(--gold); color: #0A0A0A; }
+.seg-picker-btn:not(.active):active { background: rgba(255,255,255,0.05); }
+
+/* ── KPI card estandarizada — borderTop accent + CSS vars ── */
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+  min-width: 0;
+}
+.kpi-card-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--muted);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.kpi-card-value {
+  font-size: 20px; font-weight: 900; letter-spacing: -0.5px;
+  line-height: 1; color: var(--cream);
+}
+
 /* ── Leaflet dark popup ── */
 .leaflet-popup-content-wrapper {
   background: #1C1C1C !important;
