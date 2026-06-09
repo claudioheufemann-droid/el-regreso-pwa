@@ -70,9 +70,13 @@ export async function POST(req: Request) {
     ciclo_promedio_dias: number; siguiente_compra_estimada: string | null
   }
 
+  // Solo CLIENTES ACTIVOS: compraron en los últimos 90 días (3 meses).
+  const DIAS_ACTIVO = 90
+
   // Filtrar: solo clientes que compran en ≤14 días O ya están vencidos
   const alertsFiltrados = (alerts as AlertRow[]).filter(a => {
     if (!a.ciclo_promedio_dias) return false
+    if ((a.dias_sin_compra ?? 0) > DIAS_ACTIVO) return false // inactivo (>3 meses)
     const sig = a.siguiente_compra_estimada
     if (!sig) return a.alert_level !== 'proximo'
     return sig <= d14
@@ -142,6 +146,20 @@ export async function POST(req: Request) {
     } else {
       inserted = r.data
     }
+  }
+
+  // Limpiar misiones de la semana cuyos clientes ya no califican (inactivos >90d).
+  const vivos = new Set(alertsFiltrados.map(a => `${a.vendedor_actual}|${a.nombre_fantasia}`))
+  const { data: pendientes } = await supabase
+    .from('misiones')
+    .select('id, vendedor, nombre_fantasia')
+    .eq('semana', semana)
+    .eq('estado', 'pendiente')
+  const idsBorrar = (pendientes ?? [])
+    .filter(m => !vivos.has(`${m.vendedor}|${m.nombre_fantasia}`))
+    .map(m => m.id)
+  if (idsBorrar.length) {
+    await supabase.from('misiones').delete().in('id', idsBorrar)
   }
 
   const resumen = {
