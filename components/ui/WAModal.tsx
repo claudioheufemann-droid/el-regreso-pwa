@@ -28,7 +28,6 @@ function fFecha(s: string): string {
 }
 
 export function generarMensajeWA(t: WATarget): string {
-  const nombre   = t.nombre.split(' ').slice(0, 2).join(' ')
   const producto = t.productoSugerido ?? 'cerveza'
   const litros   = t.litrosEstimados ? `${t.litrosEstimados}L` : 'tu pedido habitual'
   const ciclo    = t.cicloPromedioDias ? `cada ${t.cicloPromedioDias} días` : 'seguido'
@@ -36,31 +35,31 @@ export function generarMensajeWA(t: WATarget): string {
   switch (t.alertTipo) {
 
     case 'rojo':
-      return `¡Hola ${nombre}! ¿Cómo va todo por el local? Oye, sacando cuentas por acá creo que ya debes estar medio corto de la ${producto}. ¿Te mando unas cajitas hoy para que no te quedes seco el finde? Un abrazo. — El Regreso Beer Co. 🍺`
+      return `Hola! ¿Cómo va todo por el local? Oye, sacando cuentas por acá creo que ya debes estar medio corto de la ${producto}. ¿Te mando unas cajitas hoy para que no te quedes seco el finde?`
 
     case 'amarillo':
-      return `¡Qué tal, ${nombre}! Paso a saludarte. ¿Cómo andamos de stock para esta semana? Avísame si necesitas que te reponga ${litros} y te lo dejo anotado al tiro. — El Regreso Beer Co. 🍺`
+      return `Hola! Paso a saludarte. ¿Cómo andamos de stock para esta semana? Avísame si necesitas que te reponga ${litros} y te lo dejo anotado al tiro.`
 
     case 'verde':
-      return `¡Hola ${nombre}! Oye, te escribo porque sacamos una variedad Experimental nueva que está buenísima. Como sé que siempre llevas la ${producto}, pensé que te interesaría probarla. Acuérdate que podemos mezclar la caja de 24 con distintos sabores. ¿Te animas y te mando unas para probar? — El Regreso Beer Co. 🍺`
+      return `Hola! Oye, te escribo porque sacamos una variedad Experimental nueva que está buenísima. Como sé que siempre llevas la ${producto}, pensé que te interesaría probarla. Acuérdate que podemos mezclar la caja de 24 con distintos sabores. ¿Te animas y te mando unas para probar?`
 
     case 'morado':
-      return `¡Hola ${nombre}! Hace un tiempo que no nos coordinamos y quería pasarme a saludar. ¿Cómo están con el stock? Tenemos novedades en el portafolio y me gustaría contarte. ¿Cuándo es buen momento para hablar? — El Regreso Beer Co. 🍺`
+      return `Hola! Hace un tiempo que no nos coordinamos y quería pasarme a saludar. ¿Cómo están con el stock? Tenemos novedades en el portafolio y me gustaría contarte. ¿Cuándo es buen momento para hablar?`
 
     case 'gris':
-      return `¡Hola ${nombre}! ¿Cómo va? Quería pasarte a dejar tu pedido semanal, pero veo que nos quedó pendiente la factura anterior en el sistema. ¿Te mando los datos bancarios del Banco de Chile para regularizar y te despacho al tiro para que no te quedes sin stock? ¡Avísame! — El Regreso Beer Co. 🍺`
+      return `Hola! ¿Cómo va? Quería pasarte a dejar tu pedido semanal, pero veo que nos quedó pendiente la factura anterior en el sistema. ¿Te mando los datos bancarios del Banco de Chile para regularizar y te despacho al tiro para que no te quedes sin stock? ¡Avísame!`
 
     case 'rm_urgente':
-      return `¡Hola ${nombre}! Te escribo rápido porque estoy cerrando el camión de los despachos que sale hoy a las 4:00 PM para Santiago. Saqué la cuenta de tu consumo y creo que si no te mando stock hoy, vas a andar súper justo de ${producto} para los próximos días. ¿Te anoto ${litros} al tiro antes de que cierre el despacho y te llega mañana mismo? Un abrazo. — El Regreso Beer Co. 🍺`
+      return `Hola! Te escribo rápido porque estoy cerrando el camión de los despachos que sale hoy a las 4:00 PM para Santiago. Saqué la cuenta de tu consumo y creo que si no te mando stock hoy, vas a andar súper justo de ${producto} para los próximos días. ¿Te anoto ${litros} al tiro antes de que cierre el despacho y te llega mañana mismo?`
 
     case 'mision' as AlertTipo:
     default: {
       if (t.contexto === 'visita')
-        return `Hola ${nombre} 👋\n\nTe saluda El Regreso Beer Co. 🍺\n\nEstamos por la zona y queremos saber si necesitás algo. ¿Tenés stock? ¿Necesitás hacer un pedido?\n\n¡Saludos!`
+        return `Hola! Estamos por la zona y quería saber si necesitás algo. ¿Tenés stock? ¿Necesitás hacer un pedido?`
       if (t.contexto === 'campana')
-        return `Hola ${nombre} 👋\n\nTe saluda El Regreso Beer Co. 🍺\n\nTenemos propuestas especiales y novedades. ¿Podemos enviarte información?\n\n¡Saludos!`
+        return `Hola! Tenemos propuestas especiales y novedades que te pueden interesar. ¿Te cuento?`
       const cuando = t.siguienteCompra ? ` para el ${fFecha(t.siguienteCompra)}` : ' la próxima semana'
-      return `Hola ${nombre} 👋\n\nTe saluda El Regreso Beer Co. 🍺\n\nSegún tu historial pedís ${ciclo} y estimamos que podrías necesitar reabastecer${cuando}.\n\n¿Coordinamos tu próximo pedido? Con gusto te preparo una propuesta.\n\n¡Saludos! 🍺`
+      return `Hola! Oye, según tu historial pedís ${ciclo} y estimo que podrías necesitar reabastecer${cuando}. ¿Coordinamos tu próximo pedido?`
     }
   }
 }
