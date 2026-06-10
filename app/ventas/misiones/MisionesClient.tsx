@@ -845,12 +845,65 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
   const filled  = Math.round((pct / 100) * STEPS)
   const pColor  = pct >= 80 ? 'var(--green-dim)' : 'var(--gold)'
 
+  // ── Mobile: layout ultra-compacto ──────────────────────────────────────────
+  if (!isDesktop) {
+    return (
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-1)', borderRadius: 16, padding: '12px 14px', marginBottom: 10,
+      }}>
+        {/* Fila: título + donut */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 3 }}>
+              {rangoSemana(semana)}
+            </p>
+            <h1 style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)', lineHeight: 1.1, marginBottom: 4 }}>
+              Misiones
+            </h1>
+            {!isAdmin && vendedorActual && (
+              <p style={{ fontSize: 11, color: pColor, fontWeight: 700 }}>
+                {pedidos}/{total} listas · {pct}%
+                {volumen > 0 && <span style={{ color: 'var(--green-dim)', marginLeft: 6 }}>{volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })}L</span>}
+              </p>
+            )}
+            {isAdmin && volumen > 0 && (
+              <p style={{ fontSize: 11, color: 'var(--green-dim)', fontWeight: 700 }}>
+                {volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L rescatados
+              </p>
+            )}
+          </div>
+          <ProgressDonut done={pedidos} total={total} size={62} />
+        </div>
+        {/* KPI chips 4 columnas */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 5 }}>
+          {[
+            { label: 'Urgente', value: vencidos, color: 'var(--red)',       urgent: vencidos > 0 },
+            { label: 'Semana',  value: esSem,    color: 'var(--gold)',      urgent: false },
+            { label: 'Próxima', value: proxSem,  color: 'var(--blue)',      urgent: false },
+            { label: 'Pedido',  value: pedidos,  color: 'var(--green-dim)', urgent: false },
+          ].map(({ label, value, color, urgent }) => (
+            <div key={label} style={{
+              background: urgent && value > 0 ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${urgent && value > 0 ? 'rgba(248,113,113,0.25)' : 'rgba(255,255,255,0.07)'}`,
+              borderRadius: 9, padding: '6px 2px', textAlign: 'center',
+            }}>
+              <p style={{ fontSize: 8, color: 'var(--muted)', fontWeight: 700, marginBottom: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingInline: 2 }}>{label}</p>
+              <p style={{ fontSize: 20, fontWeight: 900, color, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.04em', lineHeight: 1.1 }}>{value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Desktop: layout original ────────────────────────────────────────────────
   return (
     <div style={{
       background: 'var(--surface)',
       border: '1px solid var(--border)',
       boxShadow: 'var(--shadow-1)',
-      borderRadius: isDesktop ? 20 : 16, padding: isDesktop ? '20px 28px' : '12px 14px', marginBottom: isDesktop ? 20 : 12,
+      borderRadius: 20, padding: '20px 28px', marginBottom: 20,
     }}>
       {/* Fila superior: título + global status */}
       <div style={{ display: 'flex', alignItems: isDesktop ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: isDesktop ? 14 : 10, flexWrap: 'wrap' }}>
@@ -1298,20 +1351,24 @@ export default function MisionesClient({
   const tabs: { key: Tab; label: string; count?: number }[] = [
     ...(isAdmin ? [{ key: 'resumen' as Tab, label: 'Resumen Admin' }] : []),
     { key: 'semana',    label: 'Esta semana',    count: misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length },
-    { key: 'calendario', label: '📅 Calendario' },
+    { key: 'calendario', label: 'Calendario' },
     { key: 'proxima',   label: 'Próxima semana', count: proxima.filter(p => { if (!p.siguiente_compra_estimada) return false; const hoy = new Date(); const d7 = new Date(hoy); d7.setDate(d7.getDate()+7); const d14 = new Date(hoy); d14.setDate(d14.getDate()+14); const d = new Date(p.siguiente_compra_estimada + 'T12:00:00'); return d >= d7 && d <= d14 }).length },
     { key: 'historial', label: 'Historial' },
   ]
 
   // Barra de controles compartida
   const Controles = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-      {/* Filtro de tipo de cliente */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.7px' }}>Tipo cliente:</span>
+    <div style={{ marginBottom: 12 }}>
+      {/* Filtro tipo cliente — scroll horizontal, sin label en mobile */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        overflowX: 'auto', WebkitOverflowScrolling: 'touch' as React.CSSProperties['WebkitOverflowScrolling'],
+        paddingBottom: 2, marginBottom: 7,
+      }}>
+        {isDesktop && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.7px', flexShrink: 0 }}>Segmento:</span>}
         <button
           onClick={() => setFiltroTipo(null)}
-          style={{ padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700, border: `1px solid ${!filtroTipo ? 'rgba(212,175,55,0.4)' : 'var(--border)'}`, background: !filtroTipo ? 'rgba(212,175,55,0.12)' : 'transparent', color: !filtroTipo ? '#D4AF37' : 'var(--muted)', cursor: 'pointer' }}
+          style={{ flexShrink: 0, padding: '4px 11px', borderRadius: 20, fontSize: 10, fontWeight: 700, border: `1px solid ${!filtroTipo ? 'rgba(212,175,55,0.4)' : 'var(--border)'}`, background: !filtroTipo ? 'rgba(212,175,55,0.12)' : 'transparent', color: !filtroTipo ? '#D4AF37' : 'var(--muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
         >
           Todos ({misiones.filter(m => !filtroVendedor || dspV(m.vendedor) === filtroVendedor).length})
         </button>
@@ -1320,77 +1377,88 @@ export default function MisionesClient({
           const cfg = TIPO_CLIENTE_CFG[tipo]
           const active = filtroTipo === tipo
           return (
-            <button
-              key={tipo}
-              onClick={() => setFiltroTipo(active ? null : tipo)}
-              style={{
-                padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
-                background: active ? cfg.bg : 'transparent',
-                border: `1px solid ${active ? cfg.border : 'var(--border)'}`,
-                color: active ? cfg.color : 'var(--muted)', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 4,
-              }}
-            >
+            <button key={tipo} onClick={() => setFiltroTipo(active ? null : tipo)} style={{
+              flexShrink: 0, padding: '4px 11px', borderRadius: 20, fontSize: 10, fontWeight: 700,
+              background: active ? cfg.bg : 'transparent',
+              border: `1px solid ${active ? cfg.border : 'var(--border)'}`,
+              color: active ? cfg.color : 'var(--muted)', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+            }}>
               {cfg.icon} {cfg.label} ({count})
             </button>
           )
         })}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      {isAdmin && vendedores.length > 1 && (
-        <div style={{ display: 'flex', gap: 5 }}>
-          <button onClick={() => setFiltroVendedor(null)} style={{
-            padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-            background: !filtroVendedor ? 'rgba(212,175,55,0.15)' : 'var(--surface2)',
-            border: `1px solid ${!filtroVendedor ? 'rgba(212,175,55,0.4)' : 'var(--border)'}`,
-            color: !filtroVendedor ? '#D4AF37' : 'var(--muted)', cursor: 'pointer',
-          }}>Todos</button>
-          {vendedores.map(v => (
-            <button key={v} onClick={() => setFiltroVendedor(v === filtroVendedor ? null : v)} style={{
-              padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-              background: filtroVendedor === v ? 'rgba(96,165,250,0.15)' : 'var(--surface2)',
-              border: `1px solid ${filtroVendedor === v ? 'rgba(96,165,250,0.4)' : 'var(--border)'}`,
-              color: filtroVendedor === v ? '#D4AF37' : 'var(--muted)', cursor: 'pointer',
-            }}>{v}</button>
-          ))}
+      {/* Admin: vendedor pills + botón actualizar en una fila */}
+      {isAdmin && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          overflowX: 'auto', WebkitOverflowScrolling: 'touch' as React.CSSProperties['WebkitOverflowScrolling'],
+        }}>
+          {vendedores.length > 1 && (
+            <>
+              <button onClick={() => setFiltroVendedor(null)} style={{
+                flexShrink: 0, padding: '4px 11px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                background: !filtroVendedor ? 'rgba(212,175,55,0.15)' : 'var(--surface2)',
+                border: `1px solid ${!filtroVendedor ? 'rgba(212,175,55,0.4)' : 'var(--border)'}`,
+                color: !filtroVendedor ? '#D4AF37' : 'var(--muted)', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>Todos</button>
+              {vendedores.map(v => (
+                <button key={v} onClick={() => setFiltroVendedor(v === filtroVendedor ? null : v)} style={{
+                  flexShrink: 0, padding: '4px 11px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                  background: filtroVendedor === v ? 'rgba(96,165,250,0.15)' : 'var(--surface2)',
+                  border: `1px solid ${filtroVendedor === v ? 'rgba(96,165,250,0.4)' : 'var(--border)'}`,
+                  color: filtroVendedor === v ? '#D4AF37' : 'var(--muted)', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}>{v}</button>
+              ))}
+            </>
+          )}
+          <div style={{ flex: 1 }} />
+          <button onClick={onGenerar} disabled={generando} style={{
+            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 12px', borderRadius: 10,
+            background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
+            color: '#D4AF37', fontSize: 11, fontWeight: 700, cursor: generando ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+          }}>
+            <RefreshCw size={12} style={{ animation: generando ? 'spin 1s linear infinite' : 'none' }} />
+            {generando ? 'Actualizando…' : isDesktop ? 'Actualizar misiones' : 'Actualizar'}
+          </button>
         </div>
       )}
-      <div style={{ flex: 1 }} />
-      {isAdmin && (
-        <button onClick={onGenerar} disabled={generando} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 14px', borderRadius: 10,
-          background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
-          color: '#D4AF37', fontSize: 11, fontWeight: 700, cursor: generando ? 'not-allowed' : 'pointer',
-        }}>
-          <RefreshCw size={13} style={{ animation: generando ? 'spin 1s linear infinite' : 'none' }} />
-          {generando ? 'Actualizando…' : 'Actualizar misiones'}
-        </button>
-      )}
-      </div>
     </div>
   )
 
+  const MOBILE_TAB_LABELS: Record<Tab, string> = {
+    resumen: 'Admin', semana: 'Semana', calendario: 'Agenda', proxima: 'Próxima', historial: 'Historial',
+  }
   const TabBar = () => (
-    <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 4 }}>
-      {tabs.map(t => (
-        <button key={t.key} onClick={() => setTab(t.key)} style={{
-          flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none',
-          background: tab === t.key ? 'rgba(212,175,55,0.12)' : 'transparent',
-          color: tab === t.key ? '#D4AF37' : 'var(--muted)',
-          fontSize: 11, fontWeight: tab === t.key ? 800 : 600, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-        }}>
-          {t.label}
-          {t.count !== undefined && t.count > 0 && (
-            <span style={{
-              padding: '1px 6px', borderRadius: 20, fontSize: 9, fontWeight: 800,
-              background: tab === t.key ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.06)',
-              color: tab === t.key ? '#D4AF37' : 'var(--muted)',
-            }}>{t.count}</span>
-          )}
-        </button>
-      ))}
+    <div style={{
+      display: 'flex', gap: 4, marginBottom: 14,
+      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 4,
+      overflowX: 'auto', WebkitOverflowScrolling: 'touch' as React.CSSProperties['WebkitOverflowScrolling'],
+    }}>
+      {tabs.map(t => {
+        const label = isDesktop ? t.label : MOBILE_TAB_LABELS[t.key]
+        return (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            flexShrink: 0, padding: isDesktop ? '8px 10px' : '7px 12px', borderRadius: 8, border: 'none',
+            background: tab === t.key ? 'rgba(212,175,55,0.12)' : 'transparent',
+            color: tab === t.key ? '#D4AF37' : 'var(--muted)',
+            fontSize: 11, fontWeight: tab === t.key ? 800 : 600, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            whiteSpace: 'nowrap',
+          }}>
+            {label}
+            {t.count !== undefined && t.count > 0 && (
+              <span style={{
+                padding: '1px 5px', borderRadius: 20, fontSize: 9, fontWeight: 800,
+                background: tab === t.key ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.06)',
+                color: tab === t.key ? '#D4AF37' : 'var(--muted)',
+              }}>{t.count}</span>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 
