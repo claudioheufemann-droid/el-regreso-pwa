@@ -39,24 +39,39 @@ function litrosPorUnidad(envase: string | null): number | null {
   return null
 }
 
-export interface ProductoItem { nombre: string; litros: number }
+export interface ClienteProducto { nombre: string; litros: number; canal: string | null }
+export interface ProductoItem { nombre: string; litros: number; clientes: ClienteProducto[] }
 export interface ProductoCategoria { categoria: string; total: number; productos: ProductoItem[] }
 
 function computeProductos(ventas: VentaAPI[]): ProductoCategoria[] {
-  const map = new Map<string, Map<string, number>>()
+  type ProdEntry = { total: number; clientes: Map<string, { litros: number; canal: string | null }> }
+  const map = new Map<string, Map<string, ProdEntry>>()
   for (const v of ventas) {
-    const cat = v.categoria_producto?.trim() || 'Sin categoría'
-    const prod = v.producto?.trim() || 'Sin nombre'
+    if (!v.litros) continue
+    const cat  = v.categoria_producto?.trim() || 'Sin categoría'
+    const prod = v.producto?.trim()           || 'Sin nombre'
+    const cli  = v.nombre_fantasia?.trim()    || 'Sin nombre'
+    const canal = v.categoria_negocio ?? null
     if (!map.has(cat)) map.set(cat, new Map())
     const pm = map.get(cat)!
-    pm.set(prod, (pm.get(prod) ?? 0) + (v.litros ?? 0))
+    if (!pm.has(prod)) pm.set(prod, { total: 0, clientes: new Map() })
+    const entry = pm.get(prod)!
+    entry.total += v.litros
+    if (!entry.clientes.has(cli)) entry.clientes.set(cli, { litros: 0, canal })
+    entry.clientes.get(cli)!.litros += v.litros
   }
   return [...map.entries()]
     .map(([categoria, pm]) => ({
       categoria,
-      total: [...pm.values()].reduce((s, l) => s + l, 0),
+      total: [...pm.values()].reduce((s, e) => s + e.total, 0),
       productos: [...pm.entries()]
-        .map(([nombre, litros]) => ({ nombre, litros }))
+        .map(([nombre, entry]) => ({
+          nombre,
+          litros: entry.total,
+          clientes: [...entry.clientes.entries()]
+            .map(([nombre, d]) => ({ nombre, litros: d.litros, canal: d.canal }))
+            .sort((a, b) => b.litros - a.litros),
+        }))
         .sort((a, b) => b.litros - a.litros),
     }))
     .filter(c => c.total > 0)

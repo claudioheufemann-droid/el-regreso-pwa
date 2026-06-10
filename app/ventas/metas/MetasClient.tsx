@@ -1017,8 +1017,8 @@ function computeProductos(ventas: VentaRow[]): ProductoCategoria[] {
     .sort((a, b) => b.total - a.total)
 }
 
-function ProductoBar({ nombre, litros, total, color, clientes }: {
-  nombre: string; litros: number; total: number; color: string; clientes: ClienteProducto[]
+function ProductoBar({ nombre, litros, total, color, clientes = [] }: {
+  nombre: string; litros: number; total: number; color: string; clientes?: ClienteProducto[]
 }) {
   const [open, setOpen] = useState(false)
   const [verTodos, setVerTodos] = useState(false)
