@@ -435,6 +435,15 @@ function ConStockSection({ misiones, onActualizar, onWA, loadingId }: {
   )
 }
 
+// ── Ícono WhatsApp (SVG oficial) ──────────────────────────────────────────────
+function WAIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="#25D366">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  )
+}
+
 // ── Torpedo V2 — versión premium para panel detalle ──────────────────────────
 function TorpedoPanelV2({ nombreProducto }: { nombreProducto: string }) {
   const [open, setOpen] = useState(true)
@@ -573,38 +582,41 @@ function BotonesAccion({ mision, onActualizar, loading }: {
         </button>
       </div>
 
-      {/* Aún con stock */}
+      {/* Aún con stock — 2 filas para evitar overflow */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 10,
-        background: '#1A1A1D',
+        padding: '9px 12px', borderRadius: 10, background: '#1A1A1D',
         border: `1px solid ${mision.estado === 'pospuesto' ? 'rgba(212,175,55,0.4)' : 'rgba(212,175,55,0.18)'}`,
       }}>
-        <Clock size={14} style={{ color: '#F5B000', flexShrink: 0 }} />
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#F5B000', flex: 1 }}>Aún con stock</span>
-        <select
-          value={diasPosp}
-          onChange={e => setDiasPosp(Number(e.target.value))}
-          disabled={loading}
-          style={{
-            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 7,
-            color: '#F5B000', fontSize: 11, fontWeight: 700, padding: '4px 7px', cursor: 'pointer', outline: 'none',
-          }}
-        >
-          {DIAS_POSPONER.map(d => (
-            <option key={d} value={d} style={{ background: '#0F0F10' }}>{d} {d === 1 ? 'día' : 'días'}</option>
-          ))}
-        </select>
-        <button
-          onClick={() => onActualizar(mision.id, 'pospuesto', { dias: diasPosp })}
-          disabled={loading}
-          style={{
-            padding: '5px 11px', borderRadius: 7, fontSize: 11, fontWeight: 800,
-            background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.35)',
-            color: '#F5B000', cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          Posponer
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+          <Clock size={13} style={{ color: '#F5B000', flexShrink: 0 }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#F5B000', whiteSpace: 'nowrap' as const }}>Aún con stock — contactar en:</span>
+        </div>
+        <div style={{ display: 'flex', gap: 7 }}>
+          <select
+            value={diasPosp}
+            onChange={e => setDiasPosp(Number(e.target.value))}
+            disabled={loading}
+            style={{
+              flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(212,175,55,0.28)', borderRadius: 7,
+              color: '#F5B000', fontSize: 12, fontWeight: 700, padding: '5px 8px', cursor: 'pointer', outline: 'none',
+            }}
+          >
+            {DIAS_POSPONER.map(d => (
+              <option key={d} value={d} style={{ background: '#0F0F10' }}>{d} {d === 1 ? 'día' : 'días'}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => onActualizar(mision.id, 'pospuesto', { dias: diasPosp })}
+            disabled={loading}
+            style={{
+              padding: '5px 14px', borderRadius: 7, fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' as const,
+              background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.35)',
+              color: '#F5B000', cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Posponer
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -724,21 +736,21 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
           {/* Botones WA + llamar */}
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             {mision.telefono && (
-              <button onClick={() => onWA(mision)} style={{
-                width: 38, height: 38, borderRadius: 10,
-                border: '1px solid rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.08)',
+              <button onClick={() => onWA(mision)} title="Enviar WhatsApp" style={{
+                width: 40, height: 40, borderRadius: 10,
+                border: '1px solid rgba(37,211,102,0.35)', background: 'rgba(37,211,102,0.1)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
               }}>
-                <MessageCircle size={16} color="#22C55E" />
+                <WAIcon size={18} />
               </button>
             )}
             {mision.telefono && (
-              <button onClick={() => window.open(`tel:${mision.telefono}`)} style={{
-                width: 38, height: 38, borderRadius: 10,
-                border: '1px solid rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.08)',
+              <button onClick={() => window.open(`tel:${mision.telefono}`)} title="Llamar" style={{
+                width: 40, height: 40, borderRadius: 10,
+                border: '1px solid rgba(212,175,55,0.35)', background: 'rgba(212,175,55,0.1)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
               }}>
-                <Phone size={16} color="#22C55E" />
+                <Phone size={17} color="#D4AF37" />
               </button>
             )}
           </div>
@@ -829,23 +841,47 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
         </div>
       )}
 
-      {/* ── TORPEDO + PEDIDO SUGERIDO ── */}
+      {/* ── LO QUE SUELE PEDIR ── */}
+      {mision.pedido_sugerido && mision.pedido_sugerido.length > 0 && (
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid #2A2A2E' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+            <ShoppingCart size={13} color="#34D399" />
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#34D399', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>Lo que suele pedir</span>
+            {mision.siguiente_compra_estimada && (
+              <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 'auto' }}>para el {fFecha(mision.siguiente_compra_estimada)}</span>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {mision.pedido_sugerido.map((p, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 12px', background: '#1A1A1D', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 10,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#E5E7EB', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                    {p.producto}
+                  </span>
+                  {p.envase && (
+                    <span style={{ fontSize: 10, color: '#9CA3AF' }}>{p.envase}</span>
+                  )}
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 900, color: '#34D399', flexShrink: 0 }}>~{p.litros}L</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(52,211,153,0.1)' }}>
+            <span style={{ fontSize: 11, color: '#9CA3AF' }}>Total estimado: </span>
+            <span style={{ fontSize: 12, fontWeight: 900, color: '#34D399', marginLeft: 5 }}>
+              ~{Math.round(mision.pedido_sugerido.reduce((s, p) => s + p.litros, 0) * 10) / 10}L
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── TORPEDO — FICHA SENSORIAL ── */}
       {mision.pedido_sugerido?.[0]?.producto && (
         <div style={{ padding: '12px 20px', borderBottom: '1px solid #2A2A2E' }}>
           <TorpedoPanelV2 nombreProducto={mision.pedido_sugerido[0].producto} />
-          {mision.pedido_sugerido.length > 0 && (
-            <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-              {mision.pedido_sugerido.map((p, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '4px 10px', background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 8,
-                }}>
-                  <span style={{ fontSize: 11, color: '#E5E7EB' }}>{p.producto}</span>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#34D399' }}>~{p.litros}L</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
@@ -928,40 +964,44 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
       {/* ── AÚN CON STOCK ── */}
       <div style={{ padding: '12px 20px', borderBottom: '1px solid #2A2A2E' }}>
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
           padding: '10px 14px', background: '#1A1A1D',
           border: `1px solid ${mision.estado === 'pospuesto' ? 'rgba(212,175,55,0.4)' : 'rgba(212,175,55,0.2)'}`,
           borderRadius: 12,
         }}>
-          <Clock size={16} color="#F5B000" style={{ flexShrink: 0 }} />
-          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: mision.estado === 'pospuesto' ? '#F5B000' : '#E5E7EB' }}>
-            Aún con stock
-          </span>
-          <select
-            value={diasPosp}
-            onChange={e => setDiasPospD(Number(e.target.value))}
-            disabled={loading}
-            style={{
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 8,
-              color: '#F5B000', fontSize: 12, fontWeight: 700, padding: '5px 8px', cursor: 'pointer', outline: 'none',
-            }}
-          >
-            {DIAS_POSPONER.map(d => (
-              <option key={d} value={d} style={{ background: '#0F0F10' }}>{d} {d === 1 ? 'día' : 'días'}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => !loading && registrar('pospuesto', { dias: diasPosp })}
-            disabled={loading}
-            style={{
-              padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 800,
-              background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.35)',
-              color: '#F5B000', cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', gap: 4,
-            }}
-          >
-            Posponer <ChevronDown size={12} />
-          </button>
+          {/* Fila título */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Clock size={14} color="#F5B000" style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: mision.estado === 'pospuesto' ? '#F5B000' : '#E5E7EB', whiteSpace: 'nowrap' as const }}>
+              Aún con stock — contactar en:
+            </span>
+          </div>
+          {/* Fila controles */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <select
+              value={diasPosp}
+              onChange={e => setDiasPospD(Number(e.target.value))}
+              disabled={loading}
+              style={{
+                flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(212,175,55,0.3)', borderRadius: 8,
+                color: '#F5B000', fontSize: 13, fontWeight: 700, padding: '7px 10px', cursor: 'pointer', outline: 'none',
+              }}
+            >
+              {DIAS_POSPONER.map(d => (
+                <option key={d} value={d} style={{ background: '#0F0F10' }}>{d} {d === 1 ? 'día' : 'días'}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => !loading && registrar('pospuesto', { dias: diasPosp })}
+              disabled={loading}
+              style={{
+                padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap' as const,
+                background: 'rgba(212,175,55,0.18)', border: '1px solid rgba(212,175,55,0.4)',
+                color: '#F5B000', cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {loading ? '…' : 'Posponer'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1204,11 +1244,11 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
               onClick={e => { e.stopPropagation(); onWA(mision) }}
               style={{
                 width: 30, height: 30, borderRadius: '50%',
-                border: '1px solid rgba(37,211,102,0.25)', background: 'rgba(37,211,102,0.07)',
+                border: '1px solid rgba(37,211,102,0.28)', background: 'rgba(37,211,102,0.08)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
               }}
             >
-              <MessageCircle size={13} color="#25D166" />
+              <WAIcon size={14} />
             </button>
           )}
           {open
