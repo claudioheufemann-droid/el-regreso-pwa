@@ -1006,7 +1006,7 @@ function computeProductos(ventas: VentaRow[]): ProductoCategoria[] {
 function ProductoBar({ nombre, litros, total, color }: {
   nombre: string; litros: number; total: number; color: string
 }) {
-  const pct = total > 0 ? Math.min(100, (litros / total) * 100) : 0
+  const pct = total > 0 ? Math.min(100, Math.max(0, (litros / total) * 100)) : 0
   return (
     <div style={{ marginBottom: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -1025,9 +1025,10 @@ function ProductoBar({ nombre, litros, total, color }: {
       </div>
       <div style={{ height: 5, borderRadius: 5, background: 'rgba(255,255,255,0.06)' }}>
         <div className="animate-progress" style={{
+          ['--pct' as string]: `${pct}%`,
           height: '100%', borderRadius: 5,
           width: `${pct}%`, background: color, opacity: 0.75,
-        }} />
+        } as React.CSSProperties} />
       </div>
     </div>
   )
