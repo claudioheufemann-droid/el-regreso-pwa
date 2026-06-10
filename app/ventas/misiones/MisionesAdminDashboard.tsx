@@ -35,11 +35,11 @@ function cohorteLabel(c: string): string {
 }
 
 const SEG_TYPES = [
-  { key: 'activo',   label: 'Activos',    color: '#5A8A4A', icon: <CheckCircle2 size={14} />, desc: 'Compradores regulares' },
-  { key: 'inactivo', label: 'Inactivos',  color: '#B5543E', icon: <XCircle size={14} />,      desc: 'En riesgo de abandono' },
-  { key: 'temporal', label: 'Temporales', color: '#D4AF37', icon: <Clock size={14} />,         desc: 'Compradores esporádicos' },
-  { key: 'nuevo',    label: 'Nuevos',     color: '#60A5FA', icon: <Sparkles size={14} />,      desc: 'Incorporación reciente' },
-]
+  { key: 'activo',   label: 'Activos',    color: 'var(--green-dim)', icon: <CheckCircle2 size={14} />, desc: 'Compradores regulares' },
+  { key: 'inactivo', label: 'Inactivos',  color: 'var(--red-dim)', icon: <XCircle size={14} />,      desc: 'En riesgo de abandono' },
+  { key: 'temporal', label: 'Temporales', color: 'var(--gold)', icon: <Clock size={14} />,         desc: 'Compradores esporádicos' },
+  { key: 'nuevo',    label: 'Nuevos',     color: 'var(--blue)', icon: <Sparkles size={14} />,      desc: 'Incorporación reciente' },
+] as const
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -116,9 +116,9 @@ function DonutChart({ completadas, vencidas, total }: { completadas: number; ven
 
   let offset = 0
   const segments = [
-    { pct: pPend, color: '#D4AF37', label: 'Por completar' },
-    { pct: pComp, color: '#5A8A4A', label: 'Completadas' },
-    { pct: pVenc, color: '#B5543E', label: 'Vencidas' },
+    { pct: pPend, color: 'var(--gold)', label: 'Por completar' },
+    { pct: pComp, color: 'var(--green-dim)', label: 'Completadas' },
+    { pct: pVenc, color: 'var(--red-dim)', label: 'Vencidas' },
   ]
 
   return (
@@ -136,7 +136,7 @@ function DonutChart({ completadas, vencidas, total }: { completadas: number; ven
         offset += seg.pct
         return el
       })}
-      <text x={cx} y={cy - 8} textAnchor="middle" fontSize="26" fontWeight="900" fill="var(--cream)">{total}</text>
+      <text x={cx} y={cy - 8} textAnchor="middle" fontSize="26" fontWeight="900" fill="var(--cream)" style={{ fontVariantNumeric: 'tabular-nums' }}>{total}</text>
       <text x={cx} y={cy + 12} textAnchor="middle" fontSize="11" fill="var(--muted)">Total</text>
     </svg>
   )
@@ -149,7 +149,7 @@ function Gauge({ pct }: { pct: number }) {
   const angle = 180
   const arcLen = Math.PI * r
   const fill = (pct / 100) * arcLen
-  const color = pct >= 80 ? '#5A8A4A' : pct >= 50 ? '#D4AF37' : '#D4AF37'
+  const color = pct >= 80 ? 'var(--green-dim)' : pct >= 50 ? 'var(--gold)' : 'var(--gold)'
 
   function polarToCart(deg: number) {
     const rad = (deg * Math.PI) / 180
@@ -177,7 +177,7 @@ function Gauge({ pct }: { pct: number }) {
         return <circle cx={ix} cy={iy} r={7} fill={color} />
       })()}
       {/* Center text */}
-      <text x={cx} y={cy - 2} textAnchor="middle" fontSize="28" fontWeight="900" fill={color}>{pct}%</text>
+      <text x={cx} y={cy - 2} textAnchor="middle" fontSize="28" fontWeight="900" fill={color} style={{ fontVariantNumeric: 'tabular-nums' }}>{pct}%</text>
       <text x={cx} y={cy + 16} textAnchor="middle" fontSize="11" fill="var(--muted)">Completado</text>
     </svg>
   )
@@ -191,15 +191,15 @@ function KpiCard({ icon, color, label, value, pct, delta, deltaLabel, sparkData 
 }) {
   const up = delta >= 0
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 20px', position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-1)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
         <div>
           <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 6 }}>{label}</p>
-          <p style={{ fontSize: 32, fontWeight: 900, color, lineHeight: 1, marginBottom: 3 }}>{value}</p>
+          <p style={{ fontSize: 32, fontWeight: 900, color, lineHeight: 1, marginBottom: 3, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.04em' }}>{value}</p>
           {pct && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{pct}</p>}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-            {up ? <TrendingUp size={11} color="#5A8A4A" /> : <TrendingDown size={11} color="#B5543E" />}
-            <span style={{ fontSize: 11, color: up ? '#5A8A4A' : '#B5543E', fontWeight: 600 }}>
+            {up ? <TrendingUp size={11} color="var(--green-dim)" /> : <TrendingDown size={11} color="var(--red-dim)" />}
+            <span style={{ fontSize: 11, color: up ? 'var(--green-dim)' : 'var(--red-dim)', fontWeight: 600 }}>
               {up ? '+' : ''}{delta} {deltaLabel ?? 'vs semana anterior'}
             </span>
           </div>
@@ -220,12 +220,12 @@ function MiniKpi({ icon, color, label, value, sub, link, onLink }: {
   sub?: string; link?: string; onLink?: () => void
 }) {
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px' }}>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', boxShadow: 'var(--shadow-1)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <div style={{ color, opacity: 0.8 }}>{icon}</div>
         <p style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.7px' }}>{label}</p>
       </div>
-      <p style={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1, marginBottom: 4 }}>{value}</p>
+      <p style={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1, marginBottom: 4, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.04em' }}>{value}</p>
       {sub && <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: link ? 8 : 0 }}>{sub}</p>}
       {link && (
         <button onClick={onLink} style={{ background: 'none', border: 'none', color, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
@@ -295,7 +295,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {/* Week selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '7px 12px' }}>
-            <Calendar size={13} style={{ color: '#D4AF37' }} />
+            <Calendar size={13} style={{ color: 'var(--gold)' }} />
             <select
               value={semana}
               onChange={e => setSemana(e.target.value)}
@@ -316,7 +316,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 10,
               background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
-              color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
             }}
           >
             <RefreshCw size={13} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
@@ -327,17 +327,17 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
 
       {/* ── Row 1: 4 KPI Cards principales ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }} className="kpi-grid-4">
-        <KpiCard icon={<Users size={22}/>} color="#D4AF37" label="Misiones Totales"
+        <KpiCard icon={<Users size={22}/>} color="var(--gold)" label="Misiones Totales"
           value={stats.total} delta={stats.dTotal} sparkData={stats.sparklines.total} />
-        <KpiCard icon={<Target size={22}/>} color="#5A8A4A" label="Completadas"
+        <KpiCard icon={<Target size={22}/>} color="var(--green-dim)" label="Completadas"
           value={stats.completadas}
           pct={`${pct}% del total`}
           delta={stats.dCompletadas} sparkData={stats.sparklines.completadas} />
-        <KpiCard icon={<Phone size={22}/>} color="#D4AF37" label="Por Contactar"
+        <KpiCard icon={<Phone size={22}/>} color="var(--gold)" label="Por Contactar"
           value={stats.porContactar}
           pct={`${stats.total > 0 ? Math.round(stats.porContactar/stats.total*100) : 0}% del total`}
           delta={-stats.dPorContactar} sparkData={stats.sparklines.porContactar} />
-        <KpiCard icon={<AlertTriangle size={22}/>} color="#8A6D1F" label="Vencidas"
+        <KpiCard icon={<AlertTriangle size={22}/>} color="var(--gold)" label="Vencidas"
           value={stats.vencidas}
           pct={`${stats.total > 0 ? Math.round(stats.vencidas/stats.total*100) : 0}% del total`}
           delta={-stats.dVencidas} sparkData={stats.sparklines.vencidas} />
@@ -345,20 +345,20 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
 
       {/* ── Row 2: 5 KPIs secundarios ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }} className="kpi-grid-4">
-        <MiniKpi icon={<Droplets size={16}/>} color="#D4AF37" label="Volumen Rescatado"
+        <MiniKpi icon={<Droplets size={16}/>} color="var(--gold)" label="Volumen Rescatado"
           value={`${stats.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L`}
           sub={`${stats.dVolumen >= 0 ? '+' : ''}${stats.dVolumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L vs semana anterior`} />
-        <MiniKpi icon={<DollarSign size={16}/>} color="#5A8A4A" label="Venta Estimada"
+        <MiniKpi icon={<DollarSign size={16}/>} color="var(--green-dim)" label="Venta Estimada"
           value={fPeso(stats.venta)}
           sub={`${stats.dVenta >= 0 ? '+' : ''}${stats.dVenta}% vs semana anterior`} />
-        <MiniKpi icon={<BarChart3 size={16}/>} color="#D4AF37" label="Ticket Promedio"
+        <MiniKpi icon={<BarChart3 size={16}/>} color="var(--gold)" label="Ticket Promedio"
           value={fPeso(stats.ticket)}
           sub={`${stats.dTicket >= 0 ? '+' : ''}${stats.dTicket}% vs semana anterior`} />
-        <MiniKpi icon={<AlertTriangle size={16}/>} color="#B5543E" label="Clientes en Riesgo"
+        <MiniKpi icon={<AlertTriangle size={16}/>} color="var(--red-dim)" label="Clientes en Riesgo"
           value={`${stats.clientesEnRiesgo}`}
           sub="Sin compras > 30 días"
           link="Ver lista" onLink={() => router.push('/ventas/clientes')} />
-        <MiniKpi icon={<Calendar size={16}/>} color="#8A6D1F" label="Agendados"
+        <MiniKpi icon={<Calendar size={16}/>} color="var(--gold)" label="Agendados"
           value={`${stats.agendados}`}
           sub="Contactos esta semana"
           link="Ver calendario" onLink={() => router.push('/ventas')} />
@@ -404,7 +404,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>Rendimiento por vendedor</p>
-            <button onClick={() => router.push('/ventas/admin/crm-metrics')} style={{ background: 'none', border: 'none', color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={() => router.push('/ventas/admin/crm-metrics')} style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               Ver detalle →
             </button>
           </div>
@@ -428,7 +428,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.vendedor.split(' ')[0]}</span>
               </div>
               <span style={{ fontSize: 13, color: 'var(--muted)' }}>{v.asignadas}</span>
-              <span style={{ fontSize: 13, color: '#5A8A4A', fontWeight: 700 }}>{v.completadas}</span>
+              <span style={{ fontSize: 13, color: 'var(--green-dim)', fontWeight: 700 }}>{v.completadas}</span>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
@@ -440,7 +440,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               <div style={{ textAlign: 'right' }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L</span>
                 {v.dVolumen !== 0 && (
-                  <p style={{ fontSize: 10, color: v.dVolumen > 0 ? '#5A8A4A' : '#B5543E', fontWeight: 600 }}>
+                  <p style={{ fontSize: 10, color: v.dVolumen > 0 ? 'var(--green-dim)' : 'var(--red-dim)', fontWeight: 600 }}>
                     {v.dVolumen > 0 ? '+' : ''}{v.dVolumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
                   </p>
                 )}
@@ -452,8 +452,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 1fr 100px', gap: 8, padding: '10px 4px 2px', alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>Total</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{stats.total}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#5A8A4A' }}>{stats.completadas}</span>
-            <span style={{ fontSize: 11, color: '#D4AF37', fontWeight: 700 }}>{pct}%</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--green-dim)' }}>{stats.completadas}</span>
+            <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>{pct}%</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', textAlign: 'right' }}>
               {stats.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
             </span>
@@ -470,9 +470,9 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {[
-              { color: '#D4AF37', label: 'Por completar', val: stats.porContactar, pct: stats.total > 0 ? Math.round(stats.porContactar/stats.total*100) : 0 },
-              { color: '#5A8A4A', label: 'Completadas',   val: stats.completadas,  pct },
-              { color: '#B5543E', label: 'Vencidas',      val: stats.vencidas,     pct: stats.total > 0 ? Math.round(stats.vencidas/stats.total*100) : 0 },
+              { color: 'var(--gold)', label: 'Por completar', val: stats.porContactar, pct: stats.total > 0 ? Math.round(stats.porContactar/stats.total*100) : 0 },
+              { color: 'var(--green-dim)', label: 'Completadas',   val: stats.completadas,  pct },
+              { color: 'var(--red-dim)', label: 'Vencidas',      val: stats.vencidas,     pct: stats.total > 0 ? Math.round(stats.vencidas/stats.total*100) : 0 },
             ].map(seg => (
               <div key={seg.label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: seg.color, flexShrink: 0 }} />
@@ -492,8 +492,8 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Meta semanal: <strong style={{ color: 'var(--cream)' }}>{stats.total} misiones</strong></p>
             {faltan > 0
-              ? <p style={{ fontSize: 11, color: '#B5543E', fontWeight: 700 }}>Faltan {faltan} misiones para completar la meta</p>
-              : <p style={{ fontSize: 11, color: '#5A8A4A', fontWeight: 800 }}>🎉 ¡Meta semanal completada!</p>
+              ? <p style={{ fontSize: 11, color: 'var(--red-dim)', fontWeight: 700 }}>Faltan {faltan} misiones para completar la meta</p>
+              : <p style={{ fontSize: 11, color: 'var(--green-dim)', fontWeight: 800 }}>¡Meta semanal completada!</p>
             }
           </div>
         </div>
@@ -523,7 +523,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             <div key={c.nombre} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px 110px 80px', gap: 8, padding: '10px 0', borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
               {/* Nombre */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#B5543E', flexShrink: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--red-dim)', flexShrink: 0 }}>
                   {c.nombre.charAt(0)}
                 </div>
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</span>
@@ -531,7 +531,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               {/* Vendedor */}
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor.split(' ')[0]}</span>
               {/* Días */}
-              <span style={{ fontSize: 13, fontWeight: 700, color: c.diasSinCompra > 60 ? '#B5543E' : '#D4AF37' }}>{c.diasSinCompra} días</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: c.diasSinCompra > 60 ? 'var(--red-dim)' : 'var(--gold)' }}>{c.diasSinCompra} días</span>
               {/* Última compra */}
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.ultimaCompra ? formatFechaCorta(c.ultimaCompra) + ' 2026' : '—'}</span>
               {/* Acciones */}
@@ -547,7 +547,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                   <button
                     onClick={() => window.open(`tel:${c.telefono}`)}
                     style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <Phone size={13} color="#D4AF37" />
+                    <Phone size={13} color="var(--gold)" />
                   </button>
                 )}
               </div>
@@ -565,36 +565,36 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             {/* En riesgo */}
             <div style={{ display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 12, background: 'rgba(248,113,113,0.05)', border: '1px solid rgba(248,113,113,0.15)' }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(248,113,113,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <AlertTriangle size={16} color="#B5543E" />
+                <AlertTriangle size={16} color="var(--red-dim)" />
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#B5543E', marginBottom: 2 }}>{stats.clientesEnRiesgo} clientes en riesgo de fuga</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--red-dim)', marginBottom: 2 }}>{stats.clientesEnRiesgo} clientes en riesgo de fuga</p>
                 <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Contacta esta semana para recuperar ventas.</p>
-                <button onClick={() => router.push('/ventas/clientes')} style={{ background: 'none', border: 'none', color: '#B5543E', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>Ver lista →</button>
+                <button onClick={() => router.push('/ventas/clientes')} style={{ background: 'none', border: 'none', color: 'var(--red-dim)', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>Ver lista →</button>
               </div>
             </div>
 
             {/* Zonas */}
             <div style={{ display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 12, background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)' }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <MapPin size={16} color="#D4AF37" />
+                <MapPin size={16} color="var(--gold)" />
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#D4AF37', marginBottom: 2 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 2 }}>
                   {stats.zonasRiesgo > 0 ? `${stats.zonasRiesgo} zonas con bajo volumen` : 'Zonas con bajo volumen'}
                 </p>
                 <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Oportunidades de crecimiento detectadas en el mapa.</p>
-                <button onClick={() => router.push('/ventas/mapa')} style={{ background: 'none', border: 'none', color: '#D4AF37', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>Ver mapa →</button>
+                <button onClick={() => router.push('/ventas/mapa')} style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>Ver mapa →</button>
               </div>
             </div>
 
             {/* Mejores días */}
             <div style={{ display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 12, background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.15)' }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(96,165,250,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <BarChart3 size={16} color="#D4AF37" />
+                <BarChart3 size={16} color="var(--gold)" />
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#D4AF37', marginBottom: 2 }}>Mejores días para contactar</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 2 }}>Mejores días para contactar</p>
                 <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>
                   {mejorDia && mejorDia.count > 0
                     ? `${mejorDia.dia} y ${stats.mejoresDias[1]?.dia ?? '—'} tienen mayor tasa de respuesta.`
@@ -605,7 +605,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                   <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 22, marginBottom: 2 }}>
                     {stats.mejoresDias.slice(0, 7).map(d => (
                       <div key={d.dia} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                        <div style={{ width: '100%', height: `${Math.max(2, (d.tasa / Math.max(...stats.mejoresDias.map(x => x.tasa), 1)) * 18)}px`, background: d.dia === mejorDia?.dia ? '#D4AF37' : 'rgba(96,165,250,0.3)', borderRadius: 2, transition: 'height 0.3s' }} />
+                        <div style={{ width: '100%', height: `${Math.max(2, (d.tasa / Math.max(...stats.mejoresDias.map(x => x.tasa), 1)) * 18)}px`, background: d.dia === mejorDia?.dia ? 'var(--gold)' : 'rgba(96,165,250,0.3)', borderRadius: 2, transition: 'height 0.3s' }} />
                         <span style={{ fontSize: 7, color: 'var(--muted)' }}>{d.dia}</span>
                       </div>
                     ))}
@@ -622,10 +622,10 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <div style={{ marginTop: 14, background: 'var(--surface)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 16, padding: '18px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <TrendingDown size={18} style={{ color: '#B5543E' }} />
+              <TrendingDown size={18} style={{ color: 'var(--red-dim)' }} />
               <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>Clientes con volumen a la baja</p>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#B5543E', background: 'rgba(248,113,113,0.12)', padding: '3px 10px', borderRadius: 20 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--red-dim)', background: 'rgba(248,113,113,0.12)', padding: '3px 10px', borderRadius: 20 }}>
               {stats.volumenBajaTotal} detectados
             </span>
           </div>
@@ -646,7 +646,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             <div key={c.nombre_fantasia} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 130px 90px 80px', gap: 8, padding: '10px 0', borderBottom: i < stats.volumenBaja.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
               {/* Nombre */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#B5543E', flexShrink: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--red-dim)', flexShrink: 0 }}>
                   {c.nombre_fantasia.charAt(0)}
                 </div>
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre_fantasia}</span>
@@ -655,12 +655,12 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual?.split(' ')[0] ?? '—'}</span>
               {/* Volumen reciente vs baseline */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
-                <span style={{ color: '#B5543E', fontWeight: 700 }}>{c.litros_reciente}L</span>
+                <span style={{ color: 'var(--red-dim)', fontWeight: 700 }}>{c.litros_reciente}L</span>
                 <span style={{ color: '#555' }}>←</span>
                 <span style={{ color: 'var(--muted)' }}>{c.litros_baseline}L</span>
               </div>
               {/* Caída % */}
-              <span style={{ fontSize: 14, fontWeight: 800, color: '#B5543E' }}>−{c.caida_pct}%</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--red-dim)' }}>−{c.caida_pct}%</span>
               {/* Acciones */}
               <div style={{ display: 'flex', gap: 6 }}>
                 {c.telefono && (
@@ -672,7 +672,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 {c.telefono && (
                   <button onClick={() => window.open(`tel:${c.telefono}`)}
                     style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <Phone size={13} color="#D4AF37" />
+                    <Phone size={13} color="var(--gold)" />
                   </button>
                 )}
               </div>
@@ -688,10 +688,10 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <div style={{ marginTop: 14, background: 'var(--surface)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 16, padding: '18px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Sparkles size={18} style={{ color: '#8A6D1F' }} />
+              <Sparkles size={18} style={{ color: 'var(--gold)' }} />
               <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>Oportunidades de cross-sell</p>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#8A6D1F', background: 'rgba(167,139,250,0.12)', padding: '3px 10px', borderRadius: 20 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--gold)', background: 'rgba(167,139,250,0.12)', padding: '3px 10px', borderRadius: 20 }}>
               {stats.crossSellTotal} oportunidades
             </span>
           </div>
@@ -710,7 +710,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           {stats.crossSell.map((c, i) => (
             <div key={`${c.nombre_fantasia}-${c.categoria_sugerida}`} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 1fr 120px 80px', gap: 8, padding: '10px 0', borderBottom: i < stats.crossSell.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#8A6D1F', flexShrink: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--gold)', flexShrink: 0 }}>
                   {c.nombre_fantasia.charAt(0)}
                 </div>
                 <div style={{ minWidth: 0 }}>
@@ -719,12 +719,12 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 </div>
               </div>
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual?.split(' ')[0] ?? '—'}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#8A6D1F' }}>{c.categoria_sugerida}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>{c.categoria_sugerida}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${c.peers_pct}%`, height: '100%', background: '#8A6D1F', borderRadius: 3 }} />
+                  <div style={{ width: `${c.peers_pct}%`, height: '100%', background: 'var(--gold)', borderRadius: 3 }} />
                 </div>
-                <span style={{ fontSize: 11, color: '#8A6D1F', fontWeight: 700, width: 32, textAlign: 'right' }}>{c.peers_pct}%</span>
+                <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, width: 32, textAlign: 'right' }}>{c.peers_pct}%</span>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {c.telefono && (
@@ -736,7 +736,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 {c.telefono && (
                   <button onClick={() => window.open(`tel:${c.telefono}`)}
                     style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <Phone size={13} color="#D4AF37" />
+                    <Phone size={13} color="var(--gold)" />
                   </button>
                 )}
               </div>
@@ -752,10 +752,10 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <div style={{ marginTop: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <TrendingUp size={18} style={{ color: '#5A8A4A' }} />
+              <TrendingUp size={18} style={{ color: 'var(--green-dim)' }} />
               <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>Retención por cohorte</p>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#5A8A4A', background: 'rgba(52,211,153,0.12)', padding: '3px 10px', borderRadius: 20 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--green-dim)', background: 'rgba(52,211,153,0.12)', padding: '3px 10px', borderRadius: 20 }}>
               {stats.repeatRateGlobal}% repite compra
             </span>
           </div>
@@ -778,16 +778,16 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               {/* Repitieron */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${c.repeat_pct}%`, height: '100%', background: '#D4AF37', borderRadius: 3 }} />
+                  <div style={{ width: `${c.repeat_pct}%`, height: '100%', background: 'var(--gold)', borderRadius: 3 }} />
                 </div>
-                <span style={{ fontSize: 11, color: '#D4AF37', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.repitieron} · {c.repeat_pct}%</span>
+                <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.repitieron} · {c.repeat_pct}%</span>
               </div>
               {/* Activos */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${c.activos_pct}%`, height: '100%', background: '#5A8A4A', borderRadius: 3 }} />
+                  <div style={{ width: `${c.activos_pct}%`, height: '100%', background: 'var(--green-dim)', borderRadius: 3 }} />
                 </div>
-                <span style={{ fontSize: 11, color: '#5A8A4A', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.activos} · {c.activos_pct}%</span>
+                <span style={{ fontSize: 11, color: 'var(--green-dim)', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.activos} · {c.activos_pct}%</span>
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{c.pedidos_prom}</span>
             </div>
