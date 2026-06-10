@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES_SCOPE, esClienteExcluido } from '@/lib/types'
+import { VENDEDORES_DB, VENDEDORES_SCOPE, esClienteExcluido } from '@/lib/types'
 
 const TODOS_VENDEDORES = [...VENDEDORES_SCOPE]
 import { getVentasRango } from '@/lib/ventasCache'

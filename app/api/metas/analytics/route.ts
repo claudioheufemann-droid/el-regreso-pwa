@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { VENDEDORES_SCOPE, CLIENTES_EXCLUIR } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_SCOPE, CLIENTES_EXCLUIR } from '@/lib/types'
 
 const TODOS_VENDEDORES = [...VENDEDORES_SCOPE] as const
 import {
