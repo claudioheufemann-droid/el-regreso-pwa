@@ -2054,26 +2054,26 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
               </div>
             </div>
 
-            {/* Row 2: Vendedores */}
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${resumen.length}, 1fr)`, gap: 8 }}>
+            {/* Row 2: Vendedores — scroll horizontal */}
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginRight: -16, paddingRight: 16 }}>
               {resumen.map(v => {
                 const color = VEND_COLOR[v.vendedor] ?? '#D4AF37'
                 const pctVend = totalLitrosPeriodo > 0 ? (v.litrosPeriodo / totalLitrosPeriodo) * 100 : 0
                 return (
-                  <div key={v.vendedor} style={{ ...cardStyle, borderTop: `2px solid ${color}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <div key={v.vendedor} style={{ ...cardStyle, borderTop: `2px solid ${color}`, minWidth: 110, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
                       <VendedorAvatar vendedor={v.vendedor} color={color} size={28} avatars={vendedorAvatars} />
-                      <span style={{ fontSize: 9, fontWeight: 700, color, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                        {dspVendedor(v.vendedor)}
+                      <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: '0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                        {dspVendedor(v.vendedor).split(' ')[0]}
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                      <span style={{ fontSize: 20, fontWeight: 900, color: '#F0EDE8', letterSpacing: '-0.8px' }}>
+                      <span style={{ fontSize: 22, fontWeight: 900, color: '#F0EDE8', letterSpacing: '-0.8px', fontVariantNumeric: 'tabular-nums' }}>
                         {v.litrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                       </span>
-                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>L</span>
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>L</span>
                     </div>
-                    <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+                    <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 3 }}>
                       {pctVend.toFixed(1)}% del total
                     </p>
                   </div>
