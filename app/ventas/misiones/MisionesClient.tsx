@@ -20,6 +20,7 @@ const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { SEG_COLOR } from '@/lib/theme'
+import { createClient } from '@/lib/supabase/client'
 
 // ── Paleta — SEG_COLOR importado de lib/theme (fuente única) ─────────────────
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
@@ -632,6 +633,38 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
   const [saving, setSaving] = useState(false)
   const router = useRouter()
 
+  type UltimoPedidoItem = { producto: string; envase: string | null; litros: number; total: number }
+  const [ultimoPedido, setUltimoPedido] = useState<{ fecha: string; items: UltimoPedidoItem[]; total: number } | null>(null)
+  const [ultimoPedidoLoading, setUltimoPedidoLoading] = useState(false)
+
+  useEffect(() => {
+    if (!mision) { setUltimoPedido(null); return }
+    setUltimoPedidoLoading(true)
+    setUltimoPedido(null)
+    const supabase = createClient()
+    supabase
+      .from('ventas')
+      .select('producto, envase, litros, total_sin_impuesto, fecha_pedido')
+      .eq('nombre_fantasia', mision.nombre_fantasia)
+      .order('fecha_pedido', { ascending: false })
+      .limit(60)
+      .then(({ data }) => {
+        if (!data || data.length === 0) { setUltimoPedidoLoading(false); return }
+        const fechaMax = data[0].fecha_pedido
+        const items = data
+          .filter((r) => r.fecha_pedido === fechaMax)
+          .map((r) => ({
+            producto: r.producto ?? '',
+            envase: r.envase ?? null,
+            litros: r.litros ?? 0,
+            total: r.total_sin_impuesto ?? 0,
+          }))
+        const total = items.reduce((s, r) => s + r.total, 0)
+        setUltimoPedido({ fecha: fechaMax, items, total })
+        setUltimoPedidoLoading(false)
+      })
+  }, [mision?.nombre_fantasia])
+
   async function registrar(estado: EstadoMision, opts?: ActualizarOpts) {
     if (!mision) return
     setSaving(true)
@@ -833,6 +866,46 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
             <span style={{ fontSize: 10, color: '#9CA3AF', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
               <MapPin size={10} /> {mision.localidad}
             </span>
+          )}
+        </div>
+      )}
+
+      {/* ── ÚLTIMO PEDIDO REAL ── */}
+      {(ultimoPedidoLoading || ultimoPedido) && (
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid #2A2A2E' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: ultimoPedidoLoading ? 0 : 10 }}>
+            <ShoppingCart size={13} color="#60A5FA" />
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#60A5FA', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>Último pedido</span>
+            {ultimoPedido && (
+              <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 'auto' }}>{fFecha(ultimoPedido.fecha)}</span>
+            )}
+          </div>
+          {ultimoPedidoLoading && (
+            <div style={{ height: 32, background: '#1A1A1D', borderRadius: 8, opacity: 0.5 }} />
+          )}
+          {ultimoPedido && (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {ultimoPedido.items.map((p, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 12px', background: '#1A1A1D', border: '1px solid rgba(96,165,250,0.15)', borderRadius: 10,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#E5E7EB', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                        {p.producto}
+                      </span>
+                      {p.envase && <span style={{ fontSize: 10, color: '#9CA3AF' }}>{p.envase}</span>}
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 900, color: '#60A5FA', flexShrink: 0 }}>{p.litros}L</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(96,165,250,0.1)' }}>
+                <span style={{ fontSize: 11, color: '#9CA3AF' }}>Total:</span>
+                <span style={{ fontSize: 13, fontWeight: 900, color: '#60A5FA' }}>{fPeso(ultimoPedido.total)}</span>
+              </div>
+            </>
           )}
         </div>
       )}
