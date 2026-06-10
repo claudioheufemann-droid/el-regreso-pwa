@@ -40,8 +40,8 @@ export default async function DashboardPage({
   const supabase = await createClient()
   const appUser = await getServerUser()
 
-  // Siempre usamos todos los vendedores DB para el scope consolidado
-  const vendedoresScope: string[] = [...VENDEDORES_DB]
+  // Todos los nombres posibles en BD (históricos + canonical + display)
+  const vendedoresScope: string[] = [...VENDEDORES_DB, ...VENDEDORES, 'Vendedor Planta']
 
   const scope = vendedoresScope.length ? vendedoresScope : ['__none__']
 

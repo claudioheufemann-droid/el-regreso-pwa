@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { VENDEDORES } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_DB } from '@/lib/types'
+
+const TODOS_VENDEDORES = [...VENDEDORES_DB, ...VENDEDORES]
 import { getVentasRango } from '@/lib/ventasCache'
 import MetasClient from './MetasClient'
 
@@ -11,7 +13,7 @@ export default async function MetasPage() {
   const { data: ultimaFecha } = await supabase
     .from('ventas')
     .select('fecha_pedido')
-    .in('vendedor_actual', VENDEDORES)
+    .in('vendedor_actual', TODOS_VENDEDORES)
     .order('fecha_pedido', { ascending: false })
     .limit(1)
     .single()

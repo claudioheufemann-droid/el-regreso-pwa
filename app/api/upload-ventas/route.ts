@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag, revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import * as XLSX from 'xlsx'
 import { esClienteExcluido, VENDEDORES_DB } from '@/lib/types'
 import { sendPushToAllAdmins } from '@/lib/push'
 
-const VENDEDORES_VALIDOS: string[] = [...VENDEDORES_DB]
+// Acepta nombres históricos (Javier/Carlos) y el token canónico (Vendedor 1)
+const VENDEDORES_VALIDOS: string[] = [...VENDEDORES_DB, 'Vendedor 1', 'Vendedor Planta']
 
 // Alias local para mantener compatibilidad con el nombre anterior
 const esClienteInterno = esClienteExcluido
@@ -290,6 +292,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
     insertadas += data?.length ?? batch.length
+  }
+
+  // Invalidar caché para que Metas/Dashboard reflejen datos inmediatamente
+  if (insertadas > 0) {
+    revalidateTag('ventas')
+    revalidatePath('/ventas/metas')
+    revalidatePath('/ventas/acumulado')
+    revalidatePath('/ventas')
   }
 
   // 🔔 Notificación a admins cuando se cargan ventas

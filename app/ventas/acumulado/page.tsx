@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, esClienteExcluido } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_DB, esClienteExcluido } from '@/lib/types'
+
+const TODOS_VENDEDORES = [...VENDEDORES_DB, ...VENDEDORES, 'Vendedor Planta']
 import { getVentasRango } from '@/lib/ventasCache'
 import AcumuladoClient from './AcumuladoClient'
 
@@ -72,7 +74,7 @@ export default async function AcumuladoPage() {
   const supabase = await createClient()
   const appUser  = await getServerUser()
 
-  const vendedoresScope = appUser?.isAdmin ? VENDEDORES : VENDEDORES.filter(v=>v===appUser?.nombre)
+  const vendedoresScope = appUser?.isAdmin ? TODOS_VENDEDORES : TODOS_VENDEDORES.filter(v => v === appUser?.nombre || VENDEDORES_DB.includes(v as never))
   const scope = vendedoresScope.length ? vendedoresScope : ['__none__']
 
   const { data: periodo } = await supabase.from('periodos').select('*').eq('activo',true).single()

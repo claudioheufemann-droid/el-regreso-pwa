@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { VENDEDORES, VENDEDORES_DB, CLIENTES_EXCLUIR } from '@/lib/types'
+
+// Todos los nombres que pueden aparecer en ventas.vendedor_actual
+const TODOS_VENDEDORES = [...VENDEDORES_DB, ...VENDEDORES, 'Vendedor Planta'] as const
 import {
   getDiasHabiles,
   getDiasHabilesTranscurridos,
@@ -106,7 +109,7 @@ export async function GET(req: NextRequest) {
       const { data: ultima } = await supabase
         .from('ventas')
         .select('fecha_pedido')
-        .in('vendedor_actual', VENDEDORES_DB)
+        .in('vendedor_actual', TODOS_VENDEDORES)
         .order('fecha_pedido', { ascending: false })
         .limit(1)
         .single()
@@ -151,7 +154,7 @@ export async function GET(req: NextRequest) {
     const PAGE = 1000
     while (true) {
       const { data } = await supabase.from('ventas').select(selectFields)
-        .in('vendedor_actual', VENDEDORES_DB)
+        .in('vendedor_actual', TODOS_VENDEDORES)
         .gte('fecha_pedido', fechaIni).lte('fecha_pedido', fechaFin)
         .order('fecha_pedido', { ascending: true })
         .range(offset, offset + PAGE - 1)
