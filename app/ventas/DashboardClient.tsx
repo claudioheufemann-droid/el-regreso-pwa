@@ -2002,54 +2002,42 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         }
 
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10, width: '100%' }}>
             {/* Litros */}
-            <div style={{ ...cardStyle, borderTop: `2px solid ${C_CERV}` }}>
+            <div style={{ ...cardStyle, borderTop: `2px solid ${C_CERV}`, overflow: 'hidden', minWidth: 0 }}>
               <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(212,175,55,0.5)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 6 }}>
                 Litros · {mesNombre}
               </p>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                <span style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, flexWrap: 'wrap' as const }}>
+                <span style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                   {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                 </span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(212,175,55,0.6)' }}>L</span>
               </div>
               {litrosMesAnterior > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                  <span style={{ fontSize: 9, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
-                    {diffTotal >= 0 ? '↑' : '↓'}
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
-                    {Math.abs(diffPct).toFixed(1)}% vs {mesAnteriorNombre}
-                  </span>
-                </div>
+                <p style={{ fontSize: 10, fontWeight: 700, color: diffTotal >= 0 ? '#4ADE80' : '#F87171', marginTop: 5 }}>
+                  {diffTotal >= 0 ? '↑' : '↓'} {Math.abs(diffPct).toFixed(1)}%
+                </p>
               )}
             </div>
 
             {/* Meta */}
-            <div style={{ ...cardStyle, borderTop: `2px solid rgba(212,175,55,0.4)` }}>
-              <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 6 }}>
+            <div style={{ ...cardStyle, borderTop: `2px solid rgba(212,175,55,0.4)`, overflow: 'hidden', minWidth: 0 }}>
+              <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 8 }}>
                 Meta Mensual
               </p>
               {metaTotalEquipo > 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <svg width={48} height={48} style={{ flexShrink: 0 }}>
-                    <circle cx={24} cy={24} r={20} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={5}/>
-                    <circle cx={24} cy={24} r={20} fill="none" stroke="#D4AF37" strokeWidth={5}
-                      strokeLinecap="round"
-                      strokeDasharray={`${(pctMeta / 100) * 2 * Math.PI * 20} ${2 * Math.PI * 20}`}
-                      strokeDashoffset={2 * Math.PI * 20 / 4}/>
-                    <text x={24} y={28} textAnchor="middle" fill="var(--gold)" fontSize={9} fontWeight="900" fontFamily="inherit">{pctMeta}%</text>
-                  </svg>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{pctMeta}%</p>
-                    <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 3, whiteSpace: 'nowrap' as const }}>
-                      {fL(totalLitrosPeriodo)} / {fL(metaTotalEquipo)}
-                    </p>
+                <>
+                  <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums', marginBottom: 4 }}>{pctMeta}%</p>
+                  <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pctMeta}%`, background: '#D4AF37', borderRadius: 2 }} />
                   </div>
-                </div>
+                  <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 4 }}>
+                    {fL(totalLitrosPeriodo)} / {fL(metaTotalEquipo)}
+                  </p>
+                </>
               ) : (
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', marginTop: 8 }}>Sin metas</p>
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>Sin metas</p>
               )}
             </div>
           </div>
