@@ -18,6 +18,7 @@ Variables de entorno (.env local / secrets en GitHub):
   UPLOAD_SECRET    mismo valor que CRON_SECRET en Vercel
 """
 import os
+import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -51,30 +52,71 @@ def rango_periodo() -> tuple[date, date]:
 
 
 # =============================================================================
-# NAVEGACION DENTRO DEL ERP -- PENDIENTE DE COMPLETAR CON EL CODIGO DE CODEGEN
-#
-# Reemplaza el cuerpo de esta funcion con los pasos que grabo `codegen`
-# (login -> Ventas Detalladas -> filtro fechas -> descargar). Debe terminar
-# devolviendo la ruta local del Excel descargado.
+# NAVEGACION DENTRO DEL ERP (mapeada con playwright codegen)
+# Flujo: cerrar modal -> Informes -> "Ver" (abre popup del informe) ->
+#        cerrar modal -> datepicker desde/hasta -> check2 -> Generar ->
+#        "Exportar a excel" (descarga). Fechas parametrizadas (24 -> hoy).
 # =============================================================================
+def _cerrar_modal(target, selector_text: str = "×", timeout: int = 4000) -> None:
+    """Cierra un modal/aviso si aparece (no falla si no existe)."""
+    try:
+        target.get_by_role("button", name=selector_text).first.click(timeout=timeout)
+    except Exception:
+        try:
+            target.get_by_text(selector_text, exact=True).first.click(timeout=1500)
+        except Exception:
+            pass
+
+
+def _elegir_fecha(rep, input_selector: str, objetivo: date, hoy: date) -> None:
+    """Abre el datepicker y selecciona `objetivo` navegando meses con «.
+    El calendario abre en el mes actual; retrocede los meses necesarios."""
+    rep.locator(input_selector).click()
+    meses_atras = (hoy.year - objetivo.year) * 12 + (hoy.month - objetivo.month)
+    for _ in range(max(0, meses_atras)):
+        rep.get_by_role("columnheader", name="«").first.click()
+    rep.get_by_role("cell", name=str(objetivo.day), exact=True).first.click()
+
+
 def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
     """Desde la pagina post-login: ir al informe, filtrar fechas y descargar."""
-    raise NotImplementedError(
-        "Navegacion al informe aun no mapeada. Pega el codigo de "
-        "`python -m playwright codegen https://www.gestioncervecera.com/login`."
-    )
-    # ── Plantilla tipica (reemplazar con lo grabado por codegen) ──────────────
-    # page.get_by_role("link", name="Informes").click()
-    # page.get_by_role("link", name="Ventas detalladas").click()
-    # page.fill("#fecha_desde", desde.strftime("%d/%m/%Y"))
-    # page.fill("#fecha_hasta", hasta.strftime("%d/%m/%Y"))
-    # page.get_by_role("button", name="Buscar").click()
-    # with page.expect_download() as dl:
-    #     page.get_by_role("button", name="Exportar").click()
-    # download = dl.value
-    # destino = DOWNLOAD_DIR / download.suggested_filename
-    # download.save_as(destino)
-    # return destino
+    hoy = date.today()
+
+    # Aviso/modal post-login
+    _cerrar_modal(page)
+
+    # Menu Informes -> abrir informe "Ver" (se abre en una pestana nueva)
+    page.get_by_role("link", name="Informes").nth(1).click()
+    with page.expect_popup() as popup_info:
+        page.get_by_role("link", name="Ver").nth(2).click()
+    rep = popup_info.value
+    rep.wait_for_load_state("networkidle")
+
+    # Aviso/modal dentro del informe
+    _cerrar_modal(rep)
+
+    # Filtro de fechas (período 24 -> hoy)
+    _elegir_fecha(rep, "#fechaDesde", desde, hoy)
+    _elegir_fecha(rep, "#fechaHasta", hasta, hoy)
+
+    # Opcion adicional confirmada en la grabacion + generar
+    rep.locator("#check2").check()
+    rep.get_by_text("Generar").first.click()
+
+    # Exportar a excel -> dispara descarga (y una pestana auxiliar)
+    with rep.expect_download() as dl_info:
+        with rep.expect_popup() as aux_info:
+            rep.locator("a").filter(has_text=re.compile(r"^Exportar a excel$")).click()
+        try:
+            aux_info.value.close()
+        except Exception:
+            pass
+    download = dl_info.value
+
+    destino = DOWNLOAD_DIR / (download.suggested_filename or "ventas_detalladas.xlsx")
+    download.save_as(destino)
+    print(f"   Descargado: {destino.name}")
+    return destino
 
 
 def login(page) -> None:
