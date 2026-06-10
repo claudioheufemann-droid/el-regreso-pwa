@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidateTag, revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSbClient } from '@supabase/supabase-js'
+import { SUPABASE_URL as SUPABASE_URL_CFG } from '@/lib/supabase/config'
 import * as XLSX from 'xlsx'
 import { esClienteExcluido, VENDEDORES_DB } from '@/lib/types'
 import { sendPushToAllAdmins } from '@/lib/push'
@@ -190,7 +192,24 @@ export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const preview = searchParams.get('preview') === 'true'
 
-  const supabase = await createClient()
+  // ── Autenticación dual ───────────────────────────────────────────────────
+  // a) UI admin: sesión por cookies (cliente normal, RLS aplica)
+  // b) Cron ERP (GitHub Actions): Bearer CRON_SECRET → cliente service-role
+  //    (sin sesión; el secret es la autorización)
+  const auth = req.headers.get('authorization')
+  const esCron = !!process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`
+
+  let supabase
+  if (esCron) {
+    const svcKey = process.env.SUPABASE_SERVICE_KEY
+    if (!svcKey) return NextResponse.json({ error: 'SUPABASE_SERVICE_KEY no configurada' }, { status: 500 })
+    supabase = createSbClient(SUPABASE_URL_CFG, svcKey)
+  } else {
+    supabase = await createClient()
+    // Sin sesión válida, los writes fallan por RLS — rechazar temprano y claro
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
 
   const formData = await req.formData()
   const file = formData.get('file') as File
