@@ -9,9 +9,12 @@ import {
   CheckCircle2, Phone, PhoneOff, MessageCircle, RefreshCw, Calendar,
   ChevronDown, ChevronRight, Target, Minus, Plus, ArrowLeft, Sparkles, UserX,
   AlertTriangle, CalendarCheck, CalendarDays, Circle, Clock, Zap,
-  TrendingDown, MapPin, ShoppingCart, XCircle,
+  TrendingDown, MapPin, ShoppingCart, XCircle, Star, Flame, Shield,
+  AlertOctagon, Timer, Beer, Leaf, Info,
 } from 'lucide-react'
 import type { MisionEnriquecida, ProximaPreview, HistorialSemana, EstadoMision, TipoMision } from './page'
+import { buscarTorpedo } from '@/lib/catalogo-torpedo'
+import type { AlertTipo } from '@/components/ui/WAModal'
 import { VENDEDOR_DISPLAY } from '@/lib/types'
 const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import AppHeader from '@/components/ui/AppHeader'
@@ -37,6 +40,38 @@ const ESTADO_CFG: Record<EstadoMision, { label: string; color: string; icon: Rea
 }
 
 const DIAS_POSPONER = [3, 5, 7, 14]
+
+// ── Sistema de alertas de 5 niveles ──────────────────────────────────────────
+interface AlertaCfg {
+  emoji: string; label: string; labelCorto: string
+  color: string; bg: string; border: string
+  puntos: number
+  icon: React.ReactNode
+}
+
+const ALERTA_CFG: Record<AlertTipo, AlertaCfg> = {
+  rojo:       { emoji: '🔴', label: 'Quiebre inminente',     labelCorto: 'Urgente',    color: '#F87171', bg: 'rgba(248,113,113,0.1)',  border: 'rgba(248,113,113,0.35)', puntos: 50,  icon: <Flame size={10} /> },
+  amarillo:   { emoji: '🟡', label: 'Ventana óptima',         labelCorto: 'Esta sem.',  color: '#FBBF24', bg: 'rgba(251,191,36,0.1)',   border: 'rgba(251,191,36,0.35)',  puntos: 25,  icon: <Clock size={10} /> },
+  verde:      { emoji: '🟢', label: 'Oportunidad cross-sell', labelCorto: 'Cross-sell', color: '#4ADE80', bg: 'rgba(74,222,128,0.1)',   border: 'rgba(74,222,128,0.35)',  puntos: 100, icon: <Star size={10} /> },
+  morado:     { emoji: '🟣', label: 'Cliente en fuga',        labelCorto: 'En fuga',    color: '#C084FC', bg: 'rgba(192,132,252,0.1)',  border: 'rgba(192,132,252,0.35)', puntos: 75,  icon: <AlertOctagon size={10} /> },
+  gris:       { emoji: '⚪', label: 'Cobranza pendiente',     labelCorto: 'Cobranza',   color: '#94A3B8', bg: 'rgba(148,163,184,0.1)',  border: 'rgba(148,163,184,0.35)', puntos: 0,   icon: <Shield size={10} /> },
+  rm_urgente: { emoji: '⏰', label: 'Corte RM — ¡hoy 4PM!',  labelCorto: 'Corte 4PM',  color: '#FB923C', bg: 'rgba(251,146,60,0.1)',   border: 'rgba(251,146,60,0.35)',  puntos: 60,  icon: <Timer size={10} /> },
+}
+
+function computeAlertTipo(m: MisionEnriquecida): AlertTipo {
+  if (m.tiene_deuda) return 'gris'
+  const esRM = !!(m.localidad?.toLowerCase().includes('metropolitana') || m.localidad?.toLowerCase().includes('santiago'))
+  // RM client in urgent window (before 4PM): flag as rm_urgente
+  if (esRM && m.tipo === 'vencido') {
+    const now = new Date()
+    const cutoff = new Date(); cutoff.setHours(16, 0, 0, 0)
+    if (now < cutoff) return 'rm_urgente'
+  }
+  if (m.dias_sin_compra > 40 && m.tipo_cliente !== 'nuevo' && m.tipo_cliente !== 'activo') return 'morado'
+  if (m.tipo === 'vencido') return 'rojo'
+  if (m.cross_sell && m.tipo === 'proxima_semana') return 'verde'
+  return 'amarillo'
+}
 
 // ── Segmentación de clientes ─────────────────────────────────────────────────
 type TipoCliente = 'activo' | 'inactivo' | 'temporal' | 'nuevo'
@@ -113,6 +148,145 @@ function ProgressDonut({ done, total, size = 90 }: { done: number; total: number
       <text x={cx} y={cx - 3} textAnchor="middle" fontSize={size * 0.22} fontWeight="900" fill="var(--cream)">{done}</text>
       <text x={cx} y={cx + size * 0.17} textAnchor="middle" fontSize={size * 0.12} fill="var(--muted)">/ {total}</text>
     </svg>
+  )
+}
+
+// ── Countdown RM (Región Metropolitana) ──────────────────────────────────────
+function CountdownRM({ localidad }: { localidad: string | null }) {
+  const [timeLeft, setTimeLeft] = useState<string | null>(null)
+
+  const isRM = !!(localidad?.toLowerCase().includes('metropolitana') || localidad?.toLowerCase().includes('santiago'))
+
+  useEffect(() => {
+    if (!isRM) return
+    const tick = () => {
+      const now = new Date()
+      const cutoff = new Date(); cutoff.setHours(16, 0, 0, 0)
+      if (now >= cutoff) { setTimeLeft(null); return }
+      const diff = cutoff.getTime() - now.getTime()
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      setTimeLeft(`${h}h ${m}m`)
+    }
+    tick()
+    const id = setInterval(tick, 60000)
+    return () => clearInterval(id)
+  }, [isRM])
+
+  if (!isRM || !timeLeft) return null
+  const isUrgent = parseInt(timeLeft) < 3
+
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      padding: '1px 7px', borderRadius: 20, fontSize: 9, fontWeight: 800,
+      background: isUrgent ? 'rgba(251,146,60,0.18)' : 'rgba(251,146,60,0.08)',
+      color: '#FB923C', border: '1px solid rgba(251,146,60,0.35)',
+      animation: isUrgent ? 'pulse 1.5s ease-in-out infinite' : 'none',
+    }}>
+      <Timer size={8} /> RM {timeLeft}
+    </span>
+  )
+}
+
+// ── Torpedo de producto (ficha sensorial) ─────────────────────────────────────
+function TorpedoPanel({ nombreProducto, compact = false }: { nombreProducto: string; compact?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const prod = buscarTorpedo(nombreProducto)
+  if (!prod) return null
+
+  if (compact) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+        {prod.notas.slice(0, 3).map(n => (
+          <span key={n} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: `${prod.acento}18`, color: prod.acento, border: `1px solid ${prod.acento}30`, fontWeight: 700 }}>{n}</span>
+        ))}
+        {prod.abv && <span style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 600 }}>{prod.abv}% ABV</span>}
+        {prod.ibu && <span style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 600 }}>{prod.ibu} IBU</span>}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${prod.acento}25` }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%', padding: '8px 12px', background: `${prod.acento}10`,
+          border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
+        }}
+      >
+        {prod.marca === 'cerveza' ? <Beer size={13} color={prod.acento} /> : <Leaf size={13} color={prod.acento} />}
+        <div style={{ flex: 1 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: prod.acento }}>{prod.nombre}</span>
+          <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 6 }}>{prod.estilo}</span>
+        </div>
+        {prod.premiado && <span style={{ fontSize: 9, color: '#FBBF24' }}>★ Premiado</span>}
+        <Info size={11} color="var(--muted)" />
+        {open ? <ChevronDown size={11} color="var(--muted)" /> : <ChevronRight size={11} color="var(--muted)" />}
+      </button>
+      {open && (
+        <div style={{ padding: '10px 12px', background: `${prod.acento}06` }}>
+          <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>{prod.descripcion}</p>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>
+            {prod.notas.map(n => (
+              <span key={n} style={{ fontSize: 9, padding: '2px 7px', borderRadius: 20, background: `${prod.acento}18`, color: prod.acento, border: `1px solid ${prod.acento}30`, fontWeight: 700 }}>{n}</span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 12, marginBottom: prod.maridaje ? 8 : 0 }}>
+            {prod.abv && (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 600 }}>ABV</p>
+                <p style={{ fontSize: 14, fontWeight: 900, color: prod.acento }}>{prod.abv}%</p>
+              </div>
+            )}
+            {prod.ibu && (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 600 }}>IBU</p>
+                <p style={{ fontSize: 14, fontWeight: 900, color: prod.acento }}>{prod.ibu}</p>
+              </div>
+            )}
+            <div style={{ flex: 1 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {prod.marca === 'cerveza' ? <Beer size={12} color="var(--muted)" /> : <Leaf size={12} color="var(--muted)" />}
+              <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>{prod.marca === 'cerveza' ? 'El Regreso' : 'La Ida'}</span>
+            </div>
+          </div>
+          {prod.maridaje && (
+            <p style={{ fontSize: 10, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ color: prod.acento, fontWeight: 700 }}>Maridaje:</span> {prod.maridaje}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Barra de gamificación semanal ─────────────────────────────────────────────
+function GamificacionBar({ misiones }: { misiones: MisionEnriquecida[] }) {
+  const pts = misiones.reduce((sum, m) => {
+    if (!esCompletada(m.estado)) return sum
+    const tipo = computeAlertTipo(m)
+    return sum + (ALERTA_CFG[tipo]?.puntos ?? 0)
+  }, 0)
+
+  const completadas = misiones.filter(m => esCompletada(m.estado)).length
+  if (completadas === 0) return null
+
+  const level = pts >= 500 ? '🏆 Élite' : pts >= 250 ? '🥇 Pro' : pts >= 100 ? '🥈 En racha' : '🌱 Arrancando'
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderRadius: 10,
+      background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)',
+      marginBottom: 10,
+    }}>
+      <Star size={13} color="#FBBF24" fill="#FBBF24" />
+      <span style={{ fontSize: 11, fontWeight: 800, color: '#FBBF24' }}>{pts} pts</span>
+      <span style={{ fontSize: 10, color: 'var(--muted)' }}>esta semana</span>
+      <span style={{ fontSize: 10, fontWeight: 700, color: '#FBBF24', marginLeft: 4 }}>{level}</span>
+    </div>
   )
 }
 
@@ -234,6 +408,8 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
   const segColor  = SEG_COLOR[mision.segmento] ?? '#6B7280'
   const tipoCfg   = TIPO_CFG[mision.tipo]
   const estadoCfg = ESTADO_CFG[mision.estado]
+  const alertTipo = computeAlertTipo(mision)
+  const alertCfg  = ALERTA_CFG[alertTipo]
   const loading   = loadingId === mision.id || saving
   const isDone    = esCompletada(mision.estado)
 
@@ -253,9 +429,17 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
       <div style={{ marginBottom: 18 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 10, fontWeight: 800, color: tipoCfg.color, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>
-              Detalle de Misión — <span style={{ color: tipoCfg.color }}>{tipoCfg.label}</span>
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 8px', borderRadius: 20, background: alertCfg.bg, color: alertCfg.color, border: `1px solid ${alertCfg.border}`, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                {alertCfg.icon} {alertCfg.emoji} {alertCfg.label}
+              </span>
+              <CountdownRM localidad={mision.localidad} />
+              {alertCfg.puntos > 0 && !isDone && (
+                <span style={{ fontSize: 9, color: '#FBBF24', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Star size={8} fill="#FBBF24" color="#FBBF24" /> +{alertCfg.puntos} pts al completar
+                </span>
+              )}
+            </div>
             <h2
               onClick={mision.cliente_id != null ? () => router.push(`/ventas/clientes/${mision.cliente_id}`) : undefined}
               title={mision.cliente_id != null ? 'Ver perfil del cliente' : undefined}
@@ -402,6 +586,13 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
               ~{Math.round(mision.pedido_sugerido.reduce((s, p) => s + p.litros, 0) * 10) / 10} L
             </span>
           </div>
+        </div>
+      )}
+
+      {/* ── Torpedo: ficha sensorial del producto ── */}
+      {mision.pedido_sugerido?.[0]?.producto && (
+        <div style={{ marginBottom: 16 }}>
+          <TorpedoPanel nombreProducto={mision.pedido_sugerido[0].producto} />
         </div>
       )}
 
@@ -736,8 +927,17 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
             )}
             {isPedido && <CheckCircle2 size={11} color="#4ADE80" />}
           </div>
-          {/* Meta: estado + tipo + badge días */}
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+          {/* Meta: alerta + estado + días + countdown RM */}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+            {(() => {
+              const at = computeAlertTipo(mision)
+              const acfg = ALERTA_CFG[at]
+              return (
+                <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, background: acfg.bg, color: acfg.color, border: `1px solid ${acfg.border}`, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                  {acfg.icon} {acfg.labelCorto}
+                </span>
+              )
+            })()}
             <span style={{ fontSize: 9, color: estadoCfg.color, fontWeight: 600, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
               {estadoCfg.icon} {estadoCfg.label}
             </span>
@@ -746,7 +946,7 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
                 {dl}
               </span>
             )}
-            <TipoClienteBadge tipo={mision.tipo_cliente} size="xs" />
+            <CountdownRM localidad={mision.localidad} />
           </div>
         </div>
 
@@ -803,6 +1003,10 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
               <p style={{ fontSize: 10, color: 'var(--gold)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 3 }}><MessageCircle size={10} /> {mision.nota}</p>
             </div>
           )}
+          {/* Torpedo: ficha sensorial del producto habitual */}
+          {mision.pedido_sugerido?.[0]?.producto && (
+            <TorpedoPanel nombreProducto={mision.pedido_sugerido[0].producto} />
+          )}
           <BotonesAccion mision={mision} onActualizar={onActualizar} loading={loading} />
           {onMarcarInactivo && (
             <button
@@ -826,8 +1030,9 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
 }
 
 // ── Header resumen ────────────────────────────────────────────────────────────
-function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }: {
+function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop, misionesTodas }: {
   misiones: MisionEnriquecida[]
+  misionesTodas: MisionEnriquecida[]
   semana: string
   vendedorActual: string | null
   isAdmin: boolean
@@ -852,6 +1057,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
         background: 'var(--surface)', border: '1px solid var(--border)',
         boxShadow: 'var(--shadow-1)', borderRadius: 16, padding: '12px 14px', marginBottom: 10,
       }}>
+        <GamificacionBar misiones={misionesTodas} />
         {/* Fila: título + donut */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -905,6 +1111,7 @@ function HeaderResumen({ misiones, semana, vendedorActual, isAdmin, isDesktop }:
       boxShadow: 'var(--shadow-1)',
       borderRadius: 20, padding: '20px 28px', marginBottom: 20,
     }}>
+      <GamificacionBar misiones={misionesTodas} />
       {/* Fila superior: título + global status */}
       <div style={{ display: 'flex', alignItems: isDesktop ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: isDesktop ? 14 : 10, flexWrap: 'wrap' }}>
         <div>
@@ -1343,7 +1550,17 @@ export default function MisionesClient({
   }, [router])
 
   const onWA = useCallback((m: MisionEnriquecida) => {
-    setWaTarget({ nombre: m.nombre_fantasia, telefono: m.telefono ?? undefined, cicloPromedioDias: m.ciclo_promedio_dias ?? undefined, siguienteCompra: m.siguiente_compra_estimada ?? undefined, contexto: 'mision' })
+    const at = computeAlertTipo(m)
+    setWaTarget({
+      nombre: m.nombre_fantasia,
+      telefono: m.telefono ?? undefined,
+      cicloPromedioDias: m.ciclo_promedio_dias ?? undefined,
+      siguienteCompra: m.siguiente_compra_estimada ?? undefined,
+      contexto: 'mision',
+      alertTipo: at,
+      productoSugerido: m.pedido_sugerido?.[0]?.producto ?? null,
+      litrosEstimados: m.litros_ultima_compra ?? m.volumen_promedio ?? null,
+    })
   }, [])
 
   const vendedores = useMemo(() => [...new Set(misiones.map(m => dspV(m.vendedor)))], [misiones])
@@ -1466,7 +1683,7 @@ export default function MisionesClient({
   if (isDesktop) {
     return (
       <div style={{ padding: '20px 24px 40px', maxWidth: 1300, margin: '0 auto' }}>
-        <HeaderResumen misiones={misionesFiltradas} semana={semana} vendedorActual={vendedorActual} isAdmin={isAdmin} isDesktop />
+        <HeaderResumen misiones={misionesFiltradas} misionesTodas={misiones} semana={semana} vendedorActual={vendedorActual} isAdmin={isAdmin} isDesktop />
 
         <Controles />
         <TabBar />
@@ -1527,7 +1744,10 @@ export default function MisionesClient({
         )}
 
         {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
-        <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+        <style>{`
+          @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+          @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.55}}
+        `}</style>
       </div>
     )
   }
@@ -1536,7 +1756,7 @@ export default function MisionesClient({
   return (
     <div style={{ padding: '12px 12px 90px', width: '100%', maxWidth: 680, margin: '0 auto', boxSizing: 'border-box', overflowX: 'hidden' }}>
       <AppHeader title="Misiones" />
-      <HeaderResumen misiones={misionesFiltradas} semana={semana} vendedorActual={vendedorActual} isAdmin={isAdmin} isDesktop={false} />
+      <HeaderResumen misiones={misionesFiltradas} misionesTodas={misiones} semana={semana} vendedorActual={vendedorActual} isAdmin={isAdmin} isDesktop={false} />
 
       <Controles />
       <TabBar />
@@ -1569,7 +1789,10 @@ export default function MisionesClient({
       )}
 
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
-      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+      <style>{`
+        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.55}}
+      `}</style>
     </div>
   )
 }
