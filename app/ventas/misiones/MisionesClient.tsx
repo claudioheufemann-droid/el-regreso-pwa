@@ -530,56 +530,52 @@ function BotonesAccion({ mision, onActualizar, loading }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* 3 botones de estado */}
+      {/* 3 botones de estado — paleta neutra, color solo en activo */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-        <button
-          onClick={() => onActualizar(mision.id, isPedido ? 'pendiente' : 'contactado_pedido')}
-          disabled={loading}
-          style={{
-            padding: '9px 4px', borderRadius: 10, cursor: loading ? 'not-allowed' : 'pointer',
-            border: `1px solid ${isPedido ? 'rgba(34,197,94,0.45)' : 'rgba(34,197,94,0.18)'}`,
-            background: isPedido ? 'rgba(34,197,94,0.12)' : 'rgba(34,197,94,0.04)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-          }}
-        >
-          <CheckCircle2 size={16} color="#22C55E" />
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#22C55E', lineHeight: 1 }}>Hizo pedido</span>
-          <span style={{ fontSize: 8, color: '#9CA3AF' }}>{isPedido ? 'Confirmado' : 'Registrar'}</span>
-        </button>
-
-        <button
-          onClick={() => onActualizar(mision.id, 'contactado_sin_pedido')}
-          disabled={loading}
-          style={{
-            padding: '9px 4px', borderRadius: 10, cursor: loading ? 'not-allowed' : 'pointer',
-            border: `1px solid ${mision.estado === 'contactado_sin_pedido' ? 'rgba(59,130,246,0.45)' : 'rgba(59,130,246,0.18)'}`,
-            background: mision.estado === 'contactado_sin_pedido' ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.04)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-          }}
-        >
-          <Phone size={16} color="#3B82F6" />
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#3B82F6', lineHeight: 1 }}>Contactado</span>
-          <span style={{ fontSize: 8, color: '#9CA3AF' }}>
-            {mision.estado === 'contactado_sin_pedido' ? 'En seguimiento' : 'Sin pedido'}
-          </span>
-        </button>
-
-        <button
-          onClick={() => onActualizar(mision.id, 'sin_respuesta')}
-          disabled={loading}
-          style={{
-            padding: '9px 4px', borderRadius: 10, cursor: loading ? 'not-allowed' : 'pointer',
-            border: `1px solid ${mision.estado === 'sin_respuesta' ? 'rgba(239,68,68,0.45)' : 'rgba(239,68,68,0.18)'}`,
-            background: mision.estado === 'sin_respuesta' ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.04)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-          }}
-        >
-          <XCircle size={16} color="#EF4444" />
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#EF4444', lineHeight: 1 }}>Sin respuesta</span>
-          <span style={{ fontSize: 8, color: '#9CA3AF' }}>
-            {mision.estado === 'sin_respuesta' ? `${mision.intentos_contacto ?? 0}x intentos` : 'No contestó'}
-          </span>
-        </button>
+        {[
+          {
+            key: 'contactado_pedido' as EstadoMision,
+            active: isPedido,
+            label: 'Hizo pedido',
+            sub: isPedido ? 'Confirmado' : 'Registrar',
+            icon: <CheckCircle2 size={16} color={isPedido ? '#4ADE80' : 'rgba(255,255,255,0.3)'} />,
+            onClick: () => onActualizar(mision.id, isPedido ? 'pendiente' : 'contactado_pedido'),
+          },
+          {
+            key: 'contactado_sin_pedido' as EstadoMision,
+            active: mision.estado === 'contactado_sin_pedido',
+            label: 'Contactado',
+            sub: mision.estado === 'contactado_sin_pedido' ? 'En seguimiento' : 'Sin pedido',
+            icon: <Phone size={16} color={mision.estado === 'contactado_sin_pedido' ? '#E5E7EB' : 'rgba(255,255,255,0.3)'} />,
+            onClick: () => onActualizar(mision.id, 'contactado_sin_pedido'),
+          },
+          {
+            key: 'sin_respuesta' as EstadoMision,
+            active: mision.estado === 'sin_respuesta',
+            label: 'Sin respuesta',
+            sub: mision.estado === 'sin_respuesta' ? `${mision.intentos_contacto ?? 0}x intentos` : 'No contestó',
+            icon: <XCircle size={16} color={mision.estado === 'sin_respuesta' ? '#F87171' : 'rgba(255,255,255,0.3)'} />,
+            onClick: () => onActualizar(mision.id, 'sin_respuesta'),
+          },
+        ].map(btn => (
+          <button
+            key={btn.key}
+            onClick={btn.onClick}
+            disabled={loading}
+            style={{
+              padding: '9px 4px', borderRadius: 10, cursor: loading ? 'not-allowed' : 'pointer',
+              border: `1px solid ${btn.active ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)'}`,
+              background: btn.active ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.02)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            }}
+          >
+            {btn.icon}
+            <span style={{ fontSize: 10, fontWeight: 800, color: btn.active ? '#E5E7EB' : '#6B7280', lineHeight: 1 }}>
+              {btn.label}
+            </span>
+            <span style={{ fontSize: 8, color: '#6B7280' }}>{btn.sub}</span>
+          </button>
+        ))}
       </div>
 
       {/* Aún con stock — 2 filas para evitar overflow */}
@@ -776,7 +772,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
             {
               label: 'VENTA TOTAL',
               value: fPeso(mision.ultima_venta_monto),
-              color: '#F5B000',
+              color: '#E5E7EB',
               icon: <span style={{ fontSize: 13, color: '#9CA3AF', fontWeight: 700, lineHeight: 1 }}>$</span>,
             },
           ].map(kpi => (
@@ -888,54 +884,50 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
       {/* ── 3 BOTONES DE ESTADO ── */}
       <div style={{ padding: '14px 20px', borderBottom: '1px solid #2A2A2E' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: isDone ? 8 : 0 }}>
-          <button
-            onClick={() => !loading && (isDone ? registrar('pendiente') : registrar('contactado_pedido', { litros: litrosInput }))}
-            disabled={loading}
-            style={{
-              padding: '12px 6px', borderRadius: 12, cursor: loading ? 'not-allowed' : 'pointer',
-              border: `1px solid ${isDone ? 'rgba(34,197,94,0.45)' : 'rgba(34,197,94,0.2)'}`,
-              background: isDone ? 'rgba(34,197,94,0.12)' : 'rgba(34,197,94,0.05)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-            }}
-          >
-            <CheckCircle2 size={19} color="#22C55E" />
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#22C55E', lineHeight: 1 }}>Hizo pedido</span>
-            <span style={{ fontSize: 9, color: '#9CA3AF' }}>{isDone ? 'Confirmado' : 'Registrar'}</span>
-          </button>
-
-          <button
-            onClick={() => !loading && registrar('contactado_sin_pedido')}
-            disabled={loading}
-            style={{
-              padding: '12px 6px', borderRadius: 12, cursor: loading ? 'not-allowed' : 'pointer',
-              border: `1px solid ${mision.estado === 'contactado_sin_pedido' ? 'rgba(59,130,246,0.45)' : 'rgba(59,130,246,0.2)'}`,
-              background: mision.estado === 'contactado_sin_pedido' ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.05)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-            }}
-          >
-            <Phone size={19} color="#3B82F6" />
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#3B82F6', lineHeight: 1 }}>Contactado</span>
-            <span style={{ fontSize: 9, color: '#9CA3AF' }}>
-              {mision.estado === 'contactado_sin_pedido' ? 'En seguimiento' : 'Sin pedido'}
-            </span>
-          </button>
-
-          <button
-            onClick={() => !loading && registrar('sin_respuesta')}
-            disabled={loading}
-            style={{
-              padding: '12px 6px', borderRadius: 12, cursor: loading ? 'not-allowed' : 'pointer',
-              border: `1px solid ${mision.estado === 'sin_respuesta' ? 'rgba(239,68,68,0.45)' : 'rgba(239,68,68,0.2)'}`,
-              background: mision.estado === 'sin_respuesta' ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.05)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-            }}
-          >
-            <XCircle size={19} color="#EF4444" />
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#EF4444', lineHeight: 1 }}>Sin respuesta</span>
-            <span style={{ fontSize: 9, color: '#9CA3AF' }}>
-              {mision.estado === 'sin_respuesta' ? `Sin actividad · ${mision.intentos_contacto ?? 0}x` : 'No contestó'}
-            </span>
-          </button>
+          {[
+            {
+              key: 'contactado_pedido' as EstadoMision,
+              active: isDone,
+              label: 'Hizo pedido',
+              sub: isDone ? 'Confirmado' : 'Registrar',
+              icon: <CheckCircle2 size={19} color={isDone ? '#4ADE80' : 'rgba(255,255,255,0.25)'} />,
+              onClick: () => !loading && (isDone ? registrar('pendiente') : registrar('contactado_pedido', { litros: litrosInput })),
+            },
+            {
+              key: 'contactado_sin_pedido' as EstadoMision,
+              active: mision.estado === 'contactado_sin_pedido',
+              label: 'Contactado',
+              sub: mision.estado === 'contactado_sin_pedido' ? 'En seguimiento' : 'Sin pedido',
+              icon: <Phone size={19} color={mision.estado === 'contactado_sin_pedido' ? '#E5E7EB' : 'rgba(255,255,255,0.25)'} />,
+              onClick: () => !loading && registrar('contactado_sin_pedido'),
+            },
+            {
+              key: 'sin_respuesta' as EstadoMision,
+              active: mision.estado === 'sin_respuesta',
+              label: 'Sin respuesta',
+              sub: mision.estado === 'sin_respuesta' ? `Sin actividad · ${mision.intentos_contacto ?? 0}x` : 'No contestó',
+              icon: <XCircle size={19} color={mision.estado === 'sin_respuesta' ? '#F87171' : 'rgba(255,255,255,0.25)'} />,
+              onClick: () => !loading && registrar('sin_respuesta'),
+            },
+          ].map(btn => (
+            <button
+              key={btn.key}
+              onClick={btn.onClick}
+              disabled={loading}
+              style={{
+                padding: '12px 6px', borderRadius: 12, cursor: loading ? 'not-allowed' : 'pointer',
+                border: `1px solid ${btn.active ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)'}`,
+                background: btn.active ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.02)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+              }}
+            >
+              {btn.icon}
+              <span style={{ fontSize: 11, fontWeight: 800, color: btn.active ? '#E5E7EB' : '#6B7280', lineHeight: 1 }}>
+                {btn.label}
+              </span>
+              <span style={{ fontSize: 9, color: '#6B7280' }}>{btn.sub}</span>
+            </button>
+          ))}
         </div>
 
         {isDone && (
@@ -1239,7 +1231,19 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
 
         {/* Acciones derecha */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-          {!isPedido && (
+          {!isPedido && mision.telefono && (
+            <button
+              onClick={e => { e.stopPropagation(); window.open(`tel:${mision.telefono}`) }}
+              style={{
+                width: 30, height: 30, borderRadius: '50%',
+                border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+            >
+              <Phone size={13} color="rgba(255,255,255,0.55)" />
+            </button>
+          )}
+          {!isPedido && mision.telefono && (
             <button
               onClick={e => { e.stopPropagation(); onWA(mision) }}
               style={{
@@ -1271,7 +1275,7 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
             {[
               { label: 'Sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#EF4444' : '#E5E7EB', icon: <Calendar size={10} color="#9CA3AF" /> },
               { label: 'Último ped.', value: fFecha(mision.ultima_venta_fecha), color: '#E5E7EB', icon: <Calendar size={10} color="#9CA3AF" /> },
-              { label: 'Venta',       value: fPeso(mision.ultima_venta_monto), color: '#F5B000', icon: <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 700 }}>$</span> },
+              { label: 'Venta',       value: fPeso(mision.ultima_venta_monto), color: '#E5E7EB', icon: <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 700 }}>$</span> },
             ].map(({ label, value, color, icon }) => (
               <div key={label} style={{ background: '#1A1A1D', border: '1px solid #2A2A2E', borderRadius: 10, padding: '7px 9px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
