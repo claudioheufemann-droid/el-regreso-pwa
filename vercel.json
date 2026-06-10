@@ -30,6 +30,10 @@
       "schedule": "0 12 * * *"
     },
     {
+      "path": "/api/cron/snooze-reminders",
+      "schedule": "30 12 * * 1-5"
+    },
+    {
       "path": "/api/cron/reporte-ventas",
       "schedule": "0 13 * * 1"
     }

@@ -290,6 +290,151 @@ function GamificacionBar({ misiones }: { misiones: MisionEnriquecida[] }) {
   )
 }
 
+// ── Sección "Con Stock — Pendientes de llamar" ────────────────────────────────
+function ConStockSection({ misiones, onActualizar, onWA, loadingId }: {
+  misiones: MisionEnriquecida[]
+  onActualizar: OnActualizar
+  onWA: (m: MisionEnriquecida) => void
+  loadingId: string | null
+}) {
+  const [open, setOpen] = useState(false)
+  if (!misiones.length) return null
+
+  // Ordenar por snooze_until ASC (el que vence antes, primero)
+  const sorted = [...misiones].sort((a, b) =>
+    (a.snooze_until ?? '').localeCompare(b.snooze_until ?? '')
+  )
+
+  function diasRestantes(snooze: string | null): number {
+    if (!snooze) return 0
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+    const d   = new Date(snooze + 'T12:00:00')
+    return Math.round((d.getTime() - hoy.getTime()) / 86400000)
+  }
+
+  function badgeDias(snooze: string | null) {
+    const d = diasRestantes(snooze)
+    if (d <= 0) return { label: 'Llamar hoy',  color: '#F87171', bg: 'rgba(248,113,113,0.12)' }
+    if (d === 1) return { label: 'Mañana',      color: '#FBBF24', bg: 'rgba(251,191,36,0.12)' }
+    return              { label: `En ${d}d`,    color: '#94A3B8', bg: 'rgba(148,163,184,0.1)'  }
+  }
+
+  const vencenHoy     = sorted.filter(m => diasRestantes(m.snooze_until) <= 0).length
+  const vencenMañana  = sorted.filter(m => diasRestantes(m.snooze_until) === 1).length
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {/* Header colapsable */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          marginBottom: open ? 8 : 0, padding: '9px 12px', borderRadius: 12,
+          border: '1px solid rgba(148,163,184,0.2)',
+          background: 'rgba(148,163,184,0.05)', cursor: 'pointer', textAlign: 'left',
+        }}
+      >
+        <Clock size={13} style={{ color: '#94A3B8', flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: '#94A3B8' }}>Con Stock — Vuelven a llamar</span>
+          <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>
+            {misiones.length} cliente{misiones.length > 1 ? 's' : ''} pospuesto{misiones.length > 1 ? 's' : ''}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 5 }}>
+          {vencenHoy > 0 && (
+            <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 800, background: 'rgba(248,113,113,0.15)', color: '#F87171' }}>
+              {vencenHoy} hoy
+            </span>
+          )}
+          {vencenMañana > 0 && (
+            <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 800, background: 'rgba(251,191,36,0.12)', color: '#FBBF24' }}>
+              {vencenMañana} mañana
+            </span>
+          )}
+        </div>
+        {open ? <ChevronDown size={15} color="var(--muted)" /> : <ChevronRight size={15} color="var(--muted)" />}
+      </button>
+
+      {open && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {sorted.map(m => {
+            const badge   = badgeDias(m.snooze_until)
+            const loading = loadingId === m.id
+            return (
+              <div key={m.id} style={{
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderLeft: `3px solid ${badge.color}`, borderRadius: 12,
+                padding: '10px 12px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* Avatar */}
+                  <div style={{
+                    width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                    background: 'rgba(148,163,184,0.1)', border: '1px solid rgba(148,163,184,0.2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12, fontWeight: 800, color: '#94A3B8',
+                  }}>
+                    {m.nombre_fantasia.charAt(0).toUpperCase()}
+                  </div>
+
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
+                      {m.nombre_fantasia}
+                    </p>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, padding: '1px 8px', borderRadius: 20, background: badge.bg, color: badge.color }}>
+                        {badge.label}
+                      </span>
+                      {m.nota && (
+                        <span style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {m.nota}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Acciones */}
+                  <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                    {m.telefono && (
+                      <button
+                        onClick={() => window.open(`tel:${m.telefono}`)}
+                        style={{ width: 30, height: 30, borderRadius: '50%', border: '1px solid rgba(212,175,55,0.3)', background: 'rgba(212,175,55,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      >
+                        <Phone size={12} color="#D4AF37" />
+                      </button>
+                    )}
+                    {m.telefono && (
+                      <button
+                        onClick={() => onWA(m)}
+                        style={{ width: 30, height: 30, borderRadius: '50%', border: '1px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      >
+                        <MessageCircle size={12} color="#25D166" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onActualizar(m.id, 'pendiente')}
+                      disabled={loading}
+                      style={{
+                        padding: '0 10px', height: 30, borderRadius: 8, fontSize: 11, fontWeight: 700,
+                        background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)',
+                        color: '#F87171', cursor: loading ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {loading ? '…' : 'Llamar ya'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Botones de acción ─────────────────────────────────────────────────────────
 function BotonesAccion({ mision, onActualizar, loading }: {
   mision: MisionEnriquecida
@@ -1454,11 +1599,20 @@ export default function MisionesClient({
   const [filtroTipo, setFiltroTipo] = useState<TipoCliente | null>(null)
   const [selectedMision, setSelectedMision] = useState<MisionEnriquecida | null>(null)
 
+  const hoyStr = new Date().toISOString().split('T')[0]
+
+  // Pospuestos con snooze vigente → sección separada "Con Stock"
+  const pospuestosConStock = useMemo(() =>
+    misiones.filter(m => m.estado === 'pospuesto' && m.snooze_until && m.snooze_until > hoyStr)
+  , [misiones, hoyStr])
+
   const misionesFiltradas = useMemo(() => {
-    let base = !filtroVendedor ? misiones : misiones.filter(m => dspV(m.vendedor) === filtroVendedor)
+    // Excluye pospuestos vigentes de la lista principal
+    let base = misiones.filter(m => !(m.estado === 'pospuesto' && m.snooze_until && m.snooze_until > hoyStr))
+    if (filtroVendedor) base = base.filter(m => dspV(m.vendedor) === filtroVendedor)
     if (filtroTipo) base = base.filter(m => m.tipo_cliente === filtroTipo)
     return base
-  }, [misiones, filtroVendedor, filtroTipo])
+  }, [misiones, filtroVendedor, filtroTipo, hoyStr])
 
   // Conteos por tipo para el filtro UI
   const conteosPorTipo = useMemo(() => {
@@ -1733,6 +1887,11 @@ export default function MisionesClient({
           </div>
         )}
 
+        {tab === 'semana' && pospuestosConStock.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <ConStockSection misiones={pospuestosConStock} onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} />
+          </div>
+        )}
         {tab === 'proxima' && <ProximaView proxima={proxima} isDesktop />}
         {tab === 'historial' && <HistorialView historial={historial} />}
         {tab === 'resumen' && isAdmin && (
@@ -1768,13 +1927,14 @@ export default function MisionesClient({
         <div>
           <SeccionMisiones tipo="vencido"      misiones={porTipo.vencido}      onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} isDesktop={isDesktop} />
           <SeccionMisiones tipo="esta_semana"  misiones={porTipo.esta_semana}  onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} isDesktop={isDesktop} />
-          {misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length === 0 && (
+          {misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length === 0 && pospuestosConStock.length === 0 && (
             <div style={{ textAlign: 'center', padding: '36px 16px' }}>
               <p style={{ fontSize: 28, marginBottom: 8 }}>🎉</p>
               <p style={{ fontSize: 13, color: 'var(--cream)', fontWeight: 700, marginBottom: 4 }}>Sin misiones activas</p>
               <p style={{ fontSize: 11, color: 'var(--muted)' }}>{isAdmin ? 'Genera misiones con el botón Actualizar.' : 'Todos los clientes al día.'}</p>
             </div>
           )}
+          <ConStockSection misiones={pospuestosConStock} onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} />
         </div>
       )}
 

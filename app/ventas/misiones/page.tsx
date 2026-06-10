@@ -226,7 +226,7 @@ export default async function MisionesPage() {
     .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap, deudoresSet))
     .filter(m => !inactivosManuales.has(m.nombre_fantasia))
     .filter(m => (m.dias_sin_compra ?? 0) <= 90)
-    .filter(m => !(m.estado === 'pospuesto' && m.snooze_until && m.snooze_until > hoyStr))
+    // Los pospuestos con snooze vigente se mantienen — se muestran en sección separada "Con Stock"
     .sort((a, b) => {
       // Deuda siempre al final
       if (a.tiene_deuda !== b.tiene_deuda) return a.tiene_deuda ? 1 : -1
