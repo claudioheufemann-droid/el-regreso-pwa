@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidateTag, revalidatePath } from 'next/cache'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { SUPABASE_URL as SUPABASE_URL_CFG } from '@/lib/supabase/config'
@@ -315,7 +315,9 @@ export async function POST(req: NextRequest) {
 
   // Invalidar caché para que Metas/Dashboard reflejen datos inmediatamente
   if (insertadas > 0) {
-    revalidateTag('ventas')
+    // revalidateTag('ventas') eliminado: en Next 16 exige 2 args; el caché
+    // de getVentasRango se refresca por su TTL (300s). revalidatePath fuerza
+    // el re-render de las páginas afectadas.
     revalidatePath('/ventas/metas')
     revalidatePath('/ventas/acumulado')
     revalidatePath('/ventas')
