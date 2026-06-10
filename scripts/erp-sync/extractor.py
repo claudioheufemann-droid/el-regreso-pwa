@@ -52,65 +52,61 @@ def rango_periodo() -> tuple[date, date]:
 
 
 # =============================================================================
-# NAVEGACION DENTRO DEL ERP (mapeada con playwright codegen)
-# Flujo: cerrar modal -> Informes -> "Ver" (abre popup del informe) ->
-#        cerrar modal -> datepicker desde/hasta -> check2 -> Generar ->
-#        "Exportar a excel" (descarga). Fechas parametrizadas (24 -> hoy).
+# NAVEGACION AL INFORME (robusta — confirmada inspeccionando el ERP)
+# En vez de navegar el menu (frágil: overlay del Academy + selectores
+# posicionales), vamos DIRECTO a la URL del informe "Ventas Detalladas"
+# (informe=VentasDet), que trae el detalle por producto/envase con las
+# columnas que espera /api/upload-ventas (VendedorActual, FechaPedido,
+# Producto, Envase, CategoriaProducto, Categoria, Litros, TotalSImp$, etc.).
 # =============================================================================
-def _cerrar_modal(target, selector_text: str = "×", timeout: int = 4000) -> None:
-    """Cierra un modal/aviso si aparece (no falla si no existe)."""
-    try:
-        target.get_by_role("button", name=selector_text).first.click(timeout=timeout)
-    except Exception:
-        try:
-            target.get_by_text(selector_text, exact=True).first.click(timeout=1500)
-        except Exception:
-            pass
+REPORT_URL = "https://www.gestioncervecera.com/Informes/Ver?informe=VentasDet"
 
-
-def _elegir_fecha(rep, input_selector: str, objetivo: date, hoy: date) -> None:
-    """Abre el datepicker y selecciona `objetivo` navegando meses con «.
-    El calendario abre en el mes actual; retrocede los meses necesarios."""
-    rep.locator(input_selector).click()
-    meses_atras = (hoy.year - objetivo.year) * 12 + (hoy.month - objetivo.month)
-    for _ in range(max(0, meses_atras)):
-        rep.get_by_role("columnheader", name="«").first.click()
-    rep.get_by_role("cell", name=str(objetivo.day), exact=True).first.click()
+# Setea un input de fecha y dispara los eventos que el datepicker/validación
+# necesitan (fill simple + Escape dejaba el campo vacío → "Debe ingresar fechas").
+_JS_SET_FECHA = """([sel, v]) => {
+    const el = document.querySelector(sel);
+    if (!el) return 'NO_EL';
+    el.value = v;
+    el.dispatchEvent(new Event('input',  { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    if (window.jQuery) { try { jQuery(el).trigger('change').trigger('blur'); } catch (e) {} }
+    return el.value;
+}"""
 
 
 def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
-    """Desde la pagina post-login: ir al informe, filtrar fechas y descargar."""
-    hoy = date.today()
+    """Abre el informe Ventas Detalladas, fija el rango y descarga el Excel."""
+    print(f"   Informe: {REPORT_URL}")
+    page.goto(REPORT_URL, wait_until="networkidle")
 
-    # Aviso/modal post-login
-    _cerrar_modal(page)
+    # Fechas (dd/mm/yyyy) vía JS + eventos change/blur.
+    page.evaluate(_JS_SET_FECHA, ["#fechaDesde", desde.strftime("%d/%m/%Y")])
+    page.evaluate(_JS_SET_FECHA, ["#fechaHasta", hasta.strftime("%d/%m/%Y")])
 
-    # Menu Informes -> abrir informe "Ver" (se abre en una pestana nueva)
-    page.get_by_role("link", name="Informes").nth(1).click()
-    with page.expect_popup() as popup_info:
-        page.get_by_role("link", name="Ver").nth(2).click()
-    rep = popup_info.value
-    rep.wait_for_load_state("networkidle")
+    # Dataset completo: incluir pedidos listos para entregar.
+    # (NO marcar "Solo Ventas PDV": excluiría la mayoría de las ventas.)
+    try:
+        page.check("#check")
+    except Exception:
+        pass
 
-    # Aviso/modal dentro del informe
-    _cerrar_modal(rep)
+    # Generar aplica los filtros (valida fechas y arma la tabla).
+    page.get_by_text("Generar", exact=True).first.click()
+    page.wait_for_timeout(3000)
 
-    # Filtro de fechas (período 24 -> hoy)
-    _elegir_fecha(rep, "#fechaDesde", desde, hoy)
-    _elegir_fecha(rep, "#fechaHasta", hasta, hoy)
+    # Verificar que no haya error de validación visible.
+    warn = page.evaluate(
+        "() => { const w = document.getElementById('alertWarning');"
+        " return (w && getComputedStyle(w).display !== 'none')"
+        " ? (w.innerText || '').replace(/\\s+/g,' ').trim().slice(0,120) : null; }"
+    )
+    if warn:
+        raise RuntimeError(f"El ERP rechazó el filtro: {warn}")
 
-    # Opcion adicional confirmada en la grabacion + generar
-    rep.locator("#check2").check()
-    rep.get_by_text("Generar").first.click()
-
-    # Exportar a excel -> dispara descarga (y una pestana auxiliar)
-    with rep.expect_download() as dl_info:
-        with rep.expect_popup() as aux_info:
-            rep.locator("a").filter(has_text=re.compile(r"^Exportar a excel$")).click()
-        try:
-            aux_info.value.close()
-        except Exception:
-            pass
+    # Exportar a excel → descarga.
+    exportar = page.locator("a.generarInforme[data-formato='excel']").first
+    with page.expect_download(timeout=120000) as dl_info:
+        exportar.click()
     download = dl_info.value
 
     destino = DOWNLOAD_DIR / (download.suggested_filename or "ventas_detalladas.xlsx")
