@@ -52,7 +52,8 @@ interface VentaRow {
   fecha_pedido: string
 }
 
-interface ProductoItem { nombre: string; litros: number }
+interface ClienteProducto { nombre: string; litros: number; canal: string | null }
+interface ProductoItem { nombre: string; litros: number; clientes: ClienteProducto[] }
 interface ProductoCategoria { categoria: string; total: number; productos: ProductoItem[] }
 
 interface MetaRow {
@@ -982,53 +983,170 @@ const CAT_PRODUCTO: Record<string, { emoji: string; color: string }> = {
 }
 
 function computeProductos(ventas: VentaRow[]): ProductoCategoria[] {
-  const map = new Map<string, Map<string, number>>()
+  type ProdEntry = { total: number; clientes: Map<string, { litros: number; canal: string | null }> }
+  const map = new Map<string, Map<string, ProdEntry>>()
   for (const v of ventas) {
     if (!v.litros) continue
     const cat  = v.categoria_producto?.trim() || 'Sin categoría'
     const prod = v.producto?.trim()           || 'Sin nombre'
+    const cli  = v.nombre_fantasia?.trim()    || 'Sin nombre'
+    const canal = v.categoria_negocio ?? null
     if (!map.has(cat)) map.set(cat, new Map())
     const pm = map.get(cat)!
-    pm.set(prod, (pm.get(prod) ?? 0) + v.litros)
+    if (!pm.has(prod)) pm.set(prod, { total: 0, clientes: new Map() })
+    const entry = pm.get(prod)!
+    entry.total += v.litros
+    if (!entry.clientes.has(cli)) entry.clientes.set(cli, { litros: 0, canal })
+    entry.clientes.get(cli)!.litros += v.litros
   }
   return [...map.entries()]
     .map(([categoria, pm]) => ({
       categoria,
-      total: [...pm.values()].reduce((s, l) => s + l, 0),
+      total: [...pm.values()].reduce((s, e) => s + e.total, 0),
       productos: [...pm.entries()]
-        .map(([nombre, litros]) => ({ nombre, litros }))
+        .map(([nombre, entry]) => ({
+          nombre,
+          litros: entry.total,
+          clientes: [...entry.clientes.entries()]
+            .map(([nombre, d]) => ({ nombre, litros: d.litros, canal: d.canal }))
+            .sort((a, b) => b.litros - a.litros),
+        }))
         .sort((a, b) => b.litros - a.litros),
     }))
     .filter(c => c.total > 0)
     .sort((a, b) => b.total - a.total)
 }
 
-function ProductoBar({ nombre, litros, total, color }: {
-  nombre: string; litros: number; total: number; color: string
+function ProductoBar({ nombre, litros, total, color, clientes }: {
+  nombre: string; litros: number; total: number; color: string; clientes: ClienteProducto[]
 }) {
+  const [open, setOpen] = useState(false)
+  const [verTodos, setVerTodos] = useState(false)
   const pct = total > 0 ? Math.min(100, Math.max(0, (litros / total) * 100)) : 0
+  const MAX_CLI = 5
+  const visibles = verTodos ? clientes : clientes.slice(0, MAX_CLI)
+  const hasClientes = clientes.length > 0
+
   return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-        <span style={{
-          fontSize: 12, color: 'var(--cream)', flex: 1,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 10,
-        }}>{nombre}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{litros.toFixed(1)} L</span>
-          <span style={{
-            fontSize: 10, color, fontWeight: 700,
-            background: `${color}18`, border: `1px solid ${color}30`,
-            padding: '1px 6px', borderRadius: 8,
-          }}>{pct.toFixed(0)}%</span>
+    <div style={{ marginBottom: 8 }}>
+      {/* Fila principal — clickable si hay clientes */}
+      <div
+        onClick={() => hasClientes && setOpen(v => !v)}
+        style={{ cursor: hasClientes ? 'pointer' : 'default', userSelect: 'none' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
+            {hasClientes && (
+              <ChevronDown size={11} color={color} style={{
+                flexShrink: 0, opacity: 0.7,
+                transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+                transition: 'transform 0.18s',
+              }} />
+            )}
+            <span style={{
+              fontSize: 12, color: 'var(--cream)', flex: 1,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{nombre}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', fontVariantNumeric: 'tabular-nums' }}>{litros.toFixed(1)} L</span>
+            <span style={{
+              fontSize: 10, color, fontWeight: 700,
+              background: `${color}18`, border: `1px solid ${color}30`,
+              padding: '1px 6px', borderRadius: 8,
+            }}>{pct.toFixed(0)}%</span>
+          </div>
+        </div>
+        <div style={{ height: 5, borderRadius: 5, background: 'rgba(255,255,255,0.06)', marginLeft: hasClientes ? 16 : 0 }}>
+          <div className="animate-progress" style={{
+            ['--pct' as string]: `${pct}%`,
+            height: '100%', borderRadius: 5,
+            width: `${pct}%`, background: color, opacity: 0.75,
+          } as React.CSSProperties} />
         </div>
       </div>
-      <div style={{ height: 5, borderRadius: 5, background: 'rgba(255,255,255,0.06)' }}>
-        <div className="animate-progress" style={{
-          ['--pct' as string]: `${pct}%`,
-          height: '100%', borderRadius: 5,
-          width: `${pct}%`, background: color, opacity: 0.75,
-        } as React.CSSProperties} />
+
+      {/* Drill-down: lista de locales */}
+      <div style={{
+        display: 'grid',
+        gridTemplateRows: open ? '1fr' : '0fr',
+        transition: 'grid-template-rows 0.22s cubic-bezier(0.16,1,0.3,1)',
+        marginLeft: 16,
+      }}>
+        <div style={{ overflow: 'hidden' }}>
+          <div style={{
+            marginTop: 8, marginBottom: 4,
+            padding: '10px 12px',
+            background: 'rgba(255,255,255,0.025)',
+            border: `1px solid ${color}20`,
+            borderRadius: 10,
+          }}>
+            {/* Cabecera */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                {clientes.length} local{clientes.length !== 1 ? 'es' : ''}
+              </span>
+              <span style={{ fontSize: 9, color: 'var(--muted)' }}>
+                {litros.toFixed(1)} L total
+              </span>
+            </div>
+            {/* Filas de locales */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {visibles.map((c, i) => {
+                const cliPct = litros > 0 ? (c.litros / litros) * 100 : 0
+                const dotColor = CANAL_DOT[c.canal ?? ''] ?? '#6B7280'
+                return (
+                  <div key={c.nombre}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                      {/* Rank */}
+                      <div style={{
+                        width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                        background: i < 3 ? `${color}20` : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${i < 3 ? color + '35' : 'rgba(255,255,255,0.07)'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 8, fontWeight: 800, color: i < 3 ? color : 'var(--muted)',
+                      }}>{i + 1}</div>
+                      {/* Canal dot */}
+                      <div style={{ width: 5, height: 5, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                      {/* Nombre */}
+                      <span style={{
+                        flex: 1, fontSize: 11, color: 'var(--cream)', fontWeight: 600,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{c.nombre}</span>
+                      {/* Litros + % */}
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                        {c.litros.toFixed(1)} L
+                      </span>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, color, flexShrink: 0,
+                        background: `${color}15`, padding: '1px 5px', borderRadius: 6,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>{cliPct.toFixed(0)}%</span>
+                    </div>
+                    {/* Mini barra */}
+                    <div style={{ height: 3, borderRadius: 3, background: 'rgba(255,255,255,0.05)', marginLeft: 23 }}>
+                      <div style={{ height: '100%', borderRadius: 3, width: `${cliPct}%`, background: color, opacity: 0.5 }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Ver más / menos */}
+            {clientes.length > MAX_CLI && (
+              <button
+                onClick={e => { e.stopPropagation(); setVerTodos(v => !v) }}
+                style={{
+                  marginTop: 8, width: '100%', padding: '5px 0',
+                  background: 'transparent', border: `1px solid ${color}25`,
+                  borderRadius: 8, fontSize: 10, fontWeight: 600,
+                  color: 'var(--muted)', cursor: 'pointer',
+                }}
+              >
+                {verTodos ? 'Ver menos' : `Ver ${clientes.length - MAX_CLI} más`}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -1067,7 +1185,7 @@ function CategoriaProductoCard({ cat }: { cat: ProductoCategoria }) {
 
         {/* Products list */}
         {cat.productos.slice(0, expanded ? undefined : MAX_VISIBLE).map(p => (
-          <ProductoBar key={p.nombre} nombre={p.nombre} litros={p.litros} total={cat.total} color={cfg.color} />
+          <ProductoBar key={p.nombre} nombre={p.nombre} litros={p.litros} total={cat.total} color={cfg.color} clientes={p.clientes} />
         ))}
 
         {cat.productos.length > MAX_VISIBLE && (
