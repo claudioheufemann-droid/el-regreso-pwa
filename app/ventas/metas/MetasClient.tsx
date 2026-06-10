@@ -1508,15 +1508,26 @@ function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; 
                               <div style={{ fontSize: 9, color: 'var(--gold)', marginTop: 1, paddingLeft: 10, opacity: 0.7 }}>{p.envase}</div>
                             )}
                           </div>
-                          {/* Unidades */}
+                          {/* Unidades — calculadas desde litros + ml del envase si no vienen de BD */}
                           <div style={{ textAlign: 'right' }}>
-                            {p.unidades != null
-                              ? <>
-                                  <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>{p.unidades.toLocaleString('es-CL')}</span>
-                                  <div style={{ fontSize: 8, color: 'var(--muted)' }}>unidades</div>
-                                </>
-                              : <span style={{ fontSize: 11, color: 'rgba(128,128,128,0.3)' }}>—</span>
-                            }
+                            {(() => {
+                              const mlMatch = p.envase?.match(/\((\d+)\s*ml\)/i)
+                              const mlPorUnidad = mlMatch ? parseInt(mlMatch[1]) : null
+                              const unidades = p.unidades ?? (mlPorUnidad && p.litros > 0
+                                ? Math.round((p.litros * 1000) / mlPorUnidad)
+                                : null)
+                              const labelUnidad = /lata/i.test(p.envase ?? '') ? 'latas'
+                                : /botella/i.test(p.envase ?? '') ? 'botellas'
+                                : 'unidades'
+                              return unidades != null && unidades > 0
+                                ? <>
+                                    <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', fontVariantNumeric: 'tabular-nums' }}>
+                                      {unidades.toLocaleString('es-CL')}
+                                    </span>
+                                    <div style={{ fontSize: 8, color: 'var(--muted)' }}>{labelUnidad}</div>
+                                  </>
+                                : <span style={{ fontSize: 11, color: 'rgba(128,128,128,0.3)' }}>—</span>
+                            })()}
                           </div>
                           {/* Litros */}
                           <div style={{ textAlign: 'right' }}>
