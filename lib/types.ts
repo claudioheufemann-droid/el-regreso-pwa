@@ -16,7 +16,13 @@ export const VENDEDOR_DISPLAY: Record<string, string> = {
   'Carlos Urrejola': 'Vendedor Planta',
   'Vendedor 1':      'Vendedor Planta',
   'Vendedor Planta': 'Vendedor Planta',
+  'OnLine':          'OnLine',
 }
+
+// Scope completo de vendedores a incluir en consultas y reportes
+export const VENDEDORES_SCOPE = [
+  'Javier Badilla', 'Carlos Urrejola', 'Vendedor 1', 'Vendedor Planta', 'OnLine',
+] as const
 
 export const CATEGORIAS_NEGOCIO = [
   'Bar',

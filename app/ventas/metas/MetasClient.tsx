@@ -99,6 +99,8 @@ interface AnalyticsExtended extends AnalyticsVendedor {
   porCanalHoy: CanalDiario[]
   barDataSemana: BarDia[]
   pacingDataMes: PacingDia[]
+  onlineLitros?: number
+  plantaLitros?: number
 }
 
 interface PeriodoSemana {
@@ -482,8 +484,10 @@ function CanalRow({ c }: { c: AnalyticsCanal }) {
 // ─── VendedorCard ─────────────────────────────────────────────────────────────
 
 function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: AnalyticsExtended; rangeLabel: string; avatarUrl?: string | null }) {
-  const meta      = analytics.metaMensual
-  const real      = analytics.realizadoMes
+  const meta        = analytics.metaMensual
+  const real        = analytics.realizadoMes
+  const onlineL     = analytics.onlineLitros ?? 0
+  const plantaL     = analytics.plantaLitros ?? real
   const esperado  = analytics.metaEsperadaMes
   const pct       = analytics.pctCumplimientoMes
   const semaforo  = analytics.semaforoMes
@@ -582,6 +586,24 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
             </div>
           ))}
         </div>
+
+        {/* Breakdown Vendedor Planta / OnLine */}
+        {onlineL > 0 && (
+          <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.04)', borderRadius: 10, display: 'flex', gap: 6 }}>
+            {[
+              { label: 'Vendedor Planta', value: plantaL, color: SEMAFORO_COLORS[semaforo] },
+              { label: 'OnLine',          value: onlineL, color: '#60A5FA' },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.6px', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color, letterSpacing: '-0.3px' }}>{fmtL(value)}</span>
+                  <span style={{ fontSize: 7, color, opacity: 0.6 }}>L</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* KPI chips — META / REALIZADO / FALTANTE */}
@@ -1759,6 +1781,8 @@ export default function MetasClient({
       const realMes = vMes.reduce((s, v) => s + (v.litros ?? 0), 0)
       const realSem = vSem.reduce((s, v) => s + (v.litros ?? 0), 0)
       const realizadoHoy = vHoy.reduce((s, v) => s + (v.litros ?? 0), 0)
+      const onlineLitros = vMes.filter(v => v.vendedor_actual === 'OnLine').reduce((s, v) => s + (v.litros ?? 0), 0)
+      const plantaLitros = realMes - onlineLitros
 
       const dhMesTotal = dhMes.length
       const dhSemTotal = dhSem.length
@@ -1821,6 +1845,7 @@ export default function MetasClient({
 
       return {
         vendedor, fecha: fechaRef,
+        onlineLitros, plantaLitros,
         metaMensual: metaMesTotal, realizadoMes: realMes, metaEsperadaMes: espMes,
         pctCumplimientoMes: calcularCumplimiento(realMes, metaMesTotal),
         semaforoMes: getEstadoSemaforo(realMes, espMes),

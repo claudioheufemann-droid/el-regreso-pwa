@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, VENDEDORES_DB, esClienteExcluido } from '@/lib/types'
+import { VENDEDORES_SCOPE, esClienteExcluido } from '@/lib/types'
 
-const TODOS_VENDEDORES = [...VENDEDORES_DB, ...VENDEDORES, 'Vendedor Planta']
+const TODOS_VENDEDORES = [...VENDEDORES_SCOPE]
 import { getVentasRango } from '@/lib/ventasCache'
 import AcumuladoClient from './AcumuladoClient'
 

@@ -1,7 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { VENDEDORES, VENDEDORES_DB } from '@/lib/types'
-
-const TODOS_VENDEDORES = [...VENDEDORES_DB, ...VENDEDORES]
+import { VENDEDORES, VENDEDORES_SCOPE } from '@/lib/types'
 import { getVentasRango } from '@/lib/ventasCache'
 import MetasClient from './MetasClient'
 
@@ -13,7 +11,7 @@ export default async function MetasPage() {
   const { data: ultimaFecha } = await supabase
     .from('ventas')
     .select('fecha_pedido')
-    .in('vendedor_actual', TODOS_VENDEDORES)
+    .in('vendedor_actual', VENDEDORES_SCOPE as unknown as string[])
     .order('fecha_pedido', { ascending: false })
     .limit(1)
     .single()
@@ -54,12 +52,17 @@ export default async function MetasPage() {
   const semInicio = metasSemanales?.[0]?.fecha_inicio  ?? fechaRef
   const semFin    = metasSemanales?.[0]?.fecha_fin     ?? fechaRef
 
+  const SCOPE = VENDEDORES_SCOPE as unknown as string[]
   const [ventasMesRaw, ventasSemanaRaw] = await Promise.all([
     getVentasRango(mesInicio, fechaRef),
     getVentasRango(semInicio, fechaRef),
   ])
-  const ventasMes    = ventasMesRaw.map(v => ({ ...v, litros: v.litros ?? 0 }))
-  const ventasSemana = ventasSemanaRaw.map(v => ({ ...v, litros: v.litros ?? 0 }))
+  const ventasMes    = ventasMesRaw
+    .filter(v => SCOPE.includes(v.vendedor_actual))
+    .map(v => ({ ...v, litros: v.litros ?? 0 }))
+  const ventasSemana = ventasSemanaRaw
+    .filter(v => SCOPE.includes(v.vendedor_actual))
+    .map(v => ({ ...v, litros: v.litros ?? 0 }))
 
   // Sin avatar individual — consolidado bajo Vendedor 1 (token canónico)
   const vendedorAvatars: Record<string, string | null> = {

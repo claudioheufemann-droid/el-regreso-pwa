@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, VENDEDORES_DB, VENDEDOR_DISPLAY, esClienteExcluido } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_DB, VENDEDOR_DISPLAY, VENDEDORES_SCOPE, esClienteExcluido } from '@/lib/types'
 import DashboardClient from './DashboardClient'
 
 export const dynamic = 'force-dynamic'
@@ -41,7 +41,7 @@ export default async function DashboardPage({
   const appUser = await getServerUser()
 
   // Todos los nombres posibles en BD (históricos + canonical + display)
-  const vendedoresScope: string[] = [...VENDEDORES_DB, ...VENDEDORES, 'Vendedor Planta']
+  const vendedoresScope: string[] = [...VENDEDORES_SCOPE]
 
   const scope = vendedoresScope.length ? vendedoresScope : ['__none__']
 

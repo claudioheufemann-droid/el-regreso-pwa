@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { VENDEDORES, VENDEDORES_DB, CLIENTES_EXCLUIR } from '@/lib/types'
+import { VENDEDORES_SCOPE, CLIENTES_EXCLUIR } from '@/lib/types'
 
-// Todos los nombres que pueden aparecer en ventas.vendedor_actual
-const TODOS_VENDEDORES = [...VENDEDORES_DB, ...VENDEDORES, 'Vendedor Planta'] as const
+const TODOS_VENDEDORES = [...VENDEDORES_SCOPE] as const
 import {
   getDiasHabiles,
   getDiasHabilesTranscurridos,
