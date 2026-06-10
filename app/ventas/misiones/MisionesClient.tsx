@@ -1475,13 +1475,16 @@ export default function MisionesClient({
     const grupos: Record<TipoMision, MisionEnriquecida[]> = { vencido: [], esta_semana: [], proxima_semana: [] }
     for (const m of misionesFiltradas) grupos[m.tipo]?.push(m)
     const orden: EstadoMision[] = ['pendiente', 'sin_respuesta', 'contactado_sin_pedido', 'pospuesto', 'contactado_pedido', 'auto_completado']
+    const getDiasVencidos = (m: MisionEnriquecida) =>
+      m.dias_para_compra !== null && m.dias_para_compra < 0
+        ? Math.abs(m.dias_para_compra)
+        : Math.max(0, (m.dias_sin_compra ?? 0) - (m.ciclo_promedio_dias ?? 0))
     for (const key of Object.keys(grupos) as TipoMision[]) {
       grupos[key].sort((a, b) => {
         const oa = orden.indexOf(a.estado); const ob = orden.indexOf(b.estado)
         if (oa !== ob) return oa - ob
-        const pa = a.prioridad_calculada ?? a.score ?? 0
-        const pb = b.prioridad_calculada ?? b.score ?? 0
-        return pb - pa
+        // Días vencidos ASC: 1 día primero, luego más días
+        return getDiasVencidos(a) - getDiasVencidos(b)
       })
     }
     return grupos

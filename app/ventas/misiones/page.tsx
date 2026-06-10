@@ -214,6 +214,13 @@ export default async function MisionesPage() {
     pedidoSugMap.get(p.nombre_fantasia)!.push({ producto: p.producto, envase: p.envase, litros: p.litros_tipico })
   }
 
+  // Días vencidos: cuántos días lleva el cliente pasando su ciclo de compra.
+  // 1 día = venció ayer, se muestra primero (más fresco, más recuperable).
+  function diasVencidos(m: MisionEnriquecida): number {
+    if (m.dias_para_compra !== null && m.dias_para_compra < 0) return Math.abs(m.dias_para_compra)
+    return Math.max(0, (m.dias_sin_compra ?? 0) - (m.ciclo_promedio_dias ?? 0))
+  }
+
   const hoyStr = new Date().toISOString().split('T')[0]
   const misiones: MisionEnriquecida[] = (misionesRaw ?? [])
     .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap, deudoresSet))
@@ -221,12 +228,12 @@ export default async function MisionesPage() {
     .filter(m => (m.dias_sin_compra ?? 0) <= 90)
     .filter(m => !(m.estado === 'pospuesto' && m.snooze_until && m.snooze_until > hoyStr))
     .sort((a, b) => {
-      // Deuda siempre al final (son gestiones, no ventas urgentes)
+      // Deuda siempre al final
       if (a.tiene_deuda !== b.tiene_deuda) return a.tiene_deuda ? 1 : -1
+      // Pendientes antes que gestionados
       if (a.estado !== b.estado) return a.estado === 'pendiente' ? -1 : 1
-      const pa = a.prioridad_calculada ?? a.score ?? 0
-      const pb = b.prioridad_calculada ?? b.score ?? 0
-      return pb - pa
+      // Ordenar por días vencidos ASC: 1 día primero, luego más días
+      return diasVencidos(a) - diasVencidos(b)
     })
 
   const historialMap = new Map<string, MisionEnriquecida[]>()
