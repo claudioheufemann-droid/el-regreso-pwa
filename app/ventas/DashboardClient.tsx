@@ -2002,83 +2002,55 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         }
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
-            {/* Row 1: Litros + Meta */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {/* Litros */}
-              <div style={{ ...cardStyle, borderTop: `2px solid ${C_CERV}` }}>
-                <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(212,175,55,0.5)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 6 }}>
-                  Litros · {mesNombre}
-                </p>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                  <span style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                    {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+            {/* Litros */}
+            <div style={{ ...cardStyle, borderTop: `2px solid ${C_CERV}` }}>
+              <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(212,175,55,0.5)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 6 }}>
+                Litros · {mesNombre}
+              </p>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                <span style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(212,175,55,0.6)' }}>L</span>
+              </div>
+              {litrosMesAnterior > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                  <span style={{ fontSize: 9, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
+                    {diffTotal >= 0 ? '↑' : '↓'}
                   </span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(212,175,55,0.6)' }}>L</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
+                    {Math.abs(diffPct).toFixed(1)}% vs {mesAnteriorNombre}
+                  </span>
                 </div>
-                {litrosMesAnterior > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                    <span style={{ fontSize: 9, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
-                      {diffTotal >= 0 ? '↑' : '↓'}
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: diffTotal >= 0 ? '#4ADE80' : '#F87171' }}>
-                      {Math.abs(diffPct).toFixed(1)}% vs {mesAnteriorNombre}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Meta */}
-              <div style={{ ...cardStyle, borderTop: `2px solid rgba(212,175,55,0.4)` }}>
-                <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 6 }}>
-                  Meta Mensual
-                </p>
-                {metaTotalEquipo > 0 ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <svg width={56} height={56} style={{ flexShrink: 0 }}>
-                      <circle cx={donutCx} cy={donutCy} r={donutR} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={sw}/>
-                      <circle cx={donutCx} cy={donutCy} r={donutR} fill="none" stroke="#D4AF37" strokeWidth={sw}
-                        strokeLinecap="round" strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={circ/4}/>
-                      <text x={donutCx} y={donutCy+4} textAnchor="middle" fill="var(--gold)" fontSize={9} fontWeight="900" fontFamily="inherit">{pctMeta}%</text>
-                    </svg>
-                    <div>
-                      <p style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{pctMeta}%</p>
-                      <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 3 }}>
-                        {fL(totalLitrosPeriodo)} / {fL(metaTotalEquipo)}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', marginTop: 8 }}>Sin metas</p>
-                )}
-              </div>
+              )}
             </div>
 
-            {/* Row 2: Vendedores — scroll horizontal */}
-            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginRight: -16, paddingRight: 16 }}>
-              {resumen.map(v => {
-                const color = VEND_COLOR[v.vendedor] ?? '#D4AF37'
-                const pctVend = totalLitrosPeriodo > 0 ? (v.litrosPeriodo / totalLitrosPeriodo) * 100 : 0
-                return (
-                  <div key={v.vendedor} style={{ ...cardStyle, borderTop: `2px solid ${color}`, minWidth: 110, flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-                      <VendedorAvatar vendedor={v.vendedor} color={color} size={28} avatars={vendedorAvatars} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: '0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                        {dspVendedor(v.vendedor).split(' ')[0]}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                      <span style={{ fontSize: 22, fontWeight: 900, color: '#F0EDE8', letterSpacing: '-0.8px', fontVariantNumeric: 'tabular-nums' }}>
-                        {v.litrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>L</span>
-                    </div>
-                    <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 3 }}>
-                      {pctVend.toFixed(1)}% del total
+            {/* Meta */}
+            <div style={{ ...cardStyle, borderTop: `2px solid rgba(212,175,55,0.4)` }}>
+              <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 6 }}>
+                Meta Mensual
+              </p>
+              {metaTotalEquipo > 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg width={48} height={48} style={{ flexShrink: 0 }}>
+                    <circle cx={24} cy={24} r={20} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={5}/>
+                    <circle cx={24} cy={24} r={20} fill="none" stroke="#D4AF37" strokeWidth={5}
+                      strokeLinecap="round"
+                      strokeDasharray={`${(pctMeta / 100) * 2 * Math.PI * 20} ${2 * Math.PI * 20}`}
+                      strokeDashoffset={2 * Math.PI * 20 / 4}/>
+                    <text x={24} y={28} textAnchor="middle" fill="var(--gold)" fontSize={9} fontWeight="900" fontFamily="inherit">{pctMeta}%</text>
+                  </svg>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{pctMeta}%</p>
+                    <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 3, whiteSpace: 'nowrap' as const }}>
+                      {fL(totalLitrosPeriodo)} / {fL(metaTotalEquipo)}
                     </p>
                   </div>
-                )
-              })}
+                </div>
+              ) : (
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', marginTop: 8 }}>Sin metas</p>
+              )}
             </div>
           </div>
         )
