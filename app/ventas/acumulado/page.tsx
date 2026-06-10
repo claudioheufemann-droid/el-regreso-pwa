@@ -6,7 +6,7 @@ const TODOS_VENDEDORES = [...VENDEDORES_DB, ...VENDEDORES, 'Vendedor Planta']
 import { getVentasRango } from '@/lib/ventasCache'
 import AcumuladoClient from './AcumuladoClient'
 
-export const revalidate = 120
+export const dynamic = 'force-dynamic'
 
 // ── Tipos exportados ────────────────────────────────────────────────────────
 export interface KpiData {

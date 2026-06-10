@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { VENDEDORES, VENDEDORES_DB, VENDEDOR_DISPLAY, esClienteExcluido } from '@/lib/types'
 import DashboardClient from './DashboardClient'
 
-export const revalidate = 120
+export const dynamic = 'force-dynamic'
 
 function contarLatas(litros: number, envase: string | null): number {
   if (!envase) return 0

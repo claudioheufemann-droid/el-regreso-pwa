@@ -1,9 +1,7 @@
-import { unstable_cache } from 'next/cache'
 import { createServerClient } from '@supabase/ssr'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 
-// Cliente SIN cookies → apto para usar dentro de unstable_cache
-// (el cliente normal lee cookies de auth y rompería el cache).
+// Cliente SIN cookies → para llamadas server-side sin auth
 function anonClient() {
   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: { getAll: () => [], setAll: () => {} },
@@ -25,7 +23,11 @@ export type VentaRangoRow = {
 
 const COLS = 'vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,producto,envase,fecha_pedido,nombre_fantasia,pedido'
 
-async function _fetchVentasRango(ini: string, fin: string): Promise<VentaRangoRow[]> {
+/**
+ * Ventas de un rango de fechas (TODOS los vendedores), llamada directa sin caché.
+ * Garantiza que los datos siempre estén actualizados tras un upload de Excel.
+ */
+export async function getVentasRango(ini: string, fin: string): Promise<VentaRangoRow[]> {
   const supabase = anonClient()
   const rows: VentaRangoRow[] = []
   let off = 0
@@ -44,17 +46,4 @@ async function _fetchVentasRango(ini: string, fin: string): Promise<VentaRangoRo
     off += PAGE
   }
   return rows
-}
-
-/**
- * Ventas de un rango de fechas (TODOS los vendedores), cacheado y COMPARTIDO
- * entre todos los usuarios. Se invalida al subir ventas (revalidateTag('ventas')).
- * Las páginas filtran por su scope de vendedor en memoria.
- */
-export function getVentasRango(ini: string, fin: string): Promise<VentaRangoRow[]> {
-  return unstable_cache(
-    () => _fetchVentasRango(ini, fin),
-    ['ventas-rango', ini, fin],
-    { tags: ['ventas'], revalidate: 300 },
-  )()
 }

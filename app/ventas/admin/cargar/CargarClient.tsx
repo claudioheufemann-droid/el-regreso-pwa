@@ -4,7 +4,6 @@ import { useState, useRef } from 'react'
 import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Loader2, Settings, Calendar, Droplets, Copy, AlertTriangle, ShieldCheck } from 'lucide-react'
 import { Periodo } from '@/lib/types'
 import { useIsDesktop } from '@/lib/useIsDesktop'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 interface Props {
@@ -61,8 +60,7 @@ function formatFecha(dateStr: string) {
 
 export default function CargarClient({ periodos }: Props) {
   const isDesktop = useIsDesktop()
-  const router = useRouter()
-  const [file, setFile] = useState<File | null>(null)
+const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [result, setResult] = useState<UploadResult | null>(null)
@@ -133,8 +131,7 @@ export default function CargarClient({ periodos }: Props) {
       setFile(null)
       setPreview(null)
       if (inputRef.current) inputRef.current.value = ''
-      // Invalida el router cache para que Hoy y Acumulado muestren datos frescos
-      router.refresh()
+      // Sin router.refresh() — las páginas son force-dynamic, siempre devuelven datos frescos
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error desconocido')
     } finally {
@@ -545,7 +542,7 @@ export default function CargarClient({ periodos }: Props) {
                 Cargar otro
               </button>
               <button
-                onClick={() => router.push('/ventas')}
+                onClick={() => { window.location.href = '/ventas' }}
                 style={{
                   flex: 2, padding: '11px 0', borderRadius: 12, fontWeight: 700, fontSize: 13,
                   border: 'none', cursor: 'pointer',

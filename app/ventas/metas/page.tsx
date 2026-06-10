@@ -5,7 +5,7 @@ const TODOS_VENDEDORES = [...VENDEDORES_DB, ...VENDEDORES]
 import { getVentasRango } from '@/lib/ventasCache'
 import MetasClient from './MetasClient'
 
-export const revalidate = 120
+export const dynamic = 'force-dynamic'
 
 export default async function MetasPage() {
   const supabase = await createClient()
