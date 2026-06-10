@@ -50,8 +50,8 @@ function formatLitros(n: number) {
 }
 
 const VENDEDORES = [
-  { value: 'all',        label: 'Todos'      },
-  { value: 'Vendedor 1', label: 'Vendedor 1' },
+  { value: 'all',             label: 'Todos'          },
+  { value: 'Vendedor Planta', label: 'Vendedor Planta' },
 ]
 
 const CAPAS: { value: CapaViz; label: string; icon: React.ReactNode }[] = [
@@ -147,7 +147,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
 
   // ── Puntos derivados (filtro vendedor + producto) ────────
   const puntosFiltrados = useMemo(() => {
-    let base = vendedor === 'all' ? puntos : puntos.filter(p => p.vendedor_actual === vendedor || p.sin_compra)
+    let base = vendedor === 'all' ? puntos : puntos.filter(p => dspV(p.vendedor_actual) === vendedor || p.sin_compra)
     if (productoFiltro !== 'all') {
       base = base
         .map(p => {
@@ -198,7 +198,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
 
   // ── Resumen por territorio ───────────────────────────────
   const territorios = useMemo(() => {
-    return [{ vendedor: 'Vendedor 1', litros: conVenta.reduce((s, p) => s + p.litros_total, 0), clientes: conVenta.length }]
+    return [{ vendedor: 'Vendedor Planta', litros: conVenta.reduce((s, p) => s + p.litros_total, 0), clientes: conVenta.length }]
   }, [conVenta])
 
   const hayDatos = conVenta.length > 0

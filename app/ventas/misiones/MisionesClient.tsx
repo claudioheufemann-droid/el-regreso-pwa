@@ -1195,14 +1195,14 @@ export default function MisionesClient({
   const [selectedMision, setSelectedMision] = useState<MisionEnriquecida | null>(null)
 
   const misionesFiltradas = useMemo(() => {
-    let base = !filtroVendedor ? misiones : misiones.filter(m => m.vendedor === filtroVendedor)
+    let base = !filtroVendedor ? misiones : misiones.filter(m => dspV(m.vendedor) === filtroVendedor)
     if (filtroTipo) base = base.filter(m => m.tipo_cliente === filtroTipo)
     return base
   }, [misiones, filtroVendedor, filtroTipo])
 
   // Conteos por tipo para el filtro UI
   const conteosPorTipo = useMemo(() => {
-    const base = !filtroVendedor ? misiones : misiones.filter(m => m.vendedor === filtroVendedor)
+    const base = !filtroVendedor ? misiones : misiones.filter(m => dspV(m.vendedor) === filtroVendedor)
     return {
       activo:   base.filter(m => m.tipo_cliente === 'activo').length,
       inactivo: base.filter(m => m.tipo_cliente === 'inactivo').length,
@@ -1293,7 +1293,7 @@ export default function MisionesClient({
     setWaTarget({ nombre: m.nombre_fantasia, telefono: m.telefono ?? undefined, cicloPromedioDias: m.ciclo_promedio_dias ?? undefined, siguienteCompra: m.siguiente_compra_estimada ?? undefined, contexto: 'mision' })
   }, [])
 
-  const vendedores = useMemo(() => [...new Set(misiones.map(m => m.vendedor))], [misiones])
+  const vendedores = useMemo(() => [...new Set(misiones.map(m => dspV(m.vendedor)))], [misiones])
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     ...(isAdmin ? [{ key: 'resumen' as Tab, label: 'Resumen Admin' }] : []),
@@ -1313,7 +1313,7 @@ export default function MisionesClient({
           onClick={() => setFiltroTipo(null)}
           style={{ padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700, border: `1px solid ${!filtroTipo ? 'rgba(212,175,55,0.4)' : 'var(--border)'}`, background: !filtroTipo ? 'rgba(212,175,55,0.12)' : 'transparent', color: !filtroTipo ? '#D4AF37' : 'var(--muted)', cursor: 'pointer' }}
         >
-          Todos ({misiones.filter(m => !filtroVendedor || m.vendedor === filtroVendedor).length})
+          Todos ({misiones.filter(m => !filtroVendedor || dspV(m.vendedor) === filtroVendedor).length})
         </button>
         {(Object.entries(conteosPorTipo) as [TipoCliente, number][]).map(([tipo, count]) => {
           if (count === 0) return null
@@ -1351,7 +1351,7 @@ export default function MisionesClient({
               background: filtroVendedor === v ? 'rgba(96,165,250,0.15)' : 'var(--surface2)',
               border: `1px solid ${filtroVendedor === v ? 'rgba(96,165,250,0.4)' : 'var(--border)'}`,
               color: filtroVendedor === v ? '#D4AF37' : 'var(--muted)', cursor: 'pointer',
-            }}>{v.split(' ')[0]}</button>
+            }}>{v}</button>
           ))}
         </div>
       )}

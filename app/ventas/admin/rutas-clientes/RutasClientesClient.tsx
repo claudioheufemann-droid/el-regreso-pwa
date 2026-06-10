@@ -7,7 +7,10 @@ import {
 } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { VEND_COLOR as VENDEDOR_COLOR } from '@/lib/theme'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
 import AppHeader from '@/components/ui/AppHeader'
+
+const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
 
 interface Cliente {
   id: number
@@ -209,7 +212,7 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
           )}
           {cliente.vendedor && (
             <span style={{ fontSize: 10, fontWeight: 700, color: vc }}>
-              {cliente.vendedor.split(' ')[0]}
+              {dspV(cliente.vendedor)}
             </span>
           )}
         </div>

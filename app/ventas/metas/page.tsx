@@ -59,7 +59,7 @@ export default async function MetasPage() {
   const ventasMes    = ventasMesRaw.map(v => ({ ...v, litros: v.litros ?? 0 }))
   const ventasSemana = ventasSemanaRaw.map(v => ({ ...v, litros: v.litros ?? 0 }))
 
-  // Sin avatar individual — consolidado bajo Vendedor 1
+  // Sin avatar individual — consolidado bajo Vendedor 1 (token canónico)
   const vendedorAvatars: Record<string, string | null> = {
     'Vendedor 1': null,
   }

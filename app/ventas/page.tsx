@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, VENDEDORES_DB, esClienteExcluido } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_DB, VENDEDOR_DISPLAY, esClienteExcluido } from '@/lib/types'
 import DashboardClient from './DashboardClient'
 
 export const revalidate = 120
@@ -205,6 +205,17 @@ export default async function DashboardPage({
     }
   }
 
+  // Consolidar series de evolución: nombres históricos (Javier/Carlos) → un solo vendedor
+  evolution = evolution.map(day => {
+    const { fecha, ...vals } = day
+    const merged: Record<string, number> = {}
+    for (const [vend, litros] of Object.entries(vals)) {
+      const key = VENDEDOR_DISPLAY[vend] ?? vend
+      merged[key] = (merged[key] ?? 0) + (litros as number)
+    }
+    return { fecha, ...merged } as EvolutionDay
+  })
+
   // Product ranking top 5
   const prodMap = new Map<string, { litros: number; categoria: string }>()
   for (const v of ventasHoy ?? []) {
@@ -242,8 +253,8 @@ export default async function DashboardPage({
     productDetailMap[key].sort((a, b) => b.litros - a.litros)
   }
 
-  // Resumen por vendedor
-  const resumen = vendedoresScope.map(vendedor => {
+  // Resumen por vendedor (crudo, una entrada por nombre histórico en BD)
+  const resumenRaw = vendedoresScope.map(vendedor => {
     const vHoy = (ventasHoy ?? []).filter(v => v.vendedor_actual === vendedor)
     const vHoyFiltrado = vHoy.filter(v => !esClienteExcluido(v.nombre_fantasia))
 
@@ -308,6 +319,34 @@ export default async function DashboardPage({
       metaLitros,
     }
   })
+
+  // Consolidar entradas por vendedor de DISPLAY: los nombres históricos de la BD
+  // (Javier Badilla, Carlos Urrejola, …) se fusionan en un solo vendedor visible.
+  const resumen = Array.from(
+    resumenRaw.reduce((acc, r) => {
+      const key = VENDEDOR_DISPLAY[r.vendedor] ?? r.vendedor
+      const prev = acc.get(key)
+      if (!prev) { acc.set(key, { ...r, vendedor: key }); return acc }
+      // Sumar métricas numéricas
+      prev.litrosHoy            += r.litrosHoy
+      prev.ventaHoy             += r.ventaHoy
+      prev.litrosPeriodo        += r.litrosPeriodo
+      prev.ventaPeriodo         += r.ventaPeriodo
+      prev.latasCervezaHoy      += r.latasCervezaHoy
+      prev.latasKombuchaHoy     += r.latasKombuchaHoy
+      prev.litrosCerveza        += r.litrosCerveza
+      prev.litrosKombucha       += r.litrosKombucha
+      prev.clientesPeriodoCount += r.clientesPeriodoCount
+      prev.metaLitros           += r.metaLitros
+      // Unir clientes del día por nombre (evita duplicar el mismo local)
+      const map = new Map(prev.clientesHoy.map(c => [c.nombre, c]))
+      for (const c of r.clientesHoy) if (!map.has(c.nombre)) map.set(c.nombre, c)
+      prev.clientesHoy      = Array.from(map.values())
+      prev.clientesHoyCount = prev.clientesHoy.length
+      prev.dropSize         = prev.clientesHoyCount > 0 ? prev.ventaHoy / prev.clientesHoyCount : 0
+      return acc
+    }, new Map<string, (typeof resumenRaw)[number]>()).values()
+  )
 
   // Plan semanal (planRaw ya cargado en FASE A)
   type ClientePlan = {

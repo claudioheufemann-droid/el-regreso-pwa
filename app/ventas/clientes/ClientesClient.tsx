@@ -562,7 +562,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
 
   // Filtrar y ordenar
   const clientesFiltrados = useMemo(() => {
-    const vendEfectivo = isAdmin ? vendFiltro : (user?.nombre ?? 'all')
+    const vendEfectivo = isAdmin ? vendFiltro : (VENDEDOR_DISPLAY[user?.nombre ?? ''] ?? user?.nombre ?? 'all')
     let res = clientes.filter(c => c.estadoCliente !== 'inactivo')
 
     if (vendEfectivo !== 'all')
@@ -689,8 +689,8 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
               {/* Vendedor tabs (solo admin) */}
               {isAdmin && (
                 <div style={{ display:'flex', gap:4, background:'rgba(255,255,255,0.04)', border:'1px solid var(--border)', borderRadius:10, padding:'3px' }}>
-                  {['all', ...vendedoresScope].map(v=>{
-                    const label = v==='all' ? 'Todos' : v.split(' ')[0]
+                  {['all', ...vendedoresScope.map(s => VENDEDOR_DISPLAY[s] ?? s)].map(v=>{
+                    const label = v==='all' ? 'Todos' : v
                     const active = vendFiltro===v
                     return (
                       <button key={v} onClick={()=>handleVend(v)}

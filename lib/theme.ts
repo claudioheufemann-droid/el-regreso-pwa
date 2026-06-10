@@ -4,8 +4,9 @@
 
 // ── Color por vendedor ──────────────────────────────────────────────────────
 export const VEND_COLOR: Record<string, string> = {
-  'Vendedor 1':      '#D4AF37',
+  'Vendedor Planta': '#D4AF37',
   // Aliases históricos en BD (datos anteriores)
+  'Vendedor 1':      '#D4AF37',
   'Javier Badilla':  '#D4AF37',
   'Carlos Urrejola': '#D4AF37',
 }

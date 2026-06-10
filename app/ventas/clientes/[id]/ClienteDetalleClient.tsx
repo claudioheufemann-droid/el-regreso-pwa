@@ -15,6 +15,9 @@ import AppHeader from '@/components/ui/AppHeader'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import RegistrarContactoModal, { type TipoContacto } from '@/components/ui/RegistrarContactoModal'
 import FollowUpModal, { type FollowUp } from '@/components/ui/FollowUpModal'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
+
+const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface Cliente {
@@ -453,7 +456,7 @@ function ActivityItem({ icon, title, sub, date, vendedor, last = false }: {
         <p style={{ fontSize: 13, fontWeight: 600, color: '#ddd', marginBottom: 2 }}>{title}</p>
         {sub && <p style={{ fontSize: 12, color: '#555', marginBottom: 2 }}>{sub}</p>}
         <p style={{ fontSize: 11, color: '#444' }}>
-          {date}{vendedor ? ` · ${vendedor}` : ''}
+          {date}{vendedor ? ` · ${dspV(vendedor)}` : ''}
         </p>
       </div>
     </div>
@@ -782,7 +785,7 @@ export default function ClienteDetalleClient({
                   {/* Vendedor */}
                   {cliente.vendedor && (
                     <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(96,165,250,0.08)', color: '#D4AF37', border: '1px solid rgba(96,165,250,0.2)' }}>
-                      ⊕ {cliente.vendedor}
+                      ⊕ {dspV(cliente.vendedor)}
                     </span>
                   )}
 
@@ -1209,7 +1212,7 @@ export default function ClienteDetalleClient({
                         {c.notas && (
                           <p style={{ fontSize: 12, color: '#888', lineHeight: 1.5, marginBottom: 4 }}>{c.notas}</p>
                         )}
-                        <p style={{ fontSize: 11, color: '#444' }}>por {c.vendedor}</p>
+                        <p style={{ fontSize: 11, color: '#444' }}>por {dspV(c.vendedor)}</p>
                       </div>
                     </div>
                   )
@@ -1389,7 +1392,7 @@ export default function ClienteDetalleClient({
                         background: `${GOLD}06`, border: `1px solid ${GOLD}18`,
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: GOLD }}>📝 {c.vendedor}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: GOLD }}>📝 {dspV(c.vendedor)}</span>
                           <span style={{ fontSize: 11, color: '#444' }}>
                             {fFecha(c.fecha_hora.split('T')[0], true)} {c.fecha_hora.split('T')[1]?.slice(0, 5)}
                           </span>

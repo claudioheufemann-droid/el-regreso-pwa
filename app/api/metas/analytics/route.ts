@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
   const productosPeriodo = computeProductos(ventas)
 
   // ── Analytics por vendedor ───────────────────────────────────────────────────
-  // Consolidar todos los vendedores DB bajo 'Vendedor 1'
+  // Consolidar todos los vendedores DB bajo 'Vendedor 1' (token canónico)
   const analytics: AnalyticsVendedor[] = VENDEDORES.map(vendedor => {
     const metaTotal = todasMetas.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
     const realizado = ventas.reduce((s, v) => s + (v.litros ?? 0), 0)

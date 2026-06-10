@@ -420,7 +420,7 @@ function MetaBar({ vendedor, actual, meta, avatars }: { vendedor: string; actual
         <VendedorAvatar vendedor={vendedor} color={color} size={36} avatars={avatars} />
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{vendedor.split(' ')[0]}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{dspVendedor(vendedor)}</span>
             <span style={{ fontSize: 12, fontWeight: 700, color }}>
               {pct.toFixed(0)}%
             </span>
@@ -703,7 +703,7 @@ function ClientesHoyModal({
               <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '1px' }}>
                 CLIENTES DEL DÍA · {formatFecha(fechaHoy)}
               </p>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)' }}>{vendedor}</h3>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)' }}>{dspVendedor(vendedor)}</h3>
             </div>
             <button
               onClick={onClose}
@@ -1112,7 +1112,7 @@ function EvolutionCard({ evolution, vendedores, colors, avatars }: { evolution: 
           {vendedores.map(v => (
             <div key={v} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ width: 10, height: 10, borderRadius: '50%', background: colors[v] ?? '#D4AF37' }} />
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{v.split(' ')[0]}</span>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{dspVendedor(v)}</span>
             </div>
           ))}
         </div>
@@ -1349,7 +1349,7 @@ function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; o
                       {c.nombre_fantasia}
                     </p>
                     <p style={{ fontSize: 10, color: '#555', marginTop: 1 }}>
-                      {c.vendedor_actual.split(' ')[0]}
+                      {dspVendedor(c.vendedor_actual)}
                       {c.siguiente_compra_estimada && ` · próximo: ${c.siguiente_compra_estimada}`}
                     </p>
                   </div>
@@ -1468,7 +1468,7 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
                         </p>
                       </div>
                       <p style={{ fontSize: 10, color }}>
-                        {c.vendedor_actual.split(' ')[0]}
+                        {dspVendedor(c.vendedor_actual)}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -2095,7 +2095,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
             <MetasCard resumen={resumen} periodo={periodo} avatars={vendedorAvatars} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <EvolutionCard evolution={evolution} vendedores={vendedoresScope} colors={VEND_COLOR} avatars={vendedorAvatars} />
+            <EvolutionCard evolution={evolution} vendedores={[...new Set(vendedoresScope.map(v => VENDEDOR_DISPLAY[v] ?? v))]} colors={VEND_COLOR} avatars={vendedorAvatars} />
             <RankingCard productRanking={productRanking} productDetail={productDetail} fechaHoy={fechaHoy} />
             <DropSizeCard resumen={resumen} colors={VEND_COLOR} avatars={vendedorAvatars} />
           </div>

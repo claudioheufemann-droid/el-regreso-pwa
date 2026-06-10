@@ -1,17 +1,21 @@
+// Token interno/canónico — coincide con valores reales en la BD (no tocar:
+// se usa como scope de queries `.in('vendedor_actual', VENDEDORES)`).
 export type Vendedor = 'Vendedor 1'
 
-// Nombre display unificado
 export const VENDEDORES: Vendedor[] = ['Vendedor 1']
 
 // Nombres históricos en la BD — necesarios para queries sobre datos pasados
 // (los registros de ventas anteriores siguen con estos nombres)
 export const VENDEDORES_DB = ['Javier Badilla', 'Carlos Urrejola'] as const
 
-// Mapeo BD → display (ambos se consolidan en Vendedor 1)
+// Mapeo BD → display: TODOS los nombres (históricos + canónico) se consolidan
+// en un solo vendedor visible. Cambiar SOLO el valor afecta lo que se MUESTRA,
+// nunca lo que se consulta en la BD.
 export const VENDEDOR_DISPLAY: Record<string, string> = {
-  'Javier Badilla':  'Vendedor 1',
-  'Carlos Urrejola': 'Vendedor 1',
-  'Vendedor 1':      'Vendedor 1',
+  'Javier Badilla':  'Vendedor Planta',
+  'Carlos Urrejola': 'Vendedor Planta',
+  'Vendedor 1':      'Vendedor Planta',
+  'Vendedor Planta': 'Vendedor Planta',
 }
 
 export const CATEGORIAS_NEGOCIO = [

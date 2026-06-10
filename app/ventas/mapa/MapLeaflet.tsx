@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
+
+const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
 
 export interface Punto {
   nombre_fantasia: string
@@ -199,7 +202,7 @@ function PopupDetalle({ p, color, onWA }: {
           {p.nombre_fantasia}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color, fontWeight: 700 }}>{p.vendedor_actual.split(' ')[0]}</span>
+          <span style={{ fontSize: 11, color, fontWeight: 700 }}>{dspV(p.vendedor_actual)}</span>
           {p.segmento && (
             <span style={{ fontSize: 10, background: 'rgba(212,175,55,0.15)', color: '#D4AF37', padding: '1px 7px', borderRadius: 20, fontWeight: 700 }}>
               Seg {p.segmento}

@@ -425,7 +425,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${v.color}20`, border: `1.5px solid ${v.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: v.color }}>
                   {v.vendedor.charAt(0)}
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.vendedor.split(' ')[0]}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.vendedor}</span>
               </div>
               <span style={{ fontSize: 13, color: 'var(--muted)' }}>{v.asignadas}</span>
               <span style={{ fontSize: 13, color: 'var(--green-dim)', fontWeight: 700 }}>{v.completadas}</span>
@@ -529,7 +529,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</span>
               </div>
               {/* Vendedor */}
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor.split(' ')[0]}</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor}</span>
               {/* Días */}
               <span style={{ fontSize: 13, fontWeight: 700, color: c.diasSinCompra > 60 ? 'var(--red-dim)' : 'var(--gold)' }}>{c.diasSinCompra} días</span>
               {/* Última compra */}
@@ -652,7 +652,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre_fantasia}</span>
               </div>
               {/* Vendedor */}
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual?.split(' ')[0] ?? '—'}</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual ?? '—'}</span>
               {/* Volumen reciente vs baseline */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
                 <span style={{ color: 'var(--red-dim)', fontWeight: 700 }}>{c.litros_reciente}L</span>
@@ -718,7 +718,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                   <p style={{ fontSize: 10, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.categoria_negocio}</p>
                 </div>
               </div>
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual?.split(' ')[0] ?? '—'}</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual ?? '—'}</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>{c.categoria_sugerida}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>

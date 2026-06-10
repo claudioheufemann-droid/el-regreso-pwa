@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
+
+// Consolida nombres históricos de la BD (Javier/Carlos/…) en un solo vendedor display
+const dspV = (v: string | null): string => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -75,7 +79,7 @@ export async function GET(req: NextRequest) {
     nombre_fantasia: string; vendedor_actual: string; segmento: string
     litros_reciente: number; litros_baseline: number; caida_pct: number
     pedidos_totales: number; dias_sin_compra: number; telefono: string | null
-  }[]).slice(0, 8)
+  }[]).slice(0, 8).map(r => ({ ...r, vendedor_actual: dspV(r.vendedor_actual) }))
   const volumenBajaTotal = (volBajaData ?? []).length
 
   // ── Retención por cohorte ─────────────────────────────────────────────────────
@@ -93,7 +97,7 @@ export async function GET(req: NextRequest) {
   const crossSell = ((crossRaw ?? []) as {
     nombre_fantasia: string; vendedor_actual: string; categoria_negocio: string
     categoria_sugerida: string; peers_pct: number; telefono: string | null
-  }[]).slice(0, 8)
+  }[]).slice(0, 8).map(r => ({ ...r, vendedor_actual: dspV(r.vendedor_actual) }))
   const crossSellTotal = (crossRaw ?? []).length
 
   // ── Segmentación tipo_cliente ─────────────────────────────────────────────────
@@ -134,28 +138,26 @@ export async function GET(req: NextRequest) {
   const vAn = calcVentas(vAnt)
 
   // ── Rendimiento por vendedor (misiones + ventas) ──────────────────────────────
-  const vendedoresSet = new Set([...(mActual ?? []).map(m => m.vendedor)])
+  const vendedoresSet = new Set([...(mActual ?? []).map(m => dspV(m.vendedor))])
   const vendMap = new Map<string, { asignadas: number; completadas: number; volActual: number; volAnt: number }>()
   for (const v of vendedoresSet) {
     vendMap.set(v, { asignadas: 0, completadas: 0, volActual: 0, volAnt: 0 })
   }
   for (const m of (mActual ?? [])) {
-    const e = vendMap.get(m.vendedor)!
+    const e = vendMap.get(dspV(m.vendedor))!
     e.asignadas++
     if (esComp(m.estado)) e.completadas++
   }
   for (const v of (vActual ?? [])) {
-    const e = vendMap.get(v.vendedor_actual)
+    const e = vendMap.get(dspV(v.vendedor_actual))
     if (e) e.volActual += v.litros ?? 0
   }
   for (const v of (vAnt ?? [])) {
-    const e = vendMap.get(v.vendedor_actual)
+    const e = vendMap.get(dspV(v.vendedor_actual))
     if (e) e.volAnt += v.litros ?? 0
   }
   const VEND_COLORS: Record<string, string> = {
-    'Vendedor 1':      '#D4AF37',
-    'Javier Badilla':  '#D4AF37',
-    'Carlos Urrejola': '#D4AF37',
+    'Vendedor Planta': '#D4AF37',
   }
   const DEFAULT_COLORS = ['#A78BFA', '#F87171', '#34D399', '#FB923C', '#38BDF8']
   let colorIdx = 0
@@ -227,7 +229,7 @@ export async function GET(req: NextRequest) {
   // ── Top 5 clientes en riesgo ─────────────────────────────────────────────────
   const topRiesgo = (riesgo ?? []).slice(0, 5).map(r => ({
     nombre:        r.nombre,
-    vendedor:      r.vendedor_actual ?? '—',
+    vendedor:      dspV(r.vendedor_actual),
     diasSinCompra: r.dias_sin_compra,
     ultimaCompra:  r.ultima_compra,
     segmento:      r.segmento,

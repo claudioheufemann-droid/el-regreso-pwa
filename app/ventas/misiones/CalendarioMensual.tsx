@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Loader2, MessageCircle, Phone, Droplets, CalendarDays } from 'lucide-react'
 import { SEG_COLOR } from '@/lib/theme'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
+
+const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
 
 interface PedidoEsperado {
   nombre_fantasia: string
@@ -27,8 +30,8 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 const DIAS_SEM = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 
 const VENDEDORES = [
-  { value: 'all',        label: 'Todos'      },
-  { value: 'Vendedor 1', label: 'Vendedor 1' },
+  { value: 'all',        label: 'Todos'           },
+  { value: 'Vendedor 1', label: 'Vendedor Planta' },
 ]
 
 function ymd(d: Date): string {
@@ -237,7 +240,7 @@ export default function CalendarioMensual({ isAdmin, vendedorActual, isDesktop }
                         <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre_fantasia}</p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ fontSize: 10, fontWeight: 700, color: tColor }}>● cada {p.ciclo_promedio_dias}d</span>
-                          {isAdmin && <span style={{ fontSize: 10, color: '#555' }}>{p.vendedor_actual?.split(' ')[0]}</span>}
+                          {isAdmin && <span style={{ fontSize: 10, color: '#555' }}>{dspV(p.vendedor_actual)}</span>}
                         </div>
                       </div>
                       {p.litros_por_pedido != null && (
