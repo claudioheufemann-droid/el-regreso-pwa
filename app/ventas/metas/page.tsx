@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { VENDEDORES, VENDEDORES_SCOPE } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_SCOPE, VENDEDOR_GRUPOS } from '@/lib/types'
 import { getVentasRango } from '@/lib/ventasCache'
 import MetasClient from './MetasClient'
 
@@ -81,7 +81,8 @@ export default async function MetasPage() {
       semanaInicio={semInicio}
       semanaFin={semFin}
       periodo={periodo}
-      vendedores={VENDEDORES as unknown as string[]}
+      vendedores={Object.keys(VENDEDOR_GRUPOS)}
+      vendedorGrupos={VENDEDOR_GRUPOS}
       periodosSemanas={periodosSemanas}
       periodosMeses={periodosMeses}
       vendedorAvatars={vendedorAvatars}

@@ -5,24 +5,33 @@ export type Vendedor = 'Vendedor 1'
 export const VENDEDORES: Vendedor[] = ['Vendedor 1']
 
 // Nombres históricos en la BD — necesarios para queries sobre datos pasados
-// (los registros de ventas anteriores siguen con estos nombres)
 export const VENDEDORES_DB = ['Javier Badilla', 'Carlos Urrejola'] as const
 
-// Mapeo BD → display: TODOS los nombres (históricos + canónico) se consolidan
-// en un solo vendedor visible. Cambiar SOLO el valor afecta lo que se MUESTRA,
-// nunca lo que se consulta en la BD.
-export const VENDEDOR_DISPLAY: Record<string, string> = {
-  'Javier Badilla':  'Vendedor Planta',
-  'Carlos Urrejola': 'Vendedor Planta',
-  'Vendedor 1':      'Vendedor Planta',
-  'Vendedor Planta': 'Vendedor Planta',
-  'OnLine':          'OnLine',
+// ─── GRUPOS DE VENDEDORES ────────────────────────────────────────────────────
+// Fuente única de verdad para la organización de vendedores.
+// Cada clave es el NOMBRE DE DISPLAY en la app.
+// Cada valor es la lista de nombres que pueden aparecer en ventas.vendedor_actual.
+//
+// Para activar un vendedor regional: agregar su nombre real al array de la región.
+// Ejemplo cuando llegue la persona de RM:
+//   'R. Metropolitana': ['Región Metropolitana', 'Juan Pérez']
+//
+export const VENDEDOR_GRUPOS: Record<string, string[]> = {
+  'Vendedor Planta':   ['Javier Badilla', 'Carlos Urrejola', 'Vendedor 1', 'Vendedor Planta'],
+  'OnLine':            ['OnLine'],
+  'R. Metropolitana':  ['Región Metropolitana'],   // ← reemplazar con nombre real cuando llegue
+  'R. Araucanía':      ['Región de la Araucanía'], // ← ídem
+  'R. de los Ríos':    ['Región de los Ríos'],     // ← ídem
+  'R. de los Lagos':   ['Región de los Lagos'],    // ← ídem
 }
 
-// Scope completo de vendedores a incluir en consultas y reportes
-export const VENDEDORES_SCOPE = [
-  'Javier Badilla', 'Carlos Urrejola', 'Vendedor 1', 'Vendedor Planta', 'OnLine',
-] as const
+// Mapeo BD → display (derivado de VENDEDOR_GRUPOS — no editar manualmente)
+export const VENDEDOR_DISPLAY: Record<string, string> = Object.entries(VENDEDOR_GRUPOS)
+  .flatMap(([display, dbNames]) => dbNames.map(n => [n, display] as [string, string]))
+  .reduce((acc, [k, v]) => ({ ...acc, [k]: v }), {} as Record<string, string>)
+
+// Scope completo: todos los nombres de BD aceptados en consultas y reportes
+export const VENDEDORES_SCOPE: string[] = Object.values(VENDEDOR_GRUPOS).flat()
 
 export const CATEGORIAS_NEGOCIO = [
   'Bar',

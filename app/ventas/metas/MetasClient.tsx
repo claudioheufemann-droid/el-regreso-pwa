@@ -99,8 +99,6 @@ interface AnalyticsExtended extends AnalyticsVendedor {
   porCanalHoy: CanalDiario[]
   barDataSemana: BarDia[]
   pacingDataMes: PacingDia[]
-  onlineLitros?: number
-  plantaLitros?: number
 }
 
 interface PeriodoSemana {
@@ -126,6 +124,7 @@ interface Props {
   semanaFin: string
   periodo: Periodo | null
   vendedores: string[]
+  vendedorGrupos?: Record<string, string[]>
   periodosSemanas: PeriodoSemana[]
   periodosMeses: PeriodoMes[]
   vendedorAvatars?: Record<string, string | null>
@@ -484,10 +483,9 @@ function CanalRow({ c }: { c: AnalyticsCanal }) {
 // ─── VendedorCard ─────────────────────────────────────────────────────────────
 
 function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: AnalyticsExtended; rangeLabel: string; avatarUrl?: string | null }) {
-  const meta        = analytics.metaMensual
-  const real        = analytics.realizadoMes
-  const onlineL     = analytics.onlineLitros ?? 0
-  const plantaL     = analytics.plantaLitros ?? real
+  const meta      = analytics.metaMensual
+  const real      = analytics.realizadoMes
+  const sinMeta   = meta === 0
   const esperado  = analytics.metaEsperadaMes
   const pct       = analytics.pctCumplimientoMes
   const semaforo  = analytics.semaforoMes
@@ -536,16 +534,25 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
             <SemaforoDot estado={semaforo} />
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ fontSize: 26, fontWeight: 900, color: SEMAFORO_COLORS[semaforo], letterSpacing: '-1px', lineHeight: 1 }}>
-            {pct.toFixed(0)}%
-          </p>
-          <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>cumplimiento</p>
-        </div>
+        {sinMeta ? (
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 22, fontWeight: 900, color: SEMAFORO_COLORS[semaforo], letterSpacing: '-1px', lineHeight: 1 }}>
+              {fmtL(real)}
+            </p>
+            <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>litros</p>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 26, fontWeight: 900, color: SEMAFORO_COLORS[semaforo], letterSpacing: '-1px', lineHeight: 1 }}>
+              {pct.toFixed(0)}%
+            </p>
+            <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>cumplimiento</p>
+          </div>
+        )}
       </div>
 
       {/* Pacing chart del período seleccionado */}
-      {analytics.pacingDataMes.length >= 2 && (
+      {!sinMeta && analytics.pacingDataMes.length >= 2 && (
         <>
           <div style={{ padding: '0 14px 4px' }}>
             <PacingLineChart
@@ -567,68 +574,52 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
         </>
       )}
 
-      {/* Progress bar */}
-      <div style={{ padding: '0 18px 14px' }}>
-        <BarraDual meta={meta} realizado={real} esperado={esperado} semaforo={semaforo} />
-        {/* Real / Meta / Esperado */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginTop: 12 }}>
-          {[
-            { label: 'Real',     value: fmtL(real),     color: SEMAFORO_COLORS[semaforo] },
-            { label: 'Meta',     value: fmtL(meta),     color: 'var(--cream)' },
-            { label: 'Esperado', value: fmtL(esperado), color: 'var(--muted)' },
-          ].map(({ label, value, color }) => (
-            <div key={label} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center' }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color, letterSpacing: '-0.3px' }}>{value}</span>
-                <span style={{ fontSize: 8, color, opacity: 0.6 }}>L</span>
-              </div>
+      {/* Progress bar + chips — solo para vendedores con meta */}
+      {!sinMeta && (
+        <>
+          <div style={{ padding: '0 18px 14px' }}>
+            <BarraDual meta={meta} realizado={real} esperado={esperado} semaforo={semaforo} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginTop: 12 }}>
+              {[
+                { label: 'Real',     value: fmtL(real),     color: SEMAFORO_COLORS[semaforo] },
+                { label: 'Meta',     value: fmtL(meta),     color: 'var(--cream)' },
+                { label: 'Esperado', value: fmtL(esperado), color: 'var(--muted)' },
+              ].map(({ label, value, color }) => (
+                <div key={label} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color, letterSpacing: '-0.3px' }}>{value}</span>
+                    <span style={{ fontSize: 8, color, opacity: 0.6 }}>L</span>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
 
-        {/* Breakdown Vendedor Planta / OnLine */}
-        {onlineL > 0 && (
-          <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.04)', borderRadius: 10, display: 'flex', gap: 6 }}>
+          <div style={{ padding: '0 18px 16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
             {[
-              { label: 'Vendedor Planta', value: plantaL, color: SEMAFORO_COLORS[semaforo] },
-              { label: 'OnLine',          value: onlineL, color: '#60A5FA' },
-            ].map(({ label, value, color }) => (
-              <div key={label} style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.6px', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center' }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color, letterSpacing: '-0.3px' }}>{fmtL(value)}</span>
-                  <span style={{ fontSize: 7, color, opacity: 0.6 }}>L</span>
+              { label: 'Meta',      num: meta,                         extra: '',   accent: false },
+              { label: 'Realizado', num: real,                         extra: '',   accent: false },
+              { label: metaCumplida ? '✓ OK' : 'Faltante',
+                num: metaCumplida ? real - meta : Math.max(0, meta - real),
+                extra: metaCumplida ? '+' : '',
+                accent: metaCumplida },
+            ].map(({ label, num, extra, accent }) => (
+              <div key={label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.6px', textTransform: 'uppercase', marginBottom: 5 }}>
+                  {label}
+                </p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center', minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: accent ? '#4A7A3A' : 'var(--cream)', letterSpacing: '-0.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {extra}{fmtL(num)}
+                  </span>
+                  <span style={{ fontSize: 9, color: accent ? '#4A7A3A' : 'var(--muted)', flexShrink: 0 }}>L</span>
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* KPI chips — META / REALIZADO / FALTANTE */}
-      <div style={{ padding: '0 18px 16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-        {[
-          { label: 'Meta',      num: meta,                         extra: '',   accent: false },
-          { label: 'Realizado', num: real,                         extra: '',   accent: false },
-          { label: metaCumplida ? '✓ OK' : 'Faltante',
-            num: metaCumplida ? real - meta : Math.max(0, meta - real),
-            extra: metaCumplida ? '+' : '',
-            accent: metaCumplida },
-        ].map(({ label, num, extra, accent }) => (
-          <div key={label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
-            <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.6px', textTransform: 'uppercase', marginBottom: 5 }}>
-              {label}
-            </p>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center', minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 900, color: accent ? '#4A7A3A' : 'var(--cream)', letterSpacing: '-0.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {extra}{fmtL(num)}
-              </span>
-              <span style={{ fontSize: 9, color: accent ? '#4A7A3A' : 'var(--muted)', flexShrink: 0 }}>L</span>
-            </div>
-          </div>
-        ))}
-      </div>
+        </>
+      )}
 
       {/* Días hábiles bar */}
       <div style={{ padding: '0 18px 14px' }}>
@@ -1616,7 +1607,7 @@ function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; 
 export default function MetasClient({
   metasSemanales, metasMensuales, ventasMes, ventasSemana,
   fechaRef, mesInicio, mesFin, semanaInicio, semanaFin,
-  periodo, vendedores, periodosSemanas, periodosMeses, vendedorAvatars,
+  periodo, vendedores, vendedorGrupos, periodosSemanas, periodosMeses, vendedorAvatars,
 }: Props) {
   const isDesktop = useIsDesktop()
 
@@ -1769,20 +1760,22 @@ export default function MetasClient({
     const dhSem = getDiasHabiles(new Date(semanaInicio), new Date(semanaFin + 'T23:59:59'))
 
     return vendedores.map(vendedor => {
-      // Consolidado: todas las metas y ventas sin filtrar por nombre individual
-      const mSem = metasSemanales
-      const mMes = metasMensuales
-      const vMes = ventasMes
-      const vSem = ventasSemana
+      // Filtrar ventas al grupo del vendedor (si hay grupos definidos)
+      const grupoNames = vendedorGrupos?.[vendedor]
+      const vMes = grupoNames ? ventasMes.filter(v => grupoNames.includes(v.vendedor_actual)) : ventasMes
+      const vSem = grupoNames ? ventasSemana.filter(v => grupoNames.includes(v.vendedor_actual)) : ventasSemana
       const vHoy = vMes.filter(v => v.fecha_pedido === fechaRef)
+
+      // Metas solo aplican a Vendedor Planta; los demás grupos no tienen meta propia aún
+      const esPlanta = vendedor === 'Vendedor Planta'
+      const mSem = esPlanta ? metasSemanales : []
+      const mMes = esPlanta ? metasMensuales : []
 
       const metaSemTotal = mSem.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
       const metaMesTotal = mMes.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
       const realMes = vMes.reduce((s, v) => s + (v.litros ?? 0), 0)
       const realSem = vSem.reduce((s, v) => s + (v.litros ?? 0), 0)
       const realizadoHoy = vHoy.reduce((s, v) => s + (v.litros ?? 0), 0)
-      const onlineLitros = vMes.filter(v => v.vendedor_actual === 'OnLine').reduce((s, v) => s + (v.litros ?? 0), 0)
-      const plantaLitros = realMes - onlineLitros
 
       const dhMesTotal = dhMes.length
       const dhSemTotal = dhSem.length
@@ -1845,7 +1838,6 @@ export default function MetasClient({
 
       return {
         vendedor, fecha: fechaRef,
-        onlineLitros, plantaLitros,
         metaMensual: metaMesTotal, realizadoMes: realMes, metaEsperadaMes: espMes,
         pctCumplimientoMes: calcularCumplimiento(realMes, metaMesTotal),
         semaforoMes: getEstadoSemaforo(realMes, espMes),
@@ -2092,11 +2084,13 @@ export default function MetasClient({
             )}
           </div>
 
-          {/* Grid de vendedores */}
+          {/* Grid de vendedores — ocultar regiones sin datos aún */}
           <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(auto-fit, minmax(400px, 1fr))' : '1fr', gap: isDesktop ? 24 : 14 }}>
-            {activeAnalytics.map(a => (
-              <VendedorCard key={a.vendedor} analytics={a} rangeLabel={rangeLabel} avatarUrl={vendedorAvatars?.[a.vendedor]} />
-            ))}
+            {activeAnalytics
+              .filter(a => a.realizadoMes > 0 || a.metaMensual > 0)
+              .map(a => (
+                <VendedorCard key={a.vendedor} analytics={a} rangeLabel={rangeLabel} avatarUrl={vendedorAvatars?.[a.vendedor]} />
+              ))}
           </div>
 
           {/* Locales vendidos */}
