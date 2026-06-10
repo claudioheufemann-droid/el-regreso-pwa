@@ -3,11 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { SUPABASE_URL as SUPABASE_URL_CFG } from '@/lib/supabase/config'
 import * as XLSX from 'xlsx'
-import { esClienteExcluido, VENDEDORES_DB } from '@/lib/types'
+import { esClienteExcluido } from '@/lib/types'
 import { sendPushToAllAdmins } from '@/lib/push'
-
-// Acepta nombres históricos (Javier/Carlos) y el token canónico (Vendedor 1)
-const VENDEDORES_VALIDOS: string[] = [...VENDEDORES_DB, 'Vendedor 1', 'Vendedor Planta']
 
 // Alias local para mantener compatibilidad con el nombre anterior
 const esClienteInterno = esClienteExcluido
@@ -88,7 +85,7 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
         row['VendedorActual'] ?? row['Vendedor actual'] ?? ''
       ).trim()
 
-      if (!VENDEDORES_VALIDOS.includes(vendedor)) return null
+      if (!vendedor) return null
 
       const fechaPedido = parseFecha(
         row['FechaPedido'] ?? row['Fecha pedido'] ?? row['Fecha Pedido']
