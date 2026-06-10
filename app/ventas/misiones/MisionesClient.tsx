@@ -630,6 +630,7 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
   const [litrosInput, setLitrosInput] = useState(50)
   const [diasPosp, setDiasPospD] = useState(5)
   const [saving, setSaving] = useState(false)
+  const [ultimoPedidoOpen, setUltimoPedidoOpen] = useState(false)
   const router = useRouter()
 
   type UltimoPedidoItem = { producto: string; envase: string | null; litros: number; total: number }
@@ -853,56 +854,80 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
         </div>
       )}
 
-      {/* ── ÚLTIMO PEDIDO REAL ── */}
-      <div style={{ padding: '12px 20px', borderBottom: '1px solid #2A2A2E' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-          <ShoppingCart size={13} color="#60A5FA" />
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#60A5FA', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>Último pedido</span>
-          <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 'auto' }}>
-            {ultimoPedido ? fFecha(ultimoPedido.fecha) : mision.ultima_venta_fecha ? fFecha(mision.ultima_venta_fecha) : ''}
-          </span>
-        </div>
-        {ultimoPedidoLoading && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {[1,2,3].map(i => (
-              <div key={i} style={{ height: 38, background: '#1A1A1D', borderRadius: 10, opacity: 0.4 + i * 0.1 }} />
-            ))}
-          </div>
-        )}
-        {!ultimoPedidoLoading && ultimoPedido && ultimoPedido.items.length > 0 && (
-          <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {ultimoPedido.items.map((p, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 12px', background: '#1A1A1D', border: '1px solid rgba(96,165,250,0.15)', borderRadius: 10,
-                }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#E5E7EB', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                      {p.producto}
-                    </span>
-                    {p.envase && <span style={{ fontSize: 10, color: '#9CA3AF' }}>{p.envase}</span>}
+      {/* ── ÚLTIMO PEDIDO REAL — colapsable ── */}
+      {(() => {
+        const fechaLabel = ultimoPedido?.fecha ?? mision.ultima_venta_fecha
+        const totalLabel = ultimoPedido?.total ?? (mision.ultima_venta_monto > 0 ? mision.ultima_venta_monto : null)
+        return (
+          <div style={{ borderBottom: '1px solid #2A2A2E' }}>
+            {/* Header — siempre visible, tappable */}
+            <button
+              onClick={() => setUltimoPedidoOpen(o => !o)}
+              style={{
+                width: '100%', padding: '12px 20px', background: 'none', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left' as const,
+              }}
+            >
+              <ShoppingCart size={13} color="#60A5FA" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#60A5FA', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>
+                Último pedido
+              </span>
+              {ultimoPedidoLoading && (
+                <span style={{ fontSize: 10, color: '#6B7280', marginLeft: 4 }}>cargando…</span>
+              )}
+              {!ultimoPedidoLoading && fechaLabel && (
+                <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 4 }}>{fFecha(fechaLabel)}</span>
+              )}
+              {!ultimoPedidoLoading && totalLabel !== null && (
+                <span style={{ fontSize: 12, fontWeight: 900, color: '#60A5FA', marginLeft: 'auto', flexShrink: 0 }}>
+                  {fPeso(totalLabel)}
+                </span>
+              )}
+              <ChevronDown
+                size={14}
+                color="#6B7280"
+                style={{ flexShrink: 0, marginLeft: totalLabel !== null ? 4 : 'auto', transition: 'transform 0.2s', transform: ultimoPedidoOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              />
+            </button>
+
+            {/* Detalle — colapsable */}
+            {ultimoPedidoOpen && (
+              <div style={{ padding: '0 20px 12px' }}>
+                {ultimoPedidoLoading && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {[1,2,3].map(i => (
+                      <div key={i} style={{ height: 38, background: '#1A1A1D', borderRadius: 10, opacity: 0.4 + i * 0.1 }} />
+                    ))}
                   </div>
-                  <span style={{ fontSize: 14, fontWeight: 900, color: '#60A5FA', flexShrink: 0 }}>{p.litros}L</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(96,165,250,0.1)' }}>
-              <span style={{ fontSize: 11, color: '#9CA3AF' }}>Total:</span>
-              <span style={{ fontSize: 13, fontWeight: 900, color: '#60A5FA' }}>{fPeso(ultimoPedido.total)}</span>
-            </div>
-          </>
-        )}
-        {!ultimoPedidoLoading && !ultimoPedido && (
-          <div style={{ padding: '10px 12px', background: '#1A1A1D', borderRadius: 10, textAlign: 'center' }}>
-            <span style={{ fontSize: 12, color: '#6B7280' }}>
-              {mision.ultima_venta_monto > 0
-                ? `${fPeso(mision.ultima_venta_monto)} — sin detalle de productos`
-                : 'Sin historial de compras'}
-            </span>
+                )}
+                {!ultimoPedidoLoading && ultimoPedido && ultimoPedido.items.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {ultimoPedido.items.map((p, i) => (
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '8px 12px', background: '#1A1A1D', border: '1px solid rgba(96,165,250,0.15)', borderRadius: 10,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#E5E7EB', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                            {p.producto}
+                          </span>
+                          {p.envase && <span style={{ fontSize: 10, color: '#9CA3AF' }}>{p.envase}</span>}
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 900, color: '#60A5FA', flexShrink: 0 }}>{p.litros}L</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!ultimoPedidoLoading && !ultimoPedido && (
+                  <p style={{ fontSize: 12, color: '#6B7280', textAlign: 'center', padding: '8px 0' }}>
+                    {mision.ultima_venta_monto > 0 ? 'Sin detalle de productos' : 'Sin historial de compras'}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        )
+      })()}
 
       {/* ── LO QUE SUELE PEDIR ── */}
       {mision.pedido_sugerido && mision.pedido_sugerido.length > 0 && (
