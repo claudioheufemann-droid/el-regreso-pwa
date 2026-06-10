@@ -130,7 +130,7 @@ function diasLabel(m: MisionEnriquecida): string | null {
   if (m.dias_para_compra === null) return null
   if (m.dias_para_compra < 0)  return `Venció hace ${Math.abs(m.dias_para_compra)}d`
   if (m.dias_para_compra === 0) return 'Compra hoy'
-  return `En ${m.dias_para_compra}d`
+  return `Llamar en ${m.dias_para_compra}d`
 }
 
 // ── Donut progreso ────────────────────────────────────────────────────────────
