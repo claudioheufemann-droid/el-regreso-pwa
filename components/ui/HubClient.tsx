@@ -285,8 +285,8 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
         <div style={{ textAlign: 'center', padding: '4px 0 16px' }}>
           {/* Logos — ambas marcas */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 8 }}>
-            {/* El Regreso — contenedor mayor para compensar su margen interno */}
-            <div style={{ position: 'relative', width: 120, height: 120, flexShrink: 0 }}>
+            {/* El Regreso */}
+            <div style={{ position: 'relative', width: 160, height: 160, flexShrink: 0 }}>
               <Image
                 src="/logo.png"
                 alt="El Regreso Beer Co."
@@ -296,9 +296,9 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
               />
             </div>
             {/* Separador */}
-            <div style={{ width: 1, height: 56, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.18), transparent)', flexShrink: 0 }} />
+            <div style={{ width: 1, height: 72, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.18), transparent)', flexShrink: 0 }} />
             {/* La Ida */}
-            <LaIdaLogo size={88} />
+            <LaIdaLogo size={140} />
           </div>
 
           {/* Nombre empresa */}
