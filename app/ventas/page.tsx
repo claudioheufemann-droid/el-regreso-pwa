@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { VENDEDORES, VENDEDORES_DB, VENDEDOR_DISPLAY, VENDEDORES_SCOPE, esClienteExcluido } from '@/lib/types'
+import { provinciasDeRegion } from '@/lib/regiones'
 import DashboardClient from './DashboardClient'
 
 export const dynamic = 'force-dynamic'
@@ -52,8 +53,26 @@ export default async function DashboardPage({
     return d.toISOString().split('T')[0]
   })()
   const misionesScope = vendedoresScope.length ? vendedoresScope : ['__none__']
-  const p_vendedor = appUser?.isAdmin ? null : (appUser?.nombre ?? null)
+
+  // ── Scope geográfico del vendedor ────────────────────────────────────────
+  // Las ventas están consolidadas (Javier/Carlos), así que el filtro por
+  // NOMBRE no aplica. El scope del vendedor se hace por PROVINCIA (su región).
+  // Admin: provinciasScope = null → las RPC no filtran (idéntico al actual).
+  const scopeRegion = appUser?.isAdmin ? null : (appUser?.region ?? null)
+  const provinciasArr = provinciasDeRegion(scopeRegion)
+  const provinciasScope: string[] | null = provinciasArr.length ? provinciasArr : null
+  const p_vendedor = null  // filtro por nombre deshabilitado (datos consolidados)
   const hace90 = new Date(); hace90.setDate(hace90.getDate() - 90)
+
+  // Nombres de clientes de la región (para filtrar misiones/plan por nombre_fantasia)
+  let regionClientes: Set<string> | null = null
+  if (provinciasScope) {
+    const { data: rc } = await supabase
+      .from('clientes')
+      .select('nombre_fantasia')
+      .or(provinciasScope.map(p => `provincia.eq.${p},provincia_entrega.eq.${p}`).join(','))
+    regionClientes = new Set((rc ?? []).map(c => c.nombre_fantasia as string).filter(Boolean))
+  }
 
   // ── FASE A: queries independientes en paralelo ───────────
   const [
@@ -64,9 +83,15 @@ export default async function DashboardPage({
     { data: misionesRaw },
     { data: usersAvatars },
   ] = await Promise.all([
-    supabase.from('ventas').select('fecha_pedido').in('vendedor_actual', scope).order('fecha_pedido', { ascending: false }).limit(1).maybeSingle(),
+    (provinciasScope
+      ? supabase.from('ventas').select('fecha_pedido').in('provincia', provinciasScope)
+      : supabase.from('ventas').select('fecha_pedido').in('vendedor_actual', scope)
+    ).order('fecha_pedido', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('periodos').select('*').eq('activo', true).maybeSingle(),
-    supabase.from('ventas').select('fecha_pedido').in('vendedor_actual', scope).gte('fecha_pedido', hace90.toISOString().split('T')[0]).order('fecha_pedido', { ascending: false }).limit(2000),
+    (provinciasScope
+      ? supabase.from('ventas').select('fecha_pedido').in('provincia', provinciasScope)
+      : supabase.from('ventas').select('fecha_pedido').in('vendedor_actual', scope)
+    ).gte('fecha_pedido', hace90.toISOString().split('T')[0]).order('fecha_pedido', { ascending: false }).limit(2000),
     supabase.rpc('get_pending_call_alerts', { p_vendedor, p_nivel_minimo: 'proximo' }),
     supabase.from('misiones').select('vendedor, alert_level, estado, score, segmento, nombre_fantasia, dias_sin_compra').eq('semana', semanaLunes).in('vendedor', misionesScope),
     supabase.from('users').select('nombre, avatar_url').in('nombre', ['Vendedor 1']),
@@ -125,16 +150,19 @@ export default async function DashboardPage({
     aggPeriodoRes,
     aggPrevRes,
   ] = await Promise.all([
-    supabase
-      .from('ventas')
-      .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, categoria_producto, producto, envase, localidad')
-      .in('vendedor_actual', scope)
-      .eq('fecha_pedido', fechaHoy),
+    (provinciasScope
+      ? supabase.from('ventas')
+          .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, categoria_producto, producto, envase, localidad')
+          .in('provincia', provinciasScope)
+      : supabase.from('ventas')
+          .select('vendedor_actual, nombre_fantasia, litros, total_sin_impuesto, categoria_negocio, categoria_producto, producto, envase, localidad')
+          .in('vendedor_actual', scope)
+    ).eq('fecha_pedido', fechaHoy),
     supabase.from('metas').select('vendedor, meta_litros').eq('periodo_id', periodo?.id ?? -1).eq('tipo', 'mensual'),
-    supabase.rpc('ventas_agg_diaria',  { p_ini: fechaIni, p_fin: fechaFinPeriodo, p_vendedor }),
-    supabase.rpc('ventas_agg_periodo', { p_ini: fechaIni, p_fin: fechaFinPeriodo, p_vendedor }),
+    supabase.rpc('ventas_agg_diaria',  { p_ini: fechaIni, p_fin: fechaFinPeriodo, p_vendedor, p_provincias: provinciasScope }),
+    supabase.rpc('ventas_agg_periodo', { p_ini: fechaIni, p_fin: fechaFinPeriodo, p_vendedor, p_provincias: provinciasScope }),
     iniPrev
-      ? supabase.rpc('ventas_agg_periodo', { p_ini: iniPrev, p_fin: finPrev, p_vendedor })
+      ? supabase.rpc('ventas_agg_periodo', { p_ini: iniPrev, p_fin: finPrev, p_vendedor, p_provincias: provinciasScope })
       : Promise.resolve({ data: [], error: null }),
   ])
 
@@ -360,16 +388,18 @@ export default async function DashboardPage({
     siguiente_compra_estimada: string | null
   }
 
-  const planSemana: ClientePlan[] = (planRaw ?? []).map((r: ClientePlan) => ({
-    nombre_fantasia: r.nombre_fantasia,
-    vendedor_actual: r.vendedor_actual,
-    dias_sin_compra: r.dias_sin_compra,
-    ciclo_promedio_dias: r.ciclo_promedio_dias,
-    alert_level: r.alert_level,
-    score: r.score,
-    segmento: r.segmento,
-    siguiente_compra_estimada: r.siguiente_compra_estimada ?? null,
-  }))
+  const planSemana: ClientePlan[] = (planRaw ?? [])
+    .filter((r: ClientePlan) => !regionClientes || regionClientes.has(r.nombre_fantasia))
+    .map((r: ClientePlan) => ({
+      nombre_fantasia: r.nombre_fantasia,
+      vendedor_actual: r.vendedor_actual,
+      dias_sin_compra: r.dias_sin_compra,
+      ciclo_promedio_dias: r.ciclo_promedio_dias,
+      alert_level: r.alert_level,
+      score: r.score,
+      segmento: r.segmento,
+      siguiente_compra_estimada: r.siguiente_compra_estimada ?? null,
+    }))
 
   const riesgoClientes = planSemana.filter(c =>
     c.alert_level === 'critico' || c.alert_level === 'vencido'
@@ -380,7 +410,8 @@ export default async function DashboardPage({
     vendedor: string; alert_level: string; estado: string
     score: number; segmento: string; nombre_fantasia: string; dias_sin_compra: number
   }
-  const misionesResumen: MisionResumen[] = misionesRaw ?? []
+  const misionesResumen: MisionResumen[] = (misionesRaw ?? [])
+    .filter((m: MisionResumen) => !regionClientes || regionClientes.has(m.nombre_fantasia))
 
   // Litros mes anterior para comparación (prevPorVendedor ya calculado en FASE B)
   let litrosMesAnteriorTotal = 0
