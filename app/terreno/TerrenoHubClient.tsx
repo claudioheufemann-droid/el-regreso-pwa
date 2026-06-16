@@ -74,36 +74,18 @@ function IsometricHero() {
   )
 }
 
-/* ── Sparkline mini ── */
-function Sparkline({ color, up }: { color: string; up: boolean }) {
-  const pts = up
-    ? "0,20 10,18 20,15 30,14 40,10 50,8 60,5"
-    : "0,5 10,8 20,10 30,14 40,15 50,18 60,20"
-  return (
-    <svg width="60" height="22" viewBox="0 0 60 22" fill="none" style={{ opacity: 0.5 }}>
-      <polyline points={pts} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-    </svg>
-  )
-}
-
-/* ── KPI Panel ── */
-function KPIPanel({ label, value, color, rgb, icon: Icon, yesterday }: {
+/* ── KPI Panel ── (sin datos inventados: número + label + sub real) */
+function KPIPanel({ label, value, color, rgb, icon: Icon, sub }: {
   label: string; value: number; color: string; rgb: string
-  icon: React.ElementType; yesterday?: number
+  icon: React.ElementType; sub?: string
 }) {
-  const diff = yesterday !== undefined ? value - yesterday : null
-  const up = diff !== null ? diff >= 0 : true
-  const pct = yesterday !== undefined && yesterday > 0
-    ? Math.round(Math.abs(((value - yesterday) / yesterday) * 100))
-    : value > 0 ? 100 : 0
-
   return (
     <div style={{
       background: `linear-gradient(145deg, rgba(${rgb},0.06) 0%, rgba(10,10,10,0.9) 100%)`,
       border: `1px solid rgba(${rgb},0.18)`,
       borderRadius: 16,
-      padding: '12px 10px 10px',
-      display: 'flex', flexDirection: 'column', gap: 0,
+      padding: '12px 10px 11px',
+      display: 'flex', flexDirection: 'column',
       boxShadow: `0 4px 24px rgba(${rgb},0.08), inset 0 1px 0 rgba(255,255,255,0.04)`,
       position: 'relative', overflow: 'hidden',
     }}>
@@ -114,22 +96,13 @@ function KPIPanel({ label, value, color, rgb, icon: Icon, yesterday }: {
         <Icon size={12} color={color} />
       </div>
       {/* Número */}
-      <p style={{ fontSize: 28, fontWeight: 900, color, lineHeight: 1, letterSpacing: '-1.5px', marginBottom: 3 }}>{value}</p>
+      <p style={{ fontSize: 28, fontWeight: 900, color, lineHeight: 1, letterSpacing: '-1.5px', marginBottom: 4 }}>{value}</p>
       {/* Label */}
-      <p style={{ fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6 }}>{label}</p>
-      {/* Sparkline + badge */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Sparkline color={color} up={up} />
-        <div style={{
-          background: up ? 'rgba(90,138,74,0.1)' : 'rgba(181,84,62,0.1)',
-          border: `1px solid ${up ? 'rgba(90,138,74,0.2)' : 'rgba(181,84,62,0.2)'}`,
-          borderRadius: 6, padding: '2px 5px',
-          fontSize: 8, fontWeight: 700,
-          color: up ? '#5A8A4A' : '#B5543E',
-        }}>
-          {up ? '↑' : '↓'} {pct}%
-        </div>
-      </div>
+      <p style={{ fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>{label}</p>
+      {/* Sub real (opcional) */}
+      {sub && (
+        <p style={{ fontSize: 9, fontWeight: 600, color: `rgba(${rgb},0.7)`, marginTop: 4 }}>{sub}</p>
+      )}
     </div>
   )
 }
@@ -285,9 +258,10 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
 
         {/* ── KPIs ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 28 }}>
-          <KPIPanel label="Visitas hoy" value={kpis.totalHoy} color="var(--cream)" rgb="244,238,223" icon={Users} yesterday={0} />
-          <KPIPanel label="Con venta"   value={kpis.conVenta}  color="#5A8A4A" rgb="90,138,74"  icon={Tag}   yesterday={0} />
-          <KPIPanel label="Sin venta"   value={kpis.sinVenta}  color="#B5543E" rgb="181,84,62"   icon={Ban}   yesterday={0} />
+          <KPIPanel label="Visitas hoy" value={kpis.totalHoy} color="var(--cream)" rgb="244,238,223" icon={Users}
+            sub={kpis.totalHoy > 0 ? `${Math.round((kpis.conVenta / kpis.totalHoy) * 100)}% efectividad` : undefined} />
+          <KPIPanel label="Con venta"   value={kpis.conVenta}  color="#5A8A4A" rgb="90,138,74"  icon={Tag} />
+          <KPIPanel label="Sin venta"   value={kpis.sinVenta}  color="#B5543E" rgb="181,84,62"  icon={Ban} />
         </div>
 
         {/* ── VISITAS DEL DÍA ── */}
