@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getServerUser } from '@/lib/auth'
+import { provinciasDeRegion } from '@/lib/regiones'
 import { VENDEDORES, VENDEDORES_SCOPE, CLIENTES_EXCLUIR } from '@/lib/types'
 
 const TODOS_VENDEDORES = [...VENDEDORES_SCOPE] as const
+
+/** Meta de litros por región (base provisional — ajustable por región luego) */
+const REGION_META_LITROS = 3500
 import {
   getDiasHabiles,
   getDiasHabilesTranscurridos,
@@ -86,6 +91,12 @@ export async function GET(req: NextRequest) {
 
   const todayStr = new Date().toISOString().split('T')[0]
 
+  // ── Scope geográfico del vendedor ────────────────────────────────────────
+  const appUser = await getServerUser()
+  const scopeRegion = appUser?.isAdmin ? null : (appUser?.region ?? null)
+  const provs = provinciasDeRegion(scopeRegion)
+  const provinciasScope: string[] | null = provs.length ? provs : null
+
   // ── Determinar rango ─────────────────────────────────────────────────────────
   // Modo nuevo: inicio + fin explícitos
   // Modo legacy: fecha → deriva el período mensual activo para esa fecha
@@ -140,9 +151,12 @@ export async function GET(req: NextRequest) {
     .lte('fecha_inicio', rangeFin)
     .gte('fecha_fin', rangeInicio)
 
-  if (!todasMetas?.length) {
+  // Vendedor con región usa meta fija de región (3500 L), no depende de la
+  // tabla metas. Admin sí requiere metas cargadas.
+  if (!todasMetas?.length && !provinciasScope) {
     return NextResponse.json({ analytics: [], sinMetas: true, rangeInicio, rangeFin })
   }
+  const metasArr = todasMetas ?? []
 
   // ── Ventas en el rango ───────────────────────────────────────────────────────
   const selectFields = 'vendedor_actual, categoria_negocio, litros, total_sin_impuesto, nombre_fantasia, fecha_pedido, categoria_producto, producto, envase'
@@ -152,9 +166,13 @@ export async function GET(req: NextRequest) {
     let offset = 0
     const PAGE = 1000
     while (true) {
-      const { data } = await supabase.from('ventas').select(selectFields)
-        .in('vendedor_actual', TODOS_VENDEDORES)
+      let q = supabase.from('ventas').select(selectFields)
         .gte('fecha_pedido', fechaIni).lte('fecha_pedido', fechaFin)
+      // Vendedor: scope por provincia (su región). Admin: por vendedores consolidados.
+      q = provinciasScope
+        ? q.in('provincia', provinciasScope)
+        : q.in('vendedor_actual', TODOS_VENDEDORES)
+      const { data } = await q
         .order('fecha_pedido', { ascending: true })
         .range(offset, offset + PAGE - 1)
       if (!data || data.length === 0) break
@@ -179,9 +197,12 @@ export async function GET(req: NextRequest) {
   // ── Analytics por vendedor ───────────────────────────────────────────────────
   // Consolidar todos los vendedores DB bajo 'Vendedor 1' (token canónico)
   const analytics: AnalyticsVendedor[] = VENDEDORES.map(vendedor => {
-    const metaTotal = todasMetas.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
     const realizado = ventas.reduce((s, v) => s + (v.litros ?? 0), 0)
-    const mV = todasMetas
+    // Vendedor: meta de región 3500 L. Admin: suma de metas cargadas.
+    const metaTotal = provinciasScope
+      ? REGION_META_LITROS
+      : metasArr.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
+    const mV = metasArr
 
     const diasHabiles       = dh.length
     const diasTranscurridos = dhTrans
@@ -193,12 +214,19 @@ export async function GET(req: NextRequest) {
     const promNec   = diasRestantes > 0 ? faltante / diasRestantes : 0
     const mensaje   = getMensajePredictivo(faltante, diasRestantes)
 
-    const allCanales = [...new Set(mV.map(m => m.categoria_negocio))]
     const vV = ventas
+    // Vendedor: canales derivados de sus ventas. Admin: canales de las metas.
+    const allCanales = provinciasScope
+      ? [...new Set(vV.map(v => v.categoria_negocio))]
+      : [...new Set(mV.map(m => m.categoria_negocio))]
 
     const porCanal: AnalyticsCanal[] = allCanales.map(canal => {
-      const metaCanal = mV.filter(m => m.categoria_negocio === canal).reduce((s, m) => s + (m.meta_litros ?? 0), 0)
       const realCanal = vV.filter(v => v.categoria_negocio === canal).reduce((s, v) => s + (v.litros ?? 0), 0)
+      // Vendedor: la meta de región (3500) se reparte proporcional a lo vendido
+      // por canal. Admin: meta cargada del canal.
+      const metaCanal = provinciasScope
+        ? (realizado > 0 ? REGION_META_LITROS * (realCanal / realizado) : 0)
+        : mV.filter(m => m.categoria_negocio === canal).reduce((s, m) => s + (m.meta_litros ?? 0), 0)
       const espCanal  = getMetaEsperadaAFecha(metaCanal, dh, fechaFinDate)
       return {
         canal,
