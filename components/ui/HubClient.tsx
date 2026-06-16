@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { Lock } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -184,15 +185,29 @@ function ModuleCard({ href, color, rgb, title, subtitle, img, locked }: ModuleCa
 
   if (locked) return (
     <div style={{
-      background: '#0D0D10', border: '1px solid rgba(255,255,255,0.04)',
+      background: '#0D0D10', border: '1px solid rgba(255,255,255,0.05)',
       borderRadius: 16, overflow: 'hidden',
       display: 'flex', alignItems: 'stretch', minHeight: 78,
-      opacity: 0.35, cursor: 'not-allowed',
+      cursor: 'not-allowed', position: 'relative',
     }}>
-      <div style={{ width: 88, flexShrink: 0, background: 'rgba(255,255,255,0.03)' }} />
-      <div style={{ flex: 1, padding: '12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: '#4A4A50', marginBottom: 2 }}>{title}</div>
-        <div style={{ fontSize: 11, color: '#2A2A30', lineHeight: 1.4 }}>{subtitle}</div>
+      {/* Imagen atenuada (deja ver que el módulo existe) */}
+      <div style={{ width: 88, minHeight: 78, flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={img} alt={title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.22, filter: 'grayscale(1)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, transparent 50%, #0D0D10 100%)' }} />
+      </div>
+      <div style={{ flex: 1, padding: '12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', opacity: 0.5 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: '#6A6A72', marginBottom: 2 }}>{title}</div>
+        <div style={{ fontSize: 11, color: '#3A3A42', lineHeight: 1.4 }}>{subtitle}</div>
+      </div>
+      {/* Candado */}
+      <div style={{
+        position: 'absolute', top: '50%', right: 16, transform: 'translateY(-50%)',
+        width: 30, height: 30, borderRadius: '50%',
+        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Lock size={13} color="rgba(255,255,255,0.35)" />
       </div>
     </div>
   )
@@ -339,26 +354,15 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             img="/hub-ventas.jpg.png"
           />
 
-          {isAdmin ? (
-            <ModuleCard
-              href="/gestion"
-              color="#3B82F6"
-              rgb="59,130,246"
-              title="Gestión de tareas"
-              subtitle="Tareas, proyectos, áreas y sistema operativo"
-              img="/hub-gestion.jpg.png"
-            />
-          ) : (
-            <ModuleCard
-              href="/gestion"
-              color="#3B82F6"
-              rgb="59,130,246"
-              title="Gestión"
-              subtitle="Acceso restringido · Solo administradores"
-              img="/hub-gestion.jpg.png"
-              locked
-            />
-          )}
+          {/* Gestión: accesible para vendedor y admin */}
+          <ModuleCard
+            href="/gestion"
+            color="#3B82F6"
+            rgb="59,130,246"
+            title={isAdmin ? 'Gestión de tareas' : 'Gestión'}
+            subtitle="Tareas, proyectos y seguimiento"
+            img="/hub-gestion.jpg.png"
+          />
 
           <ModuleCard
             href="/terreno"
@@ -369,18 +373,17 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             img="/hub-terreno.jpg.png"
           />
 
-          {/* Logística: solo admin. El vendedor accede únicamente a
-              Ventas · Gestión · Venta en Terreno. */}
-          {isAdmin && (
-            <ModuleCard
-              href="/flota"
-              color="#F97316"
-              rgb="249,115,22"
-              title="Logística"
-              subtitle="Bitácora, rutas y control de vehículos"
-              img="/hub-logistica.jpg.png"
-            />
-          )}
+          {/* Logística: visible para todos, pero el vendedor NO puede entrar
+              (locked). Muestra que el sistema existe sin dar acceso. */}
+          <ModuleCard
+            href="/flota"
+            color="#F97316"
+            rgb="249,115,22"
+            title="Logística"
+            subtitle={isAdmin ? 'Bitácora, rutas y control de vehículos' : 'Acceso exclusivo · Administración'}
+            img="/hub-logistica.jpg.png"
+            locked={!isAdmin}
+          />
 
         </div>
 

@@ -1,3 +1,5 @@
+import { getServerUser } from '@/lib/auth'
+import { redirect } from 'next/navigation'
 import FlotaSidebar from '@/components/FlotaSidebar'
 import FlotaBottomNav from '@/components/FlotaBottomNav'
 import FlotaTabBar from '@/components/FlotaTabBar'
@@ -12,7 +14,13 @@ const TABS: PageTab[] = [
 
 const ORANGE = '#D4AF37'
 
-export default function FlotaLayout({ children }: { children: React.ReactNode }) {
+export default async function FlotaLayout({ children }: { children: React.ReactNode }) {
+  // Logística es exclusiva de administración. El vendedor ve el módulo en el
+  // Hub (bloqueado) pero no puede entrar — ni por la tarjeta ni tecleando la URL.
+  const user = await getServerUser()
+  if (!user) redirect('/login')
+  if (!user.isAdmin) redirect('/')
+
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
       <div className="hidden lg:flex">

@@ -15,7 +15,7 @@ const TABS: PageTab[] = [
 export default async function GestionLayout({ children }: { children: React.ReactNode }) {
   const user = await getServerUser()
   if (!user) redirect('/login')
-  if (!user.isAdmin) redirect('/ventas')
+  // Gestión accesible para vendedores y admin (módulo habilitado para el rol vendedor)
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
