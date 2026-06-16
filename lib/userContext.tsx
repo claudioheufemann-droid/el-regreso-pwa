@@ -11,12 +11,14 @@ export type UserRole = 'admin' | 'user'
 interface UserContextType {
   user: AppUser | null
   isAdmin: boolean
+  region: string | null      // scope geográfico del vendedor (null = sin scope)
   logout: () => Promise<void>
 }
 
 const UserContext = createContext<UserContextType>({
   user: null,
   isAdmin: false,
+  region: null,
   logout: async () => {},
 })
 
@@ -41,6 +43,7 @@ export function UserProvider({
       value={{
         user: initialUser,
         isAdmin: initialUser?.isAdmin ?? false,
+        region: initialUser?.region ?? null,
         logout,
       }}
     >

@@ -369,14 +369,18 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             img="/hub-terreno.jpg.png"
           />
 
-          <ModuleCard
-            href="/flota"
-            color="#F97316"
-            rgb="249,115,22"
-            title="Logística"
-            subtitle="Bitácora, rutas y control de vehículos"
-            img="/hub-logistica.jpg.png"
-          />
+          {/* Logística: solo admin. El vendedor accede únicamente a
+              Ventas · Gestión · Venta en Terreno. */}
+          {isAdmin && (
+            <ModuleCard
+              href="/flota"
+              color="#F97316"
+              rgb="249,115,22"
+              title="Logística"
+              subtitle="Bitácora, rutas y control de vehículos"
+              img="/hub-logistica.jpg.png"
+            />
+          )}
 
         </div>
 

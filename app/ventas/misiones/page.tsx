@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { VENDEDORES_SCOPE } from '@/lib/types'
+import { provinciasDeRegion } from '@/lib/regiones'
 import { getVolumenBajaCached, getCrossSellCached, getPedidoSugeridoCached, getUltimaVentasCached } from '@/lib/misionesCache'
 import MisionesClient from './MisionesClient'
 
@@ -127,6 +128,24 @@ export default async function MisionesPage() {
   const vendedoresScope: string[] = [...VENDEDORES_SCOPE]
   const p_vendedor = null
 
+  // ── Scope geográfico del vendedor ────────────────────────────────────────
+  // Si el usuario es vendedor con región asignada, las misiones / clientes-por-
+  // llamar se filtran a su región. Admin (region null) ve todo, sin cambios.
+  const scopeRegion = appUser?.isAdmin ? null : (appUser?.region ?? null)
+  const provinciasScope = provinciasDeRegion(scopeRegion)
+  let regionClientes: Set<string> | null = null
+  if (scopeRegion && provinciasScope.length) {
+    const { data: regClis } = await supabase
+      .from('clientes')
+      .select('nombre_fantasia, provincia, provincia_entrega')
+      .or(
+        provinciasScope.map(p => `provincia.eq.${p},provincia_entrega.eq.${p}`).join(',')
+      )
+    regionClientes = new Set(
+      (regClis ?? []).map(c => c.nombre_fantasia as string).filter(Boolean)
+    )
+  }
+
   const [
     { data: misionesRaw },
     { data: historialRaw },
@@ -226,6 +245,8 @@ export default async function MisionesPage() {
     .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap, deudoresSet))
     .filter(m => !inactivosManuales.has(m.nombre_fantasia))
     .filter(m => (m.dias_sin_compra ?? 0) <= 90)
+    // Scope por región del vendedor (admin: regionClientes null = sin filtro)
+    .filter(m => !regionClientes || regionClientes.has(m.nombre_fantasia))
     // Los pospuestos con snooze vigente se mantienen — se muestran en sección separada "Con Stock"
     .sort((a, b) => {
       // Deuda siempre al final
@@ -238,6 +259,7 @@ export default async function MisionesPage() {
 
   const historialMap = new Map<string, MisionEnriquecida[]>()
   for (const m of historialRaw ?? []) {
+    if (regionClientes && !regionClientes.has(m.nombre_fantasia)) continue
     const me = enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap, deudoresSet)
     if (!historialMap.has(m.semana)) historialMap.set(m.semana, [])
     historialMap.get(m.semana)!.push(me)
@@ -248,6 +270,7 @@ export default async function MisionesPage() {
 
   const proxima: ProximaPreview[] = ((proximaRaw ?? []) as ProximaPreview[])
     .filter(p => (p.dias_sin_compra ?? 0) <= 90)
+    .filter(p => !regionClientes || regionClientes.has(p.nombre_fantasia))
 
   const pendientesAlta = misiones.filter(m => m.prioridad==='Alta' && m.estado==='pendiente')
   const consejos: string[] = []
