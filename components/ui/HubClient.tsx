@@ -286,9 +286,9 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
           {/* Logos — ambas marcas */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 8 }}>
             {/* El Regreso */}
-            <div style={{ position: 'relative', width: 160, height: 160, flexShrink: 0 }}>
+            <div style={{ position: 'relative', width: 140, height: 140, flexShrink: 0 }}>
               <Image
-                src="/logo.png"
+                src="/logo-square.png"
                 alt="El Regreso Beer Co."
                 fill
                 style={{ objectFit: 'contain', filter: 'invert(1) drop-shadow(0 0 12px rgba(255,255,255,0.2))' }}
