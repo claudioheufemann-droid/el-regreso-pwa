@@ -6,7 +6,7 @@ import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
 const ITEMS: NavItem[] = [
   { href: '/',                     icon: Home,       label: 'Inicio',    exact: true  },
-  { href: '/terreno',              icon: MapPin,     label: 'Hub',       exact: true  },
+  { href: '/terreno',              icon: MapPin,     label: 'Panel',     exact: true  },
   { href: '/terreno/ruta',         icon: Navigation, label: 'Viaje'                   },
   { href: '/terreno/historial',    icon: History,    label: 'Historial'               },
   { href: '/terreno/nueva-visita', icon: Plus,       label: 'Visita'                  },

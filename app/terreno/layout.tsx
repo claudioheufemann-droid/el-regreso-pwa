@@ -6,7 +6,7 @@ import PageTabs from '@/components/PageTabs'
 import type { PageTab } from '@/components/PageTabs'
 
 const TABS: PageTab[] = [
-  { href: '/terreno',           label: 'Hub',                exact: true  },
+  { href: '/terreno',           label: 'Panel',              exact: true  },
   { href: '/terreno/ruta',      label: 'Planifica tu Viaje'               },
   { href: '/terreno/historial', label: 'Historial'                        },
 ]
