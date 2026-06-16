@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import AppHeader from '@/components/ui/AppHeader'
 
@@ -219,6 +219,27 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
         <div style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))' }}>
           <AppHeader eyebrow={fechaCapitalizada} title="Terreno" />
         </div>
+
+        {/* ── PLANIFICA TU VIAJE ── */}
+        <button
+          onClick={() => router.push('/terreno/ruta')}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderTop: `2px solid ${G}`, borderRadius: 14,
+            padding: '12px 14px', marginBottom: 14, cursor: 'pointer',
+            minHeight: 44, textAlign: 'left',
+          }}
+        >
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: `rgba(${G_RGB},0.12)`, border: `1px solid rgba(${G_RGB},0.25)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Navigation size={16} color={G} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>Planifica tu Viaje</p>
+            <p style={{ fontSize: 10, color: 'var(--muted)' }}>Selecciona clientes y optimiza tu ruta del día</p>
+          </div>
+          <ChevronRight size={16} color="rgba(255,255,255,0.25)" />
+        </button>
 
         {/* ── VISITA EN PROGRESO ── */}
         {visitaEnProgreso && (

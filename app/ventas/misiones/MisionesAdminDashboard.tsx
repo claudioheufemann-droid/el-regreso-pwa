@@ -4,6 +4,47 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { RefreshCw, MessageCircle, Phone, TrendingUp, TrendingDown, Users, Target, Droplets, DollarSign, AlertTriangle, Calendar, MapPin, BarChart3, ChevronDown, Sparkles, CheckCircle2, XCircle, Clock, ShoppingBag } from 'lucide-react'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import { useIsDesktop } from '@/lib/useIsDesktop'
+
+// ── Fila compacta para mobile (reemplaza tablas anchas con scroll-x) ─────────
+function MobileRow({ avatarChar, avatarColor, title, subtitle, metric, metricColor, progress, progressColor, actions }: {
+  avatarChar: string; avatarColor: string; title: string; subtitle?: string
+  metric?: string; metricColor?: string
+  progress?: { pct: number; label: string }; progressColor?: string
+  actions?: React.ReactNode
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+      <div style={{ width: 30, height: 30, borderRadius: '50%', background: `${avatarColor}18`, border: `1px solid ${avatarColor}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: avatarColor, flexShrink: 0 }}>
+        {avatarChar}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</p>
+        {subtitle && <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subtitle}</p>}
+        {progress && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${progress.pct}%`, height: '100%', background: progressColor ?? 'var(--gold)', borderRadius: 3 }} />
+            </div>
+            <span style={{ fontSize: 10, color: progressColor ?? 'var(--gold)', fontWeight: 700, flexShrink: 0 }}>{progress.label}</span>
+          </div>
+        )}
+      </div>
+      {metric && (
+        <span style={{ fontSize: 12, fontWeight: 700, color: metricColor ?? 'var(--cream)', flexShrink: 0, textAlign: 'right' }}>{metric}</span>
+      )}
+      {actions && <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>{actions}</div>}
+    </div>
+  )
+}
+
+function ActionBtn({ color, bg, border, onClick, children }: { color: string; bg: string; border: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} style={{ width: 30, height: 30, borderRadius: '50%', border: `1px solid ${border}`, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+      {children}
+    </button>
+  )
+}
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -242,6 +283,7 @@ interface Props { isAdmin: boolean }
 
 export default function MisionesAdminDashboard({ isAdmin }: Props) {
   const router = useRouter()
+  const isDesktop = useIsDesktop()
   const [semana, setSemana] = useState(() => getMondayOfWeek(new Date()))
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -409,57 +451,80 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             </button>
           </div>
 
-          <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
-          <div style={{ minWidth: 460 }}>
-          {/* Encabezado tabla */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 1fr 100px', gap: 8, padding: '0 4px 8px', borderBottom: '1px solid var(--border)', marginBottom: 6 }}>
-            {['VENDEDOR', 'ASIG.', 'COMPL.', '% CUMPL.', 'VOLUMEN'].map(h => (
-              <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>{h}</span>
-            ))}
-          </div>
+          {isDesktop ? (
+            <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: 460 }}>
+            {/* Encabezado tabla */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 1fr 100px', gap: 8, padding: '0 4px 8px', borderBottom: '1px solid var(--border)', marginBottom: 6 }}>
+              {['VENDEDOR', 'ASIG.', 'COMPL.', '% CUMPL.', 'VOLUMEN'].map(h => (
+                <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>{h}</span>
+              ))}
+            </div>
 
-          {/* Filas */}
-          {stats.porVendedor.map(v => (
-            <div key={v.vendedor} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 1fr 100px', gap: 8, padding: '8px 4px', borderBottom: '1px solid rgba(255,255,255,0.04)', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${v.color}20`, border: `1.5px solid ${v.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: v.color }}>
-                  {v.vendedor.charAt(0)}
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.vendedor}</span>
-              </div>
-              <span style={{ fontSize: 13, color: 'var(--muted)' }}>{v.asignadas}</span>
-              <span style={{ fontSize: 13, color: 'var(--green-dim)', fontWeight: 700 }}>{v.completadas}</span>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${v.pct}%`, height: '100%', background: v.color, borderRadius: 3 }} />
+            {/* Filas */}
+            {stats.porVendedor.map(v => (
+              <div key={v.vendedor} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 1fr 100px', gap: 8, padding: '8px 4px', borderBottom: '1px solid rgba(255,255,255,0.04)', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${v.color}20`, border: `1.5px solid ${v.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: v.color }}>
+                    {v.vendedor.charAt(0)}
                   </div>
-                  <span style={{ fontSize: 11, color: v.color, fontWeight: 700, width: 32, textAlign: 'right' }}>{v.pct}%</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.vendedor}</span>
+                </div>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>{v.asignadas}</span>
+                <span style={{ fontSize: 13, color: 'var(--green-dim)', fontWeight: 700 }}>{v.completadas}</span>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${v.pct}%`, height: '100%', background: v.color, borderRadius: 3 }} />
+                    </div>
+                    <span style={{ fontSize: 11, color: v.color, fontWeight: 700, width: 32, textAlign: 'right' }}>{v.pct}%</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L</span>
+                  {v.dVolumen !== 0 && (
+                    <p style={{ fontSize: 10, color: v.dVolumen > 0 ? 'var(--green-dim)' : 'var(--red-dim)', fontWeight: 600 }}>
+                      {v.dVolumen > 0 ? '+' : ''}{v.dVolumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
+                    </p>
+                  )}
                 </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L</span>
-                {v.dVolumen !== 0 && (
-                  <p style={{ fontSize: 10, color: v.dVolumen > 0 ? 'var(--green-dim)' : 'var(--red-dim)', fontWeight: 600 }}>
-                    {v.dVolumen > 0 ? '+' : ''}{v.dVolumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
-                  </p>
-                )}
+            ))}
+
+            {/* Total */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 1fr 100px', gap: 8, padding: '10px 4px 2px', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>Total</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{stats.total}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--green-dim)' }}>{stats.completadas}</span>
+              <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>{pct}%</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', textAlign: 'right' }}>
+                {stats.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
+              </span>
+            </div>
+            </div>
+            </div>
+          ) : (
+            /* ── Mobile: cards apiladas, cero scroll horizontal ── */
+            <div>
+              {stats.porVendedor.map(v => (
+                <MobileRow
+                  key={v.vendedor}
+                  avatarChar={v.vendedor.charAt(0)}
+                  avatarColor={v.color}
+                  title={v.vendedor}
+                  subtitle={`${v.asignadas} asig. · ${v.completadas} compl.`}
+                  metric={`${v.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L`}
+                  metricColor="var(--cream)"
+                  progress={{ pct: v.pct, label: `${v.pct}%` }}
+                  progressColor={v.color}
+                />
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0 2px' }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>Total: {stats.completadas}/{stats.total} ({pct}%)</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{stats.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L</span>
               </div>
             </div>
-          ))}
-
-          {/* Total */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 1fr 100px', gap: 8, padding: '10px 4px 2px', alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>Total</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{stats.total}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--green-dim)' }}>{stats.completadas}</span>
-            <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>{pct}%</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', textAlign: 'right' }}>
-              {stats.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L
-            </span>
-          </div>
-          </div>
-          </div>
+          )}
         </div>
 
         {/* Distribución donut */}
@@ -506,55 +571,71 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 20px' }}>
           <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)', marginBottom: 14 }}>Top 5 clientes en riesgo</p>
 
-          <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
-          <div style={{ minWidth: 520 }}>
-          {/* Header tabla */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px 110px 80px', gap: 8, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
-            {['CLIENTE', 'VENDEDOR', 'DÍAS S/C', 'ÚLT. PEDIDO', 'ACCIÓN'].map(h => (
-              <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</span>
-            ))}
-          </div>
-
           {stats.topRiesgo.length === 0 ? (
             <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
               Sin clientes en riesgo en este período
             </div>
-          ) : stats.topRiesgo.map((c, i) => (
-            <div key={c.nombre} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px 110px 80px', gap: 8, padding: '10px 0', borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
-              {/* Nombre */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--red-dim)', flexShrink: 0 }}>
-                  {c.nombre.charAt(0)}
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</span>
-              </div>
-              {/* Vendedor */}
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor}</span>
-              {/* Días */}
-              <span style={{ fontSize: 13, fontWeight: 700, color: c.diasSinCompra > 60 ? 'var(--red-dim)' : 'var(--gold)' }}>{c.diasSinCompra} días</span>
-              {/* Última compra */}
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.ultimaCompra ? formatFechaCorta(c.ultimaCompra) + ' 2026' : '—'}</span>
-              {/* Acciones */}
-              <div style={{ display: 'flex', gap: 6 }}>
-                {c.telefono && (
-                  <button
-                    onClick={() => setWaTarget({ nombre: c.nombre, telefono: c.telefono!, contexto: 'mision' })}
-                    style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <MessageCircle size={13} color="#25D166" />
-                  </button>
-                )}
-                {c.telefono && (
-                  <button
-                    onClick={() => window.open(`tel:${c.telefono}`)}
-                    style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <Phone size={13} color="var(--gold)" />
-                  </button>
-                )}
-              </div>
+          ) : isDesktop ? (
+            <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: 520 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px 110px 80px', gap: 8, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+              {['CLIENTE', 'VENDEDOR', 'DÍAS S/C', 'ÚLT. PEDIDO', 'ACCIÓN'].map(h => (
+                <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</span>
+              ))}
             </div>
-          ))}
-          </div>
-          </div>
+            {stats.topRiesgo.map((c, i) => (
+              <div key={c.nombre} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 90px 110px 80px', gap: 8, padding: '10px 0', borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--red-dim)', flexShrink: 0 }}>
+                    {c.nombre.charAt(0)}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</span>
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: c.diasSinCompra > 60 ? 'var(--red-dim)' : 'var(--gold)' }}>{c.diasSinCompra} días</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.ultimaCompra ? formatFechaCorta(c.ultimaCompra) + ' 2026' : '—'}</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {c.telefono && (
+                    <button onClick={() => setWaTarget({ nombre: c.nombre, telefono: c.telefono!, contexto: 'mision' })} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <MessageCircle size={13} color="#25D166" />
+                    </button>
+                  )}
+                  {c.telefono && (
+                    <button onClick={() => window.open(`tel:${c.telefono}`)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <Phone size={13} color="var(--gold)" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            </div>
+            </div>
+          ) : (
+            /* ── Mobile: cards apiladas ── */
+            <div>
+              {stats.topRiesgo.map(c => (
+                <MobileRow
+                  key={c.nombre}
+                  avatarChar={c.nombre.charAt(0)}
+                  avatarColor="var(--red-dim)"
+                  title={c.nombre}
+                  subtitle={`${c.vendedor} · ${c.ultimaCompra ? formatFechaCorta(c.ultimaCompra) : 'sin compras'}`}
+                  metric={`${c.diasSinCompra}d`}
+                  metricColor={c.diasSinCompra > 60 ? 'var(--red-dim)' : 'var(--gold)'}
+                  actions={c.telefono && (
+                    <>
+                      <ActionBtn color="#25D166" bg="rgba(37,211,102,0.08)" border="rgba(37,211,102,0.3)" onClick={() => setWaTarget({ nombre: c.nombre, telefono: c.telefono!, contexto: 'mision' })}>
+                        <MessageCircle size={13} color="#25D166" />
+                      </ActionBtn>
+                      <ActionBtn color="var(--gold)" bg="rgba(96,165,250,0.08)" border="rgba(96,165,250,0.3)" onClick={() => window.open(`tel:${c.telefono}`)}>
+                        <Phone size={13} color="var(--gold)" />
+                      </ActionBtn>
+                    </>
+                  )}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Oportunidades de mejora */}
@@ -699,51 +780,75 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             Categorías que compran negocios similares pero este cliente aún no — venta nueva concreta.
           </p>
 
-          <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
-          <div style={{ minWidth: 520 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 1fr 120px 80px', gap: 8, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
-            {['CLIENTE', 'VENDEDOR', 'OFRECER', 'PARES QUE COMPRAN', 'ACCIÓN'].map(h => (
-              <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</span>
-            ))}
-          </div>
-
-          {stats.crossSell.map((c, i) => (
-            <div key={`${c.nombre_fantasia}-${c.categoria_sugerida}`} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 1fr 120px 80px', gap: 8, padding: '10px 0', borderBottom: i < stats.crossSell.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--gold)', flexShrink: 0 }}>
-                  {c.nombre_fantasia.charAt(0)}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre_fantasia}</p>
-                  <p style={{ fontSize: 10, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.categoria_negocio}</p>
-                </div>
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual ?? '—'}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>{c.categoria_sugerida}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${c.peers_pct}%`, height: '100%', background: 'var(--gold)', borderRadius: 3 }} />
-                </div>
-                <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, width: 32, textAlign: 'right' }}>{c.peers_pct}%</span>
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {c.telefono && (
-                  <button onClick={() => setWaTarget({ nombre: c.nombre_fantasia, telefono: c.telefono!, contexto: 'mision' })}
-                    style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <MessageCircle size={13} color="#25D166" />
-                  </button>
-                )}
-                {c.telefono && (
-                  <button onClick={() => window.open(`tel:${c.telefono}`)}
-                    style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <Phone size={13} color="var(--gold)" />
-                  </button>
-                )}
-              </div>
+          {isDesktop ? (
+            <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: 520 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 1fr 120px 80px', gap: 8, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+              {['CLIENTE', 'VENDEDOR', 'OFRECER', 'PARES QUE COMPRAN', 'ACCIÓN'].map(h => (
+                <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</span>
+              ))}
             </div>
-          ))}
-          </div>
-          </div>
+            {stats.crossSell.map((c, i) => (
+              <div key={`${c.nombre_fantasia}-${c.categoria_sugerida}`} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 1fr 120px 80px', gap: 8, padding: '10px 0', borderBottom: i < stats.crossSell.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--gold)', flexShrink: 0 }}>
+                    {c.nombre_fantasia.charAt(0)}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre_fantasia}</p>
+                    <p style={{ fontSize: 10, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.categoria_negocio}</p>
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.vendedor_actual ?? '—'}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>{c.categoria_sugerida}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${c.peers_pct}%`, height: '100%', background: 'var(--gold)', borderRadius: 3 }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, width: 32, textAlign: 'right' }}>{c.peers_pct}%</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {c.telefono && (
+                    <button onClick={() => setWaTarget({ nombre: c.nombre_fantasia, telefono: c.telefono!, contexto: 'mision' })} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <MessageCircle size={13} color="#25D166" />
+                    </button>
+                  )}
+                  {c.telefono && (
+                    <button onClick={() => window.open(`tel:${c.telefono}`)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <Phone size={13} color="var(--gold)" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            </div>
+            </div>
+          ) : (
+            /* ── Mobile: cards apiladas, sin tabla ── */
+            <div>
+              {stats.crossSell.map(c => (
+                <MobileRow
+                  key={`${c.nombre_fantasia}-${c.categoria_sugerida}`}
+                  avatarChar={c.nombre_fantasia.charAt(0)}
+                  avatarColor="var(--gold)"
+                  title={c.nombre_fantasia}
+                  subtitle={`${c.categoria_negocio} · Ofrecer: ${c.categoria_sugerida}`}
+                  progress={{ pct: c.peers_pct, label: `${c.peers_pct}% pares` }}
+                  progressColor="var(--gold)"
+                  actions={c.telefono && (
+                    <>
+                      <ActionBtn color="#25D166" bg="rgba(37,211,102,0.08)" border="rgba(37,211,102,0.3)" onClick={() => setWaTarget({ nombre: c.nombre_fantasia, telefono: c.telefono!, contexto: 'mision' })}>
+                        <MessageCircle size={13} color="#25D166" />
+                      </ActionBtn>
+                      <ActionBtn color="var(--gold)" bg="rgba(96,165,250,0.08)" border="rgba(96,165,250,0.3)" onClick={() => window.open(`tel:${c.telefono}`)}>
+                        <Phone size={13} color="var(--gold)" />
+                      </ActionBtn>
+                    </>
+                  )}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -763,37 +868,51 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
             Clientes agrupados por mes de su primera compra. ¿Cuántos volvieron y siguen comprando?
           </p>
 
-          <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
-          <div style={{ minWidth: 480 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '90px 80px 1fr 1fr 90px', gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
-            {['COHORTE', 'CLIENTES', 'REPITIERON', 'SIGUEN ACTIVOS', 'PED. PROM'].map(h => (
-              <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</span>
-            ))}
-          </div>
-
-          {stats.cohortes.map((c, i) => (
-            <div key={c.cohorte} style={{ display: 'grid', gridTemplateColumns: '90px 80px 1fr 1fr 90px', gap: 10, padding: '9px 0', borderBottom: i < stats.cohortes.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{cohorteLabel(c.cohorte)}</span>
-              <span style={{ fontSize: 13, color: 'var(--muted)' }}>{c.clientes}</span>
-              {/* Repitieron */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${c.repeat_pct}%`, height: '100%', background: 'var(--gold)', borderRadius: 3 }} />
-                </div>
-                <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.repitieron} · {c.repeat_pct}%</span>
-              </div>
-              {/* Activos */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${c.activos_pct}%`, height: '100%', background: 'var(--green-dim)', borderRadius: 3 }} />
-                </div>
-                <span style={{ fontSize: 11, color: 'var(--green-dim)', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.activos} · {c.activos_pct}%</span>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{c.pedidos_prom}</span>
+          {isDesktop ? (
+            <div style={{ overflowX: 'auto', margin: '0 -20px', padding: '0 20px', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: 480 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '90px 80px 1fr 1fr 90px', gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+              {['COHORTE', 'CLIENTES', 'REPITIERON', 'SIGUEN ACTIVOS', 'PED. PROM'].map(h => (
+                <span key={h} style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</span>
+              ))}
             </div>
-          ))}
-          </div>
-          </div>
+            {stats.cohortes.map((c, i) => (
+              <div key={c.cohorte} style={{ display: 'grid', gridTemplateColumns: '90px 80px 1fr 1fr 90px', gap: 10, padding: '9px 0', borderBottom: i < stats.cohortes.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{cohorteLabel(c.cohorte)}</span>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>{c.clientes}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${c.repeat_pct}%`, height: '100%', background: 'var(--gold)', borderRadius: 3 }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.repitieron} · {c.repeat_pct}%</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${c.activos_pct}%`, height: '100%', background: 'var(--green-dim)', borderRadius: 3 }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--green-dim)', fontWeight: 700, width: 56, textAlign: 'right' }}>{c.activos} · {c.activos_pct}%</span>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{c.pedidos_prom}</span>
+              </div>
+            ))}
+            </div>
+            </div>
+          ) : (
+            /* ── Mobile: cards apiladas ── */
+            <div>
+              {stats.cohortes.map(c => (
+                <MobileRow
+                  key={c.cohorte}
+                  avatarChar={cohorteLabel(c.cohorte).slice(0, 1)}
+                  avatarColor="var(--gold)"
+                  title={cohorteLabel(c.cohorte)}
+                  subtitle={`${c.clientes} clientes · ${c.pedidos_prom} ped. prom`}
+                  progress={{ pct: c.repeat_pct, label: `${c.repitieron} repiten` }}
+                  progressColor="var(--gold)"
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
