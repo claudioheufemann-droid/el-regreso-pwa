@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
+import { provinciasDeRegion } from '@/lib/regiones'
 import { VENDEDORES_DB, VENDEDORES_SCOPE, esClienteExcluido } from '@/lib/types'
 
 const TODOS_VENDEDORES = [...VENDEDORES_SCOPE]
@@ -77,13 +78,23 @@ export default async function AcumuladoPage() {
   const vendedoresScope = appUser?.isAdmin ? TODOS_VENDEDORES : TODOS_VENDEDORES.filter(v => v === appUser?.nombre || VENDEDORES_DB.includes(v as never))
   const scope = vendedoresScope.length ? vendedoresScope : ['__none__']
 
+  // ── Scope geográfico del vendedor ────────────────────────────────────────
+  // Admin: provinciasScope = null → filtra por vendedores consolidados (actual).
+  // Vendedor: filtra las ventas por PROVINCIA (su región), no por nombre.
+  const scopeRegion = appUser?.isAdmin ? null : (appUser?.region ?? null)
+  const provs = provinciasDeRegion(scopeRegion)
+  const provinciasScope: string[] | null = provs.length ? provs : null
+
   const { data: periodo } = await supabase.from('periodos').select('*').eq('activo',true).single()
   const fechaInicio = periodo?.fecha_inicio ?? new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().split('T')[0]
   const fechaFin    = periodo?.fecha_fin    ?? new Date().toISOString().split('T')[0]
   const prev = prevPeriod(fechaInicio)
 
-  // Ventas cacheadas (compartidas entre usuarios) + filtro por scope en memoria
-  const inScope = (v: { vendedor_actual: string }) => scope.includes(v.vendedor_actual)
+  // Ventas cacheadas (compartidas entre usuarios) + filtro por scope en memoria.
+  // Vendedor: por provincia (su región). Admin: por vendedores consolidados.
+  const provSet = provinciasScope ? new Set(provinciasScope) : null
+  const inScope = (v: { vendedor_actual: string; provincia?: string | null }) =>
+    provSet ? provSet.has(v.provincia ?? '') : scope.includes(v.vendedor_actual)
   const [ventasRangoActual, ventasRangoPrev, { data: metasData }, { data: riesgoRaw }] = await Promise.all([
     getVentasRango(fechaInicio, fechaFin),
     getVentasRango(prev.inicio, prev.fin),

@@ -19,9 +19,10 @@ export type VentaRangoRow = {
   fecha_pedido: string
   nombre_fantasia: string | null
   pedido: string | null
+  provincia: string | null
 }
 
-const COLS = 'vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,producto,envase,fecha_pedido,nombre_fantasia,pedido'
+const COLS = 'vendedor_actual,litros,total_sin_impuesto,categoria_negocio,categoria_producto,producto,envase,fecha_pedido,nombre_fantasia,pedido,provincia'
 
 /**
  * Ventas de un rango de fechas (TODOS los vendedores), llamada directa sin caché.
