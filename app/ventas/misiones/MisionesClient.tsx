@@ -110,6 +110,16 @@ type ActualizarOpts = { dias?: number; litros?: number }
 type OnActualizar = (id: string, estado: EstadoMision, opts?: ActualizarOpts) => Promise<void>
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function diasDesde(f: string | null | undefined): number | null {
+  if (!f) return null
+  return Math.floor((Date.now() - new Date(f).getTime()) / 86400000)
+}
+function fDias(d: number | null): string {
+  if (d === null) return '—'
+  if (d === 0) return 'Hoy'
+  if (d === 1) return 'Ayer'
+  return `hace ${d}d`
+}
 function fFecha(s: string | null): string {
   if (!s) return '—'
   const [y, m, d] = s.split('T')[0].split('-')
@@ -813,18 +823,48 @@ function DetailPanel({ mision, onActualizar, onWA, loadingId, onClose, onMarcarI
           ))}
         </div>
 
+        {/* Quiebre de stock estimado */}
         {mision.siguiente_compra_estimada && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            padding: '8px 12px', background: '#1A1A1D', border: '1px solid #2A2A2E', borderRadius: 10,
+            padding: '8px 12px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10,
           }}>
-            <Calendar size={13} color="#9CA3AF" />
+            <AlertTriangle size={13} color="#EF4444" />
             <span style={{ fontSize: 12, color: '#9CA3AF' }}>
-              Próxima visita:{' '}
+              Quiebre stock estimado:{' '}
               <strong style={{ color: '#EF4444' }}>{fFecha(mision.siguiente_compra_estimada)}</strong>
             </span>
+            {mision.ciclo_promedio_dias && (
+              <span style={{ fontSize: 10, color: '#6B7280', marginLeft: 'auto' }}>cada {mision.ciclo_promedio_dias}d</span>
+            )}
           </div>
         )}
+
+        {/* Último contacto */}
+        {(() => {
+          const dcont = diasDesde(mision.ultimo_contacto_fecha)
+          const contColor = dcont !== null && dcont <= 3 ? '#4ADE80' : dcont !== null && dcont <= 7 ? '#FBBF24' : '#EF4444'
+          return (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginTop: 6,
+              padding: '8px 12px', background: '#1A1A1D', border: '1px solid #2A2A2E', borderRadius: 10,
+            }}>
+              <MessageCircle size={13} color={dcont !== null ? contColor : '#6B7280'} />
+              <span style={{ fontSize: 12, color: '#9CA3AF' }}>Último contacto:</span>
+              <strong style={{ fontSize: 12, color: dcont !== null ? contColor : '#6B7280' }}>
+                {dcont !== null ? fDias(dcont) : 'Sin registros'}
+              </strong>
+              {mision.ultimo_contacto_fecha && (
+                <span style={{ fontSize: 10, color: '#6B7280' }}>({fFecha(mision.ultimo_contacto_fecha)})</span>
+              )}
+              {mision.ultimo_contacto_tipo && (
+                <span style={{ fontSize: 9, padding: '1px 7px', borderRadius: 20, background: 'rgba(255,255,255,0.05)', color: '#9CA3AF', marginLeft: 'auto' }}>
+                  {mision.ultimo_contacto_tipo}
+                </span>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       {/* ── BADGES CONTEXTUALES ── */}
@@ -1145,6 +1185,7 @@ function CompactCard({ mision, selected, onClick, onWA }: {
   const dl        = diasLabel(mision)
   const litros    = mision.litros_ultima_compra ?? null
   const diasSin   = mision.dias_sin_compra
+  const dcont     = diasDesde(mision.ultimo_contacto_fecha)
 
   // Línea contextual: "Último pedido: 40L [82d]"
   const contexto = litros != null
@@ -1200,6 +1241,10 @@ function CompactCard({ mision, selected, onClick, onWA }: {
                 <TrendingDown size={9} /> −{mision.volumen_caida_pct}%
               </span>
             )}
+            {/* Último contacto */}
+            <span style={{ fontSize: 9, color: dcont !== null && dcont <= 3 ? '#4ADE80' : dcont !== null && dcont <= 7 ? '#FBBF24' : '#6B7280', display: 'inline-flex', alignItems: 'center', gap: 2, whiteSpace: 'nowrap' }}>
+              <MessageCircle size={8} /> {dcont !== null ? fDias(dcont) : 'sin contacto'}
+            </span>
           </div>
         </div>
 
@@ -1363,27 +1408,37 @@ function MisionCard({ mision, onActualizar, onWA, loadingId, onMarcarInactivo, i
         <div style={{ overflow: 'hidden' }}>
         <div style={{ padding: '0 12px 12px', borderTop: '1px solid var(--border-subtle)' }}>
           {/* KPIs inline — 3 columnas */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, margin: '10px 0' }}>
-            {[
-              { label: 'Sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#EF4444' : '#E5E7EB', icon: <Calendar size={10} color="#9CA3AF" /> },
-              { label: 'Último ped.', value: fFecha(mision.ultima_venta_fecha), color: '#E5E7EB', icon: <Calendar size={10} color="#9CA3AF" /> },
-              { label: 'Venta',       value: fPeso(mision.ultima_venta_monto), color: '#E5E7EB', icon: <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 700 }}>$</span> },
-            ].map(({ label, value, color, icon }) => (
-              <div key={label} style={{ background: '#1A1A1D', border: '1px solid #2A2A2E', borderRadius: 10, padding: '7px 9px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                  <p style={{ fontSize: 7, color: '#9CA3AF', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>{label}</p>
-                  {icon}
-                </div>
-                <p style={{ fontSize: 13, fontWeight: 900, color, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+          {(() => {
+            const dcont = diasDesde(mision.ultimo_contacto_fecha)
+            const contColor = dcont !== null && dcont <= 3 ? '#4ADE80' : dcont !== null && dcont <= 7 ? '#FBBF24' : '#EF4444'
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, margin: '10px 0' }}>
+                {[
+                  { label: 'Sin comprar', value: `${mision.dias_sin_compra}d`, color: mision.tipo === 'vencido' ? '#EF4444' : '#E5E7EB', icon: <Calendar size={10} color="#9CA3AF" /> },
+                  { label: 'Último ped.', value: fFecha(mision.ultima_venta_fecha), color: '#E5E7EB', icon: <Calendar size={10} color="#9CA3AF" /> },
+                  { label: 'Últ. contacto', value: dcont !== null ? fDias(dcont) : 'Nunca', color: contColor, icon: <MessageCircle size={10} color="#9CA3AF" /> },
+                ].map(({ label, value, color, icon }) => (
+                  <div key={label} style={{ background: '#1A1A1D', border: '1px solid #2A2A2E', borderRadius: 10, padding: '7px 9px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                      <p style={{ fontSize: 7, color: '#9CA3AF', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>{label}</p>
+                      {icon}
+                    </div>
+                    <p style={{ fontSize: 13, fontWeight: 900, color, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )
+          })()}
+          {/* Quiebre de stock estimado */}
           {mision.siguiente_compra_estimada && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, padding: '6px 10px', background: '#1A1A1D', border: '1px solid #2A2A2E', borderRadius: 8 }}>
-              <Calendar size={10} color="#9CA3AF" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, padding: '6px 10px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8 }}>
+              <AlertTriangle size={10} color="#EF4444" />
               <span style={{ fontSize: 10, color: '#9CA3AF' }}>
-                Próxima: <strong style={{ color: '#EF4444' }}>{fFecha(mision.siguiente_compra_estimada)}</strong>
+                Quiebre stock: <strong style={{ color: '#EF4444' }}>{fFecha(mision.siguiente_compra_estimada)}</strong>
               </span>
+              {mision.ciclo_promedio_dias && (
+                <span style={{ fontSize: 9, color: '#6B7280', marginLeft: 'auto' }}>ciclo {mision.ciclo_promedio_dias}d</span>
+              )}
             </div>
           )}
           {mision.nota && (

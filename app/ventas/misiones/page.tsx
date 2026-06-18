@@ -58,6 +58,9 @@ export interface MisionEnriquecida {
   dias_para_compra: number | null
   // Estado financiero: true si tiene facturas pendientes en clientes_estado
   tiene_deuda: boolean
+  // Último contacto registrado (WhatsApp / llamada)
+  ultimo_contacto_fecha: string | null
+  ultimo_contacto_tipo: string | null
 }
 
 export interface ProximaPreview {
@@ -74,7 +77,7 @@ export interface HistorialSemana {
 }
 
 function enriquecerMision(
-  m: Omit<MisionEnriquecida, 'ruta_despacho'|'localidad'|'telefono'|'cliente_id'|'ultima_venta_fecha'|'ultima_venta_monto'|'prioridad'|'frecuencia_texto'|'dias_para_compra'|'tipo_cliente'|'volumen_caida_pct'|'cross_sell'|'pedido_sugerido'|'tiene_deuda'>,
+  m: Omit<MisionEnriquecida, 'ruta_despacho'|'localidad'|'telefono'|'cliente_id'|'ultima_venta_fecha'|'ultima_venta_monto'|'prioridad'|'frecuencia_texto'|'dias_para_compra'|'tipo_cliente'|'volumen_caida_pct'|'cross_sell'|'pedido_sugerido'|'tiene_deuda'|'ultimo_contacto_fecha'|'ultimo_contacto_tipo'>,
   clienteMap: Map<string, { ruta_despacho: string|null; localidad: string|null; telefono: string|null; cliente_id: number|null }>,
   ventaMap: Map<string, { fecha: string; monto: number }>,
   tipoClienteMap: Map<string, 'activo' | 'inactivo' | 'temporal' | 'nuevo'>,
@@ -82,6 +85,7 @@ function enriquecerMision(
   crossSellMap: Map<string, { categoria: string; pct: number }>,
   pedidoSugMap: Map<string, { producto: string; envase: string | null; litros: number }[]>,
   deudoresSet: Set<string>,
+  contactoMap: Map<string, { fecha: string; tipo: string }>,
 ): MisionEnriquecida {
   const cli = clienteMap.get(m.nombre_fantasia) ?? { ruta_despacho:null, localidad:null, telefono:null, cliente_id:null }
   const vta = ventaMap.get(m.nombre_fantasia)
@@ -90,6 +94,7 @@ function enriquecerMision(
   const cross_sell = crossSellMap.get(m.nombre_fantasia) ?? null
   const pedido_sugerido = pedidoSugMap.get(m.nombre_fantasia) ?? []
   const tiene_deuda = deudoresSet.has(m.nombre_fantasia)
+  const ctc = contactoMap.get(m.nombre_fantasia)
   const prioridad = m.alert_level==='critico' ? 'Alta' : m.alert_level==='vencido' ? 'Media' : 'Baja'
   const ciclo = m.ciclo_promedio_dias
   const frecuencia_texto = ciclo ? `Cada ${ciclo} días` : 'Sin datos'
@@ -114,6 +119,8 @@ function enriquecerMision(
     prioridad_calculada: m.prioridad_calculada ?? null,
     ultima_venta_fecha: vta?.fecha??null, ultima_venta_monto: vta?.monto??0,
     prioridad, frecuencia_texto, dias_para_compra,
+    ultimo_contacto_fecha: ctc?.fecha ?? null,
+    ultimo_contacto_tipo: ctc?.tipo ?? null,
   }
 }
 
@@ -158,6 +165,7 @@ export default async function MisionesPage() {
     volBajaRaw,
     crossRaw,
     pedidoSugRaw,
+    { data: contactosRaw },
   ] = await Promise.all([
     supabase.from('misiones')
       .select('*')
@@ -196,6 +204,13 @@ export default async function MisionesPage() {
     getVolumenBajaCached(p_vendedor),
     getCrossSellCached(p_vendedor),
     getPedidoSugeridoCached(p_vendedor),
+
+    // Último contacto registrado por cliente (WhatsApp / llamada)
+    supabase.from('contactos')
+      .select('cliente_nombre_fantasia, fecha_hora, tipo')
+      .in('vendedor', vendedoresScope.length ? vendedoresScope : ['__none__'])
+      .order('fecha_hora', { ascending: false })
+      .limit(2000),
   ])
 
   // Mapas de lookup
@@ -233,6 +248,12 @@ export default async function MisionesPage() {
     pedidoSugMap.get(p.nombre_fantasia)!.push({ producto: p.producto, envase: p.envase, litros: p.litros_tipico })
   }
 
+  // Último contacto por cliente (primera aparición = más reciente, rows ordenados desc)
+  const contactoMisionMap = new Map<string, { fecha: string; tipo: string }>()
+  for (const c of (contactosRaw ?? []))
+    if (c.cliente_nombre_fantasia && !contactoMisionMap.has(c.cliente_nombre_fantasia))
+      contactoMisionMap.set(c.cliente_nombre_fantasia, { fecha: c.fecha_hora, tipo: c.tipo ?? 'contacto' })
+
   // Días vencidos: cuántos días lleva el cliente pasando su ciclo de compra.
   // 1 día = venció ayer, se muestra primero (más fresco, más recuperable).
   function diasVencidos(m: MisionEnriquecida): number {
@@ -242,7 +263,7 @@ export default async function MisionesPage() {
 
   const hoyStr = new Date().toISOString().split('T')[0]
   const misiones: MisionEnriquecida[] = (misionesRaw ?? [])
-    .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap, deudoresSet))
+    .map(m => enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap, deudoresSet, contactoMisionMap))
     .filter(m => !inactivosManuales.has(m.nombre_fantasia))
     .filter(m => (m.dias_sin_compra ?? 0) <= 90)
     // Scope por región del vendedor (admin: regionClientes null = sin filtro)
@@ -260,7 +281,7 @@ export default async function MisionesPage() {
   const historialMap = new Map<string, MisionEnriquecida[]>()
   for (const m of historialRaw ?? []) {
     if (regionClientes && !regionClientes.has(m.nombre_fantasia)) continue
-    const me = enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap, deudoresSet)
+    const me = enriquecerMision(m as Parameters<typeof enriquecerMision>[0], clienteMap, ventaMap, tipoClienteMap, volBajaMap, crossSellMap, pedidoSugMap, deudoresSet, contactoMisionMap)
     if (!historialMap.has(m.semana)) historialMap.set(m.semana, [])
     historialMap.get(m.semana)!.push(me)
   }

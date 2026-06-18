@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { VENDEDORES, VENDEDORES_DB, esClienteExcluido } from '@/lib/types'
+import { getUltimaVentasCached } from '@/lib/misionesCache'
 import ClientesClient from './ClientesClient'
 
 export const revalidate = 120
@@ -33,12 +34,13 @@ export default async function ClientesPage() {
   const fechaInicio = periodo?.fecha_inicio ?? '2000-01-01'
   const fechaFin    = periodo?.fecha_fin    ?? new Date().toISOString().split('T')[0]
 
-  // Queries pequeñas (no superan 1000 filas) — en paralelo
+  // Queries en paralelo
   const [
     { data: clientes },
     { data: estadosData },
     { data: scoreData },
     { data: deudoresData },
+    ultimasVentasRaw,
   ] = await Promise.all([
     supabase.from('clientes')
       .select('id, nombre_fantasia, razon_social, categoria, vendedor, localidad, localidad_entrega, ruta_despacho, telefono, lat, lng')
@@ -47,10 +49,17 @@ export default async function ClientesPage() {
     supabase.from('clientes_estado').select('nombre_fantasia, estado, nota'),
     supabase.rpc('get_client_scores'),
     supabase.from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total'),
+    // Fuente directa de último pedido — más fiable que client_scores.ultima_compra
+    getUltimaVentasCached(scopeDB),
   ])
 
+  // Mapa de último pedido real desde ventas (primera aparición = más reciente, pues viene ordenado desc)
+  const ultimaVentaMap = new Map<string, string>()
+  for (const v of ultimasVentasRaw ?? [])
+    if (v.nombre_fantasia && !ultimaVentaMap.has(v.nombre_fantasia))
+      ultimaVentaMap.set(v.nombre_fantasia, v.fecha_pedido)
+
   // Queries grandes con paginación real (superan 1000 filas; .limit() fijo trunca silenciosamente)
-  // NOTA: ultimosPedidos eliminado — client_scores ya tiene ultima_compra por cliente
   const ultimosContactos: { cliente_nombre_fantasia: string; fecha_hora: string; tipo: string; vendedor: string }[] = []
   const ventasPeriodo: { nombre_fantasia: string; vendedor_actual: string; litros: number; total_sin_impuesto: number; fecha_pedido: string }[] = []
 
@@ -144,7 +153,8 @@ export default async function ClientesPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clientesEnriquecidos = (clientes ?? []).filter((c: any) => !esInterno(c.nombre_fantasia)).map((c: any) => {
     const freq = frecuenciaMap.get(c.nombre_fantasia ?? '') ?? null
-    const ultimaFechaCompra = freq?.ultima_compra ?? null  // viene de client_scores, sin query extra
+    // Preferir fuente directa de ventas; client_scores como fallback
+    const ultimaFechaCompra = ultimaVentaMap.get(c.nombre_fantasia ?? '') ?? freq?.ultima_compra ?? null
     const periodo = periodoMap.get(c.nombre_fantasia ?? '') ?? null
     return {
       ...c,
