@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Upload, Users, AlertCircle, Target, BarChart3 } from 'lucide-react'
+import { Upload, Users, AlertCircle, Target, BarChart3, UserPlus } from 'lucide-react'
 import AppHeader from '@/components/ui/AppHeader'
 import CargarClient from './cargar/CargarClient'
 import ClientesUploadClient from './clientes-upload/ClientesUploadClient'
@@ -46,13 +46,22 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores }
       <AppHeader
         title="Admin"
         extraAction={
-          <button onClick={() => router.push('/ventas/admin/crm-metrics')} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
-            background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
-            color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-          }}>
-            <BarChart3 size={14} /> Métricas
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => router.push('/ventas/admin/vendedores')} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)',
+              color: '#4ADE80', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <UserPlus size={14} /> Vendedores
+            </button>
+            <button onClick={() => router.push('/ventas/admin/crm-metrics')} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
+              color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <BarChart3 size={14} /> Métricas
+            </button>
+          </div>
         }
       />
 
