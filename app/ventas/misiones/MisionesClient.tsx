@@ -6,7 +6,7 @@ const CalendarioMensual = lazy(() => import('./CalendarioMensual'))
 import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
-  CheckCircle2, Phone, PhoneOff, MessageCircle, RefreshCw, Calendar,
+  CheckCircle2, Phone, PhoneOff, MessageCircle, RefreshCw, Calendar, Navigation,
   ChevronDown, ChevronRight, Target, Minus, Plus, ArrowLeft, Sparkles, UserX,
   AlertTriangle, CalendarCheck, CalendarDays, Circle, Clock, Zap,
   TrendingDown, MapPin, ShoppingCart, XCircle, Star, Flame, Shield,
@@ -2225,6 +2225,31 @@ export default function MisionesClient({
 
       {tab === 'semana' && (
         <div>
+          {/* CTA: armar la ruta del día con las misiones pendientes */}
+          {!isAdmin && (() => {
+            const pendientesHoy = misionesFiltradas.filter(m => !esCompletada(m.estado) && m.tipo !== 'proxima_semana')
+            if (pendientesHoy.length < 2) return null
+            return (
+              <button
+                onClick={() => {
+                  const nombres = pendientesHoy.map(m => m.nombre_fantasia)
+                  try { localStorage.setItem('ruta-preload', JSON.stringify(nombres)) } catch {}
+                  router.push('/terreno/ruta')
+                }}
+                style={{
+                  width: '100%', minHeight: 52, marginBottom: 12,
+                  background: 'linear-gradient(135deg, #E5C45A, #B8962E)',
+                  border: 'none', borderRadius: 14, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  color: '#080808', fontSize: 14, fontWeight: 900, letterSpacing: '-0.2px',
+                  boxShadow: '0 4px 18px rgba(212,175,55,0.3)',
+                }}
+              >
+                <Navigation size={17} />
+                Armar mi ruta del día · {pendientesHoy.length} clientes
+              </button>
+            )
+          })()}
           <SeccionMisiones tipo="vencido"      misiones={porTipo.vencido}      onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} isDesktop={isDesktop} />
           <SeccionMisiones tipo="esta_semana"  misiones={porTipo.esta_semana}  onActualizar={onActualizar} onWA={onWA} loadingId={loadingId} onMarcarInactivo={onMarcarInactivo} isDesktop={isDesktop} />
           {misionesFiltradas.filter(m => m.tipo !== 'proxima_semana').length === 0 && pospuestosConStock.length === 0 && (

@@ -101,6 +101,29 @@ export default function RutaClient({ clientes }: Props) {
 
   const enQueue = useMemo(() => new Set(queue.map(p => p.id)), [queue])
 
+  // Pre-carga desde Misiones: si venimos de "Armar mi ruta del día", la lista
+  // de clientes llega por localStorage. Hacemos match con los clientes con GPS
+  // y armamos la cola automáticamente.
+  useEffect(() => {
+    let raw: string | null = null
+    try { raw = localStorage.getItem('ruta-preload') } catch { return }
+    if (!raw) return
+    try { localStorage.removeItem('ruta-preload') } catch {}
+    let nombres: string[]
+    try { nombres = JSON.parse(raw) } catch { return }
+    if (!Array.isArray(nombres) || nombres.length === 0) return
+    const set = new Set(nombres.map(n => n.toLowerCase().trim()))
+    const paradas: Parada[] = clientes
+      .filter(c => set.has(c.nombre.toLowerCase().trim()))
+      .map(c => ({
+        id: `cli-${c.nombre}`, nombre: c.nombre,
+        detalle: [c.categoria, c.localidad].filter(Boolean).join(' · ') || null,
+        lat: c.lat, lng: c.lng, tipo: 'cliente' as const,
+      }))
+    if (paradas.length > 0) setQueue(paradas)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     if (!q) return clientes.slice(0, 60)
