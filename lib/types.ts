@@ -4,8 +4,9 @@ export type Vendedor = 'Vendedor 1'
 
 export const VENDEDORES: Vendedor[] = ['Vendedor 1']
 
-// Nombres históricos en la BD — necesarios para queries sobre datos pasados
-export const VENDEDORES_DB = ['Javier Badilla', 'Carlos Urrejola'] as const
+// Histórico consolidado en BD. Las ventas pasadas se relabelaron a
+// 'Equipo Ventas' (Javier/Carlos ya no trabajan acá — datos despersonalizados).
+export const VENDEDORES_DB = ['Equipo Ventas'] as const
 
 // ─── GRUPOS DE VENDEDORES ────────────────────────────────────────────────────
 // Fuente única de verdad para la organización de vendedores.
@@ -17,7 +18,7 @@ export const VENDEDORES_DB = ['Javier Badilla', 'Carlos Urrejola'] as const
 //   'R. Metropolitana': ['Región Metropolitana', 'Juan Pérez']
 //
 export const VENDEDOR_GRUPOS: Record<string, string[]> = {
-  'Vendedor Planta':   ['Javier Badilla', 'Carlos Urrejola', 'Vendedor 1', 'Vendedor Planta'],
+  'Equipo Ventas':     ['Equipo Ventas', 'Vendedor 1'],   // histórico despersonalizado
   'OnLine':            ['OnLine'],
   'R. Metropolitana':  ['Región Metropolitana'],   // ← reemplazar con nombre real cuando llegue
   'R. Araucanía':      ['Región de la Araucanía'], // ← ídem

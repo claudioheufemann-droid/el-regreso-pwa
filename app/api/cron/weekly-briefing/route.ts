@@ -8,10 +8,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 export const runtime = 'nodejs'
 
 const VENDEDORES_EMAIL: Record<string, string> = {
-  'Vendedor 1': 'benja.alarcon@elregresobeer.com',
-  // aliases históricos en BD
-  'Javier Badilla':  'benja.alarcon@elregresobeer.com',
-  'Carlos Urrejola': 'benja.alarcon@elregresobeer.com',
+  'Equipo Ventas': 'benja.alarcon@elregresobeer.com',
+  'Vendedor 1':    'benja.alarcon@elregresobeer.com',
 }
 const ADMIN_EMAIL = 'benja.alarcon@elregresobeer.com'
 
