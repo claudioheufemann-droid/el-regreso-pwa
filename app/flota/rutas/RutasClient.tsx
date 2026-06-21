@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import * as XLSX from 'xlsx'
 import { Plus, Trash2, Zap, MapPin, ExternalLink, Save, ChevronDown, CheckCircle, FileUp, PenLine } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useIsDesktop } from '@/lib/useIsDesktop'
@@ -231,6 +230,7 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
     setExcelError('')
     setExcelPreview([])
     try {
+      const XLSX = await import('xlsx')
       const buffer = await file.arrayBuffer()
       const wb = XLSX.read(buffer, { type: 'array' })
       const ws = wb.Sheets[wb.SheetNames[0]]

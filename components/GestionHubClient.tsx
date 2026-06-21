@@ -13,7 +13,7 @@ const AREAS = [
     rgb: '230,126,34',
     code: 'AC',
     href: '/gestion/comercial',
-    img: '/gestion-comercial.jpg.png',
+    img: '/gestion-comercial.webp',
     imgFallback: 'linear-gradient(135deg, #1a0e00 0%, #2d1a00 50%, #1a0e00 100%)',
   },
   {
@@ -24,7 +24,7 @@ const AREAS = [
     rgb: '91,138,168',
     code: 'AD',
     href: '/gestion/administracion',
-    img: '/gestion-admin.jpg.png',
+    img: '/gestion-admin.webp',
     imgFallback: 'linear-gradient(135deg, #00111a 0%, #001d2b 50%, #00111a 100%)',
   },
   {
@@ -35,7 +35,7 @@ const AREAS = [
     rgb: '46,204,113',
     code: 'PR',
     href: '/gestion/produccion',
-    img: '/gestion-produccion.jpg.png',
+    img: '/gestion-produccion.webp',
     imgFallback: 'linear-gradient(135deg, #001a0a 0%, #002b11 50%, #001a0a 100%)',
   },
 ]

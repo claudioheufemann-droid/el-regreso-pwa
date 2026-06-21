@@ -43,20 +43,19 @@ const FOTO_SLOTS: FotoSlot[] = [
 // ─── Imágenes de producto ─────────────────────────────────────
 
 const PRODUCTO_IMAGENES: Record<string, string> = {
-  'Nitro Coffee':                '/productos/cerveza/porter.jpg',
-  'Kombucha Berry Menta':        '/productos/kombucha/berry-menta.png',
-  'Kombucha Detox':              '/productos/kombucha/detox.png',
-  'Kombucha Lemon':              '/productos/kombucha/lemon-fresh.png',
-  'Kombucha Mango':              '/productos/kombucha/mango-merken.png',
-  'Kombucha Maqui':              '/productos/kombucha/maqui-hops.png',
-  'Kombucha Maracuyá Cardamomo': '/productos/kombucha/maracuya-cardamomo.png',
-  'Kombucha Natural':            '/productos/kombucha/natural.png',
-  'Arboretum':                   '/productos/cerveza/arboretum.png',
-  'Mocho English':               '/productos/cerveza/mocho.png',
-  'La Barra APA':                '/productos/cerveza/la-barra.png',
-  'Fisura':                      '/productos/cerveza/fisura.png',
-  'Descenso West Coast IPA':     '/productos/cerveza/descenso.png',
-  'Aguas Blancas':               '/productos/cerveza/aguas-blancas.png',
+  'Kombucha Berry Menta':        '/productos/kombucha/berry-menta.webp',
+  'Kombucha Detox':              '/productos/kombucha/detox.webp',
+  'Kombucha Lemon':              '/productos/kombucha/lemon-fresh.webp',
+  'Kombucha Mango':              '/productos/kombucha/mango-merken.webp',
+  'Kombucha Maqui':              '/productos/kombucha/maqui-hops.webp',
+  'Kombucha Maracuyá Cardamomo': '/productos/kombucha/maracuya-cardamomo.webp',
+  'Kombucha Natural':            '/productos/kombucha/natural.webp',
+  'Arboretum':                   '/productos/cerveza/arboretum.webp',
+  'Mocho English':               '/productos/cerveza/mocho.webp',
+  'La Barra APA':                '/productos/cerveza/la-barra.webp',
+  'Fisura':                      '/productos/cerveza/fisura.webp',
+  'Descenso West Coast IPA':     '/productos/cerveza/descenso.webp',
+  'Aguas Blancas':               '/productos/cerveza/aguas-blancas.webp',
 }
 
 function ProductoThumb({ nombre, categoria, size = 44 }: { nombre: string; categoria: string; size?: number }) {

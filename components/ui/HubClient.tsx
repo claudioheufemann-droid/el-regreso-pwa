@@ -351,7 +351,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             rgb="212,175,55"
             title="Ventas"
             subtitle="Dashboard, clientes, KPIs y metas"
-            img="/hub-ventas.jpg.png"
+            img="/hub-ventas.webp"
           />
 
           {/* Gestión: accesible para vendedor y admin */}
@@ -361,7 +361,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             rgb="59,130,246"
             title={isAdmin ? 'Gestión de tareas' : 'Gestión'}
             subtitle="Tareas, proyectos y seguimiento"
-            img="/hub-gestion.jpg.png"
+            img="/hub-gestion.webp"
           />
 
           <ModuleCard
@@ -370,7 +370,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             rgb="16,185,129"
             title="Venta en terreno"
             subtitle="Rutas, auditorías y check-in GPS"
-            img="/hub-terreno.jpg.png"
+            img="/hub-terreno.webp"
           />
 
           {/* Logística: visible para todos, pero el vendedor NO puede entrar
@@ -381,7 +381,7 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             rgb="249,115,22"
             title="Logística"
             subtitle={isAdmin ? 'Bitácora, rutas y control de vehículos' : 'Acceso exclusivo · Administración'}
-            img="/hub-logistica.jpg.png"
+            img="/hub-logistica.webp"
             locked={!isAdmin}
           />
 

@@ -5,7 +5,6 @@ import {
   Upload, CheckCircle, AlertCircle, FileSpreadsheet, Loader2,
   Users, RefreshCw, Download, Info, MapPin,
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
 
 interface UploadResult {
   total: number
@@ -117,7 +116,8 @@ export default function ClientesUploadClient() {
     }
   }
 
-  function downloadTemplate() {
+  async function downloadTemplate() {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
     const wsData = [
       COLUMNAS_TEMPLATE,
