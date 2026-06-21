@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import AppHeader from '@/components/ui/AppHeader'
+import BuscarClienteSheet from '@/components/ui/BuscarClienteSheet'
 
 const G = '#D4AF37'
 const G_RGB = '212,175,55'
@@ -292,6 +293,7 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
   // Lectura directa de window.location (sin useSearchParams) para no requerir
   // un Suspense boundary adicional en esta pantalla.
   const [showCierre, setShowCierre] = useState(false)
+  const [showBuscar, setShowBuscar] = useState(false)
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (new URLSearchParams(window.location.search).get('cierre') === '1') {
@@ -310,8 +312,26 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
 
         {/* ── HEADER ESTÁNDAR ── */}
         <div style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))' }}>
-          <AppHeader eyebrow={fechaCapitalizada} title="Terreno" />
+          <AppHeader
+            eyebrow={fechaCapitalizada}
+            title="Terreno"
+            extraAction={
+              <button
+                onClick={() => setShowBuscar(true)}
+                aria-label="Buscar cliente"
+                style={{
+                  width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                  background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+              >
+                <Search size={16} color="#D4AF37" />
+              </button>
+            }
+          />
         </div>
+
+        {showBuscar && <BuscarClienteSheet onClose={() => setShowBuscar(false)} />}
 
         {/* ── PLANIFICA TU VIAJE ── */}
         <button

@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, ChevronUp, Users, Calendar, X, MapPin, Target } from 'lucide-react'
+import { ChevronDown, ChevronUp, Users, Calendar, X, MapPin, Target, Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { Periodo, VENDEDOR_DISPLAY } from '@/lib/types'
+import BuscarClienteSheet from '@/components/ui/BuscarClienteSheet'
 
 /** Muestra "Vendedor 1" en lugar del nombre real de la BD */
 const dspVendedor = (v: string) => VENDEDOR_DISPLAY[v] ?? v
@@ -1692,6 +1693,7 @@ function DropSizeCard({ resumen, colors, avatars }: { resumen: VendedorResumen[]
 export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, periodo, evolution, productRanking, productDetail, vendedoresScope, riesgoClientes, planSemana, misionesResumen, vendedorAvatars, litrosMesAnterior = 0, litrosMesAnteriorPorVendedor = {} }: Props) {
   const isDesktop = useIsDesktop()
   const [showPlanModal, setShowPlanModal] = useState(false)
+  const [showBuscar, setShowBuscar] = useState(false)
 
   // Mostrar popup plan semanal solo los lunes, una vez por día
   useEffect(() => {
@@ -1735,7 +1737,21 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
       <AppHeader
         eyebrow={new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         title="Ventas"
+        extraAction={
+          <button
+            onClick={() => setShowBuscar(true)}
+            aria-label="Buscar cliente"
+            style={{
+              width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+              background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}
+          >
+            <Search size={16} color="#D4AF37" />
+          </button>
+        }
       />
+      {showBuscar && <BuscarClienteSheet onClose={() => setShowBuscar(false)} />}
 
       {/* === POPUP PLAN SEMANAL (solo lunes) === */}
       {showPlanModal && (

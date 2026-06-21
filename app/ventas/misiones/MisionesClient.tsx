@@ -16,6 +16,7 @@ import type { MisionEnriquecida, ProximaPreview, HistorialSemana, EstadoMision, 
 import { buscarTorpedo } from '@/lib/catalogo-torpedo'
 import type { AlertTipo } from '@/components/ui/WAModal'
 import { VENDEDOR_DISPLAY } from '@/lib/types'
+import { hapticExito } from '@/lib/haptics'
 const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
@@ -1971,6 +1972,7 @@ export default function MisionesClient({
         setSelectedMision(prev => (prev?.id === id ? null : prev))
       } else {
         const completado_at = estado === 'contactado_pedido' ? new Date().toISOString() : null
+        if (estado === 'contactado_pedido') hapticExito()
         setMisiones(prev => prev.map(m =>
           m.id === id ? { ...m, estado, completado_at: completado_at ?? m.completado_at } : m
         ))
