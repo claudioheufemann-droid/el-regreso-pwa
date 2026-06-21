@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import AppHeader from '@/components/ui/AppHeader'
 
@@ -184,6 +185,22 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
   const fecha = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
   const fechaCapitalizada = fecha.charAt(0).toUpperCase() + fecha.slice(1)
 
+  // Resumen del día al cerrar una visita (?cierre=1 desde nueva-visita).
+  // Lectura directa de window.location (sin useSearchParams) para no requerir
+  // un Suspense boundary adicional en esta pantalla.
+  const [showCierre, setShowCierre] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('cierre') === '1') {
+      setShowCierre(true)
+      window.history.replaceState({}, '', '/terreno')
+    }
+  }, [])
+
+  const totalPedidoHoy = visitas
+    .filter(v => v.estado === 'completada')
+    .reduce((s, v) => s + (v.total_pedido ?? 0), 0)
+
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 100 }}>
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
@@ -316,6 +333,72 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
         </div>
 
       </div>
+
+      {/* ── Resumen al cerrar visita ── */}
+      {showCierre && (
+        <div
+          onClick={() => setShowCierre(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(3px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+            animation: 'cierre-fade 0.2s ease',
+          }}
+        >
+          <style>{`
+            @keyframes cierre-fade { from { opacity: 0 } to { opacity: 1 } }
+            @keyframes cierre-pop { from { transform: scale(0.92) translateY(8px); opacity: 0 } to { transform: scale(1) translateY(0); opacity: 1 } }
+          `}</style>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 360,
+              background: 'linear-gradient(160deg, #14110A 0%, #0A0808 100%)',
+              border: `1px solid rgba(${G_RGB},0.3)`, borderRadius: 22,
+              padding: '24px 22px', textAlign: 'center', position: 'relative',
+              animation: 'cierre-pop 0.3s cubic-bezier(0.16,1,0.3,1)',
+            }}
+          >
+            <button
+              onClick={() => setShowCierre(false)}
+              style={{ position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            >
+              <X size={14} color="rgba(255,255,255,0.5)" />
+            </button>
+
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: `rgba(${G_RGB},0.15)`, border: `1px solid rgba(${G_RGB},0.3)`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+              <CheckCircle size={26} color={G} />
+            </div>
+
+            <p style={{ fontSize: 17, fontWeight: 900, color: '#F0EDE8', marginBottom: 4 }}>Visita registrada</p>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 18 }}>Así va tu día, {nombre}</p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 18 }}>
+              {[
+                { label: 'Visitas', value: kpis.totalHoy, color: '#F0EDE8' },
+                { label: 'Con venta', value: kpis.conVenta, color: '#4ADE80' },
+                { label: 'Total $', value: totalPedidoHoy > 0 ? fmtPeso(totalPedidoHoy).replace('$', '') : '0', color: G },
+              ].map(s => (
+                <div key={s.label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: '10px 6px' }}>
+                  <p style={{ fontSize: 18, fontWeight: 900, color: s.color, letterSpacing: '-0.5px' }}>{s.value}</p>
+                  <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 2 }}>{s.label}</p>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => { setShowCierre(false); router.push('/ventas/ranking') }}
+              style={{
+                width: '100%', minHeight: 46, borderRadius: 13, border: 'none', cursor: 'pointer',
+                background: 'linear-gradient(135deg, #E5C45A, #B8962E)', color: '#080808',
+                fontSize: 13, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              }}
+            >
+              <Trophy size={15} /> Ver mi posición en el ranking
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1694,7 +1694,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
         })
       }
 
-      router.push('/terreno')
+      router.push('/terreno?cierre=1')
     } finally {
       setGuardando(false)
     }
