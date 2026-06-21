@@ -22,13 +22,13 @@ function esProductoCatalogable(nombre: string): boolean {
 export default async function NuevaVisitaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ retomar?: string }>
+  searchParams: Promise<{ retomar?: string; cliente?: string }>
 }) {
   const user = await getServerUser()
   if (!user) redirect('/login')
 
   const supabase = await createClient()
-  const { retomar } = await searchParams
+  const { retomar, cliente: clientePre } = await searchParams
 
   // Si hay visita a retomar, cargarla
   let visitaRetomada = null
@@ -96,6 +96,7 @@ export default async function NuevaVisitaPage({
       catalogoProductos={productos}
       visitaRetomada={visitaRetomada}
       deudores={deudores}
+      clientePre={clientePre ?? null}
     />
   )
 }

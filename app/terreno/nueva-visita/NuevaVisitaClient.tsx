@@ -613,6 +613,7 @@ interface Props {
   catalogoProductos: Producto[]
   visitaRetomada?: VisitaRetomada | null
   deudores?: DeudorInfo[]
+  clientePre?: string | null
 }
 
 // ─── Selector de cantidad editable ───────────────────────────
@@ -1571,7 +1572,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
 
 // ─── Wizard principal ─────────────────────────────────────────
 
-export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos, visitaRetomada, deudores = [] }: Props) {
+export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos, visitaRetomada, deudores = [], clientePre = null }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -1601,6 +1602,18 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     if (data) setVisitaId(data.id)
     setPaso(2)
   }
+
+  // Pedido rápido: si llegamos con ?cliente=Nombre (desde misiones / detalle de
+  // cliente), pre-seleccionamos ese cliente y arrancamos directo en el check-in.
+  const pedidoRapidoRef = useRef(false)
+  useEffect(() => {
+    if (pedidoRapidoRef.current) return
+    if (!clientePre || visitaRetomada || cliente) return
+    pedidoRapidoRef.current = true
+    const c = clientesExistentes.find(x => x.nombre_fantasia?.toLowerCase().trim() === clientePre.toLowerCase().trim())
+    onClienteConfirmado(clientePre, !c, c?.categoria_negocio ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientePre])
 
   async function onCheckinConfirmado(
     coords: { lat: number; lng: number; addr: string },

@@ -801,6 +801,17 @@ export default function ClienteDetalleClient({
 
             {/* Actions */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => router.push(`/terreno/nueva-visita?cliente=${encodeURIComponent(cliente.nombre_fantasia ?? '')}`)}
+                style={{
+                  minHeight: 44, display: 'flex', alignItems: 'center', gap: 8, padding: '0 18px',
+                  background: 'linear-gradient(135deg, #E5C45A, #B8962E)', border: 'none', borderRadius: 12,
+                  color: '#080808', fontWeight: 900, fontSize: 13, cursor: 'pointer',
+                  boxShadow: '0 3px 14px rgba(212,175,55,0.25)',
+                }}
+              >
+                <ShoppingBag size={15} /> Tomar pedido
+              </button>
               <button onClick={() => setShowFollowUp(true)} style={{
                 minHeight: 44, display: 'flex', alignItems: 'center', gap: 7, padding: '0 16px',
                 background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.3)', borderRadius: 12,
