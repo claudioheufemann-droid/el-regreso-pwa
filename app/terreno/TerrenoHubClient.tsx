@@ -21,11 +21,114 @@ interface Visita {
   completada_at: string | null
 }
 
+interface ClienteGps {
+  nombre: string
+  categoria: string | null
+  localidad: string | null
+  lat: number
+  lng: number
+}
+
 interface Props {
   vendedor: AppUser
   visitas: Visita[]
   kpis: { totalHoy: number; conVenta: number; sinVenta: number }
   visitaEnProgreso: Visita | null
+  clientesConGps?: ClienteGps[]
+}
+
+function distanciaMetros(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+/* ── Clientes cercanos ahora — usa el GPS actual del vendedor ── */
+function ClientesCercanos({ clientes }: { clientes: ClienteGps[] }) {
+  const router = useRouter()
+  const [estado, setEstado] = useState<'idle' | 'buscando' | 'ok' | 'error'>('idle')
+  const [cercanos, setCercanos] = useState<(ClienteGps & { distancia: number })[]>([])
+
+  function buscar() {
+    if (!navigator.geolocation) { setEstado('error'); return }
+    setEstado('buscando')
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude, longitude } = pos.coords
+        const conDistancia = clientes
+          .map(c => ({ ...c, distancia: distanciaMetros(latitude, longitude, c.lat, c.lng) }))
+          .filter(c => c.distancia <= 500)
+          .sort((a, b) => a.distancia - b.distancia)
+          .slice(0, 8)
+        setCercanos(conDistancia)
+        setEstado('ok')
+      },
+      () => setEstado('error'),
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  }
+
+  if (estado === 'idle') {
+    return (
+      <button
+        onClick={buscar}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          borderTop: '2px solid #60A5FA', borderRadius: 14,
+          padding: '12px 14px', marginBottom: 14, cursor: 'pointer', minHeight: 44, textAlign: 'left',
+        }}
+      >
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(96,165,250,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <MapPin size={16} color="#60A5FA" />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Clientes cercanos ahora</p>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Ver quién tienes a la vuelta</p>
+        </div>
+        <ChevronRight size={16} color="rgba(255,255,255,0.3)" />
+      </button>
+    )
+  }
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '2px solid #60A5FA', borderRadius: 14, padding: '12px 14px', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: estado === 'ok' && cercanos.length > 0 ? 10 : 0 }}>
+        <MapPin size={14} color="#60A5FA" />
+        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', flex: 1 }}>Clientes cercanos ahora</p>
+        {estado === 'buscando' && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Ubicando…</span>}
+      </div>
+
+      {estado === 'error' && (
+        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>No se pudo obtener tu ubicación. <button onClick={buscar} style={{ color: '#60A5FA', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: 0, fontSize: 11 }}>Reintentar</button></p>
+      )}
+
+      {estado === 'ok' && cercanos.length === 0 && (
+        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Sin clientes registrados a menos de 500m de tu ubicación.</p>
+      )}
+
+      {estado === 'ok' && cercanos.map(c => (
+        <div
+          key={c.nombre}
+          onClick={() => router.push(`/terreno/nueva-visita?cliente=${encodeURIComponent(c.nombre)}`)}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', cursor: 'pointer', borderTop: '1px solid rgba(255,255,255,0.05)' }}
+        >
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(96,165,250,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 10, fontWeight: 900, color: '#60A5FA' }}>
+            {c.nombre.charAt(0).toUpperCase()}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</p>
+            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{c.categoria ?? c.localidad ?? 'Sin categoría'}</p>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#60A5FA', flexShrink: 0 }}>
+            {c.distancia < 1000 ? `${Math.round(c.distancia)}m` : `${(c.distancia / 1000).toFixed(1)}km`}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function fmtHora(iso: string) {
@@ -179,7 +282,7 @@ function VisitaCard({ v, isLast }: { v: Visita; isLast: boolean }) {
 }
 
 /* ── Main ── */
-export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProgreso }: Props) {
+export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProgreso, clientesConGps = [] }: Props) {
   const router = useRouter()
   const nombre = vendedor.nombre?.split(' ')[0] ?? 'Vendedor'
   const fecha = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -230,6 +333,9 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
           </div>
           <ChevronRight size={16} color="rgba(255,255,255,0.25)" />
         </button>
+
+        {/* ── CLIENTES CERCANOS AHORA ── */}
+        {clientesConGps.length > 0 && <ClientesCercanos clientes={clientesConGps} />}
 
         {/* ── VISITA EN PROGRESO ── */}
         {visitaEnProgreso && (
