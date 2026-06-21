@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { notificar } from '@/lib/notificar'
+import { upsertOrQueue } from '@/lib/offlineQueue'
 import { useRouter } from 'next/navigation'
 import {
   MapPin, Camera, CheckCircle, XCircle, ChevronLeft, ChevronDown,
@@ -596,6 +597,7 @@ interface VisitaRetomada {
   lat: number | null
   lng: number | null
   direccion_gps: string | null
+  estado?: string
 }
 
 interface DeudorInfo {
@@ -1591,15 +1593,33 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     visitaRetomada?.lat ? { lat: visitaRetomada.lat, lng: visitaRetomada.lng!, addr: visitaRetomada.direccion_gps ?? '' } : null
   )
   const [carritoInicial, setCarritoInicial] = useState<ItemCarrito[]>([])
+  const [syncPendiente, setSyncPendiente] = useState(false)
 
   const totalPasos = cliente?.esNuevo ? 3 : 4
 
+  // Draft acumulativo de la visita: cada escritura es un upsert con TODOS los
+  // campos conocidos hasta el momento. Así, si se reintenta offline en
+  // cualquier orden, nunca se pisa un campo con null por accidente.
+  const visitaDraft = useRef<Record<string, unknown>>(
+    visitaRetomada ? {
+      id: visitaRetomada.id, vendedor_id: vendedor.id,
+      cliente_nombre: visitaRetomada.cliente_nombre, es_cliente_nuevo: visitaRetomada.es_cliente_nuevo,
+      estado: visitaRetomada.estado,
+      ...(visitaRetomada.lat ? { lat: visitaRetomada.lat, lng: visitaRetomada.lng, direccion_gps: visitaRetomada.direccion_gps } : {}),
+    } : {}
+  )
+
   async function onClienteConfirmado(nombre: string, esNuevo: boolean, canal: string) {
     setCliente({ nombre, esNuevo, canal })
-    const { data } = await supabase.from('visitas_terreno').insert({
-      vendedor_id: vendedor.id, cliente_nombre: nombre, es_cliente_nuevo: esNuevo, estado: 'en_progreso',
-    }).select('id').single()
-    if (data) setVisitaId(data.id)
+    // ID generado en el cliente — no depende de la red para existir,
+    // así el resto del flujo (check-in, catálogo) puede avanzar sin conexión.
+    const id = crypto.randomUUID()
+    setVisitaId(id)
+    visitaDraft.current = {
+      id, vendedor_id: vendedor.id, cliente_nombre: nombre, es_cliente_nuevo: esNuevo, estado: 'en_progreso',
+    }
+    setSyncPendiente(true)
+    upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
     setPaso(2)
   }
 
@@ -1634,27 +1654,33 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
       exhibicion: 'foto_exhibicion',
       competencia: 'foto_competencia',
     }
+    // Sin conexión: las fotos no se pueden encolar (binarios), se omiten sin
+    // bloquear el flujo. El pedido y los datos del cliente sí se preservan.
     await Promise.all(
       Object.entries(fotosFiles).map(async ([key, file]) => {
-        const path = `${visitaId}/${key}.jpg`
-        const { error } = await supabase.storage
-          .from('terreno-fotos')
-          .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
-        if (!error) {
-          const { data: { publicUrl } } = supabase.storage
+        try {
+          const path = `${visitaId}/${key}.jpg`
+          const { error } = await supabase.storage
             .from('terreno-fotos')
-            .getPublicUrl(path)
-          photoUrls[keyMap[key]] = publicUrl
-        }
+            .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
+          if (!error) {
+            const { data: { publicUrl } } = supabase.storage
+              .from('terreno-fotos')
+              .getPublicUrl(path)
+            photoUrls[keyMap[key]] = publicUrl
+          }
+        } catch { /* sin conexión — se omite la foto, no bloquea el flujo */ }
       })
     )
 
-    await supabase.from('visitas_terreno').update({
-      lat: coords.lat,
-      lng: coords.lng,
-      direccion_gps: coords.addr,
+    visitaDraft.current = {
+      ...visitaDraft.current,
+      id: visitaId,
+      lat: coords.lat, lng: coords.lng, direccion_gps: coords.addr,
       ...photoUrls,
-    }).eq('id', visitaId)
+    }
+    setSyncPendiente(true)
+    upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
 
     setPaso(3)
   }
@@ -1666,15 +1692,26 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     setGuardando(true)
     try {
       const total = items.reduce((s, i) => s + i.cantidad * (i.precio || CATALOGO_INFO[i.producto]?.precio_lata || 0), 0)
-      await supabase.from('visitas_terreno').update({
+
+      visitaDraft.current = {
+        ...visitaDraft.current,
+        id: visitaId,
         tiene_venta: tienVenta, motivo_sin_venta: tienVenta ? null : motivo,
         observaciones: obs || null, total_pedido: total, estado: 'completada', completada_at: new Date().toISOString(),
-      }).eq('id', visitaId)
-      if (items.length > 0) {
-        await supabase.from('visitas_terreno_items').insert(
-          items.map(i => ({ visita_id: visitaId, producto: i.producto, categoria: i.categoria, envase: i.envase, cantidad: i.cantidad, precio_unit: i.precio, subtotal: i.cantidad * i.precio }))
-        )
       }
+      const rVisita = await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
+
+      let itemsQuedaronPendientes = false
+      if (items.length > 0) {
+        const resultados = await Promise.all(
+          items.map(i => upsertOrQueue(supabase, 'visitas_terreno_items', {
+            id: crypto.randomUUID(), visita_id: visitaId, producto: i.producto, categoria: i.categoria,
+            envase: i.envase, cantidad: i.cantidad, precio_unit: i.precio, subtotal: i.cantidad * i.precio,
+          }))
+        )
+        itemsQuedaronPendientes = resultados.some(r => r.queued)
+      }
+      setSyncPendiente(!rVisita.ok || itemsQuedaronPendientes)
 
       // 🔔 Notificar según resultado
       if (tienVenta) {

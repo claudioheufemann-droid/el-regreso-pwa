@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import InstallPWA from '@/components/ui/InstallPWA'
 import NotifPrompt from '@/components/ui/NotifPrompt'
+import OfflineBadge from '@/components/ui/OfflineBadge'
 
 export default function Providers({
   children,
@@ -79,6 +80,7 @@ export default function Providers({
       {children}
       <InstallPWA />
       {initialUser && <NotifPrompt />}
+      {initialUser && <OfflineBadge />}
     </UserProvider>
   )
 }
