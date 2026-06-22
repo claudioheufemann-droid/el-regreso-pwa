@@ -1698,9 +1698,12 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
   // si está offline no importa: nunca habrá quedado registrada como completada)
   // y vuelve al Hub de Terreno sin dejar rastro.
   async function cancelarVisita() {
-    if (!window.confirm('¿Cancelar esta visita? No se guardará nada.')) return
+    if (!window.confirm('¿Cancelar esta visita? Quedará registrada como cancelada.')) return
     if (visitaId) {
-      try { await supabase.from('visitas_terreno').delete().eq('id', visitaId) } catch {}
+      // No se borra: queda en el historial como 'cancelada' para mantener
+      // registro completo de todo lo que pasa en terreno (auditoría).
+      visitaDraft.current = { ...visitaDraft.current, id: visitaId, estado: 'cancelada', completada_at: new Date().toISOString() }
+      await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
     }
     router.push('/terreno')
   }

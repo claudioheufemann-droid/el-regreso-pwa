@@ -59,7 +59,21 @@ function iniciales(nombre: string) {
 }
 
 // ── Status Badge premium ──────────────────────────────────────────────────────
-function StatusBadge({ tieneVenta, deudor }: { tieneVenta: boolean | null; deudor: Deudor | undefined }) {
+function StatusBadge({ tieneVenta, deudor, cancelada }: { tieneVenta: boolean | null; deudor: Deudor | undefined; cancelada?: boolean }) {
+  if (cancelada) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.2px',
+        color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.05)',
+        border: '1px solid rgba(255,255,255,0.12)',
+        padding: '3px 8px', borderRadius: 20,
+      }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
+        Cancelada
+      </span>
+    )
+  }
   if (tieneVenta === true) {
     return (
       <span style={{
@@ -400,7 +414,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                     <StatusBadge tieneVenta={true} deudor={deudor} />
                   </>
                 ) : (
-                  <StatusBadge tieneVenta={false} deudor={deudor} />
+                  <StatusBadge tieneVenta={false} deudor={deudor} cancelada={visita.estado === 'cancelada'} />
                 )}
               </div>
               <div style={{ color: 'rgba(255,255,255,0.2)', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>
