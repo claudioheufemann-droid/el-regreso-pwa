@@ -3,10 +3,16 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import AppHeader from '@/components/ui/AppHeader'
 import BuscarClienteSheet from '@/components/ui/BuscarClienteSheet'
+
+const MiniMapaCercanos = dynamic(() => import('./MiniMapaCercanos'), {
+  ssr: false,
+  loading: () => <div style={{ height: 220, borderRadius: 12, background: 'var(--surface2)' }} />,
+})
 
 const G = '#D4AF37'
 const G_RGB = '212,175,55'
@@ -51,6 +57,7 @@ function ClientesCercanos({ clientes }: { clientes: ClienteGps[] }) {
   const router = useRouter()
   const [estado, setEstado] = useState<'idle' | 'buscando' | 'ok' | 'error'>('idle')
   const [cercanos, setCercanos] = useState<(ClienteGps & { distancia: number })[]>([])
+  const [miPos, setMiPos] = useState<{ lat: number; lng: number } | null>(null)
 
   function buscar() {
     if (!navigator.geolocation) { setEstado('error'); return }
@@ -58,6 +65,7 @@ function ClientesCercanos({ clientes }: { clientes: ClienteGps[] }) {
     navigator.geolocation.getCurrentPosition(
       pos => {
         const { latitude, longitude } = pos.coords
+        setMiPos({ lat: latitude, lng: longitude })
         const conDistancia = clientes
           .map(c => ({ ...c, distancia: distanciaMetros(latitude, longitude, c.lat, c.lng) }))
           .filter(c => c.distancia <= 500)
@@ -108,6 +116,12 @@ function ClientesCercanos({ clientes }: { clientes: ClienteGps[] }) {
 
       {estado === 'ok' && cercanos.length === 0 && (
         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Sin clientes registrados a menos de 500m de tu ubicación.</p>
+      )}
+
+      {estado === 'ok' && miPos && cercanos.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <MiniMapaCercanos miLat={miPos.lat} miLng={miPos.lng} clientes={cercanos} />
+        </div>
       )}
 
       {estado === 'ok' && cercanos.map(c => (
