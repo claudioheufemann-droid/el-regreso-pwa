@@ -880,8 +880,9 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
 
 // ─── Paso 2: Check-in GPS + Fotos ────────────────────────────
 
-function Paso2Checkin({ onConfirmar }: {
+function Paso2Checkin({ onConfirmar, onCancelar }: {
   onConfirmar: (coords: { lat: number; lng: number; addr: string }, fotos: Record<string, string>, fotosFiles: Record<string, File>) => void
+  onCancelar: () => void
 }) {
   const [gps, setGps] = useState<{ lat: number; lng: number; addr: string } | null>(null)
   const [gpsError, setGpsError] = useState(false)
@@ -970,6 +971,12 @@ function Paso2Checkin({ onConfirmar }: {
           fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px', transition: 'all 0.2s',
         }}>
           {listo ? 'Iniciar visita →' : `GPS + ${3 - fotosListas} foto${3 - fotosListas !== 1 ? 's' : ''} pendiente${3 - fotosListas !== 1 ? 's' : ''}`}
+        </button>
+        <button onClick={onCancelar} style={{
+          width: '100%', padding: '13px 0', marginTop: 10, borderRadius: 12, border: '1px solid rgba(248,113,113,0.25)',
+          background: 'transparent', color: '#F87171', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        }}>
+          Cancelar visita
         </button>
       </div>
     </div>
@@ -1687,6 +1694,17 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
 
   function onVista360Continuar(items: ItemCarrito[]) { setCarritoInicial(items); setPaso(4) }
 
+  // Cancelar visita en curso: borra la fila si llegó a guardarse (best-effort,
+  // si está offline no importa: nunca habrá quedado registrada como completada)
+  // y vuelve al Hub de Terreno sin dejar rastro.
+  async function cancelarVisita() {
+    if (!window.confirm('¿Cancelar esta visita? No se guardará nada.')) return
+    if (visitaId) {
+      try { await supabase.from('visitas_terreno').delete().eq('id', visitaId) } catch {}
+    }
+    router.push('/terreno')
+  }
+
   async function onCerrar(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string) {
     if (!visitaId) return
     setGuardando(true)
@@ -1786,7 +1804,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
       </div>
 
       {paso === 1 && <Paso1Cliente clientes={clientesExistentes} deudores={deudores} onConfirmar={onClienteConfirmado} />}
-      {paso === 2 && <Paso2Checkin onConfirmar={onCheckinConfirmado} />}
+      {paso === 2 && <Paso2Checkin onConfirmar={onCheckinConfirmado} onCancelar={cancelarVisita} />}
       {paso === 3 && !cliente?.esNuevo && <Paso3Vista360 clienteNombre={cliente?.nombre ?? ''} esNuevo={false} onContinuar={onVista360Continuar} />}
       {(paso === 4 || (paso === 3 && cliente?.esNuevo)) && (
         <Paso4Catalogo
