@@ -50,8 +50,8 @@ function formatLitros(n: number) {
 }
 
 const VENDEDORES = [
-  { value: 'all',             label: 'Todos'          },
-  { value: 'Vendedor Planta', label: 'Vendedor Planta' },
+  { value: 'all',           label: 'Todos'        },
+  { value: 'Equipo Ventas', label: 'Equipo Ventas' },
 ]
 
 const CAPAS: { value: CapaViz; label: string; icon: React.ReactNode }[] = [
@@ -332,7 +332,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
               </div>
             </div>
           )}
-          <MapLeaflet puntos={puntosFiltrados} leads={leadsFiltrados} vendedorFiltro="all" capaViz={capaViz} mostrarSinCompra={mostrarSinCompra} tileTipo={tileTipo} />
+          <MapLeaflet puntos={puntosFiltrados} leads={leadsFiltrados} vendedorFiltro={vendedor} capaViz={capaViz} mostrarSinCompra={mostrarSinCompra} tileTipo={tileTipo} />
         </div>
 
         {/* Sidebar */}
