@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search, Clock3 } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import AppHeader from '@/components/ui/AppHeader'
 import BuscarClienteSheet from '@/components/ui/BuscarClienteSheet'
@@ -213,17 +213,30 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
             eyebrow={fechaCapitalizada}
             title="Terreno"
             extraAction={
-              <button
-                onClick={() => setShowBuscar(true)}
-                aria-label="Buscar cliente"
-                style={{
-                  width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                  background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                }}
-              >
-                <Search size={16} color="#D4AF37" />
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => router.push('/ventas/actividad')}
+                  aria-label="Actividad"
+                  style={{
+                    width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                    background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                  }}
+                >
+                  <Clock3 size={16} color="#60A5FA" />
+                </button>
+                <button
+                  onClick={() => setShowBuscar(true)}
+                  aria-label="Buscar cliente"
+                  style={{
+                    width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                    background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                  }}
+                >
+                  <Search size={16} color="#D4AF37" />
+                </button>
+              </div>
             }
           />
         </div>

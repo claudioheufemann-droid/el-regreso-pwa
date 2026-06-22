@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, ChevronUp, Users, Calendar, X, MapPin, Target, Search } from 'lucide-react'
+import { ChevronDown, ChevronUp, Users, Calendar, X, MapPin, Target, Search, Clock3 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { Periodo, VENDEDOR_DISPLAY } from '@/lib/types'
@@ -1692,6 +1692,7 @@ function DropSizeCard({ resumen, colors, avatars }: { resumen: VendedorResumen[]
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, periodo, evolution, productRanking, productDetail, vendedoresScope, riesgoClientes, planSemana, misionesResumen, vendedorAvatars, litrosMesAnterior = 0, litrosMesAnteriorPorVendedor = {} }: Props) {
   const isDesktop = useIsDesktop()
+  const router = useRouter()
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [showBuscar, setShowBuscar] = useState(false)
 
@@ -1738,17 +1739,30 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         eyebrow={new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         title="Ventas"
         extraAction={
-          <button
-            onClick={() => setShowBuscar(true)}
-            aria-label="Buscar cliente"
-            style={{
-              width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-              background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-            }}
-          >
-            <Search size={16} color="#D4AF37" />
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => router.push('/ventas/actividad')}
+              aria-label="Actividad"
+              style={{
+                width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+            >
+              <Clock3 size={16} color="#60A5FA" />
+            </button>
+            <button
+              onClick={() => setShowBuscar(true)}
+              aria-label="Buscar cliente"
+              style={{
+                width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+            >
+              <Search size={16} color="#D4AF37" />
+            </button>
+          </div>
         }
       />
       {showBuscar && <BuscarClienteSheet onClose={() => setShowBuscar(false)} />}
