@@ -577,16 +577,22 @@ export default function ClienteDetalleClient({
     return [...map.values()].sort((a, b) => b.fecha.localeCompare(a.fecha))
   }, [ventas])
 
-  // Top productos
+  // Top productos — Mix de Compra Exacto: % real sobre el total (suma 100%),
+  // no relativo al líder. Permite saber exactamente qué compra el cliente.
   const topProductos = useMemo(() => {
     const map = new Map<string, { litros: number; count: number }>()
+    let totalLitros = 0
     for (const v of ventas) {
       if (!v.producto) continue
+      totalLitros += v.litros
       const ex = map.get(v.producto)
       if (ex) { ex.litros += v.litros; ex.count++ }
       else map.set(v.producto, { litros: v.litros, count: 1 })
     }
-    return [...map.entries()].sort((a, b) => b[1].litros - a[1].litros).slice(0, 8)
+    return [...map.entries()]
+      .map(([prod, stats]) => ({ prod, ...stats, pctMix: totalLitros > 0 ? Math.round((stats.litros / totalLitros) * 100) : 0 }))
+      .sort((a, b) => b.litros - a.litros)
+      .slice(0, 8)
   }, [ventas])
 
   // Contactos últimos 30 días
@@ -1105,28 +1111,27 @@ export default function ClienteDetalleClient({
           ══════════════════════════════════════════════════════════════════ */}
           {activeTab === 'products' && (
             <div>
+              <p style={{ fontSize: 11, color: '#666', marginBottom: 12 }}>
+                Mix de compra exacto — qué porcentaje de sus litros totales corresponde a cada producto
+              </p>
               <div style={{ display: 'grid', gap: 8 }}>
-                {topProductos.map(([prod, stats], i) => {
-                  const maxLitros = topProductos[0]?.[1]?.litros ?? 1
-                  const pct = Math.round((stats.litros / maxLitros) * 100)
-                  return (
-                    <div key={i} style={{ padding: '16px 18px', borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 14, fontWeight: 900, color: i === 0 ? GOLD : '#444', width: 22 }}>#{i+1}</span>
-                          <div>
-                            <p style={{ fontSize: 13, fontWeight: 700, color: '#ddd' }}>{prod}</p>
-                            <p style={{ fontSize: 11, color: '#555' }}>{stats.count} pedidos</p>
-                          </div>
+                {topProductos.map(({ prod, litros, count, pctMix }, i) => (
+                  <div key={i} style={{ padding: '16px 18px', borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 14, fontWeight: 900, color: i === 0 ? GOLD : '#444', width: 22 }}>#{i+1}</span>
+                        <div>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: '#ddd' }}>{prod}</p>
+                          <p style={{ fontSize: 11, color: '#555' }}>{count} pedidos · {litros.toFixed(1)} L</p>
                         </div>
-                        <p style={{ fontSize: 16, fontWeight: 800, color: '#D4AF37' }}>{stats.litros.toFixed(1)} L</p>
                       </div>
-                      <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${pct}%`, background: i === 0 ? GOLD : '#D4AF37', borderRadius: 4 }} />
-                      </div>
+                      <p style={{ fontSize: 20, fontWeight: 900, color: i === 0 ? GOLD : '#D4AF37', letterSpacing: '-0.5px' }}>{pctMix}%</p>
                     </div>
-                  )
-                })}
+                    <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pctMix}%`, background: i === 0 ? GOLD : '#D4AF37', borderRadius: 4 }} />
+                    </div>
+                  </div>
+                ))}
                 {topProductos.length === 0 && (
                   <p style={{ textAlign: 'center', color: '#444', padding: '40px 0', fontSize: 14 }}>Sin productos registrados</p>
                 )}
