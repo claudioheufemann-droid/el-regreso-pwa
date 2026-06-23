@@ -270,7 +270,7 @@ export default function HistorialClient({ user, viajes }: Props) {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', width: '100%', padding: '20px 16px', paddingBottom: 100 }}>
+    <div style={{ maxWidth: 1200, margin: '0 auto', width: '100%', padding: '20px 16px', paddingBottom: 100 }}>
 
       {/* Header estándar */}
       <AppHeader eyebrow="Módulo logística" title="Historial de viajes" />

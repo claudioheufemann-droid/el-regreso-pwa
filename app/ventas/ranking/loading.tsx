@@ -1,6 +1,6 @@
 export default function RankingLoading() {
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #0A090F 0%, #080808 100%)', padding: '20px 16px', maxWidth: 640, margin: '0 auto', width: '100%' }}>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #0A090F 0%, #080808 100%)', padding: '20px 16px', maxWidth: 960, margin: '0 auto', width: '100%' }}>
       <div className="er-sk" style={{ height: 10, width: '30%', borderRadius: 6, marginBottom: 8 }} />
       <div className="er-sk" style={{ height: 26, width: '40%', borderRadius: 8, marginBottom: 20 }} />
 

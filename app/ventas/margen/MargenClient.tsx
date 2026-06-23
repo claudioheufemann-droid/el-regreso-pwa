@@ -46,7 +46,7 @@ export default function MargenClient({ rows }: { rows: MargenRow[] }) {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100 }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
+      <div style={{ maxWidth: 1300, margin: '0 auto', padding: '0 16px' }}>
         <div style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))' }}>
           <AppHeader eyebrow="Solo administración" title="Brecha de Margen" />
         </div>

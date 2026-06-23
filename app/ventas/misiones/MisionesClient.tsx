@@ -2141,7 +2141,7 @@ export default function MisionesClient({
   // ── Desktop: master-detail ─────────────────────────────────────────────────
   if (isDesktop) {
     return (
-      <div style={{ padding: '20px 24px 40px', maxWidth: 1300, margin: '0 auto' }}>
+      <div style={{ padding: '20px 24px 40px', maxWidth: 1700, margin: '0 auto' }}>
         <HeaderResumen misiones={misionesFiltradas} misionesTodas={misiones} semana={semana} vendedorActual={vendedorActual} isAdmin={isAdmin} isDesktop />
 
         <Controles />
@@ -2218,7 +2218,7 @@ export default function MisionesClient({
 
   // ── Mobile: columna simple ──────────────────────────────────────────────────
   return (
-    <div style={{ padding: '12px 12px 90px', width: '100%', maxWidth: 680, margin: '0 auto', boxSizing: 'border-box', overflowX: 'hidden' }}>
+    <div style={{ padding: '12px 12px 90px', width: '100%', maxWidth: 1000, margin: '0 auto', boxSizing: 'border-box', overflowX: 'hidden' }}>
       <AppHeader title="Misiones" />
       <HeaderResumen misiones={misionesFiltradas} misionesTodas={misiones} semana={semana} vendedorActual={vendedorActual} isAdmin={isAdmin} isDesktop={false} />
 

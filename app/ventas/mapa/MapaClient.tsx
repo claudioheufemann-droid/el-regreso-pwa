@@ -247,66 +247,72 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
       </div>
 
       {/* ─── KPI row ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(5, 1fr)' : 'repeat(2, 1fr)', gap: 10, padding: isDesktop ? '14px 20px 0' : '12px 14px 0', flexShrink: 0 }}>
-        <KPICard icon={<Droplets size={16} />} color="#D4AF37" label="Ventas del período" value={`${formatLitros(kpis.litros)} L`} />
-        <KPICard icon={<Users size={16} />} color="#5A8A4A" label="Clientes activos" value={kpis.clientes} />
-        <KPICard icon={<ShoppingCart size={16} />} color="#D4AF37" label="Pedidos" value={kpis.pedidos} />
-        <KPICard icon={<DollarSign size={16} />} color="#8A6D1F" label="Ticket promedio" value={formatPeso(kpis.ticket)} />
-        <KPICard icon={<AlertTriangle size={16} />} color="#B5543E" label="Deuda total" value={formatPeso(deudaGlobal)} alert />
+      <div style={{
+        display: isDesktop ? 'grid' : 'flex',
+        gridTemplateColumns: isDesktop ? 'repeat(5, 1fr)' : undefined,
+        overflowX: isDesktop ? undefined : 'auto',
+        WebkitOverflowScrolling: 'touch',
+        gap: 10, padding: isDesktop ? '14px 20px 0' : '10px 14px 0', flexShrink: 0,
+      }}>
+        <div style={{ minWidth: isDesktop ? undefined : 132, flexShrink: 0 }}><KPICard icon={<Droplets size={16} />} color="#D4AF37" label="Ventas del período" value={`${formatLitros(kpis.litros)} L`} /></div>
+        <div style={{ minWidth: isDesktop ? undefined : 132, flexShrink: 0 }}><KPICard icon={<Users size={16} />} color="#5A8A4A" label="Clientes activos" value={kpis.clientes} /></div>
+        <div style={{ minWidth: isDesktop ? undefined : 132, flexShrink: 0 }}><KPICard icon={<ShoppingCart size={16} />} color="#D4AF37" label="Pedidos" value={kpis.pedidos} /></div>
+        <div style={{ minWidth: isDesktop ? undefined : 132, flexShrink: 0 }}><KPICard icon={<DollarSign size={16} />} color="#8A6D1F" label="Ticket promedio" value={formatPeso(kpis.ticket)} /></div>
+        <div style={{ minWidth: isDesktop ? undefined : 132, flexShrink: 0 }}><KPICard icon={<AlertTriangle size={16} />} color="#B5543E" label="Deuda total" value={formatPeso(deudaGlobal)} alert /></div>
       </div>
 
       {/* ─── Filtros ─── */}
-      <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap', padding: isDesktop ? '14px 20px' : '12px 14px' }}>
+      <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: isDesktop ? 'wrap' : 'nowrap', overflowX: isDesktop ? undefined : 'auto', WebkitOverflowScrolling: 'touch', padding: isDesktop ? '14px 20px' : '10px 14px' }}>
         {/* Play */}
         <button onClick={() => { if (fechaIdx <= 0) setFecha(fechasDisponibles[fechasDisponibles.length - 1]); setPlaying(p => !p) }} title={playing ? 'Pausar' : 'Reproducir línea de tiempo'} style={{ width: 44, height: 44, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', background: playing ? 'rgba(212,175,55,0.15)' : 'var(--surface)', color: playing ? '#D4AF37' : 'var(--muted)', outline: playing ? '1px solid rgba(212,175,55,0.3)' : '1px solid var(--border)', flexShrink: 0 }}>
           {playing ? <Pause size={15} /> : <Play size={15} />}
         </button>
 
         {/* Vendedor */}
-        <div style={{ display: 'flex', gap: 3 }}>
+        <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
           {VENDEDORES.map(v => (
-            <button key={v.value} onClick={() => setVendedor(v.value)} style={{ height: 44, padding: '0 15px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer', background: vendedor === v.value ? (VEND_COLOR[v.value] ?? '#D4AF37') : 'var(--surface)', color: vendedor === v.value ? '#000' : 'var(--muted)', outline: vendedor === v.value ? 'none' : '1px solid var(--border)' }}>{v.label}</button>
+            <button key={v.value} onClick={() => setVendedor(v.value)} style={{ height: 44, padding: '0 15px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', background: vendedor === v.value ? (VEND_COLOR[v.value] ?? '#D4AF37') : 'var(--surface)', color: vendedor === v.value ? '#000' : 'var(--muted)', outline: vendedor === v.value ? 'none' : '1px solid var(--border)' }}>{v.label}</button>
           ))}
         </div>
 
         {/* Producto */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: productoFiltro !== 'all' ? 'rgba(212,175,55,0.12)' : 'var(--surface)', border: `1px solid ${productoFiltro !== 'all' ? 'rgba(212,175,55,0.35)' : 'var(--border)'}`, borderRadius: 10, padding: '0 12px', height: 44 }}>
-          <Package size={14} style={{ color: productoFiltro !== 'all' ? '#D4AF37' : 'var(--muted)' }} />
-          <select value={productoFiltro} onChange={e => setProductoFiltro(e.target.value)} style={{ background: 'transparent', border: 'none', color: productoFiltro !== 'all' ? '#D4AF37' : 'var(--muted)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', outline: 'none', maxWidth: 180 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, background: productoFiltro !== 'all' ? 'rgba(212,175,55,0.12)' : 'var(--surface)', border: `1px solid ${productoFiltro !== 'all' ? 'rgba(212,175,55,0.35)' : 'var(--border)'}`, borderRadius: 10, padding: '0 12px', height: 44 }}>
+          <Package size={14} style={{ color: productoFiltro !== 'all' ? '#D4AF37' : 'var(--muted)', flexShrink: 0 }} />
+          <select value={productoFiltro} onChange={e => setProductoFiltro(e.target.value)} style={{ background: 'transparent', border: 'none', color: productoFiltro !== 'all' ? '#D4AF37' : 'var(--muted)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', outline: 'none', maxWidth: 150 }}>
             <option value="all" style={{ background: 'var(--surface)' }}>Todos los productos</option>
             {productosDisponibles.map(p => <option key={p} value={p} style={{ background: 'var(--surface)' }}>{p}</option>)}
           </select>
         </div>
 
         {/* Capa viz */}
-        <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 3, gap: 2 }}>
+        <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 3, gap: 2, flexShrink: 0 }}>
           {CAPAS.map(c => (
-            <button key={c.value} onClick={() => setCapaViz(c.value)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: capaViz === c.value ? '#D4AF37' : 'transparent', color: capaViz === c.value ? '#1a1200' : 'var(--muted)' }}>{c.icon}{c.label}</button>
+            <button key={c.value} onClick={() => setCapaViz(c.value)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', background: capaViz === c.value ? '#D4AF37' : 'transparent', color: capaViz === c.value ? '#1a1200' : 'var(--muted)' }}>{c.icon}{c.label}</button>
           ))}
         </div>
 
         {/* Zonas blancas */}
-        <button onClick={() => setMostrarSinCompra(b => !b)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 44, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: mostrarSinCompra ? 'rgba(99,102,241,0.15)' : 'var(--surface)', color: mostrarSinCompra ? '#818cf8' : 'var(--muted)', outline: mostrarSinCompra ? '1px solid rgba(99,102,241,0.3)' : '1px solid var(--border)' }}>
+        <button onClick={() => setMostrarSinCompra(b => !b)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 44, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: mostrarSinCompra ? 'rgba(99,102,241,0.15)' : 'var(--surface)', color: mostrarSinCompra ? '#818cf8' : 'var(--muted)', outline: mostrarSinCompra ? '1px solid rgba(99,102,241,0.3)' : '1px solid var(--border)' }}>
           {mostrarSinCompra ? <Eye size={13} /> : <EyeOff size={13} />} Zonas blancas
         </button>
 
         {/* Leads (posibles clientes) */}
-        <button onClick={() => setMostrarLeads(b => !b)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 44, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: mostrarLeads ? 'rgba(167,139,250,0.18)' : 'var(--surface)', color: mostrarLeads ? '#a78bfa' : 'var(--muted)', outline: mostrarLeads ? '1px solid rgba(167,139,250,0.4)' : '1px solid var(--border)' }}>
+        <button onClick={() => setMostrarLeads(b => !b)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 44, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: mostrarLeads ? 'rgba(167,139,250,0.18)' : 'var(--surface)', color: mostrarLeads ? '#a78bfa' : 'var(--muted)', outline: mostrarLeads ? '1px solid rgba(167,139,250,0.4)' : '1px solid var(--border)' }}>
           <Target size={13} /> Leads{mostrarLeads && leads.length ? ` (${leadsFiltrados.length})` : ''}
         </button>
 
         {/* Rango */}
-        <button onClick={() => setModoRango(r => !r)} style={{ padding: '0 12px', height: 44, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, background: modoRango ? 'rgba(96,165,250,0.15)' : 'var(--surface)', color: modoRango ? '#60a5fa' : 'var(--muted)', outline: modoRango ? '1px solid rgba(96,165,250,0.3)' : '1px solid var(--border)' }}>Rango</button>
+        <button onClick={() => setModoRango(r => !r)} style={{ padding: '0 12px', height: 44, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: modoRango ? 'rgba(96,165,250,0.15)' : 'var(--surface)', color: modoRango ? '#60a5fa' : 'var(--muted)', outline: modoRango ? '1px solid rgba(96,165,250,0.3)' : '1px solid var(--border)' }}>Rango</button>
         {modoRango && (
-          <select value={fechaFin || fecha} onChange={e => setFechaFin(e.target.value)} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--cream)', fontSize: 12, fontWeight: 600, padding: '0 10px', height: 44, outline: 'none' }}>
+          <select value={fechaFin || fecha} onChange={e => setFechaFin(e.target.value)} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--cream)', fontSize: 12, fontWeight: 600, padding: '0 10px', height: 44, outline: 'none', flexShrink: 0 }}>
             {fechasDisponibles.filter(f => f >= fecha).map(f => <option key={f} value={f} style={{ background: 'var(--surface)' }}>{formatFecha(f)}</option>)}
           </select>
         )}
 
         {playing && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px', height: 44, borderRadius: 10, background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px', height: 44, borderRadius: 10, background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)', flexShrink: 0 }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#D4AF37', animation: 'pulse 1s ease-in-out infinite' }} />
-            <span style={{ fontSize: 11.5, color: '#D4AF37', fontWeight: 700 }}>{formatFecha(fecha)}</span>
+            <span style={{ fontSize: 11.5, color: '#D4AF37', fontWeight: 700, whiteSpace: 'nowrap' }}>{formatFecha(fecha)}</span>
           </div>
         )}
       </div>

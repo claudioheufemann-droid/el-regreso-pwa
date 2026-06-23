@@ -166,7 +166,7 @@ export default function ClientesUploadClient() {
   }
 
   return (
-    <div className="px-4 pt-8 pb-20 lg:px-12 lg:pt-10" style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
+    <div className="px-4 pt-8 pb-20 lg:px-12 lg:pt-10" style={{ maxWidth: 1000, margin: '0 auto', width: '100%' }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>

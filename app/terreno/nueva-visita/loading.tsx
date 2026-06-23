@@ -1,6 +1,6 @@
 export default function NuevaVisitaLoading() {
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', padding: '20px 16px', maxWidth: 600, margin: '0 auto', width: '100%' }}>
+    <div style={{ minHeight: '100vh', background: '#080808', padding: '20px 16px', maxWidth: 1300, margin: '0 auto', width: '100%' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <div className="er-sk" style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0 }} />

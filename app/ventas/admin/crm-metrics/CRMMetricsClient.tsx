@@ -58,7 +58,7 @@ export default function CRMMetricsClient({
 
   return (
     <div style={{ minHeight: '100vh', background: '#090909', color: '#fff' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '16px 16px 60px' }}>
+      <div style={{ maxWidth: 1800, margin: '0 auto', padding: '16px 16px 60px' }}>
         <AppHeader
           title="CRM Metrics"
           extraAction={

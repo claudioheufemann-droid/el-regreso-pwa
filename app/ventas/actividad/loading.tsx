@@ -1,6 +1,6 @@
 export default function ActividadLoading() {
   return (
-    <div style={{ padding: '20px 16px', maxWidth: 680, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: '20px 16px', maxWidth: 1000, margin: '0 auto', width: '100%' }}>
       <div className="er-sk" style={{ height: 10, width: '30%', borderRadius: 6, marginBottom: 8 }} />
       <div className="er-sk" style={{ height: 26, width: '40%', borderRadius: 8, marginBottom: 16 }} />
 

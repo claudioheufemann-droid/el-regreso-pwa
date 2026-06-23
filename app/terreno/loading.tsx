@@ -1,6 +1,6 @@
 export default function TerrenoLoading() {
   return (
-    <div style={{ padding: '20px 16px', maxWidth: 600, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: '20px 16px', maxWidth: 900, margin: '0 auto', width: '100%' }}>
       {/* Header skeleton */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 22 }}>
         <div style={{ flex: 1 }}>

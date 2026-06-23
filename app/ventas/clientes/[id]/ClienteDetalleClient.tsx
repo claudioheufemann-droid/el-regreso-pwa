@@ -717,7 +717,7 @@ export default function ClienteDetalleClient({
       )}
 
       <div style={{ minHeight: '100vh', background: '#090909', color: '#fff' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '16px 16px 80px' }}>
+        <div style={{ maxWidth: 1700, margin: '0 auto', padding: '16px 16px 80px' }}>
           <AppHeader
             title="Detalle Cliente"
             extraAction={

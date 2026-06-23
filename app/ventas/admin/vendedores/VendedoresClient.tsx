@@ -53,7 +53,7 @@ export default function VendedoresClient({ vendedores }: { vendedores: VendedorR
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #0A090F 0%, #080808 100%)', paddingBottom: 100 }}>
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px 16px 0' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '16px 16px 0' }}>
         <AppHeader eyebrow="Administración" title="Vendedores" />
 
         {/* ── Éxito ── */}

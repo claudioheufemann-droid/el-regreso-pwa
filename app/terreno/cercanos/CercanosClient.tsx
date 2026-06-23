@@ -60,7 +60,7 @@ export default function CercanosClient({ clientes }: { clientes: ClienteGps[] })
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100 }}>
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
         <div style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))' }}>
           <button
             onClick={() => router.push('/terreno')}

@@ -1943,7 +1943,7 @@ export default function MetasClient({
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="px-5 pt-6 pb-28 lg:px-12 lg:pt-10" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+    <div className="px-5 pt-6 pb-28 lg:px-12 lg:pt-10" style={{ maxWidth: 1500, margin: '0 auto', width: '100%' }}>
       <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
         <AppHeader title="Metas Comerciales" />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -10 }}>

@@ -148,7 +148,7 @@ export default function UsuariosAdminPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px' }}>
+      <div style={{ maxWidth: 1500, margin: '0 auto', padding: '32px 24px' }}>
 
         {/* KPI cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>

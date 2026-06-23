@@ -1,6 +1,6 @@
 export default function HistoricoLoading() {
   return (
-    <div style={{ padding: '20px 16px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: '20px 16px', maxWidth: 1500, margin: '0 auto', width: '100%' }}>
       <div className="er-sk" style={{ height: 10, width: '26%', borderRadius: 6, marginBottom: 8 }} />
       <div className="er-sk" style={{ height: 26, width: '36%', borderRadius: 8, marginBottom: 18 }} />
 

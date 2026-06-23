@@ -205,7 +205,7 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 100 }}>
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
 
         {/* ── HEADER ESTÁNDAR ── */}
         <div style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))' }}>

@@ -1,6 +1,6 @@
 export default function HistorialLoading() {
   return (
-    <div style={{ padding: '20px 16px', maxWidth: 680, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: '20px 16px', maxWidth: 1000, margin: '0 auto', width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
         <div style={{ flex: 1 }}>
           <div className="er-sk" style={{ height: 10, width: '30%', borderRadius: 6, marginBottom: 8 }} />

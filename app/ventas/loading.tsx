@@ -2,7 +2,7 @@
 // Se muestra al toque al cambiar de sección mientras el servidor renderiza.
 export default function VentasLoading() {
   return (
-    <div style={{ padding: '20px 16px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: '20px 16px', maxWidth: 1700, margin: '0 auto', width: '100%' }}>
       {/* Encabezado */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
         <div style={{ width: 30, height: 30, borderRadius: '50%', border: '3px solid rgba(212,175,55,0.2)', borderTopColor: '#D4AF37', animation: 'erspin 0.8s linear infinite', flexShrink: 0 }} />

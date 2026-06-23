@@ -64,7 +64,7 @@ export default function RankingClient({ rankingMes, rankingSemana, miRegion, isA
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #0A090F 0%, #080808 100%)', paddingBottom: 110 }}>
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px 16px 0' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '16px 16px 0' }}>
 
         <AppHeader eyebrow="Equipo de ventas" title="Ranking" />
 

@@ -240,7 +240,7 @@ export default function RutaClient({ clientes }: Props) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#080808', paddingBottom: 110 }}>
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 16px' }}>
 
         {/* Header */}
         <div style={{ paddingTop: 16 }}>

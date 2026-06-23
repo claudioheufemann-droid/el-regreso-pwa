@@ -498,7 +498,7 @@ export default function AcumuladoClient({
   const insightIcon  = (t:string) => t==='positive'?'↗':t==='negative'?'↘':t==='warning'?'⚡':'●'
 
   return (
-    <div style={{ padding:isDesktop?'24px 28px 60px':'16px 16px 100px', maxWidth:1280, margin:'0 auto', width:'100%' }}>
+    <div style={{ padding:isDesktop?'24px 28px 60px':'16px 16px 100px', maxWidth:1700, margin:'0 auto', width:'100%' }}>
 
       {/* Encabezado estándar */}
       <AppHeader eyebrow={periodo?.nombre ?? 'Período'} title="Período Acumulado" />

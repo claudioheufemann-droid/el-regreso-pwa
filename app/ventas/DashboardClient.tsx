@@ -1732,7 +1732,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
     : { display: 'flex', flexDirection: 'column' as const, gap: 14 }
 
   return (
-    <div style={{ padding: isDesktop ? '20px 24px 60px' : '16px 16px 100px', maxWidth: 1400, margin: '0 auto' }}>
+    <div style={{ padding: isDesktop ? '20px 24px 60px' : '16px 16px 100px', maxWidth: 1800, margin: '0 auto' }}>
 
       {/* === HEADER ESTÁNDAR === */}
       <AppHeader

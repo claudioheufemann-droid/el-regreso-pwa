@@ -253,7 +253,7 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
   const enUso = vehiculos.filter(v => v.estado === 'en_uso').length
 
   return (
-    <div style={{ padding: isDesktop ? 'var(--sp-3)' : '20px 14px 16px', maxWidth: 800, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: isDesktop ? 'var(--sp-3)' : '20px 14px 16px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
       {/* Header estándar */}
       <AppHeader
         eyebrow={new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}

@@ -1,6 +1,6 @@
 export default function GestionLoading() {
   return (
-    <div style={{ padding: '20px 16px', maxWidth: 1000, margin: '0 auto', width: '100%' }}>
+    <div style={{ padding: '20px 16px', maxWidth: 1500, margin: '0 auto', width: '100%' }}>
       <div className="er-sk" style={{ height: 10, width: '24%', borderRadius: 6, marginBottom: 8 }} />
       <div className="er-sk" style={{ height: 26, width: '38%', borderRadius: 8, marginBottom: 20 }} />
 

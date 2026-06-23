@@ -1,6 +1,6 @@
 export default function RutaLoading() {
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', padding: '20px 16px', maxWidth: 640, margin: '0 auto', width: '100%' }}>
+    <div style={{ minHeight: '100vh', background: '#080808', padding: '20px 16px', maxWidth: 960, margin: '0 auto', width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10 }}>
         <div className="er-sk" style={{ height: 10, width: 70, borderRadius: 6 }} />
       </div>
