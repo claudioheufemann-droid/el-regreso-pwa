@@ -235,6 +235,16 @@ function PopupDetalle({ p, color, onWA }: {
     <div style={{ fontFamily: 'system-ui, sans-serif', minWidth: 240, maxWidth: 300, color: '#F4EEDF' }}>
       {/* Header */}
       <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color: '#5A8A4A', background: 'rgba(90,138,74,0.18)', padding: '2px 8px', borderRadius: 20, letterSpacing: '0.04em' }}>
+            ✓ CLIENTE EL REGRESO
+          </span>
+          {p.sin_compra && (
+            <span style={{ fontSize: 9, fontWeight: 800, color: '#818cf8', background: 'rgba(99,102,241,0.15)', padding: '2px 8px', borderRadius: 20 }}>
+              SIN COMPRA EN ESTE PERÍODO
+            </span>
+          )}
+        </div>
         <div style={{ fontWeight: 800, fontSize: 15, color: '#fff', marginBottom: 4, lineHeight: 1.2 }}>
           {p.nombre_fantasia}
         </div>

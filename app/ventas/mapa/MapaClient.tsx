@@ -454,6 +454,25 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
 
         {/* Sidebar */}
         <div style={{ width: isDesktop ? 300 : '100%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, overflowY: isDesktop ? 'auto' : 'visible', paddingBottom: isDesktop ? 14 : 0 }}>
+          {/* Tipos de punto */}
+          <Panel title="Tipos de punto" icon={<MapPin size={14} style={{ color: '#D4AF37' }} />}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+              <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#D4AF37', border: '1.5px solid #D4AF37', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Cliente El Regreso — con compra</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+              <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#374151', border: '1.5px dashed #4B5563', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Cliente El Regreso — sin compra este período</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+              <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'rgba(138,109,31,0.18)', border: '1.5px dashed #8A6D1F', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Posible cliente (lead) — aún no compra</span>
+            </div>
+            <p style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.4 }}>
+              Toca cualquier punto: el detalle dice si es cliente nuestro o posible cliente.
+            </p>
+          </Panel>
+
           {/* Salud del cliente */}
           <Panel title="Salud del cliente" icon={<Heart size={14} style={{ color: '#5A8A4A' }} />}>
             {SALUD_LEGEND.map(s => (
