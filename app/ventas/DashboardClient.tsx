@@ -1620,7 +1620,7 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
                     background: `${segColor}22`, color: segColor, border: `1px solid ${segColor}44`, flexShrink: 0 }}>
                     {c.segmento} {c.score}
                   </span>
-                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {c.nombre_fantasia}
                   </p>
                   {vtab === 'all' && (
