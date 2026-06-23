@@ -477,7 +477,7 @@ function Tab({ label, active, onClick, badge }: {
         color: active ? GOLD : '#666',
         borderBottom: active ? `2px solid ${GOLD}` : '2px solid transparent',
         display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
-        transition: 'all 0.15s',
+        flexShrink: 0, transition: 'all 0.15s',
       }}
     >
       {label}
