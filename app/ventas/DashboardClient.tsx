@@ -419,10 +419,10 @@ function MetaBar({ vendedor, actual, meta, avatars }: { vendedor: string; actual
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
         <VendedorAvatar vendedor={vendedor} color={color} size={36} avatars={avatars} />
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{dspVendedor(vendedor)}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{dspVendedor(vendedor)}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color, flexShrink: 0 }}>
               {pct.toFixed(0)}%
             </span>
           </div>
@@ -565,8 +565,8 @@ function ProductDetailModal({
           borderBottom: '1px solid var(--border-subtle)',
           display: 'flex', alignItems: 'flex-start', gap: 12,
         }}>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 10, color: 'var(--gold)', fontWeight: 700, letterSpacing: '1px', marginBottom: 4 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 10, color: 'var(--gold)', fontWeight: 700, letterSpacing: '1px', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               PRODUCT RANKING · {formatFecha(fechaHoy)}
             </p>
             <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--cream)', lineHeight: 1.2 }}>{producto}</h3>
@@ -700,8 +700,8 @@ function ClientesHoyModal({
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
             <VendedorAvatar vendedor={vendedor} color={color} size={38} avatars={avatars} />
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '1px' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 CLIENTES DEL DÍA · {formatFecha(fechaHoy)}
               </p>
               <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)' }}>{dspVendedor(vendedor)}</h3>
@@ -845,8 +845,8 @@ function ProductMixCard({ resumen, compact = false }: { resumen: VendedorResumen
             {cats.filter(c => c.val > 0 || c.label !== 'Otros').map(({ color, label, val, p }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', flex: 1 }}>{label}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.8)' }}>{fL(val)}</span>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.8)', flexShrink: 0 }}>{fL(val)}</span>
                 <span style={{
                   fontSize: 10, fontWeight: 700,
                   color, background: `${color}18`,
@@ -870,13 +870,13 @@ function ProductMixCard({ resumen, compact = false }: { resumen: VendedorResumen
         <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 13, marginBottom: 14 }}>Product Mix</h3>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14 }}>
           <DonutChart cerveza={totalCerveza} kombucha={totalKombucha} outros={totalOtros} size={88} />
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             {cats.map(({ color, label, val, p }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', flex: 1 }}>{label}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{fL(val)}</span>
-                <span style={{ fontSize: 9, fontWeight: 700, color, minWidth: 28, textAlign: 'right' }}>{p}%</span>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', flexShrink: 0 }}>{fL(val)}</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color, minWidth: 28, textAlign: 'right', flexShrink: 0 }}>{p}%</span>
               </div>
             ))}
           </div>
@@ -1784,16 +1784,16 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
             cursor: 'pointer', textAlign: 'left',
           }}
         >
-          <span style={{ fontSize: 22 }}>📋</span>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 13, fontWeight: 800, color: '#D4AF37' }}>Plan de la semana listo</p>
-            <p style={{ fontSize: 11, color: '#665E40' }}>
+          <span style={{ fontSize: 22, flexShrink: 0 }}>📋</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 800, color: '#D4AF37', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Plan de la semana listo</p>
+            <p style={{ fontSize: 11, color: '#665E40', lineHeight: 1.4 }}>
               {planSemana.filter(c => c.alert_level === 'critico').length} urgentes ·{' '}
               {planSemana.filter(c => c.alert_level === 'vencido').length} vencidos ·{' '}
               {planSemana.filter(c => c.alert_level === 'proximo').length} próximos
             </p>
           </div>
-          <span style={{ fontSize: 12, color: '#D4AF37', fontWeight: 700 }}>Ver →</span>
+          <span style={{ fontSize: 12, color: '#D4AF37', fontWeight: 700, flexShrink: 0 }}>Ver →</span>
         </button>
       )}
 
@@ -1996,13 +1996,15 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
           background: 'var(--surface)', border: '1px solid var(--border)',
           borderRadius: 12,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Calendar size={13} color="rgba(212,175,55,0.6)" />
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1, marginRight: 8 }}>
+            <Calendar size={13} color="rgba(212,175,55,0.6)" style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {formatFecha(fechaHoy)}{periodo ? ` · ${periodo.nombre}` : ''}
             </span>
           </div>
-          <DateSelector fechaActual={fechaHoy} fechasDisponibles={fechasDisponibles} />
+          <div style={{ flexShrink: 0 }}>
+            <DateSelector fechaActual={fechaHoy} fechasDisponibles={fechasDisponibles} />
+          </div>
         </div>
       )}
 

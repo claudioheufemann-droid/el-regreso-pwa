@@ -228,7 +228,7 @@ function TorpedoPanel({ nombreProducto, compact = false }: { nombreProducto: str
         }}
       >
         {prod.marca === 'cerveza' ? <Beer size={13} color={prod.acento} /> : <Leaf size={13} color={prod.acento} />}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: prod.acento }}>{prod.nombre}</span>
           <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 6 }}>{prod.estilo}</span>
         </div>
@@ -346,7 +346,7 @@ function ConStockSection({ misiones, onActualizar, onWA, loadingId }: {
         }}
       >
         <Clock size={13} style={{ color: '#94A3B8', flexShrink: 0 }} />
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 13, fontWeight: 800, color: '#94A3B8' }}>Con Stock — Vuelven a llamar</span>
           <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>
             {misiones.length} cliente{misiones.length > 1 ? 's' : ''} pospuesto{misiones.length > 1 ? 's' : ''}
@@ -467,7 +467,7 @@ function TorpedoPanelV2({ nombreProducto }: { nombreProducto: string }) {
         onClick={() => setOpen(v => !v)}
         style={{ width: '100%', padding: '10px 14px', background: `${prod.acento}10`, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left' }}
       >
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 900, color: prod.acento }}>{prod.nombre}</span>
             <span style={{ fontSize: 11, color: '#9CA3AF' }}>{prod.estilo}</span>
@@ -1682,7 +1682,7 @@ function SeccionMisiones({ tipo, misiones, onActualizar, onWA, loadingId, onMarc
         border: `1px solid ${cfg.border}`, background: cfg.bg, cursor: 'pointer', textAlign: 'left',
       }}>
         <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{cfg.icon}</span>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 13, fontWeight: 800, color: cfg.color }}>{cfg.label}</span>
           <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>{cfg.desc}</span>
         </div>
@@ -1729,9 +1729,9 @@ function HistorialView({ historial }: { historial: HistorialSemana[] }) {
               background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
             }}>
               <Calendar size={15} color="var(--muted)" />
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', marginBottom: 2 }}>{rangoSemana(sem.semana)}</p>
-                <p style={{ fontSize: 11, color: 'var(--muted)' }}>{sem.completadas} de {sem.total} con pedido — {pct}%</p>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rangoSemana(sem.semana)}</p>
+                <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sem.completadas} de {sem.total} con pedido — {pct}%</p>
               </div>
               <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
                 <div style={{ width: `${pct}%`, height: '100%', background: pct >= 80 ? 'var(--green-dim)' : 'var(--gold)', borderRadius: 4 }} />
@@ -1849,13 +1849,13 @@ function ListaDesktop({ porTipo, selectedId, onSelect, onWA }: {
               borderBottom: '1px solid rgba(255,255,255,0.04)',
             }}>
               <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{cfg.icon}</span>
-              <span style={{ fontSize: 10, fontWeight: 800, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.8px', flex: 1 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.8px', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {tipo === 'vencido' ? 'PRIORIDAD ALTA' : cfg.label}
               </span>
               {pendientes > 0 && (
                 <span style={{
                   padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 800,
-                  background: `${cfg.color}18`, color: cfg.color,
+                  background: `${cfg.color}18`, color: cfg.color, flexShrink: 0,
                 }}>{pendientes}</span>
               )}
             </div>

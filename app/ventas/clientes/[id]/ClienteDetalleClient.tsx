@@ -452,10 +452,10 @@ function ActivityItem({ icon, title, sub, date, vendedor, last = false }: {
       }}>
         {icon}
       </div>
-      <div style={{ flex: 1, paddingTop: 4 }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: '#ddd', marginBottom: 2 }}>{title}</p>
-        {sub && <p style={{ fontSize: 12, color: '#555', marginBottom: 2 }}>{sub}</p>}
-        <p style={{ fontSize: 11, color: '#444' }}>
+      <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#ddd', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</p>
+        {sub && <p style={{ fontSize: 12, color: '#555', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</p>}
+        <p style={{ fontSize: 11, color: '#444', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {date}{vendedor ? ` · ${dspV(vendedor)}` : ''}
         </p>
       </div>
@@ -1359,8 +1359,8 @@ export default function ClienteDetalleClient({
                     return (
                       <div key={fu.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 12, background: 'var(--surface2)', border: `1px solid ${vencido ? 'rgba(248,113,113,0.3)' : 'var(--border)'}`, marginBottom: 6 }}>
                         <Bell size={14} color={fu.estado === 'completado' ? '#5A8A4A' : vencido ? '#B5543E' : '#D4AF37'}/>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 12, fontWeight: 700, color: fu.estado === 'completado' ? '#555' : 'var(--cream)', textDecoration: fu.estado === 'completado' ? 'line-through' : 'none' }}>{fu.nota}</p>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: fu.estado === 'completado' ? '#555' : 'var(--cream)', textDecoration: fu.estado === 'completado' ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fu.nota}</p>
                           <p style={{ fontSize: 10, color: vencido ? '#B5543E' : '#555' }}>{fu.fecha_recordatorio}</p>
                         </div>
                         <button onClick={() => toggleFollowUp(fu.id, fu.estado === 'completado' ? 'pendiente' : 'completado')}

@@ -1057,7 +1057,7 @@ function ProductoBar({ nombre, litros, total, color, clientes = [] }: {
               }} />
             )}
             <span style={{
-              fontSize: 12, color: 'var(--cream)', flex: 1,
+              fontSize: 12, color: 'var(--cream)', flex: 1, minWidth: 0,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>{nombre}</span>
           </div>
@@ -1123,7 +1123,7 @@ function ProductoBar({ nombre, litros, total, color, clientes = [] }: {
                       <div style={{ width: 5, height: 5, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
                       {/* Nombre */}
                       <span style={{
-                        flex: 1, fontSize: 11, color: 'var(--cream)', fontWeight: 600,
+                        flex: 1, minWidth: 0, fontSize: 11, color: 'var(--cream)', fontWeight: 600,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>{c.nombre}</span>
                       {/* Litros + % */}
