@@ -525,8 +525,8 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
         zIndex: 50,
         justifyContent: 'space-around',
       } as React.CSSProperties}>
-        {/* Botón Inicio — volver a /gestion */}
-        <button onClick={() => router.push('/gestion')} style={{
+        {/* Botón Inicio — volver al menú principal de la app */}
+        <button onClick={() => router.push('/')} style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
           padding: '6px 14px', borderRadius: 80, border: '1px solid transparent',
           cursor: 'pointer', background: 'transparent',

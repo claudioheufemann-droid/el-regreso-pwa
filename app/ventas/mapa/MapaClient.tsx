@@ -318,7 +318,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
       </div>
 
       {/* ─── Main: mapa + sidebar ─── */}
-      <div style={{ flex: 1, display: 'flex', gap: 14, padding: isDesktop ? '0 20px' : '0 14px', minWidth: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: isDesktop ? 'row' : 'column', gap: 14, padding: isDesktop ? '0 20px' : '0 14px', minWidth: 0 }}>
         {/* Mapa */}
         <div style={{ flex: 1, position: 'relative', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border)', height: isDesktop ? undefined : '72dvh', minHeight: isDesktop ? 0 : '420px', minWidth: 0 }}>
           {loading && (
@@ -342,7 +342,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
         </div>
 
         {/* Sidebar */}
-        <div style={{ width: isDesktop ? 300 : '100%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, overflowY: isDesktop ? 'auto' : 'visible', paddingBottom: isDesktop ? 14 : 0, marginTop: isDesktop ? 0 : 14 }}>
+        <div style={{ width: isDesktop ? 300 : '100%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, overflowY: isDesktop ? 'auto' : 'visible', paddingBottom: isDesktop ? 14 : 0 }}>
           {/* Salud del cliente */}
           <Panel title="Salud del cliente" icon={<Heart size={14} style={{ color: '#5A8A4A' }} />}>
             {SALUD_LEGEND.map(s => (
