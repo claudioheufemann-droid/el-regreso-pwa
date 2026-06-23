@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
         dias_horas_entrega: getString(row, 'dias_horas_entrega', 'Dias/Horas Entrega', 'Días/Horas Entrega'),
         notas: getString(row, 'notas', 'Notas', 'NOTAS', 'observaciones', 'Observaciones'),
         ruta_despacho: getString(row, 'nro_ruta', 'Nro Ruta', 'Nro. Ruta', 'nro. ruta', 'ruta', 'Ruta'),
-        direccion_google_maps: getString(row, 'direccion_google_maps', 'Direccion Google Maps', 'Google Maps'),
+        direccion_google_maps: getString(row, 'direccion_google_maps', 'Direccion Google Maps', 'Google Maps', 'Dirección completa Google Maps', 'Direccion completa Google Maps'),
         lista_precios: getString(row, 'lista_precios', 'Lista de Precios', 'Lista Precios'),
         codigo_cliente: getString(row, 'codigo_cliente', 'Código Cliente', 'Codigo Cliente', 'Código de Cliente'),
         vendedor: getString(row, 'vendedor', 'Vendedor', 'VENDEDOR'),
