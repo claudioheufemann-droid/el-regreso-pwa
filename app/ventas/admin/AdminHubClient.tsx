@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Upload, Users, AlertCircle, Target, BarChart3, UserPlus, TrendingUp } from 'lucide-react'
+import { Upload, Users, AlertCircle, Target, BarChart3, UserPlus, TrendingUp, DollarSign } from 'lucide-react'
 import AppHeader from '@/components/ui/AppHeader'
 import CargarClient from './cargar/CargarClient'
 import ClientesUploadClient from './clientes-upload/ClientesUploadClient'
@@ -60,6 +60,13 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores }
               color: '#60A5FA', fontSize: 12, fontWeight: 700, cursor: 'pointer',
             }}>
               <TrendingUp size={14} /> Histórico
+            </button>
+            <button onClick={() => router.push('/ventas/margen')} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)',
+              color: '#4ADE80', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <DollarSign size={14} /> Margen
             </button>
             <button onClick={() => router.push('/ventas/admin/crm-metrics')} style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
