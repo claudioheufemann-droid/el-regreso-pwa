@@ -177,6 +177,20 @@ body {
      no se revisaron uno por uno. No rompe los que ya usan white-space:nowrap
      + ellipsis (nowrap gana y sigue truncando con "..." normalmente). */
   p, span, h1, h2, h3, h4, h5, h6, button, a, div { overflow-wrap: anywhere; }
+
+  /* Excepción a la regla de min-width:0 de arriba: tiras de tabs/chips
+     horizontales (display:flex + overflow-x:auto|scroll en el MISMO
+     elemento) están diseñadas para DESBORDAR y scrollear, no para
+     encoger. Si se les fuerza min-width:0, sus botones (whiteSpace:nowrap)
+     se aplastan por debajo del ancho de su propio texto y el contenido
+     de tabs vecinos se superpone — el bug exacto reportado en la ficha
+     de cliente ("Pedidos/Productos/Interacciones" amontonados).
+     Misma especificidad que la regla anterior + va DESPUÉS en el archivo
+     -> gana por orden de declaración para estos contenedores. */
+  [style*="overflow-x: auto"] > *,
+  [style*="overflow-x:auto"] > *,
+  [style*="overflow-x: scroll"] > *,
+  [style*="overflow-x:scroll"] > * { min-width: auto; flex-shrink: 0; }
 }
 
 /* ── Safe area para el notch / Dynamic Island (iPhone) ──
