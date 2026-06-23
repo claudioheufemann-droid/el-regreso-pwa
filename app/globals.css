@@ -167,6 +167,16 @@ body {
   [style*="display: grid"] > *,
   [style*="display:flex"] > *,
   [style*="display: flex"] > * { min-width: 0; }
+
+  /* Red de seguridad final: si una caja SÍ logra encogerse (regla de arriba)
+     pero el texto de adentro no tiene ellipsis explícito, el texto se sigue
+     desbordando visualmente y el overflow-x:clip de arriba lo recorta sin
+     avisar (el síntoma de "se ve cortado" reportado reiteradamente).
+     overflow-wrap:anywhere fuerza que CUALQUIER texto pueda partirse y
+     bajar de línea en vez de desbordar, incluso en elementos que todavía
+     no se revisaron uno por uno. No rompe los que ya usan white-space:nowrap
+     + ellipsis (nowrap gana y sigue truncando con "..." normalmente). */
+  p, span, h1, h2, h3, h4, h5, h6, button, a, div { overflow-wrap: anywhere; }
 }
 
 /* ── Safe area para el notch / Dynamic Island (iPhone) ──

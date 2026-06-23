@@ -53,6 +53,7 @@ interface RiesgoCliente {
   dias_sin_compra: number
   ciclo_promedio_dias: number
   alert_level: string
+  cliente_id: number | null
 }
 
 interface PlanCliente extends RiesgoCliente {
@@ -1326,7 +1327,7 @@ function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; o
               return (
                 <div
                   key={c.nombre_fantasia}
-                  onClick={() => { onClose(); router.push('/ventas/clientes') }}
+                  onClick={() => { onClose(); router.push(c.cliente_id ? `/ventas/clientes/${c.cliente_id}` : `/ventas/clientes?q=${encodeURIComponent(c.nombre_fantasia)}`) }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '10px 20px', cursor: 'pointer',
@@ -1446,7 +1447,7 @@ function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; col
                 return (
                   <div
                     key={c.nombre_fantasia}
-                    onClick={() => router.push('/ventas/clientes')}
+                    onClick={() => router.push(c.cliente_id ? `/ventas/clientes/${c.cliente_id}` : `/ventas/clientes?q=${encodeURIComponent(c.nombre_fantasia)}`)}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',

@@ -82,6 +82,7 @@ export default async function DashboardPage({
     { data: planRaw },
     { data: misionesRaw },
     { data: usersAvatars },
+    { data: clientesIdRows },
   ] = await Promise.all([
     (provinciasScope
       ? supabase.from('ventas').select('fecha_pedido').in('provincia', provinciasScope)
@@ -95,7 +96,12 @@ export default async function DashboardPage({
     supabase.rpc('get_pending_call_alerts', { p_vendedor, p_nivel_minimo: 'proximo' }),
     supabase.from('misiones').select('vendedor, alert_level, estado, score, segmento, nombre_fantasia, dias_sin_compra').eq('semana', semanaLunes).in('vendedor', misionesScope),
     supabase.from('users').select('nombre, avatar_url').in('nombre', ['Vendedor 1']),
+    supabase.from('clientes').select('id, nombre_fantasia'),
   ])
+
+  const clienteIdByName = new Map(
+    (clientesIdRows ?? []).filter(c => c.nombre_fantasia).map(c => [c.nombre_fantasia as string, c.id as number])
+  )
 
   const ultimaFechaStr = ultimaFecha?.fecha_pedido ?? new Date().toISOString().split('T')[0]
 
@@ -386,6 +392,7 @@ export default async function DashboardPage({
     score: number
     segmento: string
     siguiente_compra_estimada: string | null
+    cliente_id: number | null
   }
 
   const planSemana: ClientePlan[] = (planRaw ?? [])
@@ -399,6 +406,7 @@ export default async function DashboardPage({
       score: r.score,
       segmento: r.segmento,
       siguiente_compra_estimada: r.siguiente_compra_estimada ?? null,
+      cliente_id: clienteIdByName.get(r.nombre_fantasia) ?? null,
     }))
 
   const riesgoClientes = planSemana.filter(c =>

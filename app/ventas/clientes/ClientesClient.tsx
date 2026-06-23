@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { useUser } from '@/lib/userContext'
@@ -541,7 +541,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   const router    = useRouter()
   const { user }  = useUser()
 
-  const [busqueda,    setBusqueda]    = useState('')
+  const [busqueda,    setBusqueda]    = useState(() => typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('q') ?? '' : '')
   const [vendFiltro,  setVendFiltro]  = useState<string>('all')
   const [estadoFiltro,setEstadoFiltro]= useState<string>('todos')
   const [sortBy,      setSortBy]      = useState<'recientes'|'score'|'nombre'|'deuda'>('recientes')
@@ -549,6 +549,16 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   const [showWA,      setShowWA]      = useState(false)
   const [showSort,    setShowSort]    = useState(false)
   const [waTarget,    setWaTarget]    = useState<WATarget | null>(null)
+
+  // Si llegamos con ?q=NombreExacto (ej. desde "Clientes en riesgo" o un lead
+  // del mapa) y hay un único match exacto, saltar directo a su ficha.
+  useEffect(() => {
+    if (!busqueda.trim()) return
+    const b = busqueda.trim().toLowerCase()
+    const exactos = clientes.filter(c => c.nombre_fantasia?.toLowerCase() === b)
+    if (exactos.length === 1) router.replace(`/ventas/clientes/${exactos[0].id}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Chips de filtro con conteos
   const FILTROS = [
