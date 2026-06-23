@@ -4,8 +4,14 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim()
   if (!q || q.length < 3) return NextResponse.json([])
 
+  // bias=cl: búsqueda libre en todo Chile (ej. buscador de localidad del mapa).
+  // Por defecto se mantiene el sesgo a Valdivia (autocompletado de direcciones
+  // de clientes/visitas, donde casi siempre se busca cerca de Valdivia).
+  const bias = req.nextUrl.searchParams.get('bias')
+  const query = bias === 'cl' ? `${q}, Chile` : `${q}, Valdivia, Chile`
+
   const params = new URLSearchParams({
-    q: `${q}, Valdivia, Chile`,
+    q: query,
     format: 'json',
     limit: '6',
     countrycodes: 'cl',

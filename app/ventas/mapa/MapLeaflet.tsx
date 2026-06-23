@@ -58,6 +58,8 @@ interface Props {
   capaViz: CapaViz
   mostrarSinCompra: boolean
   tileTipo?: TileTipo
+  userCoords?: { lat: number; lng: number } | null
+  flyTarget?: FlyTarget | null
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -139,10 +141,20 @@ function HeatmapLayer({ puntos }: { puntos: Punto[] }) {
 }
 
 // ── Recentrar mapa ──────────────────────────────────────────
+// Si hay ubicación GPS del usuario, la primera carga del mapa parte ahí
+// (no salta al centroide de los datos del período, que puede caer lejos
+// de donde está el vendedor — ej. un solo cliente en otra región).
+// El auto-fit a los datos sigue funcionando normalmente para cambios
+// posteriores de filtro (fecha, vendedor, etc.).
 
-function RecenterMap({ puntos }: { puntos: Punto[] }) {
+function RecenterMap({ puntos, skipFirst }: { puntos: Punto[]; skipFirst: boolean }) {
   const map = useMap()
+  const isFirst = useRef(true)
   useEffect(() => {
+    if (isFirst.current) {
+      isFirst.current = false
+      if (skipFirst) return
+    }
     const pts = puntos.filter(p => !p.sin_compra)
     if (pts.length === 0) return
     const lats = pts.map(p => p.lat)
@@ -150,7 +162,32 @@ function RecenterMap({ puntos }: { puntos: Punto[] }) {
     const minLat = Math.min(...lats), maxLat = Math.max(...lats)
     const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
     map.fitBounds([[minLat - 0.05, minLng - 0.05], [maxLat + 0.05, maxLng + 0.05]], { maxZoom: 13 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puntos, map])
+  return null
+}
+
+// ── Centrar en la ubicación GPS del usuario al abrir el mapa ─
+function CenterOnUser({ coords }: { coords: { lat: number; lng: number } | null }) {
+  const map = useMap()
+  const done = useRef(false)
+  useEffect(() => {
+    if (coords && !done.current) {
+      done.current = true
+      map.setView([coords.lat, coords.lng], 13)
+    }
+  }, [coords, map])
+  return null
+}
+
+// ── Volar a un resultado del buscador de localidad ───────────
+export interface FlyTarget { lat: number; lng: number; zoom?: number; ts: number }
+
+function FlyTo({ target }: { target: FlyTarget | null }) {
+  const map = useMap()
+  useEffect(() => {
+    if (target) map.flyTo([target.lat, target.lng], target.zoom ?? 14, { duration: 1.2 })
+  }, [target, map])
   return null
 }
 
@@ -360,7 +397,7 @@ function PopupLead({ l, onWA }: { l: LeadPunto; onWA: (t: WATarget) => void }) {
   )
 }
 
-export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz, mostrarSinCompra, tileTipo = 'mapa' }: Props) {
+export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz, mostrarSinCompra, tileTipo = 'mapa', userCoords = null, flyTarget = null }: Props) {
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const tile = TILES[tileTipo]
 
@@ -381,6 +418,8 @@ export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz
         zoomControl={true}
       >
         <MapResizer />
+        <CenterOnUser coords={userCoords} />
+        <FlyTo target={flyTarget} />
         <TileLayer key={tileTipo} url={tile.url} attribution={tile.attribution} />
         {/* Capa de etiquetas para modo híbrido */}
         {tileTipo === 'hibrido' && (
@@ -459,7 +498,7 @@ export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz
           </CircleMarker>
         ))}
 
-        {filtrados.length > 0 && <RecenterMap puntos={filtrados} />}
+        {filtrados.length > 0 && <RecenterMap puntos={filtrados} skipFirst={!!userCoords} />}
       </MapContainer>
 
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}

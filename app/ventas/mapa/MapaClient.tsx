@@ -6,12 +6,13 @@ import {
   Calendar, Droplets, MapPin, Users, ShoppingCart, DollarSign, AlertTriangle,
   ChevronLeft, ChevronRight, Loader2, Play, Pause, Thermometer, Heart,
   Flame, Target, TrendingUp, Eye, EyeOff, Layers as LayersIcon, Package,
+  Search, Locate, X,
 } from 'lucide-react'
 import { VEND_COLOR } from '@/lib/theme'
 import { VENDEDOR_DISPLAY } from '@/lib/types'
 const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import { useIsDesktop } from '@/lib/useIsDesktop'
-import type { Punto, CapaViz, TileTipo, LeadPunto } from './MapLeaflet'
+import type { Punto, CapaViz, TileTipo, LeadPunto, FlyTarget } from './MapLeaflet'
 import AppHeader from '@/components/ui/AppHeader'
 
 const MapLeaflet = dynamic(() => import('./MapLeaflet'), {
@@ -91,6 +92,54 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
   const [modoRango, setModoRango] = useState(false)
   const [fechaFin, setFechaFin] = useState('')
   const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── Ubicación del usuario (el mapa parte ahí, no en el centroide de los datos) ──
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
+  useEffect(() => {
+    if (!('geolocation' in navigator)) return
+    navigator.geolocation.getCurrentPosition(
+      pos => setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {}, // permiso denegado o no disponible: el mapa usa el fallback de siempre
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 }
+    )
+  }, [])
+
+  // ── Buscador de localidad ──────────────────────────────────
+  const [busquedaLoc, setBusquedaLoc] = useState('')
+  const [resultadosLoc, setResultadosLoc] = useState<{ display_name: string; lat: string; lon: string }[]>([])
+  const [buscandoLoc, setBuscandoLoc] = useState(false)
+  const [showResultadosLoc, setShowResultadosLoc] = useState(false)
+  const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null)
+  const buscarLocTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (buscarLocTimer.current) clearTimeout(buscarLocTimer.current)
+    if (busquedaLoc.trim().length < 3) { setResultadosLoc([]); return }
+    buscarLocTimer.current = setTimeout(async () => {
+      setBuscandoLoc(true)
+      try {
+        const res = await fetch(`/api/geocode?bias=cl&q=${encodeURIComponent(busquedaLoc.trim())}`)
+        const data = await res.json()
+        setResultadosLoc(Array.isArray(data) ? data : [])
+      } catch {
+        setResultadosLoc([])
+      } finally {
+        setBuscandoLoc(false)
+      }
+    }, 400)
+    return () => { if (buscarLocTimer.current) clearTimeout(buscarLocTimer.current) }
+  }, [busquedaLoc])
+
+  function irAResultado(r: { display_name: string; lat: string; lon: string }) {
+    setFlyTarget({ lat: parseFloat(r.lat), lng: parseFloat(r.lon), zoom: 13, ts: Date.now() })
+    setBusquedaLoc(r.display_name.split(',').slice(0, 2).join(', '))
+    setShowResultadosLoc(false)
+  }
+
+  function irAMiUbicacion() {
+    if (!userCoords) return
+    setFlyTarget({ lat: userCoords.lat, lng: userCoords.lng, zoom: 14, ts: Date.now() })
+  }
 
   const fechaIdx = fechasDisponibles.indexOf(fecha)
 
@@ -246,6 +295,68 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
         </div>
       </div>
 
+      {/* ─── Buscador de localidad ─── */}
+      <div style={{ position: 'relative', padding: isDesktop ? '12px 20px 0' : '10px 14px 0', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '0 12px', height: 40 }}>
+              <Search size={14} style={{ color: 'var(--muted)', flexShrink: 0 }} />
+              <input
+                value={busquedaLoc}
+                onChange={e => { setBusquedaLoc(e.target.value); setShowResultadosLoc(true) }}
+                onFocus={() => setShowResultadosLoc(true)}
+                onBlur={() => setTimeout(() => setShowResultadosLoc(false), 200)}
+                placeholder="Buscar ciudad, comuna o dirección..."
+                style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: 'var(--cream)', fontSize: 13 }}
+              />
+              {buscandoLoc && <Loader2 size={14} style={{ color: 'var(--muted)', flexShrink: 0, animation: 'spin 1s linear infinite' }} />}
+              {!buscandoLoc && busquedaLoc && (
+                <button onClick={() => { setBusquedaLoc(''); setResultadosLoc([]) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', flexShrink: 0 }}>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {showResultadosLoc && resultadosLoc.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 1100,
+                background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.5)', overflow: 'hidden', maxHeight: 240, overflowY: 'auto',
+              }}>
+                {resultadosLoc.map((r, i) => (
+                  <button
+                    key={i}
+                    onClick={() => irAResultado(r)}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px',
+                      background: 'none', border: 'none', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                      cursor: 'pointer', fontSize: 12.5, color: 'var(--cream)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {r.display_name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={irAMiUbicacion}
+            disabled={!userCoords}
+            title={userCoords ? 'Ir a mi ubicación' : 'Ubicación no disponible'}
+            style={{
+              width: 40, height: 40, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: userCoords ? 'rgba(212,175,55,0.12)' : 'var(--surface)',
+              border: userCoords ? '1px solid rgba(212,175,55,0.3)' : '1px solid var(--border)',
+              color: userCoords ? '#D4AF37' : 'var(--muted)', cursor: userCoords ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <Locate size={16} />
+          </button>
+        </div>
+      </div>
+
       {/* ─── KPI row ─── */}
       <div style={{
         display: isDesktop ? 'grid' : 'flex',
@@ -338,7 +449,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
               </div>
             </div>
           )}
-          <MapLeaflet puntos={puntosFiltrados} leads={leadsFiltrados} vendedorFiltro={vendedor} capaViz={capaViz} mostrarSinCompra={mostrarSinCompra} tileTipo={tileTipo} />
+          <MapLeaflet puntos={puntosFiltrados} leads={leadsFiltrados} vendedorFiltro={vendedor} capaViz={capaViz} mostrarSinCompra={mostrarSinCompra} tileTipo={tileTipo} userCoords={userCoords} flyTarget={flyTarget} />
         </div>
 
         {/* Sidebar */}
