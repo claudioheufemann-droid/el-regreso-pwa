@@ -337,7 +337,7 @@ function PopupLead({ l, onWA }: { l: LeadPunto; onWA: (t: WATarget) => void }) {
         <span style={{ fontSize: 9, fontWeight: 800, color: '#8A6D1F', background: 'rgba(167,139,250,0.15)', padding: '1px 7px', borderRadius: 10 }}>POSIBLE CLIENTE</span>
         {l.rating != null && <span style={{ fontSize: 11, color: '#D97706' }}>★ {l.rating}</span>}
       </div>
-      <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1a1a', marginBottom: 2 }}>{l.nombre}</div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: '#D4AF37', marginBottom: 2 }}>{l.nombre}</div>
       <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
         {l.categoria ?? '—'} · 📍 {l.ciudad ?? ''}{l.categoria_mapeada ? ` · ≈ ${l.categoria_mapeada}` : ''}
       </div>
