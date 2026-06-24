@@ -449,7 +449,11 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
               </div>
             </div>
           )}
-          <MapLeaflet puntos={puntosFiltrados} leads={leadsFiltrados} vendedorFiltro={vendedor} capaViz={capaViz} mostrarSinCompra={mostrarSinCompra} tileTipo={tileTipo} userCoords={userCoords} flyTarget={flyTarget} />
+          <MapLeaflet
+            puntos={puntosFiltrados} leads={leadsFiltrados} vendedorFiltro={vendedor} capaViz={capaViz}
+            mostrarSinCompra={mostrarSinCompra} tileTipo={tileTipo} userCoords={userCoords} flyTarget={flyTarget}
+            onLocationSaved={() => fetchData(fecha, vendedor, modoRango ? fechaFin : '', mostrarSinCompra)}
+          />
         </div>
 
         {/* Sidebar */}

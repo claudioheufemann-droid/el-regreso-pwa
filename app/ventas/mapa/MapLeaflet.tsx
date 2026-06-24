@@ -1,10 +1,23 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Marker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { VENDEDOR_DISPLAY } from '@/lib/types'
+
+// Ícono de arrastre para corrección manual de ubicación (DivIcon SVG,
+// sin depender de los assets de imagen default de Leaflet).
+const DRAG_ICON = L.divIcon({
+  html: `<svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))">
+    <path d="M17 0C7.6 0 0 7.6 0 17c0 12.7 17 27 17 27s17-14.3 17-27C34 7.6 26.4 0 17 0z" fill="#D4AF37"/>
+    <circle cx="17" cy="17" r="7" fill="#1a1200"/>
+  </svg>`,
+  className: '',
+  iconSize: [34, 44],
+  iconAnchor: [17, 44],
+})
 
 const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
 
@@ -60,6 +73,7 @@ interface Props {
   tileTipo?: TileTipo
   userCoords?: { lat: number; lng: number } | null
   flyTarget?: FlyTarget | null
+  onLocationSaved?: () => void
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -212,10 +226,11 @@ function MapResizer() {
 
 // ── Popup detalle ───────────────────────────────────────────
 
-function PopupDetalle({ p, color, onWA }: {
+function PopupDetalle({ p, color, onWA, onEditLocation }: {
   p: Punto
   color: string
   onWA: (t: WATarget) => void
+  onEditLocation: (p: Punto) => void
 }) {
   const verClienteUrl = `/ventas/clientes?q=${encodeURIComponent(p.nombre_fantasia)}`
   const prods = (() => {
@@ -356,7 +371,66 @@ function PopupDetalle({ p, color, onWA }: {
       >
         Ver ficha del cliente →
       </a>
+
+      {/* Corregir ubicación — por si el geocodificador puso el pin mal */}
+      <button
+        onClick={() => onEditLocation(p)}
+        style={{
+          display: 'block', width: '100%', marginTop: 6, padding: '7px', textAlign: 'center', borderRadius: 8,
+          background: 'none', border: '1px dashed rgba(255,255,255,0.2)', cursor: 'pointer',
+          color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600,
+        }}
+      >
+        📍 ¿Este pin está mal puesto? Corregir ubicación
+      </button>
     </div>
+  )
+}
+
+// ── Marcador arrastrable para corregir ubicación ─────────────
+
+function EditableMarker({ target, onCancel, onSave }: {
+  target: Punto
+  onCancel: () => void
+  onSave: (lat: number, lng: number) => void
+}) {
+  const [pos, setPos] = useState<[number, number]>([target.lat, target.lng])
+  const [saving, setSaving] = useState(false)
+
+  return (
+    <Marker
+      position={pos}
+      icon={DRAG_ICON}
+      draggable
+      eventHandlers={{
+        dragend: e => {
+          const ll = (e.target as L.Marker).getLatLng()
+          setPos([ll.lat, ll.lng])
+        },
+      }}
+    >
+      <Popup closeButton={false} autoClose={false} closeOnClick={false}>
+        <div style={{ minWidth: 200, fontFamily: 'system-ui,sans-serif', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', marginBottom: 4 }}>{target.nombre_fantasia}</p>
+          <p style={{ fontSize: 11, color: '#666', marginBottom: 10 }}>Arrastra el pin a la ubicación correcta</p>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={onCancel}
+              style={{ flex: 1, padding: '7px', borderRadius: 7, border: '1px solid #ccc', background: 'white', color: '#666', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Cancelar
+            </button>
+            <button
+              disabled={saving}
+              onClick={async () => { setSaving(true); await onSave(pos[0], pos[1]) }}
+              style={{ flex: 1, padding: '7px', borderRadius: 7, border: 'none', background: '#D4AF37', color: '#1a1200', fontSize: 12, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1 }}
+            >
+              {saving ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      </Popup>
+    </Marker>
   )
 }
 
@@ -407,9 +481,24 @@ function PopupLead({ l, onWA }: { l: LeadPunto; onWA: (t: WATarget) => void }) {
   )
 }
 
-export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz, mostrarSinCompra, tileTipo = 'mapa', userCoords = null, flyTarget = null }: Props) {
+export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz, mostrarSinCompra, tileTipo = 'mapa', userCoords = null, flyTarget = null, onLocationSaved }: Props) {
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+  const [editTarget, setEditTarget] = useState<Punto | null>(null)
   const tile = TILES[tileTipo]
+
+  async function guardarUbicacion(lat: number, lng: number) {
+    if (!editTarget) return
+    try {
+      await fetch('/api/clientes/ubicacion', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre_fantasia: editTarget.nombre_fantasia, lat, lng }),
+      })
+      onLocationSaved?.()
+    } finally {
+      setEditTarget(null)
+    }
+  }
 
   const filtrados = (vendedorFiltro === 'all'
     ? puntos
@@ -430,6 +519,7 @@ export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz
         <MapResizer />
         <CenterOnUser coords={userCoords} />
         <FlyTo target={flyTarget} />
+        {editTarget && <EditableMarker target={editTarget} onCancel={() => setEditTarget(null)} onSave={guardarUbicacion} />}
         <TileLayer key={tileTipo} url={tile.url} attribution={tile.attribution} />
         {/* Capa de etiquetas para modo híbrido */}
         {tileTipo === 'hibrido' && (
@@ -451,7 +541,7 @@ export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz
             pathOptions={{ color: '#4B5563', fillColor: '#374151', fillOpacity: 0.5, weight: 1, opacity: 0.6, dashArray: '3' }}
           >
             <Popup closeButton maxWidth={300}>
-              <PopupDetalle p={p} color="#6B7280" onWA={setWaTarget} />
+              <PopupDetalle p={p} color="#6B7280" onWA={setWaTarget} onEditLocation={setEditTarget} />
             </Popup>
           </CircleMarker>
         ))}
@@ -471,7 +561,7 @@ export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz
               pathOptions={{ color, fillColor: color, fillOpacity: 0.75, weight: 1.5, opacity: 0.95 }}
             >
               <Popup closeButton maxWidth={310}>
-                <PopupDetalle p={p} color={color} onWA={setWaTarget} />
+                <PopupDetalle p={p} color={color} onWA={setWaTarget} onEditLocation={setEditTarget} />
               </Popup>
             </CircleMarker>
           )
@@ -488,7 +578,7 @@ export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz
               pathOptions={{ color, fillColor: color, fillOpacity: 0.9, weight: 1 }}
             >
               <Popup closeButton maxWidth={310}>
-                <PopupDetalle p={p} color={color} onWA={setWaTarget} />
+                <PopupDetalle p={p} color={color} onWA={setWaTarget} onEditLocation={setEditTarget} />
               </Popup>
             </CircleMarker>
           )
