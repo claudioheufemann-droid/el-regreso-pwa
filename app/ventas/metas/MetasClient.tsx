@@ -1235,8 +1235,8 @@ export default function MetasClient({
           metaMensual: metaM, metaSemanal: metaS,
           realizadoMes: rM, realizadoSemana: rS,
           metaEsperadaMes: eM, metaEsperadaSemana: eS,
-          pctMes: calcularCumplimiento(rM, metaM),
-          pctSemana: calcularCumplimiento(rS, metaS),
+          pctMes: calcularCumplimiento(rM, eM),
+          pctSemana: calcularCumplimiento(rS, eS),
           semaforoMes: getEstadoSemaforo(rM, eM),
           semaforoSemana: getEstadoSemaforo(rS, eS),
         }
@@ -1253,7 +1253,7 @@ export default function MetasClient({
       return {
         vendedor, fecha: fechaRef,
         metaMensual: metaMesTotal, realizadoMes: realMes, metaEsperadaMes: espMes,
-        pctCumplimientoMes: calcularCumplimiento(realMes, metaMesTotal),
+        pctCumplimientoMes: calcularCumplimiento(realMes, espMes),
         semaforoMes: getEstadoSemaforo(realMes, espMes),
         diasHabilesMes: dhMesTotal, diasTranscurridosMes: dhMesTrans, diasRestantesMes: dhMesTotal - dhMesTrans,
         faltanteMes: faltMes,
@@ -1261,7 +1261,7 @@ export default function MetasClient({
         mensajeMes: getMensajePredictivo(faltMes, dhMesTotal - dhMesTrans),
         semanaLabel: semLabel,
         metaSemanal: metaSemTotal, realizadoSemana: realSem, metaEsperadaSemana: espSem,
-        pctCumplimientoSemana: calcularCumplimiento(realSem, metaSemTotal),
+        pctCumplimientoSemana: calcularCumplimiento(realSem, espSem),
         semaforoSemana: getEstadoSemaforo(realSem, espSem),
         diasHabilesSemana: dhSemTotal, diasTranscurridosSemana: dhSemTrans, diasRestantesSemana: dhSemTotal - dhSemTrans,
         faltanteSemana: faltSem,
