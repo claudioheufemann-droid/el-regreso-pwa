@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { RcUser, RcTask, AREA_CFG, eligibleUsers, MACRO_AREAS } from '@/lib/gestion-types'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
@@ -109,6 +110,8 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   const [error, setError] = useState('')
   const [crearOtra, setCrearOtra] = useState(false)
   const [uploadingRef, setUploadingRef] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
@@ -242,7 +245,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   // MOBILE LAYOUT
   // ──────────────────────────────────────────────────────────────────
   if (!isDesktop) {
-    return (
+    const content = (
       <div style={overlayStyle} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
         <div onClick={e => e.stopPropagation()} style={modalStyle}>
 
@@ -588,6 +591,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
         </div>
       </div>
     )
+    return mounted ? createPortal(content, document.body) : null
   }
 
   // ──────────────────────────────────────────────────────────────────
@@ -595,7 +599,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   // ──────────────────────────────────────────────────────────────────
   const LBL: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: '#9CA3AF', letterSpacing: 1.2, textTransform: 'uppercase', display: 'block', marginBottom: 6 }
 
-  return (
+  const desktopContent = (
     <div style={overlayStyle} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div onClick={e => e.stopPropagation()} style={modalStyle}>
 
@@ -903,4 +907,5 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
       </div>
     </div>
   )
+  return mounted ? createPortal(desktopContent, document.body) : null
 }
