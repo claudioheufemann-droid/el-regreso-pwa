@@ -543,7 +543,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
 
           {/* ── STICKY FOOTER ── */}
           <div style={{
-            flexShrink: 0, padding: '16px 20px max(20px, env(safe-area-inset-bottom))',
+            flexShrink: 0, padding: '16px 20px max(96px, env(safe-area-inset-bottom))',
             borderTop: '1px solid rgba(255,255,255,0.07)',
             background: 'rgba(6,11,20,0.95)', backdropFilter: 'blur(12px)',
           }}>
