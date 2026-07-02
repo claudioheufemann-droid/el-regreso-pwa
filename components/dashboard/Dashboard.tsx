@@ -173,7 +173,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   // Admin aterriza en el panel general (KPIs de toda el área). Vendedor/no-admin
   // aterriza directo en sus propias tareas — el panel general mezcla tareas de
   // Marketing/Logística/etc. que no le competen y solo agregan ruido.
-  const [view, setView] = useState<View>(isAdmin ? 'home' : 'mis-tareas')
+  const [view, setView] = useState<View>('mis-tareas')
   const [filterKey, setFilterKey] = useState<FilterKey>('activas')
   const [showNewTask, setShowNewTask] = useState(false)
   // Áreas disponibles para crear tareas según el módulo activo
@@ -302,10 +302,10 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   // CONTENIDO PRINCIPAL (compartido mobile/desktop)
   // ─────────────────────────────────────────────
   const navItems: { key: View; icon: LucideIcon; label: string; adminOnly?: boolean }[] = [
-    { key: 'home',       icon: LayoutGrid,   label: 'Resumen' },
+    { key: 'home',       icon: LayoutGrid,   label: 'Gestión' },
     { key: 'mis-tareas', icon: User,         label: 'Mis Tareas' },
     { key: 'calendar',   icon: CalendarDays, label: 'Calendario' },
-    { key: 'analytics',  icon: BarChart3,    label: 'Gestión', adminOnly: true },
+    { key: 'analytics',  icon: BarChart3,    label: 'Análisis', adminOnly: true },
   ]
   const visibleNavItems = navItems.filter(n => !n.adminOnly || isAdmin)
 
