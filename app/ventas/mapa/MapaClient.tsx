@@ -359,21 +359,19 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
 
       {/* ─── KPI row ─── */}
       <div style={{
-        display: isDesktop ? 'grid' : 'flex',
-        gridTemplateColumns: isDesktop ? 'repeat(5, 1fr)' : undefined,
-        overflowX: isDesktop ? undefined : 'auto',
-        WebkitOverflowScrolling: 'touch',
+        display: 'grid',
+        gridTemplateColumns: isDesktop ? 'repeat(5, 1fr)' : 'repeat(2, 1fr)',
         gap: 10, padding: isDesktop ? '14px 20px 0' : '10px 14px 0', flexShrink: 0,
       }}>
-        <div style={{ minWidth: isDesktop ? undefined : 132, flexShrink: 0 }}><KPICard icon={<Droplets size={16} />} color="#D4AF37" label="Ventas del período" value={`${formatLitros(kpis.litros)} L`} /></div>
-        <div style={{ minWidth: isDesktop ? undefined : 132, flexShrink: 0 }}><KPICard icon={<Users size={16} />} color="#5A8A4A" label="Clientes activos" value={kpis.clientes} /></div>
-        <div style={{ minWidth: isDesktop ? undefined : 132, flexShrink: 0 }}><KPICard icon={<ShoppingCart size={16} />} color="#D4AF37" label="Pedidos" value={kpis.pedidos} /></div>
-        <div style={{ minWidth: isDesktop ? undefined : 132, flexShrink: 0 }}><KPICard icon={<DollarSign size={16} />} color="#8A6D1F" label="Ticket promedio" value={formatPeso(kpis.ticket)} /></div>
-        <div style={{ minWidth: isDesktop ? undefined : 132, flexShrink: 0 }}><KPICard icon={<AlertTriangle size={16} />} color="#B5543E" label="Deuda total" value={formatPeso(deudaGlobal)} alert /></div>
+        <KPICard icon={<Droplets size={16} />} color="#D4AF37" label="Ventas del período" value={`${formatLitros(kpis.litros)} L`} />
+        <KPICard icon={<Users size={16} />} color="#5A8A4A" label="Clientes activos" value={kpis.clientes} />
+        <KPICard icon={<ShoppingCart size={16} />} color="#D4AF37" label="Pedidos" value={kpis.pedidos} />
+        <KPICard icon={<DollarSign size={16} />} color="#8A6D1F" label="Ticket promedio" value={formatPeso(kpis.ticket)} />
+        <KPICard icon={<AlertTriangle size={16} />} color="#B5543E" label="Deuda total" value={formatPeso(deudaGlobal)} alert />
       </div>
 
       {/* ─── Filtros ─── */}
-      <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: isDesktop ? 'wrap' : 'nowrap', overflowX: isDesktop ? undefined : 'auto', WebkitOverflowScrolling: 'touch', padding: isDesktop ? '14px 20px' : '10px 14px' }}>
+      <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap', padding: isDesktop ? '14px 20px' : '10px 14px' }}>
         {/* Play */}
         <button onClick={() => { if (fechaIdx <= 0) setFecha(fechasDisponibles[fechasDisponibles.length - 1]); setPlaying(p => !p) }} title={playing ? 'Pausar' : 'Reproducir línea de tiempo'} style={{ width: 44, height: 44, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', background: playing ? 'rgba(212,175,55,0.15)' : 'var(--surface)', color: playing ? '#D4AF37' : 'var(--muted)', outline: playing ? '1px solid rgba(212,175,55,0.3)' : '1px solid var(--border)', flexShrink: 0 }}>
           {playing ? <Pause size={15} /> : <Play size={15} />}
