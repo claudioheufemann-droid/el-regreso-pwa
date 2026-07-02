@@ -120,7 +120,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-end"
+      className="fixed inset-0 z-[60] flex flex-col justify-end"
       style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
