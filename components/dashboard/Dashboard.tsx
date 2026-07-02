@@ -509,12 +509,12 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
       <ContentArea />
 
       {/* ── Bottom nav flotante — solo mobile, desktop usa tabs ── */}
-      <nav className="lg:hidden" style={{ display: showNewTask ? 'none' : undefined,
+      <nav className="lg:hidden" style={{
         position: 'fixed',
+        display: showNewTask ? 'none' : 'flex',
         bottom: 'max(16px, env(safe-area-inset-bottom))',
         left: '50%',
         transform: 'translateX(-50%)',
-        display: 'flex',
         alignItems: 'center',
         gap: 4,
         background: 'rgba(10,10,10,0.88)',
