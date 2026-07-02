@@ -271,7 +271,7 @@ export default function GestionPanel({ tasks, users, isAdmin, userName, currentU
       </div>
 
       {/* KPI TILES */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
         {kpis.map(k => (
           <button key={k.label} onClick={() => k.tab && setActiveTab(k.tab)}
             style={{ background: k.value > 0 ? k.bg : 'var(--surface)',

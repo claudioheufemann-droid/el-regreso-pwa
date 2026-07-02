@@ -210,6 +210,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     if (!currentMacroArea) return null
     if (currentMacroArea === 'comercial') return [...MACRO_AREAS.comercial.areas]
     if (currentMacroArea === 'administracion') return [...MACRO_AREAS.administracion.areas]
+    if (currentMacroArea === 'produccion') return [...MACRO_AREAS.produccion.areas]
     return null
   })()
 
