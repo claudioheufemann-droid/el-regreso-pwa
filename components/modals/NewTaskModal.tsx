@@ -209,8 +209,8 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
 
   // ── Estilos overlay / modal ────────────────────────────────────────
   const overlayStyle: React.CSSProperties = isDesktop
-    ? { position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }
-    : { position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(10px)' }
+    ? { position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }
+    : { position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(10px)' }
 
   const modalStyle: React.CSSProperties = isDesktop
     ? { width: '100%', maxWidth: 1300, maxHeight: '92vh', background: '#0D1117', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 22, display: 'flex', flexDirection: 'column', boxShadow: '0 40px 100px rgba(0,0,0,0.8)', overflow: 'hidden' }
