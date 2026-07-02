@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { RcTask, AREA_CFG, STATUS_CFG } from '@/lib/gestion-types'
 import Avatar from '@/components/ui/Avatar'
 import { formatDate } from '@/lib/format'
@@ -53,6 +54,9 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
   const [savingAdmin, setSavingAdmin]     = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting]           = useState(false)
+
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   // Photos
   const [lightboxUrl, setLightboxUrl]     = useState<string | null>(null)
@@ -437,12 +441,12 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
   }
 
   // ─────────────────────────────────────────────────────────
-  return (
+  const content = (
     <>
       {/* Overlay */}
       <div
         style={{
-          position: 'fixed', inset: 0, zIndex: 50,
+          position: 'fixed', inset: 0, zIndex: 200,
           background: 'rgba(0,0,0,0.72)',
           backdropFilter: 'blur(6px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -696,4 +700,5 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
       )}
     </>
   )
+  return mounted ? createPortal(content, document.body) : null
 }
