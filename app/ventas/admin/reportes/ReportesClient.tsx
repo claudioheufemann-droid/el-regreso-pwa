@@ -3,9 +3,13 @@
 import { useState, useMemo } from 'react'
 import { useUser } from '@/lib/userContext'
 import { useRouter } from 'next/navigation'
+import AppHeader from '@/components/ui/AppHeader'
 import { useEffect } from 'react'
 import { Shield, Clock, MessageCircle, ShoppingBag, Search } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
+
+const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
 
 interface RowReporte {
   nombre_fantasia: string | null
@@ -32,10 +36,10 @@ function formatFecha(s: string | null) {
 }
 
 function diasColor(dias: number | null) {
-  if (dias === null) return '#F87171'
-  if (dias <= 7) return '#34D399'
-  if (dias <= 14) return '#F59E0B'
-  return '#F87171'
+  if (dias === null) return '#B5543E'
+  if (dias <= 7) return '#5A8A4A'
+  if (dias <= 14) return '#D4AF37'
+  return '#B5543E'
 }
 
 function diasLabel(dias: number | null) {
@@ -59,7 +63,7 @@ export default function ReportesClient({ reporte }: Props) {
 
   const filtrados = useMemo(() => {
     return reporte.filter(r => {
-      if (vendedorFiltro !== 'all' && r.vendedor !== vendedorFiltro) return false
+      if (vendedorFiltro !== 'all' && dspV(r.vendedor) !== vendedorFiltro) return false
       if (tab === 'criticos' && !(r.diasSinContacto === null || r.diasSinContacto > 14)) return false
       if (tab === 'ok' && !(r.diasSinContacto !== null && r.diasSinContacto <= 7)) return false
       if (busqueda) {
@@ -79,27 +83,16 @@ export default function ReportesClient({ reporte }: Props) {
   if (!isAdmin) return null
 
   return (
-    <div style={{ padding: '24px 16px 60px', maxWidth: 1000, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-        <Shield size={20} style={{ color: '#A78BFA' }} />
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, color: 'white', letterSpacing: '-0.5px' }}>
-            Reporte de Comunicación
-          </h1>
-          <p style={{ fontSize: 13, color: '#888', marginTop: 2 }}>
-            Periodicidad de contacto con clientes · últimos 90 días
-          </p>
-        </div>
-      </div>
+    <div style={{ padding: '16px 16px 60px', maxWidth: 1400, margin: '0 auto' }}>
+      <AppHeader title="Reporte de Comunicación" />
 
       {/* KPIs */}
       <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
         {[
           { label: 'Total clientes', val: reporte.length, color: 'white' },
-          { label: 'Críticos (+14d)', val: criticos, color: '#F87171' },
-          { label: 'Al día (≤7d)', val: aTiempo, color: '#34D399' },
-          { label: 'Contactos (90d)', val: totalContactos, color: '#A78BFA' },
+          { label: 'Críticos (+14d)', val: criticos, color: '#B5543E' },
+          { label: 'Al día (≤7d)', val: aTiempo, color: '#5A8A4A' },
+          { label: 'Contactos (90d)', val: totalContactos, color: '#8A6D1F' },
         ].map(k => (
           <div key={k.label} style={{ background: '#141414', border: '1px solid #222', borderRadius: 12, padding: '12px 14px' }}>
             <p style={{ fontSize: 10, color: '#888', marginBottom: 4, fontWeight: 600, letterSpacing: '0.03em' }}>
@@ -125,7 +118,7 @@ export default function ReportesClient({ reporte }: Props) {
               style={{
                 padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
                 border: 'none', cursor: 'pointer',
-                background: tab === t.key ? '#F59E0B' : 'transparent',
+                background: tab === t.key ? '#D4AF37' : 'transparent',
                 color: tab === t.key ? '#000' : '#888',
               }}
             >
@@ -138,8 +131,7 @@ export default function ReportesClient({ reporte }: Props) {
         <div style={{ display: 'flex', gap: 4 }}>
           {[
             { value: 'all', label: 'Todos' },
-            { value: 'Javier Badilla', label: 'Javier' },
-            { value: 'Carlos Urrejola', label: 'Carlos' },
+            { value: 'Vendedor Planta', label: 'Vendedor Planta' },
           ].map(op => (
             <button
               key={op.value}
@@ -197,8 +189,8 @@ export default function ReportesClient({ reporte }: Props) {
               <div>
                 <p style={{ fontSize: 13, fontWeight: 600, color: 'white', lineHeight: 1.2 }}>{r.nombre_fantasia}</p>
                 <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                  <span style={{ fontSize: 10, color: r.vendedor === 'Javier Badilla' ? '#F59E0B' : '#60A5FA', fontWeight: 600 }}>
-                    {r.vendedor === 'Javier Badilla' ? 'Javier' : 'Carlos'}
+                  <span style={{ fontSize: 10, color: '#D4AF37', fontWeight: 600 }}>
+                    {dspV(r.vendedor)}
                   </span>
                   {r.categoria && <span style={{ fontSize: 10, color: '#555' }}>{r.categoria}</span>}
                 </div>
@@ -209,7 +201,7 @@ export default function ReportesClient({ reporte }: Props) {
                 {r.ultimoContacto && <p style={{ fontSize: 10, color: '#555', marginTop: 1 }}>{formatFecha(r.ultimoContacto)}</p>}
               </div>
               <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#F59E0B' : '#34D399' }}>{r.contactos90d}</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#D4AF37' : '#5A8A4A' }}>{r.contactos90d}</span>
               </div>
               <span style={{ fontSize: 12, color: '#888' }}>{formatFecha(r.ultimoPedido)}</span>
               <div>
@@ -239,8 +231,8 @@ export default function ReportesClient({ reporte }: Props) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 14, fontWeight: 700, color: 'white', lineHeight: 1.3, marginBottom: 3 }}>{r.nombre_fantasia}</p>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 10, color: r.vendedor === 'Javier Badilla' ? '#F59E0B' : '#60A5FA', fontWeight: 600 }}>
-                      {r.vendedor === 'Javier Badilla' ? 'Javier' : 'Carlos'}
+                    <span style={{ fontSize: 10, color: '#D4AF37', fontWeight: 600 }}>
+                      {dspV(r.vendedor)}
                     </span>
                     {r.categoria && <span style={{ fontSize: 10, color: '#555' }}>{r.categoria}</span>}
                     {r.ruta_despacho && <span style={{ fontSize: 10, color: '#555' }}>Ruta: {r.ruta_despacho}</span>}
@@ -258,7 +250,7 @@ export default function ReportesClient({ reporte }: Props) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <MessageCircle size={10} color="#555" />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#F59E0B' : '#34D399' }}>{r.contactos90d}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: r.contactos90d === 0 ? '#444' : r.contactos90d < 3 ? '#D4AF37' : '#5A8A4A' }}>{r.contactos90d}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <ShoppingBag size={10} color="#555" />

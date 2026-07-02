@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { notificar } from '@/lib/notificar'
+import { upsertOrQueue } from '@/lib/offlineQueue'
+import { hapticExito } from '@/lib/haptics'
 import { useRouter } from 'next/navigation'
 import {
   MapPin, Camera, CheckCircle, XCircle, ChevronLeft, ChevronDown,
@@ -41,19 +44,19 @@ const FOTO_SLOTS: FotoSlot[] = [
 // ─── Imágenes de producto ─────────────────────────────────────
 
 const PRODUCTO_IMAGENES: Record<string, string> = {
-  'Kombucha Berry Menta':        '/productos/kombucha/berry-menta.png',
-  'Kombucha Detox':              '/productos/kombucha/detox.png',
-  'Kombucha Lemon':              '/productos/kombucha/lemon-fresh.png',
-  'Kombucha Mango':              '/productos/kombucha/mango-merken.png',
-  'Kombucha Maqui':              '/productos/kombucha/maqui-hops.png',
-  'Kombucha Maracuyá Cardamomo': '/productos/kombucha/maracuya-cardamomo.png',
-  'Kombucha Natural':            '/productos/kombucha/natural.png',
-  'Arboretum':                   '/productos/cerveza/arboretum.png',
-  'Mocho English':               '/productos/cerveza/mocho.png',
-  'La Barra APA':                '/productos/cerveza/la-barra.png',
-  'Fisura':                      '/productos/cerveza/fisura.png',
-  'Descenso West Coast IPA':     '/productos/cerveza/descenso.png',
-  'Aguas Blancas':               '/productos/cerveza/aguas-blancas.png',
+  'Kombucha Berry Menta':        '/productos/kombucha/berry-menta.webp',
+  'Kombucha Detox':              '/productos/kombucha/detox.webp',
+  'Kombucha Lemon':              '/productos/kombucha/lemon-fresh.webp',
+  'Kombucha Mango':              '/productos/kombucha/mango-merken.webp',
+  'Kombucha Maqui':              '/productos/kombucha/maqui-hops.webp',
+  'Kombucha Maracuyá Cardamomo': '/productos/kombucha/maracuya-cardamomo.webp',
+  'Kombucha Natural':            '/productos/kombucha/natural.webp',
+  'Arboretum':                   '/productos/cerveza/arboretum.webp',
+  'Mocho English':               '/productos/cerveza/mocho.webp',
+  'La Barra APA':                '/productos/cerveza/la-barra.webp',
+  'Fisura':                      '/productos/cerveza/fisura.webp',
+  'Descenso West Coast IPA':     '/productos/cerveza/descenso.webp',
+  'Aguas Blancas':               '/productos/cerveza/aguas-blancas.webp',
 }
 
 function ProductoThumb({ nombre, categoria, size = 44 }: { nombre: string; categoria: string; size?: number }) {
@@ -98,6 +101,7 @@ interface CatalogoInfo {
 }
 
 const CATALOGO_INFO: Record<string, CatalogoInfo> = {
+  'Nitro Coffee':                { estilo: 'Nitro Cold Brew',           precio_lata: 0,    precio_barril: 120000, envase_ml: 470, descripcion: 'Cold brew de café con nitrógeno. Cremoso, suave y con notas a chocolate y avellana.' },
   'Arboretum':                   { estilo: 'Kölsch',                   precio_lata: 2100, precio_barril: 83000,  envase_ml: 470, descripcion: 'Color amarillo pajizo, aromas a grano y pan con notas florales. Super ligera y fácil de beber.' },
   'Mocho English':               { estilo: 'English Red Ale',          precio_lata: 2100, precio_barril: 83000,  envase_ml: 470, abv: '5.5%', ibu: '25', descripcion: 'Rojizo brillante con aromas a galleta, almendras y caramelo. Retrogusto semi dulce y tostado.' },
   'La Barra APA':                { estilo: 'American Pale Ale',        precio_lata: 2250, precio_barril: 90000,  envase_ml: 470, descripcion: 'Dorado intenso y cítrico con lúpulos Citra y Cascade. Amargor medio y final seco.' },
@@ -443,7 +447,7 @@ function VentaImageModal({ items, clienteNombre, vendedorNombre, onClose }: {
               <p style={{ fontSize: 13, color: 'var(--muted)' }}>Generando imagen…</p>
             </div>
           )}
-          {estado === 'error' && <p style={{ fontSize: 13, color: '#FF5555', padding: 24 }}>Error al generar la imagen</p>}
+          {estado === 'error' && <p style={{ fontSize: 13, color: '#B5543E', padding: 24 }}>Error al generar la imagen</p>}
           {estado === 'listo' && previewUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={previewUrl} alt="Pedido" style={{ width: '100%', display: 'block' }} />
@@ -513,10 +517,10 @@ function DeudaSection({ clienteNombre }: { clienteNombre: string }) {
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
         borderRadius: 12, marginBottom: 16,
-        background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)',
+        background: 'rgba(90,138,74,0.06)', border: '1px solid rgba(90,138,74,0.2)',
       }}>
-        <CheckCircle size={16} color="#4ADE80" />
-        <p style={{ fontSize: 13, color: '#4ADE80', fontWeight: 600 }}>Cliente al día — sin deuda pendiente</p>
+        <CheckCircle size={16} color="#5A8A4A" />
+        <p style={{ fontSize: 13, color: '#5A8A4A', fontWeight: 600 }}>Cliente al día — sin deuda pendiente</p>
       </div>
     )
   }
@@ -528,26 +532,26 @@ function DeudaSection({ clienteNombre }: { clienteNombre: string }) {
         onClick={() => setExpanded(e => !e)}
         style={{
           display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', cursor: 'pointer',
-          background: 'rgba(255,85,85,0.08)', border: '1px solid rgba(255,85,85,0.3)',
+          background: 'rgba(181,84,62,0.08)', border: '1px solid rgba(181,84,62,0.3)',
           borderRadius: expanded ? '12px 12px 0 0' : 12,
         }}
       >
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(255,85,85,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <AlertTriangle size={18} color="#FF5555" />
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(181,84,62,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <AlertTriangle size={18} color="#B5543E" />
         </div>
         <div style={{ flex: 1 }}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: '#FF5555', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 2 }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#B5543E', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 2 }}>
             Saldo pendiente · {saldo.dias_credito} días de crédito
           </p>
           <p style={{ fontSize: 20, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-0.5px' }}>
             {fmtPrecioCLP(saldo.monto_deuda)}
           </p>
         </div>
-        <ChevronDown size={16} color="#FF5555" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
+        <ChevronDown size={16} color="#B5543E" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
       </div>
 
       {expanded && (
-        <div style={{ background: 'rgba(255,85,85,0.04)', border: '1px solid rgba(255,85,85,0.2)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '12px 16px' }}>
+        <div style={{ background: 'rgba(181,84,62,0.04)', border: '1px solid rgba(181,84,62,0.2)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '12px 16px' }}>
           {saldo.facturas_vencidas.length === 0 ? (
             <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '12px 0' }}>
               Sin detalle de facturas disponible
@@ -556,7 +560,7 @@ function DeudaSection({ clienteNombre }: { clienteNombre: string }) {
             <div key={i} style={{ padding: '10px 12px', borderRadius: 10, marginBottom: 6, background: 'rgba(0,0,0,0.25)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>Doc #{f.numero}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#FF5555', background: 'rgba(255,85,85,0.12)', padding: '2px 8px', borderRadius: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#B5543E', background: 'rgba(181,84,62,0.12)', padding: '2px 8px', borderRadius: 6 }}>
                   {f.dias_atraso}d atraso
                 </span>
               </div>
@@ -593,6 +597,16 @@ interface VisitaRetomada {
   lat: number | null
   lng: number | null
   direccion_gps: string | null
+  estado?: string
+}
+
+interface DeudorInfo {
+  nombre_fantasia: string
+  saldo_total: number
+  deuda_vencida: number
+  ultimo_pago: string | null
+  fecha_ultima_compra: string | null
+  limite_cta_cte: number | null
 }
 
 interface Props {
@@ -600,6 +614,8 @@ interface Props {
   clientesExistentes: ClienteExistente[]
   catalogoProductos: Producto[]
   visitaRetomada?: VisitaRetomada | null
+  deudores?: DeudorInfo[]
+  clientePre?: string | null
 }
 
 // ─── Selector de cantidad editable ───────────────────────────
@@ -686,23 +702,26 @@ function CantidadInput({
 // ─── Step indicator ───────────────────────────────────────────
 
 function StepBar({ paso, total }: { paso: number; total: number }) {
+  const pct = Math.round((paso / total) * 100)
   return (
-    <div style={{ display: 'flex', gap: 4, padding: '0 20px' }}>
-      {Array.from({ length: total }).map((_, i) => (
-        <div key={i} style={{
-          flex: 1, height: 3, borderRadius: 2,
-          background: i < paso ? T : 'rgba(255,255,255,0.1)',
-          transition: 'background 0.3s',
+    <div style={{ padding: '0 20px' }}>
+      <div style={{ height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{
+          height: '100%', width: `${pct}%`, borderRadius: 2,
+          background: 'linear-gradient(90deg, #B8962E 0%, #D4AF37 60%, #F0D060 100%)',
+          boxShadow: '0 0 10px rgba(212,175,55,0.7)',
+          transition: 'width 0.5s cubic-bezier(0.16,1,0.3,1)',
         }} />
-      ))}
+      </div>
     </div>
   )
 }
 
 // ─── Paso 1: Selección de cliente ────────────────────────────
 
-function Paso1Cliente({ clientes, onConfirmar }: {
+function Paso1Cliente({ clientes, deudores, onConfirmar }: {
   clientes: ClienteExistente[]
+  deudores: DeudorInfo[]
   onConfirmar: (nombre: string, esNuevo: boolean, canal: string) => void
 }) {
   const [tab, setTab] = useState<'existente' | 'nuevo'>('existente')
@@ -766,7 +785,53 @@ function Paso1Cliente({ clientes, onConfirmar }: {
               ))}
             </div>
           </>
-        ) : (
+        ) : (<>
+          {/* Badge de deuda si hay cliente seleccionado */}
+          {(() => {
+            const d = seleccionado ? deudores.find(x => x.nombre_fantasia === seleccionado.nombre_fantasia) : null
+            if (!d) return null
+            const tieneDeuda = d.saldo_total > 0
+            const color = d.deuda_vencida > 0 ? '#B5543E' : '#D4AF37'
+            const rgb   = d.deuda_vencida > 0 ? '239,68,68' : '245,158,11'
+            if (!tieneDeuda) return (
+              <div style={{ margin: '8px 0 4px', padding: '10px 14px', background: 'rgba(90,138,74,0.07)', border: '1px solid rgba(90,138,74,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle size={14} color="#5A8A4A" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#5A8A4A' }}>Cliente al día — sin deuda pendiente</span>
+              </div>
+            )
+            return (
+              <div style={{ margin: '8px 0 4px', padding: '12px 14px', background: `rgba(${rgb},0.07)`, border: `1px solid rgba(${rgb},0.25)`, borderRadius: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 14 }}>{d.deuda_vencida > 0 ? '⚠️' : '💰'}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {d.deuda_vencida > 0 ? 'Deuda vencida' : 'Saldo pendiente'}
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Saldo total</p>
+                    <p style={{ fontSize: 16, fontWeight: 900, color, letterSpacing: '-0.5px' }}>
+                      {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(d.saldo_total)}
+                    </p>
+                  </div>
+                  {d.deuda_vencida > 0 && (
+                    <div>
+                      <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Vencida</p>
+                      <p style={{ fontSize: 16, fontWeight: 900, color: '#B5543E', letterSpacing: '-0.5px' }}>
+                        {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(d.deuda_vencida)}
+                      </p>
+                    </div>
+                  )}
+                  {d.ultimo_pago && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Último pago</p>
+                      <p style={{ fontSize: 11, color: '#F4EEDF' }}>{new Date(d.ultimo_pago).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
               { label: 'Nombre de fantasía *', value: nombre, onChange: setNombre, placeholder: 'Ej: Bar El Cóndor' },
@@ -789,10 +854,10 @@ function Paso1Cliente({ clientes, onConfirmar }: {
               </select>
             </div>
           </div>
-        )}
+        </>)}
       </div>
 
-      <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+      <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
         <button
           onClick={() => {
             if (tab === 'existente' && seleccionado) onConfirmar(seleccionado.nombre_fantasia, false, seleccionado.categoria_negocio ?? '')
@@ -815,12 +880,14 @@ function Paso1Cliente({ clientes, onConfirmar }: {
 
 // ─── Paso 2: Check-in GPS + Fotos ────────────────────────────
 
-function Paso2Checkin({ onConfirmar }: {
-  onConfirmar: (coords: { lat: number; lng: number; addr: string }, fotos: Record<string, string>) => void
+function Paso2Checkin({ onConfirmar, onCancelar }: {
+  onConfirmar: (coords: { lat: number; lng: number; addr: string }, fotos: Record<string, string>, fotosFiles: Record<string, File>) => void
+  onCancelar: () => void
 }) {
   const [gps, setGps] = useState<{ lat: number; lng: number; addr: string } | null>(null)
   const [gpsError, setGpsError] = useState(false)
   const [fotos, setFotos] = useState<Record<string, string>>({})
+  const [fotosFiles, setFotosFiles] = useState<Record<string, File>>({})
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => {
@@ -835,6 +902,7 @@ function Paso2Checkin({ onConfirmar }: {
     const file = e.target.files?.[0]
     if (!file) return
     setFotos(prev => ({ ...prev, [key]: URL.createObjectURL(file) }))
+    setFotosFiles(prev => ({ ...prev, [key]: file }))
   }
 
   const fotosListas = FOTO_SLOTS.filter(s => fotos[s.key]).length
@@ -844,13 +912,13 @@ function Paso2Checkin({ onConfirmar }: {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
         {/* GPS */}
-        <div style={{ background: '#1C1C1C', borderRadius: 14, padding: '14px 16px', marginBottom: 20, border: `1px solid ${gps ? T_BORDER : gpsError ? 'rgba(255,77,77,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
+        <div style={{ background: '#1C1C1C', borderRadius: 14, padding: '14px 16px', marginBottom: 20, border: `1px solid ${gps ? T_BORDER : gpsError ? 'rgba(181,84,62,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: gps ? T_DIM : gpsError ? 'rgba(255,77,77,0.1)' : 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <MapPin size={18} color={gps ? T : gpsError ? '#FF4D4D' : 'var(--muted)'} />
+            <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: gps ? T_DIM : gpsError ? 'rgba(181,84,62,0.1)' : 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <MapPin size={18} color={gps ? T : gpsError ? '#B5543E' : 'var(--muted)'} />
             </div>
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: gps ? T : gpsError ? '#FF4D4D' : 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: gps ? T : gpsError ? '#B5543E' : 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 {gps ? 'Ubicación capturada' : gpsError ? 'GPS no disponible' : 'Capturando ubicación…'}
               </p>
               {gps && <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{gps.addr}</p>}
@@ -896,13 +964,19 @@ function Paso2Checkin({ onConfirmar }: {
         {!listo && <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 8 }}>{!gps ? 'Esperando GPS…' : `Falta${fotosListas < 3 ? ` ${3 - fotosListas} foto${3 - fotosListas > 1 ? 's' : ''}` : ''}`}</p>}
       </div>
 
-      <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
-        <button onClick={() => gps && onConfirmar(gps, fotos)} disabled={!listo} style={{
+      <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
+        <button onClick={() => gps && onConfirmar(gps, fotos, fotosFiles)} disabled={!listo} style={{
           width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed',
           background: listo ? T : 'rgba(255,255,255,0.06)', color: listo ? '#080808' : 'var(--muted)',
           fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px', transition: 'all 0.2s',
         }}>
           {listo ? 'Iniciar visita →' : `GPS + ${3 - fotosListas} foto${3 - fotosListas !== 1 ? 's' : ''} pendiente${3 - fotosListas !== 1 ? 's' : ''}`}
+        </button>
+        <button onClick={onCancelar} style={{
+          width: '100%', padding: '13px 0', marginTop: 10, borderRadius: 12, border: '1px solid rgba(248,113,113,0.25)',
+          background: 'transparent', color: '#F87171', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        }}>
+          Cancelar visita
         </button>
       </div>
     </div>
@@ -1071,7 +1145,7 @@ function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
         )}
       </div>
 
-      <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+      <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
         <button onClick={() => onContinuar(Array.from(carritoSug.values()))} style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: 'pointer', background: T, color: '#080808', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}>
           {carritoSug.size > 0 ? `Ir a la Venta · ${Array.from(carritoSug.values()).reduce((s, i) => s + i.cantidad, 0)} ud. →` : 'Ir a la Venta →'}
         </button>
@@ -1089,10 +1163,12 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   carritoInicial?: ItemCarrito[]
   onCerrar: (carrito: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string) => void
 }) {
-  const [tabCat, setTabCat] = useState<'Cerveza' | 'Kombucha'>('Cerveza')
+  const [tabCat, setTabCat]     = useState<'Cerveza' | 'Kombucha'>('Cerveza')
+  const [tabEnvase, setTabEnvase] = useState<'lata' | 'barril'>('lata')
   const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(() => {
     const m = new Map<string, ItemCarrito>()
-    for (const i of carritoInicial ?? []) m.set(i.producto, i)
+    // Key: "producto|envase" para permitir lata y barril del mismo producto
+    for (const i of carritoInicial ?? []) m.set(`${i.producto}|${i.envase}`, i)
     return m
   })
   const [showCierre, setShowCierre] = useState(false)
@@ -1103,19 +1179,40 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   const [waModal, setWaModal] = useState<null | 'catalogo'>(null)
   const [showImagenModal, setShowImagenModal] = useState(false)
 
-  const prodsFiltrados = productos
-    .filter(p => (p.categoria_producto ?? '').toLowerCase().includes(tabCat.toLowerCase()))
-    .filter(p => !!PRODUCTO_IMAGENES[p.producto])
-    .sort((a, b) => (a.producto ?? '').localeCompare(b.producto ?? ''))
+  // Siempre usa CATALOGO_INFO como fuente de verdad — evita depender de la BD
+  const esBarril = tabEnvase === 'barril'
+  const envaseName = esBarril ? 'Barril 30L' : 'Lata'
+
+  const prodsFiltrados: Producto[] = Object.entries(CATALOGO_INFO)
+    .filter(([, info]) => {
+      const esKom = info.estilo.toLowerCase().includes('kombucha')
+      if (tabCat === 'Kombucha' ? !esKom : esKom) return false
+      // En modo barril: solo mostrar los que tienen precio de barril
+      if (esBarril && info.precio_barril <= 0) return false
+      // En modo lata: solo mostrar los que tienen precio de lata
+      if (!esBarril && info.precio_lata <= 0) return false
+      return true
+    })
+    .map(([nombre, info]) => ({
+      producto: nombre,
+      categoria_producto: info.estilo.toLowerCase().includes('kombucha') ? 'Kombucha' : 'Cerveza',
+      envase: envaseName,
+    }))
+    .sort((a, b) => a.producto.localeCompare(b.producto))
+
+  function cartKey(producto: string, envase: string) { return `${producto}|${envase}` }
 
   function ajustar(prod: Producto, delta: number) {
     setCarrito(prev => {
       const next = new Map(prev)
-      const key = prod.producto
+      const key = cartKey(prod.producto, prod.envase ?? envaseName)
       const actual = next.get(key)?.cantidad ?? 0
       const nueva = actual + delta
       if (nueva <= 0) { next.delete(key); return next }
-      next.set(key, { producto: prod.producto, categoria: prod.categoria_producto ?? '', envase: prod.envase ?? '', cantidad: nueva, precio: CATALOGO_INFO[prod.producto]?.precio_lata ?? 0 })
+      const precio = esBarril
+        ? (CATALOGO_INFO[prod.producto]?.precio_barril ?? 0)
+        : (CATALOGO_INFO[prod.producto]?.precio_lata ?? 0)
+      next.set(key, { producto: prod.producto, categoria: prod.categoria_producto ?? '', envase: prod.envase ?? envaseName, cantidad: nueva, precio })
       return next
     })
   }
@@ -1188,8 +1285,8 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           )}
 
           {/* Sin venta */}
-          <div onClick={() => setSinVenta(true)} style={{ borderRadius: 14, padding: '16px', marginBottom: 16, cursor: 'pointer', background: sinVenta ? 'rgba(255,77,77,0.06)' : '#1C1C1C', border: `2px solid ${sinVenta ? 'rgba(255,77,77,0.4)' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <XCircle size={22} color={sinVenta ? '#FF4D4D' : 'var(--muted)'} />
+          <div onClick={() => setSinVenta(true)} style={{ borderRadius: 14, padding: '16px', marginBottom: 16, cursor: 'pointer', background: sinVenta ? 'rgba(181,84,62,0.06)' : '#1C1C1C', border: `2px solid ${sinVenta ? 'rgba(181,84,62,0.4)' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <XCircle size={22} color={sinVenta ? '#B5543E' : 'var(--muted)'} />
             <div>
               <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>Visita sin venta</p>
               <p style={{ fontSize: 12, color: 'var(--muted)' }}>Registrar motivo de no cierre</p>
@@ -1201,7 +1298,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 8 }}>Motivo</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {MOTIVOS_SIN_VENTA.map(m => (
-                  <div key={m} onClick={() => setMotivo(m)} style={{ padding: '12px 14px', borderRadius: 10, cursor: 'pointer', background: motivo === m ? 'rgba(255,77,77,0.08)' : '#1C1C1C', border: `1px solid ${motivo === m ? 'rgba(255,77,77,0.4)' : 'rgba(255,255,255,0.06)'}`, fontSize: 14, color: motivo === m ? '#FF4D4D' : '#F4EEDF', fontWeight: motivo === m ? 700 : 400 }}>
+                  <div key={m} onClick={() => setMotivo(m)} style={{ padding: '12px 14px', borderRadius: 10, cursor: 'pointer', background: motivo === m ? 'rgba(181,84,62,0.08)' : '#1C1C1C', border: `1px solid ${motivo === m ? 'rgba(181,84,62,0.4)' : 'rgba(255,255,255,0.06)'}`, fontSize: 14, color: motivo === m ? '#B5543E' : '#F4EEDF', fontWeight: motivo === m ? 700 : 400 }}>
                     {m}
                   </div>
                 ))}
@@ -1216,7 +1313,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           </div>
         </div>
 
-        <div style={{ padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+        <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
           <button
             onClick={() => { if (sinVenta && !motivo) return; onCerrar(items, !sinVenta, motivo, obs) }}
             disabled={sinVenta && !motivo}
@@ -1245,32 +1342,107 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   // Pantalla catálogo
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Tabs + botón catálogo WA */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 16px 0' }}>
-        <div style={{ flex: 1, display: 'flex', borderRadius: 12, background: '#1C1C1C', padding: 4, gap: 4 }}>
-          {(['Cerveza', 'Kombucha'] as const).map(cat => (
-            <button key={cat} onClick={() => setTabCat(cat)} style={{
-              flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
-              background: tabCat === cat ? C : 'transparent',
-              color: tabCat === cat ? '#fff' : 'var(--muted)',
-              fontSize: 14, fontWeight: 700, transition: 'all 0.15s',
-            }}>
-              {cat === 'Cerveza' ? '🍺' : '🫧'} {cat}
-            </button>
-          ))}
+      {/* ── Selectors premium ── */}
+      <div style={{ padding: '20px 18px 0' }}>
+
+        {/* Selector PRODUCTO */}
+        <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.22)', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 8 }}>PRODUCTO</p>
+        <div style={{
+          display: 'flex',
+          background: 'rgba(255,255,255,0.035)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 18, padding: 5,
+          backdropFilter: 'blur(20px)',
+        }}>
+          {([
+            { key: 'Cerveza', label: 'Cerveza', icon: '🍺' },
+            { key: 'Kombucha', label: 'Kombucha', icon: '🫧' },
+          ] as const).map(opt => {
+            const active = tabCat === opt.key
+            return (
+              <button key={opt.key} onClick={() => setTabCat(opt.key)} style={{
+                flex: 1, padding: '13px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
+                background: active
+                  ? 'linear-gradient(145deg, rgba(212,175,55,0.22) 0%, rgba(212,175,55,0.10) 100%)'
+                  : 'transparent',
+                boxShadow: active
+                  ? '0 0 24px rgba(212,175,55,0.12), inset 0 0 0 1px rgba(212,175,55,0.22)'
+                  : 'none',
+                transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ fontSize: 22, lineHeight: 1 }}>{opt.icon}</span>
+                <span style={{ fontSize: 13, fontWeight: active ? 600 : 500, color: active ? '#F0D060' : 'rgba(255,255,255,0.3)', letterSpacing: '-0.1px', transition: 'color 0.2s' }}>
+                  {opt.label}
+                </span>
+              </button>
+            )
+          })}
         </div>
-        {/* Botón enviar catálogo */}
+
+        {/* Selector FORMATO */}
+        <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.22)', letterSpacing: '2px', textTransform: 'uppercase', marginTop: 16, marginBottom: 8 }}>FORMATO</p>
+        <div style={{
+          display: 'flex',
+          background: 'rgba(255,255,255,0.035)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 18, padding: 5,
+          backdropFilter: 'blur(20px)',
+        }}>
+          {([
+            { key: 'lata',   label: 'Lata',       icon: '🥫' },
+            { key: 'barril', label: 'Barril 30L',  icon: '🛢️' },
+          ] as const).map(opt => {
+            const active = tabEnvase === opt.key
+            return (
+              <button key={opt.key} onClick={() => setTabEnvase(opt.key)} style={{
+                flex: 1, padding: '13px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
+                background: active
+                  ? 'linear-gradient(145deg, rgba(212,175,55,0.22) 0%, rgba(212,175,55,0.10) 100%)'
+                  : 'transparent',
+                boxShadow: active
+                  ? '0 0 24px rgba(212,175,55,0.12), inset 0 0 0 1px rgba(212,175,55,0.22)'
+                  : 'none',
+                transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ fontSize: 22, lineHeight: 1 }}>{opt.icon}</span>
+                <span style={{ fontSize: 13, fontWeight: active ? 600 : 500, color: active ? '#F0D060' : 'rgba(255,255,255,0.3)', letterSpacing: '-0.1px', transition: 'color 0.2s' }}>
+                  {opt.label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Info barril */}
+        {esBarril && (
+          <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 12, background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.12)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14 }}>🛢️</span>
+            <span style={{ fontSize: 11, color: 'rgba(212,175,55,0.65)', fontWeight: 500 }}>
+              Barril de <strong style={{ color: '#D4AF37' }}>30 litros</strong> · Precio con IVA incluido
+            </span>
+          </div>
+        )}
+
+        {/* Botón enviar catálogo por WA */}
         <button
           onClick={() => setWaModal('catalogo')}
-          title="Enviar catálogo por WhatsApp"
-          style={{ width: 44, height: 44, borderRadius: 12, border: `1px solid rgba(37,211,102,0.3)`, background: 'rgba(37,211,102,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+          style={{
+            marginTop: 12, width: '100%', padding: '11px 0',
+            borderRadius: 14, border: '1px solid rgba(37,211,102,0.18)',
+            background: 'rgba(37,211,102,0.05)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            cursor: 'pointer',
+          }}
         >
-          <Share2 size={18} color={WA} />
+          <Share2 size={14} color={WA} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: WA }}>Enviar catálogo por WhatsApp</span>
         </button>
       </div>
 
       {/* Lista productos */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }}>
         {prodsFiltrados.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <Package size={32} color="var(--muted)" style={{ margin: '0 auto 10px' }} />
@@ -1279,25 +1451,42 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {prodsFiltrados.map(p => {
-              const cant = carrito.get(p.producto)?.cantidad ?? 0
+              const key = cartKey(p.producto, p.envase ?? envaseName)
+              const cant   = carrito.get(key)?.cantidad ?? 0
+              const info   = CATALOGO_INFO[p.producto]
+              const precio = esBarril ? (info?.precio_barril ?? 0) : (info?.precio_lata ?? 0)
+              const unidadLabel = esBarril ? '/ barril' : '/ lata'
               return (
-                <div key={p.producto} style={{ background: cant > 0 ? C_DIM : '#1C1C1C', border: `1px solid ${cant > 0 ? C_BORDER : 'rgba(255,255,255,0.06)'}`, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.15s' }}>
-                  <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} size={46} />
+                <div key={key} style={{
+                  background: cant > 0
+                    ? 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.04) 100%)'
+                    : 'rgba(255,255,255,0.025)',
+                  border: `1px solid ${cant > 0 ? 'rgba(212,175,55,0.18)' : 'rgba(255,255,255,0.055)'}`,
+                  borderRadius: 18,
+                  padding: '14px 16px',
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
+                  boxShadow: cant > 0 ? '0 0 20px rgba(212,175,55,0.07)' : 'none',
+                }}>
+                  <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} size={48} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{p.producto}</p>
-                    {CATALOGO_INFO[p.producto]?.estilo && (
-                      <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>{CATALOGO_INFO[p.producto].estilo}</p>
-                    )}
-                    {CATALOGO_INFO[p.producto]?.precio_lata && (
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                        <p style={{ fontSize: 17, fontWeight: 900, color: C, letterSpacing: '-0.5px', lineHeight: 1 }}>
-                          {fmtPrecioCLP(CATALOGO_INFO[p.producto].precio_lata)}
-                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>/ lata</span>
-                        </p>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: '#F0EDE8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2, letterSpacing: '-0.2px' }}>
+                      {p.producto}
+                    </p>
+                    <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 6, fontWeight: 500 }}>
+                      {info?.estilo}
+                      {esBarril && <span style={{ marginLeft: 6, color: 'rgba(212,175,55,0.6)', fontWeight: 600 }}>· 30 L</span>}
+                    </p>
+                    {precio > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <span style={{ fontSize: 16, fontWeight: 700, color: '#D4AF37', letterSpacing: '-0.4px', lineHeight: 1 }}>
+                          {fmtPrecioCLP(precio)}
+                        </span>
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: 500 }}>{unidadLabel}</span>
                         {cant > 0 && (
-                          <p style={{ fontSize: 17, fontWeight: 900, color: C, letterSpacing: '-0.5px', lineHeight: 1, opacity: 0.65 }}>
-                            = {fmtPrecioCLP(cant * CATALOGO_INFO[p.producto].precio_lata)}
-                          </p>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(212,175,55,0.55)', letterSpacing: '-0.2px' }}>
+                            · {fmtPrecioCLP(cant * precio)}
+                          </span>
                         )}
                       </div>
                     )}
@@ -1309,8 +1498,8 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
                       onchange={n => {
                         setCarrito(prev => {
                           const next = new Map(prev)
-                          if (n <= 0) { next.delete(p.producto); return next }
-                          next.set(p.producto, { producto: p.producto, categoria: p.categoria_producto ?? '', envase: p.envase ?? '', cantidad: n, precio: CATALOGO_INFO[p.producto]?.precio_lata ?? 0 })
+                          if (n <= 0) { next.delete(key); return next }
+                          next.set(key, { producto: p.producto, categoria: p.categoria_producto ?? '', envase: p.envase ?? envaseName, cantidad: n, precio })
                           return next
                         })
                       }}
@@ -1328,9 +1517,12 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
         {showCartDetail && items.length > 0 && (
           <div style={{ background: '#131313', border: `1px solid ${C_BORDER}`, borderRadius: '14px 14px 0 0', overflow: 'hidden', marginBottom: -1 }}>
             {items.map((item, i) => (
-              <div key={item.producto} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+              <div key={`${item.producto}|${item.envase}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
                 <ProductoThumb nombre={item.producto} categoria={item.categoria} size={30} />
-                <p style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{item.producto}</p>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto}</p>
+                  {item.envase && <p style={{ fontSize: 10, color: 'var(--muted)' }}>{item.envase}</p>}
+                </div>
                 <span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>×{item.cantidad}</span>
                 {item.precio > 0 && (
                   <span style={{ fontSize: 13, fontWeight: 800, color: C, flexShrink: 0, minWidth: 64, textAlign: 'right' }}>
@@ -1348,7 +1540,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
       </div>
 
       {/* Carrito flotante */}
-      <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+      <div style={{ padding: '12px 16px', paddingBottom: 'max(76px, calc(64px + env(safe-area-inset-bottom)))' }}>
         <div style={{ display: 'flex', gap: 8 }}>
           {/* Botón ver detalle */}
           {totalItems > 0 && (
@@ -1389,7 +1581,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
 
 // ─── Wizard principal ─────────────────────────────────────────
 
-export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos, visitaRetomada }: Props) {
+export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos, visitaRetomada, deudores = [], clientePre = null }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -1408,41 +1600,160 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     visitaRetomada?.lat ? { lat: visitaRetomada.lat, lng: visitaRetomada.lng!, addr: visitaRetomada.direccion_gps ?? '' } : null
   )
   const [carritoInicial, setCarritoInicial] = useState<ItemCarrito[]>([])
+  const [syncPendiente, setSyncPendiente] = useState(false)
 
   const totalPasos = cliente?.esNuevo ? 3 : 4
 
+  // Draft acumulativo de la visita: cada escritura es un upsert con TODOS los
+  // campos conocidos hasta el momento. Así, si se reintenta offline en
+  // cualquier orden, nunca se pisa un campo con null por accidente.
+  const visitaDraft = useRef<Record<string, unknown>>(
+    visitaRetomada ? {
+      id: visitaRetomada.id, vendedor_id: vendedor.id,
+      cliente_nombre: visitaRetomada.cliente_nombre, es_cliente_nuevo: visitaRetomada.es_cliente_nuevo,
+      estado: visitaRetomada.estado,
+      ...(visitaRetomada.lat ? { lat: visitaRetomada.lat, lng: visitaRetomada.lng, direccion_gps: visitaRetomada.direccion_gps } : {}),
+    } : {}
+  )
+
   async function onClienteConfirmado(nombre: string, esNuevo: boolean, canal: string) {
     setCliente({ nombre, esNuevo, canal })
-    const { data } = await supabase.from('visitas_terreno').insert({
-      vendedor_id: vendedor.id, cliente_nombre: nombre, es_cliente_nuevo: esNuevo, estado: 'en_progreso',
-    }).select('id').single()
-    if (data) setVisitaId(data.id)
+    // ID generado en el cliente — no depende de la red para existir,
+    // así el resto del flujo (check-in, catálogo) puede avanzar sin conexión.
+    const id = crypto.randomUUID()
+    setVisitaId(id)
+    visitaDraft.current = {
+      id, vendedor_id: vendedor.id, cliente_nombre: nombre, es_cliente_nuevo: esNuevo, estado: 'en_progreso',
+    }
+    setSyncPendiente(true)
+    upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
     setPaso(2)
   }
 
-  async function onCheckinConfirmado(coords: { lat: number; lng: number; addr: string }, _fotos: Record<string, string>) {
+  // Pedido rápido: si llegamos con ?cliente=Nombre (desde misiones / detalle de
+  // cliente), pre-seleccionamos ese cliente y arrancamos directo en el check-in.
+  const pedidoRapidoRef = useRef(false)
+  useEffect(() => {
+    if (pedidoRapidoRef.current) return
+    if (!clientePre || visitaRetomada || cliente) return
+    pedidoRapidoRef.current = true
+    const c = clientesExistentes.find(x => x.nombre_fantasia?.toLowerCase().trim() === clientePre.toLowerCase().trim())
+    onClienteConfirmado(clientePre, !c, c?.categoria_negocio ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientePre])
+
+  async function onCheckinConfirmado(
+    coords: { lat: number; lng: number; addr: string },
+    _fotos: Record<string, string>,
+    fotosFiles: Record<string, File>,
+  ) {
     setGps(coords)
-    if (visitaId) await supabase.from('visitas_terreno').update({ lat: coords.lat, lng: coords.lng, direccion_gps: coords.addr }).eq('id', visitaId)
+    if (!visitaId) { setPaso(3); return }
+
+    // Subir fotos a Supabase Storage y obtener URLs públicas
+    const photoUrls: Record<string, string | null> = {
+      foto_exterior: null,
+      foto_exhibicion: null,
+      foto_competencia: null,
+    }
+    const keyMap: Record<string, string> = {
+      exterior: 'foto_exterior',
+      exhibicion: 'foto_exhibicion',
+      competencia: 'foto_competencia',
+    }
+    // Sin conexión: las fotos no se pueden encolar (binarios), se omiten sin
+    // bloquear el flujo. El pedido y los datos del cliente sí se preservan.
+    await Promise.all(
+      Object.entries(fotosFiles).map(async ([key, file]) => {
+        try {
+          const path = `${visitaId}/${key}.jpg`
+          const { error } = await supabase.storage
+            .from('terreno-fotos')
+            .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
+          if (!error) {
+            const { data: { publicUrl } } = supabase.storage
+              .from('terreno-fotos')
+              .getPublicUrl(path)
+            photoUrls[keyMap[key]] = publicUrl
+          }
+        } catch { /* sin conexión — se omite la foto, no bloquea el flujo */ }
+      })
+    )
+
+    visitaDraft.current = {
+      ...visitaDraft.current,
+      id: visitaId,
+      lat: coords.lat, lng: coords.lng, direccion_gps: coords.addr,
+      ...photoUrls,
+    }
+    setSyncPendiente(true)
+    upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
+
     setPaso(3)
   }
 
   function onVista360Continuar(items: ItemCarrito[]) { setCarritoInicial(items); setPaso(4) }
+
+  // Cancelar visita en curso: borra la fila si llegó a guardarse (best-effort,
+  // si está offline no importa: nunca habrá quedado registrada como completada)
+  // y vuelve al Hub de Terreno sin dejar rastro.
+  async function cancelarVisita() {
+    if (!window.confirm('¿Cancelar esta visita? Quedará registrada como cancelada.')) return
+    if (visitaId) {
+      // No se borra: queda en el historial como 'cancelada' para mantener
+      // registro completo de todo lo que pasa en terreno (auditoría).
+      visitaDraft.current = { ...visitaDraft.current, id: visitaId, estado: 'cancelada', completada_at: new Date().toISOString() }
+      await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
+    }
+    router.push('/terreno')
+  }
 
   async function onCerrar(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string) {
     if (!visitaId) return
     setGuardando(true)
     try {
       const total = items.reduce((s, i) => s + i.cantidad * (i.precio || CATALOGO_INFO[i.producto]?.precio_lata || 0), 0)
-      await supabase.from('visitas_terreno').update({
+
+      visitaDraft.current = {
+        ...visitaDraft.current,
+        id: visitaId,
         tiene_venta: tienVenta, motivo_sin_venta: tienVenta ? null : motivo,
         observaciones: obs || null, total_pedido: total, estado: 'completada', completada_at: new Date().toISOString(),
-      }).eq('id', visitaId)
-      if (items.length > 0) {
-        await supabase.from('visitas_terreno_items').insert(
-          items.map(i => ({ visita_id: visitaId, producto: i.producto, categoria: i.categoria, envase: i.envase, cantidad: i.cantidad, precio_unit: i.precio, subtotal: i.cantidad * i.precio }))
-        )
       }
-      router.push('/terreno')
+      const rVisita = await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
+
+      let itemsQuedaronPendientes = false
+      if (items.length > 0) {
+        const resultados = await Promise.all(
+          items.map(i => upsertOrQueue(supabase, 'visitas_terreno_items', {
+            id: crypto.randomUUID(), visita_id: visitaId, producto: i.producto, categoria: i.categoria,
+            envase: i.envase, cantidad: i.cantidad, precio_unit: i.precio, subtotal: i.cantidad * i.precio,
+          }))
+        )
+        itemsQuedaronPendientes = resultados.some(r => r.queued)
+      }
+      setSyncPendiente(!rVisita.ok || itemsQuedaronPendientes)
+
+      // 🔔 Notificar según resultado
+      if (tienVenta) {
+        hapticExito()
+        const fmtCLP = (n: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
+        notificar({
+          event: 'visita_completada',
+          title: `✅ Venta en ${cliente?.nombre ?? 'local'}`,
+          body: `${fmtCLP(total)} · ${items.length} producto${items.length !== 1 ? 's' : ''}`,
+          url: '/terreno/historial',
+        })
+      } else if (motivo) {
+        notificar({
+          event: 'visita_sin_venta',
+          title: `📍 Visita sin venta — ${cliente?.nombre ?? 'local'}`,
+          body: motivo,
+          url: '/terreno/historial',
+        })
+      }
+
+      router.push('/terreno?cierre=1')
     } finally {
       setGuardando(false)
     }
@@ -1451,24 +1762,52 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
   const pasoLabel = ['', 'Cliente', 'Check-In', cliente?.esNuevo ? 'Catálogo' : 'Vista 360°', 'Catálogo'][paso]
 
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(212,175,55,0.15)', padding: '14px 16px 10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <button onClick={() => paso > 1 ? setPaso(paso - 1) : router.push('/terreno')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
-            <ChevronLeft size={18} /> {paso === 1 ? 'Cancelar' : 'Atrás'}
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #07060F 0%, #0A0810 40%, #070612 100%)', display: 'flex', flexDirection: 'column' }}>
+      {/* Header premium glass */}
+      <div style={{
+        background: 'rgba(10,8,20,0.85)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
+        paddingBottom: 14,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', marginBottom: 16 }}>
+          {/* Back button: glass circle */}
+          <button
+            onClick={() => paso > 1 ? setPaso(paso - 1) : router.push('/terreno')}
+            style={{
+              width: 38, height: 38, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.09)',
+              backdropFilter: 'blur(12px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            <ChevronLeft size={18} color="rgba(255,255,255,0.75)" />
           </button>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 14, fontWeight: 800, color: '#F4EEDF' }}>{cliente ? cliente.nombre : 'Nueva Visita'}</p>
-            <p style={{ fontSize: 11, color: 'var(--muted)' }}>Paso {paso}/{totalPasos} · {pasoLabel}</p>
+
+          {/* Title center */}
+          <div style={{ textAlign: 'center', flex: 1, padding: '0 12px' }}>
+            <p style={{ fontSize: 16, fontWeight: 700, color: '#F8F6F0', letterSpacing: '-0.4px', lineHeight: 1.2 }}>
+              {cliente ? cliente.nombre : 'Nueva Visita'}
+            </p>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 500, marginTop: 3, letterSpacing: '0.1px' }}>
+              Paso {paso}/{totalPasos} · {pasoLabel}
+            </p>
           </div>
-          <div style={{ width: 60 }} />
+
+          {/* Share placeholder (mismo tamaño que el back para centrar) */}
+          <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Share2 size={15} color="rgba(255,255,255,0.4)" />
+          </div>
         </div>
         <StepBar paso={paso} total={totalPasos} />
       </div>
 
-      {paso === 1 && <Paso1Cliente clientes={clientesExistentes} onConfirmar={onClienteConfirmado} />}
-      {paso === 2 && <Paso2Checkin onConfirmar={onCheckinConfirmado} />}
+      {paso === 1 && <Paso1Cliente clientes={clientesExistentes} deudores={deudores} onConfirmar={onClienteConfirmado} />}
+      {paso === 2 && <Paso2Checkin onConfirmar={onCheckinConfirmado} onCancelar={cancelarVisita} />}
       {paso === 3 && !cliente?.esNuevo && <Paso3Vista360 clienteNombre={cliente?.nombre ?? ''} esNuevo={false} onContinuar={onVista360Continuar} />}
       {(paso === 4 || (paso === 3 && cliente?.esNuevo)) && (
         <Paso4Catalogo

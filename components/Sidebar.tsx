@@ -1,12 +1,14 @@
 'use client'
 
-import { BarChart2, TrendingUp, Target, Map, Users, Settings, BarChart, Route } from 'lucide-react'
+import { BarChart2, TrendingUp, Target, Map, Users, Settings, BarChart, Route, Zap, Crosshair } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
 const navItems: SidebarNavItem[] = [
   { href: '/ventas',                     icon: BarChart2,  label: 'Hoy',       exact: true, adminOnly: false },
+  { href: '/ventas/misiones',            icon: Zap,        label: 'Misiones',               adminOnly: false },
   { href: '/ventas/acumulado',           icon: TrendingUp, label: 'Período',                adminOnly: false },
   { href: '/ventas/clientes',            icon: Users,      label: 'Clientes',               adminOnly: false },
+  { href: '/ventas/leads',               icon: Crosshair,  label: 'Leads',                  adminOnly: false },
   { href: '/ventas/mapa',                icon: Map,        label: 'Mapa',                   adminOnly: false },
   { href: '/ventas/metas',               icon: Target,     label: 'Metas',                  adminOnly: false },
   { href: '/ventas/admin',               icon: Settings,   label: 'Admin',                  adminOnly: true  },

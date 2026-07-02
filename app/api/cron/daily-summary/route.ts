@@ -126,6 +126,26 @@ export async function GET(req: Request) {
   const todayStr = toLocalDateStr(new Date())
   const in5DaysStr = toLocalDateStr(new Date(Date.now() + 5 * 86400000))
 
+  // ── Avanzar el período de venta activo (24→23) ───────────────────────────────
+  // El día 24 el período activo pasa al siguiente automáticamente.
+  // Usa service key para saltar RLS sobre `periodos`. Nunca rompe el resumen.
+  try {
+    const svcKey = process.env.SUPABASE_SERVICE_KEY
+    if (svcKey) {
+      const admin = createServerClient(SUPABASE_URL, svcKey, {
+        cookies: { getAll: () => [], setAll: () => {} },
+      })
+      const { data: pers } = await admin.from('periodos').select('id, fecha_inicio, fecha_fin, activo')
+      for (const p of pers ?? []) {
+        const es24 = String(p.fecha_inicio).endsWith('-24')
+        const debe = es24 && todayStr >= p.fecha_inicio && todayStr <= p.fecha_fin
+        if (debe !== p.activo) {
+          await admin.from('periodos').update({ activo: debe }).eq('id', p.id)
+        }
+      }
+    }
+  } catch { /* noop */ }
+
   // Obtener todas las tareas activas (no completadas ni rechazadas)
   const { data: tasks } = await supabase
     .from('tasks')

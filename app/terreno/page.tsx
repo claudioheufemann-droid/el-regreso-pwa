@@ -18,7 +18,11 @@ export default async function TerrenoPage() {
     .gte('iniciada_at', `${hoy}T00:00:00`)
     .order('iniciada_at', { ascending: false })
 
-  const lista = visitas ?? []
+  // Canceladas quedan registradas en BD (auditoría) pero no cuentan como
+  // "visita del día" — no se mostraron al cliente, no aportan a KPIs activos.
+  const todasHoy   = visitas ?? []
+  const lista      = todasHoy.filter(v => v.estado !== 'cancelada')
+  const canceladas = todasHoy.filter(v => v.estado === 'cancelada').length
   const totalHoy   = lista.length
   const conVenta   = lista.filter(v => v.tiene_venta === true).length
   const sinVenta   = lista.filter(v => v.tiene_venta === false).length
@@ -28,7 +32,7 @@ export default async function TerrenoPage() {
     <TerrenoHubClient
       vendedor={user}
       visitas={lista}
-      kpis={{ totalHoy, conVenta, sinVenta }}
+      kpis={{ totalHoy, conVenta, sinVenta, canceladas }}
       visitaEnProgreso={enProgreso}
     />
   )

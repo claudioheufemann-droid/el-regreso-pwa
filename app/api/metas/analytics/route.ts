@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { VENDEDORES, CLIENTES_EXCLUIR } from '@/lib/types'
+import { getServerUser } from '@/lib/auth'
+import { provinciasDeRegion } from '@/lib/regiones'
+import { VENDEDORES, VENDEDORES_SCOPE, CLIENTES_EXCLUIR } from '@/lib/types'
+
+const TODOS_VENDEDORES = [...VENDEDORES_SCOPE] as const
+
+/** Meta de litros por región (base provisional — ajustable por región luego) */
+const REGION_META_LITROS = 3500
 import {
   getDiasHabiles,
   getDiasHabilesTranscurridos,
@@ -20,30 +27,58 @@ interface VentaAPI {
   vendedor_actual: string
   categoria_negocio: string | null
   litros: number | null
+  total_sin_impuesto: number | null
   nombre_fantasia: string | null
   fecha_pedido: string | null
   categoria_producto: string | null
   producto: string | null
+  envase: string | null
 }
 
-export interface ProductoItem { nombre: string; litros: number }
+/** Retorna litros por unidad según el texto del envase. */
+function litrosPorUnidad(envase: string | null): number | null {
+  if (!envase) return null
+  const s = envase.toLowerCase()
+  const cc = s.match(/(\d+(?:[.,]\d+)?)\s*cc/)
+  if (cc) return parseFloat(cc[1].replace(',', '.')) / 1000
+  const li = s.match(/(\d+(?:[.,]\d+)?)\s*l\b/)
+  if (li) return parseFloat(li[1].replace(',', '.'))
+  return null
+}
+
+export interface ClienteProducto { nombre: string; litros: number; canal: string | null }
+export interface ProductoItem { nombre: string; litros: number; clientes: ClienteProducto[] }
 export interface ProductoCategoria { categoria: string; total: number; productos: ProductoItem[] }
 
 function computeProductos(ventas: VentaAPI[]): ProductoCategoria[] {
-  const map = new Map<string, Map<string, number>>()
+  type ProdEntry = { total: number; clientes: Map<string, { litros: number; canal: string | null }> }
+  const map = new Map<string, Map<string, ProdEntry>>()
   for (const v of ventas) {
-    const cat = v.categoria_producto?.trim() || 'Sin categoría'
-    const prod = v.producto?.trim() || 'Sin nombre'
+    if (!v.litros) continue
+    const cat  = v.categoria_producto?.trim() || 'Sin categoría'
+    const prod = v.producto?.trim()           || 'Sin nombre'
+    const cli  = v.nombre_fantasia?.trim()    || 'Sin nombre'
+    const canal = v.categoria_negocio ?? null
     if (!map.has(cat)) map.set(cat, new Map())
     const pm = map.get(cat)!
-    pm.set(prod, (pm.get(prod) ?? 0) + (v.litros ?? 0))
+    if (!pm.has(prod)) pm.set(prod, { total: 0, clientes: new Map() })
+    const entry = pm.get(prod)!
+    entry.total += v.litros
+    if (!entry.clientes.has(cli)) entry.clientes.set(cli, { litros: 0, canal })
+    entry.clientes.get(cli)!.litros += v.litros
   }
   return [...map.entries()]
     .map(([categoria, pm]) => ({
       categoria,
-      total: [...pm.values()].reduce((s, l) => s + l, 0),
+      total: [...pm.values()].reduce((s, e) => s + e.total, 0),
       productos: [...pm.entries()]
-        .map(([nombre, litros]) => ({ nombre, litros }))
+        .map(([nombre, entry]) => ({
+          nombre,
+          litros: entry.total,
+          clientes: [...entry.clientes.entries()]
+            .map(([nombre, d]) => ({ nombre, litros: d.litros, canal: d.canal }))
+            .sort((a, b) => b.litros - a.litros),
+        }))
         .sort((a, b) => b.litros - a.litros),
     }))
     .filter(c => c.total > 0)
@@ -54,212 +89,255 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { searchParams } = new URL(req.url)
 
-  // Fecha de referencia: parámetro o la última fecha con ventas
-  let fechaRef: Date
+  const todayStr = new Date().toISOString().split('T')[0]
 
-  const fechaParam = searchParams.get('fecha')
-  if (fechaParam) {
-    fechaRef = new Date(fechaParam + 'T12:00:00')
+  // ── Scope geográfico del vendedor ────────────────────────────────────────
+  const appUser = await getServerUser()
+  const scopeRegion = appUser?.isAdmin ? null : (appUser?.region ?? null)
+  const provs = provinciasDeRegion(scopeRegion)
+  const provinciasScope: string[] | null = provs.length ? provs : null
+
+  // ── Determinar rango ─────────────────────────────────────────────────────────
+  // Modo nuevo: inicio + fin explícitos
+  // Modo legacy: fecha → deriva el período mensual activo para esa fecha
+  const inicioParam = searchParams.get('inicio')
+  const finParam    = searchParams.get('fin')
+
+  let rangeInicio: string
+  let rangeFin: string
+
+  if (inicioParam && finParam) {
+    rangeInicio = inicioParam
+    rangeFin    = finParam
   } else {
-    const { data: ultima } = await supabase
-      .from('ventas')
-      .select('fecha_pedido')
-      .in('vendedor_actual', VENDEDORES)
-      .order('fecha_pedido', { ascending: false })
+    const fechaParam = searchParams.get('fecha')
+    let fechaRef: string
+
+    if (fechaParam) {
+      fechaRef = fechaParam
+    } else {
+      const { data: ultima } = await supabase
+        .from('ventas')
+        .select('fecha_pedido')
+        .in('vendedor_actual', TODOS_VENDEDORES)
+        .order('fecha_pedido', { ascending: false })
+        .limit(1)
+        .single()
+      fechaRef = ultima?.fecha_pedido ?? todayStr
+    }
+
+    // Intentar derivar período mensual activo
+    const { data: metaMes } = await supabase
+      .from('metas')
+      .select('fecha_inicio, fecha_fin')
+      .eq('tipo', 'mensual')
+      .lte('fecha_inicio', fechaRef)
+      .gte('fecha_fin', fechaRef)
       .limit(1)
       .single()
-    fechaRef = ultima?.fecha_pedido
-      ? new Date(ultima.fecha_pedido + 'T12:00:00')
-      : new Date()
+
+    rangeInicio = metaMes?.fecha_inicio ?? fechaRef.slice(0, 8) + '01'
+    rangeFin    = metaMes?.fecha_fin    ?? fechaRef
   }
 
-  const fechaStr = fechaRef.toISOString().split('T')[0]
+  // Ventas solo hasta hoy (no futuro)
+  const efectiveFin = rangeFin < todayStr ? rangeFin : todayStr
+  const fechaFinDate = new Date(efectiveFin + 'T12:00:00')
 
-  // ── Metas activas ────────────────────────────────────────────────────────────
-
-  const { data: metasSemanales } = await supabase
+  // ── Metas que se superponen con el rango ─────────────────────────────────────
+  const { data: todasMetas } = await supabase
     .from('metas')
     .select('*')
-    .eq('tipo', 'semanal')
-    .lte('fecha_inicio', fechaStr)
-    .gte('fecha_fin', fechaStr)
+    .lte('fecha_inicio', rangeFin)
+    .gte('fecha_fin', rangeInicio)
 
-  const { data: metasMensuales } = await supabase
-    .from('metas')
-    .select('*')
-    .eq('tipo', 'mensual')
-    .lte('fecha_inicio', fechaStr)
-    .gte('fecha_fin', fechaStr)
+  // Vendedor con región usa meta fija de región (3500 L), no depende de la
+  // tabla metas. Admin sí requiere metas cargadas.
+  if (!todasMetas?.length && !provinciasScope) {
+    return NextResponse.json({ analytics: [], sinMetas: true, rangeInicio, rangeFin })
+  }
+  const metasArr = todasMetas ?? []
 
-  if (!metasSemanales?.length && !metasMensuales?.length) {
-    return NextResponse.json({ analytics: [], fecha: fechaStr, sinMetas: true })
+  // ── Ventas en el rango ───────────────────────────────────────────────────────
+  const selectFields = 'vendedor_actual, categoria_negocio, litros, total_sin_impuesto, nombre_fantasia, fecha_pedido, categoria_producto, producto, envase'
+
+  async function fetchVentasPaginado(fechaIni: string, fechaFin: string): Promise<VentaAPI[]> {
+    const rows: VentaAPI[] = []
+    let offset = 0
+    const PAGE = 1000
+    while (true) {
+      let q = supabase.from('ventas').select(selectFields)
+        .gte('fecha_pedido', fechaIni).lte('fecha_pedido', fechaFin)
+      // Vendedor: scope por provincia (su región). Admin: por vendedores consolidados.
+      q = provinciasScope
+        ? q.in('provincia', provinciasScope)
+        : q.in('vendedor_actual', TODOS_VENDEDORES)
+      const { data } = await q
+        .order('fecha_pedido', { ascending: true })
+        .range(offset, offset + PAGE - 1)
+      if (!data || data.length === 0) break
+      rows.push(...(data as VentaAPI[]))
+      if (data.length < PAGE) break
+      offset += PAGE
+    }
+    return rows.filter(v =>
+      !CLIENTES_EXCLUIR.some(ex => (v.nombre_fantasia ?? '').toLowerCase().includes(ex.toLowerCase()))
+    )
   }
 
-  // ── Rangos de consulta ───────────────────────────────────────────────────────
+  const ventas = await fetchVentasPaginado(rangeInicio, efectiveFin)
 
-  const semanaActiva = metasSemanales?.[0]
-    ? { inicio: metasSemanales[0].fecha_inicio, fin: metasSemanales[0].fecha_fin }
-    : null
-
-  const mesActivo = metasMensuales?.[0]
-    ? { inicio: metasMensuales[0].fecha_inicio, fin: metasMensuales[0].fecha_fin }
-    : null
-
-  const clientes_ex = CLIENTES_EXCLUIR
-  const selectFields = 'vendedor_actual, categoria_negocio, litros, nombre_fantasia, fecha_pedido, categoria_producto, producto'
-
-  const [{ data: ventasMes }, { data: ventasSemana }, { data: ventasDia }] = await Promise.all([
-    mesActivo
-      ? supabase
-          .from('ventas')
-          .select(selectFields)
-          .in('vendedor_actual', VENDEDORES)
-          .gte('fecha_pedido', mesActivo.inicio)
-          .lte('fecha_pedido', fechaStr)
-          .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`)
-      : Promise.resolve({ data: [] as VentaAPI[] }),
-    semanaActiva
-      ? supabase
-          .from('ventas')
-          .select(selectFields)
-          .in('vendedor_actual', VENDEDORES)
-          .gte('fecha_pedido', semanaActiva.inicio)
-          .lte('fecha_pedido', fechaStr)
-          .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`)
-      : Promise.resolve({ data: [] as VentaAPI[] }),
-    supabase
-      .from('ventas')
-      .select(selectFields)
-      .in('vendedor_actual', VENDEDORES)
-      .eq('fecha_pedido', fechaStr)
-      .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`),
-  ])
-
-  const vMesArr = (ventasMes ?? []) as VentaAPI[]
-  const vSemArr = (ventasSemana ?? []) as VentaAPI[]
-  const vDiaArr = (ventasDia ?? []) as VentaAPI[]
+  // ── Días hábiles del rango ───────────────────────────────────────────────────
+  const dh = getDiasHabiles(new Date(rangeInicio), new Date(rangeFin + 'T23:59:59'))
+  const dhTrans = getDiasHabilesTranscurridos(dh, fechaFinDate)
 
   // ── Productos a nivel equipo ─────────────────────────────────────────────────
-
-  const productosMes     = computeProductos(vMesArr)
-  const productosSemana  = computeProductos(vSemArr)
-  const productosDia     = computeProductos(vDiaArr)
+  const productosPeriodo = computeProductos(ventas)
 
   // ── Analytics por vendedor ───────────────────────────────────────────────────
-
+  // Consolidar todos los vendedores DB bajo 'Vendedor 1' (token canónico)
   const analytics: AnalyticsVendedor[] = VENDEDORES.map(vendedor => {
-    const mSem = (metasSemanales ?? []).filter(m => m.vendedor === vendedor)
-    const mMes = (metasMensuales ?? []).filter(m => m.vendedor === vendedor)
+    const realizado = ventas.reduce((s, v) => s + (v.litros ?? 0), 0)
+    // Vendedor: meta de región 3500 L. Admin: suma de metas cargadas.
+    const metaTotal = provinciasScope
+      ? REGION_META_LITROS
+      : metasArr.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
+    const mV = metasArr
 
-    const metaSemanalTotal = mSem.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
-    const metaMensualTotal = mMes.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
+    const diasHabiles       = dh.length
+    const diasTranscurridos = dhTrans
+    const diasRestantes     = diasHabiles - diasTranscurridos
 
-    const vMes = vMesArr.filter(v => v.vendedor_actual === vendedor)
-    const vSem = vSemArr.filter(v => v.vendedor_actual === vendedor)
+    const esperado  = getMetaEsperadaAFecha(metaTotal, dh, fechaFinDate)
+    const faltante  = Math.max(0, metaTotal - realizado)
+    const semaforo  = getEstadoSemaforo(realizado, esperado)
+    const promNec   = diasRestantes > 0 ? faltante / diasRestantes : 0
+    const mensaje   = getMensajePredictivo(faltante, diasRestantes)
 
-    const realizadoMes    = vMes.reduce((s, v) => s + (v.litros ?? 0), 0)
-    const realizadoSemana = vSem.reduce((s, v) => s + (v.litros ?? 0), 0)
-
-    const dhMes = mesActivo
-      ? getDiasHabiles(new Date(mesActivo.inicio), new Date(mesActivo.fin + 'T23:59:59'))
-      : []
-    const dhSem = semanaActiva
-      ? getDiasHabiles(new Date(semanaActiva.inicio), new Date(semanaActiva.fin + 'T23:59:59'))
-      : []
-
-    const diasHabilesMes     = dhMes.length
-    const diasHabilesSemana  = dhSem.length
-    const diasTranscurridosMes    = getDiasHabilesTranscurridos(dhMes, fechaRef)
-    const diasTranscurridosSemana = getDiasHabilesTranscurridos(dhSem, fechaRef)
-    const diasRestantesMes    = diasHabilesMes - diasTranscurridosMes
-    const diasRestantesSemana = diasHabilesSemana - diasTranscurridosSemana
-
-    const metaEsperadaMes    = getMetaEsperadaAFecha(metaMensualTotal, dhMes, fechaRef)
-    const metaEsperadaSemana = getMetaEsperadaAFecha(metaSemanalTotal, dhSem, fechaRef)
-
-    const faltanteMes    = Math.max(0, metaMensualTotal - realizadoMes)
-    const faltanteSemana = Math.max(0, metaSemanalTotal - realizadoSemana)
-
-    const semaforoMes    = getEstadoSemaforo(realizadoMes,    metaEsperadaMes)
-    const semaforoSemana = getEstadoSemaforo(realizadoSemana, metaEsperadaSemana)
-
-    const promedioNecesarioDiarioMes    = diasRestantesMes    > 0 ? faltanteMes    / diasRestantesMes    : 0
-    const promedioNecesarioDiarioSemana = diasRestantesSemana > 0 ? faltanteSemana / diasRestantesSemana : 0
-
-    const mensajeMes    = getMensajePredictivo(faltanteMes,    diasRestantesMes)
-    const mensajeSemana = getMensajePredictivo(faltanteSemana, diasRestantesSemana)
-
-    const semNum = mSem[0]?.semana_numero ?? 0
-    const semanaLabel = semanaActiva
-      ? `S${semNum} · ${semanaActiva.inicio.slice(8)} – ${semanaActiva.fin.slice(8)} ${mesActivo?.inicio.slice(5, 7) === '05' ? 'May' : mesActivo?.inicio.slice(5, 7) === '06' ? 'Jun' : 'Jul'}`
-      : ''
-
-    const allCanales = [...new Set([
-      ...mMes.map(m => m.categoria_negocio),
-      ...mSem.map(m => m.categoria_negocio),
-    ])]
+    const vV = ventas
+    // Vendedor: canales derivados de sus ventas. Admin: canales de las metas.
+    const allCanales = provinciasScope
+      ? [...new Set(vV.map(v => v.categoria_negocio))]
+      : [...new Set(mV.map(m => m.categoria_negocio))]
 
     const porCanal: AnalyticsCanal[] = allCanales.map(canal => {
-      const metaMes = mMes.find(m => m.categoria_negocio === canal)?.meta_litros ?? 0
-      const metaSem = mSem.find(m => m.categoria_negocio === canal)?.meta_litros ?? 0
-      const realMes  = vMes.filter(v => v.categoria_negocio === canal).reduce((s, v) => s + (v.litros ?? 0), 0)
-      const realSem  = vSem.filter(v => v.categoria_negocio === canal).reduce((s, v) => s + (v.litros ?? 0), 0)
-      const metaEspMes = getMetaEsperadaAFecha(metaMes, dhMes, fechaRef)
-      const metaEspSem = getMetaEsperadaAFecha(metaSem, dhSem, fechaRef)
+      const realCanal = vV.filter(v => v.categoria_negocio === canal).reduce((s, v) => s + (v.litros ?? 0), 0)
+      // Vendedor: la meta de región (3500) se reparte proporcional a lo vendido
+      // por canal. Admin: meta cargada del canal.
+      const metaCanal = provinciasScope
+        ? (realizado > 0 ? REGION_META_LITROS * (realCanal / realizado) : 0)
+        : mV.filter(m => m.categoria_negocio === canal).reduce((s, m) => s + (m.meta_litros ?? 0), 0)
+      const espCanal  = getMetaEsperadaAFecha(metaCanal, dh, fechaFinDate)
       return {
         canal,
-        metaMensual: metaMes, metaSemanal: metaSem,
-        realizadoMes: realMes, realizadoSemana: realSem,
-        metaEsperadaMes: metaEspMes, metaEsperadaSemana: metaEspSem,
-        pctMes: calcularCumplimiento(realMes, metaEspMes),
-        pctSemana: calcularCumplimiento(realSem, metaEspSem),
-        semaforoMes: getEstadoSemaforo(realMes, metaEspMes),
-        semaforoSemana: getEstadoSemaforo(realSem, metaEspSem),
+        metaMensual: metaCanal, metaSemanal: metaCanal,
+        realizadoMes: realCanal, realizadoSemana: realCanal,
+        metaEsperadaMes: espCanal, metaEsperadaSemana: espCanal,
+        pctMes: calcularCumplimiento(realCanal, espCanal),
+        pctSemana: calcularCumplimiento(realCanal, espCanal),
+        semaforoMes: getEstadoSemaforo(realCanal, espCanal),
+        semaforoSemana: getEstadoSemaforo(realCanal, espCanal),
       }
     }).sort((a, b) => b.metaMensual - a.metaMensual)
 
-    const vDia       = vDiaArr.filter(v => v.vendedor_actual === vendedor)
-    const realizadoHoy = vDia.reduce((s, v) => s + (v.litros ?? 0), 0)
-    const porCanalHoy  = allCanales.map(canal => ({
-      canal,
-      realHoy: vDia.filter(v => v.categoria_negocio === canal).reduce((s, v) => s + (v.litros ?? 0), 0),
-    }))
-
-    const ventasDiariasRaw = vMes
+    const ventasDiariasRaw = vV
       .filter(v => v.fecha_pedido)
       .map(v => ({ fecha: v.fecha_pedido as string, litros: v.litros ?? 0 }))
 
     return {
       vendedor,
-      fecha: fechaStr,
-      metaMensual: metaMensualTotal,
-      realizadoMes,
-      metaEsperadaMes,
-      pctCumplimientoMes: calcularCumplimiento(realizadoMes, metaEsperadaMes),
-      semaforoMes,
-      diasHabilesMes, diasTranscurridosMes, diasRestantesMes,
-      faltanteMes, promedioNecesarioDiarioMes, mensajeMes,
-      semanaLabel,
-      metaSemanal: metaSemanalTotal,
-      realizadoSemana,
-      metaEsperadaSemana,
-      pctCumplimientoSemana: calcularCumplimiento(realizadoSemana, metaEsperadaSemana),
-      semaforoSemana,
-      diasHabilesSemana, diasTranscurridosSemana, diasRestantesSemana,
-      faltanteSemana, promedioNecesarioDiarioSemana, mensajeSemana,
+      fecha: efectiveFin,
+      metaMensual: metaTotal, realizadoMes: realizado,
+      metaEsperadaMes: esperado,
+      pctCumplimientoMes: calcularCumplimiento(realizado, esperado),
+      semaforoMes: semaforo,
+      diasHabilesMes: diasHabiles, diasTranscurridosMes: diasTranscurridos, diasRestantesMes: diasRestantes,
+      faltanteMes: faltante, promedioNecesarioDiarioMes: promNec, mensajeMes: mensaje,
+      semanaLabel: `${rangeInicio} – ${rangeFin}`,
+      metaSemanal: metaTotal, realizadoSemana: realizado,
+      metaEsperadaSemana: esperado,
+      pctCumplimientoSemana: calcularCumplimiento(realizado, esperado),
+      semaforoSemana: semaforo,
+      diasHabilesSemana: diasHabiles, diasTranscurridosSemana: diasTranscurridos, diasRestantesSemana: diasRestantes,
+      faltanteSemana: faltante, promedioNecesarioDiarioSemana: promNec, mensajeSemana: mensaje,
       porCanal,
-      realizadoHoy,
-      porCanalHoy,
+      realizadoHoy: 0,
+      porCanalHoy: [],
       ventasDiariasRaw,
     }
   })
 
+  // ── Detalle por local (nombre_fantasia) ─────────────────────────────────────
+  type ProdEntry = { categoria: string; envase: string | null; litros: number; monto: number; unidades: number | null }
+  const clientesMap = new Map<string, {
+    canal: string | null
+    litros: number
+    monto: number
+    fechas: Set<string>
+    prods: Map<string, ProdEntry>
+  }>()
+
+  for (const v of ventas) {
+    const nombre = (v.nombre_fantasia ?? '').trim() || 'Sin nombre'
+    if (!clientesMap.has(nombre)) {
+      clientesMap.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, monto: 0, fechas: new Set(), prods: new Map() })
+    }
+    const e = clientesMap.get(nombre)!
+    const litros = v.litros ?? 0
+    const monto  = v.total_sin_impuesto ?? 0
+    e.litros += litros
+    e.monto  += monto
+    if (v.fecha_pedido) e.fechas.add(v.fecha_pedido)
+
+    // Clave: producto + envase para distinguir presentaciones
+    const prod   = (v.producto ?? '').trim() || 'Sin nombre'
+    const cat    = (v.categoria_producto ?? '').trim() || 'Sin categoría'
+    const envase = (v.envase ?? '').trim() || null
+    const key    = `${prod}||${envase ?? ''}`
+
+    if (!e.prods.has(key)) e.prods.set(key, { categoria: cat, envase, litros: 0, monto: 0, unidades: null })
+    const p = e.prods.get(key)!
+    p.litros += litros
+    p.monto  += monto
+
+    // Calcular unidades acumulando
+    const lpu = litrosPorUnidad(envase)
+    if (lpu && lpu > 0) {
+      p.unidades = Math.round(p.litros / lpu)
+    }
+  }
+
+  const clientesDetalle = [...clientesMap.entries()]
+    .map(([nombre, e]) => ({
+      nombre,
+      canal: e.canal,
+      litros:  Math.round(e.litros * 10) / 10,
+      monto:   Math.round(e.monto),
+      pedidos: e.fechas.size,
+      ultimoPedido: [...e.fechas].sort().at(-1) ?? '',
+      productos: [...e.prods.entries()]
+        .map(([key, { categoria, envase, litros, monto, unidades }]) => ({
+          producto: key.split('||')[0],   // reconstruir desde la clave
+          categoria, envase,
+          litros:   Math.round(litros * 10) / 10,
+          monto:    Math.round(monto),
+          unidades,
+        }))
+        .sort((a, b) => b.monto - a.monto),
+    }))
+    .filter(c => c.litros > 0)
+    .sort((a, b) => b.monto - a.monto)
+
   return NextResponse.json({
     analytics,
-    fecha: fechaStr,
+    rangeInicio,
+    rangeFin,
     sinMetas: false,
-    productosMes,
-    productosSemana,
-    productosDia,
+    productosPeriodo,
+    clientesDetalle,
+    // Legacy compat
+    productosMes: productosPeriodo,
+    productosSemana: productosPeriodo,
+    productosDia: [],
   })
 }

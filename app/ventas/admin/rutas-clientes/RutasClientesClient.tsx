@@ -6,6 +6,11 @@ import {
   Route, Users, MoveRight, ArrowRightLeft, AlertCircle,
 } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
+import { VEND_COLOR as VENDEDOR_COLOR } from '@/lib/theme'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
+import AppHeader from '@/components/ui/AppHeader'
+
+const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
 
 interface Cliente {
   id: number
@@ -84,7 +89,7 @@ function EditableNombre({ nombre, onSave, onCancel }: {
         }}
       />
       <button onClick={() => onSave(val)}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#34D399', padding: 3 }}>
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5A8A4A', padding: 3 }}>
         <Check size={15} />
       </button>
       <button onClick={onCancel}
@@ -153,7 +158,7 @@ function RutaItem({ nombre, count, isSelected, isEditing, onSelect, onEdit, onSa
               onClick={e => { e.stopPropagation(); onDelete() }}
               title="Eliminar"
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: '2px 4px', borderRadius: 4 }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#F87171')}
+              onMouseEnter={e => (e.currentTarget.style.color = '#B5543E')}
               onMouseLeave={e => (e.currentTarget.style.color = '#555')}
             >
               <Trash2 size={11} />
@@ -165,11 +170,7 @@ function RutaItem({ nombre, count, isSelected, isEditing, onSelect, onEdit, onSa
   )
 }
 
-// ── ClienteRow ───────────────────────────────────────────────────────────────
-const VENDEDOR_COLOR: Record<string, string> = {
-  'Javier Badilla': '#F59E0B',
-  'Carlos Urrejola': '#60A5FA',
-}
+// ── ClienteRow — VENDEDOR_COLOR importado de lib/theme ───────────────────────
 
 function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
   cliente: Cliente
@@ -179,7 +180,7 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
   onMover: (ruta: string | null) => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const vc = cliente.vendedor ? (VENDEDOR_COLOR[cliente.vendedor] ?? '#A78BFA') : '#666'
+  const vc = cliente.vendedor ? (VENDEDOR_COLOR[cliente.vendedor] ?? '#8A6D1F') : '#666'
 
   return (
     <div
@@ -211,7 +212,7 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
           )}
           {cliente.vendedor && (
             <span style={{ fontSize: 10, fontWeight: 700, color: vc }}>
-              {cliente.vendedor.split(' ')[0]}
+              {dspV(cliente.vendedor)}
             </span>
           )}
         </div>
@@ -259,7 +260,7 @@ function ClienteRow({ cliente, seleccionado, onToggle, allRutas, onMover }: {
                   onClick={() => { onMover(null); setMenuOpen(false) }}
                   style={{
                     width: '100%', textAlign: 'left', padding: '8px 12px',
-                    background: 'none', border: 'none', color: '#F87171',
+                    background: 'none', border: 'none', color: '#B5543E',
                     fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'block',
                     borderTop: '1px solid #2A2A2A',
                   }}
@@ -285,8 +286,8 @@ function Toast({ message, type, onClose }: { message: string; type: 'error' | 's
       zIndex: 9999, display: 'flex', alignItems: 'center', gap: 10,
       padding: '12px 20px', borderRadius: 12,
       background: type === 'error' ? '#2A0A0A' : '#0A2A14',
-      border: `1px solid ${type === 'error' ? '#F87171' : '#34D399'}`,
-      color: type === 'error' ? '#F87171' : '#34D399',
+      border: `1px solid ${type === 'error' ? '#B5543E' : '#5A8A4A'}`,
+      color: type === 'error' ? '#B5543E' : '#5A8A4A',
       fontSize: 13, fontWeight: 600,
       boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
       maxWidth: 420,
@@ -562,14 +563,14 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
           }}
           onClick={() => setSelectedRuta('__sin_ruta__')}
         >
-          <MapPin size={13} style={{ color: selectedRuta === '__sin_ruta__' ? '#F87171' : '#444', flexShrink: 0 }} />
-          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: selectedRuta === '__sin_ruta__' ? '#F87171' : '#666' }}>
+          <MapPin size={13} style={{ color: selectedRuta === '__sin_ruta__' ? '#B5543E' : '#444', flexShrink: 0 }} />
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: selectedRuta === '__sin_ruta__' ? '#B5543E' : '#666' }}>
             Sin ruta asignada
           </span>
           <span style={{
             fontSize: 11, fontWeight: 800,
             background: sinRuta.length > 0 ? 'rgba(248,113,113,0.2)' : '#1A1A1A',
-            color: sinRuta.length > 0 ? '#F87171' : '#555',
+            color: sinRuta.length > 0 ? '#B5543E' : '#555',
             padding: '1px 7px', borderRadius: 20,
           }}>{sinRuta.length}</span>
         </div>
@@ -602,7 +603,9 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
           <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #1E1E1E' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
               <div>
-                <h2 style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{currentRutaName}</h2>
+                <h2 style={{ fontSize: 14, fontWeight: 800, color: selectedRuta === '__sin_ruta__' ? '#B5543E' : '#fff' }}>
+                  {currentRutaName}
+                </h2>
                 <p style={{ fontSize: 10, color: '#555', marginTop: 2 }}>
                   {clientesEnRuta.length} clientes
                   {seleccionados.size > 0 && <span style={{ color: '#D4AF37', marginLeft: 6 }}>· {seleccionados.size} seleccionados</span>}
@@ -613,11 +616,54 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
                   ? setSeleccionados(new Set())
                   : setSeleccionados(new Set(clientesEnRuta.map(c => c.id)))
                 }
-                style={{ padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, background: '#1A1A1A', border: '1px solid #333', color: '#888', cursor: 'pointer' }}
+                style={{
+                  padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                  background: seleccionados.size > 0
+                    ? '#1A1A1A'
+                    : selectedRuta === '__sin_ruta__'
+                      ? 'rgba(248,113,113,0.12)'
+                      : '#1A1A1A',
+                  border: seleccionados.size > 0
+                    ? '1px solid #333'
+                    : selectedRuta === '__sin_ruta__'
+                      ? '1px solid rgba(248,113,113,0.3)'
+                      : '1px solid #333',
+                  color: seleccionados.size > 0
+                    ? '#888'
+                    : selectedRuta === '__sin_ruta__'
+                      ? '#B5543E'
+                      : '#888',
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
               >
                 {seleccionados.size > 0 ? 'Quitar selección' : 'Seleccionar todos'}
               </button>
             </div>
+
+            {/* Banner de acción rápida para clientes sin ruta */}
+            {selectedRuta === '__sin_ruta__' && seleccionados.size === 0 && clientesEnRuta.length > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 12px', marginBottom: 10, borderRadius: 10,
+                background: 'rgba(248,113,113,0.05)',
+                border: '1px solid rgba(248,113,113,0.18)',
+              }}>
+                <AlertCircle size={13} style={{ color: '#B5543E', flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: '#B5543E', flex: 1, fontWeight: 600 }}>
+                  {clientesEnRuta.length} cliente{clientesEnRuta.length !== 1 ? 's' : ''} sin ruta — selecciona todos para asignar rápido
+                </span>
+                <button
+                  onClick={() => setSeleccionados(new Set(clientesEnRuta.map(c => c.id)))}
+                  style={{
+                    padding: '5px 12px', borderRadius: 7, fontSize: 11, fontWeight: 800,
+                    background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.35)',
+                    color: '#B5543E', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  }}
+                >
+                  Seleccionar todos →
+                </button>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <div style={{
@@ -634,17 +680,25 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
               </div>
 
               {seleccionados.size > 0 && (
-                <div style={{ display: 'flex', gap: 5 }}>
+                <div style={{
+                  display: 'flex', gap: 6, flexWrap: 'wrap',
+                  padding: selectedRuta === '__sin_ruta__' ? '8px 10px' : '0',
+                  borderRadius: selectedRuta === '__sin_ruta__' ? 10 : 0,
+                  background: selectedRuta === '__sin_ruta__' ? 'rgba(212,175,55,0.05)' : 'transparent',
+                  border: selectedRuta === '__sin_ruta__' ? '1px solid rgba(212,175,55,0.15)' : 'none',
+                  width: '100%',
+                }}>
                   <select
                     value={moverDestino}
                     onChange={e => setMoverDestino(e.target.value)}
                     style={{
+                      flex: 1, minWidth: 120,
                       background: '#1A1A1A', border: '1px solid #333', borderRadius: 8,
-                      padding: '6px 8px', color: moverDestino ? '#fff' : '#555',
-                      fontSize: 11, outline: 'none', cursor: 'pointer',
+                      padding: '7px 8px', color: moverDestino ? '#fff' : '#555',
+                      fontSize: 12, outline: 'none', cursor: 'pointer',
                     }}
                   >
-                    <option value="">Mover a...</option>
+                    <option value="">Asignar a ruta...</option>
                     {allRutaNames.filter(r => r !== selectedRuta).map(r => (
                       <option key={r} value={r}>Ruta {r}</option>
                     ))}
@@ -657,14 +711,15 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
                     disabled={!moverDestino || loading}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 5,
-                      padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                      padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                       background: moverDestino ? 'rgba(212,175,55,0.15)' : '#1A1A1A',
                       border: moverDestino ? '1px solid rgba(212,175,55,0.3)' : '1px solid #333',
                       color: moverDestino ? '#D4AF37' : '#555',
                       cursor: moverDestino && !loading ? 'pointer' : 'not-allowed',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    <ArrowRightLeft size={12} /> Mover ({seleccionados.size})
+                    <ArrowRightLeft size={12} /> Asignar {seleccionados.size}
                   </button>
                 </div>
               )}
@@ -701,11 +756,8 @@ export default function RutasClientesClient({ clientes: initialClientes }: Props
   )
 
   return (
-    <div style={{ padding: '20px 20px 60px', maxWidth: 1400, margin: '0 auto' }}>
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>Rutas de despacho</h1>
-        <p style={{ fontSize: 12, color: '#555', marginTop: 3 }}>Crea rutas, asigna y mueve clientes entre ellas</p>
-      </div>
+    <div style={{ padding: '16px 16px 60px', maxWidth: 1800, margin: '0 auto' }}>
+      <AppHeader title="Rutas de despacho" />
 
       {isDesktop ? (
         <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>

@@ -6,12 +6,13 @@ import PageTabs from '@/components/PageTabs'
 import type { PageTab } from '@/components/PageTabs'
 
 const TABS: PageTab[] = [
-  { href: '/ventas',          label: 'Hoy',      exact: true  },
-  { href: '/ventas/acumulado',label: 'Período'                },
-  { href: '/ventas/clientes', label: 'Clientes'               },
-  { href: '/ventas/mapa',     label: 'Mapa'                   },
-  { href: '/ventas/metas',    label: 'Metas'                  },
-  { href: '/ventas/admin',    label: 'Admin',    adminOnly: true },
+  { href: '/ventas',           label: 'Hoy',      exact: true  },
+  { href: '/ventas/acumulado', label: 'Período'                },
+  { href: '/ventas/clientes',  label: 'Clientes'               },
+  { href: '/ventas/misiones',  label: 'Misiones'               },
+  { href: '/ventas/mapa',      label: 'Mapa'                   },
+  { href: '/ventas/metas',     label: 'Metas'                  },
+  { href: '/ventas/admin',     label: 'Admin',    adminOnly: true },
 ]
 
 export default async function VentasLayout({ children }: { children: React.ReactNode }) {
@@ -23,8 +24,8 @@ export default async function VentasLayout({ children }: { children: React.React
       <div className="hidden lg:flex">
         <Sidebar />
       </div>
-      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-24 lg:pb-0">
-        <div className="lg:hidden">
+      <main className="flex-1 min-w-0 flex flex-col min-h-screen overflow-y-auto overflow-x-hidden pb-24 lg:pb-0 mobile-safe-top">
+        <div className="hidden lg:block">
           <PageTabs tabs={TABS} />
         </div>
         {children}

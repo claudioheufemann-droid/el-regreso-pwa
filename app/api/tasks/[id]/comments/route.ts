@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 import { sendPushToUser } from '@/lib/push'
+import { emailComentarioNuevo } from '@/lib/email'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -45,15 +46,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Notificar push al responsable de la tarea (si no es quien comentó)
-  const { data: task } = await supabase.from('tasks').select('responsable_id, titulo').eq('id', id).single()
+  // Notificar push + email al responsable (si no es quien comentó)
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('responsable_id, titulo, area, responsable:users(id, nombre, email)')
+    .eq('id', id)
+    .single()
+
   if (task && task.responsable_id !== profile.id) {
+    // Push al responsable
     sendPushToUser(task.responsable_id, {
       title: `💬 Nuevo comentario`,
       body: `${profile.nombre}: "${texto.trim().slice(0, 80)}"`,
-      url: '/',
+      taskId: id,
       tag: `comment-${id}`,
     }).catch(() => {})
+
+    // Email al responsable
+    const raw = task.responsable
+    const responsable = Array.isArray(raw) ? (raw[0] as { id: string; nombre: string; email: string } | undefined) : (raw as { id: string; nombre: string; email: string } | null)
+    if (responsable?.email) {
+      emailComentarioNuevo({
+        toEmail: responsable.email,
+        toNombre: responsable.nombre,
+        taskTitulo: task.titulo,
+        taskArea: task.area,
+        autorNombre: profile.nombre,
+        comentario: texto.trim().slice(0, 200),
+      }).catch(() => {})
+    }
   }
 
   return NextResponse.json(comment, { status: 201 })

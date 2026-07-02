@@ -148,8 +148,9 @@ export async function POST(req: NextRequest) {
   sendPushToUsers(allIds, {
     title: '📋 Nueva tarea asignada',
     body: titulo,
-    url: '/',
+    taskId: task.id,
     tag: `task-assigned-${task.id}`,
+    requireInteraction: true,
   }).catch(() => {})
 
   // Enviar email + .ics a TODOS los responsables

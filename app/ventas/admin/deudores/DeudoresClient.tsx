@@ -35,6 +35,7 @@ interface UploadStats {
   total_procesados: number
   nuevos: number
   actualizados: number
+  eliminados: number
   duplicados_en_archivo: number
   batch_id: string
 }
@@ -173,18 +174,18 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
         {uploadError && (
           <div style={{
             marginTop: 12, padding: '10px 14px', borderRadius: 8,
-            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+            background: 'rgba(181,84,62,0.08)', border: '1px solid rgba(181,84,62,0.2)',
             display: 'flex', gap: 8, alignItems: 'flex-start',
           }}>
-            <AlertTriangle size={15} style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }} />
-            <p style={{ fontSize: 13, color: '#F87171' }}>{uploadError}</p>
+            <AlertTriangle size={15} style={{ color: '#B5543E', flexShrink: 0, marginTop: 1 }} />
+            <p style={{ fontSize: 13, color: '#B5543E' }}>{uploadError}</p>
           </div>
         )}
 
         {uploadStats && (
           <div style={{
             marginTop: 12, padding: '12px 16px', borderRadius: 8,
-            background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)',
+            background: 'rgba(90,138,74,0.06)', border: '1px solid rgba(90,138,74,0.15)',
           }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
               <CheckCircle2 size={15} style={{ color: '#4ade80' }} />
@@ -192,12 +193,12 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
                 Carga exitosa
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+            <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
               {[
                 { label: 'Procesados', value: uploadStats.total_procesados, color: 'var(--cream)' },
                 { label: 'Nuevos', value: uploadStats.nuevos, color: '#60a5fa' },
                 { label: 'Actualizados', value: uploadStats.actualizados, color: 'var(--gold)' },
-                { label: 'Duplicados', value: uploadStats.duplicados_en_archivo, color: '#f87171' },
+                { label: 'Eliminados', value: uploadStats.eliminados, color: '#f87171' },
               ].map(({ label, value, color }) => (
                 <div key={label}>
                   <p style={{ fontSize: 20, fontWeight: 900, color }}>{value}</p>
@@ -210,7 +211,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+      <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Total Deudores', value: totals.deudores, format: 'n', color: '#60a5fa' },
           { label: 'Deuda Vencida', value: totals.deuda_vencida, format: '$', color: '#f87171' },
@@ -232,7 +233,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
       </div>
 
       {/* Filters */}
-      <div style={{
+      <div className="grid-stack-mobile" style={{
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 12, padding: '16px 20px', marginBottom: 16,
         display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12,
@@ -358,7 +359,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
                           borderBottom: '1px solid var(--border)',
                           borderLeft: '3px solid var(--gold)',
                         }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
+                          <div className="grid-stack-mobile" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
 
                             {/* Contacto */}
                             <div>

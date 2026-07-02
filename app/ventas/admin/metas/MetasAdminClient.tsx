@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { Plus, Trash2, Loader2, CheckCircle } from 'lucide-react'
-import { Meta, Periodo } from '@/lib/types'
+import { Meta, Periodo, VENDEDOR_DISPLAY } from '@/lib/types'
+
+const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
 
 const CATEGORIAS = [
   'Total', 'Bar', 'Minimarket', 'Cafetería', 'Botillería',
@@ -255,7 +257,7 @@ export default function MetasAdminClient({ periodos, metas: initialMetas, vended
             >
               <div>
                 <p className="text-sm font-semibold" style={{ color: 'var(--cream)' }}>
-                  {meta.vendedor.split(' ')[0]} · {meta.categoria_negocio}
+                  {dspV(meta.vendedor)} · {meta.categoria_negocio}
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
                   {meta.tipo} · {meta.meta_litros} L

@@ -5,7 +5,6 @@ import {
   Upload, CheckCircle, AlertCircle, FileSpreadsheet, Loader2,
   Users, RefreshCw, Download, Info, MapPin,
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
 
 interface UploadResult {
   total: number
@@ -117,7 +116,8 @@ export default function ClientesUploadClient() {
     }
   }
 
-  function downloadTemplate() {
+  async function downloadTemplate() {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
     const wsData = [
       COLUMNAS_TEMPLATE,
@@ -126,7 +126,7 @@ export default function ClientesUploadClient() {
        'Juan Pérez', 'Calle Falsa 123', 'Santiago', 'Santiago', '8320000', 'IVA',
        'Calle Falsa 123', 'Santiago', 'Santiago', '0', 'Lun-Vie 9-18',
        'Sin notas', '1', 'https://maps.google.com/?q=...', 'Lista A',
-       'CLI-001', 'Javier Badilla', '30', '0', '0', 'Particular',
+       'CLI-001', 'Vendedor 1', '30', '0', '0', 'Particular',
        'Bar', 'Contado', 'Expendio de bebidas'],
     ]
     const ws = XLSX.utils.aoa_to_sheet(wsData)
@@ -166,7 +166,7 @@ export default function ClientesUploadClient() {
   }
 
   return (
-    <div className="px-4 pt-8 pb-20 lg:px-12 lg:pt-10" style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
+    <div className="px-4 pt-8 pb-20 lg:px-12 lg:pt-10" style={{ maxWidth: 1000, margin: '0 auto', width: '100%' }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -224,7 +224,7 @@ export default function ClientesUploadClient() {
                 marginTop: 8, padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                 border: 'none', cursor: 'pointer',
                 background: sqlCopied ? 'rgba(52,211,153,0.15)' : 'var(--surface2)',
-                color: sqlCopied ? '#34D399' : 'var(--cream)',
+                color: sqlCopied ? '#5A8A4A' : 'var(--cream)',
               }}
             >
               {sqlCopied ? '✓ Copiado' : 'Copiar SQL'}
@@ -287,10 +287,10 @@ export default function ClientesUploadClient() {
                 value={op.key}
                 checked={modo === op.key}
                 onChange={() => setModo(op.key)}
-                style={{ marginTop: 2, accentColor: op.key === 'replace' ? '#F87171' : 'var(--gold)', flexShrink: 0 }}
+                style={{ marginTop: 2, accentColor: op.key === 'replace' ? '#B5543E' : 'var(--gold)', flexShrink: 0 }}
               />
               <div>
-                <p style={{ fontSize: 13, fontWeight: 700, color: op.key === 'replace' && modo === op.key ? '#F87171' : 'var(--cream)' }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: op.key === 'replace' && modo === op.key ? '#B5543E' : 'var(--cream)' }}>
                   {op.label}
                 </p>
                 <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{op.desc}</p>
@@ -376,8 +376,8 @@ export default function ClientesUploadClient() {
           display: 'flex', alignItems: 'flex-start', gap: 10,
           background: 'rgba(255,68,68,0.06)', border: '1px solid rgba(255,68,68,0.25)',
         }}>
-          <AlertCircle size={17} style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }} />
-          <p style={{ fontSize: 13, color: '#F87171' }}>{error}</p>
+          <AlertCircle size={17} style={{ color: '#B5543E', flexShrink: 0, marginTop: 1 }} />
+          <p style={{ fontSize: 13, color: '#B5543E' }}>{error}</p>
         </div>
       )}
 
@@ -388,18 +388,18 @@ export default function ClientesUploadClient() {
           background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.2)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <CheckCircle size={17} style={{ color: '#34D399' }} />
-            <span style={{ fontWeight: 700, color: '#34D399', fontSize: 14 }}>Importación completada</span>
+            <CheckCircle size={17} style={{ color: '#5A8A4A' }} />
+            <span style={{ fontWeight: 700, color: '#5A8A4A', fontSize: 14 }}>Importación completada</span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div style={{ borderRadius: 10, padding: '12px 14px', background: 'rgba(52,211,153,0.07)' }}>
-              <p style={{ fontSize: 11, color: '#34D399', marginBottom: 6 }}>PROCESADOS EN EXCEL</p>
+              <p style={{ fontSize: 11, color: '#5A8A4A', marginBottom: 6 }}>PROCESADOS EN EXCEL</p>
               <p style={{ fontSize: 28, fontWeight: 900, color: 'white' }}>{result.total}</p>
               <p style={{ fontSize: 11, color: '#666', marginTop: 2 }}>clientes</p>
             </div>
             <div style={{ borderRadius: 10, padding: '12px 14px', background: 'rgba(52,211,153,0.07)' }}>
-              <p style={{ fontSize: 11, color: '#34D399', marginBottom: 6 }}>INSERTADOS EN DB</p>
+              <p style={{ fontSize: 11, color: '#5A8A4A', marginBottom: 6 }}>INSERTADOS EN DB</p>
               <p style={{ fontSize: 28, fontWeight: 900, color: 'white' }}>{result.insertadas}</p>
               <p style={{ fontSize: 11, color: '#666', marginTop: 2 }}>
                 modo: {result.modo === 'replace' ? 'reemplazo' : 'upsert'}
@@ -408,7 +408,7 @@ export default function ClientesUploadClient() {
           </div>
 
           {result.modo === 'replace' && (
-            <p style={{ fontSize: 12, color: '#F59E0B', marginTop: 10 }}>
+            <p style={{ fontSize: 12, color: '#D4AF37', marginTop: 10 }}>
               ⚠ Se eliminaron todos los clientes anteriores antes de la importación.
             </p>
           )}
@@ -421,7 +421,7 @@ export default function ClientesUploadClient() {
         background: 'var(--surface)', border: '1px solid var(--border)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <MapPin size={16} style={{ color: '#60A5FA' }} />
+          <MapPin size={16} style={{ color: '#D4AF37' }} />
           <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>
             Coordenadas para el mapa
           </p>
@@ -433,11 +433,11 @@ export default function ClientesUploadClient() {
         {coordsStatus && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
             <div style={{ borderRadius: 10, padding: '10px 14px', background: 'rgba(52,211,153,0.07)', textAlign: 'center' }}>
-              <p style={{ fontSize: 11, color: '#34D399', marginBottom: 4 }}>Con coordenadas</p>
+              <p style={{ fontSize: 11, color: '#5A8A4A', marginBottom: 4 }}>Con coordenadas</p>
               <p style={{ fontSize: 22, fontWeight: 800, color: 'white' }}>{coordsStatus.con_coordenadas}</p>
             </div>
             <div style={{ borderRadius: 10, padding: '10px 14px', background: 'rgba(248,113,113,0.07)', textAlign: 'center' }}>
-              <p style={{ fontSize: 11, color: '#F87171', marginBottom: 4 }}>Sin coordenadas</p>
+              <p style={{ fontSize: 11, color: '#B5543E', marginBottom: 4 }}>Sin coordenadas</p>
               <p style={{ fontSize: 22, fontWeight: 800, color: 'white' }}>{coordsStatus.sin_coordenadas}</p>
             </div>
           </div>
@@ -446,8 +446,8 @@ export default function ClientesUploadClient() {
         {geocodeResult && (
           <div style={{ borderRadius: 10, padding: '12px 14px', background: 'rgba(52,211,153,0.07)', marginBottom: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <CheckCircle size={14} style={{ color: '#34D399' }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#34D399' }}>Geocodificación completada</span>
+              <CheckCircle size={14} style={{ color: '#5A8A4A' }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#5A8A4A' }}>Geocodificación completada</span>
             </div>
             <p style={{ fontSize: 12, color: '#888' }}>
               {geocodeResult.actualizados} clientes actualizados · {geocodeResult.ciudades_procesadas} ciudades procesadas
@@ -458,7 +458,7 @@ export default function ClientesUploadClient() {
 
         {geocodeError && (
           <div style={{ borderRadius: 10, padding: '10px 14px', background: 'rgba(248,113,113,0.07)', marginBottom: 10 }}>
-            <p style={{ fontSize: 12, color: '#F87171' }}>{geocodeError}</p>
+            <p style={{ fontSize: 12, color: '#B5543E' }}>{geocodeError}</p>
           </div>
         )}
 
@@ -480,7 +480,7 @@ export default function ClientesUploadClient() {
               flex: 1, padding: '9px 16px', borderRadius: 10, fontSize: 12, fontWeight: 700,
               border: 'none', cursor: geocoding ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              background: geocoding ? 'var(--surface2)' : '#60A5FA',
+              background: geocoding ? 'var(--surface2)' : '#D4AF37',
               color: geocoding ? 'var(--muted)' : '#000',
               transition: 'all 0.15s',
             }}

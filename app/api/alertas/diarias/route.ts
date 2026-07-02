@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { VENDEDORES, CLIENTES_EXCLUIR } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_DB, CLIENTES_EXCLUIR } from '@/lib/types'
 import {
   getDiasHabiles,
   getDiasHabilesTranscurridos,
@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
   const { data: ultima } = await supabase
     .from('ventas')
     .select('fecha_pedido')
-    .in('vendedor_actual', VENDEDORES)
+    .in('vendedor_actual', VENDEDORES_DB)
     .order('fecha_pedido', { ascending: false })
     .limit(1)
     .single()
@@ -160,26 +160,27 @@ export async function GET(req: NextRequest) {
   const [{ data: ventasMes }, { data: ventasSemana }] = await Promise.all([
     mesActivo
       ? supabase.from('ventas').select('vendedor_actual, categoria_negocio, litros')
-          .in('vendedor_actual', VENDEDORES)
+          .in('vendedor_actual', VENDEDORES_DB)
           .gte('fecha_pedido', mesActivo.inicio).lte('fecha_pedido', fechaStr)
           .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`)
       : Promise.resolve({ data: [] }),
     semanaActiva
       ? supabase.from('ventas').select('vendedor_actual, categoria_negocio, litros')
-          .in('vendedor_actual', VENDEDORES)
+          .in('vendedor_actual', VENDEDORES_DB)
           .gte('fecha_pedido', semanaActiva.inicio).lte('fecha_pedido', fechaStr)
           .not('nombre_fantasia', 'in', `(${clientes_ex.map(c => `"${c}"`).join(',')})`)
       : Promise.resolve({ data: [] }),
   ])
 
   const analytics: AnalyticsVendedor[] = VENDEDORES.map(vendedor => {
-    const mSem = (metasSemanales ?? []).filter(m => m.vendedor === vendedor)
-    const mMes = (metasMensuales ?? []).filter(m => m.vendedor === vendedor)
+    // Consolidado: todas las metas y ventas
+    const mSem = metasSemanales ?? []
+    const mMes = metasMensuales ?? []
     const metaSemanalTotal = mSem.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
     const metaMensualTotal = mMes.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
 
-    const vMes = (ventasMes ?? []).filter(v => v.vendedor_actual === vendedor)
-    const vSem = (ventasSemana ?? []).filter(v => v.vendedor_actual === vendedor)
+    const vMes = ventasMes ?? []
+    const vSem = ventasSemana ?? []
     const realizadoMes = vMes.reduce((s, v) => s + (v.litros ?? 0), 0)
     const realizadoSemana = vSem.reduce((s, v) => s + (v.litros ?? 0), 0)
 

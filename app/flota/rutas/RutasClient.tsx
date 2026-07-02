@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import * as XLSX from 'xlsx'
 import { Plus, Trash2, Zap, MapPin, ExternalLink, Save, ChevronDown, CheckCircle, FileUp, PenLine } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 
-const F = '#F97316'
-const F_DIM = 'rgba(249,115,22,0.12)'
-const F_BORDER = 'rgba(249,115,22,0.28)'
+const F = '#D4AF37'
+const F_DIM = 'rgba(212,175,55,0.12)'
+const F_BORDER = 'rgba(212,175,55,0.28)'
 const T = '#D4AF37'
 
 interface Vehiculo { id: string; nombre: string; tipo: string; patente: string | null }
@@ -231,6 +230,7 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
     setExcelError('')
     setExcelPreview([])
     try {
+      const XLSX = await import('xlsx')
       const buffer = await file.arrayBuffer()
       const wb = XLSX.read(buffer, { type: 'array' })
       const ws = wb.Sheets[wb.SheetNames[0]]
@@ -356,8 +356,8 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
                   <div key={i} style={{ background: '#131313', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <span style={{ width: 22, height: 22, borderRadius: '50%', background: F_DIM, border: `1px solid ${F_BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: F, flexShrink: 0 }}>{p.orden}</span>
-                      {p.lat && p.lng && <MapPin size={12} color="#4ADE80" />}
-                      <button onClick={() => eliminarParada(i)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#FF5555', padding: 0 }}>
+                      {p.lat && p.lng && <MapPin size={12} color="#5A8A4A" />}
+                      <button onClick={() => eliminarParada(i)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#B5543E', padding: 0 }}>
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -431,7 +431,7 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
                 {/* Zona de carga */}
                 <div
                   onClick={() => excelRef.current?.click()}
-                  style={{ background: '#0F0F0F', border: '1px dashed rgba(249,115,22,0.3)', borderRadius: 12, padding: '24px 20px', textAlign: 'center', cursor: 'pointer' }}
+                  style={{ background: '#0F0F0F', border: '1px dashed rgba(212,175,55,0.3)', borderRadius: 12, padding: '24px 20px', textAlign: 'center', cursor: 'pointer' }}
                 >
                   <FileUp size={28} color={F} style={{ margin: '0 auto 10px', display: 'block' }} />
                   <p style={{ fontSize: 14, fontWeight: 700, color: '#F4EEDF', marginBottom: 4 }}>
@@ -445,7 +445,7 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
 
                 {/* Error */}
                 {excelError && (
-                  <p style={{ fontSize: 12, color: '#FF5555', marginTop: 10, padding: '10px 12px', background: 'rgba(255,85,85,0.08)', borderRadius: 8, border: '1px solid rgba(255,85,85,0.2)' }}>
+                  <p style={{ fontSize: 12, color: '#B5543E', marginTop: 10, padding: '10px 12px', background: 'rgba(181,84,62,0.08)', borderRadius: 8, border: '1px solid rgba(181,84,62,0.2)' }}>
                     ⚠ {excelError}
                   </p>
                 )}
@@ -515,7 +515,7 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
                 </a>
               )}
 
-              <button onClick={guardar} disabled={!puedeGuardar || guardando} style={{ width: '100%', padding: '15px', borderRadius: 12, border: 'none', background: puedeGuardar && !guardando ? (rutaGuardada ? '#4ADE80' : F) : 'rgba(255,255,255,0.06)', color: puedeGuardar && !guardando ? '#fff' : 'var(--muted)', fontSize: 15, fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <button onClick={guardar} disabled={!puedeGuardar || guardando} style={{ width: '100%', padding: '15px', borderRadius: 12, border: 'none', background: puedeGuardar && !guardando ? (rutaGuardada ? '#5A8A4A' : F) : 'rgba(255,255,255,0.06)', color: puedeGuardar && !guardando ? '#fff' : 'var(--muted)', fontSize: 15, fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 {rutaGuardada ? <><CheckCircle size={16} /> Ruta guardada</> : <><Save size={16} />{guardando ? 'Guardando…' : 'Guardar ruta'}</>}
               </button>
             </div>
@@ -538,7 +538,7 @@ export default function RutasClient({ vehiculos, rutas }: Props) {
 
 function RutaCard({ ruta, vehiculo }: { ruta: Ruta; vehiculo: Vehiculo | undefined }) {
   const [open, setOpen] = useState(false)
-  const estadoColor = { pendiente: '#F59E0B', en_curso: F, completada: '#4ADE80' }[ruta.estado] ?? 'var(--muted)'
+  const estadoColor = { pendiente: '#D4AF37', en_curso: F, completada: '#5A8A4A' }[ruta.estado] ?? 'var(--muted)'
 
   return (
     <div style={{ background: 'var(--surface2)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, overflow: 'hidden' }}>
@@ -564,7 +564,7 @@ function RutaCard({ ruta, vehiculo }: { ruta: Ruta; vehiculo: Vehiculo | undefin
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.cliente_nombre}</p>
                 <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.direccion}</p>
               </div>
-              {p.completada && <CheckCircle size={14} color="#4ADE80" />}
+              {p.completada && <CheckCircle size={14} color="#5A8A4A" />}
             </div>
           ))}
         </div>

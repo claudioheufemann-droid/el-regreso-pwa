@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Upload, Users, AlertCircle, Target } from 'lucide-react'
+import { Upload, Users, AlertCircle, Target, BarChart3, UserPlus, TrendingUp, DollarSign } from 'lucide-react'
+import AppHeader from '@/components/ui/AppHeader'
 import CargarClient from './cargar/CargarClient'
 import ClientesUploadClient from './clientes-upload/ClientesUploadClient'
 import DeudoresClient from './deudores/DeudoresClient'
@@ -41,19 +42,45 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores }
   }
 
   return (
-    <div style={{ padding: '32px 40px 60px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px', lineHeight: 1.1 }}>
-          Administración
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 5 }}>
-          Cargas de datos y configuración
-        </p>
-      </div>
+    <div className="admin-pad" style={{ padding: '12px 16px 60px' }}>
+      <AppHeader
+        title="Admin"
+        extraAction={
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => router.push('/ventas/admin/vendedores')} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)',
+              color: '#4ADE80', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <UserPlus size={14} /> Vendedores
+            </button>
+            <button onClick={() => router.push('/ventas/historico')} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)',
+              color: '#60A5FA', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <TrendingUp size={14} /> Histórico
+            </button>
+            <button onClick={() => router.push('/ventas/margen')} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)',
+              color: '#4ADE80', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <DollarSign size={14} /> Margen
+            </button>
+            <button onClick={() => router.push('/ventas/admin/crm-metrics')} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
+              color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <BarChart3 size={14} /> Métricas
+            </button>
+          </div>
+        }
+      />
 
       {/* Tab Bar */}
-      <div style={{
+      <div className="scroll-x-mobile" style={{
         display: 'flex', gap: 2, marginBottom: 32,
         background: 'var(--surface)',
         border: '1px solid var(--border)',
@@ -75,6 +102,7 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores }
                 background: active ? 'var(--gold)' : 'transparent',
                 color: active ? '#1a1200' : 'var(--muted)',
                 transition: 'all 0.15s',
+                flexShrink: 0, whiteSpace: 'nowrap',
               }}
             >
               <Icon size={14} />

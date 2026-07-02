@@ -13,7 +13,7 @@ export default async function ProduccionPage() {
   if (!user) redirect('/login')
 
   const [{ data: users }] = await Promise.all([
-    supabase.from('users').select('id, nombre, iniciales, rol, area, email, is_admin, macro_area'),
+    supabase.from('users').select('id, nombre, iniciales, rol, area, email, is_admin, macro_area, avatar_url'),
   ])
 
   const userProfile = users?.find(u => u.email === user.email)
@@ -28,7 +28,7 @@ export default async function ProduccionPage() {
 
   const { data: tasks } = await supabase
     .from('tasks')
-    .select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids')
+    .select('*, responsable:users(id, nombre, iniciales, rol, area, email, avatar_url), responsable_ids')
     .in('area', PRODUCCION_AREAS)
     .order('created_at', { ascending: false })
 

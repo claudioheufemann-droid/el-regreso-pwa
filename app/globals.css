@@ -2,17 +2,31 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #080808;
-  --surface: #131313;
-  --surface2: #1C1C1C;
+  --bg: #0A0A0A;
+  --surface: #111111;
+  --surface2: #181818;
   --gold: #D4AF37;
-  --gold-dim: rgba(212, 175, 55, 0.15);
-  --gold-hover: rgba(212, 175, 55, 0.07);
+  --gold-dim: rgba(212, 175, 55, 0.12);
+  --gold-hover: rgba(212, 175, 55, 0.06);
   --cream: #F4EEDF;
-  --muted: #7A7268;
-  --dim: #2A2522;
-  --border: rgba(212, 175, 55, 0.15);
-  --border-subtle: rgba(255, 255, 255, 0.06);
+  --muted: #6B6560;
+  --dim: #252220;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+
+  /* ── Colores semánticos de estado ── */
+  --green: #4ADE80;
+  --green-dim: #5A8A4A;
+  --red: #F87171;
+  --red-dim: #B5543E;
+  --orange: #F97316;
+  --blue: #60A5FA;
+
+  /* ── Spacing compacto ── */
+  --card-pad:    10px 12px;
+  --card-pad-lg: 14px 16px;
+  --section-gap: 10px;
+  --card-radius: 14px;
   --input-bg: rgba(255, 255, 255, 0.05);
   --input-color: #F4EEDF;
   --input-border: rgba(212, 175, 55, 0.18);
@@ -20,10 +34,27 @@
   --row-separator: rgba(255, 255, 255, 0.05);
   --spring: cubic-bezier(0.16, 1, 0.3, 1);
   --sidebar-w: 240px;
-  /* Tipografía */
+  /* ── Escala tipográfica (5 pasos) ── */
+  --text-xs:  10px;  /* labels uppercase, eyebrow, badges */
+  --text-sm:  12px;  /* body secundario, chips, botones */
+  --text-md:  14px;  /* body principal */
+  --text-lg:  18px;  /* títulos de sección */
+  --text-xl:  26px;  /* KPI hero, títulos de pantalla */
+
+  /* Tipografía (legacy — mantener para compatibilidad) */
   --fs-title: 24px;
   --fs-subtitle: 18px;
   --fs-body: 14px;
+
+  /* ── Elevación — 4 niveles de profundidad ── */
+  --shadow-0: none;
+  --shadow-1: 0 1px 3px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-2: 0 4px 12px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+  --shadow-3: 0 8px 32px rgba(0,0,0,0.6), 0 4px 8px rgba(0,0,0,0.35);
+  --shadow-gold: 0 0 0 1px rgba(212,175,55,0.15), 0 4px 18px rgba(212,175,55,0.12);
+
+  /* ── Surface level 3 (inputs dentro de cards) ── */
+  --surface3: #1E1E1E;
 
   /* Espaciado (grid de 8px) */
   --sp-1: 8px;
@@ -40,6 +71,21 @@
   --urgent-orange: #E67E22;
   --urgent-amber: #D4AF37;
   --safe-green: #4A7A3A;
+
+  /* ── Sistema El Regreso (identidad cervecera premium) ── */
+  --rg-carbon: var(--surface);    /* superficie de card estándar */
+  --rg-carbon-2: var(--bg);       /* fondo profundo */
+  --rg-gold: #D4AF37;            /* dorado corporativo */
+  --rg-amber-dim: #8A6D1F;       /* ámbar apagado (secundario) */
+  --rg-red-dim: #B5543E;         /* rojo apagado (alertas, no neón) */
+  --rg-cream: var(--cream);       /* texto principal */
+  --rg-text-2: rgba(255,255,255,0.4);  /* texto secundario */
+  --rg-text-3: rgba(255,255,255,0.25); /* texto terciario */
+  --rg-hairline: rgba(255,255,255,0.06); /* separadores */
+  --rg-card-border: rgba(255,255,255,0.06);
+  --rg-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  --rg-shadow-lg: 0 8px 40px rgba(0,0,0,0.5);
+  --rg-glow-gold: 0 0 12px rgba(212,175,55,0.25);
 }
 
 /* ── Modo Claro ── */
@@ -99,6 +145,78 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Anti-overflow horizontal global (mobile) ──
+   Usa overflow-x: clip (no 'hidden') para NO romper el scroll vertical
+   del documento en iOS. 'clip' recorta sin crear contenedor de scroll. */
+@media (max-width: 1023px) {
+  body { overflow-x: clip; }
+  /* min-width:0 es CLAVE: <main> es flex item; sin esto NO se encoge por
+     debajo del ancho de su contenido más ancho (tablas anchas) y estira
+     toda la página fuera de la pantalla. Con min-width:0 se ajusta al viewport
+     y el contenido ancho se recorta/scrollea en vez de empujar el layout. */
+  main { max-width: 100vw; min-width: 0; overflow-x: clip; }
+  main > * { min-width: 0; max-width: 100%; }
+  /* Fix global de raíz: los hijos de cualquier contenedor grid o flex reciben
+     min-width:0 para que las celdas se ENCOJAN en vez de desbordar la pantalla
+     (el default min-width:auto = min-content desborda con repeat(N,1fr) y flex).
+     SIN scope a 'main' — así cubre también Gestión (que no usa <main>) y
+     cualquier página top-level. Las tablas con scroll horizontal usan minWidth
+     inline (prevalece sobre esta regla). */
+  [style*="grid-template"] > *,
+  [style*="display:grid"] > *,
+  [style*="display: grid"] > *,
+  [style*="display:flex"] > *,
+  [style*="display: flex"] > * { min-width: 0; }
+
+  /* Red de seguridad final: si una caja SÍ logra encogerse (regla de arriba)
+     pero el texto de adentro no tiene ellipsis explícito, el texto se sigue
+     desbordando visualmente y el overflow-x:clip de arriba lo recorta sin
+     avisar (el síntoma de "se ve cortado" reportado reiteradamente).
+     overflow-wrap:anywhere fuerza que CUALQUIER texto pueda partirse y
+     bajar de línea en vez de desbordar, incluso en elementos que todavía
+     no se revisaron uno por uno. No rompe los que ya usan white-space:nowrap
+     + ellipsis (nowrap gana y sigue truncando con "..." normalmente). */
+  p, span, h1, h2, h3, h4, h5, h6, button, a, div { overflow-wrap: anywhere; }
+
+  /* Excepción a la regla de min-width:0 de arriba: tiras de tabs/chips
+     horizontales (display:flex + overflow-x:auto|scroll en el MISMO
+     elemento) están diseñadas para DESBORDAR y scrollear, no para
+     encoger. Si se les fuerza min-width:0, sus botones (whiteSpace:nowrap)
+     se aplastan por debajo del ancho de su propio texto y el contenido
+     de tabs vecinos se superpone — el bug exacto reportado en la ficha
+     de cliente ("Pedidos/Productos/Interacciones" amontonados).
+     Misma especificidad que la regla anterior + va DESPUÉS en el archivo
+     -> gana por orden de declaración para estos contenedores. */
+  [style*="overflow-x: auto"] > *,
+  [style*="overflow-x:auto"] > *,
+  [style*="overflow-x: scroll"] > *,
+  [style*="overflow-x:scroll"] > * { min-width: auto; flex-shrink: 0; }
+}
+
+/* ── Safe area para el notch / Dynamic Island (iPhone) ──
+   Requiere viewport-fit=cover en el <meta viewport> para que
+   env(safe-area-inset-*) tenga valores no-cero en iOS. */
+
+/* HTML necesita height: 100% para que safe-area funcione en PWA standalone */
+html { height: 100%; }
+
+.mobile-safe-top  { padding-top:    env(safe-area-inset-top,    0px); }
+.mobile-safe-bot  { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.mobile-safe-left { padding-left:   env(safe-area-inset-left,   0px); }
+.mobile-safe-x    { padding-left:   env(safe-area-inset-left,   0px);
+                    padding-right:  env(safe-area-inset-right,  0px); }
+
+@media (min-width: 1024px) {
+  .mobile-safe-top  { padding-top:    0; }
+  .mobile-safe-bot  { padding-bottom: 0; }
+  .mobile-safe-left { padding-left:   0; }
+  .mobile-safe-x    { padding-left:   0; padding-right: 0; }
+}
+
+/* Utilidad para contenedores que necesitan respetar la barra inferior */
+.pb-safe { padding-bottom: max(80px, calc(64px + env(safe-area-inset-bottom, 0px))); }
+@media (min-width: 1024px) { .pb-safe { padding-bottom: 24px; } }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -112,7 +230,7 @@ input, select, textarea {
   border: 1px solid var(--input-border);
   border-radius: 8px;
   padding: 12px 14px;
-  font-size: 15px;
+  font-size: 16px; /* 16px mínimo — evita zoom automático en iOS al enfocar */
   font-family: inherit;
   outline: none;
   width: 100%;
@@ -233,17 +351,87 @@ input::placeholder, textarea::placeholder { color: #5A5248; }
   overflow: hidden;
 }
 
-/* Safe area */
-.pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+/* Safe area — consolidadas, sin duplicados */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
-.safe-top    { padding-top: env(safe-area-inset-top, 0px); }
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px);  }
+
+/* ── Tap targets mínimos (WCAG 44×44px) ──────────────────────────────────
+   Usar .tap en botones pequeños, .tap-lg en CTAs principales */
+.tap    { min-height: 44px; min-width: 44px; display: flex; align-items: center; justify-content: center; }
+.tap-lg { min-height: 52px; min-width: 52px; display: flex; align-items: center; justify-content: center; }
+
+/* Botón primario estandarizado mobile */
+.btn-primary {
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #E5C45A, #B8962E);
+  color: #0A0A0A;
+  font-size: 14px;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  letter-spacing: -0.2px;
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  box-shadow: 0 4px 18px rgba(212,175,55,0.28);
+  transition: opacity 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-primary:active { opacity: 0.85; transform: scale(0.98); }
+
+/* Input estandarizado mobile — altura cómoda para dedo */
+.input-mobile {
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 16px; /* 16px evita zoom en iOS al enfocar */
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--cream);
+  font-family: inherit;
+  width: 100%;
+  outline: none;
+  -webkit-appearance: none;
+}
+.input-mobile:focus { border-color: rgba(212,175,55,0.5); }
+
+/* Contenedor de formulario mobile */
+.form-mobile {
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 0 20px;
+}
+
+/* Label de campo */
+.field-label {
+  font-size: 11px; font-weight: 700;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin-bottom: 6px; display: block;
+}
 
 /* ── Mobile responsive helpers ── */
 @media (max-width: 639px) {
-  .kpi-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
-  .kpi-grid-3 { grid-template-columns: repeat(2, 1fr) !important; }
+  /* minmax(0,1fr) — NO '1fr' (=minmax(auto,1fr)) — para que las celdas se
+     achiquen por debajo de su contenido en vez de ensanchar el grid fuera
+     de la pantalla. Combinado con min-width:0 en los hijos. */
+  .kpi-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .kpi-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .kpi-grid-4 > *, .kpi-grid-3 > * { min-width: 0; overflow: hidden; }
   .hide-on-mobile { display: none !important; }
   .content-pad { padding-left: 16px !important; padding-right: 16px !important; }
+  /* Grids que colapsan a 1 columna en móvil (filtros, detalles, master-detail) */
+  .grid-stack-mobile { grid-template-columns: minmax(0, 1fr) !important; }
+  .grid-stack-mobile > * { min-width: 0; }
+  /* Padding lateral reducido para secciones admin */
+  .admin-pad { padding-left: 16px !important; padding-right: 16px !important; }
+  /* Barra de pestañas/filtros con scroll horizontal en móvil */
+  .scroll-x-mobile { overflow-x: auto !important; width: 100% !important; -webkit-overflow-scrolling: touch; }
+  .scroll-x-mobile::-webkit-scrollbar { height: 0; }
+}
+
+/* Tablet: grids de 4 columnas pasan a 2 */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .grid-stack-mobile { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
 /* ── Desktop ── */
@@ -265,6 +453,371 @@ input::placeholder, textarea::placeholder { color: #5A5248; }
     color: var(--gold) !important;
   }
   .sidebar-nav-item.active span { color: var(--gold) !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SISTEMA EL REGRESO — clases estándar mobile (identidad cervecera)
+   Reutilizables en todas las secciones. No cambian lógica.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Contenedor de página estándar */
+.rg-page {
+  background: var(--rg-carbon-2);
+  min-height: 100vh;
+  padding: max(env(safe-area-inset-top), 18px) 16px 100px;
+}
+.rg-page-inner { max-width: 600px; margin: 0 auto; width: 100%; }
+
+/* Header de sección */
+.rg-eyebrow {
+  font-size: 11px; font-weight: 500; color: var(--rg-text-3);
+  letter-spacing: 0.4px; text-transform: capitalize; margin-bottom: 6px;
+}
+.rg-title {
+  font-size: 28px; font-weight: 900; color: var(--rg-cream);
+  letter-spacing: -1px; line-height: 1.1;
+}
+.rg-title-gold { color: var(--rg-gold); }
+
+/* Card estándar */
+.rg-card {
+  background: var(--rg-carbon);
+  border: 1px solid var(--rg-card-border);
+  border-radius: 18px;
+  box-shadow: var(--rg-shadow);
+  overflow: hidden;
+}
+.rg-card-pad { padding: 16px; }
+
+/* Encabezado dentro de card (título + acción) */
+.rg-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 12px; border-bottom: 1px solid var(--rg-hairline);
+}
+.rg-card-head-title {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 12px; font-weight: 700; color: var(--rg-cream); letter-spacing: 0.2px;
+}
+.rg-link {
+  font-size: 10.5px; font-weight: 700; color: var(--rg-gold);
+  background: none; border: none; cursor: pointer;
+  display: flex; align-items: center; gap: 3px;
+}
+
+/* KPI minimal */
+.rg-kpi {
+  background: var(--rg-carbon);
+  border: 1px solid var(--rg-card-border);
+  border-radius: 14px; padding: 12px 8px 10px;
+  display: flex; flex-direction: column; align-items: flex-start;
+  cursor: pointer; position: relative; overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+.rg-kpi-num { font-size: 26px; font-weight: 900; letter-spacing: -1.5px; line-height: 1; color: var(--rg-cream); font-variant-numeric: tabular-nums; }
+.rg-kpi-label { font-size: 9px; font-weight: 600; color: var(--rg-text-2); letter-spacing: 0.2px; }
+.rg-kpi-bar { position: absolute; bottom: 0; left: 0; width: 100%; height: 2px; background: rgba(255,255,255,0.05); }
+.rg-kpi-bar.active { background: var(--rg-gold); }
+
+/* Fila de lista ERP */
+.rg-row {
+  display: flex; align-items: center; gap: 13px; padding: 12px 16px;
+  border-bottom: 1px solid var(--rg-hairline); cursor: pointer;
+}
+.rg-row:last-child { border-bottom: none; }
+.rg-row:active { background: rgba(255,255,255,0.02); }
+.rg-row-title { font-size: 13.5px; font-weight: 600; color: var(--rg-cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rg-row-sub { font-size: 10px; color: var(--rg-text-2); margin-top: 2px; }
+
+/* Badge fecha discreto */
+.rg-date-badge {
+  flex-shrink: 0; background: rgba(212,175,55,0.1);
+  border: 1px solid rgba(212,175,55,0.22); border-radius: 8px; padding: 5px 9px;
+  font-size: 10px; font-weight: 800; color: var(--rg-gold); letter-spacing: 0.3px;
+}
+
+/* Botón primario dorado */
+.rg-btn-gold {
+  background: linear-gradient(135deg, #E5C45A, #B8962E);
+  color: #0A0A0A; border: none; border-radius: 14px;
+  padding: 12px 18px; font-size: 13px; font-weight: 900; cursor: pointer;
+  letter-spacing: -0.3px; box-shadow: 0 4px 18px rgba(212,175,55,0.28);
+}
+
+/* ── Sistema Tipográfico Unificado El Regreso ──────────────────────────────
+   JERARQUÍA:
+   .ty-hero        → 36px / 900   Números KPI grandes (dashboard hero)
+   .ty-h1          → 28px / 900   Títulos de sección (AppHeader)
+   .ty-h2          → 20px / 800   Títulos de card / subsección
+   .ty-h3          → 16px / 700   Títulos de item
+   .ty-h4          → 14px / 700   Subtítulos y labels de sección
+   .ty-body        → 14px / 500   Texto normal
+   .ty-body-sm     → 13px / 500   Texto secundario
+   .ty-label       → 11px / 600   Labels de campo, eyebrow
+   .ty-caption     → 10px / 500   Notas, fechas, contexto
+   .ty-micro       → 9px  / 600   Uppercase labels (UPPERCASE + letterSpacing)
+   .ty-nano        → 8px  / 700   Badges muy pequeños
+   ─────────────────────────────────────────────────────────────────────── */
+.ty-hero     { font-size: 36px;  font-weight: 900; letter-spacing: -1.5px; line-height: 1;   font-variant-numeric: tabular-nums; }
+.ty-h1       { font-size: 28px;  font-weight: 900; letter-spacing: -1px;   line-height: 1.1; }
+.ty-h2       { font-size: 20px;  font-weight: 800; letter-spacing: -0.5px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.ty-h3       { font-size: 16px;  font-weight: 700; letter-spacing: -0.2px; line-height: 1.3; }
+.ty-h4       { font-size: 14px;  font-weight: 700; letter-spacing: -0.1px; line-height: 1.4; }
+.ty-body     { font-size: 14px;  font-weight: 500; letter-spacing:  0;     line-height: 1.5; }
+.ty-body-sm  { font-size: 13px;  font-weight: 500; letter-spacing:  0;     line-height: 1.5; }
+.ty-label    { font-size: 11px;  font-weight: 600; letter-spacing:  0.3px; line-height: 1.4; }
+.ty-caption  { font-size: 10px;  font-weight: 500; letter-spacing:  0.1px; line-height: 1.4; }
+.ty-micro    { font-size:  9px;  font-weight: 700; letter-spacing:  0.8px; line-height: 1;   text-transform: uppercase; }
+.ty-nano     { font-size:  8px;  font-weight: 700; letter-spacing:  0.5px; line-height: 1;   }
+
+/* Colores semánticos de texto */
+.ty-primary   { color: var(--rg-cream); }
+.ty-secondary { color: var(--rg-text-2); }
+.ty-tertiary  { color: var(--rg-text-3); }
+.ty-gold      { color: var(--rg-gold);   }
+.ty-muted     { color: var(--muted);     }
+
+/* Bottom nav flotante estándar (pill glass) */
+.rg-nav {
+  position: fixed; bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4;
+  background: rgba(10,10,10,0.88);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.08); border-radius: 100px;
+  padding: 8px 12px; box-shadow: var(--rg-shadow-lg), 0 0 0 1px rgba(255,255,255,0.04);
+  z-index: 50; justify-content: space-around;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SISTEMA COMPACTO GLOBAL — El Regreso v2
+   Clases ultra-compactas para toda la app. Un módulo las usa,
+   todos se benefician. Reemplazan las clases largas anteriores.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Sistema de cards con jerarquía (3 niveles) ── */
+
+/* Flat: solo para contexto informativo, sin elevación */
+.card-flat {
+  background: var(--surface);
+  border-radius: var(--card-radius);
+}
+
+/* Raised (default): cards de contenido principal */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+
+/* Accent: card urgente/primaria — borde lateral con color semántico */
+.card-accent-left {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-color, var(--gold));
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-1);
+}
+
+.card-pad    { padding: var(--card-pad); }
+.card-pad-lg { padding: var(--card-pad-lg); }
+
+/* Acento de color en borde superior */
+.card-accent-gold { border-top: 2px solid rgba(212,175,55,0.5); }
+.card-accent      { border-top: 2px solid var(--accent-color, rgba(212,175,55,0.5)); }
+
+/* Hover interactivo (desktop) */
+@media (hover: hover) {
+  .card-interactive:hover {
+    border-color: rgba(255,255,255,0.12);
+    box-shadow: var(--shadow-2);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .card-interactive { transition: border-color 0.15s, box-shadow 0.15s; }
+}
+
+/* ── KPI chip compacto ── */
+.kpi-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;
+}
+.kpi-chip-num { font-size: 20px; font-weight: 900; letter-spacing: -0.5px; line-height: 1; color: var(--cream); font-variant-numeric: tabular-nums; }
+.kpi-chip-label { font-size: 8px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(255,255,255,0.3); }
+.kpi-chip-delta { font-size: 10px; font-weight: 700; }
+
+/* ── Fila lista densa ── */
+.row-dense {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  min-height: 44px; /* touch target */
+}
+.row-dense:last-child { border-bottom: none; }
+.row-dense:active { background: rgba(255,255,255,0.02); }
+
+/* ── Sección heading compacto ── */
+.section-head {
+  font-size: 10px; font-weight: 700;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 1px; text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* ── Badge de estado ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 20px;
+  font-size: 10px; font-weight: 700; line-height: 1.4;
+  border: 1px solid;
+  white-space: nowrap; flex-shrink: 0;
+}
+.badge-gold  { color: #D4AF37; background: rgba(212,175,55,0.08); border-color: rgba(212,175,55,0.2); }
+.badge-green { color: #4ADE80; background: rgba(74,222,128,0.08);  border-color: rgba(74,222,128,0.2); }
+.badge-red   { color: #F87171; background: rgba(248,113,113,0.08); border-color: rgba(248,113,113,0.2); }
+.badge-gray  { color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
+.badge-blue  { color: #60A5FA; background: rgba(96,165,250,0.08);  border-color: rgba(96,165,250,0.2); }
+
+/* ── Línea de texto con label + valor ── */
+.stat-line {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 0;
+}
+.stat-label { font-size: 11px; color: rgba(255,255,255,0.4); }
+.stat-value { font-size: 12px; font-weight: 700; color: var(--cream); }
+
+/* ── Delta indicator ── */
+.delta-pos { color: #4ADE80; font-size: 11px; font-weight: 700; }
+.delta-neg { color: #F87171; font-size: 11px; font-weight: 700; }
+
+/* ── Avatar compacto (iniciales) ── */
+.avatar-sm {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 900;
+}
+.avatar-md {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 900;
+}
+
+/* ── Separador visual ── */
+.divider { height: 1px; background: var(--border-subtle); margin: 8px 0; }
+
+/* ── Input mobile optimizado ── */
+.input-sm {
+  height: 36px; padding: 0 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--cream);
+  font-size: 13px; font-family: inherit;
+  outline: none; width: 100%;
+}
+.input-sm:focus { border-color: rgba(212,175,55,0.4); }
+
+/* ── Botón CTA primario (44px touch target) ── */
+.btn-cta {
+  min-height: 44px; padding: 0 18px;
+  background: linear-gradient(135deg, #E5C45A, #B8962E);
+  color: #0A0A0A; border: none; border-radius: 12px;
+  font-size: 13px; font-weight: 900; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+  letter-spacing: -0.2px; box-shadow: 0 3px 14px rgba(212,175,55,0.25);
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.btn-cta:active { opacity: 0.85; transform: scale(0.98); }
+
+/* ── Botón secundario outline (44px) ── */
+.btn-ghost {
+  min-height: 44px; padding: 0 16px;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 12px; color: var(--cream);
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-ghost:active { background: rgba(255,255,255,0.03); }
+
+/* ── Responsive: 2 cols compactas ── */
+@media (max-width: 639px) {
+  .grid-2-compact {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 8px;
+  }
+  .gap-compact { gap: 8px !important; }
+  .mb-compact  { margin-bottom: 8px !important; }
+  .p-compact   { padding: 10px 12px !important; }
+}
+
+/* ── Filter chip — botón filtro togglable (44px touch target) ── */
+.filter-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 0 16px;
+  border-radius: var(--radius-md);
+  font-size: 12px; font-weight: 700;
+  border: none; cursor: pointer;
+  background: var(--surface);
+  color: var(--muted);
+  outline: 1px solid var(--border);
+  white-space: nowrap; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, outline-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-chip.active {
+  background: var(--gold-dim);
+  color: var(--gold);
+  outline-color: rgba(212,175,55,0.3);
+}
+.filter-chip:active { opacity: 0.75; transform: scale(0.97); }
+
+/* ── Segmented picker (Mapa/Satélite/Híbrido, Capas, Vistas) ── */
+.seg-picker {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.seg-picker-btn {
+  padding: 7px 14px;
+  border-radius: calc(var(--radius-md) - 3px);
+  border: none; cursor: pointer;
+  font-size: 12px; font-weight: 700;
+  background: transparent;
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  display: flex; align-items: center; gap: 5px;
+}
+.seg-picker-btn.active { background: var(--gold); color: #0A0A0A; }
+.seg-picker-btn:not(.active):active { background: rgba(255,255,255,0.05); }
+
+/* ── KPI card estandarizada — borderTop accent + CSS vars ── */
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+  min-width: 0;
+}
+.kpi-card-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--muted);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.kpi-card-value {
+  font-size: 20px; font-weight: 900; letter-spacing: -0.5px;
+  line-height: 1; color: var(--cream);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Leaflet dark popup ── */

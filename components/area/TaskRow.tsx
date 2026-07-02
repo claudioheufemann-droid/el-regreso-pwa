@@ -135,7 +135,7 @@ export default function TaskRow({ task, onClick, selectable, selected, onToggle,
             </span>
           )}
           {task.responsable && (
-            <Avatar iniciales={task.responsable.iniciales} userId={task.responsable_id} size={24} />
+            <Avatar iniciales={task.responsable.iniciales} userId={task.responsable_id} size={24} avatarUrl={task.responsable?.avatar_url} />
           )}
         </div>
       </div>

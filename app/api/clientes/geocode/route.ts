@@ -5,29 +5,46 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-async function geocodeCity(ciudad: string, pais = 'Chile'): Promise<{ lat: number; lng: number } | null> {
+// Bounding box de Chile continental — cualquier resultado fuera de esto
+// es un falso positivo de Nominatim (p.ej. matchea una calle homónima
+// en otro país) y se descarta en vez de guardarse.
+const CHILE_BOUNDS = { minLat: -56.0, maxLat: -17.5, minLng: -75.7, maxLng: -66.4 }
+
+async function geocodeAddress(query: string): Promise<{ lat: number; lng: number } | null> {
   try {
-    const q = encodeURIComponent(`${ciudad}, ${pais}`)
+    const q = encodeURIComponent(query)
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=cl`,
+      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=cl&addressdetails=0`,
       {
         headers: {
-          'User-Agent': 'ElRegresoBeerApp/1.0 (benja.alarcon@elregresobeer.com)',
+          'User-Agent': 'ElRegresoBeerApp/1.0 (admin@elregresobeer.com)',
           'Accept-Language': 'es',
         },
       }
     )
     if (!res.ok) return null
     const data = await res.json()
-    if (data.length === 0) return null
-    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
+    if (!Array.isArray(data) || data.length === 0) return null
+    const lat = parseFloat(data[0].lat)
+    const lng = parseFloat(data[0].lon)
+    if (isNaN(lat) || isNaN(lng)) return null
+    if (lat < CHILE_BOUNDS.minLat || lat > CHILE_BOUNDS.maxLat || lng < CHILE_BOUNDS.minLng || lng > CHILE_BOUNDS.maxLng) return null
+    return { lat, lng }
   } catch {
     return null
   }
 }
 
-function addJitter(coord: number, range = 0.008) {
-  return coord + (Math.random() - 0.5) * range
+// Construye la mejor query de dirección posible para un cliente:
+// prioriza la dirección completa de Google Maps (ya trae comuna/región),
+// si no existe usa dirección + localidad/provincia + Chile.
+function buildQuery(c: { direccion_google_maps: string | null; direccion: string | null; localidad: string | null; provincia: string | null }): string | null {
+  if (c.direccion_google_maps) return `${c.direccion_google_maps}, Chile`
+  if (c.direccion) {
+    const zona = c.localidad || c.provincia
+    return zona ? `${c.direccion}, ${zona}, Chile` : `${c.direccion}, Chile`
+  }
+  return null
 }
 
 export async function POST() {
@@ -39,12 +56,11 @@ export async function POST() {
 
   const supabase = createClient(url, key)
 
-  // Get all clients without coordinates
   const { data: sinCoords, error } = await supabase
     .from('clientes')
-    .select('id, nombre_fantasia, localidad_entrega, localidad, provincia')
+    .select('id, nombre_fantasia, direccion, direccion_google_maps, localidad, provincia')
     .or('lat.is.null,lng.is.null')
-    .limit(1000)
+    .limit(60) // Nominatim: 1 req/seg — limitar para no exceder el timeout de la función
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -54,50 +70,32 @@ export async function POST() {
     return NextResponse.json({ mensaje: 'Todos los clientes ya tienen coordenadas', actualizados: 0 })
   }
 
-  // Group by city to minimize API calls
-  const ciudadMap = new Map<string, number[]>() // ciudad → [client ids]
-  for (const c of sinCoords) {
-    const ciudad = (c.localidad_entrega || c.localidad || c.provincia || '').trim()
-    if (!ciudad) continue
-    if (!ciudadMap.has(ciudad)) ciudadMap.set(ciudad, [])
-    ciudadMap.get(ciudad)!.push(c.id)
-  }
-
   let actualizados = 0
-  let sinCiudad = sinCoords.filter(c => !((c.localidad_entrega || c.localidad || c.provincia || '').trim())).length
+  let sinDireccion = 0
+  let sinResultado = 0
 
-  // Geocode each unique city (max 60 to avoid long timeouts)
-  const ciudades = [...ciudadMap.entries()].slice(0, 60)
+  for (const c of sinCoords) {
+    const query = buildQuery(c)
+    if (!query) { sinDireccion++; continue }
 
-  for (const [ciudad, ids] of ciudades) {
-    const coords = await geocodeCity(ciudad)
-    if (!coords) {
-      await sleep(1100) // wait before next request even if failed
-      continue
-    }
+    const coords = await geocodeAddress(query)
+    await sleep(1100) // Nominatim: máximo 1 req/seg
 
-    // Update all clients in this city with slightly randomized coordinates
-    for (const id of ids) {
-      const lat = addJitter(coords.lat)
-      const lng = addJitter(coords.lng)
+    if (!coords) { sinResultado++; continue }
 
-      const { error: updateError } = await supabase
-        .from('clientes')
-        .update({ lat, lng })
-        .eq('id', id)
+    const { error: updateError } = await supabase
+      .from('clientes')
+      .update({ lat: coords.lat, lng: coords.lng })
+      .eq('id', c.id)
 
-      if (!updateError) actualizados++
-    }
-
-    await sleep(1100) // Nominatim rate limit: max 1 req/sec
+    if (!updateError) actualizados++
   }
 
   return NextResponse.json({
-    total_sin_coords: sinCoords.length,
-    ciudades_procesadas: ciudades.length,
+    procesados: sinCoords.length,
     actualizados,
-    sin_ciudad: sinCiudad,
-    pendientes: Math.max(0, ciudadMap.size - 60),
+    sin_direccion: sinDireccion,
+    sin_resultado: sinResultado,
   })
 }
 

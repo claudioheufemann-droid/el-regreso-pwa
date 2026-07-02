@@ -1,10 +1,27 @@
 'use client'
 
-import { useEffect } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
+import { useEffect, useRef, useState } from 'react'
+import { MapContainer, TileLayer, CircleMarker, Marker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import { VENDEDOR_DISPLAY } from '@/lib/types'
 
-interface Punto {
+// Ícono de arrastre para corrección manual de ubicación (DivIcon SVG,
+// sin depender de los assets de imagen default de Leaflet).
+const DRAG_ICON = L.divIcon({
+  html: `<svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))">
+    <path d="M17 0C7.6 0 0 7.6 0 17c0 12.7 17 27 17 27s17-14.3 17-27C34 7.6 26.4 0 17 0z" fill="#D4AF37"/>
+    <circle cx="17" cy="17" r="7" fill="#1a1200"/>
+  </svg>`,
+  className: '',
+  iconSize: [34, 44],
+  iconAnchor: [17, 44],
+})
+
+const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
+
+export interface Punto {
   nombre_fantasia: string
   vendedor_actual: string
   categoria_negocio: string | null
@@ -18,208 +35,573 @@ interface Punto {
   telefono: string | null
   email: string | null
   contacto: string | null
+  dias_sin_compra: number | null
+  segmento: string | null
+  score: number | null
+  alerta_nivel: string | null
+  ultima_compra: string | null
+  deuda_total: number
+  deuda_vencida: number
+  sin_compra: boolean
+}
+
+export type CapaViz = 'pedidos' | 'salud' | 'calor'
+export type TileTipo = 'mapa' | 'satelite' | 'hibrido'
+
+export interface LeadPunto {
+  id: number
+  nombre: string
+  ciudad: string | null
+  categoria: string | null
+  categoria_mapeada: string | null
+  producto_sugerido: string | null
+  telefono: string | null
+  sitio_web: string | null
+  rating: number | null
+  lat: number | null
+  lng: number | null
+  litros_potencial: number | null
+  score_lead: number | null
 }
 
 interface Props {
   puntos: Punto[]
+  leads?: LeadPunto[]
   vendedorFiltro: string
+  capaViz: CapaViz
+  mostrarSinCompra: boolean
+  tileTipo?: TileTipo
+  userCoords?: { lat: number; lng: number } | null
+  flyTarget?: FlyTarget | null
+  onLocationSaved?: () => void
 }
+
+// ── Helpers ──────────────────────────────────────────────────
 
 function formatPeso(n: number) {
   return '$' + Math.round(n).toLocaleString('es-CL')
 }
 
-function getColor(vendedor: string) {
-  if (vendedor === 'Javier Badilla') return '#F59E0B'
-  if (vendedor === 'Carlos Urrejola') return '#60A5FA'
-  return '#A78BFA'
+function getColorVendedor(_vendedor: string) {
+  return '#D4AF37'
+}
+
+// Salud: verde <7d, amarillo 8-15d, naranja 16-30d, rojo >30d
+function getColorSalud(dias: number | null): string {
+  if (dias === null) return '#6B7280'
+  if (dias <= 7)  return '#5A8A4A'  // verde: excelente
+  if (dias <= 15) return '#D4AF37'  // amarillo: atención
+  if (dias <= 30) return '#F97316'  // naranja: riesgo
+  return '#B5543E'                   // rojo: crítico
+}
+
+function getSaludLabel(dias: number | null): string {
+  if (dias === null) return 'Sin datos'
+  if (dias <= 7)  return `Excelente · ${dias}d`
+  if (dias <= 15) return `Atención · ${dias}d`
+  if (dias <= 30) return `Riesgo · ${dias}d`
+  return `Crítico · ${dias}d`
 }
 
 function getRadius(litros: number) {
-  if (litros <= 0) return 4
-  if (litros < 10) return 5
-  if (litros < 30) return 8
-  if (litros < 60) return 11
-  if (litros < 100) return 14
-  if (litros < 200) return 17
-  return 20
+  if (litros <= 0) return 5
+  if (litros < 10) return 6
+  if (litros < 30) return 9
+  if (litros < 60) return 12
+  if (litros < 100) return 15
+  if (litros < 200) return 18
+  return 22
 }
 
-function RecenterMap({ puntos }: { puntos: Punto[] }) {
+// ── Componente Heatmap ───────────────────────────────────────
+
+function HeatmapLayer({ puntos }: { puntos: Punto[] }) {
   const map = useMap()
+  const layerRef = useRef<any>(null)
+
   useEffect(() => {
-    if (puntos.length === 0) return
-    const lats = puntos.map(p => p.lat)
-    const lngs = puntos.map(p => p.lng)
+    if (typeof window === 'undefined') return
+    // Importar leaflet.heat dinámicamente
+    import('leaflet').then(L => {
+      require('leaflet.heat')
+      if (layerRef.current) {
+        map.removeLayer(layerRef.current)
+      }
+      const points = puntos
+        .filter(p => p.litros_total > 0)
+        .map(p => [p.lat, p.lng, Math.min(p.litros_total / 100, 1)] as [number, number, number])
+
+      if (points.length === 0) return
+
+      // @ts-ignore — leaflet.heat añade L.heatLayer
+      layerRef.current = (L as any).heatLayer(points, {
+        radius: 35,
+        blur: 20,
+        maxZoom: 13,
+        max: 1,
+        gradient: { 0.2: '#1e40af', 0.4: '#7c3aed', 0.6: '#d97706', 0.8: '#dc2626', 1.0: '#fff' },
+      }).addTo(map)
+    })
+
+    return () => {
+      if (layerRef.current) {
+        map.removeLayer(layerRef.current)
+        layerRef.current = null
+      }
+    }
+  }, [puntos, map])
+
+  return null
+}
+
+// ── Recentrar mapa ──────────────────────────────────────────
+// Si hay ubicación GPS del usuario, la primera carga del mapa parte ahí
+// (no salta al centroide de los datos del período, que puede caer lejos
+// de donde está el vendedor — ej. un solo cliente en otra región).
+// El auto-fit a los datos sigue funcionando normalmente para cambios
+// posteriores de filtro (fecha, vendedor, etc.).
+
+function RecenterMap({ puntos, skipFirst }: { puntos: Punto[]; skipFirst: boolean }) {
+  const map = useMap()
+  const isFirst = useRef(true)
+  useEffect(() => {
+    if (isFirst.current) {
+      isFirst.current = false
+      if (skipFirst) return
+    }
+    const pts = puntos.filter(p => !p.sin_compra)
+    if (pts.length === 0) return
+    const lats = pts.map(p => p.lat)
+    const lngs = pts.map(p => p.lng)
     const minLat = Math.min(...lats), maxLat = Math.max(...lats)
     const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
-    map.fitBounds([[minLat - 0.1, minLng - 0.1], [maxLat + 0.1, maxLng + 0.1]], { maxZoom: 12 })
+    map.fitBounds([[minLat - 0.05, minLng - 0.05], [maxLat + 0.05, maxLng + 0.05]], { maxZoom: 13 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puntos, map])
   return null
 }
 
-export default function MapLeaflet({ puntos, vendedorFiltro }: Props) {
-  const filtrados = vendedorFiltro === 'all'
-    ? puntos
-    : puntos.filter(p => p.vendedor_actual === vendedorFiltro)
-
-  // Agrupar productos por producto+envase para el popup
-  function agruparProductos(productos: { producto: string; envase: string | null; litros: number }[]) {
-    const map = new Map<string, number>()
-    for (const p of productos) {
-      const key = `${p.producto}||${p.envase ?? ''}`
-      map.set(key, (map.get(key) ?? 0) + p.litros)
+// ── Centrar en la ubicación GPS del usuario al abrir el mapa ─
+function CenterOnUser({ coords }: { coords: { lat: number; lng: number } | null }) {
+  const map = useMap()
+  const done = useRef(false)
+  useEffect(() => {
+    if (coords && !done.current) {
+      done.current = true
+      map.setView([coords.lat, coords.lng], 13)
     }
-    return [...map.entries()]
-      .map(([k, litros]) => {
-        const [producto, envase] = k.split('||')
-        return { producto, envase, litros: Math.round(litros * 10) / 10 }
-      })
+  }, [coords, map])
+  return null
+}
+
+// ── Volar a un resultado del buscador de localidad ───────────
+export interface FlyTarget { lat: number; lng: number; zoom?: number; ts: number }
+
+function FlyTo({ target }: { target: FlyTarget | null }) {
+  const map = useMap()
+  useEffect(() => {
+    if (target) map.flyTo([target.lat, target.lng], target.zoom ?? 14, { duration: 1.2 })
+  }, [target, map])
+  return null
+}
+
+// ── Forzar recálculo de tamaño (Leaflet renderiza 0px si el contenedor se
+//    dimensiona después de montar — típico en móvil y con carga dinámica) ──
+function MapResizer() {
+  const map = useMap()
+  useEffect(() => {
+    const fix = () => map.invalidateSize()
+    const t1 = setTimeout(fix, 150)
+    const t2 = setTimeout(fix, 500)
+    window.addEventListener('resize', fix)
+    window.addEventListener('orientationchange', fix)
+    return () => {
+      clearTimeout(t1); clearTimeout(t2)
+      window.removeEventListener('resize', fix)
+      window.removeEventListener('orientationchange', fix)
+    }
+  }, [map])
+  return null
+}
+
+// ── Popup detalle ───────────────────────────────────────────
+
+function PopupDetalle({ p, color, onWA, onEditLocation }: {
+  p: Punto
+  color: string
+  onWA: (t: WATarget) => void
+  onEditLocation: (p: Punto) => void
+}) {
+  const verClienteUrl = `/ventas/clientes?q=${encodeURIComponent(p.nombre_fantasia)}`
+  const prods = (() => {
+    const m = new Map<string, number>()
+    for (const pr of p.productos) {
+      const key = `${pr.producto}||${pr.envase ?? ''}`
+      m.set(key, (m.get(key) ?? 0) + pr.litros)
+    }
+    return [...m.entries()]
+      .map(([k, litros]) => { const [producto, envase] = k.split('||'); return { producto, envase, litros: Math.round(litros * 10) / 10 } })
       .sort((a, b) => b.litros - a.litros)
-  }
+  })()
+
+  const saludColor = getColorSalud(p.dias_sin_compra)
 
   return (
-    <MapContainer
-      center={[-40.2, -72.8]}
-      zoom={8}
-      style={{ height: '100%', width: '100%', background: '#111' }}
-      zoomControl={true}
-    >
-      <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-      />
+    <div style={{ fontFamily: 'system-ui, sans-serif', minWidth: 240, maxWidth: 300, color: '#F4EEDF' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color: '#5A8A4A', background: 'rgba(90,138,74,0.18)', padding: '2px 8px', borderRadius: 20, letterSpacing: '0.04em' }}>
+            ✓ CLIENTE EL REGRESO
+          </span>
+          {p.sin_compra && (
+            <span style={{ fontSize: 9, fontWeight: 800, color: '#818cf8', background: 'rgba(99,102,241,0.15)', padding: '2px 8px', borderRadius: 20 }}>
+              SIN COMPRA EN ESTE PERÍODO
+            </span>
+          )}
+        </div>
+        <div style={{ fontWeight: 800, fontSize: 15, color: '#fff', marginBottom: 4, lineHeight: 1.2 }}>
+          {p.nombre_fantasia}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color, fontWeight: 700 }}>{dspV(p.vendedor_actual)}</span>
+          {p.segmento && (
+            <span style={{ fontSize: 10, background: 'rgba(212,175,55,0.15)', color: '#D4AF37', padding: '1px 7px', borderRadius: 20, fontWeight: 700 }}>
+              Seg {p.segmento}
+            </span>
+          )}
+          {p.categoria_negocio && (
+            <span style={{ fontSize: 10, color: '#aaa', background: 'rgba(255,255,255,0.07)', padding: '1px 7px', borderRadius: 20 }}>
+              {p.categoria_negocio}
+            </span>
+          )}
+        </div>
+        {p.localidad && <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>📍 {p.localidad}</div>}
+      </div>
 
-      {filtrados.map((p, i) => {
-        const color = getColor(p.vendedor_actual)
-        const radius = getRadius(p.litros_total)
-        const prods = agruparProductos(p.productos)
+      {/* Salud del cliente */}
+      <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: `${saludColor}15`, border: `1px solid ${saludColor}40` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: saludColor, fontWeight: 700 }}>
+            {p.sin_compra ? '⚠️ Sin compra en período' : getSaludLabel(p.dias_sin_compra)}
+          </span>
+          {p.score !== null && (
+            <span style={{ fontSize: 11, color: '#D4AF37', fontWeight: 800 }}>{p.score} pts</span>
+          )}
+        </div>
+        {p.ultima_compra && (
+          <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
+            Última: {new Date(p.ultima_compra).toLocaleDateString('es-CL')}
+          </div>
+        )}
+        {p.deuda_vencida > 0 && (
+          <div style={{ fontSize: 10, color: '#B5543E', marginTop: 3, fontWeight: 700 }}>
+            ⚠ Deuda vencida: {formatPeso(p.deuda_vencida)}
+          </div>
+        )}
+      </div>
 
-        return (
-          <CircleMarker
-            key={i}
-            center={[p.lat, p.lng]}
-            radius={radius}
-            pathOptions={{
-              color,
-              fillColor: color,
-              fillOpacity: 0.7,
-              weight: 1.5,
-              opacity: 0.9,
-            }}
-          >
-            <Popup closeButton={true} maxWidth={300}>
-              <div style={{ fontFamily: 'system-ui, sans-serif', minWidth: 240, color: '#F4EEDF' }}>
-                {/* Header */}
-                <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: '#fff', marginBottom: 3, lineHeight: 1.2 }}>
-                    {p.nombre_fantasia}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, color, fontWeight: 700 }}>{p.vendedor_actual.split(' ')[0]}</span>
-                    {p.categoria_negocio && (
-                      <span style={{ fontSize: 10, color: '#aaa', background: 'rgba(255,255,255,0.08)', padding: '1px 7px', borderRadius: 20 }}>
-                        {p.categoria_negocio}
-                      </span>
-                    )}
-                  </div>
-                  {p.localidad && (
-                    <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>📍 {p.localidad}</div>
-                  )}
+      {/* Métricas (solo si tiene compras en período) */}
+      {!p.sin_compra && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 10 }}>
+          <div style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
+            <div style={{ fontSize: 10, color: '#D4AF37', fontWeight: 600, marginBottom: 2 }}>LITROS</div>
+            <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{p.litros_total.toFixed(1)}</div>
+          </div>
+          <div style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
+            <div style={{ fontSize: 10, color: '#5A8A4A', fontWeight: 600, marginBottom: 2 }}>PEDIDOS</div>
+            <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{p.pedidos_count}</div>
+          </div>
+          <div style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
+            <div style={{ fontSize: 10, color: '#8A6D1F', fontWeight: 600, marginBottom: 2 }}>VENTA</div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: '#fff' }}>{formatPeso(p.total_sin_impuesto)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Contacto */}
+      {(p.telefono || p.contacto || p.email) && (
+        <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          {p.contacto && <div style={{ fontSize: 11, color: '#bbb', marginBottom: 6 }}>👤 {p.contacto}</div>}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {p.telefono && (
+              <button
+                onClick={() => onWA({ nombre: p.nombre_fantasia, telefono: p.telefono, contexto: 'visita', subtitulo: p.categoria_negocio ?? undefined })}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, background: 'rgba(37,211,102,0.15)', border: '1px solid rgba(37,211,102,0.3)', color: '#25D366', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                💬 WhatsApp
+              </button>
+            )}
+            {p.email && (
+              <a href={`mailto:${p.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, textDecoration: 'none', background: 'rgba(129,140,248,0.15)', border: '1px solid rgba(129,140,248,0.3)', color: '#818cf8', fontSize: 12, fontWeight: 700 }}>
+                ✉ Email
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Productos */}
+      {prods.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#999', marginBottom: 6, letterSpacing: '0.08em' }}>PRODUCTOS</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {prods.slice(0, 6).map((prod, j) => (
+              <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: '#eee', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prod.producto}</div>
+                  {prod.envase && <div style={{ fontSize: 10, color: '#888' }}>{prod.envase}</div>}
                 </div>
-
-                {/* Métricas */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 10 }}>
-                  <div style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, color: '#60A5FA', fontWeight: 600, marginBottom: 2 }}>LITROS</div>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{p.litros_total.toFixed(1)}</div>
-                  </div>
-                  <div style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, color: '#34D399', fontWeight: 600, marginBottom: 2 }}>PEDIDOS</div>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{p.pedidos_count}</div>
-                  </div>
-                  <div style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, color: '#A78BFA', fontWeight: 600, marginBottom: 2 }}>VENTA</div>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: '#fff' }}>{formatPeso(p.total_sin_impuesto)}</div>
-                  </div>
-                </div>
-
-                {/* Contacto */}
-                {(p.telefono || p.contacto || p.email) && (
-                  <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                    {p.contacto && (
-                      <div style={{ fontSize: 11, color: '#bbb', marginBottom: 6 }}>👤 {p.contacto}</div>
-                    )}
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {p.telefono && (
-                        <a
-                          href={`https://wa.me/${p.telefono.replace(/\D/g, '')}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 5,
-                            padding: '6px 12px', borderRadius: 8, textDecoration: 'none',
-                            background: 'rgba(37,211,102,0.15)', border: '1px solid rgba(37,211,102,0.3)',
-                            color: '#25D366', fontSize: 12, fontWeight: 700,
-                          }}
-                        >
-                          💬 WhatsApp
-                        </a>
-                      )}
-                      {p.email && (
-                        <a
-                          href={`mailto:${p.email}`}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 5,
-                            padding: '6px 12px', borderRadius: 8, textDecoration: 'none',
-                            background: 'rgba(129,140,248,0.15)', border: '1px solid rgba(129,140,248,0.3)',
-                            color: '#818cf8', fontSize: 12, fontWeight: 700,
-                          }}
-                        >
-                          ✉ Email
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Productos */}
-                {prods.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#999', marginBottom: 6, letterSpacing: '0.08em' }}>
-                      PRODUCTOS
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {prods.slice(0, 8).map((prod, j) => (
-                        <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, color: '#eee', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {prod.producto}
-                            </div>
-                            {prod.envase && (
-                              <div style={{ fontSize: 10, color: '#888' }}>{prod.envase}</div>
-                            )}
-                          </div>
-                          <div style={{ fontSize: 12, fontWeight: 800, color: '#60A5FA', marginLeft: 10, flexShrink: 0 }}>
-                            {prod.litros} L
-                          </div>
-                        </div>
-                      ))}
-                      {prods.length > 8 && (
-                        <div style={{ fontSize: 10, color: '#777', textAlign: 'center', paddingTop: 4 }}>
-                          +{prods.length - 8} productos más
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#D4AF37', marginLeft: 10, flexShrink: 0 }}>{prod.litros} L</div>
               </div>
+            ))}
+            {prods.length > 6 && <div style={{ fontSize: 10, color: '#777', textAlign: 'center', paddingTop: 4 }}>+{prods.length - 6} más</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Ver cliente */}
+      <a
+        href={verClienteUrl}
+        style={{
+          display: 'block', marginTop: 10, padding: '8px', textAlign: 'center', borderRadius: 8,
+          background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)',
+          color: '#D4AF37', fontSize: 12, fontWeight: 700, textDecoration: 'none',
+        }}
+      >
+        Ver ficha del cliente →
+      </a>
+
+      {/* Corregir ubicación — por si el geocodificador puso el pin mal */}
+      <button
+        onClick={() => onEditLocation(p)}
+        style={{
+          display: 'block', width: '100%', marginTop: 6, padding: '7px', textAlign: 'center', borderRadius: 8,
+          background: 'none', border: '1px dashed rgba(255,255,255,0.2)', cursor: 'pointer',
+          color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600,
+        }}
+      >
+        📍 ¿Este pin está mal puesto? Corregir ubicación
+      </button>
+    </div>
+  )
+}
+
+// ── Marcador arrastrable para corregir ubicación ─────────────
+
+function EditableMarker({ target, onCancel, onSave }: {
+  target: Punto
+  onCancel: () => void
+  onSave: (lat: number, lng: number) => void
+}) {
+  const [pos, setPos] = useState<[number, number]>([target.lat, target.lng])
+  const [saving, setSaving] = useState(false)
+
+  return (
+    <Marker
+      position={pos}
+      icon={DRAG_ICON}
+      draggable
+      eventHandlers={{
+        dragend: e => {
+          const ll = (e.target as L.Marker).getLatLng()
+          setPos([ll.lat, ll.lng])
+        },
+      }}
+    >
+      <Popup closeButton={false} autoClose={false} closeOnClick={false}>
+        <div style={{ minWidth: 200, fontFamily: 'system-ui,sans-serif', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', marginBottom: 4 }}>{target.nombre_fantasia}</p>
+          <p style={{ fontSize: 11, color: '#666', marginBottom: 10 }}>Arrastra el pin a la ubicación correcta</p>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={onCancel}
+              style={{ flex: 1, padding: '7px', borderRadius: 7, border: '1px solid #ccc', background: 'white', color: '#666', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Cancelar
+            </button>
+            <button
+              disabled={saving}
+              onClick={async () => { setSaving(true); await onSave(pos[0], pos[1]) }}
+              style={{ flex: 1, padding: '7px', borderRadius: 7, border: 'none', background: '#D4AF37', color: '#1a1200', fontSize: 12, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1 }}
+            >
+              {saving ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      </Popup>
+    </Marker>
+  )
+}
+
+// ── Componente principal ─────────────────────────────────────
+
+const TILES: Record<TileTipo, { url: string; attribution: string }> = {
+  mapa: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+  },
+  satelite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+  },
+  hibrido: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+  },
+}
+
+function PopupLead({ l, onWA }: { l: LeadPunto; onWA: (t: WATarget) => void }) {
+  return (
+    <div style={{ minWidth: 210, fontFamily: 'system-ui,sans-serif' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span style={{ fontSize: 9, fontWeight: 800, color: '#8A6D1F', background: 'rgba(167,139,250,0.15)', padding: '1px 7px', borderRadius: 10 }}>POSIBLE CLIENTE</span>
+        {l.rating != null && <span style={{ fontSize: 11, color: '#D97706' }}>★ {l.rating}</span>}
+      </div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: '#D4AF37', marginBottom: 2 }}>{l.nombre}</div>
+      <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
+        {l.categoria ?? '—'} · 📍 {l.ciudad ?? ''}{l.categoria_mapeada ? ` · ≈ ${l.categoria_mapeada}` : ''}
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+        <div><div style={{ fontSize: 16, fontWeight: 900, color: '#059669' }}>~{l.litros_potencial} L</div><div style={{ fontSize: 9, color: '#999', textTransform: 'uppercase' }}>potencial/mes</div></div>
+        <div><div style={{ fontSize: 16, fontWeight: 900, color: '#7C3AED' }}>{l.score_lead ?? 0}</div><div style={{ fontSize: 9, color: '#999', textTransform: 'uppercase' }}>score</div></div>
+        {l.producto_sugerido && <div><div style={{ fontSize: 11, fontWeight: 700, color: '#D4AF37', marginTop: 3 }}>{l.producto_sugerido}</div><div style={{ fontSize: 9, color: '#999', textTransform: 'uppercase' }}>sugerido</div></div>}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {l.telefono && (
+          <button onClick={() => onWA({ nombre: l.nombre, telefono: l.telefono!, contexto: 'mision' })}
+            style={{ flex: 1, padding: '6px', borderRadius: 7, border: 'none', background: '#25D166', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>WhatsApp</button>
+        )}
+        {l.telefono && (
+          <button onClick={() => window.open(`tel:${l.telefono}`)}
+            style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #D4AF37', background: 'white', color: '#D4AF37', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Llamar</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function MapLeaflet({ puntos, leads = [], vendedorFiltro, capaViz, mostrarSinCompra, tileTipo = 'mapa', userCoords = null, flyTarget = null, onLocationSaved }: Props) {
+  const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+  const [editTarget, setEditTarget] = useState<Punto | null>(null)
+  const tile = TILES[tileTipo]
+
+  async function guardarUbicacion(lat: number, lng: number) {
+    if (!editTarget) return
+    try {
+      await fetch('/api/clientes/ubicacion', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre_fantasia: editTarget.nombre_fantasia, lat, lng }),
+      })
+      onLocationSaved?.()
+    } finally {
+      setEditTarget(null)
+    }
+  }
+
+  const filtrados = (vendedorFiltro === 'all'
+    ? puntos
+    : puntos.filter(p => p.vendedor_actual === vendedorFiltro)
+  ).filter(p => mostrarSinCompra ? true : !p.sin_compra)
+
+  const conVenta = filtrados.filter(p => !p.sin_compra)
+  const sinVenta = filtrados.filter(p => p.sin_compra)
+
+  return (
+    <>
+      <MapContainer
+        center={[-40.2, -72.8]}
+        zoom={8}
+        style={{ height: '100%', width: '100%', background: '#111' }}
+        zoomControl={true}
+      >
+        <MapResizer />
+        <CenterOnUser coords={userCoords} />
+        <FlyTo target={flyTarget} />
+        {editTarget && <EditableMarker target={editTarget} onCancel={() => setEditTarget(null)} onSave={guardarUbicacion} />}
+        <TileLayer key={tileTipo} url={tile.url} attribution={tile.attribution} />
+        {/* Capa de etiquetas para modo híbrido */}
+        {tileTipo === 'hibrido' && (
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            attribution=""
+          />
+        )}
+
+        {/* Capa heatmap */}
+        {capaViz === 'calor' && <HeatmapLayer puntos={conVenta} />}
+
+        {/* Puntos sin compra (zonas blancas) */}
+        {mostrarSinCompra && sinVenta.map((p, i) => (
+          <CircleMarker
+            key={`sin-${i}`}
+            center={[p.lat, p.lng]}
+            radius={5}
+            pathOptions={{ color: '#4B5563', fillColor: '#374151', fillOpacity: 0.5, weight: 1, opacity: 0.6, dashArray: '3' }}
+          >
+            <Popup closeButton maxWidth={300}>
+              <PopupDetalle p={p} color="#6B7280" onWA={setWaTarget} onEditLocation={setEditTarget} />
             </Popup>
           </CircleMarker>
-        )
-      })}
+        ))}
 
-      {puntos.length > 0 && <RecenterMap puntos={filtrados.length > 0 ? filtrados : puntos} />}
-    </MapContainer>
+        {/* Puntos principales */}
+        {capaViz !== 'calor' && conVenta.map((p, i) => {
+          const color = capaViz === 'salud'
+            ? getColorSalud(p.dias_sin_compra)
+            : getColorVendedor(p.vendedor_actual)
+          const radius = getRadius(p.litros_total)
+
+          return (
+            <CircleMarker
+              key={i}
+              center={[p.lat, p.lng]}
+              radius={radius}
+              pathOptions={{ color, fillColor: color, fillOpacity: 0.75, weight: 1.5, opacity: 0.95 }}
+            >
+              <Popup closeButton maxWidth={310}>
+                <PopupDetalle p={p} color={color} onWA={setWaTarget} onEditLocation={setEditTarget} />
+              </Popup>
+            </CircleMarker>
+          )
+        })}
+
+        {/* En modo calor, igual mostrar puntos pequeños sobre el heatmap */}
+        {capaViz === 'calor' && conVenta.map((p, i) => {
+          const color = getColorVendedor(p.vendedor_actual)
+          return (
+            <CircleMarker
+              key={`h-${i}`}
+              center={[p.lat, p.lng]}
+              radius={4}
+              pathOptions={{ color, fillColor: color, fillOpacity: 0.9, weight: 1 }}
+            >
+              <Popup closeButton maxWidth={310}>
+                <PopupDetalle p={p} color={color} onWA={setWaTarget} onEditLocation={setEditTarget} />
+              </Popup>
+            </CircleMarker>
+          )
+        })}
+
+        {/* Capa de LEADS (posibles clientes) — morado, hueco, diferenciado */}
+        {leads.map((l, i) => (
+          <CircleMarker
+            key={`lead-${l.id ?? i}`}
+            center={[l.lat as number, l.lng as number]}
+            radius={6}
+            pathOptions={{ color: '#8A6D1F', fillColor: '#8A6D1F', fillOpacity: 0.18, weight: 2, opacity: 0.95, dashArray: '2 2' }}
+          >
+            <Popup closeButton maxWidth={290}>
+              <PopupLead l={l} onWA={setWaTarget} />
+            </Popup>
+          </CircleMarker>
+        ))}
+
+        {filtrados.length > 0 && <RecenterMap puntos={filtrados} skipFirst={!!userCoords} />}
+      </MapContainer>
+
+      {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
+    </>
   )
 }
