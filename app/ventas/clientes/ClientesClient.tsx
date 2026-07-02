@@ -72,6 +72,32 @@ function fPeso(n: number): string {
   if (n >= 1000) return `$${Math.round(n/1000)}k`
   return `$${Math.round(n).toLocaleString('es-CL')}`
 }
+function esPasada(f: string | null | undefined): boolean {
+  if (!f) return false
+  return new Date(f) < new Date()
+}
+
+// ── Score badge con anillo SVG de progreso ─────────────────────────────────────
+function ScoreBadge({ seg, score, segColor, size = 46 }: { seg: string; score: number; segColor: string; size?: number }) {
+  const r = (size - 5) / 2
+  const cx = size / 2
+  const cy = size / 2
+  const circumference = 2 * Math.PI * r
+  const offset = circumference * (1 - Math.min(score, 100) / 100)
+  return (
+    <div style={{ position:'relative', width:size, height:size, flexShrink:0 }}>
+      <svg width={size} height={size} style={{ position:'absolute', inset:0, transform:'rotate(-90deg)' }}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={`${segColor}20`} strokeWidth={2.5}/>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={segColor} strokeWidth={2.5}
+          strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"/>
+      </svg>
+      <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:0 }}>
+        <span style={{ fontSize: size > 44 ? 18 : 16, fontWeight:900, color:segColor, lineHeight:1 }}>{seg}</span>
+        <span style={{ fontSize:8, fontWeight:700, color:segColor, opacity:0.85 }}>{Math.round(score)}</span>
+      </div>
+    </div>
+  )
+}
 
 type EstadoDisplay = { label: string; color: string; bg: string; border: string }
 
@@ -258,12 +284,7 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
       {/* Cliente + Score */}
       <td style={{ padding:'10px 12px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:42, height:42, borderRadius:10, flexShrink:0,
-            background:`${segColor}18`, border:`1.5px solid ${segColor}55`,
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:0 }}>
-            <span style={{ fontSize:16, fontWeight:900, color:segColor, lineHeight:1 }}>{seg}</span>
-            <span style={{ fontSize:7, fontWeight:700, color:segColor, opacity:0.7 }}>{Math.round(score)}pts</span>
-          </div>
+          <ScoreBadge seg={seg} score={score} segColor={segColor} size={44}/>
           <div style={{ minWidth:0 }}>
             <p style={{ fontSize:13, fontWeight:700, color:'var(--cream)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:180 }}>
               {c.nombre_fantasia}
@@ -309,14 +330,22 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
         ) : <span style={{ fontSize:11, color:'#444' }}>—</span>}
       </td>
 
-      {/* Próximo pedido */}
+      {/* Quiebre stock */}
       <td style={{ padding:'10px 8px' }}>
-        {siguComp ? (
-          <div>
-            <p style={{ fontSize:11, color:'var(--cream)', fontWeight:600, marginBottom:2 }}>{fFecha(siguComp)}</p>
-            <span style={{ fontSize:9, padding:'1px 6px', borderRadius:10, background:'rgba(52,211,153,0.12)', color:'#5A8A4A', fontWeight:700 }}>▸ estimado</span>
-          </div>
-        ) : <span style={{ fontSize:11, color:'#444' }}>—</span>}
+        {siguComp ? (() => {
+          const past = esPasada(siguComp)
+          const qColor = past ? '#EF4444' : '#5A8A4A'
+          return (
+            <div>
+              <p style={{ fontSize:11, color: past ? '#EF4444' : 'var(--cream)', fontWeight:600, marginBottom:2 }}>{fFecha(siguComp)}</p>
+              <span style={{ fontSize:9, padding:'1px 6px', borderRadius:10,
+                background: past ? 'rgba(239,68,68,0.1)' : 'rgba(52,211,153,0.12)',
+                color:qColor, fontWeight:700 }}>
+                {past ? '⚠ vencido' : '▸ estimado'}
+              </span>
+            </div>
+          )
+        })() : <span style={{ fontSize:11, color:'#444' }}>—</span>}
       </td>
 
       {/* Contacto + WA */}
@@ -328,8 +357,9 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
               color:'#25D366', fontSize:11, fontWeight:700, cursor:'pointer', width:'fit-content' }}>
             <MessageCircle size={13}/> WhatsApp
           </button>
-          <span style={{ fontSize:10, color: dcont !== null && dcont <= 7 ? '#5A8A4A' : '#555' }}>
-            {c.ultimoContacto ? fDias(dcont) : 'sin contacto'}
+          <span style={{ fontSize:10, fontWeight:600,
+            color: dcont !== null && dcont <= 3 ? '#4ADE80' : dcont !== null && dcont <= 7 ? '#FBBF24' : '#EF4444' }}>
+            {c.ultimoContacto ? fDias(dcont) : 'Sin contacto'}
           </span>
         </div>
       </td>
@@ -393,12 +423,7 @@ function ClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; on
         {/* Fila superior: badge + nombre + estado */}
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
           {/* Badge segmento */}
-          <div style={{ width:46, height:46, borderRadius:12, flexShrink:0,
-            background:`${segColor}18`, border:`1.5px solid ${segColor}44`,
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:1 }}>
-            <span style={{ fontSize:18, fontWeight:900, color:segColor, lineHeight:1 }}>{seg}</span>
-            <span style={{ fontSize:8, fontWeight:700, color:segColor, opacity:0.6 }}>{Math.round(score)}pts</span>
-          </div>
+          <ScoreBadge seg={seg} score={score} segColor={segColor} size={48}/>
 
           <div style={{ flex:1, minWidth:0 }}>
             <p style={{ fontSize:14, fontWeight:800, color:'var(--cream)',
@@ -431,17 +456,22 @@ function ClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; on
             {diasSin > 0 && <p style={{ fontSize:10, color:barColor, fontWeight:600, marginTop:1 }}>{diasSin}d sin comprar</p>}
           </div>
 
-          {c.frecuencia?.siguiente_compra_estimada ? (
-            <div style={{ background:`${barColor}08`, borderRadius:8, padding:'7px 10px', border:`1px solid ${barColor}25` }}>
-              <p style={{ fontSize:9, color:barColor, fontWeight:700, letterSpacing:'0.06em', marginBottom:2 }}>PRÓXIMO ESTIMADO</p>
-              <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)' }}>{fFecha(c.frecuencia.siguiente_compra_estimada)}</p>
-              {(c.ultimoPedido?.litrosPeriodo ?? 0) > 0 && (
-                <p style={{ fontSize:10, color:'#555', marginTop:1 }}>{(c.ultimoPedido?.litrosPeriodo ?? 0).toFixed(0)}L período</p>
-              )}
-            </div>
-          ) : (
+          {c.frecuencia?.siguiente_compra_estimada ? (() => {
+            const past = esPasada(c.frecuencia.siguiente_compra_estimada)
+            const qColor = past ? '#EF4444' : barColor
+            return (
+              <div style={{ background: past ? 'rgba(239,68,68,0.06)' : `${barColor}08`, borderRadius:8, padding:'7px 10px', border:`1px solid ${past ? 'rgba(239,68,68,0.2)' : `${barColor}25`}` }}>
+                <p style={{ fontSize:9, color:qColor, fontWeight:700, letterSpacing:'0.06em', marginBottom:2 }}>QUIEBRE STOCK</p>
+                <p style={{ fontSize:12, fontWeight:700, color: past ? '#EF4444' : 'var(--cream)' }}>{fFecha(c.frecuencia.siguiente_compra_estimada)}</p>
+                {past
+                  ? <p style={{ fontSize:10, color:'#EF4444', fontWeight:600, marginTop:1 }}>⚠ ya vencido</p>
+                  : (c.ultimoPedido?.litrosPeriodo ?? 0) > 0 && <p style={{ fontSize:10, color:'#555', marginTop:1 }}>{(c.ultimoPedido?.litrosPeriodo ?? 0).toFixed(0)}L período</p>
+                }
+              </div>
+            )
+          })() : (
             <div style={{ background:'rgba(255,255,255,0.02)', borderRadius:8, padding:'7px 10px' }}>
-              <p style={{ fontSize:9, color:'#444', fontWeight:700, letterSpacing:'0.06em', marginBottom:2 }}>PRÓXIMO ESTIMADO</p>
+              <p style={{ fontSize:9, color:'#444', fontWeight:700, letterSpacing:'0.06em', marginBottom:2 }}>QUIEBRE STOCK</p>
               <p style={{ fontSize:12, color:'#444' }}>Sin historial</p>
             </div>
           )}
@@ -774,7 +804,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead>
                   <tr style={{ background:'rgba(255,255,255,0.02)', borderBottom:'1px solid var(--border)' }}>
-                    {['CLIENTE','RUTA','ÚLTIMO PEDIDO','DEUDA ACTUAL','PRÓXIMO PEDIDO','CONTACTO WHATSAPP','ESTADO',''].map(h=>(
+                    {['CLIENTE','RUTA','ÚLTIMO PEDIDO','DEUDA ACTUAL','QUIEBRE STOCK','CONTACTO WHATSAPP','ESTADO',''].map(h=>(
                       <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontSize:9, fontWeight:700,
                         color:'var(--muted)', letterSpacing:'0.08em', whiteSpace:'nowrap' }}>{h}</th>
                     ))}
