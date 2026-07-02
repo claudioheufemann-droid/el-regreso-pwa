@@ -537,7 +537,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
           </svg>
-          <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: '0.3px' }}>Inicio</span>
+          <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>Inicio</span>
         </button>
 
         {visibleNavItems.map(({ key, icon: Icon, label }) => {
