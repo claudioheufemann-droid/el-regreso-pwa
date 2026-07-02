@@ -464,16 +464,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
           {/* ── ANALYTICS VIEW ── */}
           {view === 'analytics' && isAdmin && (
-            <GestionPanel
-              tasks={tasks}
-              users={users}
-              isAdmin={isAdmin}
-              userName={userName}
-              currentUserId={currentUserId}
-              onTaskClick={setSelectedTask}
-              onTaskCreated={t => setTasks(prev => [t, ...prev])}
-              filterMacro={currentMacroArea as MacroKey | null}
-            />
+            <GestionPanel tasks={tasks} />
           )}
 
         </div>
