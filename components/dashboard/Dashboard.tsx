@@ -9,10 +9,11 @@ import TaskDetailModal from '@/components/modals/TaskDetailModal'
 import TaskCalendar from '@/components/calendar/TaskCalendar'
 import TaskRow from '@/components/area/TaskRow'
 import AppHeader from '@/components/ui/AppHeader'
+import Avatar from '@/components/ui/Avatar'
 import GestionPanel from '@/components/dashboard/GestionPanel'
 import HomeDashboard from '@/components/dashboard/HomeDashboard'
 import NewTaskModal from '@/components/modals/NewTaskModal'
-import { LayoutGrid, User, CalendarDays, BarChart3, RefreshCw, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, User, Users, CalendarDays, BarChart3, RefreshCw, type LucideIcon } from 'lucide-react'
 
 interface Props {
   initialTasks: RcTask[]
@@ -162,7 +163,7 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
   )
 }
 
-type View = 'home' | 'mis-tareas' | 'calendar' | 'filter' | 'analytics'
+type View = 'home' | 'mis-tareas' | 'equipo' | 'calendar' | 'filter' | 'analytics'
 type FilterKey = 'activas' | 'en-proceso' | 'aprobar' | 'atraso'
 
 export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId, currentMacroArea, backHref = '/' }: Props) {
@@ -174,6 +175,8 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   // aterriza directo en sus propias tareas — el panel general mezcla tareas de
   // Marketing/Logística/etc. que no le competen y solo agregan ruido.
   const [view, setView] = useState<View>('mis-tareas')
+  // Cuando se navega desde Equipo hacia las tareas de otra persona (null = uno mismo)
+  const [viewedUserId, setViewedUserId] = useState<string | null>(null)
   const [filterKey, setFilterKey] = useState<FilterKey>('activas')
   const [showNewTask, setShowNewTask] = useState(false)
   // Áreas disponibles para crear tareas según el módulo activo
@@ -304,10 +307,22 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   const navItems: { key: View; icon: LucideIcon; label: string; adminOnly?: boolean }[] = [
     { key: 'home',       icon: LayoutGrid,   label: 'Gestión' },
     { key: 'mis-tareas', icon: User,         label: 'Mis Tareas' },
+    { key: 'equipo',     icon: Users,        label: 'Equipo' },
     { key: 'calendar',   icon: CalendarDays, label: 'Calendario' },
     { key: 'analytics',  icon: BarChart3,    label: 'Análisis', adminOnly: true },
   ]
   const visibleNavItems = navItems.filter(n => !n.adminOnly || isAdmin)
+
+  function isNavActive(key: View): boolean {
+    if (key === 'home')       return view === 'home' || view === 'filter'
+    if (key === 'mis-tareas') return view === 'mis-tareas' && viewedUserId === null
+    if (key === 'equipo')     return view === 'equipo' || (view === 'mis-tareas' && viewedUserId !== null)
+    return view === key
+  }
+  function goToNav(key: View) {
+    if (key === 'mis-tareas') setViewedUserId(null)
+    setView(key)
+  }
 
   function ContentArea() {
     return (
@@ -325,9 +340,9 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             ← Hub
           </button>
           {visibleNavItems.map(item => {
-            const active = view === item.key || (item.key === 'home' && view === 'filter')
+            const active = isNavActive(item.key)
             return (
-              <button key={item.key} onClick={() => setView(item.key)} style={{
+              <button key={item.key} onClick={() => goToNav(item.key)} style={{
                 padding: '10px 14px', fontSize: 12,
                 fontWeight: active ? 700 : 500,
                 color: active ? 'var(--gold)' : 'var(--muted)',
@@ -376,11 +391,13 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             />
           )}
 
-                    {/* ── MIS TAREAS VIEW ── */}
+                    {/* ── MIS TAREAS VIEW (o tareas de un compañero, visto desde Equipo) ── */}
           {view === 'mis-tareas' && (() => {
+            const targetUserId = viewedUserId ?? currentUserId
+            const targetUser = viewedUserId ? users.find(u => u.id === viewedUserId) : null
             const misTareas = tasks.filter(t =>
-              t.responsable_id === currentUserId ||
-              (t.responsable_ids ?? []).includes(currentUserId)
+              t.responsable_id === targetUserId ||
+              (t.responsable_ids ?? []).includes(targetUserId)
             )
             const pendientes = misTareas.filter(t => !['Completada', 'Rechazada'].includes(t.estado))
             const completadas = misTareas.filter(t => t.estado === 'Completada')
@@ -395,13 +412,24 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             return (
               <>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)', marginBottom: 4 }}>Mis Tareas</div>
+                  {targetUser && (
+                    <button onClick={() => { setViewedUserId(null); setView('equipo') }} className="touch-active"
+                      style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      ← Equipo
+                    </button>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    {targetUser && <Avatar iniciales={targetUser.iniciales} userId={targetUser.id} size={isDesktop ? 32 : 28} avatarUrl={targetUser.avatar_url} />}
+                    <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)' }}>
+                      {targetUser ? `Tareas de ${targetUser.nombre.split(' ')[0]}` : 'Mis Tareas'}
+                    </div>
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>{pendientes.length} pendiente{pendientes.length !== 1 ? 's' : ''} · {completadas.length} completada{completadas.length !== 1 ? 's' : ''}</div>
                 </div>
                 {misTareas.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '48px 20px' }}>
                     <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
-                    <div style={{ fontSize: 14, color: 'var(--muted)' }}>No tienes tareas asignadas</div>
+                    <div style={{ fontSize: 14, color: 'var(--muted)' }}>{targetUser ? `${targetUser.nombre.split(' ')[0]} no tiene` : 'No tienes'} tareas asignadas</div>
                   </div>
                 )}
                 {grupos.map(grupo => (
@@ -417,6 +445,79 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                     </div>
                   </div>
                 ))}
+              </>
+            )
+          })()}
+
+          {/* ── EQUIPO VIEW — carga de tareas de todos los compañeros de esta sección ── */}
+          {view === 'equipo' && (() => {
+            const teamUserIds = [...new Set(
+              activeTasks.flatMap(t => [t.responsable_id, ...(t.responsable_ids ?? [])].filter(Boolean))
+            )]
+            const teamUsers = users.filter(u => teamUserIds.includes(u.id))
+            const teamStats = teamUsers.map(u => {
+              const myTasks = activeTasks.filter(t => t.responsable_id === u.id || (t.responsable_ids ?? []).includes(u.id))
+              const comp = myTasks.filter(t => t.estado === 'Completada').length
+              const atr = myTasks.filter(t => t.estado === 'Atrasada').length
+              const enProceso = myTasks.filter(t => t.estado === 'En Proceso').length
+              const porApr = myTasks.filter(t => t.estado === 'Por Aprobar').length
+              const pct = myTasks.length > 0 ? Math.round((comp / myTasks.length) * 100) : 0
+              const color = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : atr > 0 ? '#FF6B6B' : '#5B8AA8'
+              return { user: u, total: myTasks.length, comp, atr, enProceso, porApr, pct, color }
+            }).filter(s => s.total > 0).sort((a, b) => b.pct - a.pct)
+
+            return (
+              <>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)', marginBottom: 4 }}>Equipo</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    {teamStats.length} persona{teamStats.length !== 1 ? 's' : ''} con tareas {currentMacroArea ? 'en esta área' : 'en toda la empresa'}
+                  </div>
+                </div>
+                {teamStats.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>👥</div>
+                    <div style={{ fontSize: 14, color: 'var(--muted)' }}>Nadie tiene tareas asignadas todavía</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(2, 1fr)' : '1fr', gap: 12 }}>
+                    {teamStats.map(({ user: u, total, comp, atr, enProceso, porApr, pct, color }) => (
+                      <div key={u.id}
+                        className="touch-active cursor-pointer"
+                        onClick={() => { setViewedUserId(u.id); setView('mis-tareas') }}
+                        style={{ background: 'var(--surface)', border: '1px solid rgba(128,128,128,0.1)', borderRadius: 16, padding: 16, borderLeft: `3px solid ${color}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                          <Avatar iniciales={u.iniciales} userId={u.id} size={42} avatarUrl={u.avatar_url} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--cream)' }}>{u.nombre}</div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{u.rol}</div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: 24, fontWeight: 900, color, lineHeight: 1 }}>{pct}%</div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>{comp}/{total}</div>
+                          </div>
+                        </div>
+                        <div style={{ height: 6, background: 'rgba(128,128,128,0.15)', borderRadius: 6, overflow: 'hidden', marginBottom: 12 }}>
+                          <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${color}80, ${color})`, borderRadius: 6, transition: 'width 0.6s ease' }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {[
+                            { label: 'Completadas', val: comp, color: '#4A7A3A' },
+                            { label: 'En Proceso', val: enProceso, color: '#E67E22' },
+                            { label: 'Por Aprobar', val: porApr, color: '#D4AF37' },
+                            { label: 'Atrasadas', val: atr, color: '#FF6B6B' },
+                          ].filter(s => s.val > 0).map(s => (
+                            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 10, background: `${s.color}12`, border: `1px solid ${s.color}25` }}>
+                              <div style={{ width: 5, height: 5, borderRadius: '50%', background: s.color }} />
+                              <span style={{ fontSize: 10, color: s.color, fontWeight: 600 }}>{s.val} {s.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ marginTop: 10, fontSize: 9, color: 'var(--muted)', letterSpacing: 1 }}>TOCA PARA VER SUS TAREAS →</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )
           })()}
@@ -529,9 +630,9 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
         justifyContent: 'space-around',
       } as React.CSSProperties}>
         {visibleNavItems.map(({ key, icon: Icon, label }) => {
-          const active = view === key || (key === 'home' && view === 'filter')
+          const active = isNavActive(key)
           return (
-            <button key={key} onClick={() => setView(key)} style={{
+            <button key={key} onClick={() => goToNav(key)} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
               padding: '6px 14px', borderRadius: 80, border: 'none', cursor: 'pointer',
               background: active ? 'rgba(212,175,55,0.12)' : 'transparent',
