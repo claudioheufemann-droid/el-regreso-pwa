@@ -181,13 +181,16 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   const [allTasks, setAllTasks] = useState<RcTask[] | null>(null)
   const [filterKey, setFilterKey] = useState<FilterKey>('activas')
   const [showNewTask, setShowNewTask] = useState(false)
-  // Áreas disponibles para crear tareas según el módulo activo
+  // Áreas disponibles para crear tareas: SIEMPRE todas (cualquiera puede asignar a cualquier área),
+  // con las de la sección actual primero para que el default tenga sentido según el módulo activo.
   const availableTaskAreas: string[] = (() => {
-    if (currentMacroArea === 'administracion') return [...MACRO_AREAS.administracion.areas]
-    if (currentMacroArea === 'comercial')      return [...MACRO_AREAS.comercial.areas]
-    if (currentMacroArea === 'produccion')     return [...MACRO_AREAS.produccion.areas]
-    // admin global: todas las áreas
-    return [...MACRO_AREAS.comercial.areas, ...MACRO_AREAS.administracion.areas, ...MACRO_AREAS.produccion.areas]
+    const current =
+      currentMacroArea === 'administracion' ? [...MACRO_AREAS.administracion.areas] :
+      currentMacroArea === 'comercial'      ? [...MACRO_AREAS.comercial.areas] :
+      currentMacroArea === 'produccion'     ? [...MACRO_AREAS.produccion.areas] :
+      []
+    const all = [...MACRO_AREAS.comercial.areas, ...MACRO_AREAS.administracion.areas, ...MACRO_AREAS.produccion.areas]
+    return [...new Set([...current, ...all])]
   })()
   const defaultNewTaskArea = availableTaskAreas[0] ?? 'Ventas'
   // Collapsible macro sections — default: all expanded

@@ -68,10 +68,9 @@ export function getMacroKey(area: string): MacroKey {
   return 'comercial'
 }
 
-/** Usuarios elegibles para asignar en una tarea de cierta área */
-export function eligibleUsers(users: RcUser[], area: string): RcUser[] {
-  const macro = getMacroKey(area)
-  return users.filter(u => u.macro_area === macro || !u.macro_area)
+/** Usuarios elegibles para asignar en una tarea — todos, sin restricción por área */
+export function eligibleUsers(users: RcUser[]): RcUser[] {
+  return users
 }
 
 export const AREAS = [

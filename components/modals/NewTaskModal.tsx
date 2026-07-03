@@ -79,7 +79,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   const isDesktop = useIsDesktop()
   const [selectedArea, setSelectedArea] = useState(defaultArea)
   const cfg = AREA_CFG[selectedArea] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
-  const allUsers = eligibleUsers(users, selectedArea)
+  const allUsers = eligibleUsers(users)
 
   // Core fields
   const [titulo, setTitulo] = useState('')

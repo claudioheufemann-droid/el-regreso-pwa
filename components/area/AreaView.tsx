@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { RcTask, RcUser, TaskStatus, AREA_CFG, STATUS_LIST, STATUS_CFG } from '@/lib/gestion-types'
+import { RcTask, RcUser, TaskStatus, AREA_CFG, STATUS_LIST, STATUS_CFG, AREAS } from '@/lib/gestion-types'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import TaskRow from './TaskRow'
 import NewTaskModal from '@/components/modals/NewTaskModal'
@@ -516,7 +516,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
           </div>
         )}
 
-        {showNew && <NewTaskModal defaultArea={area} availableAreas={[area]} users={users} onClose={() => setShowNew(false)} onCreated={handleCreated} />}
+        {showNew && <NewTaskModal defaultArea={area} availableAreas={[...AREAS]} users={users} onClose={() => setShowNew(false)} onCreated={handleCreated} />}
         {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
       </div>
     )
@@ -659,7 +659,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
         </div>
       )}
 
-      {showNew && <NewTaskModal defaultArea={area} availableAreas={[area]} users={users} onClose={() => setShowNew(false)} onCreated={handleCreated} />}
+      {showNew && <NewTaskModal defaultArea={area} availableAreas={[...AREAS]} users={users} onClose={() => setShowNew(false)} onCreated={handleCreated} />}
       {selectedTask && !selectMode && (
         <TaskDetailModal
           task={selectedTask}
