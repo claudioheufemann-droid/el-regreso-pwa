@@ -1,13 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { ChevronLeft } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 
 /**
  * Header estándar de El Regreso Control — mismo en todos los módulos y submenús.
- * Izquierda: eyebrow (fecha/módulo) + título. Derecha: avatar del usuario.
- * Tocar el avatar abre la configuración de la app.
+ * Arriba del todo: botón "Volver" (vuelve a la pantalla anterior; si no hay
+ * historial, va al inicio de la app). Debajo: eyebrow (fecha/módulo) + título
+ * a la izquierda, avatar a la derecha. Tocar el avatar abre la configuración.
  * El saludo "Hola, X" NO va aquí: solo en el home tras iniciar sesión.
  */
 interface AppHeaderProps {
@@ -17,17 +20,43 @@ interface AppHeaderProps {
   title: string
   /** Acción extra opcional a la izquierda del avatar (ej. botón filtros) */
   extraAction?: React.ReactNode
+  /** Ocultar el botón Volver (por defecto se muestra en todas las pantallas) */
+  hideBack?: boolean
 }
 
-export default function AppHeader({ eyebrow, title, extraAction }: AppHeaderProps) {
+export default function AppHeader({ eyebrow, title, extraAction, hideBack }: AppHeaderProps) {
   const { user } = useUser()
+  const router = useRouter()
   const [showSettings, setShowSettings] = useState(false)
 
   const initials = user?.iniciales ?? (user?.nombre?.slice(0, 2).toUpperCase() ?? '··')
 
+  function goBack() {
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back()
+    else router.push('/')
+  }
+
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingTop: 'env(safe-area-inset-top, 0px)', marginBottom: 14 }}>
+      {!hideBack && (
+        <div style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+          <button
+            onClick={goBack}
+            aria-label="Volver"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 100, padding: '7px 14px 7px 10px', marginTop: 8, marginBottom: 4,
+              color: 'var(--cream)', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              minHeight: 36,
+            }}
+          >
+            <ChevronLeft size={17} strokeWidth={2.5} color="#D4AF37" />
+            Volver
+          </button>
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingTop: hideBack ? 'env(safe-area-inset-top, 0px)' : 0, marginBottom: 14 }}>
         <div style={{ minWidth: 0, overflow: 'hidden' }}>
           {eyebrow && (
             <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.4px', marginBottom: 4, textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

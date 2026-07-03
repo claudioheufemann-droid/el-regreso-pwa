@@ -1,8 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { ArrowLeft, TrendingUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { TrendingUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import AppHeader from '@/components/ui/AppHeader'
 
 interface Cliente { nombre_fantasia: string | null; vendedor: string | null }
@@ -16,8 +15,6 @@ export default function CRMMetricsClient({
   frequencias: Frequencia[]
   followups: FollowUp[]
 }) {
-  const router = useRouter()
-
   // ── Metrics derivadas ────────────────────────────────────────────
   const metrics = useMemo(() => {
     const totalClientes = frequencias.length
@@ -59,18 +56,7 @@ export default function CRMMetricsClient({
   return (
     <div style={{ minHeight: '100vh', background: '#090909', color: '#fff' }}>
       <div style={{ maxWidth: 1800, margin: '0 auto', padding: '16px 16px 60px' }}>
-        <AppHeader
-          title="CRM Metrics"
-          extraAction={
-            <button onClick={() => router.back()} style={{
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-              cursor: 'pointer', color: '#888', display: 'flex', alignItems: 'center', gap: 5,
-              fontSize: 12, fontWeight: 700, padding: '7px 12px', borderRadius: 9,
-            }}>
-              <ArrowLeft size={14} /> Volver
-            </button>
-          }
-        />
+        <AppHeader title="CRM Metrics" />
         {/* KPI Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 16, marginBottom: 32 }}>
           <KPICard icon={<TrendingUp size={20} />} label="Clientes" value={metrics.totalClientes} color="#D4AF37" />

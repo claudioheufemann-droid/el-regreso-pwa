@@ -185,24 +185,6 @@ export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl:
           {section === 'main' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-              {/* Ir al inicio (menú principal de la app) */}
-              <a
-                href="/"
-                className="touch-active"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '16px', borderRadius: 14, cursor: 'pointer', textDecoration: 'none',
-                  background: 'var(--surface2)', border: '1px solid rgba(128,128,128,0.1)',
-                }}
-              >
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(212,175,55,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🏠</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)' }}>Ir al Inicio</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Volver al menú principal de la app</div>
-                </div>
-                <span style={{ color: 'var(--muted)', fontSize: 16 }}>›</span>
-              </a>
-
               {/* Foto de perfil */}
               <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarChange(f) }} />

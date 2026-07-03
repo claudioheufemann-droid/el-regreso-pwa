@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, MessageCircle, Mail, MapPin, Phone, Tag, Truck,
+  MessageCircle, Mail, MapPin, Phone, Tag, Truck,
   ShoppingBag, Droplets, DollarSign, Clock, User, FileText,
   CreditCard, Calendar, CheckCircle2, XCircle, Sunset, Star,
   AlertTriangle, TrendingUp, Package, Activity,
@@ -718,15 +718,7 @@ export default function ClienteDetalleClient({
 
       <div style={{ minHeight: '100vh', background: '#090909', color: '#fff' }}>
         <div style={{ maxWidth: 1700, margin: '0 auto', padding: '16px 16px 80px' }}>
-          <AppHeader
-            title="Detalle Cliente"
-            extraAction={
-              <button onClick={() => router.back()}
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', color: '#888', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, padding: '7px 12px', borderRadius: 9 }}>
-                <ArrowLeft size={14} /> Volver
-              </button>
-            }
-          />
+          <AppHeader title="Detalle Cliente" />
 
           {/* ══════════════════════════════════════════════════════════════════
               CUSTOMER HEADER

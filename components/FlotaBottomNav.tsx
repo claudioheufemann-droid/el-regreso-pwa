@@ -1,11 +1,11 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Truck, Plus, History, BarChart3, Home } from 'lucide-react'
+import { Truck, Plus, History, BarChart3 } from 'lucide-react'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
+// El regreso al inicio va en el botón "Volver" del header, no en el nav.
 const ITEMS: NavItem[] = [
-  { href: '/',                icon: Home,      label: 'Inicio',    exact: true  },
   { href: '/flota',           icon: Truck,     label: 'Flota',     exact: true  },
   { href: '/flota/checkin',   icon: Plus,      label: 'Salida'                  },
   { href: '/flota/historial', icon: History,   label: 'Historial'               },
