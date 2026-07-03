@@ -297,24 +297,32 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 8 }}>
 
         {/* ── HEADER ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 500, marginBottom: 6, textTransform: 'capitalize', letterSpacing: '0.4px' }}>
-              {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: CREAM, letterSpacing: -1, lineHeight: 1.1 }}>
-              Resumen
-            </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 500, marginBottom: 6, textTransform: 'capitalize', letterSpacing: '0.4px' }}>
+            {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
           </div>
-          <button onClick={() => setShowNewTask(true)} style={{
-            flexShrink: 0, padding: '12px 18px', marginTop: 4,
-            background: 'linear-gradient(135deg, #E5C45A, #B8962E)',
-            color: '#0A0A0A', border: 'none', borderRadius: 14,
-            cursor: 'pointer', fontSize: 13, fontWeight: 900,
-            boxShadow: '0 4px 18px rgba(212,175,55,0.28)',
-            letterSpacing: '-0.3px',
-          }}>+ Nueva</button>
+          <div style={{ fontSize: 28, fontWeight: 900, color: CREAM, letterSpacing: -1, lineHeight: 1.1 }}>
+            Resumen
+          </div>
         </div>
+
+        {/* ── CTA PRINCIPAL: Nueva Tarea — punto de partida de todo el módulo ── */}
+        <button onClick={() => setShowNewTask(true)} className="touch-active" style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+          padding: '18px 20px', borderRadius: 18, border: 'none', cursor: 'pointer',
+          background: 'linear-gradient(135deg, #E5C45A, #B8962E)',
+          boxShadow: '0 10px 32px rgba(212,175,55,0.32)',
+          WebkitTapHighlightColor: 'transparent',
+        }}>
+          <div style={{ width: 42, height: 42, borderRadius: 13, background: 'rgba(10,10,10,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+          <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 900, color: '#0A0A0A', letterSpacing: -0.3 }}>Nueva Tarea</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(10,10,10,0.65)', marginTop: 1 }}>Aquí se crean y asignan las tareas del equipo</div>
+          </div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
 
         {/* ── KPI CARDS — minimal monocromático ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
@@ -509,16 +517,31 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           </div>
           {isDesktop && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, textTransform: 'capitalize' }}>{dateStr}</div>}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          <div style={{ position: 'relative' }}>
-            <button style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 15 }}>🔔</button>
-            {(kpiAtrasadas + kpiAprobar) > 0 && <span style={{ position: 'absolute', top: -4, right: -4, background: '#E74C3C', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 8, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{kpiAtrasadas + kpiAprobar}</span>}
-          </div>
-          <button onClick={() => setShowNewTask(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: isDesktop ? '10px 20px' : '8px 12px', background: 'var(--gold)', color: '#0A0A0A', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: isDesktop ? 13 : 11, fontWeight: 800, whiteSpace: 'nowrap' }}>
-            + {isDesktop ? 'Nueva tarea' : 'Nueva'}
-          </button>
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button style={{ background: 'var(--surface)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 15 }}>🔔</button>
+          {(kpiAtrasadas + kpiAprobar) > 0 && <span style={{ position: 'absolute', top: -4, right: -4, background: '#E74C3C', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 8, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{kpiAtrasadas + kpiAprobar}</span>}
         </div>
       </div>
+
+      {/* ── CTA PRINCIPAL: Nueva Tarea — punto de partida de todo el módulo ── */}
+      <button onClick={() => setShowNewTask(true)} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+        padding: '20px 28px', borderRadius: 18, border: 'none', cursor: 'pointer',
+        background: 'linear-gradient(135deg, #E5C45A, #B8962E)',
+        boxShadow: '0 10px 36px rgba(212,175,55,0.3)',
+        transition: 'transform 0.15s',
+      }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)' }}
+        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)' }}>
+        <div style={{ width: 44, height: 44, borderRadius: 13, background: 'rgba(10,10,10,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 17, fontWeight: 900, color: '#0A0A0A', letterSpacing: -0.3 }}>Nueva Tarea</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(10,10,10,0.65)', marginTop: 2 }}>Aquí se crean y asignan todas las tareas del equipo</div>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
 
       {/* ── LAYOUT MASTER: izquierda 1fr + sidebar derecho 280px (filas 1+2+3) ── */}
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 280px' : '1fr', gap: 14, alignItems: 'stretch' }}>
