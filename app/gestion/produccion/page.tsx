@@ -20,11 +20,9 @@ export default async function ProduccionPage() {
   const userName = userProfile?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
   const isAdmin = userProfile?.is_admin === true
   const currentUserId = userProfile?.id ?? ''
-  const userMacroArea = userProfile?.macro_area ?? null
 
-  if (!isAdmin && userMacroArea !== null && userMacroArea !== 'produccion') {
-    redirect('/gestion')
-  }
+  // Visibilidad total: cualquier usuario puede ver la carga de tareas de esta área,
+  // sin importar su macro_area asignada — solo la creación/edición sigue controlada por isAdmin.
 
   const { data: tasks } = await supabase
     .from('tasks')

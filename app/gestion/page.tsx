@@ -20,10 +20,8 @@ export default async function GestionPage() {
   const isAdmin = userProfile?.is_admin === true
   const userMacroArea: string | null = userProfile?.macro_area ?? null
 
-  // Non-admin users with a macro_area go directly to their own dashboard
-  if (!isAdmin && userMacroArea) {
-    redirect(`/gestion/${userMacroArea}`)
-  }
+  // Todos los usuarios ven el Hub con las 3 áreas — visibilidad total de cargas de trabajo.
+  // userMacroArea solo se usa para destacar "tu área asignada" (ver GestionHubClient).
 
   const taskCounts: Record<string, number> = {}
   for (const [key, macro] of Object.entries(MACRO_AREAS)) {

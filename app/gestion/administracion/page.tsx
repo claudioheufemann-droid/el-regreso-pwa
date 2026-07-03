@@ -21,12 +21,9 @@ export default async function AdministracionPage() {
   const userName = userProfile?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
   const isAdmin = userProfile?.is_admin === true
   const currentUserId = userProfile?.id ?? ''
-  const userMacroArea = userProfile?.macro_area ?? null
 
-  // Bloquear acceso si el usuario pertenece a otra macro-área
-  if (!isAdmin && userMacroArea !== null && userMacroArea !== 'administracion') {
-    redirect('/gestion')
-  }
+  // Visibilidad total: cualquier usuario puede ver la carga de tareas de esta área,
+  // sin importar su macro_area asignada — solo la creación/edición sigue controlada por isAdmin.
 
   // Siempre filtrar a esta macro-área (incluso para admin)
   // La vista global está disponible en el Panel KPIs dentro del módulo

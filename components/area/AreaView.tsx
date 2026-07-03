@@ -256,8 +256,8 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
           </div>
         )}
 
-        {/* Nueva tarea */}
-        {isAdmin && !selectMode && (
+        {/* Nueva tarea — cualquier usuario puede crear y asignar tareas */}
+        {!selectMode && (
           <div style={{ padding: '12px 16px', marginTop: 'auto', borderTop: '1px solid rgba(128,128,128,0.08)' }}>
             <button onClick={() => setShowNew(true)} className="touch-active" style={{ width: '100%', padding: '13px', borderRadius: 12, cursor: 'pointer', background: `${cfg.color}18`, border: `1px solid ${cfg.color}40`, fontSize: 14, fontWeight: 700, color: cfg.color }}>
               + Nueva Tarea
@@ -467,8 +467,8 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
           )}
         </div>
 
-        {/* FAB */}
-        {isAdmin && !selectMode && (
+        {/* FAB — cualquier usuario puede crear y asignar tareas */}
+        {!selectMode && (
           <div style={{ position: 'fixed', bottom: 24, right: 16, zIndex: 40 }}>
             <button onClick={() => setShowNew(true)} style={{ width: 52, height: 52, borderRadius: '50%', cursor: 'pointer', background: cfg.color, border: 'none', fontSize: 22, color: '#0A0A0A', fontWeight: 900, boxShadow: `0 4px 20px ${cfg.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
           </div>

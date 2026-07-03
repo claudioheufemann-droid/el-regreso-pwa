@@ -85,7 +85,8 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
   const router = useRouter()
   const fecha = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
   const fechaCap = fecha.charAt(0).toUpperCase() + fecha.slice(1)
-  const visibleAreas = AREAS.filter(a => userMacroArea === null || a.key === userMacroArea)
+  // Todos ven las 3 áreas — visibilidad total de cargas de trabajo entre equipos
+  const visibleAreas = AREAS
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 100 }}>

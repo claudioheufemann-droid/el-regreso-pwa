@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import AreaView from '@/components/area/AreaView'
-import { getMacroKey } from '@/lib/gestion-types'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,13 +20,9 @@ export default async function AreaPage({ params }: { params: Promise<{ name: str
   const userProfile = users?.find(u => u.email === user.email)
   const isAdmin = userProfile?.is_admin === true
   const currentUserId = userProfile?.id ?? ''
-  const userMacroArea = userProfile?.macro_area ?? null
 
-  // Bloquear acceso si el área no pertenece a la macro-área del usuario
-  const areaMacro = getMacroKey(area)
-  if (!isAdmin && userMacroArea !== null && userMacroArea !== areaMacro) {
-    redirect('/gestion')
-  }
+  // Visibilidad total: cualquier usuario puede ver la carga de tareas de esta área,
+  // sin importar su macro_area asignada — solo la creación/edición sigue controlada por isAdmin.
 
   return (
     <AreaView
