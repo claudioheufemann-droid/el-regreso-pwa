@@ -412,37 +412,6 @@ function LineChart({ data, vendedores, colors, avatars }: { data: EvolutionDay[]
   )
 }
 
-// ── MetaBar ──────────────────────────────────────────────────────────────────
-function MetaBar({ vendedor, actual, meta, avatars }: { vendedor: string; actual: number; meta: number; avatars?: Record<string, string | null> }) {
-  const pct = meta > 0 ? Math.min((actual / meta) * 100, 100) : 0
-  const color = '#D4AF37'
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <VendedorAvatar vendedor={vendedor} color={color} size={36} avatars={avatars} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{dspVendedor(vendedor)}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color, flexShrink: 0 }}>
-              {pct.toFixed(0)}%
-            </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fL(actual)} / {fL(meta)}</span>
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>META: {fL(meta)}</span>
-          </div>
-          <div style={{ height: 8, borderRadius: 100, background: 'var(--surface2)', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', width: `${pct}%`, borderRadius: 100,
-              background: color, transition: 'width 0.5s ease',
-            }} />
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── DateSelector ────────────────────────────────────────────────────────────
 function DateSelector({ fechaActual, fechasDisponibles }: { fechaActual: string; fechasDisponibles: string[] }) {
   const router = useRouter()
@@ -1075,32 +1044,6 @@ function VendedorCard({ data, color, fechaHoy, avatars }: { data: VendedorResume
   )
 }
 
-// ── MetasCard ────────────────────────────────────────────────────────────────
-function MetasCard({ resumen, periodo, avatars }: { resumen: VendedorResumen[]; periodo: Periodo | null; avatars?: Record<string, string | null> }) {
-  const allZero = resumen.every(v => v.metaLitros === 0)
-  return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 20, overflow: 'hidden',
-    }}>
-      <div style={{ height: 3, background: 'var(--gold)', borderRadius: '20px 20px 0 0' }} />
-      <div style={{ padding: '16px 18px 20px' }}>
-        <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 14, marginBottom: 4 }}>Metas Individuales</h3>
-        <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 20 }}>{periodo?.nombre ?? 'Período activo'}</p>
-        {allZero ? (
-          <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', padding: '20px 0' }}>
-            Sin metas configuradas para este período
-          </p>
-        ) : (
-          resumen.map(v => (
-            <MetaBar key={v.vendedor} vendedor={v.vendedor} actual={v.litrosPeriodo} meta={v.metaLitros} avatars={avatars} />
-          ))
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ── EvolutionCard ────────────────────────────────────────────────────────────
 function EvolutionCard({ evolution, vendedores, colors, avatars }: { evolution: EvolutionDay[]; vendedores: string[]; colors: Record<string, string>; avatars?: Record<string, string | null> }) {
   return (
@@ -1385,110 +1328,6 @@ function WeeklyBriefingModal({ clientes, onClose }: { clientes: PlanCliente[]; o
   )
 }
 
-// ── RiesgoClientesCard ────────────────────────────────────────────────────────
-const SEG_COLORS_RISK = SEG_COLOR_THEME // desde lib/theme
-function RiesgoClientesCard({ clientes, colors }: { clientes: PlanCliente[]; colors: Record<string, string> }) {
-  const router = useRouter()
-  const criticos = clientes.filter(c => c.alert_level === 'critico')
-  const vencidos  = clientes.filter(c => c.alert_level === 'vencido')
-  const total = criticos.length + vencidos.length
-
-  return (
-    <div style={{
-      background: 'var(--surface)', border: total > 0 ? '1px solid rgba(181,84,62,0.3)' : '1px solid var(--border)',
-      borderRadius: 20, overflow: 'hidden',
-    }}>
-      <div style={{ padding: '16px 18px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 14 }}>Clientes en riesgo</h3>
-          <button
-            onClick={() => router.push('/ventas/clientes')}
-            style={{
-              fontSize: 11, fontWeight: 700, color: '#B5543E',
-              background: 'rgba(181,84,62,0.1)', border: '1px solid rgba(181,84,62,0.2)',
-              borderRadius: 8, padding: '4px 10px', cursor: 'pointer',
-            }}
-          >
-            Ver todos
-          </button>
-        </div>
-
-        {/* Contadores */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-          <div style={{ background: 'rgba(181,84,62,0.08)', border: '1px solid rgba(181,84,62,0.2)', borderRadius: 12, padding: '12px 14px' }}>
-            <p style={{ fontSize: 10, color: 'var(--red-dim)', fontWeight: 700, marginBottom: 4 }}>CRÍTICOS</p>
-            <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--red-dim)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{criticos.length}</p>
-            <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>+1.5× su ciclo</p>
-          </div>
-          <div style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 12, padding: '12px 14px' }}>
-            <p style={{ fontSize: 10, color: 'var(--red-dim)', fontWeight: 700, marginBottom: 4 }}>VENCIDOS</p>
-            <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--red-dim)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{vencidos.length}</p>
-            <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>Superaron su ciclo</p>
-          </div>
-        </div>
-
-        {/* Lista top clientes */}
-        {total === 0 ? (
-          <div style={{ textAlign: 'center', padding: '16px 0' }}>
-            <p style={{ fontSize: 28, marginBottom: 4 }}>✅</p>
-            <p style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>Todos al día</p>
-          </div>
-        ) : (
-          <div>
-            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.07em', marginBottom: 8 }}>
-              TOP URGENTES
-            </p>
-            {[...criticos, ...vencidos]
-              .sort((a, b) => b.dias_sin_compra - a.dias_sin_compra)
-              .slice(0, 5)
-              .map(c => {
-                const color = colors[c.vendedor_actual] ?? '#D4AF37'
-                const isCritico = c.alert_level === 'critico'
-                return (
-                  <div
-                    key={c.nombre_fantasia}
-                    onClick={() => router.push(c.cliente_id ? `/ventas/clientes/${c.cliente_id}` : `/ventas/clientes?q=${encodeURIComponent(c.nombre_fantasia)}`)}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                        {c.segmento && (
-                          <span style={{
-                            fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 5,
-                            background: `${SEG_COLORS_RISK[c.segmento] ?? '#888'}22`,
-                            color: SEG_COLORS_RISK[c.segmento] ?? '#888',
-                            border: `1px solid ${SEG_COLORS_RISK[c.segmento] ?? '#888'}44`,
-                            flexShrink: 0, lineHeight: 1.4,
-                          }}>{c.segmento}{c.score != null ? ` ${c.score}` : ''}</span>
-                        )}
-                        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {c.nombre_fantasia}
-                        </p>
-                      </div>
-                      <p style={{ fontSize: 10, color }}>
-                        {dspVendedor(c.vendedor_actual)}
-                      </p>
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 800, color: isCritico ? '#B5543E' : '#B5543E' }}>
-                        {c.dias_sin_compra}d
-                      </p>
-                      <p style={{ fontSize: 10, color: 'var(--muted)' }}>/{c.ciclo_promedio_dias}d</p>
-                    </div>
-                  </div>
-                )
-              })}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ── MisionesWidgetCard ────────────────────────────────────────────────────────
 function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
   const router   = useRouter()
@@ -1643,55 +1482,8 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
   )
 }
 
-// ── DropSizeCard ─────────────────────────────────────────────────────────────
-function DropSizeCard({ resumen, colors, avatars }: { resumen: VendedorResumen[]; colors: Record<string, string>; avatars?: Record<string, string | null> }) {
-  return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 20, overflow: 'hidden',
-    }}>
-      <div style={{ padding: '16px 18px 20px' }}>
-        <h3 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 14, marginBottom: 20 }}>
-          Ticket Promedio / Drop Size
-        </h3>
-        {resumen.map((v, i) => {
-          const color = colors[v.vendedor] ?? '#D4AF37'
-          return (
-            <div key={v.vendedor} style={{ marginBottom: i < resumen.length - 1 ? 20 : 0 }}>
-              {/* Header row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <VendedorAvatar vendedor={v.vendedor} color={color} size={36} avatars={avatars} />
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{dspVendedor(v.vendedor)}</p>
-                  <p style={{ fontSize: 10, color: 'var(--muted)' }}>Vendedor Canal</p>
-                </div>
-              </div>
-              {/* 3 metric boxes */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                {[
-                  { label: 'Litros período', value: fL(v.litrosPeriodo), color: '#D4AF37' },
-                  { label: 'Venta s/imp período', value: fP(v.ventaPeriodo), color: '#5A8A4A' },
-                  { label: 'Drop Size Hoy', value: fP(v.dropSize), color },
-                ].map(({ label, value, color: c }) => (
-                  <div key={label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '10px 10px' }}>
-                    <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>{label}</p>
-                    <p style={{ fontSize: 13, fontWeight: 800, color: c }}>{value}</p>
-                  </div>
-                ))}
-              </div>
-              {i < resumen.length - 1 && (
-                <div style={{ height: 1, background: 'var(--border-subtle)', margin: '16px 0 0' }} />
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 // ── Main Component ───────────────────────────────────────────────────────────
-export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, periodo, evolution, productRanking, productDetail, vendedoresScope, riesgoClientes, planSemana, misionesResumen, vendedorAvatars, litrosMesAnterior = 0, litrosMesAnteriorPorVendedor = {} }: Props) {
+export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, periodo, evolution, productRanking, productDetail, vendedoresScope, planSemana, misionesResumen, vendedorAvatars }: Props) {
   const isDesktop = useIsDesktop()
   const router = useRouter()
   const [showPlanModal, setShowPlanModal] = useState(false)
@@ -1716,21 +1508,12 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
     setShowPlanModal(false)
   }
 
-  const totalLitrosHoy = resumen.reduce((s, v) => s + v.litrosHoy, 0)
-  const totalVentaHoy = resumen.reduce((s, v) => s + v.ventaHoy, 0)
-  const totalLitrosPeriodo = resumen.reduce((s, v) => s + v.litrosPeriodo, 0)
-  const precioProm = totalLitrosHoy > 0 ? totalVentaHoy / totalLitrosHoy : 0
-
   // Vendedor colors — usa fuente única de lib/theme (no más asignación por índice)
   const VEND_COLOR = VEND_COLOR_THEME
 
   const gridStyle4 = isDesktop
-    ? { display: 'grid', gridTemplateColumns: '220px 1fr 1fr 220px', gap: 16, marginBottom: 16 }
+    ? { display: 'grid', gridTemplateColumns: `220px repeat(${Math.max(resumen.length, 1)}, 1fr)`, gap: 16, marginBottom: 16 }
     : { display: 'flex', flexDirection: 'column' as const, gap: 14, marginBottom: 14 }
-
-  const gridStyle3 = isDesktop
-    ? { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }
-    : { display: 'flex', flexDirection: 'column' as const, gap: 14 }
 
   return (
     <div style={{ padding: isDesktop ? '20px 24px 60px' : '16px 16px 100px', maxWidth: 1800, margin: '0 auto' }}>
@@ -1798,199 +1581,8 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         </button>
       )}
 
-      {/* === KPI BANNER PREMIUM === */}
-      {(() => {
-        const mesNombre = periodo?.fecha_inicio
-          ? ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][new Date(periodo.fecha_inicio + 'T12:00:00').getMonth()]
-          : ''
-        const anio = periodo?.fecha_inicio ? new Date(periodo.fecha_inicio + 'T12:00:00').getFullYear() : ''
-        const mesAnteriorNombre = periodo?.fecha_inicio
-          ? (() => { const d = new Date(periodo.fecha_inicio + 'T12:00:00'); d.setMonth(d.getMonth() - 1); return ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][d.getMonth()] })()
-          : ''
-        const diffTotal = litrosMesAnterior > 0 ? totalLitrosPeriodo - litrosMesAnterior : 0
-        const diffPct = litrosMesAnterior > 0 ? (diffTotal / litrosMesAnterior) * 100 : 0
-        const metaTotalEquipo = resumen.reduce((s, v) => s + v.metaLitros, 0)
-        const pctMeta = metaTotalEquipo > 0 ? Math.min(Math.round((totalLitrosPeriodo / metaTotalEquipo) * 100), 100) : 0
-
-        // Mini sparkline SVG por vendedor
-        function MiniSparkline({ vendedor, color }: { vendedor: string; color: string }) {
-          const dias = evolution.filter(d => typeof d[vendedor] === 'number' && (d[vendedor] as number) > 0)
-          if (dias.length < 2) return null
-          const vals = dias.map(d => d[vendedor] as number)
-          const max = Math.max(...vals)
-          const W = 80, H = 28
-          const pts = vals.map((v, i) => {
-            const x = (i / (vals.length - 1)) * W
-            const y = H - (v / max) * H * 0.85
-            return `${x.toFixed(1)},${y.toFixed(1)}`
-          }).join(' ')
-          return (
-            <svg width={W} height={H} style={{ display: 'block' }}>
-              <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity={0.7} />
-              {/* último punto resaltado */}
-              {vals.length > 0 && (() => {
-                const lx = W
-                const lv = vals[vals.length - 1]
-                const ly = H - (lv / max) * H * 0.85
-                return <circle cx={lx} cy={ly} r={2.5} fill={color} />
-              })()}
-            </svg>
-          )
-        }
-
-        // Donut meta
-        const donutR = 28, donutCx = 34, donutCy = 34, stroke = 7
-        const circ = 2 * Math.PI * donutR
-        const dash = (pctMeta / 100) * circ
-
-        // ── Bloque vendedor reutilizable ──────────────────────────────────────
-        function VendedorBannerBlock({ v, compact }: { v: typeof resumen[0]; compact?: boolean }) {
-          const color = VEND_COLOR[v.vendedor] ?? '#D4AF37'
-          const pctVendedor = totalLitrosPeriodo > 0 ? (v.litrosPeriodo / totalLitrosPeriodo) * 100 : 0
-          const avatarSize = compact ? 36 : 44
-          return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 10 : 12, minWidth: 0 }}>
-              {vendedorAvatars?.[v.vendedor] ? (
-                <div style={{
-                  width: avatarSize, height: avatarSize, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
-                  border: `2px solid ${color}`, boxShadow: `0 0 10px ${color}30`,
-                }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={vendedorAvatars[v.vendedor]!} alt={v.vendedor}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
-                </div>
-              ) : (
-                <div style={{
-                  width: avatarSize, height: avatarSize, borderRadius: '50%', flexShrink: 0,
-                  background: color, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: avatarSize * 0.33, fontWeight: 900, color: '#080808', border: `2px solid ${color}40`,
-                }}>{getInitials(v.vendedor)}</div>
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 9, fontWeight: 800, color, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 2 }}>
-                  {dspVendedor(v.vendedor)}
-                </p>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, marginBottom: 2 }}>
-                  <span style={{ fontSize: compact ? 16 : 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px' }}>
-                    {v.litrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                  </span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)' }}>L</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontSize: 10, color: '#555', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    {pctVendedor.toFixed(1)}% del total
-                  </span>
-                  {!compact && <MiniSparkline vendedor={v.vendedor} color={color} />}
-                </div>
-              </div>
-            </div>
-          )
-        }
-
-        // ── Donut Meta ──────────────────────────────────────────────────────
-        function DonutMeta({ small }: { small?: boolean }) {
-          if (metaTotalEquipo <= 0) return null
-          const r = small ? 22 : 28, cx = small ? 26 : 34, cy = small ? 26 : 34, sw = small ? 5 : 7
-          const c2 = 2 * Math.PI * r
-          const d2 = (pctMeta / 100) * c2
-          const sz = small ? 52 : 68
-          return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: small ? 10 : 14 }}>
-              <svg width={sz} height={sz} style={{ flexShrink: 0 }}>
-                <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={sw} />
-                <circle cx={cx} cy={cy} r={r} fill="none" stroke="#D4AF37" strokeWidth={sw}
-                  strokeLinecap="round"
-                  strokeDasharray={`${d2} ${c2 - d2}`}
-                  strokeDashoffset={c2 / 4} />
-                <text x={cx} y={cy + (small ? 4 : 5)} textAnchor="middle"
-                  fill="#D4AF37" fontSize={small ? 9 : 11} fontWeight="900" fontFamily="inherit">
-                  {pctMeta}%
-                </text>
-              </svg>
-              <div>
-                <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.55)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 3 }}>
-                  Meta Mensual
-                </p>
-                <p style={{ fontSize: small ? 18 : 26, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, marginBottom: 3, fontVariantNumeric: 'tabular-nums' }}>
-                  {pctMeta}%
-                </p>
-                <p style={{ fontSize: small ? 9 : 10, color: '#555', fontWeight: 600, lineHeight: 1.3 }}>
-                  {fL(totalLitrosPeriodo)} / {fL(metaTotalEquipo)}
-                </p>
-              </div>
-            </div>
-          )
-        }
-
-        const Sep = () => <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(212,175,55,0.15)', margin: '0 4px' }} />
-
-        if (!isDesktop) return null // mobile usa el nuevo KPI grid
-        return (
-          <div style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            boxShadow: 'var(--shadow-1)',
-            borderRadius: 20,
-            padding: '18px 24px',
-            marginBottom: 20,
-          }}>
-            {/* Top row: fecha + selector */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <p style={{ fontSize: 10, color: 'rgba(212,175,55,0.5)', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase' }}>
-                {formatFecha(fechaHoy)}{periodo ? ` · ${periodo.nombre}` : ''}
-              </p>
-              <DateSelector fechaActual={fechaHoy} fechasDisponibles={fechasDisponibles} />
-            </div>
-
-            {isDesktop ? (
-              /* ══ DESKTOP: una fila, todos los bloques lado a lado ══ */
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-
-                {/* Bloque 1: total período */}
-                <div style={{ minWidth: 160 }}>
-                  <p style={{ fontSize: 10, color: 'rgba(212,175,55,0.55)', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 6 }}>
-                    Litros en {mesNombre} {anio}
-                  </p>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 5 }}>
-                    <span style={{ fontSize: 42, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                      {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                    </span>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: '#A8870F' }}>L</span>
-                  </div>
-                  {litrosMesAnterior > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: diffTotal >= 0 ? 'var(--green-dim)' : 'var(--red-dim)' }}>
-                        {diffTotal >= 0 ? '+' : ''}{diffPct.toFixed(1)}% vs {mesAnteriorNombre}
-                      </span>
-                      <span style={{ fontSize: 10, color: '#555', fontWeight: 600 }}>
-                        ({litrosMesAnterior.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L en {mesAnteriorNombre})
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <Sep />
-
-                {/* Bloques vendedores con separadores entre ellos */}
-                {resumen.map((v, i) => (
-                  <div key={v.vendedor} style={{ display: 'flex', alignItems: 'center', gap: 20, flex: 1, minWidth: 0 }}>
-                    {i > 0 && <Sep />}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <VendedorBannerBlock v={v} />
-                    </div>
-                  </div>
-                ))}
-
-                {metaTotalEquipo > 0 && <><Sep /><DonutMeta /></>}
-              </div>
-
-            ) : null /* Mobile: usa el nuevo KPI grid abajo */ }
-          </div>
-        )
-      })()}
-
-      {/* ── Selector de fecha MOBILE ── */}
-      {!isDesktop && (
+      {/* ── Selector de fecha ── */}
+      {(
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '10px 14px', marginBottom: 8,
@@ -2009,74 +1601,6 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         </div>
       )}
 
-      {/* ══ MOBILE: Nueva grilla KPI compacta ══ */}
-      {!isDesktop && (() => {
-        const mesNombre = periodo?.fecha_inicio
-          ? ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][new Date(periodo.fecha_inicio + 'T12:00:00').getMonth()]
-          : ''
-        const anio = periodo?.fecha_inicio ? new Date(periodo.fecha_inicio + 'T12:00:00').getFullYear() : ''
-        const mesAnteriorNombre = periodo?.fecha_inicio
-          ? (() => { const d = new Date(periodo.fecha_inicio + 'T12:00:00'); d.setMonth(d.getMonth()-1); return ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][d.getMonth()] })()
-          : ''
-        const diffTotal = litrosMesAnterior > 0 ? totalLitrosPeriodo - litrosMesAnterior : 0
-        const diffPct   = litrosMesAnterior > 0 ? (diffTotal / litrosMesAnterior) * 100 : 0
-        const metaTotalEquipo = resumen.reduce((s, v) => s + v.metaLitros, 0)
-        const pctMeta = metaTotalEquipo > 0 ? Math.min(Math.round((totalLitrosPeriodo / metaTotalEquipo) * 100), 100) : 0
-        const donutR = 24, donutCx = 28, donutCy = 28, sw = 5
-        const circ = 2 * Math.PI * donutR
-        const dash = (pctMeta / 100) * circ
-        const totalClientesPeriodo = resumen.reduce((s, v) => s + v.clientesPeriodoCount, 0)
-
-        const cardStyle: React.CSSProperties = {
-          background: 'var(--surface)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: 14,
-          padding: '12px 14px',
-        }
-
-        return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10, width: '100%' }}>
-            {/* Litros */}
-            <div style={{ ...cardStyle, borderTop: `2px solid ${C_CERV}`, overflow: 'hidden', minWidth: 0 }}>
-              <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(212,175,55,0.5)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 6 }}>
-                Litros · {mesNombre}
-              </p>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, flexWrap: 'wrap' as const }}>
-                <span style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                  {totalLitrosPeriodo.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(212,175,55,0.6)' }}>L</span>
-              </div>
-              {litrosMesAnterior > 0 && (
-                <p style={{ fontSize: 10, fontWeight: 700, color: diffTotal >= 0 ? '#4ADE80' : '#F87171', marginTop: 5 }}>
-                  {diffTotal >= 0 ? '↑' : '↓'} {Math.abs(diffPct).toFixed(1)}%
-                </p>
-              )}
-            </div>
-
-            {/* Meta */}
-            <div style={{ ...cardStyle, borderTop: `2px solid rgba(212,175,55,0.4)`, overflow: 'hidden', minWidth: 0 }}>
-              <p style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 8 }}>
-                Meta Mensual
-              </p>
-              {metaTotalEquipo > 0 ? (
-                <>
-                  <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.05em', lineHeight: 1, fontVariantNumeric: 'tabular-nums', marginBottom: 4 }}>{pctMeta}%</p>
-                  <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pctMeta}%`, background: '#D4AF37', borderRadius: 2 }} />
-                  </div>
-                  <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 4 }}>
-                    {fL(totalLitrosPeriodo)} / {fL(metaTotalEquipo)}
-                  </p>
-                </>
-              ) : (
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>Sin metas</p>
-              )}
-            </div>
-          </div>
-        )
-      })()}
-
       {/* ═══ DESKTOP: grid original ═══ */}
       {isDesktop && (
         <>
@@ -2085,15 +1609,12 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
             {resumen.map(v => (
               <VendedorCard key={v.vendedor} data={v} color={VEND_COLOR[v.vendedor] ?? '#D4AF37'} fechaHoy={fechaHoy} avatars={vendedorAvatars} />
             ))}
-            <MetasCard resumen={resumen} periodo={periodo} avatars={vendedorAvatars} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, marginBottom: 12 }}>
             <EvolutionCard evolution={evolution} vendedores={[...new Set(vendedoresScope.map(v => VENDEDOR_DISPLAY[v] ?? v))]} colors={VEND_COLOR} avatars={vendedorAvatars} />
             <RankingCard productRanking={productRanking} productDetail={productDetail} fechaHoy={fechaHoy} />
-            <DropSizeCard resumen={resumen} colors={VEND_COLOR} avatars={vendedorAvatars} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <RiesgoClientesCard clientes={riesgoClientes} colors={VEND_COLOR} />
+          <div style={{ marginBottom: 12 }}>
             <MisionesWidgetCard misiones={misionesResumen} />
           </div>
         </>
@@ -2114,19 +1635,16 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
           {/* Evolución compacta */}
           <EvolutionCard evolution={evolution} vendedores={vendedoresScope} colors={VEND_COLOR} avatars={vendedorAvatars} />
 
-          {/* Misiones + Riesgo */}
+          {/* Misiones */}
           <MisionesWidgetCard misiones={misionesResumen} />
-          <RiesgoClientesCard clientes={riesgoClientes} colors={VEND_COLOR} />
 
-          {/* Ranking + Drop Size */}
+          {/* Ranking de productos */}
           <RankingCard productRanking={productRanking} productDetail={productDetail} fechaHoy={fechaHoy} />
-          <DropSizeCard resumen={resumen} colors={VEND_COLOR} avatars={vendedorAvatars} />
 
           {/* Tarjetas full detalle — accesibles con scroll */}
           {resumen.map(v => (
             <VendedorCard key={v.vendedor} data={v} color={VEND_COLOR[v.vendedor] ?? '#D4AF37'} fechaHoy={fechaHoy} avatars={vendedorAvatars} />
           ))}
-          <MetasCard resumen={resumen} periodo={periodo} avatars={vendedorAvatars} />
         </div>
       )}
     </div>
