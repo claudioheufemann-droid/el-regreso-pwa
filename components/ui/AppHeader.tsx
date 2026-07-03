@@ -8,9 +8,9 @@ import SettingsPanel from '@/components/ui/SettingsPanel'
 
 /**
  * Header estándar de El Regreso Control — mismo en todos los módulos y submenús.
- * Arriba del todo: botón "Volver" (vuelve a la pantalla anterior; si no hay
- * historial, va al inicio de la app). Debajo: eyebrow (fecha/módulo) + título
- * a la izquierda, avatar a la derecha. Tocar el avatar abre la configuración.
+ * Arriba del todo: botón "Volver" que lleva directo al menú principal de la app.
+ * Debajo: eyebrow (fecha/módulo) + título a la izquierda, avatar a la derecha.
+ * Tocar el avatar abre la configuración.
  * El saludo "Hola, X" NO va aquí: solo en el home tras iniciar sesión.
  */
 interface AppHeaderProps {
@@ -31,18 +31,13 @@ export default function AppHeader({ eyebrow, title, extraAction, hideBack }: App
 
   const initials = user?.iniciales ?? (user?.nombre?.slice(0, 2).toUpperCase() ?? '··')
 
-  function goBack() {
-    if (typeof window !== 'undefined' && window.history.length > 1) router.back()
-    else router.push('/')
-  }
-
   return (
     <>
       {!hideBack && (
         <div style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <button
-            onClick={goBack}
-            aria-label="Volver"
+            onClick={() => router.push('/')}
+            aria-label="Volver al inicio"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
