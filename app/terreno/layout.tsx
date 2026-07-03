@@ -5,10 +5,13 @@ import TerrenoBottomNav from '@/components/TerrenoBottomNav'
 import PageTabs from '@/components/PageTabs'
 import type { PageTab } from '@/components/PageTabs'
 
+// Mismos destinos y nombres que el nav móvil — un solo modelo mental.
 const TABS: PageTab[] = [
-  { href: '/terreno',           label: 'Panel',              exact: true  },
-  { href: '/terreno/ruta',      label: 'Planifica tu Viaje'               },
-  { href: '/terreno/historial', label: 'Historial'                        },
+  { href: '/terreno',              label: 'Panel',     exact: true },
+  { href: '/terreno/ruta',         label: 'Viaje'                  },
+  { href: '/terreno/nueva-visita', label: 'Visita'                 },
+  { href: '/terreno/cercanos',     label: 'Cercanos'               },
+  { href: '/terreno/historial',    label: 'Historial'              },
 ]
 
 export default async function TerrenoLayout({ children }: { children: React.ReactNode }) {

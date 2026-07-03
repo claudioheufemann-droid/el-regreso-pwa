@@ -1,16 +1,18 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Home, MapPin, History, Plus, Navigation, Locate } from 'lucide-react'
+import { LayoutDashboard, Route, Plus, Navigation, History } from 'lucide-react'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
+// 5 destinos = los 5 slots del NavPill, sin botón "Más".
+// Orden = flujo de trabajo del vendedor: reviso mi día → planifico a dónde voy
+// → registro la visita (acción central) → veo qué tengo cerca → reviso lo hecho.
 const ITEMS: NavItem[] = [
-  { href: '/',                     icon: Home,       label: 'Inicio',    exact: true  },
-  { href: '/terreno',              icon: MapPin,     label: 'Panel',     exact: true  },
-  { href: '/terreno/nueva-visita', icon: Plus,       label: 'Visita'                  },
-  { href: '/terreno/ruta',         icon: Navigation, label: 'Viaje'                   },
-  { href: '/terreno/cercanos',     icon: Locate,     label: 'Cercanos'                },
-  { href: '/terreno/historial',    icon: History,    label: 'Historial'               },
+  { href: '/terreno',              icon: LayoutDashboard, label: 'Panel',     exact: true },
+  { href: '/terreno/ruta',         icon: Route,           label: 'Viaje'                  },
+  { href: '/terreno/nueva-visita', icon: Plus,            label: 'Visita'                 },
+  { href: '/terreno/cercanos',     icon: Navigation,      label: 'Cercanos'               },
+  { href: '/terreno/historial',    icon: History,         label: 'Historial'              },
 ]
 
 export default function TerrenoBottomNav() {

@@ -1,12 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { History, MapPin, Plus } from 'lucide-react'
+import { LayoutDashboard, Route, Navigation, History, Plus } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
+// Mismos destinos y nombres que el nav móvil y las tabs de desktop.
+// "Visita" no va en la lista: es la acción principal y vive en el CTA dorado.
 const navItems: SidebarNavItem[] = [
-  { href: '/terreno',           icon: MapPin,  label: 'Hub Terreno', exact: true  },
-  { href: '/terreno/historial', icon: History, label: 'Historial',   exact: false },
+  { href: '/terreno',           icon: LayoutDashboard, label: 'Panel',     exact: true  },
+  { href: '/terreno/ruta',      icon: Route,           label: 'Viaje',     exact: false },
+  { href: '/terreno/cercanos',  icon: Navigation,      label: 'Cercanos',  exact: false },
+  { href: '/terreno/historial', icon: History,         label: 'Historial', exact: false },
 ]
 
 const cta = (
