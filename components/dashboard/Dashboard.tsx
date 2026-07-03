@@ -171,10 +171,9 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   const isDesktop = useIsDesktop()
   const [tasks, setTasks] = useState(initialTasks)
   const [selectedTask, setSelectedTask] = useState<RcTask | null>(null)
-  // Admin aterriza en el panel general (KPIs de toda el área). Vendedor/no-admin
-  // aterriza directo en sus propias tareas — el panel general mezcla tareas de
-  // Marketing/Logística/etc. que no le competen y solo agregan ruido.
-  const [view, setView] = useState<View>('mis-tareas')
+  // Resumen es la puerta de entrada del módulo: KPIs de la sección + el CTA
+  // de Nueva Tarea (crear y asignar). Todos aterrizan ahí, admin o no.
+  const [view, setView] = useState<View>('home')
   // Cuando se navega desde Equipo hacia las tareas de otra persona (null = uno mismo)
   const [viewedUserId, setViewedUserId] = useState<string | null>(null)
   // Equipo necesita ver las 3 macro-áreas a la vez, no solo la del dashboard activo —
