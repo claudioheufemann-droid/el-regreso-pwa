@@ -177,6 +177,9 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   const [view, setView] = useState<View>('mis-tareas')
   // Cuando se navega desde Equipo hacia las tareas de otra persona (null = uno mismo)
   const [viewedUserId, setViewedUserId] = useState<string | null>(null)
+  // Equipo necesita ver las 3 macro-áreas a la vez, no solo la del dashboard activo —
+  // se carga una vez, sin scope, y se reutiliza en "Mis Tareas" al ver a un compañero.
+  const [allTasks, setAllTasks] = useState<RcTask[] | null>(null)
   const [filterKey, setFilterKey] = useState<FilterKey>('activas')
   const [showNewTask, setShowNewTask] = useState(false)
   // Áreas disponibles para crear tareas según el módulo activo
@@ -222,11 +225,22 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
   const handleUpdate = useCallback((updated: RcTask) => {
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
+    setAllTasks(prev => prev ? prev.map(t => t.id === updated.id ? updated : t) : prev)
   }, [])
   const handleDelete = useCallback((id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id))
+    setAllTasks(prev => prev ? prev.filter(t => t.id !== id) : prev)
     setSelectedTask(null)
   }, [])
+
+  // Carga perezosa: solo al entrar a Equipo por primera vez, todas las tareas de la empresa
+  useEffect(() => {
+    if (view !== 'equipo' || allTasks !== null) return
+    fetch('/api/tasks', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => setAllTasks(Array.isArray(data) ? data : []))
+      .catch(() => setAllTasks([]))
+  }, [view, allTasks])
 
   const refreshTasks = useCallback(async () => {
     try {
@@ -395,7 +409,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           {view === 'mis-tareas' && (() => {
             const targetUserId = viewedUserId ?? currentUserId
             const targetUser = viewedUserId ? users.find(u => u.id === viewedUserId) : null
-            const misTareas = tasks.filter(t =>
+            const misTareas = (allTasks ?? tasks).filter(t =>
               t.responsable_id === targetUserId ||
               (t.responsable_ids ?? []).includes(targetUserId)
             )
@@ -449,71 +463,94 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             )
           })()}
 
-          {/* ── EQUIPO VIEW — carga de tareas de todos los compañeros de esta sección ── */}
+          {/* ── EQUIPO VIEW — las 3 áreas por separado, con sus responsables debajo ── */}
           {view === 'equipo' && (() => {
-            const teamUserIds = [...new Set(
-              activeTasks.flatMap(t => [t.responsable_id, ...(t.responsable_ids ?? [])].filter(Boolean))
-            )]
-            const teamUsers = users.filter(u => teamUserIds.includes(u.id))
-            const teamStats = teamUsers.map(u => {
-              const myTasks = activeTasks.filter(t => t.responsable_id === u.id || (t.responsable_ids ?? []).includes(u.id))
-              const comp = myTasks.filter(t => t.estado === 'Completada').length
-              const atr = myTasks.filter(t => t.estado === 'Atrasada').length
-              const enProceso = myTasks.filter(t => t.estado === 'En Proceso').length
-              const porApr = myTasks.filter(t => t.estado === 'Por Aprobar').length
-              const pct = myTasks.length > 0 ? Math.round((comp / myTasks.length) * 100) : 0
-              const color = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : atr > 0 ? '#FF6B6B' : '#5B8AA8'
-              return { user: u, total: myTasks.length, comp, atr, enProceso, porApr, pct, color }
-            }).filter(s => s.total > 0).sort((a, b) => b.pct - a.pct)
+            const source = (allTasks ?? tasks).filter(t => t.area !== CEREBRO_AREA)
+            const macroEntries = Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][]
+
+            const sections = macroEntries.map(([macroKey, macro]) => {
+              const macroAreaList = macro.areas as readonly string[]
+              const macroTasks = source.filter(t => macroAreaList.includes(t.area))
+              const teamUserIds = [...new Set(
+                macroTasks.flatMap(t => [t.responsable_id, ...(t.responsable_ids ?? [])].filter(Boolean))
+              )]
+              const teamStats = users.filter(u => teamUserIds.includes(u.id)).map(u => {
+                const myTasks = macroTasks.filter(t => t.responsable_id === u.id || (t.responsable_ids ?? []).includes(u.id))
+                const comp = myTasks.filter(t => t.estado === 'Completada').length
+                const atr = myTasks.filter(t => t.estado === 'Atrasada').length
+                const enProceso = myTasks.filter(t => t.estado === 'En Proceso').length
+                const porApr = myTasks.filter(t => t.estado === 'Por Aprobar').length
+                const pct = myTasks.length > 0 ? Math.round((comp / myTasks.length) * 100) : 0
+                const color = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : atr > 0 ? '#FF6B6B' : '#5B8AA8'
+                return { user: u, total: myTasks.length, comp, atr, enProceso, porApr, pct, color }
+              }).filter(s => s.total > 0).sort((a, b) => b.pct - a.pct)
+              return { macroKey, macro, teamStats }
+            })
 
             return (
               <>
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)', marginBottom: 4 }}>Equipo</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                    {teamStats.length} persona{teamStats.length !== 1 ? 's' : ''} con tareas {currentMacroArea ? 'en esta área' : 'en toda la empresa'}
-                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>Carga de tareas de toda la empresa, por área</div>
                 </div>
-                {teamStats.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '48px 20px' }}>
-                    <div style={{ fontSize: 36, marginBottom: 12 }}>👥</div>
-                    <div style={{ fontSize: 14, color: 'var(--muted)' }}>Nadie tiene tareas asignadas todavía</div>
-                  </div>
+
+                {allTasks === null ? (
+                  <div style={{ textAlign: 'center', padding: '48px 20px', fontSize: 12, color: 'var(--muted)' }}>Cargando equipo…</div>
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(2, 1fr)' : '1fr', gap: 12 }}>
-                    {teamStats.map(({ user: u, total, comp, atr, enProceso, porApr, pct, color }) => (
-                      <div key={u.id}
-                        className="touch-active cursor-pointer"
-                        onClick={() => { setViewedUserId(u.id); setView('mis-tareas') }}
-                        style={{ background: 'var(--surface)', border: '1px solid rgba(128,128,128,0.1)', borderRadius: 16, padding: 16, borderLeft: `3px solid ${color}` }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                          <Avatar iniciales={u.iniciales} userId={u.id} size={42} avatarUrl={u.avatar_url} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--cream)' }}>{u.nombre}</div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{u.rol}</div>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: 24, fontWeight: 900, color, lineHeight: 1 }}>{pct}%</div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>{comp}/{total}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                    {sections.map(({ macroKey, macro, teamStats }) => (
+                      <div key={macroKey}>
+                        {/* Título de la sección/área */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${macro.color}25` }}>
+                          <div style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: `${macro.color}18`, border: `1px solid ${macro.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, color: macro.color }}>{macro.code}</div>
+                          <div style={{ fontSize: isDesktop ? 17 : 15, fontWeight: 900, color: macro.color, letterSpacing: -0.3 }}>{macro.label}</div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                            {teamStats.length > 0 ? `${teamStats.length} responsable${teamStats.length !== 1 ? 's' : ''}` : 'sin tareas asignadas'}
                           </div>
                         </div>
-                        <div style={{ height: 6, background: 'rgba(128,128,128,0.15)', borderRadius: 6, overflow: 'hidden', marginBottom: 12 }}>
-                          <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${color}80, ${color})`, borderRadius: 6, transition: 'width 0.6s ease' }} />
-                        </div>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          {[
-                            { label: 'Completadas', val: comp, color: '#4A7A3A' },
-                            { label: 'En Proceso', val: enProceso, color: '#E67E22' },
-                            { label: 'Por Aprobar', val: porApr, color: '#D4AF37' },
-                            { label: 'Atrasadas', val: atr, color: '#FF6B6B' },
-                          ].filter(s => s.val > 0).map(s => (
-                            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 10, background: `${s.color}12`, border: `1px solid ${s.color}25` }}>
-                              <div style={{ width: 5, height: 5, borderRadius: '50%', background: s.color }} />
-                              <span style={{ fontSize: 10, color: s.color, fontWeight: 600 }}>{s.val} {s.label}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{ marginTop: 10, fontSize: 9, color: 'var(--muted)', letterSpacing: 1 }}>TOCA PARA VER SUS TAREAS →</div>
+
+                        {/* Responsables de esta área */}
+                        {teamStats.length === 0 ? (
+                          <div style={{ fontSize: 12, color: 'var(--muted)', paddingLeft: 4 }}>Nadie tiene tareas asignadas en esta área todavía</div>
+                        ) : (
+                          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(2, 1fr)' : '1fr', gap: 12 }}>
+                            {teamStats.map(({ user: u, total, comp, atr, enProceso, porApr, pct, color }) => (
+                              <div key={u.id}
+                                className="touch-active cursor-pointer"
+                                onClick={() => { setViewedUserId(u.id); setView('mis-tareas') }}
+                                style={{ background: 'var(--surface)', border: '1px solid rgba(128,128,128,0.1)', borderRadius: 16, padding: 16, borderLeft: `3px solid ${color}` }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                                  <Avatar iniciales={u.iniciales} userId={u.id} size={42} avatarUrl={u.avatar_url} />
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--cream)' }}>{u.nombre}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{u.rol}</div>
+                                  </div>
+                                  <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: 24, fontWeight: 900, color, lineHeight: 1 }}>{pct}%</div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>{comp}/{total}</div>
+                                  </div>
+                                </div>
+                                <div style={{ height: 6, background: 'rgba(128,128,128,0.15)', borderRadius: 6, overflow: 'hidden', marginBottom: 12 }}>
+                                  <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${color}80, ${color})`, borderRadius: 6, transition: 'width 0.6s ease' }} />
+                                </div>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                  {[
+                                    { label: 'Completadas', val: comp, color: '#4A7A3A' },
+                                    { label: 'En Proceso', val: enProceso, color: '#E67E22' },
+                                    { label: 'Por Aprobar', val: porApr, color: '#D4AF37' },
+                                    { label: 'Atrasadas', val: atr, color: '#FF6B6B' },
+                                  ].filter(s => s.val > 0).map(s => (
+                                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 10, background: `${s.color}12`, border: `1px solid ${s.color}25` }}>
+                                      <div style={{ width: 5, height: 5, borderRadius: '50%', background: s.color }} />
+                                      <span style={{ fontSize: 10, color: s.color, fontWeight: 600 }}>{s.val} {s.label}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div style={{ marginTop: 10, fontSize: 9, color: 'var(--muted)', letterSpacing: 1 }}>TOCA PARA VER SUS TAREAS →</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
