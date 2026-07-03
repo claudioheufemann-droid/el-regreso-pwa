@@ -3,12 +3,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import {
-  Calendar, Droplets, MapPin, Users, ShoppingCart, DollarSign, AlertTriangle,
+  Calendar, Droplets, MapPin, Users,
   ChevronLeft, ChevronRight, Loader2, Play, Pause, Thermometer, Heart,
   Flame, Target, TrendingUp, Eye, EyeOff, Layers as LayersIcon, Package,
   Search, Locate, X, SlidersHorizontal,
 } from 'lucide-react'
-import { VEND_COLOR } from '@/lib/theme'
 import { VENDEDOR_DISPLAY } from '@/lib/types'
 const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import { useIsDesktop } from '@/lib/useIsDesktop'
@@ -49,8 +48,6 @@ interface Props {
 
 interface MapaResponse {
   puntos: Punto[]
-  deudaGlobal: number
-  deudaVencidaGlobal: number
 }
 
 function formatFecha(dateStr: string) {
@@ -58,10 +55,6 @@ function formatFecha(dateStr: string) {
   const [y, m, d] = dateStr.split('-')
   const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
   return `${parseInt(d)} ${meses[parseInt(m) - 1]} ${y}`
-}
-
-function formatPeso(n: number) {
-  return '$' + Math.round(n).toLocaleString('es-CL')
 }
 
 function formatLitros(n: number) {
@@ -98,7 +91,6 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
   const [fecha, setFecha] = useState(fechaDefault)
   const [vendedor, setVendedor] = useState('all')
   const [puntos, setPuntos] = useState<Punto[]>([])
-  const [deudaGlobal, setDeudaGlobal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [capaViz, setCapaViz] = useState<CapaViz>('pedidos')
   const [tileTipo, setTileTipo] = useState<TileTipo>('mapa')
@@ -169,10 +161,8 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
       const res = await fetch(`/api/mapa?${params}`)
       const data: MapaResponse = await res.json()
       setPuntos(Array.isArray(data?.puntos) ? data.puntos : [])
-      setDeudaGlobal(data?.deudaGlobal ?? 0)
     } catch {
       setPuntos([])
-      setDeudaGlobal(0)
     } finally {
       setLoading(false)
     }
@@ -227,9 +217,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
 
   const kpis = useMemo(() => {
     const litros = conVenta.reduce((s, p) => s + p.litros_total, 0)
-    const venta = conVenta.reduce((s, p) => s + p.total_sin_impuesto, 0)
-    const pedidos = conVenta.reduce((s, p) => s + p.pedidos_count, 0)
-    return { litros, clientes: conVenta.length, pedidos, ticket: pedidos > 0 ? venta / pedidos : 0 }
+    return { litros, clientes: conVenta.length }
   }, [conVenta])
 
   const insights = useMemo(() => {
@@ -244,14 +232,8 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
     const zonaCaliente = top && totalLitros > 0
       ? { nombre: top[0], pct: Math.round((top[1] / totalLitros) * 100) }
       : null
-    const enRiesgo = conVenta.filter(p => (p.dias_sin_compra ?? 0) > 30).length
-      + sinVenta.filter(p => (p.dias_sin_compra ?? 0) > 30).length
-    return { zonaCaliente, zonasBlancas: sinVenta.length, enRiesgo, rankingLocalidades: ranking.slice(0, 6), totalLitros }
+    return { zonaCaliente, zonasBlancas: sinVenta.length, rankingLocalidades: ranking.slice(0, 6), totalLitros }
   }, [conVenta, sinVenta])
-
-  const territorios = useMemo(() => {
-    return [{ vendedor: 'Vendedor Planta', litros: conVenta.reduce((s, p) => s + p.litros_total, 0), clientes: conVenta.length }]
-  }, [conVenta])
 
   const hayDatos = conVenta.length > 0
 
@@ -285,12 +267,9 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
           <SearchBar busquedaLoc={busquedaLoc} setBusquedaLoc={setBusquedaLoc} buscandoLoc={buscandoLoc} showResultadosLoc={showResultadosLoc} setShowResultadosLoc={setShowResultadosLoc} resultadosLoc={resultadosLoc} irAResultado={irAResultado} irAMiUbicacion={irAMiUbicacion} userCoords={userCoords} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, padding: '12px 20px 0', flexShrink: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '12px 20px 0', flexShrink: 0 }}>
           <KPICard icon={<Droplets size={14} />} color={C.gold} label="Ventas del período" value={`${formatLitros(kpis.litros)} L`} />
           <KPICard icon={<Users size={14} />} color={C.green} label="Clientes activos" value={kpis.clientes} />
-          <KPICard icon={<ShoppingCart size={14} />} color="#8a9fff" label="Pedidos" value={kpis.pedidos} />
-          <KPICard icon={<DollarSign size={14} />} color="#c084fc" label="Ticket promedio" value={formatPeso(kpis.ticket)} />
-          <DebtCard value={formatPeso(deudaGlobal)} />
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '10px 20px' }}>
@@ -345,11 +324,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
                 <InsightRow icon={<Target size={14} />} color="#818cf8" title="Oportunidad detectada"
                   body={`${insights.zonasBlancas} clientes sin compra en este período.`} />
               )}
-              {insights.enRiesgo > 0 && (
-                <InsightRow icon={<AlertTriangle size={14} />} color={C.gold} title="Clientes en riesgo"
-                  body={`${insights.enRiesgo} clientes no compran hace más de 30 días.`} />
-              )}
-              {!insights.zonaCaliente && insights.enRiesgo === 0 && (
+              {!insights.zonaCaliente && (
                 <p style={{ fontSize: 12, color: C.muted }}>Sin insights para este período.</p>
               )}
             </PanelCard>
@@ -365,8 +340,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
           <TimelineBar playing={playing} fecha={fecha} fechaIdx={fechaIdx} fechasDisponibles={fechasDisponibles} setPlaying={setPlaying} setFecha={setFecha} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, padding: '0 20px 18px', flexShrink: 0 }}>
-          <TerritoryPanel territorios={territorios} />
+        <div style={{ padding: '0 20px 18px', flexShrink: 0 }}>
           <RankingPanel insights={insights} />
         </div>
 
@@ -434,17 +408,10 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
         </div>
       </div>
 
-      {/* KPI 2x2 */}
+      {/* KPIs de contexto geográfico */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '10px 18px 0' }}>
         <KPICard icon={<Droplets size={14} />} color={C.gold} label="Ventas período" value={`${formatLitros(kpis.litros)} L`} />
         <KPICard icon={<Users size={14} />} color={C.green} label="Clientes activos" value={kpis.clientes} />
-        <KPICard icon={<ShoppingCart size={14} />} color="#8a9fff" label="Pedidos" value={kpis.pedidos} />
-        <KPICard icon={<DollarSign size={14} />} color="#c084fc" label="Ticket promedio" value={formatPeso(kpis.ticket)} />
-      </div>
-
-      {/* Deuda card */}
-      <div style={{ padding: '10px 18px 0' }}>
-        <DebtCard value={formatPeso(deudaGlobal)} />
       </div>
 
       {/* Filtros */}
@@ -496,7 +463,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
       </div>
 
       {/* Insights */}
-      {(insights.zonaCaliente || insights.enRiesgo > 0 || (mostrarSinCompra && insights.zonasBlancas > 0)) && (
+      {(insights.zonaCaliente || (mostrarSinCompra && insights.zonasBlancas > 0)) && (
         <div style={{ padding: '12px 18px 0' }}>
           <PanelCard title="Insights" icon={<TrendingUp size={13} style={{ color: C.gold }} />}>
             {insights.zonaCaliente && (
@@ -505,16 +472,13 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
             {mostrarSinCompra && insights.zonasBlancas > 0 && (
               <InsightRow icon={<Target size={14} />} color="#818cf8" title="Oportunidad detectada" body={`${insights.zonasBlancas} clientes sin compra en este período.`} />
             )}
-            {insights.enRiesgo > 0 && (
-              <InsightRow icon={<AlertTriangle size={14} />} color={C.gold} title="Clientes en riesgo" body={`${insights.enRiesgo} clientes no compran hace más de 30 días.`} />
-            )}
           </PanelCard>
         </div>
       )}
 
       {/* Ranking */}
       {insights.rankingLocalidades.length > 0 && (
-        <div style={{ padding: '12px 18px 0' }}>
+        <div style={{ padding: '12px 18px 20px' }}>
           <PanelCard title="Ranking de zonas" icon={<MapPin size={13} style={{ color: C.gold }} />}>
             {insights.rankingLocalidades.map(([loc, litros], i) => {
               const pct = insights.totalLitros > 0 ? Math.round((litros / insights.totalLitros) * 100) : 0
@@ -530,11 +494,6 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
           </PanelCard>
         </div>
       )}
-
-      {/* Territorio */}
-      <div style={{ padding: '12px 18px 96px' }}>
-        <TerritoryPanel territorios={territorios} />
-      </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } } @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }`}</style>
     </div>
@@ -559,20 +518,6 @@ function KPICard({ icon, color, label, value }: { icon: React.ReactNode; color: 
       </div>
       <div style={{ fontSize: 20, fontWeight: 900, color: C.cream, letterSpacing: '-0.5px', lineHeight: 1, marginBottom: 4 }}>{value}</div>
       <div style={{ fontSize: 10.5, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>{label}</div>
-    </div>
-  )
-}
-
-function DebtCard({ value }: { value: string }) {
-  return (
-    <div style={{ background: `linear-gradient(135deg, ${C.redDim} 0%, transparent 100%)`, border: `1px solid ${C.redBorder}`, borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <div>
-        <div style={{ fontSize: 10.5, color: C.red, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4, opacity: 0.85 }}>Deuda total</div>
-        <div style={{ fontSize: 22, fontWeight: 900, color: C.red, letterSpacing: '-0.5px' }}>{value}</div>
-      </div>
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: `${C.red}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <AlertTriangle size={16} style={{ color: C.red }} />
-      </div>
     </div>
   )
 }
@@ -721,33 +666,6 @@ function CapaToggle({ label, color, active, onClick }: { label: string; color: s
       </div>
       {active ? <Eye size={13} style={{ color }} /> : <EyeOff size={13} style={{ color: C.muted }} />}
     </button>
-  )
-}
-
-function TerritoryPanel({ territorios }: { territorios: { vendedor: string; litros: number; clientes: number }[] }) {
-  const maxL = Math.max(...territorios.map(x => x.litros), 1)
-  return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16 }}>
-      <p style={{ fontSize: 13, fontWeight: 700, color: C.cream, marginBottom: 12 }}>Resumen por territorio</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        {territorios.map(t => {
-          const color = VEND_COLOR[t.vendedor] ?? C.muted
-          return (
-            <div key={t.vendedor} style={{ background: C.cardElevated, borderRadius: 12, padding: 12, border: `1px solid ${C.border}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: color }} />
-                <span style={{ fontSize: 11.5, color, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dspV(t.vendedor)}</span>
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: C.cream, letterSpacing: '-0.5px', marginBottom: 2 }}>{formatLitros(t.litros)} L</div>
-              <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>{t.clientes} clientes</div>
-              <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${(t.litros / maxL) * 100}%`, background: color, borderRadius: 2 }} />
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
   )
 }
 
