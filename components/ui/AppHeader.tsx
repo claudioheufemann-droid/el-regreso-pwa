@@ -22,9 +22,11 @@ interface AppHeaderProps {
   extraAction?: React.ReactNode
   /** Ocultar el botón Volver (por defecto se muestra en todas las pantallas) */
   hideBack?: boolean
+  /** A dónde navega "Volver" (por defecto al inicio de la app) */
+  backHref?: string
 }
 
-export default function AppHeader({ eyebrow, title, extraAction, hideBack }: AppHeaderProps) {
+export default function AppHeader({ eyebrow, title, extraAction, hideBack, backHref = '/' }: AppHeaderProps) {
   const { user } = useUser()
   const router = useRouter()
   const [showSettings, setShowSettings] = useState(false)
@@ -36,8 +38,8 @@ export default function AppHeader({ eyebrow, title, extraAction, hideBack }: App
       {!hideBack && (
         <div style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <button
-            onClick={() => router.push('/')}
-            aria-label="Volver al inicio"
+            onClick={() => router.push(backHref)}
+            aria-label="Volver"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',

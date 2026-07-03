@@ -487,6 +487,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             ? (Object.entries(MACRO_AREAS).find(([k]) => k === currentMacroArea)?.[1]?.label ?? 'Gestión')
             : 'Gestión'
           }
+          backHref={backHref}
           extraAction={
             <button
               onClick={refreshTasks}
