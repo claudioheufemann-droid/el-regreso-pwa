@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { RcTask, RcUser, CEREBRO_AREA, AREA_CFG, MACRO_AREAS, MacroKey, getMacroKey } from '@/lib/gestion-types'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { createClient } from '@/lib/supabase/client'
+import { getSemaphore } from '@/lib/kpis'
 import AreaCard from './AreaCard'
 import TaskDetailModal from '@/components/modals/TaskDetailModal'
 import TaskCalendar from '@/components/calendar/TaskCalendar'
@@ -504,7 +505,13 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                 const porApr = myTasks.filter(t => t.estado === 'Por Aprobar').length
                 const pct = myTasks.length > 0 ? Math.round((comp / myTasks.length) * 100) : 0
                 const color = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : atr > 0 ? '#FF6B6B' : '#5B8AA8'
-                return { user: u, total: myTasks.length, comp, atr, enProceso, porApr, pct, color }
+                // Próxima entrega: la tarea pendiente con el plazo más cercano
+                const pendientes = myTasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada')
+                const proxima = pendientes.length > 0
+                  ? [...pendientes].sort((a, b) => a.plazo.localeCompare(b.plazo))[0]
+                  : null
+                const proximaSem = proxima ? getSemaphore(proxima.plazo, proxima.estado) : null
+                return { user: u, total: myTasks.length, comp, atr, enProceso, porApr, pct, color, proxima, proximaSem }
               }).filter(s => s.total > 0).sort((a, b) => b.pct - a.pct)
               return { macroKey, macro, teamStats }
             })
@@ -536,7 +543,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                           <div style={{ fontSize: 12, color: 'var(--muted)', paddingLeft: 4 }}>Nadie tiene tareas asignadas en esta área todavía</div>
                         ) : (
                           <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(2, 1fr)' : '1fr', gap: 12 }}>
-                            {teamStats.map(({ user: u, total, comp, atr, enProceso, porApr, pct, color }) => (
+                            {teamStats.map(({ user: u, total, comp, atr, enProceso, porApr, pct, color, proxima, proximaSem }) => (
                               <div key={u.id}
                                 className="touch-active cursor-pointer"
                                 onClick={() => { setViewedUserId(u.id); setView('mis-tareas') }}
@@ -555,6 +562,15 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                                 <div style={{ height: 6, background: 'rgba(128,128,128,0.15)', borderRadius: 6, overflow: 'hidden', marginBottom: 12 }}>
                                   <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${color}80, ${color})`, borderRadius: 6, transition: 'width 0.6s ease' }} />
                                 </div>
+                                {proxima && proximaSem && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, padding: '6px 10px', borderRadius: 10, background: `${proximaSem.hex}12`, border: `1px solid ${proximaSem.hex}30` }}>
+                                    <span style={{ fontSize: 11 }}>⏳</span>
+                                    <span style={{ fontSize: 11, color: proximaSem.hex, fontWeight: 700 }}>
+                                      {proximaSem.label === 'Vencida' ? 'Vencida' : `Vence en ${proximaSem.label}`}
+                                    </span>
+                                    <span style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>· {proxima.titulo}</span>
+                                  </div>
+                                )}
                                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                   {[
                                     { label: 'Completadas', val: comp, color: '#4A7A3A' },
