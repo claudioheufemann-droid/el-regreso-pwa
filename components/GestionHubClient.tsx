@@ -69,18 +69,6 @@ function GestionHero() {
   )
 }
 
-/* ── Sparkline ── */
-function Spark({ color }: { color: string }) {
-  return (
-    <svg width="80" height="28" viewBox="0 0 80 28" fill="none">
-      <path d="M0 22 C10 20 15 14 25 12 C35 10 40 16 52 8 C62 2 70 6 80 4"
-        stroke={color} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.6"/>
-      <circle cx="80" cy="4" r="3" fill={color} opacity="0.8"/>
-      <circle cx="80" cy="4" r="6" fill={color} opacity="0.12"/>
-    </svg>
-  )
-}
-
 export default function GestionHubClient({ userName, taskCounts, userMacroArea }: Props) {
   const router = useRouter()
   const fecha = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -137,11 +125,6 @@ export default function GestionHubClient({ userName, taskCounts, userMacroArea }
                   display: 'flex', alignItems: 'stretch', gap: 14,
                   padding: 14, position: 'relative',
                 }}>
-                  {/* Sparkline fondo */}
-                  <div style={{ position: 'absolute', bottom: 16, right: 60, pointerEvents: 'none', zIndex: 0 }}>
-                    <Spark color={area.color} />
-                  </div>
-
                   {/* Imagen cuadrada izquierda */}
                   <div style={{ position: 'relative', width: 110, height: 110, borderRadius: 16, overflow: 'hidden', flexShrink: 0, aspectRatio: '1 / 1', border: `1px solid rgba(${area.rgb},0.2)` }}>
                     {/* Fallback gradient */}
