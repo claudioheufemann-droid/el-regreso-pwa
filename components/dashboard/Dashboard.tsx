@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { RcTask, RcUser, CEREBRO_AREA, AREA_CFG, MACRO_AREAS, MacroKey, getMacroKey } from '@/lib/gestion-types'
 import { useIsDesktop } from '@/lib/useIsDesktop'
+import { createClient } from '@/lib/supabase/client'
 import AreaCard from './AreaCard'
 import TaskDetailModal from '@/components/modals/TaskDetailModal'
 import TaskCalendar from '@/components/calendar/TaskCalendar'
@@ -13,7 +14,7 @@ import Avatar from '@/components/ui/Avatar'
 import GestionPanel from '@/components/dashboard/GestionPanel'
 import HomeDashboard from '@/components/dashboard/HomeDashboard'
 import NewTaskModal from '@/components/modals/NewTaskModal'
-import { LayoutGrid, User, Users, CalendarDays, BarChart3, RefreshCw, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, User, Users, CalendarDays, BarChart3, History, RefreshCw, type LucideIcon } from 'lucide-react'
 
 interface Props {
   initialTasks: RcTask[]
@@ -163,7 +164,7 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
   )
 }
 
-type View = 'home' | 'mis-tareas' | 'equipo' | 'calendar' | 'filter' | 'analytics'
+type View = 'home' | 'mis-tareas' | 'equipo' | 'calendar' | 'filter' | 'analytics' | 'historial'
 type FilterKey = 'activas' | 'en-proceso' | 'aprobar' | 'atraso'
 
 export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId, currentMacroArea, backHref = '/' }: Props) {
@@ -235,14 +236,32 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     setSelectedTask(null)
   }, [])
 
-  // Carga perezosa: solo al entrar a Equipo por primera vez, todas las tareas de la empresa
+  // Carga perezosa: solo al entrar a Equipo/Historial por primera vez, todas las tareas de la empresa
   useEffect(() => {
-    if (view !== 'equipo' || allTasks !== null) return
+    if ((view !== 'equipo' && view !== 'historial') || allTasks !== null) return
     fetch('/api/tasks', { cache: 'no-store' })
       .then(r => r.json())
       .then(data => setAllTasks(Array.isArray(data) ? data : []))
       .catch(() => setAllTasks([]))
   }, [view, allTasks])
+
+  // Sincronizar eliminaciones en tiempo real entre todas las ventanas/usuarios —
+  // sin esto, borrar una tarea solo la quitaba de la sesión que hizo la acción;
+  // el resto veía la tarea "fantasma" hasta refrescar o recuperar el foco.
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('tasks-delete-sync')
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tasks' }, (payload) => {
+        const deletedId = (payload.old as { id?: string })?.id
+        if (!deletedId) return
+        setTasks(prev => prev.filter(t => t.id !== deletedId))
+        setAllTasks(prev => prev ? prev.filter(t => t.id !== deletedId) : prev)
+        setSelectedTask(prev => (prev && prev.id === deletedId) ? null : prev)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   const refreshTasks = useCallback(async () => {
     try {
@@ -325,6 +344,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     { key: 'mis-tareas', icon: User,         label: 'Mis Tareas' },
     { key: 'equipo',     icon: Users,        label: 'Equipo' },
     { key: 'calendar',   icon: CalendarDays, label: 'Calendario' },
+    { key: 'historial',  icon: History,      label: 'Historial' },
     { key: 'analytics',  icon: BarChart3,    label: 'Análisis', adminOnly: true },
   ]
   const visibleNavItems = navItems.filter(n => !n.adminOnly || isAdmin)
@@ -553,6 +573,54 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                             ))}
                           </div>
                         )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )
+          })()}
+
+          {/* ── HISTORIAL VIEW — todas las tareas completadas de la empresa ── */}
+          {view === 'historial' && (() => {
+            const source = (allTasks ?? tasks).filter(t => t.estado === 'Completada')
+            const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+            // No existe un timestamp de "completada el", se agrupa por la fecha de vencimiento (plazo)
+            const sorted = [...source].sort((a, b) => b.plazo.localeCompare(a.plazo))
+            const groups: { label: string; items: RcTask[] }[] = []
+            for (const t of sorted) {
+              const d = new Date(t.plazo + 'T12:00:00')
+              const label = `${MESES[d.getMonth()]} ${d.getFullYear()}`
+              const existing = groups.find(g => g.label === label)
+              if (existing) existing.items.push(t)
+              else groups.push({ label, items: [t] })
+            }
+
+            return (
+              <>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)', marginBottom: 4 }}>Historial</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{source.length} tarea{source.length !== 1 ? 's' : ''} completada{source.length !== 1 ? 's' : ''} en total</div>
+                </div>
+                {allTasks === null ? (
+                  <div style={{ textAlign: 'center', padding: '48px 20px', fontSize: 12, color: 'var(--muted)' }}>Cargando historial…</div>
+                ) : source.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>🗂️</div>
+                    <div style={{ fontSize: 14, color: 'var(--muted)' }}>Todavía no hay tareas completadas</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    {groups.map(g => (
+                      <div key={g.label}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>
+                          {g.label} · {g.items.length}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {g.items.map(t => (
+                            <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta />
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
