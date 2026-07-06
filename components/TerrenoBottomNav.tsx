@@ -17,5 +17,9 @@ const ITEMS: NavItem[] = [
 
 export default function TerrenoBottomNav() {
   const pathname = usePathname()
+  // Nueva Visita es un flujo propio a pantalla completa (con su propio header
+  // y botón Volver) — el nav flotante le tapaba el botón de confirmar al
+  // final de cada paso.
+  if (pathname?.startsWith('/terreno/nueva-visita')) return null
   return <NavPill items={ITEMS} pathname={pathname} />
 }

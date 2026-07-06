@@ -740,7 +740,7 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
   const canalesNegocio = ['Bar', 'Minimarket', 'Cafetería', 'Botillería', 'Almacén', 'Restaurante', 'Supermercado', 'Distribuidor', 'Actividades Turísticas', 'Cliente Directo', 'Otros']
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ display: 'flex', margin: '16px 16px 0', borderRadius: 12, background: '#1C1C1C', padding: 4, gap: 4 }}>
         {(['existente', 'nuevo'] as const).map(t => (
           <button key={t} onClick={() => { setTab(t); setSeleccionado(null) }} style={{
@@ -754,7 +754,7 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 0' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 16px 0' }}>
         {tab === 'existente' ? (
           <>
             <div style={{ position: 'relative', marginBottom: 12 }}>
@@ -909,8 +909,8 @@ function Paso2Checkin({ onConfirmar, onCancelar }: {
   const listo = !!gps && fotosListas === 3
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px' }}>
         {/* GPS */}
         <div style={{ background: '#1C1C1C', borderRadius: 14, padding: '14px 16px', marginBottom: 20, border: `1px solid ${gps ? T_BORDER : gpsError ? 'rgba(181,84,62,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1055,8 +1055,8 @@ function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
   const fmtFecha = (iso: string) => new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px' }}>
 
         {/* Sección deuda */}
         <DeudaSection clienteNombre={clienteNombre} />
@@ -1224,8 +1224,8 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   // Pantalla cierre
   if (showCierre) {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px' }}>
           <p style={{ fontSize: 18, fontWeight: 900, color: '#F4EEDF', marginBottom: 16 }}>Cerrar visita</p>
 
           {/* Resumen carrito */}
@@ -1341,7 +1341,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
 
   // Pantalla catálogo
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* ── Selectors premium ── */}
       <div style={{ padding: '20px 18px 0' }}>
 
@@ -1442,7 +1442,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
       </div>
 
       {/* Lista productos */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 18px' }}>
         {prodsFiltrados.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <Package size={32} color="var(--muted)" style={{ margin: '0 auto 10px' }} />
@@ -1762,7 +1762,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
   const pasoLabel = ['', 'Cliente', 'Check-In', cliente?.esNuevo ? 'Catálogo' : 'Vista 360°', 'Catálogo'][paso]
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #07060F 0%, #0A0810 40%, #070612 100%)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 60, height: '100dvh', background: 'linear-gradient(160deg, #07060F 0%, #0A0810 40%, #070612 100%)', display: 'flex', flexDirection: 'column' }}>
       {/* Header premium glass */}
       <div style={{
         background: 'rgba(10,8,20,0.85)',
@@ -1771,21 +1771,23 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
         borderBottom: '1px solid rgba(255,255,255,0.05)',
         paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
         paddingBottom: 14,
+        flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', marginBottom: 16 }}>
-          {/* Back button: glass circle */}
+          {/* Back button: mismo botón "Volver" que el resto de la app */}
           <button
             onClick={() => paso > 1 ? setPaso(paso - 1) : router.push('/terreno')}
+            aria-label="Volver"
             style={{
-              width: 38, height: 38, borderRadius: '50%',
-              background: 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.09)',
-              backdropFilter: 'blur(12px)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', flexShrink: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 100, padding: '7px 14px 7px 10px',
+              color: '#F4EEDF', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              minHeight: 36, flexShrink: 0,
             }}
           >
-            <ChevronLeft size={18} color="rgba(255,255,255,0.75)" />
+            <ChevronLeft size={17} strokeWidth={2.5} color="#D4AF37" />
+            Volver
           </button>
 
           {/* Title center */}
@@ -1799,7 +1801,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
           </div>
 
           {/* Share placeholder (mismo tamaño que el back para centrar) */}
-          <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Share2 size={15} color="rgba(255,255,255,0.4)" />
           </div>
         </div>
