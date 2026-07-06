@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search, Clock3 } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search, Clock3, CreditCard } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import AppHeader from '@/components/ui/AppHeader'
 import BuscarClienteSheet from '@/components/ui/BuscarClienteSheet'
+import { createClient } from '@/lib/supabase/client'
 
 const G = '#D4AF37'
 const G_RGB = '212,175,55'
@@ -22,11 +23,19 @@ interface Visita {
   completada_at: string | null
 }
 
+interface CobroPendiente {
+  id: string
+  cliente_nombre: string
+  total_pedido: number | null
+  fecha_pago_estimada: string
+}
+
 interface Props {
   vendedor: AppUser
   visitas: Visita[]
   kpis: { totalHoy: number; conVenta: number; sinVenta: number; canceladas?: number }
   visitaEnProgreso: Visita | null
+  cobrosPendientes: CobroPendiente[]
 }
 
 function fmtHora(iso: string) {
@@ -180,11 +189,25 @@ function VisitaCard({ v, isLast }: { v: Visita; isLast: boolean }) {
 }
 
 /* ── Main ── */
-export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProgreso }: Props) {
+export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProgreso, cobrosPendientes }: Props) {
   const router = useRouter()
   const nombre = vendedor.nombre?.split(' ')[0] ?? 'Vendedor'
   const fecha = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
   const fechaCapitalizada = fecha.charAt(0).toUpperCase() + fecha.slice(1)
+
+  const [cobros, setCobros] = useState(cobrosPendientes)
+  const [marcandoId, setMarcandoId] = useState<string | null>(null)
+
+  async function marcarPagado(id: string) {
+    setMarcandoId(id)
+    const supabase = createClient()
+    const { error } = await supabase.from('visitas_terreno').update({ pagado: true }).eq('id', id)
+    if (!error) setCobros(prev => prev.filter(c => c.id !== id))
+    setMarcandoId(null)
+  }
+
+  const hoyStr = new Date().toISOString().split('T')[0]
+  const cobrosVencidos = cobros.filter(c => c.fecha_pago_estimada < hoyStr)
 
   // Resumen del día al cerrar una visita (?cierre=1 desde nueva-visita).
   // Lectura directa de window.location (sin useSearchParams) para no requerir
@@ -281,6 +304,51 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
 
             <div style={{ width: 38, height: 38, borderRadius: 12, background: G, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: `0 4px 16px rgba(${G_RGB},0.4)` }}>
               <ChevronRight size={18} color="#050505" strokeWidth={2.5} />
+            </div>
+          </div>
+        )}
+
+        {/* ── COBROS PENDIENTES ── */}
+        {cobros.length > 0 && (
+          <div style={{
+            background: cobrosVencidos.length > 0 ? 'rgba(181,84,62,0.06)' : 'rgba(212,175,55,0.05)',
+            border: `1px solid ${cobrosVencidos.length > 0 ? 'rgba(181,84,62,0.25)' : `rgba(${G_RGB},0.2)`}`,
+            borderRadius: 20, padding: '14px 16px', marginBottom: 20,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <CreditCard size={16} color={cobrosVencidos.length > 0 ? '#B5543E' : G} />
+              <p style={{ fontSize: 12, fontWeight: 800, color: cobrosVencidos.length > 0 ? '#B5543E' : G }}>
+                {cobrosVencidos.length > 0
+                  ? `${cobrosVencidos.length} cobro${cobrosVencidos.length !== 1 ? 's' : ''} vencido${cobrosVencidos.length !== 1 ? 's' : ''}`
+                  : `${cobros.length} cobro${cobros.length !== 1 ? 's' : ''} pendiente${cobros.length !== 1 ? 's' : ''}`}
+              </p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {cobros.slice(0, 4).map(c => {
+                const vencido = c.fecha_pago_estimada < hoyStr
+                const fechaFmt = new Date(c.fecha_pago_estimada + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
+                return (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.cliente_nombre}</p>
+                      <p style={{ fontSize: 11, color: vencido ? '#E0796A' : 'rgba(255,255,255,0.4)', fontWeight: vencido ? 700 : 400 }}>
+                        {vencido ? `Venció el ${fechaFmt}` : `Vence el ${fechaFmt}`}
+                        {c.total_pedido ? ` · ${new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(c.total_pedido)}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => marcarPagado(c.id)}
+                      disabled={marcandoId === c.id}
+                      style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 9, border: `1px solid rgba(${G_RGB},0.3)`, background: `rgba(${G_RGB},0.1)`, color: G, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      {marcandoId === c.id ? '...' : 'Ya pagó'}
+                    </button>
+                  </div>
+                )
+              })}
+              {cobros.length > 4 && (
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 2 }}>+{cobros.length - 4} más</p>
+              )}
             </div>
           </div>
         )}

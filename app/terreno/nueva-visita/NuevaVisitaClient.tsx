@@ -8,9 +8,15 @@ import { useRouter } from 'next/navigation'
 import {
   MapPin, Camera, CheckCircle, XCircle, ChevronLeft, ChevronDown,
   Search, Plus, ShoppingCart, Minus, Package, AlertTriangle, MessageCircle, Share2,
+  Banknote, Landmark, CreditCard, CalendarClock,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
+import { addDays, format } from 'date-fns'
+import { es } from 'date-fns/locale'
+
+type MetodoPago = 'efectivo' | 'transferencia' | 'credito'
+const DIAS_CREDITO_PRESETS = [7, 15, 30, 45, 60]
 
 const T = '#D4AF37'
 const T_DIM = 'rgba(212,175,55,0.12)'
@@ -1161,7 +1167,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   clienteNombre: string
   vendedorNombre: string
   carritoInicial?: ItemCarrito[]
-  onCerrar: (carrito: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string) => void
+  onCerrar: (carrito: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null) => void
 }) {
   const [tabCat, setTabCat]     = useState<'Cerveza' | 'Kombucha'>('Cerveza')
   const [tabEnvase, setTabEnvase] = useState<'lata' | 'barril'>('lata')
@@ -1176,6 +1182,9 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   const [sinVenta, setSinVenta] = useState(false)
   const [motivo, setMotivo] = useState('')
   const [obs, setObs] = useState('')
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo')
+  const [diasCredito, setDiasCredito] = useState(15)
+  const fechaVence = addDays(new Date(), diasCredito)
   const [waModal, setWaModal] = useState<null | 'catalogo'>(null)
   const [showImagenModal, setShowImagenModal] = useState(false)
 
@@ -1284,6 +1293,69 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
             </div>
           )}
 
+          {/* Forma de pago — solo si hay venta efectiva */}
+          {items.length > 0 && !sinVenta && (
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: '1.4px', textTransform: 'uppercase', marginBottom: 8 }}>Forma de pago</p>
+              <div style={{ display: 'flex', gap: 6, marginBottom: metodoPago === 'credito' ? 10 : 0 }}>
+                {([
+                  { key: 'efectivo' as const,      label: 'Efectivo',      Icon: Banknote },
+                  { key: 'transferencia' as const, label: 'Transferencia', Icon: Landmark },
+                  { key: 'credito' as const,       label: 'Crédito',       Icon: CreditCard },
+                ]).map(({ key, label, Icon }) => {
+                  const active = metodoPago === key
+                  return (
+                    <button key={key} onClick={() => setMetodoPago(key)} style={{
+                      flex: 1, padding: '12px 4px', borderRadius: 12, cursor: 'pointer',
+                      border: `1.5px solid ${active ? T : 'rgba(255,255,255,0.08)'}`,
+                      background: active ? T_DIM : '#1C1C1C',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                      transition: 'all 0.15s',
+                    }}>
+                      <Icon size={18} color={active ? T : 'var(--muted)'} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: active ? T : 'var(--muted)' }}>{label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {metodoPago === 'credito' && (
+                <div style={{ background: '#1C1C1C', border: `1px solid ${T_BORDER}`, borderRadius: 14, padding: 14 }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>¿En cuántos días paga?</p>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                    {DIAS_CREDITO_PRESETS.map(d => {
+                      const active = diasCredito === d
+                      return (
+                        <button key={d} onClick={() => setDiasCredito(d)} style={{
+                          flex: 1, padding: '8px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
+                          background: active ? T : 'rgba(255,255,255,0.05)',
+                          color: active ? '#080808' : 'var(--muted)',
+                          fontSize: 12, fontWeight: 700, transition: 'all 0.15s',
+                        }}>
+                          {d}d
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <input
+                      type="number" min={1} value={diasCredito}
+                      onChange={e => setDiasCredito(Math.max(1, parseInt(e.target.value) || 1))}
+                      style={{ width: 64, padding: '8px 10px', borderRadius: 8, background: '#111', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 14, textAlign: 'center', outline: 'none' }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>días personalizados</span>
+                  </div>
+                  <div style={{ padding: '9px 12px', background: 'rgba(212,175,55,0.08)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <CalendarClock size={15} color={T} />
+                    <span style={{ fontSize: 12, color: T, fontWeight: 700 }}>
+                      Vence el {format(fechaVence, "d 'de' MMMM", { locale: es })}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Sin venta */}
           <div onClick={() => setSinVenta(true)} style={{ borderRadius: 14, padding: '16px', marginBottom: 16, cursor: 'pointer', background: sinVenta ? 'rgba(181,84,62,0.06)' : '#1C1C1C', border: `2px solid ${sinVenta ? 'rgba(181,84,62,0.4)' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
             <XCircle size={22} color={sinVenta ? '#B5543E' : 'var(--muted)'} />
@@ -1315,7 +1387,16 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
 
         <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
           <button
-            onClick={() => { if (sinVenta && !motivo) return; onCerrar(items, !sinVenta, motivo, obs) }}
+            onClick={() => {
+              if (sinVenta && !motivo) return
+              const tienVenta = !sinVenta
+              onCerrar(
+                items, tienVenta, motivo, obs,
+                tienVenta ? metodoPago : null,
+                tienVenta && metodoPago === 'credito' ? diasCredito : null,
+                tienVenta && metodoPago === 'credito' ? format(fechaVence, 'yyyy-MM-dd') : null,
+              )
+            }}
             disabled={sinVenta && !motivo}
             style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: sinVenta && !motivo ? 'not-allowed' : 'pointer', background: sinVenta && !motivo ? 'rgba(255,255,255,0.06)' : C, color: sinVenta && !motivo ? 'var(--muted)' : '#080808', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}
           >
@@ -1689,7 +1770,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     router.push('/terreno')
   }
 
-  async function onCerrar(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string) {
+  async function onCerrar(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null) {
     if (!visitaId) return
     setGuardando(true)
     try {
@@ -1700,6 +1781,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
         id: visitaId,
         tiene_venta: tienVenta, motivo_sin_venta: tienVenta ? null : motivo,
         observaciones: obs || null, total_pedido: total, estado: 'completada', completada_at: new Date().toISOString(),
+        metodo_pago: metodoPago, dias_credito: diasCredito, fecha_pago_estimada: fechaPagoEstimada,
       }
       const rVisita = await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
 
@@ -1719,10 +1801,13 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
       if (tienVenta) {
         hapticExito()
         const fmtCLP = (n: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
+        const bodyPago = metodoPago === 'credito' && fechaPagoEstimada
+          ? ` · Crédito, cobrar el ${format(new Date(fechaPagoEstimada + 'T12:00:00'), "d 'de' MMMM", { locale: es })}`
+          : ''
         notificar({
           event: 'visita_completada',
           title: `✅ Venta en ${cliente?.nombre ?? 'local'}`,
-          body: `${fmtCLP(total)} · ${items.length} producto${items.length !== 1 ? 's' : ''}`,
+          body: `${fmtCLP(total)} · ${items.length} producto${items.length !== 1 ? 's' : ''}${bodyPago}`,
           url: '/terreno/historial',
         })
       } else if (motivo) {
