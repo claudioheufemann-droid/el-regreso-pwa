@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { Resend } from 'resend'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
@@ -16,6 +17,17 @@ async function getSupabase() {
       setAll: (list) => { try { list.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {} },
     },
   })
+}
+
+// Cliente con service key — usado SOLO para el borrado en sí, una vez que ya
+// verificamos permisos con el usuario autenticado. La policy RLS de delete en
+// 'tasks' históricamente solo contempla admins; con el cliente anon, borrar
+// como dueño-no-admin fallaba en silencio (0 filas afectadas, sin error) y la
+// tarea "revivía" en el próximo refetch.
+function getAdminSupabase() {
+  const key = process.env.SUPABASE_SERVICE_KEY
+  if (!key) return null
+  return createSupabaseClient(SUPABASE_URL, key)
 }
 
 function buildReviewEmailHtml(task: {
@@ -254,8 +266,13 @@ export async function DELETE(req: NextRequest) {
   const isOwner = task?.creado_por === user.id
   if (!profile?.is_admin && !isOwner) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-  const { error } = await supabase.from('tasks').delete().eq('id', id)
+  const adminSupabase = getAdminSupabase()
+  const deleteClient = adminSupabase ?? supabase
+  const { data: deleted, error } = await deleteClient.from('tasks').delete().eq('id', id).select('id')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!deleted || deleted.length === 0) {
+    return NextResponse.json({ error: 'La tarea no se pudo eliminar (permisos de base de datos)' }, { status: 403 })
+  }
   return NextResponse.json({ ok: true })
 }

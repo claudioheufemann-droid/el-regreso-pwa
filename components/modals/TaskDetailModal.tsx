@@ -54,6 +54,7 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
   const [savingAdmin, setSavingAdmin]     = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting]           = useState(false)
+  const [deleteError, setDeleteError]     = useState<string | null>(null)
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
@@ -135,11 +136,19 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
   async function saveAdmin()   { setSavingAdmin(true); await patch({ titulo: editTitulo.trim(), descripcion: editDesc.trim(), nota_admin: editNota.trim() }); setSavingAdmin(false) }
   async function deleteTask()  {
     setDeleting(true)
+    setDeleteError(null)
     try {
       const res = await fetch('/api/tasks', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: task.id }) })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        setDeleteError(body?.error ?? 'No se pudo eliminar la tarea')
+        setDeleting(false)
+        return
+      }
       onDelete?.(task.id)
-    } catch { /* ignore */ }
+    } catch {
+      setDeleteError('No se pudo eliminar la tarea — revisa tu conexión')
+    }
     setDeleting(false)
   }
 
@@ -347,8 +356,13 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 <div style={{ fontSize: 11, color: '#FF6666', textAlign: 'center' }}>¿Eliminar? No se puede deshacer.</div>
+                {deleteError && (
+                  <div style={{ fontSize: 11, color: '#FF4444', textAlign: 'center', background: 'rgba(255,68,68,0.08)', border: '1px solid rgba(255,68,68,0.2)', borderRadius: 8, padding: '6px 10px' }}>
+                    {deleteError}
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-                  <button onClick={() => setShowDeleteConfirm(false)} style={{ padding: '9px', borderRadius: 9, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', fontSize: 11, color: 'rgba(128,128,128,0.5)' }}>Cancelar</button>
+                  <button onClick={() => { setShowDeleteConfirm(false); setDeleteError(null) }} style={{ padding: '9px', borderRadius: 9, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', fontSize: 11, color: 'rgba(128,128,128,0.5)' }}>Cancelar</button>
                   <button onClick={deleteTask} disabled={deleting} style={{ padding: '9px', borderRadius: 9, cursor: 'pointer', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.3)', fontSize: 11, fontWeight: 700, color: '#FF4444' }}>
                     {deleting ? 'Eliminando...' : 'Eliminar'}
                   </button>
