@@ -414,7 +414,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                   onFocus={() => { datePickerOpenRef.current = true }}
                   onBlur={() => { datePickerOpenRef.current = false }}
                   min={minDate} required
-                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
               </div>
             </div>
 
@@ -727,7 +727,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
               </div>
               <input ref={dateInputRef} type="date" value={plazo} onChange={e => setPlazo(e.target.value)}
                 onFocus={() => { datePickerOpenRef.current = true }} onBlur={() => { datePickerOpenRef.current = false }}
-                min={minDate} required style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                min={minDate} required style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
             </div>
           </div>
         </div>

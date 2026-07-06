@@ -80,6 +80,8 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
   const canChangeStatus = isResponsable || isAdmin
   const canApprove      = task.estado === 'Por Aprobar' && isAdmin
   const canSubmit       = task.estado === 'En Proceso' && isResponsable
+  const isCreator       = !!currentUserId && task.creado_por === currentUserId
+  const canDelete       = isAdmin || isCreator
 
   // ── API helpers ──────────────────────────────────────────
   async function patch(updates: Partial<RcTask>) {
@@ -331,25 +333,28 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
               style={{ width: '100%', padding: '12px', borderRadius: 12, cursor: 'pointer', background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', fontSize: 12, fontWeight: 800, color: '#D4AF37', opacity: savingAdmin ? 0.5 : 1 }}>
               {savingAdmin ? 'Guardando...' : '★ Guardar cambios'}
             </button>
+          </div>
+        )}
 
-            <div style={{ borderTop: '1px solid rgba(255,68,68,0.1)', paddingTop: 10 }}>
-              {!showDeleteConfirm ? (
-                <button onClick={() => setShowDeleteConfirm(true)}
-                  style={{ width: '100%', padding: '10px', borderRadius: 10, cursor: 'pointer', background: 'rgba(255,68,68,0.05)', border: '1px solid rgba(255,68,68,0.15)', fontSize: 11, color: '#FF6666' }}>
-                  🗑 Eliminar tarea
-                </button>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  <div style={{ fontSize: 11, color: '#FF6666', textAlign: 'center' }}>¿Eliminar? No se puede deshacer.</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-                    <button onClick={() => setShowDeleteConfirm(false)} style={{ padding: '9px', borderRadius: 9, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', fontSize: 11, color: 'rgba(128,128,128,0.5)' }}>Cancelar</button>
-                    <button onClick={deleteTask} disabled={deleting} style={{ padding: '9px', borderRadius: 9, cursor: 'pointer', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.3)', fontSize: 11, fontWeight: 700, color: '#FF4444' }}>
-                      {deleting ? 'Eliminando...' : 'Eliminar'}
-                    </button>
-                  </div>
+        {/* Eliminar tarea — visible para admin o para quien la creó */}
+        {canDelete && (
+          <div style={{ borderTop: '1px solid rgba(255,68,68,0.1)', paddingTop: 12 }}>
+            {!showDeleteConfirm ? (
+              <button onClick={() => setShowDeleteConfirm(true)}
+                style={{ width: '100%', padding: '11px', borderRadius: 12, cursor: 'pointer', background: 'rgba(255,68,68,0.05)', border: '1px solid rgba(255,68,68,0.15)', fontSize: 12, fontWeight: 700, color: '#FF6666', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                🗑 Eliminar tarea
+              </button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <div style={{ fontSize: 11, color: '#FF6666', textAlign: 'center' }}>¿Eliminar? No se puede deshacer.</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+                  <button onClick={() => setShowDeleteConfirm(false)} style={{ padding: '9px', borderRadius: 9, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', fontSize: 11, color: 'rgba(128,128,128,0.5)' }}>Cancelar</button>
+                  <button onClick={deleteTask} disabled={deleting} style={{ padding: '9px', borderRadius: 9, cursor: 'pointer', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.3)', fontSize: 11, fontWeight: 700, color: '#FF4444' }}>
+                    {deleting ? 'Eliminando...' : 'Eliminar'}
+                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>

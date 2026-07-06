@@ -247,9 +247,13 @@ export async function DELETE(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
   const { data: profile } = await supabase.from('users').select('is_admin').eq('email', user.email!).single()
-  if (!profile?.is_admin) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
   const { id } = await req.json()
+  const { data: task } = await supabase.from('tasks').select('creado_por').eq('id', id).single()
+
+  const isOwner = task?.creado_por === user.id
+  if (!profile?.is_admin && !isOwner) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+
   const { error } = await supabase.from('tasks').delete().eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -217,6 +217,21 @@ html { height: 100%; }
 .pb-safe { padding-bottom: max(80px, calc(64px + env(safe-area-inset-bottom, 0px))); }
 @media (min-width: 1024px) { .pb-safe { padding-bottom: 24px; } }
 
+/* ── Scroll suave dentro de modales en iOS ──
+   El body tiene overscroll-behavior:none (arriba) para evitar el bounce
+   de toda la página. Pero los contenedores overflow-y:auto DENTRO de
+   overlays position:fixed (modales de tarea, nueva tarea, etc.) heredan
+   ese bloqueo: al llegar al borde del scroll interno, iOS intenta encadenar
+   el gesto al body -que está bloqueado- y el drag se congela a mitad de
+   camino ("queda pegado"). -webkit-overflow-scrolling:touch da inercia;
+   overscroll-behavior:contain evita que el gesto se propague al body. */
+[style*="overflow-y: auto"],
+[style*="overflow-y:auto"],
+[style*="overflowY: auto"] {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -242,6 +257,13 @@ input:focus, select:focus, textarea:focus {
   background: rgba(255, 255, 255, 0.07);
 }
 input::placeholder, textarea::placeholder { color: #5A5248; }
+
+/* input[type=date/time] necesita su appearance nativo para poder desplegar
+   el selector del sistema (WebKit no abre el picker si se le quita el appearance) */
+input[type="date"], input[type="time"], input[type="datetime-local"] {
+  -webkit-appearance: auto;
+  appearance: auto;
+}
 
 /* Animations */
 @keyframes fade-in {
