@@ -1351,30 +1351,19 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           display: 'flex',
           background: 'rgba(255,255,255,0.035)',
           border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: 18, padding: 5,
-          backdropFilter: 'blur(20px)',
+          borderRadius: 12, padding: 3, gap: 2,
         }}>
-          {([
-            { key: 'Cerveza', label: 'Cerveza', icon: '🍺' },
-            { key: 'Kombucha', label: 'Kombucha', icon: '🫧' },
-          ] as const).map(opt => {
-            const active = tabCat === opt.key
+          {(['Cerveza', 'Kombucha'] as const).map(opt => {
+            const active = tabCat === opt
             return (
-              <button key={opt.key} onClick={() => setTabCat(opt.key)} style={{
-                flex: 1, padding: '13px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
-                background: active
-                  ? 'linear-gradient(145deg, rgba(212,175,55,0.22) 0%, rgba(212,175,55,0.10) 100%)'
-                  : 'transparent',
-                boxShadow: active
-                  ? '0 0 24px rgba(212,175,55,0.12), inset 0 0 0 1px rgba(212,175,55,0.22)'
-                  : 'none',
-                transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+              <button key={opt} onClick={() => setTabCat(opt)} style={{
+                flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
+                background: active ? '#D4AF37' : 'transparent',
+                color: active ? '#0A0A0A' : 'rgba(255,255,255,0.4)',
+                fontSize: 13, fontWeight: 700, letterSpacing: '-0.1px',
+                transition: 'all 0.15s',
               }}>
-                <span style={{ fontSize: 22, lineHeight: 1 }}>{opt.icon}</span>
-                <span style={{ fontSize: 13, fontWeight: active ? 600 : 500, color: active ? '#F0D060' : 'rgba(255,255,255,0.3)', letterSpacing: '-0.1px', transition: 'color 0.2s' }}>
-                  {opt.label}
-                </span>
+                {opt}
               </button>
             )
           })}
@@ -1386,30 +1375,22 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           display: 'flex',
           background: 'rgba(255,255,255,0.035)',
           border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: 18, padding: 5,
-          backdropFilter: 'blur(20px)',
+          borderRadius: 12, padding: 3, gap: 2,
         }}>
           {([
-            { key: 'lata',   label: 'Lata',       icon: '🥫' },
-            { key: 'barril', label: 'Barril 30L',  icon: '🛢️' },
+            { key: 'lata',   label: 'Lata' },
+            { key: 'barril', label: 'Barril 30L' },
           ] as const).map(opt => {
             const active = tabEnvase === opt.key
             return (
               <button key={opt.key} onClick={() => setTabEnvase(opt.key)} style={{
-                flex: 1, padding: '13px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
-                background: active
-                  ? 'linear-gradient(145deg, rgba(212,175,55,0.22) 0%, rgba(212,175,55,0.10) 100%)'
-                  : 'transparent',
-                boxShadow: active
-                  ? '0 0 24px rgba(212,175,55,0.12), inset 0 0 0 1px rgba(212,175,55,0.22)'
-                  : 'none',
-                transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
+                background: active ? '#D4AF37' : 'transparent',
+                color: active ? '#0A0A0A' : 'rgba(255,255,255,0.4)',
+                fontSize: 13, fontWeight: 700, letterSpacing: '-0.1px',
+                transition: 'all 0.15s',
               }}>
-                <span style={{ fontSize: 22, lineHeight: 1 }}>{opt.icon}</span>
-                <span style={{ fontSize: 13, fontWeight: active ? 600 : 500, color: active ? '#F0D060' : 'rgba(255,255,255,0.3)', letterSpacing: '-0.1px', transition: 'color 0.2s' }}>
-                  {opt.label}
-                </span>
+                {opt.label}
               </button>
             )
           })}
