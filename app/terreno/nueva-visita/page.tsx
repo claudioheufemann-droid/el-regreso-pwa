@@ -30,15 +30,18 @@ export default async function NuevaVisitaPage({
   const supabase = await createClient()
   const { retomar, cliente: clientePre } = await searchParams
 
-  // Si hay visita a retomar, cargarla
+  // Si hay visita a retomar, cargarla — solo si es del vendedor actual (o admin).
+  // Terreno es un módulo personal: nadie más debe poder ver/retomar una visita
+  // en curso de otro vendedor, ni siquiera editando el id en la URL.
   let visitaRetomada = null
   if (retomar) {
-    const { data } = await supabase
+    let query = supabase
       .from('visitas_terreno')
       .select('id, cliente_nombre, es_cliente_nuevo, lat, lng, direccion_gps, estado')
       .eq('id', retomar)
       .eq('estado', 'en_progreso')
-      .maybeSingle()
+    if (!user.isAdmin) query = query.eq('vendedor_id', user.id)
+    const { data } = await query.maybeSingle()
     visitaRetomada = data ?? null
   }
 
