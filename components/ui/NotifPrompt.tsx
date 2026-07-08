@@ -14,10 +14,20 @@ function urlBase64ToUint8Array(base64String: string) {
   return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
 }
 
+function isIos(): boolean {
+  return /iphone|ipad|ipod/i.test(window.navigator.userAgent)
+}
+
+function isStandalone(): boolean {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+}
+
 export default function NotifPrompt() {
   const [show, setShow]       = useState(false)
   const [loading, setLoading] = useState(false)
   const [done, setDone]       = useState(false)
+  const [needsInstall, setNeedsInstall] = useState(false)
 
   useEffect(() => {
     if (!('Notification' in window) || !('serviceWorker' in navigator)) return
@@ -31,9 +41,12 @@ export default function NotifPrompt() {
     }
     // Bloqueado — no podemos hacer nada
     if (Notification.permission === 'denied') return
-    // Ya descartado en este dispositivo — no volver a molestar (por 7 días)
+    // Ya descartado en este dispositivo — no volver a molestar (por 1 día, para insistir hasta que se active)
     const dismissed = localStorage.getItem('notif-dismissed-until')
     if (dismissed && Date.now() < parseInt(dismissed)) return
+
+    // iOS Safari solo soporta Web Push si la app está instalada (Agregar a inicio)
+    setNeedsInstall(isIos() && !isStandalone())
 
     // Mostrar prompt después de 2s
     const t = setTimeout(() => setShow(true), 2000)
@@ -50,8 +63,8 @@ export default function NotifPrompt() {
   }, [])
 
   function dismiss() {
-    // Recordar por 7 días
-    localStorage.setItem('notif-dismissed-until', String(Date.now() + 7 * 86400000))
+    // Recordar por 1 día — insistir hasta que se active en todos los dispositivos
+    localStorage.setItem('notif-dismissed-until', String(Date.now() + 86400000))
     setShow(false)
   }
 
@@ -123,6 +136,27 @@ export default function NotifPrompt() {
             <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>
               Recibirás alertas de ventas, camiones, visitas y tareas.
             </p>
+          </>
+        ) : needsInstall ? (
+          <>
+            <p style={{ fontSize: 14, fontWeight: 800, color: '#F0EDE8', marginBottom: 4 }}>
+              Un paso más en iPhone
+            </p>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.55, marginBottom: 14 }}>
+              Safari solo activa notificaciones si la app está instalada. Toca <strong style={{ color: '#F0EDE8' }}>Compartir</strong> (el ícono cuadrado con flecha) y luego <strong style={{ color: '#F0EDE8' }}>&quot;Agregar a inicio&quot;</strong>. Abre la app desde ese ícono y vuelve a activar aquí.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={dismiss}
+                style={{
+                  flex: 1, padding: '11px 0', borderRadius: 13, cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                  color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 700,
+                }}
+              >
+                Entendido
+              </button>
+            </div>
           </>
         ) : (
           <>
