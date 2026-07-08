@@ -392,7 +392,7 @@ export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boo
             href="/logistica"
             color="#F97316"
             rgb="249,115,22"
-            title="Producción y Despachos"
+            title="Producción Logística"
             subtitle={puedeLogisticaProduccion ? 'Lotes, despachos, entregas y KPIs' : 'Acceso exclusivo · Logística y Producción'}
             img="/gestion-produccion.webp"
             locked={!puedeLogisticaProduccion}
