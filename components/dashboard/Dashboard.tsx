@@ -190,8 +190,9 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
       currentMacroArea === 'administracion' ? [...MACRO_AREAS.administracion.areas] :
       currentMacroArea === 'comercial'      ? [...MACRO_AREAS.comercial.areas] :
       currentMacroArea === 'produccion'     ? [...MACRO_AREAS.produccion.areas] :
+      currentMacroArea === 'logistica'      ? [...MACRO_AREAS.logistica.areas] :
       []
-    const all = [...MACRO_AREAS.comercial.areas, ...MACRO_AREAS.administracion.areas, ...MACRO_AREAS.produccion.areas]
+    const all = [...MACRO_AREAS.comercial.areas, ...MACRO_AREAS.administracion.areas, ...MACRO_AREAS.produccion.areas, ...MACRO_AREAS.logistica.areas]
     return [...new Set([...current, ...all])]
   })()
   const defaultNewTaskArea = availableTaskAreas[0] ?? 'Ventas'
@@ -212,6 +213,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     if (currentMacroArea === 'comercial') return [...MACRO_AREAS.comercial.areas]
     if (currentMacroArea === 'administracion') return [...MACRO_AREAS.administracion.areas]
     if (currentMacroArea === 'produccion') return [...MACRO_AREAS.produccion.areas]
+    if (currentMacroArea === 'logistica') return [...MACRO_AREAS.logistica.areas]
     return null
   })()
 

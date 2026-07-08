@@ -69,7 +69,7 @@ function Avatar({ u }: { u: AppUser }) {
 export default function UsuariosAdminPage() {
   const [users, setUsers]       = useState<AppUser[]>([])
   const [loading, setLoading]   = useState(true)
-  const [filter, setFilter]     = useState<'todos' | 'comercial' | 'administracion' | 'produccion' | 'sin-area'>('todos')
+  const [filter, setFilter]     = useState<'todos' | 'comercial' | 'administracion' | 'produccion' | 'logistica' | 'sin-area'>('todos')
   const [search, setSearch]     = useState('')
   const [sortBy, setSortBy]     = useState<'nombre' | 'actividad'>('actividad')
   const [syncing, setSyncing]   = useState(false)
@@ -182,6 +182,7 @@ export default function UsuariosAdminPage() {
               { key: 'comercial',     label: 'Comercial',     color: '#E67E22' },
               { key: 'administracion',label: 'Administración',color: '#5B8AA8' },
               { key: 'produccion',    label: 'Producción',    color: '#22C55E' },
+              { key: 'logistica',     label: 'Logística',     color: '#F97316' },
               { key: 'sin-area',      label: 'Sin área',      color: '#666' },
             ] as { key: typeof filter; label: string; color: string }[]).map(f => (
               <button key={f.key} onClick={() => setFilter(f.key)}

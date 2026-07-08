@@ -38,6 +38,17 @@ const AREAS = [
     img: '/gestion-produccion.webp',
     imgFallback: 'linear-gradient(135deg, #001a0a 0%, #002b11 50%, #001a0a 100%)',
   },
+  {
+    key: 'logistica',
+    label: 'Logística',
+    description: 'Despachos · Traspasos · Inventario',
+    color: '#F97316',
+    rgb: '249,115,22',
+    code: 'LG',
+    href: '/gestion/logistica',
+    img: '/hub-logistica.webp',
+    imgFallback: 'linear-gradient(135deg, #1a0d00 0%, #2b1700 50%, #1a0d00 100%)',
+  },
 ]
 
 interface Props {

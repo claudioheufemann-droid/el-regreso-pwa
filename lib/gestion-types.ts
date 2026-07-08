@@ -43,7 +43,7 @@ export const MACRO_AREAS = {
     label: 'Área Comercial',
     color: '#E67E22',
     code: 'AC',
-    areas: ['Ventas', 'Marketing', 'Logística', 'Control de Gestión'] as const,
+    areas: ['Ventas', 'Marketing', 'Control de Gestión'] as const,
   },
   administracion: {
     label: 'Administración',
@@ -57,6 +57,12 @@ export const MACRO_AREAS = {
     code: 'PR',
     areas: ['Producción', 'Calidad', 'Bodega'] as const,
   },
+  logistica: {
+    label: 'Logística',
+    color: '#F97316',
+    code: 'LG',
+    areas: ['Logística'] as const,
+  },
 } as const
 
 export type MacroKey = keyof typeof MACRO_AREAS
@@ -65,6 +71,7 @@ export type MacroKey = keyof typeof MACRO_AREAS
 export function getMacroKey(area: string): MacroKey {
   if ((MACRO_AREAS.administracion.areas as readonly string[]).includes(area)) return 'administracion'
   if ((MACRO_AREAS.produccion.areas as readonly string[]).includes(area)) return 'produccion'
+  if ((MACRO_AREAS.logistica.areas as readonly string[]).includes(area)) return 'logistica'
   return 'comercial'
 }
 
@@ -77,6 +84,7 @@ export const AREAS = [
   ...MACRO_AREAS.comercial.areas,
   ...MACRO_AREAS.administracion.areas,
   ...MACRO_AREAS.produccion.areas,
+  ...MACRO_AREAS.logistica.areas,
 ] as const
 export const CEREBRO_AREA = 'Mi Cerebro'
 export const ALL_AREAS = [...AREAS, CEREBRO_AREA] as const
