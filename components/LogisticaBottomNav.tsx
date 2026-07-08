@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { PackagePlus, PackageCheck, AlertTriangle, Truck } from 'lucide-react'
+import { PackagePlus, PackageCheck, AlertTriangle, Truck, BarChart3 } from 'lucide-react'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
 const ITEMS: NavItem[] = [
@@ -9,6 +9,7 @@ const ITEMS: NavItem[] = [
   { href: '/logistica/produccion/declarar', icon: PackagePlus,  label: 'Declarar'  },
   { href: '/logistica/recepcion',           icon: PackageCheck, label: 'Recepción' },
   { href: '/logistica/alertas',             icon: AlertTriangle,label: 'Alertas'   },
+  { href: '/logistica/kpis',                icon: BarChart3,    label: 'KPIs'      },
 ]
 
 export default function LogisticaBottomNav() {

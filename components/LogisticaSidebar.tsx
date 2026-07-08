@@ -1,6 +1,6 @@
 'use client'
 
-import { PackagePlus, PackageCheck, AlertTriangle, Truck } from 'lucide-react'
+import { PackagePlus, PackageCheck, AlertTriangle, Truck, BarChart3 } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
 const navItems: SidebarNavItem[] = [
@@ -8,6 +8,7 @@ const navItems: SidebarNavItem[] = [
   { href: '/logistica/produccion/declarar', icon: PackagePlus,   label: 'Declarar lote', exact: false },
   { href: '/logistica/recepcion',           icon: PackageCheck,  label: 'Recepción',     exact: false },
   { href: '/logistica/alertas',             icon: AlertTriangle, label: 'Alertas',       exact: false },
+  { href: '/logistica/kpis',                icon: BarChart3,     label: 'KPIs',          exact: false },
 ]
 
 export default function LogisticaSidebar() {
