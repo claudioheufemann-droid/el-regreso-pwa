@@ -11,12 +11,13 @@ export default async function HubPage() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('nombre, is_admin, email')
+    .select('nombre, is_admin, email, macro_area')
     .eq('id', user.id)
     .maybeSingle()
 
   const isAdmin = profile?.is_admin ?? false
   const nombre = profile?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
+  const macroArea = profile?.macro_area ?? null
 
-  return <HubClient isAdmin={isAdmin} nombre={nombre} />
+  return <HubClient isAdmin={isAdmin} nombre={nombre} macroArea={macroArea} />
 }

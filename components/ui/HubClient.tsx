@@ -276,9 +276,10 @@ function ModuleCard({ href, color, rgb, title, subtitle, img, locked }: ModuleCa
 }
 
 /* ── Main ── */
-export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombre: string }) {
+export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boolean; nombre: string; macroArea?: string | null }) {
   const firstName = nombre.split(' ')[0]
   const router = useRouter()
+  const puedeLogisticaProduccion = isAdmin || macroArea === 'logistica' || macroArea === 'produccion'
 
   async function handleLogout() {
     const supabase = createClient()
@@ -383,6 +384,18 @@ export default function HubClient({ isAdmin, nombre }: { isAdmin: boolean; nombr
             subtitle={isAdmin ? 'Bitácora, rutas y control de vehículos' : 'Acceso exclusivo · Administración'}
             img="/hub-logistica.webp"
             locked={!isAdmin}
+          />
+
+          {/* Producción y Despachos: trazabilidad de lotes, despachos con POD y KPIs.
+              Visible para admin, Logística (Matías) y Producción (Rodrigo y equipo). */}
+          <ModuleCard
+            href="/logistica"
+            color="#F97316"
+            rgb="249,115,22"
+            title="Producción y Despachos"
+            subtitle={puedeLogisticaProduccion ? 'Lotes, despachos, entregas y KPIs' : 'Acceso exclusivo · Logística y Producción'}
+            img="/gestion-produccion.webp"
+            locked={!puedeLogisticaProduccion}
           />
 
         </div>
