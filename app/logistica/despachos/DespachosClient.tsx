@@ -115,7 +115,7 @@ export default function DespachosClient() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      <AppHeader eyebrow="Logística" title="Despachos" backHref="/logistica" />
+      <AppHeader eyebrow="Logística" title="Despachos" backHref="/" />
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 100px' }}>
 
@@ -224,7 +224,7 @@ export default function DespachosClient() {
 
 const inputStyle: React.CSSProperties = {
   flex: 1, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)',
-  background: 'rgba(255,255,255,0.03)', color: 'var(--cream)', fontSize: 13, outline: 'none',
+  background: 'var(--surface2)', color: 'var(--cream)', fontSize: 13, outline: 'none', colorScheme: 'dark',
 }
 const iconBtnStyle: React.CSSProperties = {
   width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border)', background: 'transparent',

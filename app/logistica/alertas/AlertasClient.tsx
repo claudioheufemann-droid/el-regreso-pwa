@@ -46,7 +46,7 @@ export default function AlertasClient() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      <AppHeader eyebrow="Logística" title="Alertas de Inventario" backHref="/logistica" />
+      <AppHeader eyebrow="Logística" title="Alertas de Inventario" backHref="/" />
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 100px' }}>
         {loading ? (

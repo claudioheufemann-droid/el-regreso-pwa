@@ -69,7 +69,7 @@ export default function RecepcionClient() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      <AppHeader eyebrow="Logística" title="Recepción en Bodega" backHref="/logistica" />
+      <AppHeader eyebrow="Logística" title="Recepción en Bodega" backHref="/" />
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 100px' }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>

@@ -99,7 +99,7 @@ export default function DeclararClient() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      <AppHeader eyebrow="Producción" title="Declarar Lote" backHref="/logistica" />
+      <AppHeader eyebrow="Producción" title="Declarar Lote" backHref="/" />
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 100px' }}>
 
@@ -232,7 +232,7 @@ export default function DeclararClient() {
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)',
-  background: 'rgba(255,255,255,0.03)', color: 'var(--cream)', fontSize: 13, outline: 'none',
+  background: 'var(--surface2)', color: 'var(--cream)', fontSize: 13, outline: 'none', colorScheme: 'dark',
 }
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5,

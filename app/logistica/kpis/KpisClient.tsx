@@ -43,7 +43,7 @@ export default function KpisClient() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      <AppHeader eyebrow="Logística" title="KPIs" backHref="/logistica" />
+      <AppHeader eyebrow="Logística" title="KPIs" backHref="/" />
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 100px' }}>
 
@@ -152,5 +152,5 @@ function TrendChart({ serie }: { serie: PuntoSerie[] }) {
 
 const inputStyle: React.CSSProperties = {
   padding: '9px 10px', borderRadius: 10, border: '1px solid var(--border)',
-  background: 'rgba(255,255,255,0.03)', color: 'var(--cream)', fontSize: 12, outline: 'none',
+  background: 'var(--surface2)', color: 'var(--cream)', fontSize: 12, outline: 'none', colorScheme: 'dark',
 }
