@@ -205,7 +205,7 @@ export default function DespachosClient() {
                         <>
                           <button onClick={() => mover(d.id, d.paradas, i, -1)} style={iconBtnStyle}><ArrowUp size={12} /></button>
                           <button onClick={() => mover(d.id, d.paradas, i, 1)} style={iconBtnStyle}><ArrowDown size={12} /></button>
-                          <button onClick={() => router.push(`/logistica/despachos/${d.id}/entregar?parada=${p.id}`)} style={{ ...iconBtnStyle, color: ORANGE, borderColor: `${ORANGE}55` }}>
+                          <button onClick={() => router.push(`/flota/despachos/${d.id}/entregar?parada=${p.id}`)} style={{ ...iconBtnStyle, color: ORANGE, borderColor: `${ORANGE}55` }}>
                             <Camera size={12} />
                           </button>
                         </>

@@ -108,7 +108,7 @@ export default function EntregarClient() {
         alert(err.error ?? 'Error al registrar la entrega')
         return
       }
-      router.push('/logistica/despachos')
+      router.push('/flota/despachos')
     } finally {
       setGuardando(false)
     }
@@ -118,7 +118,7 @@ export default function EntregarClient() {
   if (!paradaId || !parada) {
     return (
       <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-        <AppHeader eyebrow="Logística" title="Entregar Pedido" backHref="/logistica/despachos" />
+        <AppHeader eyebrow="Logística" title="Entregar Pedido" backHref="/flota/despachos" />
         <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 40 }}>Parada no encontrada.</p>
       </div>
     )
@@ -129,7 +129,7 @@ export default function EntregarClient() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      <AppHeader eyebrow="Logística" title="Entregar Pedido" backHref="/logistica/despachos" />
+      <AppHeader eyebrow="Logística" title="Entregar Pedido" backHref="/flota/despachos" />
 
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 16px 100px' }}>
 

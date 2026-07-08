@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 
 export default async function LogisticaIndexPage() {
   const user = await getServerUser()
-  // Producción aterriza en su declaración; Logística/admin en Despachos (la ruta del día de Matías)
+  // Producción aterriza en su declaración; Logística/admin en Recepción (check-in de bodega)
   if (user?.macroArea === 'produccion' && !user.isAdmin) redirect('/logistica/produccion/declarar')
-  redirect('/logistica/despachos')
+  redirect('/logistica/recepcion')
 }

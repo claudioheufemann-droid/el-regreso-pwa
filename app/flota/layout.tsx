@@ -8,18 +8,20 @@ import type { PageTab } from '@/components/PageTabs'
 const TABS: PageTab[] = [
   { href: '/flota',           label: 'Vehículos',    exact: true  },
   { href: '/flota/checkin',   label: 'Nueva Salida'              },
+  { href: '/flota/despachos', label: 'Despachos'                 },
   { href: '/flota/historial', label: 'Historial'                 },
+  { href: '/flota/kpis',      label: 'KPIs'                      },
   { href: '/flota/admin',     label: 'Reportes'                  },
 ]
 
 const ORANGE = '#D4AF37'
 
 export default async function FlotaLayout({ children }: { children: React.ReactNode }) {
-  // Logística es exclusiva de administración. El vendedor ve el módulo en el
-  // Hub (bloqueado) pero no puede entrar — ni por la tarjeta ni tecleando la URL.
+  // Exclusiva de administración y del equipo de Logística (Matías) —
+  // el vendedor ve el módulo en el Hub (bloqueado) pero no puede entrar.
   const user = await getServerUser()
   if (!user) redirect('/login')
-  if (!user.isAdmin) redirect('/')
+  if (!user.isAdmin && user.macroArea !== 'logistica') redirect('/')
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>

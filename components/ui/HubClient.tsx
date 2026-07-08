@@ -280,6 +280,7 @@ export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boo
   const firstName = nombre.split(' ')[0]
   const router = useRouter()
   const puedeLogisticaProduccion = isAdmin || macroArea === 'logistica' || macroArea === 'produccion'
+  const puedeFlota = isAdmin || macroArea === 'logistica'
 
   async function handleLogout() {
     const supabase = createClient()
@@ -374,26 +375,26 @@ export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boo
             img="/hub-terreno.webp"
           />
 
-          {/* Logística: visible para todos, pero el vendedor NO puede entrar
-              (locked). Muestra que el sistema existe sin dar acceso. */}
+          {/* Logística: vehículos, despachos con POD y KPIs OTIF/Efectividad.
+              Visible para admin y Logística (Matías); el vendedor la ve bloqueada. */}
           <ModuleCard
             href="/flota"
             color="#F97316"
             rgb="249,115,22"
             title="Logística"
-            subtitle={isAdmin ? 'Bitácora, rutas y control de vehículos' : 'Acceso exclusivo · Administración'}
+            subtitle={puedeFlota ? 'Vehículos, despachos, entregas y KPIs' : 'Acceso exclusivo · Administración'}
             img="/hub-logistica.webp"
-            locked={!isAdmin}
+            locked={!puedeFlota}
           />
 
-          {/* Producción y Despachos: trazabilidad de lotes, despachos con POD y KPIs.
+          {/* Producción Logística: trazabilidad de lotes entre Producción y bodega.
               Visible para admin, Logística (Matías) y Producción (Rodrigo y equipo). */}
           <ModuleCard
             href="/logistica"
             color="#F97316"
             rgb="249,115,22"
             title="Producción Logística"
-            subtitle={puedeLogisticaProduccion ? 'Lotes, despachos, entregas y KPIs' : 'Acceso exclusivo · Logística y Producción'}
+            subtitle={puedeLogisticaProduccion ? 'Declaración y recepción de lotes' : 'Acceso exclusivo · Logística y Producción'}
             img="/gestion-produccion.webp"
             locked={!puedeLogisticaProduccion}
           />
