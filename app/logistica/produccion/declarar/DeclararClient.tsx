@@ -4,13 +4,34 @@ import { useState, useEffect, useCallback } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
 import { Plus, Trash2, Send, Package } from 'lucide-react'
 
-const PRODUCTOS = [
-  'Nitro Coffee', 'Arboretum', 'Mocho English', 'La Barra APA', 'Fisura',
-  'Descenso West Coast IPA', 'Aguas Blancas',
-  'Kombucha Berry Menta', 'Kombucha Lemon', 'Kombucha Maqui',
-  'Kombucha Maracuyá Cardamomo', 'Kombucha Detox', 'Kombucha Natural', 'Kombucha Mango',
+// Catálogo real: sin botellas. Kombucha = lata 355ml, cerveza = lata 500ml.
+// Nitro Coffee solo se vende en barril (no existe en lata).
+interface ProductoCatalogo {
+  nombre: string
+  categoria: 'Cerveza' | 'Kombucha' | 'Café'
+  formatos: string[]
+}
+
+const CATALOGO: ProductoCatalogo[] = [
+  { nombre: 'Nitro Coffee',             categoria: 'Café',     formatos: ['Barril 20L', 'Barril 50L'] },
+  { nombre: 'Arboretum',                categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Mocho English',            categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'La Barra APA',             categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Fisura',                   categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Descenso West Coast IPA',  categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Aguas Blancas',            categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Kombucha Berry Menta',            categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Kombucha Lemon',                  categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Kombucha Maqui',                  categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Kombucha Maracuyá Cardamomo',     categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Kombucha Detox',                  categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Kombucha Natural',                categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
+  { nombre: 'Kombucha Mango',                  categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
 ]
-const ENVASES = ['Lata 350ml', 'Lata 500ml', 'Botella 330ml', 'Barril 20L', 'Barril 50L']
+
+function catalogoDe(nombre: string): ProductoCatalogo {
+  return CATALOGO.find(p => p.nombre === nombre) ?? CATALOGO[0]
+}
 
 interface ItemForm {
   producto: string
@@ -29,6 +50,11 @@ interface LoteRow {
 
 const ORANGE = '#F97316'
 
+function itemInicial(): ItemForm {
+  const primero = CATALOGO[0]
+  return { producto: primero.nombre, envase: primero.formatos[0], cantidad_declarada: 1 }
+}
+
 export default function DeclararClient() {
   const [lotes, setLotes] = useState<LoteRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,7 +63,7 @@ export default function DeclararClient() {
   const [codigoLote, setCodigoLote] = useState('')
   const [etaEntrega, setEtaEntrega] = useState('')
   const [observaciones, setObservaciones] = useState('')
-  const [items, setItems] = useState<ItemForm[]>([{ producto: PRODUCTOS[0], envase: ENVASES[0], cantidad_declarada: 1 }])
+  const [items, setItems] = useState<ItemForm[]>([itemInicial()])
 
   const load = useCallback(() => {
     setLoading(true)
@@ -50,13 +76,17 @@ export default function DeclararClient() {
   useEffect(() => { load() }, [load])
 
   function addItem() {
-    setItems(prev => [...prev, { producto: PRODUCTOS[0], envase: ENVASES[0], cantidad_declarada: 1 }])
+    setItems(prev => [...prev, itemInicial()])
   }
   function removeItem(i: number) {
     setItems(prev => prev.filter((_, idx) => idx !== i))
   }
   function updateItem(i: number, patch: Partial<ItemForm>) {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, ...patch } : it))
+  }
+  function cambiarProducto(i: number, nombre: string) {
+    const cat = catalogoDe(nombre)
+    updateItem(i, { producto: nombre, envase: cat.formatos[0] })
   }
 
   async function declarar() {
@@ -79,7 +109,7 @@ export default function DeclararClient() {
         return
       }
       setCodigoLote(''); setEtaEntrega(''); setObservaciones('')
-      setItems([{ producto: PRODUCTOS[0], envase: ENVASES[0], cantidad_declarada: 1 }])
+      setItems([itemInicial()])
       load()
     } finally {
       setSaving(false)
@@ -107,11 +137,12 @@ export default function DeclararClient() {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, padding: 18, marginBottom: 24 }}>
           <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)', marginBottom: 14 }}>Nueva declaración</p>
 
-          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+          <div style={{ marginBottom: 10 }}>
+            <label style={labelStyle}>Código de lote</label>
             <input
               value={codigoLote}
               onChange={e => setCodigoLote(e.target.value)}
-              placeholder="Código de lote (ej: LP-2026-0714-01)"
+              placeholder="Ej: LP-2026-0714-01"
               style={inputStyle}
             />
           </div>
@@ -126,7 +157,7 @@ export default function DeclararClient() {
             />
           </div>
 
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ marginBottom: 18 }}>
             <label style={labelStyle}>Observaciones (opcional)</label>
             <input
               value={observaciones}
@@ -136,30 +167,64 @@ export default function DeclararClient() {
             />
           </div>
 
-          <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
             Items del lote
           </p>
 
-          {items.map((it, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-              <select value={it.producto} onChange={e => updateItem(i, { producto: e.target.value })} style={{ ...inputStyle, flex: 2 }}>
-                {PRODUCTOS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <select value={it.envase} onChange={e => updateItem(i, { envase: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
-                {ENVASES.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
-              <input
-                type="number" min={1} value={it.cantidad_declarada}
-                onChange={e => updateItem(i, { cantidad_declarada: Math.max(1, parseInt(e.target.value) || 1) })}
-                style={{ ...inputStyle, flex: 1, textAlign: 'center' }}
-              />
-              {items.length > 1 && (
-                <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#FF6666', cursor: 'pointer', padding: 8, flexShrink: 0 }}>
-                  <Trash2 size={16} />
-                </button>
-              )}
-            </div>
-          ))}
+          {items.map((it, i) => {
+            const cat = catalogoDe(it.producto)
+            return (
+              <div key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 14, padding: 12, marginBottom: 10 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                  <select value={it.producto} onChange={e => cambiarProducto(i, e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+                    <optgroup label="Cerveza">
+                      {CATALOGO.filter(p => p.categoria === 'Cerveza').map(p => (
+                        <option key={p.nombre} value={p.nombre} style={optionStyle}>{p.nombre}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Kombucha">
+                      {CATALOGO.filter(p => p.categoria === 'Kombucha').map(p => (
+                        <option key={p.nombre} value={p.nombre} style={optionStyle}>{p.nombre}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Café">
+                      {CATALOGO.filter(p => p.categoria === 'Café').map(p => (
+                        <option key={p.nombre} value={p.nombre} style={optionStyle}>{p.nombre}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  <input
+                    type="number" min={1} value={it.cantidad_declarada}
+                    onChange={e => updateItem(i, { cantidad_declarada: Math.max(1, parseInt(e.target.value) || 1) })}
+                    style={{ ...inputStyle, width: 64, flexShrink: 0, textAlign: 'center' }}
+                  />
+                  {items.length > 1 && (
+                    <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#FF6666', cursor: 'pointer', padding: 6, flexShrink: 0 }}>
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Formato: pastillas, no <select> — solo muestra las opciones válidas para el producto elegido */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {cat.formatos.map(f => (
+                    <button
+                      key={f}
+                      onClick={() => updateItem(i, { envase: f })}
+                      style={{
+                        padding: '7px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                        border: `1px solid ${it.envase === f ? ORANGE : 'var(--border)'}`,
+                        background: it.envase === f ? `${ORANGE}18` : 'transparent',
+                        color: it.envase === f ? ORANGE : 'rgba(255,255,255,0.5)',
+                      }}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
 
           <button onClick={addItem} style={{
             display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px dashed var(--border)',
@@ -234,6 +299,9 @@ const inputStyle: React.CSSProperties = {
   width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)',
   background: 'var(--surface2)', color: 'var(--cream)', fontSize: 13, outline: 'none', colorScheme: 'dark',
 }
+// Los <option>/<optgroup> nativos suelen ignorar el tema oscuro del padre y renderizan
+// con fondo claro del sistema — se fuerza texto oscuro para que sean legibles en ese caso.
+const optionStyle: React.CSSProperties = { color: '#111827', background: '#FFFFFF' }
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5,
 }
