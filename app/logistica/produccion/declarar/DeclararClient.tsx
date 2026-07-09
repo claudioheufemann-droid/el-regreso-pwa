@@ -5,8 +5,8 @@ import AppHeader from '@/components/ui/AppHeader'
 import { Plus, Trash2, Send, Package, Calendar, Clock } from 'lucide-react'
 
 // Catálogo real: sin botellas, un solo tamaño de barril (30L).
-// Cerveza = Lata 500cc · Kombucha = Lata 355cc · Nitro Coffee solo existe en barril.
-type Categoria = 'Cerveza' | 'Kombucha' | 'Café'
+// Cerveza = Lata 500cc · Kombucha = Lata 355cc.
+type Categoria = 'Cerveza' | 'Kombucha'
 
 interface ProductoCatalogo {
   nombre: string
@@ -20,6 +20,7 @@ const VARIEDADES: ProductoCatalogo[] = [
   { nombre: 'Fisura',                  categoria: 'Cerveza' },
   { nombre: 'Descenso West Coast IPA', categoria: 'Cerveza' },
   { nombre: 'Aguas Blancas',           categoria: 'Cerveza' },
+  { nombre: 'Nitro Coffee',            categoria: 'Cerveza' },
   { nombre: 'Kombucha Berry Menta',        categoria: 'Kombucha' },
   { nombre: 'Kombucha Lemon',              categoria: 'Kombucha' },
   { nombre: 'Kombucha Maqui',              categoria: 'Kombucha' },
@@ -27,16 +28,14 @@ const VARIEDADES: ProductoCatalogo[] = [
   { nombre: 'Kombucha Detox',              categoria: 'Kombucha' },
   { nombre: 'Kombucha Natural',            categoria: 'Kombucha' },
   { nombre: 'Kombucha Mango',              categoria: 'Kombucha' },
-  { nombre: 'Nitro Coffee',            categoria: 'Café' },
 ]
 
-const CATEGORIAS: Categoria[] = ['Cerveza', 'Kombucha', 'Café']
+const CATEGORIAS: Categoria[] = ['Cerveza', 'Kombucha']
 
-// Formatos válidos por categoría — un solo tamaño de barril (30L). Nitro Coffee no existe en lata.
+// Formatos válidos por categoría — un solo tamaño de barril (30L).
 function formatosDe(categoria: Categoria): string[] {
   if (categoria === 'Cerveza') return ['Lata 500cc', 'Barril 30L']
-  if (categoria === 'Kombucha') return ['Lata 355cc', 'Barril 30L']
-  return ['Barril 30L']
+  return ['Lata 355cc', 'Barril 30L']
 }
 
 interface ItemPedido {
@@ -109,7 +108,11 @@ export default function DeclararClient() {
       }
       return [...prev, { producto, envase, cantidad_declarada: cantidad }]
     })
+    // Reinicia el selector completo para encadenar el siguiente lote desde cero
     setCantidadTexto('')
+    setCategoria('Cerveza')
+    setProducto(VARIEDADES.find(v => v.categoria === 'Cerveza')!.nombre)
+    setEnvase(formatosDe('Cerveza')[0])
     cantidadInputRef.current?.focus()
   }
 
@@ -258,8 +261,8 @@ export default function DeclararClient() {
               ))}
             </div>
 
-            {/* Formato + cantidad + agregar */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Formato */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
               {formatosDe(categoria).map(f => (
                 <button
                   key={f}
@@ -274,26 +277,37 @@ export default function DeclararClient() {
                   {f}
                 </button>
               ))}
-              <input
-                ref={cantidadInputRef}
-                type="number" min={1} inputMode="numeric" placeholder="Cant."
-                value={cantidadTexto}
-                onFocus={e => e.target.select()}
-                onChange={e => setCantidadTexto(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') agregarAlPedido() }}
-                style={{ ...inputStyle, width: 64, padding: '7px 8px', textAlign: 'center' }}
-              />
-              <button
-                onClick={agregarAlPedido}
-                disabled={!cantidadTexto}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 9, cursor: cantidadTexto ? 'pointer' : 'default',
-                  border: 'none', background: `linear-gradient(135deg, ${ORANGE}, #C2410C)`, color: '#080808', fontSize: 12, fontWeight: 900,
-                  opacity: cantidadTexto ? 1 : 0.4,
-                }}
-              >
-                <Plus size={13} /> Agregar
-              </button>
+            </div>
+
+            {/* Cantidad de unidades — destacada, es el dato más importante del formulario */}
+            <div>
+              <label style={{ ...labelStyle, color: ORANGE, fontSize: 11 }}>Cantidad de unidades</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  ref={cantidadInputRef}
+                  type="number" min={1} inputMode="numeric" placeholder="0"
+                  value={cantidadTexto}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setCantidadTexto(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') agregarAlPedido() }}
+                  style={{
+                    flex: 1, padding: '14px 14px', borderRadius: 12, textAlign: 'center',
+                    border: `2px solid ${ORANGE}`, background: 'rgba(249,115,22,0.08)',
+                    color: 'var(--cream)', fontSize: 22, fontWeight: 900, outline: 'none', colorScheme: 'dark',
+                  }}
+                />
+                <button
+                  onClick={agregarAlPedido}
+                  disabled={!cantidadTexto}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '0 20px', borderRadius: 12, cursor: cantidadTexto ? 'pointer' : 'default',
+                    border: 'none', background: `linear-gradient(135deg, ${ORANGE}, #C2410C)`, color: '#080808', fontSize: 13, fontWeight: 900,
+                    opacity: cantidadTexto ? 1 : 0.4,
+                  }}
+                >
+                  <Plus size={16} /> Agregar
+                </button>
+              </div>
             </div>
           </div>
 
