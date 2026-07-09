@@ -372,6 +372,17 @@ export default function DeclararClient() {
           ))}
         </div>
 
+        {/* ── Código de lote: justo debajo del estilo elegido ── */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 14, marginBottom: 18 }}>
+          <label style={labelStyle}>Código de lote</label>
+          <input
+            value={codigoLote}
+            onChange={e => setCodigoLote(e.target.value)}
+            placeholder="Ej: LP-2026-0714-01"
+            style={inputStyle}
+          />
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
           {variedadesFiltradas.map(v => {
             const key = cartKey(v.nombre, envaseActual)
@@ -433,19 +444,6 @@ export default function DeclararClient() {
                 </button>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* ── Código de lote: se completa al final, justo antes de enviar ── */}
-        {items.length > 0 && (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 14, marginBottom: 10 }}>
-            <label style={labelStyle}>Código de lote</label>
-            <input
-              value={codigoLote}
-              onChange={e => setCodigoLote(e.target.value)}
-              placeholder="Ej: LP-2026-0714-01"
-              style={inputStyle}
-            />
           </div>
         )}
 
