@@ -4,36 +4,47 @@ import { useState, useEffect, useCallback } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
 import { Plus, Trash2, Send, Package } from 'lucide-react'
 
-// Catálogo real: sin botellas. Kombucha = lata 355ml, cerveza = lata 500ml.
-// Nitro Coffee solo se vende en barril (no existe en lata).
+// Catálogo real: sin botellas, un solo tamaño de barril (30L).
+// Cerveza = Lata 500cc · Kombucha = Lata 355cc · Nitro Coffee solo existe en barril.
+type Categoria = 'Cerveza' | 'Kombucha' | 'Café'
+
 interface ProductoCatalogo {
   nombre: string
-  categoria: 'Cerveza' | 'Kombucha' | 'Café'
-  formatos: string[]
+  categoria: Categoria
 }
 
-const CATALOGO: ProductoCatalogo[] = [
-  { nombre: 'Nitro Coffee',             categoria: 'Café',     formatos: ['Barril 20L', 'Barril 50L'] },
-  { nombre: 'Arboretum',                categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Mocho English',            categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'La Barra APA',             categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Fisura',                   categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Descenso West Coast IPA',  categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Aguas Blancas',            categoria: 'Cerveza',  formatos: ['Lata 500ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Kombucha Berry Menta',            categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Kombucha Lemon',                  categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Kombucha Maqui',                  categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Kombucha Maracuyá Cardamomo',     categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Kombucha Detox',                  categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Kombucha Natural',                categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
-  { nombre: 'Kombucha Mango',                  categoria: 'Kombucha', formatos: ['Lata 355ml', 'Barril 20L', 'Barril 50L'] },
+const VARIEDADES: ProductoCatalogo[] = [
+  { nombre: 'Arboretum',               categoria: 'Cerveza' },
+  { nombre: 'Mocho English',           categoria: 'Cerveza' },
+  { nombre: 'La Barra APA',            categoria: 'Cerveza' },
+  { nombre: 'Fisura',                  categoria: 'Cerveza' },
+  { nombre: 'Descenso West Coast IPA', categoria: 'Cerveza' },
+  { nombre: 'Aguas Blancas',           categoria: 'Cerveza' },
+  { nombre: 'Kombucha Berry Menta',           categoria: 'Kombucha' },
+  { nombre: 'Kombucha Lemon',                 categoria: 'Kombucha' },
+  { nombre: 'Kombucha Maqui',                 categoria: 'Kombucha' },
+  { nombre: 'Kombucha Maracuyá Cardamomo',    categoria: 'Kombucha' },
+  { nombre: 'Kombucha Detox',                 categoria: 'Kombucha' },
+  { nombre: 'Kombucha Natural',                categoria: 'Kombucha' },
+  { nombre: 'Kombucha Mango',                 categoria: 'Kombucha' },
+  { nombre: 'Nitro Coffee',            categoria: 'Café' },
 ]
 
-function catalogoDe(nombre: string): ProductoCatalogo {
-  return CATALOGO.find(p => p.nombre === nombre) ?? CATALOGO[0]
+const CATEGORIAS: Categoria[] = ['Cerveza', 'Kombucha', 'Café']
+
+// Formatos válidos por categoría — Nitro Coffee (Café) no existe en lata.
+function formatosDe(categoria: Categoria): string[] {
+  if (categoria === 'Cerveza') return ['Lata 500cc', 'Barril 30L']
+  if (categoria === 'Kombucha') return ['Lata 355cc', 'Barril 30L']
+  return ['Barril 30L']
+}
+
+function categoriaDe(nombre: string): Categoria {
+  return VARIEDADES.find(v => v.nombre === nombre)?.categoria ?? 'Cerveza'
 }
 
 interface ItemForm {
+  categoria: Categoria
   producto: string
   envase: string
   cantidad_declarada: number
@@ -51,8 +62,8 @@ interface LoteRow {
 const ORANGE = '#F97316'
 
 function itemInicial(): ItemForm {
-  const primero = CATALOGO[0]
-  return { producto: primero.nombre, envase: primero.formatos[0], cantidad_declarada: 1 }
+  const primera = VARIEDADES[0]
+  return { categoria: primera.categoria, producto: primera.nombre, envase: formatosDe(primera.categoria)[0], cantidad_declarada: 1 }
 }
 
 export default function DeclararClient() {
@@ -84,9 +95,12 @@ export default function DeclararClient() {
   function updateItem(i: number, patch: Partial<ItemForm>) {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, ...patch } : it))
   }
+  function cambiarCategoria(i: number, categoria: Categoria) {
+    const primeraVariedad = VARIEDADES.find(v => v.categoria === categoria)!
+    updateItem(i, { categoria, producto: primeraVariedad.nombre, envase: formatosDe(categoria)[0] })
+  }
   function cambiarProducto(i: number, nombre: string) {
-    const cat = catalogoDe(nombre)
-    updateItem(i, { producto: nombre, envase: cat.formatos[0] })
+    updateItem(i, { producto: nombre })
   }
 
   async function declarar() {
@@ -100,7 +114,7 @@ export default function DeclararClient() {
           codigo_lote: codigoLote.trim(),
           eta_entrega: new Date(etaEntrega).toISOString(),
           observaciones: observaciones.trim() || undefined,
-          items,
+          items: items.map(({ producto, envase, cantidad_declarada }) => ({ producto, envase, cantidad_declarada })),
         }),
       })
       if (!res.ok) {
@@ -171,60 +185,74 @@ export default function DeclararClient() {
             Items del lote
           </p>
 
-          {items.map((it, i) => {
-            const cat = catalogoDe(it.producto)
-            return (
-              <div key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 14, padding: 12, marginBottom: 10 }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                  <select value={it.producto} onChange={e => cambiarProducto(i, e.target.value)} style={{ ...inputStyle, flex: 1 }}>
-                    <optgroup label="Cerveza">
-                      {CATALOGO.filter(p => p.categoria === 'Cerveza').map(p => (
-                        <option key={p.nombre} value={p.nombre} style={optionStyle}>{p.nombre}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Kombucha">
-                      {CATALOGO.filter(p => p.categoria === 'Kombucha').map(p => (
-                        <option key={p.nombre} value={p.nombre} style={optionStyle}>{p.nombre}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Café">
-                      {CATALOGO.filter(p => p.categoria === 'Café').map(p => (
-                        <option key={p.nombre} value={p.nombre} style={optionStyle}>{p.nombre}</option>
-                      ))}
-                    </optgroup>
-                  </select>
-                  <input
-                    type="number" min={1} value={it.cantidad_declarada}
-                    onChange={e => updateItem(i, { cantidad_declarada: Math.max(1, parseInt(e.target.value) || 1) })}
-                    style={{ ...inputStyle, width: 64, flexShrink: 0, textAlign: 'center' }}
-                  />
-                  {items.length > 1 && (
-                    <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#FF6666', cursor: 'pointer', padding: 6, flexShrink: 0 }}>
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
+          {items.map((it, i) => (
+            <div key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 14, padding: 12, marginBottom: 10 }}>
 
-                {/* Formato: pastillas, no <select> — solo muestra las opciones válidas para el producto elegido */}
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {cat.formatos.map(f => (
-                    <button
-                      key={f}
-                      onClick={() => updateItem(i, { envase: f })}
-                      style={{
-                        padding: '7px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                        border: `1px solid ${it.envase === f ? ORANGE : 'var(--border)'}`,
-                        background: it.envase === f ? `${ORANGE}18` : 'transparent',
-                        color: it.envase === f ? ORANGE : 'rgba(255,255,255,0.5)',
-                      }}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
+              {/* Paso 1: categoría */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                {CATEGORIAS.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => cambiarCategoria(i, c)}
+                    style={{
+                      flex: 1, padding: '8px 0', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 800,
+                      border: `1px solid ${it.categoria === c ? ORANGE : 'var(--border)'}`,
+                      background: it.categoria === c ? `${ORANGE}18` : 'transparent',
+                      color: it.categoria === c ? ORANGE : 'rgba(255,255,255,0.5)',
+                    }}
+                  >
+                    {c}
+                  </button>
+                ))}
+                <input
+                  type="number" min={1} value={it.cantidad_declarada}
+                  onChange={e => updateItem(i, { cantidad_declarada: Math.max(1, parseInt(e.target.value) || 1) })}
+                  style={{ ...inputStyle, width: 56, flexShrink: 0, textAlign: 'center', padding: '8px 4px' }}
+                />
+                {items.length > 1 && (
+                  <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#FF6666', cursor: 'pointer', padding: '0 2px', flexShrink: 0 }}>
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
-            )
-          })}
+
+              {/* Paso 2: variedad — solo las de la categoría elegida */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                {VARIEDADES.filter(v => v.categoria === it.categoria).map(v => (
+                  <button
+                    key={v.nombre}
+                    onClick={() => cambiarProducto(i, v.nombre)}
+                    style={{
+                      padding: '7px 11px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                      border: `1px solid ${it.producto === v.nombre ? ORANGE : 'var(--border)'}`,
+                      background: it.producto === v.nombre ? `${ORANGE}18` : 'transparent',
+                      color: it.producto === v.nombre ? ORANGE : 'rgba(255,255,255,0.55)',
+                    }}
+                  >
+                    {v.nombre.replace('Kombucha ', '')}
+                  </button>
+                ))}
+              </div>
+
+              {/* Paso 3: formato — solo los válidos para esa categoría */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {formatosDe(it.categoria).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => updateItem(i, { envase: f })}
+                    style={{
+                      padding: '7px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                      border: `1px solid ${it.envase === f ? ORANGE : 'var(--border)'}`,
+                      background: it.envase === f ? `${ORANGE}18` : 'transparent',
+                      color: it.envase === f ? ORANGE : 'rgba(255,255,255,0.5)',
+                    }}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
 
           <button onClick={addItem} style={{
             display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px dashed var(--border)',
@@ -299,9 +327,6 @@ const inputStyle: React.CSSProperties = {
   width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)',
   background: 'var(--surface2)', color: 'var(--cream)', fontSize: 13, outline: 'none', colorScheme: 'dark',
 }
-// Los <option>/<optgroup> nativos suelen ignorar el tema oscuro del padre y renderizan
-// con fondo claro del sistema — se fuerza texto oscuro para que sean legibles en ese caso.
-const optionStyle: React.CSSProperties = { color: '#111827', background: '#FFFFFF' }
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5,
 }
