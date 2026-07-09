@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
-import { Plus, Trash2, Send, Package } from 'lucide-react'
+import { Plus, Trash2, Send, Package, Calendar, Clock } from 'lucide-react'
 
 // Catálogo real: sin botellas, un solo tamaño de barril (30L).
 // Cerveza = Lata 500cc · Kombucha = Lata 355cc · Nitro Coffee solo existe en barril.
@@ -20,31 +20,26 @@ const VARIEDADES: ProductoCatalogo[] = [
   { nombre: 'Fisura',                  categoria: 'Cerveza' },
   { nombre: 'Descenso West Coast IPA', categoria: 'Cerveza' },
   { nombre: 'Aguas Blancas',           categoria: 'Cerveza' },
-  { nombre: 'Kombucha Berry Menta',           categoria: 'Kombucha' },
-  { nombre: 'Kombucha Lemon',                 categoria: 'Kombucha' },
-  { nombre: 'Kombucha Maqui',                 categoria: 'Kombucha' },
-  { nombre: 'Kombucha Maracuyá Cardamomo',    categoria: 'Kombucha' },
-  { nombre: 'Kombucha Detox',                 categoria: 'Kombucha' },
-  { nombre: 'Kombucha Natural',                categoria: 'Kombucha' },
-  { nombre: 'Kombucha Mango',                 categoria: 'Kombucha' },
+  { nombre: 'Kombucha Berry Menta',        categoria: 'Kombucha' },
+  { nombre: 'Kombucha Lemon',              categoria: 'Kombucha' },
+  { nombre: 'Kombucha Maqui',              categoria: 'Kombucha' },
+  { nombre: 'Kombucha Maracuyá Cardamomo', categoria: 'Kombucha' },
+  { nombre: 'Kombucha Detox',              categoria: 'Kombucha' },
+  { nombre: 'Kombucha Natural',            categoria: 'Kombucha' },
+  { nombre: 'Kombucha Mango',              categoria: 'Kombucha' },
   { nombre: 'Nitro Coffee',            categoria: 'Café' },
 ]
 
 const CATEGORIAS: Categoria[] = ['Cerveza', 'Kombucha', 'Café']
 
-// Formatos válidos por categoría — Nitro Coffee (Café) no existe en lata.
+// Formatos válidos por categoría — un solo tamaño de barril (30L). Nitro Coffee no existe en lata.
 function formatosDe(categoria: Categoria): string[] {
   if (categoria === 'Cerveza') return ['Lata 500cc', 'Barril 30L']
   if (categoria === 'Kombucha') return ['Lata 355cc', 'Barril 30L']
   return ['Barril 30L']
 }
 
-function categoriaDe(nombre: string): Categoria {
-  return VARIEDADES.find(v => v.nombre === nombre)?.categoria ?? 'Cerveza'
-}
-
-interface ItemForm {
-  categoria: Categoria
+interface ItemPedido {
   producto: string
   envase: string
   cantidad_declarada: number
@@ -61,20 +56,28 @@ interface LoteRow {
 
 const ORANGE = '#F97316'
 
-function itemInicial(): ItemForm {
-  const primera = VARIEDADES[0]
-  return { categoria: primera.categoria, producto: primera.nombre, envase: formatosDe(primera.categoria)[0], cantidad_declarada: 1 }
-}
-
 export default function DeclararClient() {
   const [lotes, setLotes] = useState<LoteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const [codigoLote, setCodigoLote] = useState('')
-  const [etaEntrega, setEtaEntrega] = useState('')
+  const [fecha, setFecha] = useState('')
+  const [hora, setHora] = useState('')
   const [observaciones, setObservaciones] = useState('')
-  const [items, setItems] = useState<ItemForm[]>([itemInicial()])
+
+  // ── Selector del próximo item a agregar (no es un item ya confirmado) ──
+  const [categoria, setCategoria] = useState<Categoria>('Cerveza')
+  const [producto, setProducto] = useState<string>(VARIEDADES[0].nombre)
+  const [envase, setEnvase] = useState<string>(formatosDe('Cerveza')[0])
+  const [cantidadTexto, setCantidadTexto] = useState('')
+  const cantidadInputRef = useRef<HTMLInputElement>(null)
+
+  // ── El pedido: varias variedades/formatos en un solo envío ──
+  const [pedido, setPedido] = useState<ItemPedido[]>([])
+
+  const dateRef = useRef<HTMLInputElement>(null)
+  const timeRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -86,35 +89,47 @@ export default function DeclararClient() {
 
   useEffect(() => { load() }, [load])
 
-  function addItem() {
-    setItems(prev => [...prev, itemInicial()])
+  function cambiarCategoria(c: Categoria) {
+    setCategoria(c)
+    const primeraVariedad = VARIEDADES.find(v => v.categoria === c)!
+    setProducto(primeraVariedad.nombre)
+    setEnvase(formatosDe(c)[0])
   }
-  function removeItem(i: number) {
-    setItems(prev => prev.filter((_, idx) => idx !== i))
+
+  function agregarAlPedido() {
+    const cantidad = Math.max(1, parseInt(cantidadTexto) || 0)
+    if (!cantidad) return
+    setPedido(prev => {
+      // Si ya existe el mismo producto+envase, suma cantidades en vez de duplicar la línea
+      const idx = prev.findIndex(it => it.producto === producto && it.envase === envase)
+      if (idx >= 0) {
+        const next = [...prev]
+        next[idx] = { ...next[idx], cantidad_declarada: next[idx].cantidad_declarada + cantidad }
+        return next
+      }
+      return [...prev, { producto, envase, cantidad_declarada: cantidad }]
+    })
+    setCantidadTexto('')
+    cantidadInputRef.current?.focus()
   }
-  function updateItem(i: number, patch: Partial<ItemForm>) {
-    setItems(prev => prev.map((it, idx) => idx === i ? { ...it, ...patch } : it))
-  }
-  function cambiarCategoria(i: number, categoria: Categoria) {
-    const primeraVariedad = VARIEDADES.find(v => v.categoria === categoria)!
-    updateItem(i, { categoria, producto: primeraVariedad.nombre, envase: formatosDe(categoria)[0] })
-  }
-  function cambiarProducto(i: number, nombre: string) {
-    updateItem(i, { producto: nombre })
+
+  function quitarDelPedido(i: number) {
+    setPedido(prev => prev.filter((_, idx) => idx !== i))
   }
 
   async function declarar() {
-    if (!codigoLote.trim() || !etaEntrega || !items.length) return
+    if (!codigoLote.trim() || !fecha || !pedido.length) return
     setSaving(true)
     try {
+      const etaEntrega = new Date(`${fecha}T${hora || '09:00'}:00`).toISOString()
       const res = await fetch('/api/logistica/lotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           codigo_lote: codigoLote.trim(),
-          eta_entrega: new Date(etaEntrega).toISOString(),
+          eta_entrega: etaEntrega,
           observaciones: observaciones.trim() || undefined,
-          items: items.map(({ producto, envase, cantidad_declarada }) => ({ producto, envase, cantidad_declarada })),
+          items: pedido,
         }),
       })
       if (!res.ok) {
@@ -122,8 +137,9 @@ export default function DeclararClient() {
         alert(err.error ?? 'Error al declarar el lote')
         return
       }
-      setCodigoLote(''); setEtaEntrega(''); setObservaciones('')
-      setItems([itemInicial()])
+      setCodigoLote(''); setFecha(''); setHora(''); setObservaciones('')
+      setPedido([])
+      setCantidadTexto('')
       load()
     } finally {
       setSaving(false)
@@ -161,17 +177,36 @@ export default function DeclararClient() {
             />
           </div>
 
-          <div style={{ marginBottom: 10 }}>
-            <label style={labelStyle}>ETA a bodega de Logística (obligatorio)</label>
-            <input
-              type="datetime-local"
-              value={etaEntrega}
-              onChange={e => setEtaEntrega(e.target.value)}
-              style={inputStyle}
-            />
+          <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Fecha</label>
+              <div style={{ position: 'relative' }} onClick={() => dateRef.current?.showPicker?.()}>
+                <input
+                  ref={dateRef}
+                  type="date"
+                  value={fecha}
+                  onChange={e => setFecha(e.target.value)}
+                  style={{ ...inputStyle, paddingRight: 34 }}
+                />
+                <Calendar size={15} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }} />
+              </div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Hora (aprox.)</label>
+              <div style={{ position: 'relative' }} onClick={() => timeRef.current?.showPicker?.()}>
+                <input
+                  ref={timeRef}
+                  type="time"
+                  value={hora}
+                  onChange={e => setHora(e.target.value)}
+                  style={{ ...inputStyle, paddingRight: 34 }}
+                />
+                <Clock size={15} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }} />
+              </div>
+            </div>
           </div>
 
-          <div style={{ marginBottom: 18 }}>
+          <div style={{ marginBottom: 20 }}>
             <label style={labelStyle}>Observaciones (opcional)</label>
             <input
               value={observaciones}
@@ -181,96 +216,125 @@ export default function DeclararClient() {
             />
           </div>
 
+          {/* ── Selector: arma el próximo item del pedido ── */}
           <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
-            Items del lote
+            Agregar producto al pedido
           </p>
 
-          {items.map((it, i) => (
-            <div key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 14, padding: 12, marginBottom: 10 }}>
-
-              {/* Paso 1: categoría */}
-              <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                {CATEGORIAS.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => cambiarCategoria(i, c)}
-                    style={{
-                      flex: 1, padding: '8px 0', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 800,
-                      border: `1px solid ${it.categoria === c ? ORANGE : 'var(--border)'}`,
-                      background: it.categoria === c ? `${ORANGE}18` : 'transparent',
-                      color: it.categoria === c ? ORANGE : 'rgba(255,255,255,0.5)',
-                    }}
-                  >
-                    {c}
-                  </button>
-                ))}
-                <input
-                  type="number" min={1} value={it.cantidad_declarada}
-                  onChange={e => updateItem(i, { cantidad_declarada: Math.max(1, parseInt(e.target.value) || 1) })}
-                  style={{ ...inputStyle, width: 56, flexShrink: 0, textAlign: 'center', padding: '8px 4px' }}
-                />
-                {items.length > 1 && (
-                  <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#FF6666', cursor: 'pointer', padding: '0 2px', flexShrink: 0 }}>
-                    <Trash2 size={16} />
-                  </button>
-                )}
-              </div>
-
-              {/* Paso 2: variedad — solo las de la categoría elegida */}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                {VARIEDADES.filter(v => v.categoria === it.categoria).map(v => (
-                  <button
-                    key={v.nombre}
-                    onClick={() => cambiarProducto(i, v.nombre)}
-                    style={{
-                      padding: '7px 11px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                      border: `1px solid ${it.producto === v.nombre ? ORANGE : 'var(--border)'}`,
-                      background: it.producto === v.nombre ? `${ORANGE}18` : 'transparent',
-                      color: it.producto === v.nombre ? ORANGE : 'rgba(255,255,255,0.55)',
-                    }}
-                  >
-                    {v.nombre.replace('Kombucha ', '')}
-                  </button>
-                ))}
-              </div>
-
-              {/* Paso 3: formato — solo los válidos para esa categoría */}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {formatosDe(it.categoria).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => updateItem(i, { envase: f })}
-                    style={{
-                      padding: '7px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                      border: `1px solid ${it.envase === f ? ORANGE : 'var(--border)'}`,
-                      background: it.envase === f ? `${ORANGE}18` : 'transparent',
-                      color: it.envase === f ? ORANGE : 'rgba(255,255,255,0.5)',
-                    }}
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 14, padding: 12, marginBottom: 14 }}>
+            {/* Categoría */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+              {CATEGORIAS.map(c => (
+                <button
+                  key={c}
+                  onClick={() => cambiarCategoria(c)}
+                  style={{
+                    flex: 1, padding: '8px 0', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 800,
+                    border: `1px solid ${categoria === c ? ORANGE : 'var(--border)'}`,
+                    background: categoria === c ? `${ORANGE}18` : 'transparent',
+                    color: categoria === c ? ORANGE : 'rgba(255,255,255,0.5)',
+                  }}
+                >
+                  {c}
+                </button>
+              ))}
             </div>
-          ))}
 
-          <button onClick={addItem} style={{
-            display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px dashed var(--border)',
-            borderRadius: 10, padding: '8px 12px', color: 'rgba(255,255,255,0.5)', fontSize: 12, cursor: 'pointer', marginBottom: 16,
-          }}>
-            <Plus size={14} /> Agregar producto
-          </button>
+            {/* Variedad */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              {VARIEDADES.filter(v => v.categoria === categoria).map(v => (
+                <button
+                  key={v.nombre}
+                  onClick={() => setProducto(v.nombre)}
+                  style={{
+                    padding: '7px 11px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                    border: `1px solid ${producto === v.nombre ? ORANGE : 'var(--border)'}`,
+                    background: producto === v.nombre ? `${ORANGE}18` : 'transparent',
+                    color: producto === v.nombre ? ORANGE : 'rgba(255,255,255,0.55)',
+                  }}
+                >
+                  {v.nombre.replace('Kombucha ', '')}
+                </button>
+              ))}
+            </div>
+
+            {/* Formato + cantidad + agregar */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {formatosDe(categoria).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setEnvase(f)}
+                  style={{
+                    padding: '7px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                    border: `1px solid ${envase === f ? ORANGE : 'var(--border)'}`,
+                    background: envase === f ? `${ORANGE}18` : 'transparent',
+                    color: envase === f ? ORANGE : 'rgba(255,255,255,0.5)',
+                  }}
+                >
+                  {f}
+                </button>
+              ))}
+              <input
+                ref={cantidadInputRef}
+                type="number" min={1} inputMode="numeric" placeholder="Cant."
+                value={cantidadTexto}
+                onFocus={e => e.target.select()}
+                onChange={e => setCantidadTexto(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') agregarAlPedido() }}
+                style={{ ...inputStyle, width: 64, padding: '7px 8px', textAlign: 'center' }}
+              />
+              <button
+                onClick={agregarAlPedido}
+                disabled={!cantidadTexto}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 9, cursor: cantidadTexto ? 'pointer' : 'default',
+                  border: 'none', background: `linear-gradient(135deg, ${ORANGE}, #C2410C)`, color: '#080808', fontSize: 12, fontWeight: 900,
+                  opacity: cantidadTexto ? 1 : 0.4,
+                }}
+              >
+                <Plus size={13} /> Agregar
+              </button>
+            </div>
+          </div>
+
+          {/* ── Resumen del pedido: todo lo que va en este mismo envío ── */}
+          <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+            Resumen del pedido {pedido.length > 0 && `(${pedido.length})`}
+          </p>
+
+          {pedido.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 16 }}>
+              Todavía no agregaste ningún producto.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+              {pedido.map((it, i) => (
+                <div key={`${it.producto}-${it.envase}`} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10,
+                  background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)',
+                }}>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>
+                    {it.producto.replace('Kombucha ', '')} <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>· {it.envase}</span>
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: ORANGE }}>× {it.cantidad_declarada}</span>
+                  <button onClick={() => quitarDelPedido(i)} style={{ background: 'none', border: 'none', color: '#FF6666', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           <button
             onClick={declarar}
-            disabled={saving}
+            disabled={saving || !pedido.length || !codigoLote.trim() || !fecha}
             style={{
               width: '100%', padding: '13px 0', borderRadius: 13, border: 'none', cursor: 'pointer',
               background: `linear-gradient(135deg, ${ORANGE}, #C2410C)`, color: '#080808', fontSize: 14, fontWeight: 900,
-              opacity: saving ? 0.7 : 1,
+              opacity: saving || !pedido.length || !codigoLote.trim() || !fecha ? 0.4 : 1,
             }}
           >
-            {saving ? 'Declarando…' : 'Declarar lote'}
+            {saving ? 'Declarando…' : `Declarar lote (${pedido.length} producto${pedido.length === 1 ? '' : 's'})`}
           </button>
         </div>
 
