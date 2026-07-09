@@ -38,6 +38,13 @@ const PRODUCTO_IMAGENES: Record<string, string> = {
   'Fisura':                      '/productos/cerveza/fisura.webp',
   'Descenso West Coast IPA':     '/productos/cerveza/descenso.webp',
   'Aguas Blancas':               '/productos/cerveza/aguas-blancas.webp',
+  'Kombucha Berry Menta':        '/productos/kombucha/berry-menta.webp',
+  'Kombucha Detox':              '/productos/kombucha/detox.webp',
+  'Kombucha Lemon':              '/productos/kombucha/lemon-fresh.webp',
+  'Kombucha Mango':              '/productos/kombucha/mango-merken.webp',
+  'Kombucha Maqui':              '/productos/kombucha/maqui-hops.webp',
+  'Kombucha Maracuyá Cardamomo': '/productos/kombucha/maracuya-cardamomo.webp',
+  'Kombucha Natural':            '/productos/kombucha/natural.webp',
 }
 
 function envaseDe(categoria: Categoria, tab: FormatoTab): string {
@@ -175,8 +182,10 @@ export default function DeclararClient() {
   const [formatoTab, setFormatoTab] = useState<FormatoTab>('lata')
   const [showCartDetail, setShowCartDetail] = useState(false)
 
-  // ── Carrito: cantidad por producto+envase, editable con steppers en cada card ──
+  // ── Carrito: items ya confirmados con "Agregar" (van en el lote) ──
   const [carrito, setCarrito] = useState<Map<string, ItemPedido>>(new Map())
+  // ── Staging: cantidad que se está eligiendo en cada card, antes de confirmar ──
+  const [staging, setStaging] = useState<Map<string, number>>(new Map())
 
   const dateRef = useRef<HTMLInputElement>(null)
   const timeRef = useRef<HTMLInputElement>(null)
@@ -196,12 +205,30 @@ export default function DeclararClient() {
   const items = Array.from(carrito.values())
   const totalItems = items.reduce((s, it) => s + it.cantidad_declarada, 0)
 
-  function setCantidad(producto: string, envase: string, cantidad: number) {
-    setCarrito(prev => {
+  function setStagingCantidad(producto: string, envase: string, cantidad: number) {
+    setStaging(prev => {
       const next = new Map(prev)
       const key = cartKey(producto, envase)
       if (cantidad <= 0) { next.delete(key); return next }
-      next.set(key, { producto, envase, cantidad_declarada: cantidad })
+      next.set(key, cantidad)
+      return next
+    })
+  }
+
+  function agregarAlPedido(producto: string, envase: string) {
+    const key = cartKey(producto, envase)
+    const cantidad = staging.get(key) ?? 0
+    if (!cantidad) return
+    setCarrito(prev => {
+      const next = new Map(prev)
+      const existente = next.get(key)
+      next.set(key, { producto, envase, cantidad_declarada: (existente?.cantidad_declarada ?? 0) + cantidad })
+      return next
+    })
+    // Reinicia el picker de esta card para elegir la siguiente cantidad desde cero
+    setStaging(prev => {
+      const next = new Map(prev)
+      next.delete(key)
       return next
     })
   }
@@ -236,6 +263,7 @@ export default function DeclararClient() {
       }
       setCodigoLote(''); setFecha(''); setHora(''); setObservaciones('')
       setCarrito(new Map())
+      setStaging(new Map())
       setShowCartDetail(false)
       load()
     } finally {
@@ -263,16 +291,6 @@ export default function DeclararClient() {
         {/* ── Datos del lote ── */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, padding: 18, marginBottom: 16 }}>
           <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)', marginBottom: 14 }}>Datos del lote</p>
-
-          <div style={{ marginBottom: 10 }}>
-            <label style={labelStyle}>Código de lote</label>
-            <input
-              value={codigoLote}
-              onChange={e => setCodigoLote(e.target.value)}
-              placeholder="Ej: LP-2026-0714-01"
-              style={inputStyle}
-            />
-          </div>
 
           <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
             <div style={{ flex: 1 }}>
@@ -357,25 +375,42 @@ export default function DeclararClient() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
           {variedadesFiltradas.map(v => {
             const key = cartKey(v.nombre, envaseActual)
-            const cant = carrito.get(key)?.cantidad_declarada ?? 0
+            const enPedido = carrito.get(key)?.cantidad_declarada ?? 0
+            const eligiendo = staging.get(key) ?? 0
             return (
               <div key={key} style={{
-                background: cant > 0
+                background: enPedido > 0
                   ? 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(249,115,22,0.04) 100%)'
                   : 'rgba(255,255,255,0.025)',
-                border: `1px solid ${cant > 0 ? ORANGE_BORDER : 'rgba(255,255,255,0.055)'}`,
+                border: `1px solid ${enPedido > 0 ? ORANGE_BORDER : 'rgba(255,255,255,0.055)'}`,
                 borderRadius: 18, padding: '12px 14px',
-                display: 'flex', alignItems: 'center', gap: 14,
-                boxShadow: cant > 0 ? '0 0 20px rgba(249,115,22,0.07)' : 'none',
+                boxShadow: enPedido > 0 ? '0 0 20px rgba(249,115,22,0.07)' : 'none',
               }}>
-                <ProductoThumb nombre={v.nombre} categoria={v.categoria} size={44} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {v.nombre.replace('Kombucha ', '')}
-                  </p>
-                  <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 500 }}>{envaseActual}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <ProductoThumb nombre={v.nombre} categoria={v.categoria} size={44} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {v.nombre.replace('Kombucha ', '')}
+                    </p>
+                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 500 }}>
+                      {envaseActual}
+                      {enPedido > 0 && <span style={{ color: ORANGE, fontWeight: 700 }}> · {enPedido} en el pedido</span>}
+                    </p>
+                  </div>
+                  <CantidadInput value={eligiendo} onchange={n => setStagingCantidad(v.nombre, envaseActual, n)} />
                 </div>
-                <CantidadInput value={cant} onchange={n => setCantidad(v.nombre, envaseActual, n)} />
+                {eligiendo > 0 && (
+                  <button
+                    onClick={() => agregarAlPedido(v.nombre, envaseActual)}
+                    style={{
+                      width: '100%', marginTop: 10, padding: '9px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
+                      background: `linear-gradient(135deg, ${ORANGE}, #C2410C)`, color: '#080808', fontSize: 12, fontWeight: 900,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}
+                  >
+                    <Plus size={14} /> Agregar {eligiendo} al pedido
+                  </button>
+                )}
               </div>
             )
           })}
@@ -398,6 +433,19 @@ export default function DeclararClient() {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ── Código de lote: se completa al final, justo antes de enviar ── */}
+        {items.length > 0 && (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 14, marginBottom: 10 }}>
+            <label style={labelStyle}>Código de lote</label>
+            <input
+              value={codigoLote}
+              onChange={e => setCodigoLote(e.target.value)}
+              placeholder="Ej: LP-2026-0714-01"
+              style={inputStyle}
+            />
           </div>
         )}
 
