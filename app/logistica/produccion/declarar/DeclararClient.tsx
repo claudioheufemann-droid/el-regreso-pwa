@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
-import { Plus, Minus, Send, Package, Calendar, Clock, ChevronDown, ShoppingCart } from 'lucide-react'
+import { Plus, Minus, Send, Calendar, Clock, ChevronDown, ShoppingCart } from 'lucide-react'
 
 // Catálogo real: sin botellas, un solo tamaño de barril (30L).
 // Cerveza = Lata 500cc · Kombucha = Lata 355cc.
@@ -205,6 +205,16 @@ export default function DeclararClient() {
   const items = Array.from(carrito.values())
   const totalItems = items.reduce((s, it) => s + it.cantidad_declarada, 0)
 
+  // ── Lotes pendientes agrupados por producto, para mostrarlos bajo cada card ──
+  const lotesPorProducto = new Map<string, { lote: LoteRow; item: LoteRow['items'][0] }[]>()
+  for (const lote of lotes) {
+    for (const item of lote.items) {
+      const lista = lotesPorProducto.get(item.producto) ?? []
+      lista.push({ lote, item })
+      lotesPorProducto.set(item.producto, lista)
+    }
+  }
+
   function setStagingCantidad(producto: string, envase: string, cantidad: number) {
     setStaging(prev => {
       const next = new Map(prev)
@@ -388,6 +398,7 @@ export default function DeclararClient() {
             const key = cartKey(v.nombre, envaseActual)
             const enPedido = carrito.get(key)?.cantidad_declarada ?? 0
             const eligiendo = staging.get(key) ?? 0
+            const pendientes = lotesPorProducto.get(v.nombre) ?? []
             return (
               <div key={key} style={{
                 background: enPedido > 0
@@ -421,6 +432,29 @@ export default function DeclararClient() {
                   >
                     <Plus size={14} /> Agregar {eligiendo} al pedido
                   </button>
+                )}
+                {pendientes.length > 0 && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                      Pendiente de envío
+                    </p>
+                    {pendientes.map(({ lote, item }) => (
+                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
+                        <span style={{ flex: 1, color: 'rgba(255,255,255,0.55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {lote.codigo_lote} <span style={{ color: 'rgba(255,255,255,0.3)' }}>· {item.envase} × {item.cantidad_declarada}</span>
+                        </span>
+                        <button
+                          onClick={() => marcarEnviado(lote.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 4, padding: '5px 9px', borderRadius: 8, flexShrink: 0,
+                            border: `1px solid ${ORANGE}55`, background: `${ORANGE}15`, color: ORANGE, fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                          }}
+                        >
+                          <Send size={10} /> Enviar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )
@@ -481,49 +515,8 @@ export default function DeclararClient() {
           </button>
         </div>
 
-        {/* ── Lotes declarados pendientes de envío ── */}
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
-          Pendientes de envío
-        </p>
-
-        {loading ? (
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Cargando…</p>
-        ) : lotes.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'rgba(255,255,255,0.3)' }}>
-            <Package size={28} style={{ marginBottom: 8, opacity: 0.4 }} />
-            <p style={{ fontSize: 13 }}>No hay lotes declarados pendientes de envío.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {lotes.map(l => (
-              <div key={l.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <div>
-                    <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>{l.codigo_lote}</p>
-                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
-                      ETA {new Date(l.eta_entrega).toLocaleString('es-CL')}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => marcarEnviado(l.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 10,
-                      border: `1px solid ${ORANGE}55`, background: `${ORANGE}15`, color: ORANGE, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                    }}
-                  >
-                    <Send size={12} /> Marcar enviado
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {l.items.map(it => (
-                    <span key={it.id} style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '4px 8px' }}>
-                      {it.producto} · {it.envase} × {it.cantidad_declarada}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+        {loading && (
+          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, textAlign: 'center' }}>Cargando lotes pendientes…</p>
         )}
       </div>
     </div>
