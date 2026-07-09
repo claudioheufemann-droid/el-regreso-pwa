@@ -201,7 +201,6 @@ export default function DeclararClient() {
   useEffect(() => { load() }, [load])
 
   const envaseActual = envaseDe(categoria, formatoTab)
-  const variedadesFiltradas = VARIEDADES.filter(v => v.categoria === categoria)
   const items = Array.from(carrito.values())
   const totalItems = items.reduce((s, it) => s + it.cantidad_declarada, 0)
 
@@ -214,6 +213,17 @@ export default function DeclararClient() {
       lotesPorProducto.set(item.producto, lista)
     }
   }
+
+  // Los productos con lotes pendientes de envío suben al principio de la lista,
+  // para que no queden escondidos si están al final del catálogo.
+  const variedadesFiltradas = VARIEDADES
+    .filter(v => v.categoria === categoria)
+    .slice()
+    .sort((a, b) => {
+      const pa = lotesPorProducto.get(a.nombre)?.length ?? 0
+      const pb = lotesPorProducto.get(b.nombre)?.length ?? 0
+      return pb - pa
+    })
 
   function setStagingCantidad(producto: string, envase: string, cantidad: number) {
     setStaging(prev => {
@@ -401,15 +411,29 @@ export default function DeclararClient() {
             const pendientes = lotesPorProducto.get(v.nombre) ?? []
             return (
               <div key={key} style={{
-                background: enPedido > 0
+                background: pendientes.length > 0
+                  ? 'linear-gradient(135deg, rgba(249,115,22,0.14) 0%, rgba(249,115,22,0.05) 100%)'
+                  : enPedido > 0
                   ? 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(249,115,22,0.04) 100%)'
                   : 'rgba(255,255,255,0.025)',
-                border: `1px solid ${enPedido > 0 ? ORANGE_BORDER : 'rgba(255,255,255,0.055)'}`,
+                border: `1px solid ${pendientes.length > 0 || enPedido > 0 ? ORANGE_BORDER : 'rgba(255,255,255,0.055)'}`,
                 borderRadius: 18, padding: '12px 14px',
-                boxShadow: enPedido > 0 ? '0 0 20px rgba(249,115,22,0.07)' : 'none',
+                boxShadow: pendientes.length > 0 || enPedido > 0 ? '0 0 20px rgba(249,115,22,0.07)' : 'none',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <ProductoThumb nombre={v.nombre} categoria={v.categoria} size={44} />
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <ProductoThumb nombre={v.nombre} categoria={v.categoria} size={44} />
+                    {pendientes.length > 0 && (
+                      <span style={{
+                        position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8,
+                        background: ORANGE, color: '#0A0A0A', fontSize: 9, fontWeight: 900,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+                        border: '2px solid var(--bg)',
+                      }}>
+                        {pendientes.length}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {v.nombre.replace('Kombucha ', '')}
@@ -418,6 +442,14 @@ export default function DeclararClient() {
                       {envaseActual}
                       {enPedido > 0 && <span style={{ color: ORANGE, fontWeight: 700 }}> · {enPedido} en el pedido</span>}
                     </p>
+                    {pendientes.length > 0 && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 7px', borderRadius: 6,
+                        background: ORANGE_DIM, color: ORANGE, fontSize: 10, fontWeight: 800,
+                      }}>
+                        <Send size={9} /> {pendientes.length} lote{pendientes.length === 1 ? '' : 's'} pendiente{pendientes.length === 1 ? '' : 's'} de envío
+                      </span>
+                    )}
                   </div>
                   <CantidadInput value={eligiendo} onchange={n => setStagingCantidad(v.nombre, envaseActual, n)} />
                 </div>
