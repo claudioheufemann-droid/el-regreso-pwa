@@ -17,6 +17,7 @@ interface LoteItemInput {
   producto: string
   envase: string
   cantidad_declarada: number
+  codigo_lote: string
 }
 
 // GET /api/logistica/lotes?estado=declarado — lista de lotes (filtro opcional por estado)
@@ -39,7 +40,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data)
 }
 
-// POST /api/logistica/lotes — Producción declara un lote con sus items y ETA
+// POST /api/logistica/lotes — Producción declara un envío a bodega con sus items;
+// cada item lleva su propio código de lote (cada cerveza/kombucha es un lote distinto).
 export async function POST(req: NextRequest) {
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
@@ -49,20 +51,22 @@ export async function POST(req: NextRequest) {
   if (!profile) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
 
   const body = await req.json() as {
-    codigo_lote: string
     eta_entrega: string
     observaciones?: string
     items: LoteItemInput[]
   }
 
-  if (!body.codigo_lote || !body.eta_entrega || !body.items?.length) {
-    return NextResponse.json({ error: 'codigo_lote, eta_entrega e items son obligatorios' }, { status: 400 })
+  if (!body.eta_entrega || !body.items?.length) {
+    return NextResponse.json({ error: 'eta_entrega e items son obligatorios' }, { status: 400 })
+  }
+  if (body.items.some(it => !it.codigo_lote?.trim())) {
+    return NextResponse.json({ error: 'Cada producto necesita su código de lote' }, { status: 400 })
   }
 
   const { data: lote, error: loteErr } = await supabase
     .from('lotes_produccion')
     .insert({
-      codigo_lote: body.codigo_lote,
+      codigo_lote: `ENVIO-${Date.now()}`,
       eta_entrega: body.eta_entrega,
       observaciones: body.observaciones ?? null,
       declarado_por: profile.id,
@@ -79,6 +83,7 @@ export async function POST(req: NextRequest) {
       producto: it.producto,
       envase: it.envase,
       cantidad_declarada: it.cantidad_declarada,
+      codigo_lote: it.codigo_lote.trim(),
     })))
 
   if (itemsErr) return NextResponse.json({ error: itemsErr.message }, { status: 500 })

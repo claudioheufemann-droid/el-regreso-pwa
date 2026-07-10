@@ -40,8 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: destinatarios } = await supabase.from('users').select('id').eq('macro_area', 'logistica')
   if (destinatarios?.length) {
     sendPushToUsers(destinatarios.map(d => d.id), {
-      title: '🚚 Lote en camino desde Producción',
-      body: `${lote.codigo_lote} · ETA ${new Date(lote.eta_entrega).toLocaleString('es-CL')}`,
+      title: '🚚 Envío en camino desde Producción',
+      body: `ETA ${new Date(lote.eta_entrega).toLocaleString('es-CL')}`,
       url: '/logistica/recepcion',
       tag: `lote-enviado-${lote.id}`,
     }).catch(() => {})

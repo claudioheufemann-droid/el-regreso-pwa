@@ -14,7 +14,7 @@ interface AlertaRow {
   resuelta: boolean
   nota_resolucion: string | null
   created_at: string
-  lote: { codigo_lote: string } | null
+  item: { codigo_lote: string } | null
 }
 
 export default function AlertasClient() {
@@ -65,7 +65,7 @@ export default function AlertasClient() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <AlertTriangle size={14} color="#FF6666" />
                   <p style={{ fontSize: 13, fontWeight: 800, color: '#FF6666' }}>
-                    {a.lote?.codigo_lote ?? 'Lote'} · {a.producto} ({a.envase})
+                    {a.item?.codigo_lote ?? 'Lote'} · {a.producto} ({a.envase})
                   </p>
                 </div>
                 <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>

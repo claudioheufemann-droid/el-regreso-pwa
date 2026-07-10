@@ -60,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (destinatarios?.length) {
       sendPushToUsers(destinatarios.map(d => d.id), {
         title: '⚠️ Descuadre de inventario',
-        body: `${lote.codigo_lote}: lo recibido no coincide con lo declarado.`,
+        body: 'Lo recibido en bodega no coincide con lo declarado.',
         url: '/logistica/alertas',
         tag: `alerta-lote-${lote.id}`,
         requireInteraction: true,

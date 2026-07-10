@@ -13,22 +13,21 @@ async function getSupabase() {
   })
 }
 
-// GET /api/logistica/alertas?resuelta=false
-export async function GET(req: NextRequest) {
+// DELETE /api/logistica/lotes/[id] — Producción elimina un envío que aún no salió a bodega
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const resueltaParam = req.nextUrl.searchParams.get('resuelta')
+  const { error, count } = await supabase
+    .from('lotes_produccion')
+    .delete({ count: 'exact' })
+    .eq('id', id)
+    .eq('estado', 'declarado')
 
-  let query = supabase
-    .from('alertas_inventario')
-    .select('*, item:lotes_produccion_items(codigo_lote)')
-    .order('created_at', { ascending: false })
-
-  if (resueltaParam !== null) query = query.eq('resuelta', resueltaParam === 'true')
-
-  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+  if (!count) return NextResponse.json({ error: 'No se encontró el envío o ya salió a bodega' }, { status: 400 })
+
+  return NextResponse.json({ ok: true })
 }

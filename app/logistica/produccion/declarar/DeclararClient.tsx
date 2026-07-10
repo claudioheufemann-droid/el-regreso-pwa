@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
-import { Plus, Minus, Send, Calendar, Clock, ChevronDown, ShoppingCart } from 'lucide-react'
+import { Plus, Minus, Send, Trash2, Calendar, Clock, ChevronDown, ShoppingCart } from 'lucide-react'
 
 // Catálogo real: sin botellas, un solo tamaño de barril (30L).
 // Cerveza = Lata 500cc · Kombucha = Lata 355cc.
@@ -56,19 +56,22 @@ function cartKey(producto: string, envase: string) {
   return `${producto}|${envase}`
 }
 
+// Cada producto declarado lleva su propio código de lote — cada cerveza/kombucha
+// se produce en un lote distinto, aunque se declaren juntas en el mismo envío.
 interface ItemPedido {
+  id: string
   producto: string
   envase: string
   cantidad_declarada: number
+  codigo_lote: string
 }
 
 interface LoteRow {
   id: string
-  codigo_lote: string
   eta_entrega: string
   estado: string
   observaciones: string | null
-  items: { id: string; producto: string; envase: string; cantidad_declarada: number }[]
+  items: { id: string; producto: string; envase: string; cantidad_declarada: number; codigo_lote: string }[]
 }
 
 const ORANGE = '#F97316'
@@ -168,12 +171,14 @@ function CantidadInput({ value, onchange }: { value: number; onchange: (n: numbe
   )
 }
 
+let nextId = 0
+function newId() { nextId += 1; return `item-${Date.now()}-${nextId}` }
+
 export default function DeclararClient() {
   const [lotes, setLotes] = useState<LoteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  const [codigoLote, setCodigoLote] = useState('')
   const [fecha, setFecha] = useState('')
   const [hora, setHora] = useState('')
   const [observaciones, setObservaciones] = useState('')
@@ -182,10 +187,11 @@ export default function DeclararClient() {
   const [formatoTab, setFormatoTab] = useState<FormatoTab>('lata')
   const [showCartDetail, setShowCartDetail] = useState(false)
 
-  // ── Carrito: items ya confirmados con "Agregar" (van en el lote) ──
-  const [carrito, setCarrito] = useState<Map<string, ItemPedido>>(new Map())
-  // ── Staging: cantidad que se está eligiendo en cada card, antes de confirmar ──
-  const [staging, setStaging] = useState<Map<string, number>>(new Map())
+  // ── Pedido: items ya confirmados con "Agregar" (van en el envío) ──
+  const [carrito, setCarrito] = useState<ItemPedido[]>([])
+  // ── Staging: cantidad y código de lote que se están eligiendo en cada card ──
+  const [stagingCantidad, setStagingCantidad] = useState<Map<string, number>>(new Map())
+  const [stagingLote, setStagingLote] = useState<Map<string, string>>(new Map())
 
   const dateRef = useRef<HTMLInputElement>(null)
   const timeRef = useRef<HTMLInputElement>(null)
@@ -201,8 +207,7 @@ export default function DeclararClient() {
   useEffect(() => { load() }, [load])
 
   const envaseActual = envaseDe(categoria, formatoTab)
-  const items = Array.from(carrito.values())
-  const totalItems = items.reduce((s, it) => s + it.cantidad_declarada, 0)
+  const totalItems = carrito.reduce((s, it) => s + it.cantidad_declarada, 0)
 
   // ── Lotes pendientes agrupados por producto, para mostrarlos bajo cada card ──
   const lotesPorProducto = new Map<string, { lote: LoteRow; item: LoteRow['items'][0] }[]>()
@@ -225,8 +230,8 @@ export default function DeclararClient() {
       return pb - pa
     })
 
-  function setStagingCantidad(producto: string, envase: string, cantidad: number) {
-    setStaging(prev => {
+  function setCantidad(producto: string, envase: string, cantidad: number) {
+    setStagingCantidad(prev => {
       const next = new Map(prev)
       const key = cartKey(producto, envase)
       if (cantidad <= 0) { next.delete(key); return next }
@@ -235,34 +240,31 @@ export default function DeclararClient() {
     })
   }
 
-  function agregarAlPedido(producto: string, envase: string) {
-    const key = cartKey(producto, envase)
-    const cantidad = staging.get(key) ?? 0
-    if (!cantidad) return
-    setCarrito(prev => {
+  function setLoteTexto(producto: string, envase: string, texto: string) {
+    setStagingLote(prev => {
       const next = new Map(prev)
-      const existente = next.get(key)
-      next.set(key, { producto, envase, cantidad_declarada: (existente?.cantidad_declarada ?? 0) + cantidad })
-      return next
-    })
-    // Reinicia el picker de esta card para elegir la siguiente cantidad desde cero
-    setStaging(prev => {
-      const next = new Map(prev)
-      next.delete(key)
+      next.set(cartKey(producto, envase), texto)
       return next
     })
   }
 
-  function quitarDelPedido(producto: string, envase: string) {
-    setCarrito(prev => {
-      const next = new Map(prev)
-      next.delete(cartKey(producto, envase))
-      return next
-    })
+  function agregarAlPedido(producto: string, envase: string) {
+    const key = cartKey(producto, envase)
+    const cantidad = stagingCantidad.get(key) ?? 0
+    const codigoLote = (stagingLote.get(key) ?? '').trim()
+    if (!cantidad || !codigoLote) return
+    setCarrito(prev => [...prev, { id: newId(), producto, envase, cantidad_declarada: cantidad, codigo_lote: codigoLote }])
+    // Reinicia el picker de esta card para cargar el siguiente lote desde cero
+    setStagingCantidad(prev => { const next = new Map(prev); next.delete(key); return next })
+    setStagingLote(prev => { const next = new Map(prev); next.delete(key); return next })
+  }
+
+  function quitarDelPedido(id: string) {
+    setCarrito(prev => prev.filter(it => it.id !== id))
   }
 
   async function declarar() {
-    if (!codigoLote.trim() || !fecha || !items.length) return
+    if (!fecha || !carrito.length) return
     setSaving(true)
     try {
       const etaEntrega = new Date(`${fecha}T${hora || '09:00'}:00`).toISOString()
@@ -270,20 +272,20 @@ export default function DeclararClient() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          codigo_lote: codigoLote.trim(),
           eta_entrega: etaEntrega,
           observaciones: observaciones.trim() || undefined,
-          items,
+          items: carrito.map(({ producto, envase, cantidad_declarada, codigo_lote }) => ({ producto, envase, cantidad_declarada, codigo_lote })),
         }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        alert(err.error ?? 'Error al declarar el lote')
+        alert(err.error ?? 'Error al declarar el envío')
         return
       }
-      setCodigoLote(''); setFecha(''); setHora(''); setObservaciones('')
-      setCarrito(new Map())
-      setStaging(new Map())
+      setFecha(''); setHora(''); setObservaciones('')
+      setCarrito([])
+      setStagingCantidad(new Map())
+      setStagingLote(new Map())
       setShowCartDetail(false)
       load()
     } finally {
@@ -292,11 +294,22 @@ export default function DeclararClient() {
   }
 
   async function marcarEnviado(loteId: string) {
-    if (!confirm('¿Confirmas que el lote salió físicamente hacia bodega de Logística?')) return
+    if (!confirm('¿Confirmas que el envío salió físicamente hacia bodega de Logística?')) return
     const res = await fetch(`/api/logistica/lotes/${loteId}/enviar`, { method: 'POST' })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       alert(err.error ?? 'Error al marcar enviado')
+      return
+    }
+    load()
+  }
+
+  async function eliminarLote(loteId: string) {
+    if (!confirm('¿Eliminar este envío? No se podrá deshacer.')) return
+    const res = await fetch(`/api/logistica/lotes/${loteId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(err.error ?? 'Error al eliminar el envío')
       return
     }
     load()
@@ -308,9 +321,9 @@ export default function DeclararClient() {
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 100px' }}>
 
-        {/* ── Datos del lote ── */}
+        {/* ── Datos del envío a bodega ── */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, padding: 18, marginBottom: 16 }}>
-          <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)', marginBottom: 14 }}>Datos del lote</p>
+          <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)', marginBottom: 14 }}>Datos del envío a bodega</p>
 
           <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
             <div style={{ flex: 1 }}>
@@ -392,33 +405,24 @@ export default function DeclararClient() {
           ))}
         </div>
 
-        {/* ── Código de lote: justo debajo del estilo elegido ── */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 14, marginBottom: 18 }}>
-          <label style={labelStyle}>Código de lote</label>
-          <input
-            value={codigoLote}
-            onChange={e => setCodigoLote(e.target.value)}
-            placeholder="Ej: LP-2026-0714-01"
-            style={inputStyle}
-          />
-        </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
           {variedadesFiltradas.map(v => {
             const key = cartKey(v.nombre, envaseActual)
-            const enPedido = carrito.get(key)?.cantidad_declarada ?? 0
-            const eligiendo = staging.get(key) ?? 0
+            const eligiendo = stagingCantidad.get(key) ?? 0
+            const loteTexto = stagingLote.get(key) ?? ''
+            const enEsteEnvio = carrito.filter(it => it.producto === v.nombre && it.envase === envaseActual)
             const pendientes = lotesPorProducto.get(v.nombre) ?? []
+            const destacado = pendientes.length > 0 || enEsteEnvio.length > 0
             return (
               <div key={key} style={{
                 background: pendientes.length > 0
                   ? 'linear-gradient(135deg, rgba(249,115,22,0.14) 0%, rgba(249,115,22,0.05) 100%)'
-                  : enPedido > 0
+                  : destacado
                   ? 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(249,115,22,0.04) 100%)'
                   : 'rgba(255,255,255,0.025)',
-                border: `1px solid ${pendientes.length > 0 || enPedido > 0 ? ORANGE_BORDER : 'rgba(255,255,255,0.055)'}`,
+                border: `1px solid ${destacado ? ORANGE_BORDER : 'rgba(255,255,255,0.055)'}`,
                 borderRadius: 18, padding: '12px 14px',
-                boxShadow: pendientes.length > 0 || enPedido > 0 ? '0 0 20px rgba(249,115,22,0.07)' : 'none',
+                boxShadow: destacado ? '0 0 20px rgba(249,115,22,0.07)' : 'none',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -440,7 +444,6 @@ export default function DeclararClient() {
                     </p>
                     <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 500 }}>
                       {envaseActual}
-                      {enPedido > 0 && <span style={{ color: ORANGE, fontWeight: 700 }}> · {enPedido} en el pedido</span>}
                     </p>
                     {pendientes.length > 0 && (
                       <span style={{
@@ -451,20 +454,54 @@ export default function DeclararClient() {
                       </span>
                     )}
                   </div>
-                  <CantidadInput value={eligiendo} onchange={n => setStagingCantidad(v.nombre, envaseActual, n)} />
+                  <CantidadInput value={eligiendo} onchange={n => setCantidad(v.nombre, envaseActual, n)} />
                 </div>
+
                 {eligiendo > 0 && (
-                  <button
-                    onClick={() => agregarAlPedido(v.nombre, envaseActual)}
-                    style={{
-                      width: '100%', marginTop: 10, padding: '9px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
-                      background: `linear-gradient(135deg, ${ORANGE}, #C2410C)`, color: '#080808', fontSize: 12, fontWeight: 900,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    }}
-                  >
-                    <Plus size={14} /> Agregar {eligiendo} al pedido
-                  </button>
+                  <div style={{ marginTop: 10 }}>
+                    <input
+                      value={loteTexto}
+                      onChange={e => setLoteTexto(v.nombre, envaseActual, e.target.value)}
+                      placeholder="Código de lote de esta cerveza (ej: LP-2026-0714-01)"
+                      style={{ ...inputStyle, padding: '9px 12px', fontSize: 12, marginBottom: 8 }}
+                    />
+                    <button
+                      onClick={() => agregarAlPedido(v.nombre, envaseActual)}
+                      disabled={!loteTexto.trim()}
+                      style={{
+                        width: '100%', padding: '9px 0', borderRadius: 10, border: 'none',
+                        cursor: loteTexto.trim() ? 'pointer' : 'default',
+                        background: `linear-gradient(135deg, ${ORANGE}, #C2410C)`, color: '#080808', fontSize: 12, fontWeight: 900,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        opacity: loteTexto.trim() ? 1 : 0.4,
+                      }}
+                    >
+                      <Plus size={14} /> Agregar {eligiendo} al pedido
+                    </button>
+                  </div>
                 )}
+
+                {enEsteEnvio.length > 0 && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                      En este envío
+                    </p>
+                    {enEsteEnvio.map(it => (
+                      <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
+                        <span style={{ flex: 1, color: ORANGE, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {it.codigo_lote} <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>× {it.cantidad_declarada}</span>
+                        </span>
+                        <button
+                          onClick={() => quitarDelPedido(it.id)}
+                          style={{ background: 'none', border: 'none', color: '#FF6666', cursor: 'pointer', padding: 2, flexShrink: 0, fontSize: 11, fontWeight: 700 }}
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {pendientes.length > 0 && (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: 0.6 }}>
@@ -473,7 +510,7 @@ export default function DeclararClient() {
                     {pendientes.map(({ lote, item }) => (
                       <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
                         <span style={{ flex: 1, color: 'rgba(255,255,255,0.55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {lote.codigo_lote} <span style={{ color: 'rgba(255,255,255,0.3)' }}>· {item.envase} × {item.cantidad_declarada}</span>
+                          {item.codigo_lote} <span style={{ color: 'rgba(255,255,255,0.3)' }}>· {item.envase} × {item.cantidad_declarada}</span>
                         </span>
                         <button
                           onClick={() => marcarEnviado(lote.id)}
@@ -483,6 +520,16 @@ export default function DeclararClient() {
                           }}
                         >
                           <Send size={10} /> Enviar
+                        </button>
+                        <button
+                          onClick={() => eliminarLote(lote.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                            border: '1px solid rgba(255,102,102,0.35)', background: 'rgba(255,102,102,0.1)', color: '#FF6666', cursor: 'pointer',
+                          }}
+                          title="Eliminar envío"
+                        >
+                          <Trash2 size={11} />
                         </button>
                       </div>
                     ))}
@@ -494,16 +541,16 @@ export default function DeclararClient() {
         </div>
 
         {/* ── Panel detalle carrito ── */}
-        {showCartDetail && items.length > 0 && (
+        {showCartDetail && carrito.length > 0 && (
           <div style={{ background: '#131313', border: `1px solid ${ORANGE_BORDER}`, borderRadius: 14, overflow: 'hidden', marginBottom: 10 }}>
-            {items.map((item, i) => (
-              <div key={`${item.producto}|${item.envase}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+            {carrito.map((item, i) => (
+              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: i < carrito.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
                 <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.producto.replace('Kombucha ', '')} <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>· {item.envase}</span>
+                  {item.producto.replace('Kombucha ', '')} <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>· {item.envase} · {item.codigo_lote}</span>
                 </span>
                 <span style={{ fontSize: 13, fontWeight: 900, color: ORANGE, flexShrink: 0 }}>× {item.cantidad_declarada}</span>
                 <button
-                  onClick={() => quitarDelPedido(item.producto, item.envase)}
+                  onClick={() => quitarDelPedido(item.id)}
                   style={{ background: 'none', border: 'none', color: '#FF6666', cursor: 'pointer', padding: 2, flexShrink: 0, fontSize: 11, fontWeight: 700 }}
                 >
                   Quitar
@@ -515,7 +562,7 @@ export default function DeclararClient() {
 
         {/* ── Barra de resumen + declarar ── */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-          {items.length > 0 && (
+          {carrito.length > 0 && (
             <button
               onClick={() => setShowCartDetail(s => !s)}
               style={{
@@ -528,12 +575,12 @@ export default function DeclararClient() {
           )}
           <button
             onClick={declarar}
-            disabled={saving || !items.length || !codigoLote.trim() || !fecha}
+            disabled={saving || !carrito.length || !fecha}
             style={{
               flex: 1, padding: '15px 18px', borderRadius: 14, border: 'none',
-              cursor: saving || !items.length || !codigoLote.trim() || !fecha ? 'default' : 'pointer',
-              background: items.length > 0 ? `linear-gradient(135deg, ${ORANGE}, #C2410C)` : 'rgba(255,255,255,0.06)',
-              color: items.length > 0 ? '#080808' : 'rgba(255,255,255,0.35)',
+              cursor: saving || !carrito.length || !fecha ? 'default' : 'pointer',
+              background: carrito.length > 0 ? `linear-gradient(135deg, ${ORANGE}, #C2410C)` : 'rgba(255,255,255,0.06)',
+              color: carrito.length > 0 ? '#080808' : 'rgba(255,255,255,0.35)',
               fontSize: 14, fontWeight: 900,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               opacity: saving ? 0.6 : 1,
@@ -541,7 +588,7 @@ export default function DeclararClient() {
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <ShoppingCart size={18} />
-              {items.length > 0 ? `${totalItems} unidad${totalItems === 1 ? '' : 'es'} · ${items.length} producto${items.length === 1 ? '' : 's'}` : 'Sin productos'}
+              {carrito.length > 0 ? `${totalItems} unidad${totalItems === 1 ? '' : 'es'} · ${carrito.length} lote${carrito.length === 1 ? '' : 's'}` : 'Sin productos'}
             </span>
             <span>{saving ? 'Declarando…' : 'Declarar →'}</span>
           </button>

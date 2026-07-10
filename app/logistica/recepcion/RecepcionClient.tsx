@@ -9,6 +9,7 @@ interface LoteItem {
   producto: string
   envase: string
   cantidad_declarada: number
+  codigo_lote: string
 }
 interface LoteRow {
   id: string
@@ -89,9 +90,11 @@ export default function RecepcionClient() {
               <div key={l.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: abierto === l.id ? 14 : 0 }}>
                   <div>
-                    <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>{l.codigo_lote}</p>
+                    <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>
+                      Envío · {new Date(l.eta_entrega).toLocaleDateString('es-CL')}
+                    </p>
                     <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
-                      ETA {new Date(l.eta_entrega).toLocaleString('es-CL')}
+                      ETA {new Date(l.eta_entrega).toLocaleString('es-CL')} · {l.items.length} producto{l.items.length === 1 ? '' : 's'}
                     </p>
                   </div>
                   {abierto !== l.id && (
@@ -115,7 +118,7 @@ export default function RecepcionClient() {
                     {l.items.map(it => (
                       <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                         <span style={{ flex: 1, fontSize: 12, color: 'var(--cream)' }}>
-                          {it.producto} · {it.envase}
+                          <span style={{ color: ORANGE, fontWeight: 700 }}>{it.codigo_lote}</span> · {it.producto} · {it.envase}
                           <span style={{ color: 'rgba(255,255,255,0.35)' }}> (declarado: {it.cantidad_declarada})</span>
                         </span>
                         <input
