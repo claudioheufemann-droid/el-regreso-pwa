@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { Lock } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { useUser } from '@/lib/userContext'
+import SettingsPanel from '@/components/ui/SettingsPanel'
 
 /* ── Logo La Ida Kombucha — SVG inline (fallback si no hay archivo) ── */
 function LaIdaLogo({ size = 100 }: { size?: number }) {
@@ -279,6 +281,9 @@ function ModuleCard({ href, color, rgb, title, subtitle, img, locked }: ModuleCa
 export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boolean; nombre: string; macroArea?: string | null }) {
   const firstName = nombre.split(' ')[0]
   const router = useRouter()
+  const { user } = useUser()
+  const [showSettings, setShowSettings] = useState(false)
+  const initials = user?.iniciales ?? (nombre.slice(0, 2).toUpperCase())
 
   async function handleLogout() {
     const supabase = createClient()
@@ -294,7 +299,29 @@ export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boo
       padding: 'max(env(safe-area-inset-top), 16px) 18px 20px',
       fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
-      <div style={{ width: '100%', maxWidth: 420 }}>
+      <div style={{ width: '100%', maxWidth: 420, position: 'relative' }}>
+
+        {/* ── Botón de cuenta ── */}
+        <button
+          onClick={() => setShowSettings(true)}
+          aria-label="Mi cuenta"
+          style={{
+            position: 'absolute', top: 0, right: 0, zIndex: 5,
+            width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+            border: '1.5px solid rgba(212,175,55,0.4)', cursor: 'pointer', padding: 0,
+            background: user?.avatarUrl ? 'transparent' : 'linear-gradient(135deg, #D4AF37, #B8962E)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            overflow: 'hidden',
+            boxShadow: '0 2px 12px rgba(212,175,55,0.2)',
+          }}
+        >
+          {user?.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.avatarUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <span style={{ fontSize: 12, fontWeight: 900, color: '#0A0A0A' }}>{initials}</span>
+          )}
+        </button>
 
         {/* ── HEADER ── */}
         <div style={{ textAlign: 'center', padding: '4px 0 16px' }}>
@@ -428,6 +455,15 @@ export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boo
         </div>
 
       </div>
+
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          userName={user?.nombre ?? nombre}
+          userEmail={user?.email ?? ''}
+          avatarUrl={user?.avatarUrl}
+        />
+      )}
     </div>
   )
 }
