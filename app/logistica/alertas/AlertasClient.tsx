@@ -13,6 +13,7 @@ interface AlertaRow {
   diferencia: number
   resuelta: boolean
   nota_resolucion: string | null
+  observacion: string | null
   created_at: string
   item: { codigo_lote: string } | null
 }
@@ -71,8 +72,13 @@ export default function AlertasClient() {
                 <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
                   Declarado: <strong style={{ color: 'var(--cream)' }}>{a.cantidad_declarada}</strong> ·
                   {' '}Recibido: <strong style={{ color: 'var(--cream)' }}>{a.cantidad_recibida}</strong> ·
-                  {' '}Diferencia: <strong style={{ color: a.diferencia < 0 ? '#FF6666' : '#4ADE80' }}>{a.diferencia > 0 ? '+' : ''}{a.diferencia}</strong>
+                  {' '}Diferencia: <strong style={{ color: a.diferencia < 0 ? '#FF6666' : a.diferencia > 0 ? '#4ADE80' : 'rgba(255,255,255,0.4)' }}>{a.diferencia > 0 ? '+' : ''}{a.diferencia}</strong>
                 </p>
+                {a.observacion && (
+                  <p style={{ fontSize: 12, color: '#FF6666', marginBottom: 4, fontStyle: 'italic' }}>
+                    "{a.observacion}"
+                  </p>
+                )}
                 <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 10 }}>
                   {new Date(a.created_at).toLocaleString('es-CL')}
                 </p>

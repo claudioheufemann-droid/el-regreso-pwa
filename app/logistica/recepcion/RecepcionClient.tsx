@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
-import { PackageCheck, Inbox, FileText, ImageIcon } from 'lucide-react'
+import { PackageCheck, Inbox, FileText, ImageIcon, AlertTriangle } from 'lucide-react'
 
 interface LoteItem {
   id: string
@@ -29,6 +29,8 @@ export default function RecepcionClient() {
   const [loading, setLoading] = useState(true)
   const [abierto, setAbierto] = useState<string | null>(null)
   const [cantidades, setCantidades] = useState<Record<string, number>>({})
+  const [noCorresponde, setNoCorresponde] = useState<Record<string, boolean>>({})
+  const [observaciones, setObservaciones] = useState<Record<string, string>>({})
   const [guiaCorregidaUrl, setGuiaCorregidaUrl] = useState<string | null>(null)
   const [subiendoGuia, setSubiendoGuia] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -47,6 +49,8 @@ export default function RecepcionClient() {
   function abrir(lote: LoteRow) {
     setAbierto(lote.id)
     setGuiaCorregidaUrl(null)
+    setNoCorresponde({})
+    setObservaciones({})
     const init: Record<string, number> = {}
     lote.items.forEach(it => { init[it.id] = it.cantidad_declarada })
     setCantidades(init)
@@ -73,7 +77,12 @@ export default function RecepcionClient() {
   async function confirmar(loteId: string) {
     setSaving(true)
     try {
-      const items = Object.entries(cantidades).map(([item_id, cantidad_recibida]) => ({ item_id, cantidad_recibida }))
+      const items = Object.entries(cantidades).map(([item_id, cantidad_recibida]) => ({
+        item_id,
+        cantidad_recibida,
+        no_corresponde: noCorresponde[item_id] ?? false,
+        observacion: observaciones[item_id]?.trim() || undefined,
+      }))
       const res = await fetch(`/api/logistica/lotes/${loteId}/recepcion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -146,26 +155,55 @@ export default function RecepcionClient() {
                     <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
                       Ingresa lo que realmente llegó a bodega — se compara automáticamente con lo declarado.
                     </p>
-                    {l.items.map(it => (
-                      <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                        <span style={{ flex: 1, fontSize: 12, color: 'var(--cream)' }}>
-                          <span style={{ color: ORANGE, fontWeight: 700 }}>{it.codigo_lote}</span> · {it.producto} · {it.envase}
-                          <span style={{ color: 'rgba(255,255,255,0.35)' }}> (declarado: {it.cantidad_declarada})</span>
-                        </span>
-                        <input
-                          type="number" min={0}
-                          value={cantidades[it.id] ?? it.cantidad_declarada}
-                          onChange={e => setCantidades(prev => ({ ...prev, [it.id]: Math.max(0, parseInt(e.target.value) || 0) }))}
-                          style={{
-                            width: 72, padding: '8px 10px', borderRadius: 9, textAlign: 'center',
-                            border: `1px solid ${(cantidades[it.id] ?? it.cantidad_declarada) !== it.cantidad_declarada ? '#FF6666' : 'var(--border)'}`,
-                            background: 'rgba(255,255,255,0.03)', color: 'var(--cream)', fontSize: 13, outline: 'none',
-                          }}
-                        />
-                      </div>
-                    ))}
+                    {l.items.map(it => {
+                      const marcado = noCorresponde[it.id] ?? false
+                      return (
+                        <div key={it.id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                            <span style={{ flex: 1, fontSize: 12, color: 'var(--cream)' }}>
+                              <span style={{ color: ORANGE, fontWeight: 700 }}>{it.codigo_lote}</span> · {it.producto} · {it.envase}
+                              <span style={{ color: 'rgba(255,255,255,0.35)' }}> (declarado: {it.cantidad_declarada})</span>
+                            </span>
+                            <input
+                              type="number" min={0}
+                              value={cantidades[it.id] ?? it.cantidad_declarada}
+                              onChange={e => setCantidades(prev => ({ ...prev, [it.id]: Math.max(0, parseInt(e.target.value) || 0) }))}
+                              style={{
+                                width: 72, padding: '8px 10px', borderRadius: 9, textAlign: 'center',
+                                border: `1px solid ${(cantidades[it.id] ?? it.cantidad_declarada) !== it.cantidad_declarada ? '#FF6666' : 'var(--border)'}`,
+                                background: 'rgba(255,255,255,0.03)', color: 'var(--cream)', fontSize: 13, outline: 'none',
+                              }}
+                            />
+                          </div>
 
-                    {l.items.some(it => (cantidades[it.id] ?? it.cantidad_declarada) !== it.cantidad_declarada) && (
+                          <button
+                            onClick={() => setNoCorresponde(prev => ({ ...prev, [it.id]: !marcado }))}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
+                              border: `1px solid ${marcado ? '#FF666655' : 'var(--border)'}`,
+                              background: marcado ? 'rgba(255,102,102,0.1)' : 'transparent',
+                              color: marcado ? '#FF6666' : 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 700,
+                            }}
+                          >
+                            <AlertTriangle size={11} /> Lo que llegó no corresponde con la guía
+                          </button>
+
+                          {marcado && (
+                            <input
+                              value={observaciones[it.id] ?? ''}
+                              onChange={e => setObservaciones(prev => ({ ...prev, [it.id]: e.target.value }))}
+                              placeholder="¿Qué llegó en realidad? (ej: llegó Fisura en vez de Arboretum, viene dañado...)"
+                              style={{
+                                width: '100%', marginTop: 8, padding: '9px 12px', borderRadius: 9, border: '1px solid rgba(255,102,102,0.3)',
+                                background: 'rgba(255,102,102,0.05)', color: 'var(--cream)', fontSize: 12, outline: 'none',
+                              }}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+
+                    {l.items.some(it => (cantidades[it.id] ?? it.cantidad_declarada) !== it.cantidad_declarada || noCorresponde[it.id]) && (
                       <div style={{ marginTop: 10 }}>
                         <input ref={guiaInputRef} type="file" accept="image/*,.pdf" capture="environment" hidden
                           onChange={e => { const f = e.target.files?.[0]; if (f) subirGuiaCorregida(l.id, f) }} />

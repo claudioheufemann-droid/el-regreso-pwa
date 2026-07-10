@@ -17,6 +17,8 @@ async function getSupabase() {
 interface RecepcionInput {
   item_id: string
   cantidad_recibida: number
+  no_corresponde?: boolean
+  observacion?: string
 }
 
 // POST /api/logistica/lotes/[id]/recepcion — Logística confirma cantidades recibidas por item.
@@ -40,6 +42,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       item_id: it.item_id,
       cantidad_recibida: it.cantidad_recibida,
       recibido_por: profile.id,
+      no_corresponde: it.no_corresponde ?? false,
+      observacion: it.observacion?.trim() || null,
     })))
 
   if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
