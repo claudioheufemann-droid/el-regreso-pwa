@@ -242,6 +242,7 @@ export default function UsuariosAdminPage() {
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>Administración · El Regreso</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <a href="/admin/jornadas" style={{ fontSize: 11, color: '#D4AF37', textDecoration: 'none' }}>Kilometraje →</a>
           {syncMsg && <span style={{ fontSize: 11, color: syncMsg.startsWith('✓') ? '#22C55E' : '#FF6666' }}>{syncMsg}</span>}
           <button onClick={syncAvatars} disabled={syncing}
             style={{ padding: '7px 14px', borderRadius: 9, border: '1px solid rgba(91,138,168,0.35)', background: 'rgba(91,138,168,0.1)', color: '#5B8AA8', fontSize: 11, fontWeight: 700, cursor: syncing ? 'default' : 'pointer', opacity: syncing ? 0.6 : 1, whiteSpace: 'nowrap' }}>
