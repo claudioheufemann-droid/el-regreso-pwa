@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
-import { PackageCheck, Inbox, FileText, ImageIcon, AlertTriangle } from 'lucide-react'
+import { PackageCheck, Inbox, FileText, ImageIcon, AlertTriangle, Minus, Plus } from 'lucide-react'
 
 interface LoteItem {
   id: string
@@ -23,6 +23,73 @@ interface LoteRow {
 }
 
 const ORANGE = '#F97316'
+
+function CantidadStepper({ value, alterada, onchange }: { value: number; alterada: boolean; onchange: (n: number) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const btnW = 32
+  const color = alterada ? '#FF6666' : ORANGE
+
+  function confirm(raw: string) {
+    const n = parseInt(raw, 10)
+    if (!isNaN(n) && n >= 0) onchange(n)
+    setEditing(false)
+  }
+
+  function startEdit() {
+    setDraft(value > 0 ? String(value) : '')
+    setEditing(true)
+    setTimeout(() => { inputRef.current?.select() }, 0)
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
+      <button
+        onClick={() => onchange(Math.max(0, value - 1))}
+        style={{ width: btnW, height: btnW, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', color: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Minus size={13} />
+      </button>
+
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={e => setDraft(e.target.value.replace(/\D/g, ''))}
+          onBlur={() => confirm(draft)}
+          onKeyDown={e => { if (e.key === 'Enter') confirm(draft); if (e.key === 'Escape') setEditing(false) }}
+          type="text"
+          inputMode="numeric"
+          style={{
+            minWidth: 34, maxWidth: 56, height: btnW, textAlign: 'center', fontSize: 14, fontWeight: 900,
+            background: `${color}1F`, border: `1px solid ${color}`, borderRadius: 8, color, outline: 'none', margin: '0 3px', padding: '0 4px',
+          }}
+        />
+      ) : (
+        <span
+          onClick={startEdit}
+          style={{
+            minWidth: 34, maxWidth: 56, height: btnW, padding: '0 4px', textAlign: 'center', whiteSpace: 'nowrap',
+            fontSize: value >= 1000 ? 12 : 14, fontWeight: 900, color,
+            cursor: 'text', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 8, border: `1px dashed ${color}`, margin: '0 3px',
+          }}
+          title="Toca para escribir la cantidad"
+        >
+          {value}
+        </span>
+      )}
+
+      <button
+        onClick={() => onchange(value + 1)}
+        style={{ width: btnW, height: btnW, borderRadius: 8, cursor: 'pointer', border: 'none', background: `${color}1F`, color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Plus size={13} />
+      </button>
+    </div>
+  )
+}
 
 export default function RecepcionClient() {
   const [lotes, setLotes] = useState<LoteRow[]>([])
@@ -164,15 +231,10 @@ export default function RecepcionClient() {
                               <span style={{ color: ORANGE, fontWeight: 700 }}>{it.codigo_lote}</span> · {it.producto} · {it.envase}
                               <span style={{ color: 'rgba(255,255,255,0.35)' }}> (declarado: {it.cantidad_declarada})</span>
                             </span>
-                            <input
-                              type="number" min={0}
+                            <CantidadStepper
                               value={cantidades[it.id] ?? it.cantidad_declarada}
-                              onChange={e => setCantidades(prev => ({ ...prev, [it.id]: Math.max(0, parseInt(e.target.value) || 0) }))}
-                              style={{
-                                width: 72, padding: '8px 10px', borderRadius: 9, textAlign: 'center',
-                                border: `1px solid ${(cantidades[it.id] ?? it.cantidad_declarada) !== it.cantidad_declarada ? '#FF6666' : 'var(--border)'}`,
-                                background: 'rgba(255,255,255,0.03)', color: 'var(--cream)', fontSize: 13, outline: 'none',
-                              }}
+                              alterada={(cantidades[it.id] ?? it.cantidad_declarada) !== it.cantidad_declarada}
+                              onchange={n => setCantidades(prev => ({ ...prev, [it.id]: n }))}
                             />
                           </div>
 

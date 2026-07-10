@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
-import { Archive, FileText, ImageIcon } from 'lucide-react'
+import { Archive, FileText, ImageIcon, AlertTriangle } from 'lucide-react'
 
 interface LoteItem {
   id: string
@@ -10,6 +10,17 @@ interface LoteItem {
   envase: string
   cantidad_declarada: number
   codigo_lote: string
+}
+interface AlertaRow {
+  id: string
+  producto: string
+  envase: string
+  cantidad_declarada: number
+  cantidad_recibida: number
+  diferencia: number
+  resuelta: boolean
+  nota_resolucion: string | null
+  observacion: string | null
 }
 interface LoteRow {
   id: string
@@ -22,6 +33,7 @@ interface LoteRow {
   created_at: string
   declarante: { nombre: string } | null
   items: LoteItem[]
+  alertas: AlertaRow[]
 }
 
 const ESTADO_INFO: Record<string, { label: string; color: string }> = {
@@ -101,6 +113,30 @@ export default function HistorialClient() {
                     <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 10, fontStyle: 'italic' }}>
                       "{l.observaciones}"
                     </p>
+                  )}
+
+                  {l.alertas?.length > 0 && (
+                    <div style={{ background: 'rgba(255,102,102,0.06)', border: '1px solid rgba(255,102,102,0.25)', borderRadius: 12, padding: 10, marginBottom: 10 }}>
+                      <p style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, color: '#FF6666', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                        <AlertTriangle size={12} /> Problemas en este envío
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {l.alertas.map(a => (
+                          <div key={a.id} style={{ fontSize: 11 }}>
+                            <p style={{ color: 'var(--cream)' }}>
+                              {a.producto} · {a.envase} — declarado {a.cantidad_declarada}, recibido {a.cantidad_recibida}
+                              {a.diferencia !== 0 && (
+                                <strong style={{ color: a.diferencia < 0 ? '#FF6666' : '#4ADE80' }}> ({a.diferencia > 0 ? '+' : ''}{a.diferencia})</strong>
+                              )}
+                            </p>
+                            {a.observacion && <p style={{ color: '#FF6666', fontStyle: 'italic', marginTop: 2 }}>"{a.observacion}"</p>}
+                            <p style={{ color: a.resuelta ? '#4ADE80' : 'rgba(255,255,255,0.35)', marginTop: 2, fontSize: 10, fontWeight: 700 }}>
+                              {a.resuelta ? `✓ Resuelto${a.nota_resolucion ? `: ${a.nota_resolucion}` : ''}` : 'Sin resolver'}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
 
                   {(l.guia_despacho_url || l.guia_recepcion_url) && (

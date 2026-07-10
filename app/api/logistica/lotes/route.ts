@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('lotes_produccion')
-    .select('*, items:lotes_produccion_items(*), declarante:users!lotes_produccion_declarado_por_fkey(nombre)')
+    .select('*, items:lotes_produccion_items(*), declarante:users!lotes_produccion_declarado_por_fkey(nombre), alertas:alertas_inventario(*)')
     .order('created_at', { ascending: false })
 
   if (estado) query = query.eq('estado', estado)
