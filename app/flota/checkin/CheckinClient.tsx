@@ -284,6 +284,11 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   const [fotoOdo, setFotoOdo] = useState('')
   const [fotos360, setFotos360] = useState<Record<string, string>>({})
   const [fotoMarcador, setFotoMarcador] = useState('')
+  // Archivos crudos retenidos para subirlos a Storage recién al confirmar
+  // (las URLs de arriba son solo blobs locales para el preview).
+  const fotoOdoFileRef = useRef<File | null>(null)
+  const fotos360FilesRef = useRef<Record<string, File>>({})
+  const fotoMarcadorFileRef = useRef<File | null>(null)
   const [kmInicio, setKmInicio] = useState('')
   const [analizandoOdo, setAnalizandoOdo] = useState(false)
   const [kmLeido, setKmLeido] = useState<string | null>(null)
@@ -414,7 +419,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
     if (!vehiculo || !listo) return
     setGuardando(true)
     try {
-      const { error: errViaje } = await supabase.from('viajes_flota').insert({
+      const { data: viaje, error: errViaje } = await supabase.from('viajes_flota').insert({
         vehiculo_id: vehiculo.id,
         conductor_id: user.id,
         ruta_id: null,
@@ -426,9 +431,40 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
           ? JSON.stringify(paradas.map(p => ({ n: p.nombre, d: p.direccion, lat: p.lat, lng: p.lng })))
           : motivoViaje.trim() || null,
         estado: 'en_curso',
-      })
+      }).select('id').single()
 
       if (errViaje) throw new Error(errViaje.message)
+
+      // Sube toda la evidencia fotográfica del check-in — es el respaldo de
+      // auditoría del viaje, no puede perderse. Best-effort por foto: si una
+      // falla no bloquea el resto ni el check-in en sí.
+      const subir = async (file: File | null, nombre: string) => {
+        if (!file) return null
+        try {
+          const path = `flota/${viaje.id}/${nombre}.jpg`
+          const { error } = await supabase.storage.from('logistica-evidence').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
+          if (error) return null
+          return supabase.storage.from('logistica-evidence').getPublicUrl(path).data.publicUrl
+        } catch { return null }
+      }
+
+      const [urlOdo, urlFrente, urlIzq, urlDer, urlAtras, urlComb] = await Promise.all([
+        subir(fotoOdoFileRef.current, 'odometro-inicio'),
+        subir(fotos360FilesRef.current.frente, '360-frente'),
+        subir(fotos360FilesRef.current.izquierdo, '360-izquierdo'),
+        subir(fotos360FilesRef.current.derecho, '360-derecho'),
+        subir(fotos360FilesRef.current.atras, '360-atras'),
+        subir(fotoMarcadorFileRef.current, 'combustible-inicio'),
+      ])
+
+      await supabase.from('viajes_flota').update({
+        foto_odometro_inicio: urlOdo,
+        foto_360_frente_inicio: urlFrente,
+        foto_360_izquierdo_inicio: urlIzq,
+        foto_360_derecho_inicio: urlDer,
+        foto_360_atras_inicio: urlAtras,
+        foto_combustible_inicio: urlComb,
+      }).eq('id', viaje.id)
 
       const { error: errVeh } = await supabase
         .from('vehiculos')
@@ -791,7 +827,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Foto odómetro *</p>
             <div style={{ marginBottom: 6 }}>
-              <FotoSlot label="Odómetro" emoji="🔢" onCaptura={(url, file) => { setFotoOdo(url); analizarOdometro(file) }} capturada={!!fotoOdo} />
+              <FotoSlot label="Odómetro" emoji="🔢" onCaptura={(url, file) => { setFotoOdo(url); fotoOdoFileRef.current = file; analizarOdometro(file) }} capturada={!!fotoOdo} />
             </div>
             {analizandoOdo && (
               <p style={{ fontSize: 11, color: '#D4AF37', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -827,7 +863,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
               {ANGULOS_360.map(a => (
                 <FotoSlot key={a.key} label={a.label} emoji={a.emoji}
-                  onCaptura={(url) => setFotos360(prev => ({ ...prev, [a.key]: url }))}
+                  onCaptura={(url, file) => { setFotos360(prev => ({ ...prev, [a.key]: url })); fotos360FilesRef.current[a.key] = file }}
                   capturada={!!fotos360[a.key]} />
               ))}
             </div>
@@ -854,7 +890,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
             {/* Foto tablero — opcional, mejora la detección */}
             <div style={{ marginBottom: 8 }}>
-              <FotoSlot label="Foto del tablero (opcional)" emoji="⛽" onCaptura={(url, file) => { setFotoMarcador(url); analizarCombustible(file) }} capturada={!!fotoMarcador} />
+              <FotoSlot label="Foto del tablero (opcional)" emoji="⛽" onCaptura={(url, file) => { setFotoMarcador(url); fotoMarcadorFileRef.current = file; analizarCombustible(file) }} capturada={!!fotoMarcador} />
             </div>
           </div>
 

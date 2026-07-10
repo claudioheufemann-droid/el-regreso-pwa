@@ -20,8 +20,19 @@ interface Viaje {
   iniciado_at: string
   completado_at: string | null
   destino_declarado: string | null
-  foto_checkin: string | null
-  foto_checkout: string | null
+  foto_odometro_inicio: string | null
+  foto_360_frente_inicio: string | null
+  foto_360_izquierdo_inicio: string | null
+  foto_360_derecho_inicio: string | null
+  foto_360_atras_inicio: string | null
+  foto_combustible_inicio: string | null
+  foto_odometro_fin: string | null
+  foto_360_frente_fin: string | null
+  foto_360_izquierdo_fin: string | null
+  foto_360_derecho_fin: string | null
+  foto_360_atras_fin: string | null
+  foto_combustible_fin: string | null
+  foto_boleta_combustible: string | null
   vehiculo: { id?: string; nombre: string; patente: string | null } | null
   conductor: { id?: string; nombre: string } | null
 }
@@ -182,40 +193,44 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
             </div>
           )}
 
-          {/* Fotos */}
-          {(viaje.foto_checkin || viaje.foto_checkout) && (
-            <div>
-              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>
-                📸 Fotos del viaje
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                {viaje.foto_checkin && (
-                  <div style={{ borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <a href={viaje.foto_checkin} target="_blank" rel="noopener noreferrer">
-                      <img
-                        src={viaje.foto_checkin}
-                        alt="Check-in"
-                        style={{ width: '100%', height: '120px', objectFit: 'cover', display: 'block' }}
-                      />
-                      <div style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700, color: 'var(--muted)' }}>Check-in</div>
-                    </a>
-                  </div>
-                )}
-                {viaje.foto_checkout && (
-                  <div style={{ borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <a href={viaje.foto_checkout} target="_blank" rel="noopener noreferrer">
-                      <img
-                        src={viaje.foto_checkout}
-                        alt="Check-out"
-                        style={{ width: '100%', height: '120px', objectFit: 'cover', display: 'block' }}
-                      />
-                      <div style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700, color: 'var(--muted)' }}>Check-out</div>
-                    </a>
-                  </div>
-                )}
+          {/* Fotos — toda la evidencia capturada en check-in y checkout */}
+          {(() => {
+            const fotos: { url: string; label: string }[] = [
+              { url: viaje.foto_odometro_inicio ?? '', label: 'Odómetro (inicio)' },
+              { url: viaje.foto_combustible_inicio ?? '', label: 'Combustible (inicio)' },
+              { url: viaje.foto_360_frente_inicio ?? '', label: '360° Frente (inicio)' },
+              { url: viaje.foto_360_izquierdo_inicio ?? '', label: '360° Izq. (inicio)' },
+              { url: viaje.foto_360_derecho_inicio ?? '', label: '360° Der. (inicio)' },
+              { url: viaje.foto_360_atras_inicio ?? '', label: '360° Atrás (inicio)' },
+              { url: viaje.foto_odometro_fin ?? '', label: 'Odómetro (fin)' },
+              { url: viaje.foto_combustible_fin ?? '', label: 'Combustible (fin)' },
+              { url: viaje.foto_360_frente_fin ?? '', label: '360° Frente (fin)' },
+              { url: viaje.foto_360_izquierdo_fin ?? '', label: '360° Izq. (fin)' },
+              { url: viaje.foto_360_derecho_fin ?? '', label: '360° Der. (fin)' },
+              { url: viaje.foto_360_atras_fin ?? '', label: '360° Atrás (fin)' },
+              { url: viaje.foto_boleta_combustible ?? '', label: 'Boleta combustible' },
+            ].filter(f => f.url)
+
+            if (fotos.length === 0) return null
+            return (
+              <div>
+                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>
+                  📸 Evidencia fotográfica ({fotos.length})
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {fotos.map(f => (
+                    <div key={f.label} style={{ borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <a href={f.url} target="_blank" rel="noopener noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={f.url} alt={f.label} style={{ width: '100%', height: '90px', objectFit: 'cover', display: 'block' }} />
+                        <div style={{ padding: '5px 8px', fontSize: 9, fontWeight: 700, color: 'var(--muted)' }}>{f.label}</div>
+                      </a>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* Abrir en Maps */}
           {paradas.length > 0 && (

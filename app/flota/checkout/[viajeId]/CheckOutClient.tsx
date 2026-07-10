@@ -113,6 +113,12 @@ export default function CheckOutClient({ user, viaje }: Props) {
   const [fotoKmFin, setFotoKmFin] = useState('')
   const [fotos360, setFotos360] = useState<Record<string, string>>({})
   const [fotoMarcador, setFotoMarcador] = useState('')
+  // Archivos crudos retenidos para subirlos a Storage recién al cerrar
+  // (las URLs de arriba son solo blobs locales para el preview).
+  const fotoKmFinFileRef = useRef<File | null>(null)
+  const fotos360FilesRef = useRef<Record<string, File>>({})
+  const fotoMarcadorFileRef = useRef<File | null>(null)
+  const fotoBoletaFileRef = useRef<File | null>(null)
 
   // KM final — auto-llenado por IA
   const [kmFin, setKmFin] = useState('')
@@ -191,12 +197,42 @@ export default function CheckOutClient({ user, viaje }: Props) {
     setGuardando(true)
     try {
       const km = parseInt(kmFin)
+
+      // Sube toda la evidencia fotográfica del checkout — respaldo de
+      // auditoría. Best-effort por foto: si una falla no bloquea el cierre.
+      const subir = async (file: File | null, nombre: string) => {
+        if (!file) return null
+        try {
+          const path = `flota/${viaje.id}/${nombre}.jpg`
+          const { error } = await supabase.storage.from('logistica-evidence').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
+          if (error) return null
+          return supabase.storage.from('logistica-evidence').getPublicUrl(path).data.publicUrl
+        } catch { return null }
+      }
+
+      const [urlOdo, urlFrente, urlIzq, urlDer, urlAtras, urlComb, urlBoleta] = await Promise.all([
+        subir(fotoKmFinFileRef.current, 'odometro-fin'),
+        subir(fotos360FilesRef.current.frente, '360-frente-fin'),
+        subir(fotos360FilesRef.current.izquierdo, '360-izquierdo-fin'),
+        subir(fotos360FilesRef.current.derecho, '360-derecho-fin'),
+        subir(fotos360FilesRef.current.atras, '360-atras-fin'),
+        subir(fotoMarcadorFileRef.current, 'combustible-fin'),
+        subir(fotoBoletaFileRef.current, 'boleta-carga'),
+      ])
+
       await supabase.from('viajes_flota').update({
         km_fin: km,
         litros_carga: litros ? parseFloat(litros) : null,
         monto_combustible: montoComb ? parseInt(montoComb) : null,
         estado: 'completado',
         completado_at: new Date().toISOString(),
+        foto_odometro_fin: urlOdo,
+        foto_360_frente_fin: urlFrente,
+        foto_360_izquierdo_fin: urlIzq,
+        foto_360_derecho_fin: urlDer,
+        foto_360_atras_fin: urlAtras,
+        foto_combustible_fin: urlComb,
+        foto_boleta_combustible: urlBoleta,
       }).eq('id', viaje.id)
       await supabase.from('vehiculos').update({ estado: 'disponible', km_actual: km, combustible: combustibleFin }).eq('id', viaje.vehiculo_id)
       router.push('/flota')
@@ -245,7 +281,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
         </p>
         <div style={{ marginBottom: 6 }}>
           <FotoSlot label="Odómetro" emoji="🔢"
-            onCaptura={(url, file) => { setFotoKmFin(url); analizarOdometro(file) }}
+            onCaptura={(url, file) => { setFotoKmFin(url); fotoKmFinFileRef.current = file; analizarOdometro(file) }}
             capturada={!!fotoKmFin} />
         </div>
         {analizandoOdo && (
@@ -305,7 +341,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
           {ANGULOS_360.map(a => (
             <FotoSlot key={a.key} label={a.label} emoji={a.emoji}
-              onCaptura={(url) => setFotos360(prev => ({ ...prev, [a.key]: url }))}
+              onCaptura={(url, file) => { setFotos360(prev => ({ ...prev, [a.key]: url })); fotos360FilesRef.current[a.key] = file }}
               capturada={!!fotos360[a.key]} />
           ))}
         </div>
@@ -314,7 +350,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Marcador de combustible *</p>
         <div style={{ marginBottom: 8 }}>
           <FotoSlot label="Foto del tablero" emoji="⛽"
-            onCaptura={(url, file) => { setFotoMarcador(url); analizarCombustible(file) }}
+            onCaptura={(url, file) => { setFotoMarcador(url); fotoMarcadorFileRef.current = file; analizarCombustible(file) }}
             capturada={!!fotoMarcador} />
         </div>
 
@@ -366,7 +402,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
               </div>
             </div>
             <input ref={boletaRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-              onChange={e => { const f = e.target.files?.[0]; if (f) setFotoBoleta(URL.createObjectURL(f)) }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) { setFotoBoleta(URL.createObjectURL(f)); fotoBoletaFileRef.current = f } }}
             />
             <div onClick={() => boletaRef.current?.click()} style={{ height: 60, borderRadius: 10, cursor: 'pointer', background: fotoBoleta ? 'rgba(90,138,74,0.07)' : 'rgba(0,0,0,0.3)', border: `1px solid ${fotoBoleta ? '#5A8A4A' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
               {fotoBoleta ? <CheckCircle size={18} color="#5A8A4A" /> : <Camera size={16} color="var(--muted)" />}
