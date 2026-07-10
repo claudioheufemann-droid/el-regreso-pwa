@@ -572,8 +572,8 @@ export default function DeclararClient() {
             style={{
               flex: 1, padding: '15px 18px', borderRadius: 14, border: 'none',
               cursor: saving || !carrito.length || !fecha ? 'default' : 'pointer',
-              background: carrito.length > 0 ? `linear-gradient(135deg, ${ORANGE}, #C2410C)` : 'rgba(255,255,255,0.06)',
-              color: carrito.length > 0 ? '#080808' : 'rgba(255,255,255,0.35)',
+              background: carrito.length > 0 && fecha ? `linear-gradient(135deg, ${ORANGE}, #C2410C)` : 'rgba(255,255,255,0.06)',
+              color: carrito.length > 0 && fecha ? '#080808' : 'rgba(255,255,255,0.35)',
               fontSize: 14, fontWeight: 900,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               opacity: saving ? 0.6 : 1,
@@ -586,6 +586,12 @@ export default function DeclararClient() {
             <span>{saving ? 'Creando…' : 'Crear envío →'}</span>
           </button>
         </div>
+
+        {carrito.length > 0 && !fecha && (
+          <p style={{ color: '#FBBF24', fontSize: 11, textAlign: 'center', marginTop: -16, marginBottom: 20 }}>
+            Falta la fecha del envío (arriba en "Datos del envío a bodega") para poder crearlo.
+          </p>
+        )}
 
         {loading && (
           <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, textAlign: 'center' }}>Cargando lotes pendientes…</p>
