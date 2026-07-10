@@ -13,6 +13,23 @@ async function getSupabase() {
   })
 }
 
+// GET /api/logistica/lotes/[id] — Detalle de un envío con sus items
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const supabase = await getSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+  const { data: lote, error } = await supabase
+    .from('lotes_produccion')
+    .select('*, items:lotes_produccion_items(*)')
+    .eq('id', id)
+    .single()
+
+  if (error || !lote) return NextResponse.json({ error: error?.message ?? 'Envío no encontrado' }, { status: 404 })
+  return NextResponse.json(lote)
+}
+
 // DELETE /api/logistica/lotes/[id] — Producción elimina un envío que aún no salió a bodega
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

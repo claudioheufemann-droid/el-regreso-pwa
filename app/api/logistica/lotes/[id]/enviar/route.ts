@@ -14,7 +14,9 @@ async function getSupabase() {
   })
 }
 
-// POST /api/logistica/lotes/[id]/enviar — Producción marca el lote como despachado a bodega
+// POST /api/logistica/lotes/[id]/enviar — Producción adjunta la guía de despacho
+// y marca el envío como despachado a bodega; ambas cosas van juntas porque la
+// guía es lo que Logística usa para corroborar lo que llega.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await getSupabase()
@@ -24,9 +26,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: profile } = await supabase.from('users').select('id').eq('email', user.email!).single()
   if (!profile) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
 
+  const body = await req.json().catch(() => ({})) as { guia_despacho_url?: string }
+  if (!body.guia_despacho_url) {
+    return NextResponse.json({ error: 'La guía de despacho es obligatoria' }, { status: 400 })
+  }
+
   const { data: lote, error } = await supabase
     .from('lotes_produccion')
-    .update({ estado: 'enviado', enviado_at: new Date().toISOString(), enviado_por: profile.id })
+    .update({
+      estado: 'enviado',
+      enviado_at: new Date().toISOString(),
+      enviado_por: profile.id,
+      guia_despacho_url: body.guia_despacho_url,
+    })
     .eq('id', id)
     .eq('estado', 'declarado')
     .select('*')

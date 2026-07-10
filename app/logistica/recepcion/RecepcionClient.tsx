@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
-import { PackageCheck, Inbox } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { compressImage } from '@/lib/compress-image'
+import { PackageCheck, Inbox, FileText, ImageIcon } from 'lucide-react'
 
 interface LoteItem {
   id: string
@@ -13,10 +15,10 @@ interface LoteItem {
 }
 interface LoteRow {
   id: string
-  codigo_lote: string
   eta_entrega: string
   estado: string
   enviado_at: string | null
+  guia_despacho_url: string | null
   items: LoteItem[]
 }
 
@@ -27,7 +29,10 @@ export default function RecepcionClient() {
   const [loading, setLoading] = useState(true)
   const [abierto, setAbierto] = useState<string | null>(null)
   const [cantidades, setCantidades] = useState<Record<string, number>>({})
+  const [guiaCorregidaUrl, setGuiaCorregidaUrl] = useState<string | null>(null)
+  const [subiendoGuia, setSubiendoGuia] = useState(false)
   const [saving, setSaving] = useState(false)
+  const guiaInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -41,9 +46,28 @@ export default function RecepcionClient() {
 
   function abrir(lote: LoteRow) {
     setAbierto(lote.id)
+    setGuiaCorregidaUrl(null)
     const init: Record<string, number> = {}
     lote.items.forEach(it => { init[it.id] = it.cantidad_declarada })
     setCantidades(init)
+  }
+
+  async function subirGuiaCorregida(loteId: string, file: File) {
+    setSubiendoGuia(true)
+    try {
+      const supabase = createClient()
+      const compressed = await compressImage(file, { maxDim: 1600, quality: 0.8 })
+      const path = `produccion/${loteId}/guia-recepcion-${Date.now()}.jpg`
+      const { error } = await supabase.storage.from('logistica-evidence').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
+      if (error) throw error
+      const { data: { publicUrl } } = supabase.storage.from('logistica-evidence').getPublicUrl(path)
+      setGuiaCorregidaUrl(publicUrl)
+    } catch (e) {
+      console.error(e)
+      alert('Error al subir la guía. Intenta de nuevo.')
+    } finally {
+      setSubiendoGuia(false)
+    }
   }
 
   async function confirmar(loteId: string) {
@@ -53,7 +77,7 @@ export default function RecepcionClient() {
       const res = await fetch(`/api/logistica/lotes/${loteId}/recepcion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, guia_recepcion_url: guiaCorregidaUrl ?? undefined }),
       })
       const data = await res.json()
       if (!res.ok) { alert(data.error ?? 'Error al confirmar recepción'); return }
@@ -62,6 +86,7 @@ export default function RecepcionClient() {
         alert('⚠️ Se registró la recepción, pero hay diferencias con lo declarado. Se generó una alerta en /logistica/alertas.')
       }
       setAbierto(null)
+      setGuiaCorregidaUrl(null)
       load()
     } finally {
       setSaving(false)
@@ -96,6 +121,12 @@ export default function RecepcionClient() {
                     <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
                       ETA {new Date(l.eta_entrega).toLocaleString('es-CL')} · {l.items.length} producto{l.items.length === 1 ? '' : 's'}
                     </p>
+                    {l.guia_despacho_url && (
+                      <a href={l.guia_despacho_url} target="_blank" rel="noopener noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 11, color: ORANGE, fontWeight: 700, textDecoration: 'none' }}>
+                        <FileText size={11} /> Ver guía de despacho
+                      </a>
+                    )}
                   </div>
                   {abierto !== l.id && (
                     <button
@@ -133,6 +164,26 @@ export default function RecepcionClient() {
                         />
                       </div>
                     ))}
+
+                    {l.items.some(it => (cantidades[it.id] ?? it.cantidad_declarada) !== it.cantidad_declarada) && (
+                      <div style={{ marginTop: 10 }}>
+                        <input ref={guiaInputRef} type="file" accept="image/*,.pdf" capture="environment" hidden
+                          onChange={e => { const f = e.target.files?.[0]; if (f) subirGuiaCorregida(l.id, f) }} />
+                        <button
+                          onClick={() => guiaInputRef.current?.click()}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+                            border: `1px solid ${guiaCorregidaUrl ? '#4ADE8055' : '#FBBF2455'}`,
+                            background: guiaCorregidaUrl ? 'rgba(74,222,128,0.08)' : 'rgba(251,191,36,0.08)',
+                            color: guiaCorregidaUrl ? '#4ADE80' : '#FBBF24', fontSize: 11, fontWeight: 700, textAlign: 'left',
+                          }}
+                        >
+                          <ImageIcon size={14} />
+                          {subiendoGuia ? 'Subiendo…' : guiaCorregidaUrl ? '✓ Guía corregida cargada' : 'Hay diferencias — sube la guía corregida (opcional)'}
+                        </button>
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                       <button
                         onClick={() => confirmar(l.id)}

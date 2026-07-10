@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: profile } = await supabase.from('users').select('id').eq('email', user.email!).single()
   if (!profile) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
 
-  const body = await req.json() as { items: RecepcionInput[] }
+  const body = await req.json() as { items: RecepcionInput[]; guia_recepcion_url?: string }
   if (!body.items?.length) return NextResponse.json({ error: 'items es obligatorio' }, { status: 400 })
 
   const { error: insertErr } = await supabase
@@ -43,6 +43,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })))
 
   if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
+
+  if (body.guia_recepcion_url) {
+    await supabase.from('lotes_produccion').update({ guia_recepcion_url: body.guia_recepcion_url }).eq('id', loteId)
+  }
 
   // Releer estado del lote (el trigger pudo haberlo marcado 'con_discrepancia')
   const { data: lote } = await supabase.from('lotes_produccion').select('*').eq('id', loteId).single()

@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/ui/AppHeader'
-import { Plus, Minus, Send, Trash2, Calendar, Clock, ChevronDown, ShoppingCart } from 'lucide-react'
+import { Plus, Minus, Send, Trash2, FileText, Calendar, Clock, ChevronDown, ShoppingCart } from 'lucide-react'
 
 // Catálogo real: sin botellas, un solo tamaño de barril (30L).
 // Cerveza = Lata 500cc · Kombucha = Lata 355cc.
@@ -175,6 +176,7 @@ let nextId = 0
 function newId() { nextId += 1; return `item-${Date.now()}-${nextId}` }
 
 export default function DeclararClient() {
+  const router = useRouter()
   const [lotes, setLotes] = useState<LoteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -279,29 +281,20 @@ export default function DeclararClient() {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        alert(err.error ?? 'Error al declarar el envío')
+        alert(err.error ?? 'Error al crear el envío')
         return
       }
+      const nuevoLote = await res.json() as { id: string }
       setFecha(''); setHora(''); setObservaciones('')
       setCarrito([])
       setStagingCantidad(new Map())
       setStagingLote(new Map())
       setShowCartDetail(false)
-      load()
+      // Sigue a subir la guía de despacho — recién ahí el envío sale hacia Logística
+      router.push(`/logistica/produccion/declarar/${nuevoLote.id}/guia`)
     } finally {
       setSaving(false)
     }
-  }
-
-  async function marcarEnviado(loteId: string) {
-    if (!confirm('¿Confirmas que el envío salió físicamente hacia bodega de Logística?')) return
-    const res = await fetch(`/api/logistica/lotes/${loteId}/enviar`, { method: 'POST' })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      alert(err.error ?? 'Error al marcar enviado')
-      return
-    }
-    load()
   }
 
   async function eliminarLote(loteId: string) {
@@ -513,13 +506,13 @@ export default function DeclararClient() {
                           {item.codigo_lote} <span style={{ color: 'rgba(255,255,255,0.3)' }}>· {item.envase} × {item.cantidad_declarada}</span>
                         </span>
                         <button
-                          onClick={() => marcarEnviado(lote.id)}
+                          onClick={() => router.push(`/logistica/produccion/declarar/${lote.id}/guia`)}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 4, padding: '5px 9px', borderRadius: 8, flexShrink: 0,
                             border: `1px solid ${ORANGE}55`, background: `${ORANGE}15`, color: ORANGE, fontSize: 10, fontWeight: 700, cursor: 'pointer',
                           }}
                         >
-                          <Send size={10} /> Enviar
+                          <FileText size={10} /> Subir guía y enviar
                         </button>
                         <button
                           onClick={() => eliminarLote(lote.id)}
@@ -590,7 +583,7 @@ export default function DeclararClient() {
               <ShoppingCart size={18} />
               {carrito.length > 0 ? `${totalItems} unidad${totalItems === 1 ? '' : 'es'} · ${carrito.length} lote${carrito.length === 1 ? '' : 's'}` : 'Sin productos'}
             </span>
-            <span>{saving ? 'Declarando…' : 'Declarar →'}</span>
+            <span>{saving ? 'Creando…' : 'Crear envío →'}</span>
           </button>
         </div>
 
