@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search, Clock3, CreditCard, Gauge } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search, Clock3, CreditCard, Fuel } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import AppHeader from '@/components/ui/AppHeader'
 import BuscarClienteSheet from '@/components/ui/BuscarClienteSheet'
@@ -226,6 +226,12 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
     .filter(v => v.estado === 'completada')
     .reduce((s, v) => s + (v.total_pedido ?? 0), 0)
 
+  // Jornada de ruta (kilometraje + combustible) — para saber si ya se inició hoy
+  const [jornada, setJornada] = useState<{ id: string; km_inicio: number; iniciada_at: string } | null | undefined>(undefined)
+  useEffect(() => {
+    fetch('/api/terreno/jornada').then(r => r.json()).then(j => setJornada(j ?? null)).catch(() => setJornada(null))
+  }, [])
+
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 100 }}>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
@@ -237,17 +243,6 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
             title="Terreno"
             extraAction={
               <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => router.push('/terreno/jornada')}
-                  aria-label="Jornada y kilometraje"
-                  style={{
-                    width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                    background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.25)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                  }}
-                >
-                  <Gauge size={16} color="#F97316" />
-                </button>
                 <button
                   onClick={() => router.push('/ventas/actividad')}
                   aria-label="Actividad"
@@ -371,6 +366,40 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
           <KPIPanel label="Con venta"   value={kpis.conVenta}  color="#5A8A4A" rgb="90,138,74"  icon={Tag} />
           <KPIPanel label="Sin venta"   value={kpis.sinVenta}  color="#B5543E" rgb="181,84,62"  icon={Ban} />
         </div>
+
+        {/* ── BENCINA Y KILOMETRAJE DEL VIAJE ── */}
+        <Link href="/terreno/jornada" style={{ textDecoration: 'none', display: 'block', marginBottom: 20 }}>
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(10,10,10,0.95) 100%)',
+            border: '1px solid rgba(249,115,22,0.3)',
+            borderRadius: 22, padding: '18px 20px',
+            display: 'flex', alignItems: 'center', gap: 16,
+            boxShadow: '0 4px 24px rgba(249,115,22,0.1)',
+          }}>
+            <div style={{ width: 48, height: 48, borderRadius: 16, background: 'rgba(249,115,22,0.14)', border: '1.5px solid rgba(249,115,22,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Fuel size={22} color="#F97316" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 15, fontWeight: 900, color: 'var(--cream)', marginBottom: 3 }}>
+                Bencina y kilometraje del viaje
+              </p>
+              {jornada === undefined ? (
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>Cargando…</p>
+              ) : jornada ? (
+                <p style={{ fontSize: 12, color: '#F97316', fontWeight: 700 }}>
+                  Jornada en curso desde las {new Date(jornada.iniciada_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} · Toca para cerrar o registrar combustible
+                </p>
+              ) : (
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                  Registra tu odómetro antes de salir para declarar el reembolso de combustible
+                </p>
+              )}
+            </div>
+            <div style={{ width: 38, height: 38, borderRadius: 12, background: '#F97316', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <ChevronRight size={18} color="#080808" strokeWidth={2.5} />
+            </div>
+          </div>
+        </Link>
 
         {/* ── VISITAS DEL DÍA ── */}
         <div style={{ marginBottom: 16 }}>
