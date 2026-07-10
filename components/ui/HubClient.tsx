@@ -279,8 +279,6 @@ function ModuleCard({ href, color, rgb, title, subtitle, img, locked }: ModuleCa
 export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boolean; nombre: string; macroArea?: string | null }) {
   const firstName = nombre.split(' ')[0]
   const router = useRouter()
-  const puedeLogisticaProduccion = isAdmin || macroArea === 'logistica' || macroArea === 'produccion'
-  const puedeFlota = isAdmin || macroArea === 'logistica'
 
   async function handleLogout() {
     const supabase = createClient()
@@ -376,27 +374,25 @@ export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boo
           />
 
           {/* Logística: vehículos, despachos con POD y KPIs OTIF/Efectividad.
-              Visible para admin y Logística (Matías); el vendedor la ve bloqueada. */}
+              Acceso total para cualquier trabajador autenticado. */}
           <ModuleCard
             href="/flota"
             color="#F97316"
             rgb="249,115,22"
             title="Logística"
-            subtitle={puedeFlota ? 'Vehículos, despachos, entregas y KPIs' : 'Acceso exclusivo · Administración'}
+            subtitle="Vehículos, despachos, entregas y KPIs"
             img="/hub-logistica.webp"
-            locked={!puedeFlota}
           />
 
           {/* Producción Logística: trazabilidad de lotes entre Producción y bodega.
-              Visible para admin, Logística (Matías) y Producción (Rodrigo y equipo). */}
+              Acceso total para cualquier trabajador autenticado. */}
           <ModuleCard
             href="/logistica"
             color="#F97316"
             rgb="249,115,22"
             title="Producción Logística"
-            subtitle={puedeLogisticaProduccion ? 'Declaración y recepción de lotes' : 'Acceso exclusivo · Logística y Producción'}
+            subtitle="Declaración y recepción de lotes"
             img="/gestion-produccion.webp"
-            locked={!puedeLogisticaProduccion}
           />
 
         </div>

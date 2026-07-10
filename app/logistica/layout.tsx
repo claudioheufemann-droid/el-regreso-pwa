@@ -4,11 +4,9 @@ import LogisticaSidebar from '@/components/LogisticaSidebar'
 import LogisticaBottomNav from '@/components/LogisticaBottomNav'
 
 export default async function LogisticaLayout({ children }: { children: React.ReactNode }) {
-  // Acceso: admin, Logística (Matías) o Producción (declara los lotes que Logística recibe).
+  // Acceso total para cualquier trabajador autenticado, sin importar su área.
   const user = await getServerUser()
   if (!user) redirect('/login')
-  const permitido = user.isAdmin || user.macroArea === 'logistica' || user.macroArea === 'produccion'
-  if (!permitido) redirect('/')
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>

@@ -17,11 +17,9 @@ const TABS: PageTab[] = [
 const ORANGE = '#D4AF37'
 
 export default async function FlotaLayout({ children }: { children: React.ReactNode }) {
-  // Exclusiva de administración y del equipo de Logística (Matías) —
-  // el vendedor ve el módulo en el Hub (bloqueado) pero no puede entrar.
+  // Acceso total para cualquier trabajador autenticado, sin importar su área.
   const user = await getServerUser()
   if (!user) redirect('/login')
-  if (!user.isAdmin && user.macroArea !== 'logistica') redirect('/')
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
