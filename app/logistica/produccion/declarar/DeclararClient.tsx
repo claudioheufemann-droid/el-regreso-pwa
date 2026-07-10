@@ -147,15 +147,20 @@ function CantidadInput({ value, onchange }: { value: number; onchange: (n: numbe
           type="text"
           inputMode="numeric"
           style={{
-            width: numW + 12, height: btnW, textAlign: 'center', fontSize: 16, fontWeight: 900,
+            minWidth: numW + 12, maxWidth: 60, height: btnW, textAlign: 'center', fontSize: 16, fontWeight: 900,
             background: ORANGE_DIM, border: `1px solid ${ORANGE}`, borderRadius: 9,
-            color: ORANGE, outline: 'none', margin: '0 4px',
+            color: ORANGE, outline: 'none', margin: '0 4px', padding: '0 4px',
           }}
         />
       ) : (
         <span
           onClick={startEdit}
-          style={{ width: numW + 8, height: btnW, textAlign: 'center', fontSize: 16, fontWeight: 900, color: value > 0 ? ORANGE : 'rgba(255,255,255,0.3)', cursor: 'text', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 9, border: `1px dashed ${value > 0 ? ORANGE : 'rgba(255,255,255,0.18)'}`, margin: '0 3px', flexShrink: 0 }}
+          style={{
+            minWidth: numW + 8, maxWidth: 60, height: btnW, padding: '0 4px', textAlign: 'center',
+            fontSize: value >= 1000 ? 13 : 16, fontWeight: 900, whiteSpace: 'nowrap',
+            color: value > 0 ? ORANGE : 'rgba(255,255,255,0.3)', cursor: 'text', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 9, border: `1px dashed ${value > 0 ? ORANGE : 'rgba(255,255,255,0.18)'}`, margin: '0 3px', flexShrink: 0,
+          }}
           title="Toca para escribir cantidad"
         >
           {value}
