@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search, Clock3, CreditCard } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search, Clock3, CreditCard, Gauge } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import AppHeader from '@/components/ui/AppHeader'
 import BuscarClienteSheet from '@/components/ui/BuscarClienteSheet'
@@ -237,6 +237,17 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
             title="Terreno"
             extraAction={
               <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => router.push('/terreno/jornada')}
+                  aria-label="Jornada y kilometraje"
+                  style={{
+                    width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                    background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                  }}
+                >
+                  <Gauge size={16} color="#F97316" />
+                </button>
                 <button
                   onClick={() => router.push('/ventas/actividad')}
                   aria-label="Actividad"

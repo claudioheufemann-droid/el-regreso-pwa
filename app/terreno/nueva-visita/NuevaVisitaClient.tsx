@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 import { addDays, format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { dentroDeGeofence } from '@/lib/geo'
 
 type MetodoPago = 'efectivo' | 'transferencia' | 'credito'
 const DIAS_CREDITO_PRESETS = [7, 15, 30, 45, 60]
@@ -32,6 +33,8 @@ interface ClienteExistente {
   nombre_fantasia: string
   categoria_negocio: string | null
   localidad: string | null
+  lat?: number | null
+  lng?: number | null
 }
 
 interface Producto {
@@ -1664,6 +1667,15 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
   const [carritoInicial, setCarritoInicial] = useState<ItemCarrito[]>([])
   const [syncPendiente, setSyncPendiente] = useState(false)
 
+  // Jornada de ruta abierta (para vincular la visita y calcular el km GPS al cerrar)
+  const jornadaIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    fetch('/api/terreno/jornada').then(r => r.json()).then(j => { jornadaIdRef.current = j?.id ?? null }).catch(() => {})
+  }, [])
+
+  // Coordenadas del cliente elegido (de la tabla maestra) — para validar geofencing al check-in
+  const clienteCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
+
   const totalPasos = cliente?.esNuevo ? 3 : 4
 
   // Draft acumulativo de la visita: cada escritura es un upsert con TODOS los
@@ -1684,8 +1696,15 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     // así el resto del flujo (check-in, catálogo) puede avanzar sin conexión.
     const id = crypto.randomUUID()
     setVisitaId(id)
+
+    // Guarda las coordenadas registradas del cliente (si las tiene) para
+    // validar geofencing contra el GPS del check-in en el siguiente paso.
+    const c = clientesExistentes.find(x => x.nombre_fantasia?.toLowerCase().trim() === nombre.toLowerCase().trim())
+    clienteCoordsRef.current = (c?.lat != null && c?.lng != null) ? { lat: c.lat, lng: c.lng } : null
+
     visitaDraft.current = {
       id, vendedor_id: vendedor.id, cliente_nombre: nombre, es_cliente_nuevo: esNuevo, estado: 'en_progreso',
+      jornada_id: jornadaIdRef.current,
     }
     setSyncPendiente(true)
     upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
@@ -1742,11 +1761,24 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
       })
     )
 
+    // Geofencing: si el cliente tiene coordenadas registradas, valida que el
+    // check-in esté a ≤50m de esa ubicación. No bloquea el flujo (el GPS del
+    // celular puede fallar puntualmente) — solo queda registrado para
+    // auditoría y aparece marcado en el panel de admin si está fuera de rango.
+    let geofence: { distancia_cliente_m: number; dentro_geofence: boolean } | null = null
+    if (clienteCoordsRef.current) {
+      const { dentro, distanciaM } = dentroDeGeofence(
+        coords.lat, coords.lng, clienteCoordsRef.current.lat, clienteCoordsRef.current.lng,
+      )
+      geofence = { distancia_cliente_m: Math.round(distanciaM), dentro_geofence: dentro }
+    }
+
     visitaDraft.current = {
       ...visitaDraft.current,
       id: visitaId,
       lat: coords.lat, lng: coords.lng, direccion_gps: coords.addr,
       ...photoUrls,
+      ...geofence,
     }
     setSyncPendiente(true)
     upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))

@@ -17,6 +17,110 @@ interface AppUser {
   created_at: string
   last_sign_in_at: string | null
   email_confirmed: boolean
+  vehiculo_propio: boolean | null
+  vehiculo_tipo: string | null
+  rendimiento_kml: number | null
+  tarifa_reembolso_km: number | null
+}
+
+const VEHICULO_TIPOS = ['auto', 'moto', 'camioneta', 'furgón'] as const
+
+function VehiculoModal({ user, onClose, onSaved }: { user: AppUser; onClose: () => void; onSaved: (u: AppUser) => void }) {
+  const [vehiculoPropio, setVehiculoPropio] = useState(user.vehiculo_propio ?? true)
+  const [tipo, setTipo] = useState(user.vehiculo_tipo ?? '')
+  const [rendimiento, setRendimiento] = useState(user.rendimiento_kml != null ? String(user.rendimiento_kml) : '')
+  const [tarifa, setTarifa] = useState(user.tarifa_reembolso_km != null ? String(user.tarifa_reembolso_km) : '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function guardar() {
+    setSaving(true); setError('')
+    try {
+      const res = await fetch('/api/admin/usuarios', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: user.id,
+          vehiculo_propio: vehiculoPropio,
+          vehiculo_tipo: tipo || null,
+          rendimiento_kml: rendimiento ? parseFloat(rendimiento) : null,
+          tarifa_reembolso_km: tarifa ? parseFloat(tarifa) : null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? 'Error al guardar'); return }
+      onSaved({ ...user, ...data })
+      onClose()
+    } catch {
+      setError('Error de conexión')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '9px 12px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.1)',
+    background: 'rgba(255,255,255,0.03)', color: '#F4EEDF', fontSize: 13, outline: 'none',
+  }
+  const labelStyle: React.CSSProperties = {
+    display: 'block', fontSize: 10, color: 'rgba(255,255,255,0.4)', marginBottom: 5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: 24, maxWidth: 420, width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 15, fontWeight: 900, color: '#F4EEDF', marginBottom: 2 }}>Vehículo y reembolso</h2>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{user.nombre}</p>
+        </div>
+
+        <button
+          onClick={() => setVehiculoPropio(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+            border: `1px solid ${vehiculoPropio ? 'rgba(212,175,55,0.35)' : 'rgba(255,255,255,0.1)'}`,
+            background: vehiculoPropio ? 'rgba(212,175,55,0.08)' : 'rgba(255,255,255,0.03)',
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 700, color: vehiculoPropio ? '#D4AF37' : 'rgba(255,255,255,0.5)' }}>Usa vehículo propio</span>
+          <span style={{ fontSize: 11, fontWeight: 900, color: vehiculoPropio ? '#D4AF37' : 'rgba(255,255,255,0.3)' }}>{vehiculoPropio ? 'SÍ' : 'NO'}</span>
+        </button>
+
+        <div>
+          <label style={labelStyle}>Tipo de vehículo</label>
+          <select value={tipo} onChange={e => setTipo(e.target.value)} style={{ ...inputStyle, colorScheme: 'dark' }}>
+            <option value="">Sin especificar</option>
+            {VEHICULO_TIPOS.map(t => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Rendimiento (km/l)</label>
+            <input type="number" min={0} step={0.1} value={rendimiento} onChange={e => setRendimiento(e.target.value)} placeholder="Ej: 12" style={inputStyle} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Tarifa reembolso ($/km)</label>
+            <input type="number" min={0} value={tarifa} onChange={e => setTarifa(e.target.value)} placeholder="Ej: 150" style={inputStyle} />
+          </div>
+        </div>
+
+        {error && <p style={{ fontSize: 12, color: '#FF6666' }}>{error}</p>}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={guardar} disabled={saving}
+            style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', cursor: 'pointer', background: '#D4AF37', color: '#0A0A0A', fontSize: 13, fontWeight: 900, opacity: saving ? 0.7 : 1 }}>
+            {saving ? 'Guardando…' : 'Guardar'}
+          </button>
+          <button onClick={onClose}
+            style={{ padding: '11px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: 12, cursor: 'pointer' }}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 const AREA_COLOR: Record<string, string> = {
@@ -74,6 +178,7 @@ export default function UsuariosAdminPage() {
   const [sortBy, setSortBy]     = useState<'nombre' | 'actividad'>('actividad')
   const [syncing, setSyncing]   = useState(false)
   const [syncMsg, setSyncMsg]   = useState('')
+  const [editando, setEditando] = useState<AppUser | null>(null)
 
   function loadUsers() {
     setLoading(true)
@@ -204,8 +309,8 @@ export default function UsuariosAdminPage() {
         <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 18, overflow: 'hidden' }}>
 
           {/* Header tabla */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 1fr 1fr', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
-            {['USUARIO', 'CONTACTO', 'ÁREA', 'ROL', 'ÚLTIMO ACCESO', 'ESTADO'].map(h => (
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 1fr 1fr 1fr', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
+            {['USUARIO', 'CONTACTO', 'ÁREA', 'ROL', 'ÚLTIMO ACCESO', 'ESTADO', 'VEHÍCULO'].map(h => (
               <div key={h} style={{ fontSize: 8, fontWeight: 800, color: 'rgba(255,255,255,0.25)', letterSpacing: 1.4, textTransform: 'uppercase' }}>{h}</div>
             ))}
           </div>
@@ -228,7 +333,7 @@ export default function UsuariosAdminPage() {
             const isActive = u.last_sign_in_at && (Date.now() - new Date(u.last_sign_in_at).getTime()) < 86400000
             return (
               <div key={u.id}
-                style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 1fr 1fr', gap: 8, padding: '14px 20px', borderBottom: idx < filtered.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center', transition: 'background 0.12s' }}
+                style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 1fr 1fr 1fr', gap: 8, padding: '14px 20px', borderBottom: idx < filtered.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', alignItems: 'center', transition: 'background 0.12s' }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
 
@@ -290,10 +395,31 @@ export default function UsuariosAdminPage() {
                     {isActive ? 'Activo hoy' : u.last_sign_in_at ? 'Inactivo' : 'Sin acceso'}
                   </span>
                 </div>
+
+                {/* VEHÍCULO */}
+                <div>
+                  <button onClick={() => setEditando(u)}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, padding: '5px 9px', borderRadius: 8, border: '1px solid rgba(212,175,55,0.25)', background: 'rgba(212,175,55,0.06)', cursor: 'pointer' }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: '#D4AF37' }}>
+                      {u.tarifa_reembolso_km ? `$${u.tarifa_reembolso_km}/km` : 'Configurar'}
+                    </span>
+                    {u.vehiculo_tipo && (
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', textTransform: 'capitalize' }}>{u.vehiculo_tipo}</span>
+                    )}
+                  </button>
+                </div>
               </div>
             )
           })}
         </div>
+
+        {editando && (
+          <VehiculoModal
+            user={editando}
+            onClose={() => setEditando(null)}
+            onSaved={u => setUsers(prev => prev.map(p => p.id === u.id ? u : p))}
+          />
+        )}
 
         <div style={{ marginTop: 16, fontSize: 11, color: 'rgba(255,255,255,0.2)', textAlign: 'center' }}>
           {filtered.length} de {users.length} usuarios · Actualizado al cargar la página
