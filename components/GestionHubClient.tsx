@@ -30,7 +30,7 @@ const AREAS = [
   {
     key: 'produccion',
     label: 'Área de Producción',
-    description: 'Producción · Calidad · Bodega',
+    description: 'Producción · Calidad · Bodega · Mantenimiento',
     color: '#2ECC71',
     rgb: '46,204,113',
     code: 'PR',

@@ -55,7 +55,7 @@ export const MACRO_AREAS = {
     label: 'Área de Producción',
     color: '#2ECC71',
     code: 'PR',
-    areas: ['Producción', 'Calidad', 'Bodega'] as const,
+    areas: ['Producción', 'Calidad', 'Bodega', 'Mantenimiento'] as const,
   },
   logistica: {
     label: 'Logística',
@@ -107,6 +107,7 @@ export const AREA_CFG: Record<string, { color: string; dim: string; code: string
   'Producción':           { color: '#2ECC71', dim: '#071A0E', code: 'PR' },
   'Calidad':              { color: '#1ABC9C', dim: '#061512', code: 'CA' },
   'Bodega':               { color: '#F39C12', dim: '#16100A', code: 'BD' },
+  'Mantenimiento':        { color: '#3498DB', dim: '#081018', code: 'MT' },
   // Personal
   'Mi Cerebro':           { color: '#9B59B6', dim: '#100A14', code: 'MC' },
 }

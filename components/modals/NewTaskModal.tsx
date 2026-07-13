@@ -115,12 +115,16 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
-  const datePickerOpenRef = useRef(false)
   const responsablesRef = useRef<HTMLDivElement>(null)
   const areaRef = useRef<HTMLDivElement>(null)
 
   const minDate = new Date().toISOString().split('T')[0]
   const canSubmit = titulo.trim().length > 0 && plazo && selectedIds.length > 0
+  const missingFields = [
+    titulo.trim().length === 0 && 'título',
+    !plazo && 'plazo',
+    selectedIds.length === 0 && 'responsable',
+  ].filter(Boolean) as string[]
   const selectedUsers = allUsers.filter(u => selectedIds.includes(u.id))
   const macroGroups = (Object.entries(MACRO_AREAS) as [string, typeof MACRO_AREAS[keyof typeof MACRO_AREAS]][])
     .map(([key, macro]) => ({ key, label: macro.label, color: macro.color, areas: macro.areas.filter(a => availableAreas.includes(a)) }))
@@ -397,10 +401,9 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
               {/* Fecha */}
               <span style={LABEL}>Fecha de vencimiento *</span>
               <div style={{ position: 'relative' }}>
-                <div onClick={() => !datePickerOpenRef.current && dateInputRef.current?.showPicker?.()}
-                  style={{
+                <div style={{
                     display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '13px 16px', borderRadius: 14, cursor: 'pointer',
+                    padding: '13px 16px', borderRadius: 14,
                     background: plazo ? `rgba(255,255,255,0.06)` : 'rgba(255,255,255,0.04)',
                     border: `1px solid ${plazo ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.08)'}`,
                     transition: 'all 0.18s',
@@ -411,10 +414,8 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                   </span>
                 </div>
                 <input ref={dateInputRef} type="date" value={plazo} onChange={e => setPlazo(e.target.value)}
-                  onFocus={() => { datePickerOpenRef.current = true }}
-                  onBlur={() => { datePickerOpenRef.current = false }}
                   min={minDate} required
-                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
+                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
               </div>
             </div>
 
@@ -555,6 +556,12 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
               <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>Crear otra tarea después</span>
               <IOSToggle value={crearOtra} onChange={setCrearOtra} color={cfg.color} />
             </div>
+
+            {!canSubmit && missingFields.length > 0 && (
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 10, textAlign: 'center' }}>
+                Falta: {missingFields.join(', ')}
+              </div>
+            )}
 
             {/* Botones */}
             <div style={{ display: 'flex', gap: 10 }}>
@@ -720,14 +727,12 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
           <div>
             <label style={LBL}>Fecha vencimiento *</label>
             <div style={{ position: 'relative', height: 44 }}>
-              <div onClick={() => !datePickerOpenRef.current && dateInputRef.current?.showPicker?.()}
-                style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 14px', borderRadius: 10, background: plazo ? 'rgba(255,255,255,0.06)' : '#1A1D24', border: `1.5px solid ${plazo ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'}`, fontSize: 13, color: plazo ? '#F4EEDF' : '#6B7280', cursor: 'pointer', height: 44, boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 14px', borderRadius: 10, background: plazo ? 'rgba(255,255,255,0.06)' : '#1A1D24', border: `1.5px solid ${plazo ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'}`, fontSize: 13, color: plazo ? '#F4EEDF' : '#6B7280', height: 44, boxSizing: 'border-box' }}>
                 <span>📅</span>
                 <span style={{ flex: 1 }}>{plazo ? new Date(plazo+'T12:00:00').toLocaleDateString('es-CL', { day:'2-digit', month:'short', year:'numeric' }) : 'Seleccionar fecha'}</span>
               </div>
               <input ref={dateInputRef} type="date" value={plazo} onChange={e => setPlazo(e.target.value)}
-                onFocus={() => { datePickerOpenRef.current = true }} onBlur={() => { datePickerOpenRef.current = false }}
-                min={minDate} required style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
+                min={minDate} required style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
             </div>
           </div>
         </div>
@@ -891,6 +896,9 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
             <IOSToggle value={crearOtra} onChange={setCrearOtra} color={cfg.color} />
             <span style={{ fontSize: 12, color: '#9CA3AF' }}>Crear otra tarea después</span>
           </label>
+          {!canSubmit && missingFields.length > 0 && (
+            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Falta: {missingFields.join(', ')}</span>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={onClose}
               style={{ padding: '10px 22px', borderRadius: 10, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, color: '#9CA3AF', fontWeight: 600 }}>
