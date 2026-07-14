@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { Resend } from 'resend'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
-import { sendPushToUsers } from '@/lib/push'
+import { sendPushToAll } from '@/lib/push'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -144,10 +144,12 @@ export async function POST(req: NextRequest) {
 
   if (taskErr) return NextResponse.json({ error: taskErr.message }, { status: 500 })
 
-  // Notificación push a todos los responsables
-  sendPushToUsers(allIds, {
-    title: '📋 Nueva tarea asignada',
-    body: titulo,
+  // Notificación push a TODOS los usuarios de la app (no solo a los responsables) —
+  // awaited para que no se corte a mitad en el entorno serverless de Vercel.
+  const responsableNombres = responsables.map(r => r.nombre).join(', ')
+  await sendPushToAll({
+    title: '📋 Nueva tarea creada',
+    body: `${titulo} — Asignada a ${responsableNombres}`,
     taskId: task.id,
     tag: `task-assigned-${task.id}`,
     requireInteraction: true,
