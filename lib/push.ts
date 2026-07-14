@@ -12,6 +12,8 @@ function initVapid() {
       pub,
       priv
     )
+  } else {
+    console.error('Push: faltan variables VAPID en el entorno (NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY) — no se puede enviar ninguna notificación push')
   }
 }
 
@@ -48,6 +50,8 @@ export async function sendPushToUser(userId: string, payload: PushPayload) {
           // Si el endpoint ya no es válido (410/404), eliminarlo
           if (err.statusCode === 410 || err.statusCode === 404) {
             supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint).then(() => {})
+          } else {
+            console.error(`Push: fallo al enviar a user ${userId} (status ${err.statusCode ?? '?'}):`, err.body ?? err.message ?? err)
           }
         })
       )
@@ -72,7 +76,7 @@ export async function sendPushToEmail(email: string, payload: PushPayload) {
 
     if (!subs?.length) return
 
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       subs.map(sub =>
         webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
@@ -80,6 +84,7 @@ export async function sendPushToEmail(email: string, payload: PushPayload) {
         )
       )
     )
+    results.forEach(r => { if (r.status === 'rejected') console.error(`Push: fallo al enviar a ${email}:`, r.reason) })
   } catch (e) {
     console.error('Push to email error:', e)
   }
@@ -121,6 +126,8 @@ export async function sendPushToAll(payload: PushPayload) {
         ).catch(err => {
           if (err.statusCode === 410 || err.statusCode === 404) {
             supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint).then(() => {})
+          } else {
+            console.error(`Push: fallo al enviar a ${sub.user_email ?? sub.user_id} (status ${err.statusCode ?? '?'}):`, err.body ?? err.message ?? err)
           }
         })
       )
