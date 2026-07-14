@@ -79,9 +79,13 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
 
   const isResponsable   = task.responsable_id === currentUserId || (task.responsable_ids ?? []).includes(currentUserId ?? '')
   const canChangeStatus = isResponsable || isAdmin
-  const canApprove      = task.estado === 'Por Aprobar' && isAdmin
-  const canSubmit       = task.estado === 'En Proceso' && isResponsable
   const isCreator       = !!currentUserId && task.creado_por === currentUserId
+  // Tarea que alguien se asignó a sí mismo (único responsable = quien la creó):
+  // no tiene sentido exigir aprobación de un tercero, así que el propio responsable puede cerrarla.
+  const responsableIds  = (task.responsable_ids?.length ? task.responsable_ids : [task.responsable_id])
+  const isSelfAssigned  = responsableIds.length === 1 && responsableIds[0] === task.creado_por
+  const canApprove      = task.estado === 'Por Aprobar' && (isAdmin || (isSelfAssigned && isCreator))
+  const canSubmit       = task.estado === 'En Proceso' && isResponsable
   const canDelete       = isAdmin || isCreator
 
   // ── API helpers ──────────────────────────────────────────
