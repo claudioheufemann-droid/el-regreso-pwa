@@ -146,6 +146,10 @@ export async function POST(req: NextRequest) {
 
   // Notificación push a TODOS los usuarios de la app (no solo a los responsables) —
   // awaited para que no se corte a mitad en el entorno serverless de Vercel.
+  // Solo llega a quien ya activó notificaciones en su celular (push_subscriptions);
+  // si un responsable nunca lo activó, no hay error que loguear — simplemente no
+  // hay ningún endpoint al que enviarle nada. El email de abajo es el respaldo que
+  // sí le llega a cualquiera con email válido, sin necesitar activación previa.
   const responsableNombres = responsables.map(r => r.nombre).join(', ')
   await sendPushToAll({
     title: '📋 Nueva tarea creada',
@@ -153,18 +157,23 @@ export async function POST(req: NextRequest) {
     taskId: task.id,
     tag: `task-assigned-${task.id}`,
     requireInteraction: true,
-  }).catch(() => {})
+  }).catch(err => console.error('sendPushToAll falló para tasks/assign:', err))
 
   // Enviar email + .ics a TODOS los responsables
   const resendKey = process.env.RESEND_API_KEY
-  if (resendKey) {
+  if (!resendKey) {
+    console.error('tasks/assign: RESEND_API_KEY no está configurada — no se envió ningún email de notificación')
+  } else {
     try {
       const resend = new Resend(resendKey)
       const icsContent = buildIcs({ titulo, descripcion: descripcion ?? '', plazo, area })
       const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'
 
-      // Email individual a cada responsable
-      await Promise.allSettled(responsables.map(r => {
+      // Email individual a cada responsable. Promise.allSettled no basta para
+      // detectar fallos: el SDK de Resend devuelve {data,error} en vez de
+      // lanzar, así que un "settled/fulfilled" puede igual traer error adentro
+      // y antes quedaba invisible — ahora se loguea cada caso explícitamente.
+      const resultados = await Promise.allSettled(responsables.map(r => {
         const otros = responsables.filter(x => x.id !== r.id).map(x => x.nombre)
         return resend.emails.send({
           from: `El Regreso Control <${fromEmail}>`,
@@ -177,8 +186,19 @@ export async function POST(req: NextRequest) {
           }],
         })
       }))
+
+      resultados.forEach((r, i) => {
+        const destinatario = responsables[i].email
+        if (r.status === 'rejected') {
+          console.error(`tasks/assign: email a ${destinatario} lanzó excepción:`, r.reason)
+        } else if (r.value?.error) {
+          console.error(`tasks/assign: Resend devolvió error para ${destinatario}:`, r.value.error)
+        } else {
+          console.log(`tasks/assign: email enviado a ${destinatario} (id: ${r.value?.data?.id})`)
+        }
+      })
     } catch (emailErr) {
-      console.error('Email error:', emailErr)
+      console.error('tasks/assign: error inesperado enviando emails:', emailErr)
     }
   }
 
