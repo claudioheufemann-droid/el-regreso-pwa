@@ -73,28 +73,28 @@ function buildEmailHtml(
       </div>
     </div>
 
-    <p style="font-size:13px;color:#3A3530;margin-bottom:6px">Hola <strong style="color:#F4EEDF">${responsableNombre}</strong>,</p>
-    <p style="font-size:13px;color:#3A3530;margin-bottom:24px">Se te ha asignado una nueva tarea:</p>
+    <p style="font-size:13px;color:#A39C90;margin-bottom:6px">Hola <strong style="color:#F4EEDF">${responsableNombre}</strong>,</p>
+    <p style="font-size:13px;color:#A39C90;margin-bottom:24px">Se te ha asignado una nueva tarea:</p>
 
     <div style="background:#0E0E0E;border:1px solid rgba(212,175,55,0.2);border-radius:6px;padding:20px;margin-bottom:20px">
       <div style="font-size:18px;font-weight:800;color:#F4EEDF;margin-bottom:8px">${task.titulo}</div>
       <div style="font-size:10px;color:#D4AF37;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px">${task.area}</div>
-      ${task.descripcion ? `<p style="font-size:13px;color:#3A3530;line-height:1.6;margin-bottom:12px">${task.descripcion}</p>` : ''}
+      ${task.descripcion ? `<p style="font-size:13px;color:#A39C90;line-height:1.6;margin-bottom:12px">${task.descripcion}</p>` : ''}
       <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,68,68,0.06);border:1px solid rgba(255,68,68,0.15);border-radius:3px">
         <span style="font-size:11px;color:#FF6666">⏰ Plazo:</span>
         <span style="font-size:11px;font-weight:700;color:#F4EEDF">${fechaStr}</span>
       </div>
       ${otrosNombres.length > 0 ? `
       <div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:3px">
-        <span style="font-size:10px;color:#5A5450">También asignado a: </span>
-        <span style="font-size:10px;color:#8A8076">${otrosNombres.join(', ')}</span>
+        <span style="font-size:10px;color:#8A8276">También asignado a: </span>
+        <span style="font-size:10px;color:#B5AEA2">${otrosNombres.join(', ')}</span>
       </div>` : ''}
     </div>
 
-    <p style="font-size:11px;color:#2A2522;margin-bottom:4px">El archivo adjunto <strong style="color:#3A3530">tarea.ics</strong> agrega esta tarea automáticamente a tu calendario.</p>
+    <p style="font-size:11px;color:#6B6460;margin-bottom:4px">El archivo adjunto <strong style="color:#A39C90">tarea.ics</strong> agrega esta tarea automáticamente a tu calendario.</p>
 
     <div style="border-top:1px solid rgba(255,255,255,0.05);margin-top:32px;padding-top:16px">
-      <p style="font-size:10px;color:#2A2522">Cervecería El Regreso · Sistema Operativo Ejecutivo</p>
+      <p style="font-size:10px;color:#6B6460">Cervecería El Regreso · Sistema Operativo Ejecutivo</p>
     </div>
   </div>
 </body>
