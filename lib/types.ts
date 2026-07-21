@@ -18,12 +18,14 @@ export const VENDEDORES_DB = ['Equipo Ventas'] as const
 //   'R. Metropolitana': ['Región Metropolitana', 'Juan Pérez']
 //
 export const VENDEDOR_GRUPOS: Record<string, string[]> = {
-  'Equipo Ventas':     ['Equipo Ventas', 'Vendedor 1'],   // histórico despersonalizado
+  // histórico despersonalizado + ex-vendedores + cuentas internas/admin que
+  // quedaron como dueños de algunos clientes en la BD (clientes.vendedor)
+  'Equipo Ventas':     ['Equipo Ventas', 'Vendedor 1', 'Javier Badilla', 'Carlos Urrejola', 'Douglas Koenig', 'Mariel Lillo', 'Rodrigo Solis', 'Benja Alarcón', 'CERVECERÍA'],
   'OnLine':            ['OnLine'],
-  'R. Metropolitana':  ['Región Metropolitana'],   // ← reemplazar con nombre real cuando llegue
-  'R. Araucanía':      ['Región de la Araucanía'], // ← ídem
-  'R. de los Ríos':    ['Región de los Ríos'],     // ← ídem
-  'R. de los Lagos':   ['Región de los Lagos'],    // ← ídem
+  'R. Metropolitana':  ['Región Metropolitana', 'Yadro Fabijancic'],
+  'R. Araucanía':      ['Región de la Araucanía', 'Marcelo Diaz'],
+  'R. de los Ríos':    ['Región de los Ríos'],
+  'R. de los Lagos':   ['Región de los Lagos'],
 }
 
 // Mapeo BD → display (derivado de VENDEDOR_GRUPOS — no editar manualmente)

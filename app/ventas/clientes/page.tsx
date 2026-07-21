@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, VENDEDORES_DB, esClienteExcluido } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_SCOPE, esClienteExcluido } from '@/lib/types'
 import { getUltimaVentasCached } from '@/lib/misionesCache'
 import ClientesClient from './ClientesClient'
 
@@ -23,10 +23,11 @@ export default async function ClientesPage() {
   const appUser  = await getServerUser()
 
   const vendedoresScope = appUser?.isAdmin ? VENDEDORES : VENDEDORES.filter(v => v === appUser?.nombre)
-  // El campo clientes.vendedor guarda nombres REALES (Javier/Carlos), no el display
-  // "Vendedor 1". Para el query usamos VENDEDORES_DB; si no, no matchea y la lista
-  // sale vacía. (Equipo consolidado en un vendedor → todos ven la cartera del equipo.)
-  const scopeDB: string[] = [...VENDEDORES_DB]
+  // El campo clientes.vendedor guarda nombres REALES (Marcelo Diaz, Yadro Fabijancic,
+  // Javier/Carlos históricos, etc.), no solo el display "Equipo Ventas". Usamos
+  // VENDEDORES_SCOPE (todos los nombres reales agrupados en lib/types.ts) para no
+  // dejar fuera clientes cuyo vendedor no sea el histórico consolidado.
+  const scopeDB: string[] = [...VENDEDORES_SCOPE]
 
   const { data: periodo } = await supabase
     .from('periodos').select('id, nombre, fecha_inicio, fecha_fin').eq('activo', true).single()

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { VENDEDORES_SCOPE } from '@/lib/types'
 import ReportesClient from './ReportesClient'
 
 export default async function ReportesPage() {
@@ -8,7 +9,7 @@ export default async function ReportesPage() {
   const { data: clientes } = await supabase
     .from('clientes')
     .select('nombre_fantasia, vendedor, ruta_despacho, categoria, telefono')
-    .in('vendedor', ['Equipo Ventas', 'Vendedor 1'])
+    .in('vendedor', VENDEDORES_SCOPE)
     .order('nombre_fantasia')
 
   // Todos los contactos (últimos 90 días)
