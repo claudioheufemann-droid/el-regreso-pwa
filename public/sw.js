@@ -1,7 +1,7 @@
 // El Regreso Control — Service Worker
 // Maneja push notifications + caché offline + badge de ícono con número
 
-const CACHE_NAME = 'el-regreso-v49'
+const CACHE_NAME = 'el-regreso-v50'
 const OFFLINE_URL = '/offline'
 
 const STATIC_ASSETS = [
@@ -12,10 +12,28 @@ const STATIC_ASSETS = [
   '/icons/icon-512x512.png',
 ]
 
+// Pantallas de terreno: se precachean best-effort (una por una, sin que el
+// fallo de una tumbe a las demás) para que un vendedor que ya abrió la app
+// con señal pueda entrar a "Nueva visita" aunque después se quede sin
+// cobertura por completo — no solo cuando ya tenía la pantalla en caché por
+// haber navegado antes.
+const TERRENO_ASSETS = [
+  '/terreno',
+  '/terreno/nueva-visita',
+  '/terreno/historial',
+  '/terreno/jornada',
+  '/terreno/cercanos',
+]
+
 // ── Install ────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS).catch(() => {}))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.allSettled([
+        cache.addAll(STATIC_ASSETS),
+        ...TERRENO_ASSETS.map((url) => cache.add(url).catch(() => {})),
+      ])
+    )
   )
   self.skipWaiting()
 })

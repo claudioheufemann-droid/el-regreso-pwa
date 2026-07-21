@@ -9,14 +9,18 @@ import { useEffect, useState } from 'react'
 import { WifiOff, RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { startAutoFlush, onQueueChange } from '@/lib/offlineQueue'
+import { startPhotoAutoFlush, onPhotoQueueChange } from '@/lib/offlinePhotoQueue'
 
 export default function OfflineBadge() {
   const [online, setOnline] = useState(true)
-  const [pendientes, setPendientes] = useState(0)
+  const [pendientesDatos, setPendientesDatos] = useState(0)
+  const [pendientesFotos, setPendientesFotos] = useState(0)
+  const pendientes = pendientesDatos + pendientesFotos
 
   useEffect(() => {
     const supabase = createClient()
     startAutoFlush(supabase)
+    startPhotoAutoFlush(supabase)
 
     setOnline(navigator.onLine)
     const onOnline  = () => setOnline(true)
@@ -24,12 +28,14 @@ export default function OfflineBadge() {
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
 
-    const unsub = onQueueChange(setPendientes)
+    const unsub1 = onQueueChange(setPendientesDatos)
+    const unsub2 = onPhotoQueueChange(setPendientesFotos)
 
     return () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
-      unsub()
+      unsub1()
+      unsub2()
     }
   }, [])
 

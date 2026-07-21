@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { notificar } from '@/lib/notificar'
 import { upsertOrQueue } from '@/lib/offlineQueue'
+import { uploadConTimeout } from '@/lib/offlinePhotoQueue'
 import { hapticExito } from '@/lib/haptics'
 import { useRouter } from 'next/navigation'
 import {
@@ -1723,43 +1724,19 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientePre])
 
-  async function onCheckinConfirmado(
+  const keyMap: Record<string, string> = {
+    exterior: 'foto_exterior',
+    exhibicion: 'foto_exhibicion',
+    competencia: 'foto_competencia',
+  }
+
+  function onCheckinConfirmado(
     coords: { lat: number; lng: number; addr: string },
     _fotos: Record<string, string>,
     fotosFiles: Record<string, File>,
   ) {
     setGps(coords)
     if (!visitaId) { setPaso(3); return }
-
-    // Subir fotos a Supabase Storage y obtener URLs públicas
-    const photoUrls: Record<string, string | null> = {
-      foto_exterior: null,
-      foto_exhibicion: null,
-      foto_competencia: null,
-    }
-    const keyMap: Record<string, string> = {
-      exterior: 'foto_exterior',
-      exhibicion: 'foto_exhibicion',
-      competencia: 'foto_competencia',
-    }
-    // Sin conexión: las fotos no se pueden encolar (binarios), se omiten sin
-    // bloquear el flujo. El pedido y los datos del cliente sí se preservan.
-    await Promise.all(
-      Object.entries(fotosFiles).map(async ([key, file]) => {
-        try {
-          const path = `${visitaId}/${key}.jpg`
-          const { error } = await supabase.storage
-            .from('terreno-fotos')
-            .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
-          if (!error) {
-            const { data: { publicUrl } } = supabase.storage
-              .from('terreno-fotos')
-              .getPublicUrl(path)
-            photoUrls[keyMap[key]] = publicUrl
-          }
-        } catch { /* sin conexión — se omite la foto, no bloquea el flujo */ }
-      })
-    )
 
     // Geofencing: si el cliente tiene coordenadas registradas, valida que el
     // check-in esté a ≤50m de esa ubicación. No bloquea el flujo (el GPS del
@@ -1777,13 +1754,27 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
       ...visitaDraft.current,
       id: visitaId,
       lat: coords.lat, lng: coords.lng, direccion_gps: coords.addr,
-      ...photoUrls,
       ...geofence,
     }
     setSyncPendiente(true)
     upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
 
+    // Avanza de inmediato — el vendedor no debe quedar esperando a que las
+    // fotos terminen de subir (con mala señal eso podía colgarse minutos).
     setPaso(3)
+
+    // Subida de fotos en segundo plano: si no hay señal (o se cae en <7s),
+    // uploadConTimeout la guarda en IndexedDB y el reintento automático la
+    // sube sola apenas vuelva la conexión — nunca se pierde.
+    const vId = visitaId
+    Object.entries(fotosFiles).forEach(([key, file]) => {
+      const campo = keyMap[key]
+      uploadConTimeout(supabase, vId, key, campo, file).then(publicUrl => {
+        if (!publicUrl) return
+        visitaDraft.current = { ...visitaDraft.current, [campo]: publicUrl }
+        upsertOrQueue(supabase, 'visitas_terreno', { id: vId, [campo]: publicUrl })
+      })
+    })
   }
 
   function onVista360Continuar(items: ItemCarrito[]) { setCarritoInicial(items); setPaso(4) }
