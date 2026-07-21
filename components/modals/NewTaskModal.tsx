@@ -141,6 +141,20 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // El input <input type=date> invisible superpuesto no siempre capta el
+  // tap de forma confiable en mobile (dentro de un contenedor con scroll,
+  // detrás de backdrop-filter, etc.) — se dispara el selector nativo
+  // explícitamente al tocar la card visible, con fallback a .click() en
+  // navegadores sin showPicker() (Safari < 16.4).
+  function abrirSelectorFecha() {
+    const el = dateInputRef.current
+    if (!el) return
+    if (typeof el.showPicker === 'function') {
+      try { el.showPicker(); return } catch { /* cae a .click() */ }
+    }
+    el.click()
+  }
+
   function handleAreaChange(area: string) { setSelectedArea(area); setSelectedIds([]); setShowAreaDropdown(false) }
   function toggleUser(id: string) {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -401,9 +415,9 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
               {/* Fecha */}
               <span style={LABEL}>Fecha de vencimiento *</span>
               <div style={{ position: 'relative' }}>
-                <div style={{
+                <div onClick={abrirSelectorFecha} style={{
                     display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '13px 16px', borderRadius: 14,
+                    padding: '13px 16px', borderRadius: 14, cursor: 'pointer',
                     background: plazo ? `rgba(255,255,255,0.06)` : 'rgba(255,255,255,0.04)',
                     border: `1px solid ${plazo ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.08)'}`,
                     transition: 'all 0.18s',
@@ -415,7 +429,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                 </div>
                 <input ref={dateInputRef} type="date" value={plazo} onChange={e => setPlazo(e.target.value)}
                   min={minDate} required
-                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer', pointerEvents: 'none' }} />
               </div>
             </div>
 
@@ -727,12 +741,12 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
           <div>
             <label style={LBL}>Fecha vencimiento *</label>
             <div style={{ position: 'relative', height: 44 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 14px', borderRadius: 10, background: plazo ? 'rgba(255,255,255,0.06)' : '#1A1D24', border: `1.5px solid ${plazo ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'}`, fontSize: 13, color: plazo ? '#F4EEDF' : '#6B7280', height: 44, boxSizing: 'border-box' }}>
+              <div onClick={abrirSelectorFecha} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: plazo ? 'rgba(255,255,255,0.06)' : '#1A1D24', border: `1.5px solid ${plazo ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'}`, fontSize: 13, color: plazo ? '#F4EEDF' : '#6B7280', height: 44, boxSizing: 'border-box' }}>
                 <span>📅</span>
                 <span style={{ flex: 1 }}>{plazo ? new Date(plazo+'T12:00:00').toLocaleDateString('es-CL', { day:'2-digit', month:'short', year:'numeric' }) : 'Seleccionar fecha'}</span>
               </div>
               <input ref={dateInputRef} type="date" value={plazo} onChange={e => setPlazo(e.target.value)}
-                min={minDate} required style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                min={minDate} required style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer', pointerEvents: 'none' }} />
             </div>
           </div>
         </div>
