@@ -252,6 +252,15 @@ function taskPorAprobarHtml(params: {
 
 // ── Funciones públicas de envío ─────────────────────────────────────────
 
+// El SDK de Resend devuelve {data,error} en vez de lanzar excepción en fallos
+// de la API (dominio no verificado, key inválida, destinatario inválido…),
+// así que un .catch() solo no alcanza para detectarlos — hay que revisar
+// `error` explícitamente o el fallo queda invisible en los logs.
+function logResultado(tag: string, destinatarios: string[], result: Awaited<ReturnType<Resend['emails']['send']>>) {
+  if (result.error) console.error(`Email ${tag} falló para ${destinatarios.join(', ')}:`, result.error)
+  else console.log(`Email ${tag} enviado a ${destinatarios.join(', ')} (id: ${result.data?.id})`)
+}
+
 export async function emailTaskAsignada(params: {
   toEmail: string
   toNombre: string
@@ -262,14 +271,15 @@ export async function emailTaskAsignada(params: {
   asignadoPor?: string
 }) {
   const resend = getResend()
-  if (!resend) return
+  if (!resend) { console.error('emailTaskAsignada: RESEND_API_KEY no configurada'); return }
 
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: `El Regreso Control <${FROM}>`,
     to: [params.toEmail],
     subject: `📋 Nueva tarea: ${params.taskTitulo}`,
     html: taskAsignadaHtml({ destinatarioNombre: params.toNombre, taskTitulo: params.taskTitulo, taskArea: params.taskArea, taskPlazo: params.taskPlazo, taskDescripcion: params.taskDescripcion, asignadoPor: params.asignadoPor }),
-  }).catch(e => console.error('Email asignada error:', e))
+  }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
+  logResultado('asignada', [params.toEmail], result)
 }
 
 export async function emailTaskAprobada(params: {
@@ -280,14 +290,15 @@ export async function emailTaskAprobada(params: {
   aprobadoPor?: string
 }) {
   const resend = getResend()
-  if (!resend) return
+  if (!resend) { console.error('emailTaskAprobada: RESEND_API_KEY no configurada'); return }
 
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: `El Regreso Control <${FROM}>`,
     to: [params.toEmail],
     subject: `✅ Tarea aprobada: ${params.taskTitulo}`,
     html: taskAprobadaHtml({ destinatarioNombre: params.toNombre, taskTitulo: params.taskTitulo, taskArea: params.taskArea, aprobadoPor: params.aprobadoPor }),
-  }).catch(e => console.error('Email aprobada error:', e))
+  }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
+  logResultado('aprobada', [params.toEmail], result)
 }
 
 export async function emailTaskRechazada(params: {
@@ -298,14 +309,15 @@ export async function emailTaskRechazada(params: {
   motivo?: string
 }) {
   const resend = getResend()
-  if (!resend) return
+  if (!resend) { console.error('emailTaskRechazada: RESEND_API_KEY no configurada'); return }
 
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: `El Regreso Control <${FROM}>`,
     to: [params.toEmail],
     subject: `❌ Tarea rechazada: ${params.taskTitulo}`,
     html: taskRechazadaHtml({ destinatarioNombre: params.toNombre, taskTitulo: params.taskTitulo, taskArea: params.taskArea, motivo: params.motivo }),
-  }).catch(e => console.error('Email rechazada error:', e))
+  }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
+  logResultado('rechazada', [params.toEmail], result)
 }
 
 export async function emailComentarioNuevo(params: {
@@ -317,14 +329,15 @@ export async function emailComentarioNuevo(params: {
   comentario: string
 }) {
   const resend = getResend()
-  if (!resend) return
+  if (!resend) { console.error('emailComentarioNuevo: RESEND_API_KEY no configurada'); return }
 
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: `El Regreso Control <${FROM}>`,
     to: [params.toEmail],
     subject: `💬 Comentario en: ${params.taskTitulo}`,
     html: comentarioNuevoHtml({ destinatarioNombre: params.toNombre, taskTitulo: params.taskTitulo, taskArea: params.taskArea, autorNombre: params.autorNombre, comentario: params.comentario }),
-  }).catch(e => console.error('Email comentario error:', e))
+  }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
+  logResultado('comentario', [params.toEmail], result)
 }
 
 export async function emailTaskPorAprobar(params: {
@@ -338,12 +351,14 @@ export async function emailTaskPorAprobar(params: {
   fotoDespuesUrl?: string
 }) {
   const resend = getResend()
-  if (!resend || !params.toEmails.length) return
+  if (!resend) { console.error('emailTaskPorAprobar: RESEND_API_KEY no configurada'); return }
+  if (!params.toEmails.length) return
 
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: `El Regreso Control <${FROM}>`,
     to: params.toEmails,
     subject: `⭐ Por aprobar: ${params.taskTitulo}`,
     html: taskPorAprobarHtml(params),
-  }).catch(e => console.error('Email por aprobar error:', e))
+  }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
+  logResultado('por aprobar', params.toEmails, result)
 }

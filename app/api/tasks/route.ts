@@ -214,38 +214,35 @@ export async function PATCH(req: NextRequest) {
     }).catch(() => {})
   }
 
-  // Notificar al responsable si su tarea fue aprobada o rechazada
+  // Notificar a TODOS los asignados (no solo al responsable principal) si la
+  // tarea fue aprobada o rechazada.
   if ((updates.estado === 'Completada' || updates.estado === 'Rechazada') &&
-      before?.estado === 'Por Aprobar' && data.responsable_id) {
+      before?.estado === 'Por Aprobar') {
     const isApproved = updates.estado === 'Completada'
-    const responsableEmail = data.responsable?.email
-    const responsableNombre = data.responsable?.nombre ?? 'Responsable'
+    const destinatarioIds: string[] = Array.from(new Set(
+      (data.responsable_ids?.length ? data.responsable_ids : [data.responsable_id]).filter(Boolean)
+    ))
 
-    // Push + Email al responsable
-    sendPushToUser(data.responsable_id, {
-      title: isApproved ? '✅ Tarea aprobada' : '❌ Tarea rechazada',
-      body: data.titulo,
-      taskId: data.id,
-      tag: `status-${data.id}`,
-    }).catch(() => {})
+    if (destinatarioIds.length > 0) {
+      const { data: destinatarios } = await supabase
+        .from('users')
+        .select('id, nombre, email')
+        .in('id', destinatarioIds)
 
-    if (responsableEmail) {
-      if (isApproved) {
-        emailTaskAprobada({
-          toEmail: responsableEmail,
-          toNombre: responsableNombre,
-          taskTitulo: data.titulo,
-          taskArea: data.area,
-        }).catch(() => {})
-      } else {
-        emailTaskRechazada({
-          toEmail: responsableEmail,
-          toNombre: responsableNombre,
-          taskTitulo: data.titulo,
-          taskArea: data.area,
-          motivo: updates.nota_rechazo,
-        }).catch(() => {})
-      }
+      await Promise.allSettled((destinatarios ?? []).flatMap(dest => [
+        sendPushToUser(dest.id, {
+          title: isApproved ? '✅ Tarea aprobada' : '❌ Tarea rechazada',
+          body: data.titulo,
+          taskId: data.id,
+          tag: `status-${data.id}`,
+        }).catch(err => console.error(`tasks PATCH: push a ${dest.id} falló:`, err)),
+        dest.email
+          ? (isApproved
+              ? emailTaskAprobada({ toEmail: dest.email, toNombre: dest.nombre, taskTitulo: data.titulo, taskArea: data.area })
+              : emailTaskRechazada({ toEmail: dest.email, toNombre: dest.nombre, taskTitulo: data.titulo, taskArea: data.area, motivo: updates.nota_rechazo })
+            ).catch(err => console.error(`tasks PATCH: email a ${dest.email} falló:`, err))
+          : Promise.resolve(),
+      ]))
     }
   }
 
