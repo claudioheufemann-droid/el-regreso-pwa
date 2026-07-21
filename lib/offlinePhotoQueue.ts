@@ -3,24 +3,29 @@
 /**
  * Cola de fotos offline — para terreno con mala señal.
  *
- * Las fotos de check-in (exterior/exhibición/competencia) son binarios y no
- * caben en la cola de texto de lib/offlineQueue.ts (localStorage). Se
- * guardan en IndexedDB como Blob y se reintenta subirlas cuando vuelve la
- * conexión, igual que la cola de filas: al recuperar conexión ('online') y
- * cada 20s mientras haya pendientes.
+ * Las fotos (check-in, odómetro, boletas) son binarios y no caben en la
+ * cola de texto de lib/offlineQueue.ts (localStorage). Se guardan en
+ * IndexedDB como Blob y se reintenta subirlas cuando vuelve la conexión,
+ * igual que la cola de filas: al recuperar conexión ('online') y cada 20s
+ * mientras haya pendientes.
  *
- * Al subir con éxito, se hace un upsert parcial de la fila visitas_terreno
- * con solo esa columna de foto — seguro aunque hayan pasado horas y el
- * componente de la visita ya no exista en memoria.
+ * Al subir con éxito, se hace un upsert parcial de la fila destino con
+ * solo esa columna — seguro aunque hayan pasado horas y el componente que
+ * originó la foto ya no exista en memoria.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { upsertOrQueue } from './offlineQueue'
 
-interface QueuedPhoto {
-  id: string          // `${visitaId}:${key}`
-  visitaId: string
-  key: string          // 'exterior' | 'exhibicion' | 'competencia'
-  campo: string         // columna destino en visitas_terreno
+interface UploadSpec {
+  bucket: string           // ej. 'terreno-fotos'
+  path: string              // ej. `${visitaId}/exterior.jpg`
+  table: string             // ej. 'visitas_terreno'
+  rowId: string             // id de la fila a parchar
+  campo: string             // columna destino (ej. 'foto_exterior')
+}
+
+interface QueuedPhoto extends UploadSpec {
+  id: string          // clave única en IndexedDB — `${table}:${rowId}:${campo}`
   blob: Blob
   contentType: string
   createdAt: number
@@ -77,12 +82,12 @@ export async function photoQueueCount(): Promise<number> {
   return (await getAllPhotos()).length
 }
 
-/** Guarda una foto de check-in que no se pudo subir por falta de conexión. */
-export async function queuePhoto(visitaId: string, key: string, campo: string, file: File | Blob): Promise<void> {
+/** Guarda una foto que no se pudo subir por falta de conexión. */
+export async function queuePhoto(spec: UploadSpec, file: File | Blob): Promise<void> {
   if (typeof window === 'undefined' || !('indexedDB' in window)) return
   const record: QueuedPhoto = {
-    id: `${visitaId}:${key}`,
-    visitaId, key, campo,
+    ...spec,
+    id: `${spec.table}:${spec.rowId}:${spec.campo}`,
     blob: file,
     contentType: file.type || 'image/jpeg',
     createdAt: Date.now(),
@@ -100,17 +105,14 @@ export async function flushPhotoQueue(supabase: SupabaseClient): Promise<void> {
 
   for (const p of pending) {
     try {
-      const path = `${p.visitaId}/${p.key}.jpg`
       const { error } = await supabase.storage
-        .from('terreno-fotos')
-        .upload(path, p.blob, { upsert: true, contentType: p.contentType })
+        .from(p.bucket)
+        .upload(p.path, p.blob, { upsert: true, contentType: p.contentType })
       if (error) throw error
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('terreno-fotos')
-        .getPublicUrl(path)
+      const { data: { publicUrl } } = supabase.storage.from(p.bucket).getPublicUrl(p.path)
 
-      await upsertOrQueue(supabase, 'visitas_terreno', { id: p.visitaId, [p.campo]: publicUrl })
+      await upsertOrQueue(supabase, p.table, { id: p.rowId, [p.campo]: publicUrl })
       await withStore('readwrite', s => s.delete(p.id))
     } catch {
       // sigue en cola, se reintenta en el próximo flush
@@ -132,22 +134,23 @@ export function startPhotoAutoFlush(supabase: SupabaseClient): void {
   if (navigator.onLine) flushPhotoQueue(supabase)
 }
 
-/** Sube una foto con un timeout corto — en vez de colgarse minutos sin señal, falla rápido y se encola. */
+/**
+ * Sube una foto con un timeout corto — en vez de colgarse minutos sin
+ * señal, falla rápido y la encola. Devuelve la URL pública si se subió al
+ * toque, o null si quedó pendiente (ya encolada para reintento automático).
+ */
 export async function uploadConTimeout(
   supabase: SupabaseClient,
-  visitaId: string,
-  key: string,
-  campo: string,
+  spec: UploadSpec,
   file: File,
   timeoutMs = 7000,
 ): Promise<string | null> {
-  const path = `${visitaId}/${key}.jpg`
   const upload = supabase.storage
-    .from('terreno-fotos')
-    .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
+    .from(spec.bucket)
+    .upload(spec.path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
     .then(({ error }) => {
       if (error) throw error
-      const { data: { publicUrl } } = supabase.storage.from('terreno-fotos').getPublicUrl(path)
+      const { data: { publicUrl } } = supabase.storage.from(spec.bucket).getPublicUrl(spec.path)
       return publicUrl
     })
 
@@ -158,7 +161,7 @@ export async function uploadConTimeout(
   try {
     return await Promise.race([upload, timeout])
   } catch {
-    await queuePhoto(visitaId, key, campo, file)
+    await queuePhoto(spec, file)
     return null
   }
 }

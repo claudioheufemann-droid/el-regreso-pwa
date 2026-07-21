@@ -1769,7 +1769,8 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     const vId = visitaId
     Object.entries(fotosFiles).forEach(([key, file]) => {
       const campo = keyMap[key]
-      uploadConTimeout(supabase, vId, key, campo, file).then(publicUrl => {
+      const spec = { bucket: 'terreno-fotos', path: `${vId}/${key}.jpg`, table: 'visitas_terreno', rowId: vId, campo }
+      uploadConTimeout(supabase, spec, file).then(publicUrl => {
         if (!publicUrl) return
         visitaDraft.current = { ...visitaDraft.current, [campo]: publicUrl }
         upsertOrQueue(supabase, 'visitas_terreno', { id: vId, [campo]: publicUrl })

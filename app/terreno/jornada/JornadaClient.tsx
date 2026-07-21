@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/ui/AppHeader'
 import { createClient } from '@/lib/supabase/client'
+import { upsertOrQueue } from '@/lib/offlineQueue'
+import { uploadConTimeout, queuePhoto } from '@/lib/offlinePhotoQueue'
 import { Gauge, Fuel, CheckCircle2, AlertTriangle, Flag } from 'lucide-react'
 
 const ORANGE = '#F97316'
@@ -79,6 +81,7 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
   const [analizandoFin, setAnalizandoFin] = useState(false)
   const [cerrando, setCerrando] = useState(false)
   const [resultado, setResultado] = useState<Jornada | null>(null)
+  const [cierrePendiente, setCierrePendiente] = useState(false)
 
   // Combustible
   const [mostrarCombustible, setMostrarCombustible] = useState(false)
@@ -110,40 +113,48 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
     setAnalizando(false)
   }
 
-  async function subirFoto(file: File, nombre: string): Promise<string | null> {
-    try {
-      const path = `jornadas/${vendedorId}/${Date.now()}-${nombre}.jpg`
-      const { error } = await supabase.storage.from('terreno-fotos').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
-      if (error) return null
-      const { data: { publicUrl } } = supabase.storage.from('terreno-fotos').getPublicUrl(path)
-      return publicUrl
-    } catch { return null }
-  }
-
-  async function iniciarJornada() {
+  // Inicia la jornada de inmediato con un id generado en el cliente — no
+  // depende de la red para existir. La foto se sube en segundo plano (con
+  // timeout corto) y si no hay señal queda en cola, se sube sola después.
+  function iniciarJornada() {
     if (!kmInicio || !fotoInicioFile) return
     setCreando(true)
-    try {
-      const fotoUrl = await subirFoto(fotoInicioFile, 'odometro-inicio')
-      if (!fotoUrl) { alert('No se pudo subir la foto. Revisa tu conexión.'); return }
-      const res = await fetch('/api/terreno/jornada', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ km_inicio: parseInt(kmInicio, 10), foto_odometro_inicio: fotoUrl }),
-      })
-      const data = await res.json()
-      if (!res.ok) { alert(data.error ?? 'Error al iniciar la jornada'); return }
-      setJornada(data)
-    } finally {
-      setCreando(false)
+    const id = crypto.randomUUID()
+    const nueva: Jornada = {
+      id, km_inicio: parseInt(kmInicio, 10), foto_odometro_inicio: null,
+      km_fin: null, km_declarados: null, km_gps: null, diferencia_pct: null,
+      requiere_revision: null, monto_reembolso: null, estado: 'abierta',
+      iniciada_at: new Date().toISOString(),
     }
+    upsertOrQueue(supabase, 'jornadas_terreno', {
+      id, vendedor_id: vendedorId, km_inicio: nueva.km_inicio, estado: 'abierta', iniciada_at: nueva.iniciada_at,
+    })
+    setJornada(nueva)
+    setCreando(false)
+
+    const path = `jornadas/${vendedorId}/${Date.now()}-odometro-inicio.jpg`
+    uploadConTimeout(supabase, { bucket: 'terreno-fotos', path, table: 'jornadas_terreno', rowId: id, campo: 'foto_odometro_inicio' }, fotoInicioFile)
+      .then(url => { if (url) setJornada(j => j && j.id === id ? { ...j, foto_odometro_inicio: url } : j) })
   }
 
+  // El cierre calcula reembolso y km reales por GPS en el servidor — sí
+  // necesita señal. Si la foto no sube al toque, se encola (no se pierde)
+  // y se avisa para volver a intentar el cierre cuando haya conexión.
   async function cerrarJornada() {
     if (!jornada || !kmFin || !fotoFinFile) return
     setCerrando(true)
+    setCierrePendiente(false)
     try {
-      const fotoUrl = await subirFoto(fotoFinFile, 'odometro-fin')
-      if (!fotoUrl) { alert('No se pudo subir la foto. Revisa tu conexión.'); return }
+      const path = `jornadas/${vendedorId}/${Date.now()}-odometro-fin.jpg`
+      const spec = { bucket: 'terreno-fotos', path, table: 'jornadas_terreno', rowId: jornada.id, campo: 'foto_odometro_fin' }
+      let fotoUrl: string | null = null
+      if (!navigator.onLine) {
+        await queuePhoto(spec, fotoFinFile)
+      } else {
+        fotoUrl = await uploadConTimeout(supabase, spec, fotoFinFile)
+      }
+      if (!fotoUrl) { setCierrePendiente(true); return }
+
       const res = await fetch(`/api/terreno/jornada/${jornada.id}/cerrar`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ km_fin: parseInt(kmFin, 10), foto_odometro_fin: fotoUrl }),
@@ -152,27 +163,34 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
       if (!res.ok) { alert(data.error ?? 'Error al cerrar la jornada'); return }
       setResultado(data)
       setJornada(null)
+    } catch {
+      setCierrePendiente(true)
     } finally {
       setCerrando(false)
     }
   }
 
-  async function registrarCarga() {
+  // La carga de combustible es un insert simple (sin cálculos), se puede
+  // hacer sin señal igual que el resto de terreno.
+  function registrarCarga() {
     if (!jornada || !monto) return
     setGuardandoCarga(true)
-    try {
-      const fotoUrl = fotoBoletaFile ? await subirFoto(fotoBoletaFile, 'boleta') : null
-      const res = await fetch(`/api/terreno/jornada/${jornada.id}/combustible`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ monto: parseInt(monto, 10), litros: litros ? parseFloat(litros) : undefined, foto_boleta_url: fotoUrl ?? undefined }),
-      })
-      const data = await res.json()
-      if (!res.ok) { alert(data.error ?? 'Error al registrar la carga'); return }
-      setCargas(prev => [...prev, data])
-      setMonto(''); setLitros(''); setFotoBoletaFile(null); setMostrarCombustible(false)
-    } finally {
-      setGuardandoCarga(false)
+    const id = crypto.randomUUID()
+    const montoNum = parseInt(monto, 10)
+    const litrosNum = litros ? parseFloat(litros) : null
+    upsertOrQueue(supabase, 'cargas_combustible_terreno', {
+      id, jornada_id: jornada.id, vendedor_id: vendedorId, monto: montoNum, litros: litrosNum,
+      registrado_at: new Date().toISOString(),
+    })
+    setCargas(prev => [...prev, { id, monto: montoNum, litros: litrosNum, registrado_at: new Date().toISOString() }])
+    setMonto(''); setLitros(''); setMostrarCombustible(false)
+    setGuardandoCarga(false)
+
+    if (fotoBoletaFile) {
+      const path = `jornadas/${vendedorId}/${Date.now()}-boleta.jpg`
+      uploadConTimeout(supabase, { bucket: 'terreno-fotos', path, table: 'cargas_combustible_terreno', rowId: id, campo: 'foto_boleta_url' }, fotoBoletaFile)
     }
+    setFotoBoletaFile(null)
   }
 
   if (loading) return <div style={{ background: 'var(--bg)', minHeight: '100vh' }} />
@@ -312,6 +330,12 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
 
                 <FotoSlot label="odómetro final" capturada={!!fotoFinFile} onCaptura={f => { setFotoFinFile(f); analizar(f, 'fin') }} />
                 {analizandoFin && <p style={{ fontSize: 11, color: ORANGE, marginTop: -6, marginBottom: 12 }}>Leyendo odómetro con IA…</p>}
+                {cierrePendiente && (
+                  <p style={{ fontSize: 11, color: '#FBBF24', marginBottom: 12, lineHeight: 1.5 }}>
+                    ⚠ Sin señal ahora mismo — la foto quedó guardada en el teléfono y se sube sola apenas
+                    tengas conexión. Vuelve a esta pantalla y toca &quot;Confirmar cierre&quot; de nuevo cuando tengas señal.
+                  </p>
+                )}
 
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
