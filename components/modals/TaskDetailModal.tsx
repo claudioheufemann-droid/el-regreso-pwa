@@ -51,6 +51,7 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
   const [editTitulo, setEditTitulo]       = useState(task.titulo)
   const [editDesc, setEditDesc]           = useState(task.descripcion ?? '')
   const [editNota, setEditNota]           = useState(task.nota_admin ?? '')
+  const [editPlazo, setEditPlazo]         = useState(task.plazo ? task.plazo.slice(0, 10) : '')
   const [savingAdmin, setSavingAdmin]     = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting]           = useState(false)
@@ -137,7 +138,7 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
   function submitForApproval() { patch({ estado: 'Por Aprobar' }) }
   function startTask()         { patch({ estado: 'En Proceso' }) }
   async function saveResumen() { setSavingResumen(true); await patch({ resumen_cierre: resumen }); setSavingResumen(false) }
-  async function saveAdmin()   { setSavingAdmin(true); await patch({ titulo: editTitulo.trim(), descripcion: editDesc.trim(), nota_admin: editNota.trim() }); setSavingAdmin(false) }
+  async function saveAdmin()   { setSavingAdmin(true); await patch({ titulo: editTitulo.trim(), descripcion: editDesc.trim(), nota_admin: editNota.trim(), plazo: editPlazo || undefined }); setSavingAdmin(false) }
   async function deleteTask()  {
     setDeleting(true)
     setDeleteError(null)
@@ -296,6 +297,12 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
               <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 5 }}>Descripción</div>
               <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={2}
                 style={{ width: '100%', boxSizing: 'border-box', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', padding: '9px 12px', fontSize: 12, resize: 'none' }} />
+            </div>
+
+            <div>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 5 }}>Fecha de vencimiento</div>
+              <input type="date" value={editPlazo} onChange={e => setEditPlazo(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', padding: '9px 12px', fontSize: 12, colorScheme: 'dark' }} />
             </div>
 
             <div>
