@@ -1725,7 +1725,9 @@ function EvidenciaFAB({ pendientes, onClick }: { pendientes: number; onClick: ()
     <button
       onClick={onClick}
       style={{
-        position: 'fixed', right: 16, bottom: 'max(90px, calc(74px + env(safe-area-inset-bottom, 0px)))',
+        // Suficientemente arriba para no taparse con ninguna barra inferior de
+        // los distintos pasos (el carrito de Paso4, los 2 botones de Paso2, etc.)
+        position: 'fixed', right: 16, bottom: 'max(160px, calc(144px + env(safe-area-inset-bottom, 0px)))',
         zIndex: 70, display: 'flex', alignItems: 'center', gap: 8,
         padding: '12px 16px', borderRadius: 100, border: `1px solid ${pendientes > 0 ? T_BORDER : 'rgba(255,255,255,0.12)'}`,
         background: pendientes > 0 ? 'rgba(212,175,55,0.14)' : 'rgba(20,20,20,0.9)',
