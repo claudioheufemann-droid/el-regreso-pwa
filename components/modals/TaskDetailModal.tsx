@@ -500,8 +500,9 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
         }}>
           {/* Botón X */}
           <button onClick={onClose} style={{
-            position: 'sticky', top: 16, zIndex: 20,
-            marginLeft: 'auto', marginRight: 16, marginTop: 16,
+            position: 'sticky', top: 'max(16px, env(safe-area-inset-top, 16px))', zIndex: 20,
+            marginLeft: 'auto', marginRight: 16,
+            marginTop: 'max(16px, env(safe-area-inset-top, 16px))',
             width: 34, height: 34, borderRadius: '50%',
             background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
             color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 16,
