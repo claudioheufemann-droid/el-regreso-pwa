@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { RcTask, AREA_CFG, STATUS_CFG } from '@/lib/gestion-types'
+import { RcTask, RcUser, AREA_CFG, STATUS_CFG } from '@/lib/gestion-types'
 import Avatar from '@/components/ui/Avatar'
 import { formatDate } from '@/lib/format'
 import { createClient } from '@/lib/supabase/client'
@@ -17,6 +17,7 @@ interface Props {
   onDelete?: (id: string) => void
   isAdmin?: boolean
   currentUserId?: string
+  users?: RcUser[]
 }
 
 const STATUS_FLOW = ['Asignada', 'En Proceso', 'Por Aprobar', 'Completada'] as const
@@ -39,7 +40,7 @@ const CONSEJO: Record<string, string> = {
   'Atrasada':    'Esta tarea está atrasada. Actívala o reasígnala lo antes posible.',
 }
 
-export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, onDelete, isAdmin, currentUserId }: Props) {
+export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, onDelete, isAdmin, currentUserId, users }: Props) {
   const [task, setTask]                   = useState(initialTask)
   const [commTab, setCommTab]             = useState<'chat' | 'fotos'>('chat')
   const [showAdminPanel, setShowAdminPanel] = useState(false)
@@ -604,6 +605,14 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
                       ))}
                     </div>
                   ) : <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>Sin asignar</div>}
+                  {(() => {
+                    const creadorNombre = users?.find(u => u.id === task.creado_por)?.nombre
+                    return creadorNombre ? (
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        Creada por {creadorNombre}
+                      </div>
+                    ) : null
+                  })()}
                 </div>
 
                 {/* Plazo */}

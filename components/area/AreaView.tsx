@@ -283,7 +283,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
                   <span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 1.5 }}>SIN TAREAS EN ESTE ESTADO</span>
                 </div>
               ) : filtered.map(t => (
-                <TaskRow key={t.id} task={t} onClick={() => { if (!selectMode) setSelectedTask(t) }} selectable={selectMode} selected={selectedIds.has(t.id)} onToggle={toggleId} showMeta />
+                <TaskRow key={t.id} task={t} onClick={() => { if (!selectMode) setSelectedTask(t) }} selectable={selectMode} selected={selectedIds.has(t.id)} onToggle={toggleId} showMeta creadorNombre={users.find(u => u.id === t.creado_por)?.nombre} />
               ))}
             </div>
           </>
@@ -429,7 +429,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
                 <span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 1.5 }}>SIN TAREAS EN ESTE ESTADO</span>
               </div>
             ) : filtered.map(t => (
-              <TaskRow key={t.id} task={t} onClick={() => { if (!selectMode) setSelectedTask(t) }} selectable={selectMode} selected={selectedIds.has(t.id)} onToggle={toggleId} showMeta />
+              <TaskRow key={t.id} task={t} onClick={() => { if (!selectMode) setSelectedTask(t) }} selectable={selectMode} selected={selectedIds.has(t.id)} onToggle={toggleId} showMeta creadorNombre={users.find(u => u.id === t.creado_por)?.nombre} />
             ))
           )}
           {viewMode === 'equipo' && (
@@ -517,7 +517,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
         )}
 
         {showNew && <NewTaskModal defaultArea={area} availableAreas={[...AREAS]} users={users} onClose={() => setShowNew(false)} onCreated={handleCreated} />}
-        {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
+        {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} users={users} />}
       </div>
     )
   }
@@ -668,6 +668,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
           onDelete={handleDelete}
           isAdmin={isAdmin}
           currentUserId={currentUserId}
+          users={users}
         />
       )}
     </div>

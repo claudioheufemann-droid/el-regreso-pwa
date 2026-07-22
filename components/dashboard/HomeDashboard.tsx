@@ -419,6 +419,8 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             {proximos.map((t, idx) => {
               const { day, mon } = fP(t.plazo)
               const c = vCol(t.plazo)
+              const respNombre = (t.responsables?.[0] ?? users.find(u => u.id === t.responsable_id))?.nombre
+              const creadorNombre = users.find(u => u.id === t.creado_por)?.nombre
               return (
                 <div key={t.id} onClick={() => setSelectedTask(t)}
                   style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', borderBottom: idx < proximos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', cursor: 'pointer' }}
@@ -434,7 +436,12 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                   {/* Título */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 600, color: CREAM, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 2 }}>{t.titulo}</div>
-                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{t.prioridad_maxima ? 'Alta prioridad' : 'Media'}</div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{t.area} · {t.prioridad_maxima ? 'Alta prioridad' : 'Media'}</div>
+                    {(respNombre || creadorNombre) && (
+                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>
+                        {respNombre ? `Resp: ${respNombre.split(' ')[0]}` : ''}{respNombre && creadorNombre ? ' · ' : ''}{creadorNombre ? `creada por ${creadorNombre.split(' ')[0]}` : ''}
+                      </div>
+                    )}
                   </div>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
                 </div>
@@ -460,6 +467,8 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           ) : pendientes.map((t, idx) => {
             const { day, mon } = fP(t.plazo)
             const vc = vCol(t.plazo)
+            const respNombre = (t.responsables?.[0] ?? users.find(u => u.id === t.responsable_id))?.nombre
+            const creadorNombre = users.find(u => u.id === t.creado_por)?.nombre
             return (
               <div key={t.id} onClick={() => setSelectedTask(t)}
                 style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '12px 16px', borderBottom: idx < pendientes.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', cursor: 'pointer' }}
@@ -470,7 +479,12 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                 {/* Texto */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600, color: CREAM, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 2 }}>{t.titulo}</div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{t.area}</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
+                    {t.area}{respNombre ? ` · Resp: ${respNombre.split(' ')[0]}` : ''}
+                  </div>
+                  {creadorNombre && (
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 1 }}>creada por {creadorNombre.split(' ')[0]}</div>
+                  )}
                 </div>
                 {/* Badge fecha */}
                 <div style={{ flexShrink: 0, background: vc === RED_DIM ? 'rgba(181,84,62,0.12)' : 'rgba(212,175,55,0.1)', border: `1px solid ${vc === RED_DIM ? 'rgba(181,84,62,0.3)' : 'rgba(212,175,55,0.22)'}`, borderRadius: 8, padding: '5px 9px' }}>
@@ -491,7 +505,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)}
             onUpdate={t => { onTaskUpdated(t); setSelectedTask(null) }}
             onDelete={id => { onTaskDeleted(id); setSelectedTask(null) }}
-            isAdmin={isAdmin} currentUserId={currentUserId} />
+            isAdmin={isAdmin} currentUserId={currentUserId} users={users} />
         )}
       </div>
     )
@@ -774,6 +788,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                 const vColor = vencimientoColor(t.plazo)
                 const cfg = AREA_CFG[t.area] ?? { color: '#888', code: '??' }
                 const resps = (t.responsables ?? [users.find(u => u.id === t.responsable_id)].filter(Boolean)) as RcUser[]
+                const creadorNombre = users.find(u => u.id === t.creado_por)?.nombre
                 return (
                   <div key={t.id} onClick={() => setSelectedTask(t)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', padding: '7px 8px', borderRadius: 10, transition: 'background 0.15s' }}
                     onMouseEnter={e => (e.currentTarget.style.background='rgba(128,128,128,0.07)')}
@@ -785,7 +800,8 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{t.titulo}</div>
                       <div style={{ fontSize: 9, color: 'var(--muted)', marginBottom: 5 }}>Vence {daysLabel(t.plazo)} · {formatPlazo(t.plazo)}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 7, background: `${cfg.color}18`, color: cfg.color, fontWeight: 700 }}>{t.area}</span>
                         <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 7, background: t.prioridad_maxima?'rgba(220,38,38,0.12)':'rgba(212,175,55,0.1)', color: t.prioridad_maxima?'#B5543E':'#D4AF37', fontWeight: 700 }}>{t.prioridad_maxima?'Alta':'Media'}</span>
                         <div style={{ display: 'flex' }}>
                           {resps.slice(0,3).map((u,i) => (
@@ -794,6 +810,9 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
                           {resps.length>3 && <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(128,128,128,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 6, color: 'var(--muted)', marginLeft: -5 }}>+{resps.length-3}</div>}
                         </div>
                       </div>
+                      {creadorNombre && (
+                        <div style={{ fontSize: 8, color: 'rgba(128,128,128,0.5)', marginTop: 3 }}>creada por {creadorNombre.split(' ')[0]}</div>
+                      )}
                     </div>
                   </div>
                 )
@@ -1070,7 +1089,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
         <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)}
           onUpdate={t => { onTaskUpdated(t); setSelectedTask(null) }}
           onDelete={id => { onTaskDeleted(id); setSelectedTask(null) }}
-          isAdmin={isAdmin} currentUserId={currentUserId} />
+          isAdmin={isAdmin} currentUserId={currentUserId} users={users} />
       )}
     </div>
   )

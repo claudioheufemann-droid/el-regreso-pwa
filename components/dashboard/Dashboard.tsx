@@ -479,7 +479,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {grupo.items.map(t => (
-                        <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta />
+                        <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta creadorNombre={users.find(u => u.id === t.creado_por)?.nombre} />
                       ))}
                     </div>
                   </div>
@@ -636,7 +636,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                           {g.items.map(t => (
-                            <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta />
+                            <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta creadorNombre={users.find(u => u.id === t.creado_por)?.nombre} />
                           ))}
                         </div>
                       </div>
@@ -675,7 +675,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                   {[...currentFilter.items]
                     .sort((a, b) => a.plazo.localeCompare(b.plazo))
                     .map(t => (
-                      <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta />
+                      <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta creadorNombre={users.find(u => u.id === t.creado_por)?.nombre} />
                     ))
                   }
                 </div>
@@ -787,7 +787,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
         })}
       </nav>
 
-      {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
+      {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} users={users} />}
       {showNewTask && <NewTaskModal defaultArea={defaultNewTaskArea} availableAreas={availableTaskAreas} users={users} onClose={() => setShowNewTask(false)} onCreated={(t) => { setTasks(prev => [t, ...prev]); setShowNewTask(false) }} />}
     </div>
   )

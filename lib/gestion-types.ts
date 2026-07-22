@@ -29,6 +29,7 @@ export interface RcTask {
   contador_retrasos: number
   created_at?: string
   creado_por?: string
+  creador?: RcUser
   nota_rechazo?: string
   nota_admin?: string
   foto_antes_url?: string

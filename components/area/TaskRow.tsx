@@ -9,9 +9,10 @@ interface Props {
   selected?: boolean
   onToggle?: (id: string) => void
   showMeta?: boolean   // muestra área + todos los responsables
+  creadorNombre?: string
 }
 
-export default function TaskRow({ task, onClick, selectable, selected, onToggle, showMeta }: Props) {
+export default function TaskRow({ task, onClick, selectable, selected, onToggle, showMeta, creadorNombre }: Props) {
   const plazo = formatPlazo(task.plazo)
   const done = task.estado === 'Completada'
   const sCfg = STATUS_CFG[task.estado]
@@ -118,6 +119,12 @@ export default function TaskRow({ task, onClick, selectable, selected, onToggle,
                   <span style={{ fontSize: 8, color: 'var(--muted)' }}>+{allResponsables.length - 3}</span>
                 )}
               </div>
+            )}
+            {/* Creador */}
+            {creadorNombre && (
+              <span style={{ fontSize: 8, color: 'var(--muted)', opacity: 0.7 }}>
+                creada por {creadorNombre.split(' ')[0]}
+              </span>
             )}
           </div>
         )}
