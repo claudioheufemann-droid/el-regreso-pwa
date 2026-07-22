@@ -23,6 +23,7 @@ export interface RcTask {
   responsable_ids?: string[]
   responsables?: RcUser[]
   plazo: string
+  hora_limite?: string | null
   estado: TaskStatus
   prioridad_maxima: boolean
   evidencia_url?: string

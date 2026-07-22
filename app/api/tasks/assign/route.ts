@@ -19,10 +19,12 @@ async function getSupabase() {
   )
 }
 
-function buildIcs(task: { titulo: string; descripcion: string; plazo: string; area: string }): string {
+function buildIcs(task: { titulo: string; descripcion: string; plazo: string; area: string; horaLimite?: string | null }): string {
   const now = new Date()
   const [year, month, day] = task.plazo.split('-').map(Number)
-  const plazo = new Date(Date.UTC(year, month - 1, day, 9, 0, 0))
+  // Si el usuario definió una hora límite opcional se usa esa; si no, 9:00 por defecto (igual que antes).
+  const [hh, mm] = task.horaLimite ? task.horaLimite.split(':').map(Number) : [9, 0]
+  const plazo = new Date(Date.UTC(year, month - 1, day, hh, mm, 0))
   const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
   const end = new Date(plazo.getTime() + 60 * 60 * 1000)
   const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
@@ -53,12 +55,12 @@ function buildIcs(task: { titulo: string; descripcion: string; plazo: string; ar
 }
 
 function buildEmailHtml(
-  task: { titulo: string; descripcion: string; area: string; plazo: string },
+  task: { titulo: string; descripcion: string; area: string; plazo: string; horaLimite?: string | null },
   responsableNombre: string,
   otrosNombres: string[]
 ): string {
   const [y, m, d] = task.plazo.split('-').map(Number)
-  const fechaStr = `${d}/${m}/${y}`
+  const fechaStr = task.horaLimite ? `${d}/${m}/${y} · ${task.horaLimite.slice(0, 5)}` : `${d}/${m}/${y}`
 
   return `
 <!DOCTYPE html>
@@ -103,7 +105,7 @@ function buildEmailHtml(
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { titulo, descripcion, area, sub_area, responsable_id, responsable_ids, plazo, prioridad_maxima, evidencia_url } = body
+  const { titulo, descripcion, area, sub_area, responsable_id, responsable_ids, plazo, hora_limite, prioridad_maxima, evidencia_url } = body
 
   // responsable_ids puede venir como array; si no, usar responsable_id como único
   const allIds: string[] = responsable_ids?.length > 0 ? responsable_ids : [responsable_id]
@@ -133,6 +135,7 @@ export async function POST(req: NextRequest) {
       responsable_id: primaryId,
       responsable_ids: allIds,
       plazo,
+      ...(hora_limite ? { hora_limite } : {}),
       prioridad_maxima: prioridad_maxima ?? false,
       estado: 'Asignada',
       contador_retrasos: 0,
@@ -166,7 +169,7 @@ export async function POST(req: NextRequest) {
   } else {
     try {
       const resend = new Resend(resendKey)
-      const icsContent = buildIcs({ titulo, descripcion: descripcion ?? '', plazo, area })
+      const icsContent = buildIcs({ titulo, descripcion: descripcion ?? '', plazo, area, horaLimite: hora_limite })
       const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'
 
       // Email individual a cada responsable. Promise.allSettled no basta para
@@ -179,7 +182,7 @@ export async function POST(req: NextRequest) {
           from: `El Regreso Control <${fromEmail}>`,
           to: [r.email],
           subject: `Nueva tarea asignada: ${titulo}`,
-          html: buildEmailHtml({ titulo, descripcion: descripcion ?? '', area, plazo }, r.nombre, otros),
+          html: buildEmailHtml({ titulo, descripcion: descripcion ?? '', area, plazo, horaLimite: hora_limite }, r.nombre, otros),
           attachments: [{
             filename: 'tarea.ics',
             content: Buffer.from(icsContent).toString('base64'),

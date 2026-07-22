@@ -156,7 +156,9 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   const [titulo, setTitulo] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [buscarResp, setBuscarResp] = useState('')
   const [plazo, setPlazo] = useState('')
+  const [horaLimite, setHoraLimite] = useState('')
   const [priority, setPriority] = useState('Alta')
   const [prioridad, setPrioridad] = useState(true)
 
@@ -198,6 +200,9 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
     selectedIds.length === 0 && 'responsable',
   ].filter(Boolean) as string[]
   const selectedUsers = allUsers.filter(u => selectedIds.includes(u.id))
+  const usersFiltrados = buscarResp.trim()
+    ? allUsers.filter(u => u.nombre.toLowerCase().includes(buscarResp.trim().toLowerCase()))
+    : allUsers
   const macroGroups = (Object.entries(MACRO_AREAS) as [string, typeof MACRO_AREAS[keyof typeof MACRO_AREAS]][])
     .map(([key, macro]) => ({ key, label: macro.label, color: macro.color, areas: macro.areas.filter(a => availableAreas.includes(a)) }))
     .filter(g => g.areas.length > 0)
@@ -274,6 +279,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
           titulo: titulo.trim(), descripcion: descripcion.trim(),
           area: selectedArea, responsable_id: selectedIds[0] ?? null, responsable_ids: selectedIds,
           plazo: plazo,
+          hora_limite: horaLimite || undefined,
           prioridad_maxima: prioridad || priority === 'Alta',
           evidencia_url: evidencias[0] ?? undefined,
           nota_admin: meta.length > 0 ? meta.join('\n') : undefined,
@@ -283,7 +289,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
       const task = await res.json()
       onCreated(task)
       if (!crearOtra) onClose()
-      else { setTitulo(''); setDescripcion(''); setSelectedIds([]); setPlazo(''); setAttachedFiles([]) }
+      else { setTitulo(''); setDescripcion(''); setSelectedIds([]); setPlazo(''); setHoraLimite(''); setAttachedFiles([]) }
     } catch { setError('Error al crear la tarea. Intenta nuevamente.') }
     finally { setLoading(false) }
   }
@@ -425,10 +431,18 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                 </button>
                 {showResponsablesDropdown && (
                   <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200, background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, marginTop: 6, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+                    <div style={{ padding: 10, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                      <input
+                        value={buscarResp} onChange={e => setBuscarResp(e.target.value)}
+                        placeholder="Buscar por nombre..." autoFocus
+                        onClick={e => e.stopPropagation()}
+                        style={{ width: '100%', padding: '9px 12px', borderRadius: 9, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                      />
+                    </div>
                     <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-                      {allUsers.length === 0
-                        ? <div style={{ padding: 16, fontSize: 12, color: '#6B7280', textAlign: 'center' }}>No hay usuarios en esta área</div>
-                        : allUsers.map(u => {
+                      {usersFiltrados.length === 0
+                        ? <div style={{ padding: 16, fontSize: 12, color: '#6B7280', textAlign: 'center' }}>{allUsers.length === 0 ? 'No hay usuarios en esta área' : 'Sin resultados'}</div>
+                        : usersFiltrados.map(u => {
                           const sel = selectedIds.includes(u.id)
                           return (
                             <button key={u.id} type="button" onClick={() => toggleUser(u.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: sel ? `${cfg.color}12` : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s' }}>
@@ -442,7 +456,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                           )
                         })}
                     </div>
-                    <button type="button" onClick={() => setShowResponsablesDropdown(false)} style={{ width: '100%', padding: '13px', border: 'none', borderTop: '1px solid rgba(255,255,255,0.07)', background: selectedIds.length > 0 ? cfg.color : 'rgba(255,255,255,0.04)', cursor: 'pointer', fontSize: 13, fontWeight: 800, color: selectedIds.length > 0 ? '#000' : '#9CA3AF' }}>
+                    <button type="button" onClick={() => { setShowResponsablesDropdown(false); setBuscarResp('') }} style={{ width: '100%', padding: '13px', border: 'none', borderTop: '1px solid rgba(255,255,255,0.07)', background: selectedIds.length > 0 ? cfg.color : 'rgba(255,255,255,0.04)', cursor: 'pointer', fontSize: 13, fontWeight: 800, color: selectedIds.length > 0 ? '#000' : '#9CA3AF' }}>
                       {selectedIds.length > 0 ? `Confirmar (${selectedIds.length} seleccionado${selectedIds.length > 1 ? 's' : ''})` : 'Cerrar'}
                     </button>
                   </div>
@@ -489,6 +503,24 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                 </div>
                 {showCalendar && (
                   <MiniCalendar value={plazo} minDate={minDate} accent={cfg.color} onSelect={iso => { setPlazo(iso); setShowCalendar(false) }} />
+                )}
+              </div>
+
+              {/* Hora límite — opcional */}
+              <span style={{ ...LABEL, marginTop: 14 }}>Hora límite (opcional)</span>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '13px 16px', borderRadius: 14,
+                background: horaLimite ? `rgba(255,255,255,0.06)` : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${horaLimite ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.08)'}`,
+              }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: horaLimite ? `${cfg.color}20` : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🕐</div>
+                <input
+                  type="time" value={horaLimite} onChange={e => setHoraLimite(e.target.value)}
+                  style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 14, color: horaLimite ? '#F4EEDF' : 'rgba(255,255,255,0.3)', fontWeight: horaLimite ? 600 : 400, colorScheme: 'dark' }}
+                />
+                {horaLimite && (
+                  <button type="button" onClick={() => setHoraLimite('')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: 13, cursor: 'pointer', padding: 4 }}>✕</button>
                 )}
               </div>
             </div>
@@ -704,7 +736,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
         </div>
 
         {/* FIRST ROW */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr 1.2fr 1.1fr', gap: 10, padding: '16px 28px 0', flexShrink: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr 1.2fr 1.1fr 0.9fr', gap: 10, padding: '16px 28px 0', flexShrink: 0 }}>
           {/* Área */}
           <div ref={areaRef} style={{ position: 'relative' }}>
             <label style={LBL}>Área *</label>
@@ -757,10 +789,18 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
             </div>
             {showResponsablesDropdown && (
               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200, background: '#1A1D24', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, marginTop: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: 8, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                  <input
+                    value={buscarResp} onChange={e => setBuscarResp(e.target.value)}
+                    placeholder="Buscar por nombre..." autoFocus
+                    onClick={e => e.stopPropagation()}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
                 <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-                  {allUsers.length === 0
-                    ? <div style={{ padding: '14px', fontSize: 12, color: '#6B7280', textAlign: 'center' }}>No hay usuarios en esta área</div>
-                    : allUsers.map(u => {
+                  {usersFiltrados.length === 0
+                    ? <div style={{ padding: '14px', fontSize: 12, color: '#6B7280', textAlign: 'center' }}>{allUsers.length === 0 ? 'No hay usuarios en esta área' : 'Sin resultados'}</div>
+                    : usersFiltrados.map(u => {
                       const sel = selectedIds.includes(u.id)
                       return (
                         <button key={u.id} type="button" onClick={() => toggleUser(u.id)}
@@ -776,7 +816,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                       )
                     })}
                 </div>
-                <button type="button" onClick={() => setShowResponsablesDropdown(false)}
+                <button type="button" onClick={() => { setShowResponsablesDropdown(false); setBuscarResp('') }}
                   style={{ width: '100%', padding: '11px', border: 'none', borderTop: '1px solid rgba(255,255,255,0.07)', background: selectedIds.length > 0 ? cfg.color : 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: 12, fontWeight: 800, borderRadius: '0 0 12px 12px', color: selectedIds.length > 0 ? '#0A0A0A' : '#9CA3AF' }}>
                   {selectedIds.length > 0 ? `✓ Confirmar (${selectedIds.length} seleccionado${selectedIds.length > 1 ? 's' : ''})` : 'Cerrar'}
                 </button>
@@ -807,6 +847,21 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
               </div>
               {showCalendar && (
                 <MiniCalendar value={plazo} minDate={minDate} accent={cfg.color} onSelect={iso => { setPlazo(iso); setShowCalendar(false) }} />
+              )}
+            </div>
+          </div>
+
+          {/* Hora límite — opcional */}
+          <div>
+            <label style={LBL}>Hora límite (opcional)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 14px', borderRadius: 10, background: horaLimite ? 'rgba(255,255,255,0.06)' : '#1A1D24', border: `1.5px solid ${horaLimite ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'}`, height: 44, boxSizing: 'border-box' }}>
+              <span>🕐</span>
+              <input
+                type="time" value={horaLimite} onChange={e => setHoraLimite(e.target.value)}
+                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: horaLimite ? '#F4EEDF' : '#6B7280', colorScheme: 'dark' }}
+              />
+              {horaLimite && (
+                <button type="button" onClick={() => setHoraLimite('')} style={{ background: 'none', border: 'none', color: '#6B7280', fontSize: 12, cursor: 'pointer', padding: 2 }}>✕</button>
               )}
             </div>
           </div>
