@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation'
 import {
   MapPin, Camera, CheckCircle, XCircle, ChevronLeft, ChevronDown,
   Search, Plus, ShoppingCart, Minus, Package, AlertTriangle, MessageCircle, Share2,
-  Banknote, Landmark, CreditCard, CalendarClock,
+  Banknote, Landmark, CreditCard, CalendarClock, Loader2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
@@ -42,6 +42,16 @@ interface Producto {
   producto: string
   categoria_producto: string | null
   envase: string | null
+}
+
+interface GeoResult { lat: string; lon: string; display_name: string }
+
+interface NuevoClienteDetalle {
+  direccion: string
+  lat: number | null
+  lng: number | null
+  contacto: string
+  rut: string
 }
 
 interface FotoSlot { label: string; key: 'exterior' | 'exhibicion' | 'competencia'; emoji: string }
@@ -744,7 +754,7 @@ function StepBar({ paso, total }: { paso: number; total: number }) {
 function Paso1Cliente({ clientes, deudores, onConfirmar }: {
   clientes: ClienteExistente[]
   deudores: DeudorInfo[]
-  onConfirmar: (nombre: string, esNuevo: boolean, canal: string) => void
+  onConfirmar: (nombre: string, esNuevo: boolean, canal: string, nuevoDetalle?: NuevoClienteDetalle) => void
 }) {
   const [tab, setTab] = useState<'existente' | 'nuevo'>('existente')
   const [query, setQuery] = useState('')
@@ -752,8 +762,41 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
   const [nombre, setNombre] = useState('')
   const [canal, setCanal] = useState('')
   const [direccion, setDireccion] = useState('')
+  const [direccionCoords, setDireccionCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [contacto, setContacto] = useState('')
   const [rut, setRut] = useState('')
+
+  // Autocompletado de dirección (Nominatim) — igual patrón que RutaClient.tsx
+  const [geoResults, setGeoResults] = useState<GeoResult[]>([])
+  const [buscandoGeo, setBuscandoGeo] = useState(false)
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const q = direccion.trim()
+    if (!mostrarSugerencias || q.length < 3) { setGeoResults([]); return }
+    debounceRef.current = setTimeout(async () => {
+      setBuscandoGeo(true)
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`)
+        const data: GeoResult[] = await res.json()
+        setGeoResults(Array.isArray(data) ? data.slice(0, 5) : [])
+      } catch {
+        setGeoResults([])
+      } finally {
+        setBuscandoGeo(false)
+      }
+    }, 450)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [direccion, mostrarSugerencias])
+
+  function elegirDireccion(r: GeoResult) {
+    setDireccion(r.display_name.split(',').slice(0, 3).join(',').trim())
+    setDireccionCoords({ lat: parseFloat(r.lat), lng: parseFloat(r.lon) })
+    setGeoResults([])
+    setMostrarSugerencias(false)
+  }
 
   const filtrados = query.length > 1
     ? clientes.filter(c => c.nombre_fantasia.toLowerCase().includes(query.toLowerCase())).slice(0, 12)
@@ -855,9 +898,63 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
             )
           })()}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre de fantasía *</label>
+              <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Bar El Cóndor"
+                style={{ width: '100%', padding: '13px 14px', borderRadius: 12, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 15, outline: 'none' }} />
+            </div>
+
+            {/* Dirección con autocompletado (Nominatim) — al elegir una sugerencia
+                queda la dirección normalizada + lat/lng, sin escribir a mano. */}
+            <div style={{ position: 'relative' }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Dirección *</label>
+              <div style={{ position: 'relative' }}>
+                <MapPin size={16} style={{ position: 'absolute', left: 14, top: 15, color: direccionCoords ? '#5A8A4A' : 'rgba(255,255,255,0.3)' }} />
+                <input
+                  value={direccion}
+                  onChange={e => { setDireccion(e.target.value); setDireccionCoords(null); setMostrarSugerencias(true) }}
+                  onFocus={() => setMostrarSugerencias(true)}
+                  placeholder="Calle, número"
+                  style={{ width: '100%', padding: '13px 14px 13px 38px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${direccionCoords ? 'rgba(90,138,74,0.4)' : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 15, outline: 'none' }}
+                />
+                {buscandoGeo && (
+                  <Loader2 size={15} style={{ position: 'absolute', right: 13, top: 15, color: 'rgba(255,255,255,0.4)', animation: 'spin 0.8s linear infinite' }} />
+                )}
+              </div>
+              {direccionCoords && (
+                <p style={{ fontSize: 10, color: '#5A8A4A', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <CheckCircle size={11} /> Ubicación confirmada en el mapa
+                </p>
+              )}
+              {mostrarSugerencias && geoResults.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                  {geoResults.map((r, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => elegirDireccion(r)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
+                        minHeight: 40, padding: '8px 10px', borderRadius: 10,
+                        background: '#1C1C1C', border: '1px solid rgba(212,175,55,0.2)',
+                        color: 'var(--cream)', cursor: 'pointer', width: '100%',
+                      }}
+                    >
+                      <MapPin size={13} color={T} style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.display_name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {mostrarSugerencias && direccion.trim().length >= 3 && !buscandoGeo && geoResults.length === 0 && (
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
+                  Sin resultados. Sigue escribiendo o ajusta calle + número.
+                </p>
+              )}
+            </div>
+
             {[
-              { label: 'Nombre de fantasía *', value: nombre, onChange: setNombre, placeholder: 'Ej: Bar El Cóndor' },
-              { label: 'Dirección *',           value: direccion, onChange: setDireccion, placeholder: 'Calle, número' },
               { label: 'Contacto / Teléfono',  value: contacto, onChange: setContacto, placeholder: '+56 9 ...' },
               { label: 'RUT (opcional)',        value: rut, onChange: setRut, placeholder: '12.345.678-9' },
             ].map(f => (
@@ -883,9 +980,13 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
         <button
           onClick={() => {
             if (tab === 'existente' && seleccionado) onConfirmar(seleccionado.nombre_fantasia, false, seleccionado.categoria_negocio ?? '')
-            else if (tab === 'nuevo' && nombre && canal) onConfirmar(nombre, true, canal)
+            else if (tab === 'nuevo' && nombre && canal && direccion) {
+              onConfirmar(nombre, true, canal, {
+                direccion, lat: direccionCoords?.lat ?? null, lng: direccionCoords?.lng ?? null, contacto, rut,
+              })
+            }
           }}
-          disabled={tab === 'existente' ? !seleccionado : !nombre || !canal}
+          disabled={tab === 'existente' ? !seleccionado : !nombre || !canal || !direccion}
           style={{
             width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
             background: (tab === 'existente' ? !!seleccionado : !!nombre && !!canal) ? T : 'rgba(255,255,255,0.06)',
@@ -1899,7 +2000,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     } : {}
   )
 
-  async function onClienteConfirmado(nombre: string, esNuevo: boolean, canal: string) {
+  async function onClienteConfirmado(nombre: string, esNuevo: boolean, canal: string, nuevoDetalle?: NuevoClienteDetalle) {
     setCliente({ nombre, esNuevo, canal })
     // ID generado en el cliente — no depende de la red para existir,
     // así el resto del flujo (check-in, catálogo) puede avanzar sin conexión.
@@ -1909,11 +2010,32 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     // Guarda las coordenadas registradas del cliente (si las tiene) para
     // validar geofencing contra el GPS del check-in en el siguiente paso.
     const c = clientesExistentes.find(x => x.nombre_fantasia?.toLowerCase().trim() === nombre.toLowerCase().trim())
-    clienteCoordsRef.current = (c?.lat != null && c?.lng != null) ? { lat: c.lat, lng: c.lng } : null
+    clienteCoordsRef.current = (c?.lat != null && c?.lng != null) ? { lat: c.lat, lng: c.lng } : (nuevoDetalle?.lat != null && nuevoDetalle?.lng != null) ? { lat: nuevoDetalle.lat, lng: nuevoDetalle.lng } : null
+
+    let clienteTerrenoId: string | null = null
+    if (esNuevo && nuevoDetalle) {
+      // Antes se perdía todo lo tipeado acá (dirección/teléfono/RUT) — la visita
+      // solo guardaba el nombre. Ahora queda un cliente real en clientes_terreno,
+      // reutilizable en futuras visitas y visible en el mapa de cobertura.
+      clienteTerrenoId = crypto.randomUUID()
+      upsertOrQueue(supabase, 'clientes_terreno', {
+        id: clienteTerrenoId,
+        nombre_fantasia: nombre,
+        direccion: nuevoDetalle.direccion,
+        lat: nuevoDetalle.lat,
+        lng: nuevoDetalle.lng,
+        contacto: nuevoDetalle.contacto || null,
+        telefono: nuevoDetalle.contacto || null,
+        rut: nuevoDetalle.rut || null,
+        canal,
+        creado_por: vendedor.id,
+      })
+    }
 
     visitaDraft.current = {
       id, vendedor_id: vendedor.id, cliente_nombre: nombre, es_cliente_nuevo: esNuevo, estado: 'en_progreso',
       jornada_id: jornadaIdRef.current,
+      ...(clienteTerrenoId ? { cliente_terreno_id: clienteTerrenoId } : {}),
     }
     setSyncPendiente(true)
     upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
