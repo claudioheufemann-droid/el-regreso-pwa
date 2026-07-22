@@ -759,7 +759,7 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
     ? clientes.filter(c => c.nombre_fantasia.toLowerCase().includes(query.toLowerCase())).slice(0, 12)
     : clientes.slice(0, 8)
 
-  const canalesNegocio = ['Bar', 'Minimarket', 'Cafetería', 'Botillería', 'Almacén', 'Restaurante', 'Supermercado', 'Distribuidor', 'Actividades Turísticas', 'Cliente Directo', 'Otros']
+  const canalesNegocio = ['Bar', 'Minimarket', 'Cafetería', 'Botillería', 'Almacén', 'Restaurante', 'Supermercado', 'Distribuidor', 'Actividades Turísticas', 'Gimnasio', 'Panadería', 'Cliente Directo', 'Otros']
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
