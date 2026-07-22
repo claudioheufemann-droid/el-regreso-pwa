@@ -1691,8 +1691,10 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
               <ChevronDown size={20} style={{ transform: showCartDetail ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
             </button>
           )}
-          <button onClick={() => setShowCierre(true)} style={{
-            flex: 1, padding: '17px 20px', borderRadius: 14, border: 'none', cursor: 'pointer',
+          {/* Botón carrito/venta — solo se habilita con productos agregados */}
+          <button onClick={() => setShowCierre(true)} disabled={totalItems === 0} style={{
+            flex: 1, padding: '17px 20px', borderRadius: 14, border: 'none',
+            cursor: totalItems > 0 ? 'pointer' : 'not-allowed',
             background: totalItems > 0 ? C : 'rgba(255,255,255,0.06)',
             color: totalItems > 0 ? '#080808' : 'var(--muted)',
             fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s',
@@ -1701,7 +1703,15 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
               <ShoppingCart size={18} />
               <span>{totalItems > 0 ? `${totalItems} producto${totalItems > 1 ? 's' : ''}` : 'Carrito vacío'}</span>
             </div>
-            <span>{totalItems > 0 ? `${fmtPrecioCLP(totalPrecio)} →` : 'Sin venta →'}</span>
+            {totalItems > 0 && <span>{fmtPrecioCLP(totalPrecio)} →</span>}
+          </button>
+          {/* Botón dedicado — separado del carrito para que quede claro que es otra acción */}
+          <button onClick={() => { setSinVenta(true); setShowCierre(true) }} style={{
+            padding: '17px 18px', borderRadius: 14, border: '1.5px solid rgba(248,113,113,0.35)',
+            background: 'rgba(248,113,113,0.08)', color: '#F87171',
+            fontSize: 14, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            Sin venta
           </button>
         </div>
       </div>
