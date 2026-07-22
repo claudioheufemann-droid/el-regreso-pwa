@@ -890,14 +890,14 @@ function Paso1Cliente({ clientes, deudores, onConfirmar }: {
 
 // ─── Paso 2: Check-in GPS + Fotos ────────────────────────────
 
-function Paso2Checkin({ onConfirmar, onCancelar }: {
-  onConfirmar: (coords: { lat: number; lng: number; addr: string }, fotos: Record<string, string>, fotosFiles: Record<string, File>) => void
+function Paso2Checkin({ fotos, onAdjuntarFoto, onConfirmar, onCancelar }: {
+  fotos: Record<string, string>
+  onAdjuntarFoto: (key: string, file: File) => void
+  onConfirmar: (coords: { lat: number; lng: number; addr: string }) => void
   onCancelar: () => void
 }) {
   const [gps, setGps] = useState<{ lat: number; lng: number; addr: string } | null>(null)
   const [gpsError, setGpsError] = useState(false)
-  const [fotos, setFotos] = useState<Record<string, string>>({})
-  const [fotosFiles, setFotosFiles] = useState<Record<string, File>>({})
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => {
@@ -911,12 +911,16 @@ function Paso2Checkin({ onConfirmar, onCancelar }: {
   function handleFoto(key: string, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setFotos(prev => ({ ...prev, [key]: URL.createObjectURL(file) }))
-    setFotosFiles(prev => ({ ...prev, [key]: file }))
+    onAdjuntarFoto(key, file)
+    e.target.value = ''
   }
 
   const fotosListas = FOTO_SLOTS.filter(s => fotos[s.key]).length
-  const listo = !!gps && fotosListas === 3
+  // Las fotos ya no son obligatorias para avanzar — solo se requiere el GPS.
+  // Se pueden adjuntar en cualquier momento (acá o desde el botón flotante
+  // "Adjuntar evidencia" en los pasos siguientes); si al Finalizar la visita
+  // no hay ninguna, se avisa con un modal en vez de bloquear el flujo.
+  const listo = !!gps
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -943,14 +947,15 @@ function Paso2Checkin({ onConfirmar, onCancelar }: {
           </div>
         </div>
 
-        {/* Fotos */}
+        {/* Fotos — opcionales acá, se pueden adjuntar en cualquier momento */}
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10 }}>
-          Fotos requeridas ({fotosListas} / 3)
+          Fotos (opcional) — {fotosListas} / 3
         </p>
         <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
           {FOTO_SLOTS.map(slot => (
             <div key={slot.key} style={{ flex: 1 }}>
-              <input ref={el => { fileRefs.current[slot.key] = el }} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => handleFoto(slot.key, e)} />
+              {/* Sin "capture" — así el picker nativo ofrece cámara Y galería */}
+              <input ref={el => { fileRefs.current[slot.key] = el }} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleFoto(slot.key, e)} />
               <div onClick={() => fileRefs.current[slot.key]?.click()} style={{ height: 80, borderRadius: 12, overflow: 'hidden', cursor: 'pointer', background: fotos[slot.key] ? 'transparent' : '#1C1C1C', border: `2px solid ${fotos[slot.key] ? T : 'rgba(255,255,255,0.08)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                 {fotos[slot.key] ? (
                   <>
@@ -971,16 +976,16 @@ function Paso2Checkin({ onConfirmar, onCancelar }: {
             </div>
           ))}
         </div>
-        {!listo && <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 8 }}>{!gps ? 'Esperando GPS…' : `Falta${fotosListas < 3 ? ` ${3 - fotosListas} foto${3 - fotosListas > 1 ? 's' : ''}` : ''}`}</p>}
+        {!listo && <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 8 }}>Esperando GPS…</p>}
       </div>
 
       <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
-        <button onClick={() => gps && onConfirmar(gps, fotos, fotosFiles)} disabled={!listo} style={{
+        <button onClick={() => gps && onConfirmar(gps)} disabled={!listo} style={{
           width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed',
           background: listo ? T : 'rgba(255,255,255,0.06)', color: listo ? '#080808' : 'var(--muted)',
           fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px', transition: 'all 0.2s',
         }}>
-          {listo ? 'Iniciar visita →' : `GPS + ${3 - fotosListas} foto${3 - fotosListas !== 1 ? 's' : ''} pendiente${3 - fotosListas !== 1 ? 's' : ''}`}
+          {listo ? 'Iniciar visita →' : 'Esperando GPS…'}
         </button>
         <button onClick={onCancelar} style={{
           width: '100%', padding: '13px 0', marginTop: 10, borderRadius: 12, border: '1px solid rgba(248,113,113,0.25)',
@@ -1645,6 +1650,120 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   )
 }
 
+// ─── Botón flotante + hoja "Adjuntar evidencia" ──────────────
+// Disponible en cualquier paso posterior al check-in (una vez existe
+// visitaId), para que la carga de fotos no dependa de una sola pantalla.
+
+function EvidenciaFAB({ pendientes, onClick }: { pendientes: number; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        position: 'fixed', right: 16, bottom: 'max(90px, calc(74px + env(safe-area-inset-bottom, 0px)))',
+        zIndex: 70, display: 'flex', alignItems: 'center', gap: 8,
+        padding: '12px 16px', borderRadius: 100, border: `1px solid ${pendientes > 0 ? T_BORDER : 'rgba(255,255,255,0.12)'}`,
+        background: pendientes > 0 ? 'rgba(212,175,55,0.14)' : 'rgba(20,20,20,0.9)',
+        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+        boxShadow: '0 8px 28px rgba(0,0,0,0.5)', cursor: 'pointer',
+      }}
+    >
+      <Camera size={16} color={pendientes > 0 ? T : '#F4EEDF'} />
+      <span style={{ fontSize: 13, fontWeight: 700, color: pendientes > 0 ? T : '#F4EEDF' }}>
+        Adjuntar evidencia{pendientes > 0 ? ` (${pendientes}/3)` : ''}
+      </span>
+    </button>
+  )
+}
+
+function EvidenciaSheet({ fotos, onAdjuntarFoto, onClose }: {
+  fotos: Record<string, string>
+  onAdjuntarFoto: (key: string, file: File) => void
+  onClose: () => void
+}) {
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  function handleFoto(key: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    onAdjuntarFoto(key, file)
+    e.target.value = ''
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#1C1C1C', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px', width: '100%', maxWidth: 520 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: T_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Camera size={20} color={T} />
+          </div>
+          <div>
+            <p style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF' }}>Adjuntar evidencia</p>
+            <p style={{ fontSize: 11, color: 'var(--muted)' }}>Cámara o galería — cuando quieras</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+          {FOTO_SLOTS.map(slot => (
+            <div key={slot.key} style={{ flex: 1 }}>
+              <input ref={el => { fileRefs.current[slot.key] = el }} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleFoto(slot.key, e)} />
+              <div onClick={() => fileRefs.current[slot.key]?.click()} style={{ height: 90, borderRadius: 12, overflow: 'hidden', cursor: 'pointer', background: fotos[slot.key] ? 'transparent' : '#131313', border: `2px solid ${fotos[slot.key] ? T : 'rgba(255,255,255,0.08)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                {fotos[slot.key] ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={fotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <div style={{ position: 'absolute', bottom: 3, right: 3, width: 18, height: 18, background: T, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <CheckCircle size={11} color="#080808" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 22, marginBottom: 4 }}>{slot.emoji}</span>
+                    <Camera size={14} color="var(--muted)" />
+                  </>
+                )}
+              </div>
+              <p style={{ fontSize: 10, textAlign: 'center', color: fotos[slot.key] ? T : 'var(--muted)', marginTop: 5, fontWeight: 600 }}>{slot.label}</p>
+            </div>
+          ))}
+        </div>
+        <button onClick={onClose} style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: T, color: '#080808', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+          Listo
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Modal "Fotos pendientes de registro" ─────────────────────
+// Aparece al tocar "Finalizar" si no se adjuntó ninguna foto — ya no bloquea
+// el cierre, solo avisa y deja elegir.
+
+function FotosPendientesModal({ onCargarAhora, onFinalizarIgual }: {
+  onCargarAhora: () => void
+  onFinalizarIgual: () => void
+}) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 20 }}>
+      <div style={{ background: '#1C1C1C', borderRadius: 20, padding: 24, width: '100%', maxWidth: 380, border: '1px solid rgba(212,175,55,0.2)' }}>
+        <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(212,175,55,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+          <AlertTriangle size={24} color={T} />
+        </div>
+        <p style={{ fontSize: 17, fontWeight: 900, color: '#F4EEDF', marginBottom: 8 }}>Fotos pendientes de registro</p>
+        <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 22 }}>
+          No has adjuntado fotos a esta visita. ¿Deseas subirlas ahora antes de finalizar?
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button onClick={onCargarAhora} style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: T, color: '#080808', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+            Cargar fotos ahora
+          </button>
+          <button onClick={onFinalizarIgual} style={{ width: '100%', padding: '14px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+            Finalizar de todos modos
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Wizard principal ─────────────────────────────────────────
 
 export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos, visitaRetomada, deudores = [], clientePre = null }: Props) {
@@ -1667,6 +1786,16 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
   )
   const [carritoInicial, setCarritoInicial] = useState<ItemCarrito[]>([])
   const [syncPendiente, setSyncPendiente] = useState(false)
+
+  // Evidencia fotográfica — vive acá (no en Paso2Checkin) para que sea la
+  // misma data sin importar desde dónde se adjunte: el paso de check-in o el
+  // botón flotante "Adjuntar evidencia" disponible en los pasos siguientes.
+  const [fotos, setFotos] = useState<Record<string, string>>({})
+  const [showEvidencia, setShowEvidencia] = useState(false)
+  const [pendingCierre, setPendingCierre] = useState<{
+    items: ItemCarrito[]; tienVenta: boolean; motivo: string; obs: string
+    metodoPago: MetodoPago | null; diasCredito: number | null; fechaPagoEstimada: string | null
+  } | null>(null)
 
   // Jornada de ruta abierta (para vincular la visita y calcular el km GPS al cerrar)
   const jornadaIdRef = useRef<string | null>(null)
@@ -1730,11 +1859,24 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     competencia: 'foto_competencia',
   }
 
-  function onCheckinConfirmado(
-    coords: { lat: number; lng: number; addr: string },
-    _fotos: Record<string, string>,
-    fotosFiles: Record<string, File>,
-  ) {
+  // Adjuntar una foto de evidencia — se puede llamar desde Paso2Checkin o
+  // desde el botón flotante "Adjuntar evidencia" en cualquier paso posterior,
+  // siempre que ya exista visitaId. Sube en segundo plano (con cola offline)
+  // y no bloquea nada de la UI.
+  function subirFoto(key: string, file: File) {
+    if (!visitaId) return
+    setFotos(prev => ({ ...prev, [key]: URL.createObjectURL(file) }))
+    const vId = visitaId
+    const campo = keyMap[key]
+    const spec = { bucket: 'terreno-fotos', path: `${vId}/${key}.jpg`, table: 'visitas_terreno', rowId: vId, campo }
+    uploadConTimeout(supabase, spec, file).then(publicUrl => {
+      if (!publicUrl) return
+      visitaDraft.current = { ...visitaDraft.current, [campo]: publicUrl }
+      upsertOrQueue(supabase, 'visitas_terreno', { id: vId, [campo]: publicUrl })
+    })
+  }
+
+  function onCheckinConfirmado(coords: { lat: number; lng: number; addr: string }) {
     setGps(coords)
     if (!visitaId) { setPaso(3); return }
 
@@ -1758,24 +1900,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     }
     setSyncPendiente(true)
     upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
-
-    // Avanza de inmediato — el vendedor no debe quedar esperando a que las
-    // fotos terminen de subir (con mala señal eso podía colgarse minutos).
     setPaso(3)
-
-    // Subida de fotos en segundo plano: si no hay señal (o se cae en <7s),
-    // uploadConTimeout la guarda en IndexedDB y el reintento automático la
-    // sube sola apenas vuelva la conexión — nunca se pierde.
-    const vId = visitaId
-    Object.entries(fotosFiles).forEach(([key, file]) => {
-      const campo = keyMap[key]
-      const spec = { bucket: 'terreno-fotos', path: `${vId}/${key}.jpg`, table: 'visitas_terreno', rowId: vId, campo }
-      uploadConTimeout(supabase, spec, file).then(publicUrl => {
-        if (!publicUrl) return
-        visitaDraft.current = { ...visitaDraft.current, [campo]: publicUrl }
-        upsertOrQueue(supabase, 'visitas_terreno', { id: vId, [campo]: publicUrl })
-      })
-    })
   }
 
   function onVista360Continuar(items: ItemCarrito[]) { setCarritoInicial(items); setPaso(4) }
@@ -1794,8 +1919,22 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     router.push('/terreno')
   }
 
-  async function onCerrar(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null) {
+  // Botón "Confirmar y finalizar" de Paso4 llega hasta acá primero. Si no hay
+  // ninguna foto de evidencia adjuntada, no cierra de inmediato — guarda los
+  // datos pendientes y muestra el modal de aviso en vez de bloquear como
+  // antes exigía el check-in. El vendedor decide si carga fotos ahora o
+  // finaliza igual (quedando fotos_status = 'PENDIENTE').
+  function onCerrarIntentado(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null) {
+    if (Object.keys(fotos).length === 0) {
+      setPendingCierre({ items, tienVenta, motivo, obs, metodoPago, diasCredito, fechaPagoEstimada })
+      return
+    }
+    ejecutarCierre(items, tienVenta, motivo, obs, metodoPago, diasCredito, fechaPagoEstimada)
+  }
+
+  async function ejecutarCierre(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null) {
     if (!visitaId) return
+    setPendingCierre(null)
     setGuardando(true)
     try {
       const total = items.reduce((s, i) => s + i.cantidad * (i.precio || CATALOGO_INFO[i.producto]?.precio_lata || 0), 0)
@@ -1806,6 +1945,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
         tiene_venta: tienVenta, motivo_sin_venta: tienVenta ? null : motivo,
         observaciones: obs || null, total_pedido: total, estado: 'completada', completada_at: new Date().toISOString(),
         metodo_pago: metodoPago, dias_credito: diasCredito, fecha_pago_estimada: fechaPagoEstimada,
+        fotos_status: Object.keys(fotos).length > 0 ? 'COMPLETO' : 'PENDIENTE',
       }
       const rVisita = await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
 
@@ -1899,7 +2039,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
       </div>
 
       {paso === 1 && <Paso1Cliente clientes={clientesExistentes} deudores={deudores} onConfirmar={onClienteConfirmado} />}
-      {paso === 2 && <Paso2Checkin onConfirmar={onCheckinConfirmado} onCancelar={cancelarVisita} />}
+      {paso === 2 && <Paso2Checkin fotos={fotos} onAdjuntarFoto={subirFoto} onConfirmar={onCheckinConfirmado} onCancelar={cancelarVisita} />}
       {paso === 3 && !cliente?.esNuevo && <Paso3Vista360 clienteNombre={cliente?.nombre ?? ''} esNuevo={false} onContinuar={onVista360Continuar} />}
       {(paso === 4 || (paso === 3 && cliente?.esNuevo)) && (
         <Paso4Catalogo
@@ -1907,7 +2047,25 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
           clienteNombre={cliente?.nombre ?? ''}
           vendedorNombre={vendedor.nombre ?? ''}
           carritoInicial={carritoInicial}
-          onCerrar={onCerrar}
+          onCerrar={onCerrarIntentado}
+        />
+      )}
+
+      {/* Botón flotante de evidencia — visible desde el check-in en adelante */}
+      {paso >= 2 && visitaId && !guardando && (
+        <EvidenciaFAB pendientes={FOTO_SLOTS.filter(s => fotos[s.key]).length} onClick={() => setShowEvidencia(true)} />
+      )}
+      {showEvidencia && (
+        <EvidenciaSheet fotos={fotos} onAdjuntarFoto={subirFoto} onClose={() => setShowEvidencia(false)} />
+      )}
+
+      {pendingCierre && (
+        <FotosPendientesModal
+          onCargarAhora={() => { setPendingCierre(null); setShowEvidencia(true) }}
+          onFinalizarIgual={() => ejecutarCierre(
+            pendingCierre.items, pendingCierre.tienVenta, pendingCierre.motivo, pendingCierre.obs,
+            pendingCierre.metodoPago, pendingCierre.diasCredito, pendingCierre.fechaPagoEstimada,
+          )}
         />
       )}
 

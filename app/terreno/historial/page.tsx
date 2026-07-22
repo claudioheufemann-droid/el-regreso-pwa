@@ -13,7 +13,7 @@ export default async function HistorialPage() {
 
   let query = supabase
     .from('visitas_terreno')
-    .select('id, cliente_nombre, tiene_venta, motivo_sin_venta, total_pedido, estado, iniciada_at, completada_at, vendedor_id, es_cliente_nuevo, observaciones, direccion_gps, lat, lng, foto_exterior, foto_exhibicion, foto_competencia')
+    .select('id, cliente_nombre, tiene_venta, motivo_sin_venta, total_pedido, estado, iniciada_at, completada_at, vendedor_id, es_cliente_nuevo, observaciones, direccion_gps, lat, lng, foto_exterior, foto_exhibicion, foto_competencia, fotos_status')
     .order('iniciada_at', { ascending: false })
     .limit(300)
 

@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { MapPin, CheckCircle, XCircle, Filter, ChevronDown, ChevronUp, Package, TrendingUp, AlertTriangle, Clock, Camera, Trash2 } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import AppHeader from '@/components/ui/AppHeader'
+import { createClient } from '@/lib/supabase/client'
 
 const T        = '#D4AF37'
 const T_DIM    = 'rgba(212,175,55,0.10)'
@@ -19,6 +20,7 @@ interface Visita {
   observaciones: string | null; direccion_gps: string | null
   lat: number | null; lng: number | null
   foto_exterior: string | null; foto_exhibicion: string | null; foto_competencia: string | null
+  fotos_status: 'PENDIENTE' | 'COMPLETO'
 }
 interface Item { id: string; visita_id: string; producto: string; categoria: string; envase: string; cantidad: number; precio_unit: number; subtotal: number }
 interface Deudor { nombre_fantasia: string; saldo_total: number; deuda_vencida: number; ultimo_pago: string | null; fecha_ultima_compra: string | null; limite_cta_cte: number | null }
@@ -324,16 +326,48 @@ function FotoLightbox({ fotos, startIdx, onClose }: { fotos: FotoEntry[]; startI
 }
 
 // ── VisitaCard premium ────────────────────────────────────────────────────────
-function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPorVisita, vendedorNombre, isAdmin, onEliminar }: {
+const SLOTS_FOTO_HISTORIAL: { key: 'foto_exterior' | 'foto_exhibicion' | 'foto_competencia'; label: string; emoji: string }[] = [
+  { key: 'foto_exterior',    label: 'Exterior',    emoji: '🏪' },
+  { key: 'foto_exhibicion',  label: 'Exhibición',  emoji: '🍺' },
+  { key: 'foto_competencia', label: 'Competencia', emoji: '🔍' },
+]
+
+function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPorVisita, vendedorNombre, isAdmin, currentUserId, onEliminar, onFotoActualizada }: {
   visita: Visita; items: Item[]; deudor: Deudor | undefined
   ventasHist: VentaHist[]; visitasCliente: Visita[]
   itemsPorVisita: Record<string, Item[]>; vendedorNombre: string
-  isAdmin: boolean; onEliminar: (id: string) => void
+  isAdmin: boolean; currentUserId: string; onEliminar: (id: string) => void
+  onFotoActualizada: (visitaId: string, campo: string, url: string) => void
 }) {
   const [open, setOpen]             = useState(false)
   const [tabDetalle, setTabDetalle] = useState<'pedido' | 'cliente'>('pedido')
   const [lightbox, setLightbox]     = useState<{ idx: number } | null>(null)
   const [borrando, setBorrando]     = useState(false)
+  const [subiendo, setSubiendo]     = useState<Record<string, boolean>>({})
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  const puedeAdjuntarFotos = visita.fotos_status === 'PENDIENTE' && (isAdmin || visita.vendedor_id === currentUserId)
+
+  async function adjuntarFotoTardia(campo: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setSubiendo(prev => ({ ...prev, [campo]: true }))
+    try {
+      const supabase = createClient()
+      const path = `${visita.id}/${campo}.jpg`
+      const { error: upErr } = await supabase.storage.from('terreno-fotos').upload(path, file, { upsert: true })
+      if (upErr) throw upErr
+      const { data: pub } = supabase.storage.from('terreno-fotos').getPublicUrl(path)
+      const { error: updErr } = await supabase.from('visitas_terreno').update({ [campo]: pub.publicUrl, fotos_status: 'COMPLETO' }).eq('id', visita.id)
+      if (updErr) throw updErr
+      onFotoActualizada(visita.id, campo, pub.publicUrl)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo subir la foto')
+    } finally {
+      setSubiendo(prev => ({ ...prev, [campo]: false }))
+    }
+  }
 
   async function eliminar(e: React.MouseEvent) {
     e.stopPropagation()
@@ -401,6 +435,9 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                   <span style={{ fontSize: 8, fontWeight: 800, color: '#60A5FA', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>NUEVO</span>
                 )}
                 <DeudaBadge deudor={deudor} />
+                {visita.fotos_status === 'PENDIENTE' && (
+                  <span style={{ fontSize: 8, fontWeight: 800, color: '#D4AF37', background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Fotos pendientes</span>
+                )}
               </div>
               {/* Meta secundaria */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -559,6 +596,40 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                   </div>
                 )}
 
+                {/* Adjuntar fotos pendientes — solo si falta evidencia y es tu visita (o eres admin) */}
+                {puedeAdjuntarFotos && (
+                  <div style={{ marginBottom: 12, padding: '12px 14px', background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.2)', borderRadius: 12 }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: T, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
+                      Adjuntar fotos pendientes
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {SLOTS_FOTO_HISTORIAL.filter(s => !visita[s.key]).map(slot => (
+                        <div key={slot.key} style={{ flex: 1 }}>
+                          <input
+                            ref={el => { fileRefs.current[slot.key] = el }}
+                            type="file" accept="image/*" style={{ display: 'none' }}
+                            onChange={e => adjuntarFotoTardia(slot.key, e)}
+                          />
+                          <div
+                            onClick={() => fileRefs.current[slot.key]?.click()}
+                            style={{ height: 64, borderRadius: 10, cursor: 'pointer', background: '#131313', border: '1.5px dashed rgba(212,175,55,0.3)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            {subiendo[slot.key] ? (
+                              <div style={{ width: 16, height: 16, border: `2px solid ${T_BORDER}`, borderTopColor: T, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                            ) : (
+                              <>
+                                <span style={{ fontSize: 16 }}>{slot.emoji}</span>
+                                <Camera size={11} color="var(--muted)" />
+                              </>
+                            )}
+                          </div>
+                          <p style={{ fontSize: 8, textAlign: 'center', color: 'var(--muted)', marginTop: 4, fontWeight: 600 }}>{slot.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* GPS */}
                 {visita.lat && visita.lng && (
                   <a href={`https://www.google.com/maps?q=${visita.lat},${visita.lng}`} target="_blank" rel="noopener noreferrer"
@@ -595,6 +666,10 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
 
   function eliminarVisita(id: string) {
     setVisitas(vs => vs.filter(v => v.id !== id))
+  }
+
+  function actualizarFotoVisita(visitaId: string, campo: string, url: string) {
+    setVisitas(vs => vs.map(v => v.id === visitaId ? { ...v, [campo]: url, fotos_status: 'COMPLETO' } : v))
   }
 
   const deudorMap     = useMemo(() => Object.fromEntries(deudores.map(d => [d.nombre_fantasia, d])), [deudores])
@@ -806,7 +881,9 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
                         itemsPorVisita={itemsByVisita}
                         vendedorNombre={vendedorMap[v.vendedor_id] ?? ''}
                         isAdmin={user.isAdmin}
+                        currentUserId={user.id}
                         onEliminar={eliminarVisita}
+                        onFotoActualizada={actualizarFotoVisita}
                       />
                     ))}
                   </div>
