@@ -129,19 +129,19 @@ export default function EntregasAdminClient() {
   return (
     <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
       <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(212,175,55,0.15)', padding: '14px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => router.push('/flota/admin')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+          <button onClick={() => router.push('/flota/admin')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0, flexShrink: 0 }}>
             <ChevronLeft size={18} /> Admin
           </button>
-          <div style={{ flex: 1 }}>
+          <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>Entregas y Aprobación</p>
             <p style={{ fontSize: 11, color: 'var(--muted)' }}>Prueba de entrega, mapa e inventario de despacho</p>
           </div>
-          <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{
-            padding: '8px 10px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.12)',
-            background: '#131313', color: '#F4EEDF', fontSize: 12,
-          }} />
         </div>
+        <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{
+          width: '100%', padding: '8px 10px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.12)',
+          background: '#131313', color: '#F4EEDF', fontSize: 12, colorScheme: 'dark',
+        }} />
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 16, maxWidth: 720, margin: '0 auto', width: '100%' }}>
