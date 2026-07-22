@@ -61,7 +61,7 @@ function iniciales(nombre: string) {
 }
 
 // ── Status Badge premium ──────────────────────────────────────────────────────
-function StatusBadge({ tieneVenta, deudor, cancelada }: { tieneVenta: boolean | null; deudor: Deudor | undefined; cancelada?: boolean }) {
+function StatusBadge({ tieneVenta, montoTotal, deudor, cancelada }: { tieneVenta: boolean | null; montoTotal?: number | null; deudor: Deudor | undefined; cancelada?: boolean }) {
   if (cancelada) {
     return (
       <span style={{
@@ -76,7 +76,11 @@ function StatusBadge({ tieneVenta, deudor, cancelada }: { tieneVenta: boolean | 
       </span>
     )
   }
-  if (tieneVenta === true) {
+  // "Con venta" solo si de verdad hay un monto registrado — una visita
+  // marcada tiene_venta=true pero sin monto (dato viejo, antes del boton
+  // "Sin venta" dedicado) no es una venta real, así que se muestra como
+  // "Visita" neutro en vez del verde engañoso.
+  if (tieneVenta === true && montoTotal && montoTotal > 0) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -87,6 +91,20 @@ function StatusBadge({ tieneVenta, deudor, cancelada }: { tieneVenta: boolean | 
       }}>
         <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#4ADE80', flexShrink: 0 }} />
         Con venta
+      </span>
+    )
+  }
+  if (tieneVenta === true) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.2px',
+        color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.06)',
+        border: '1px solid rgba(255,255,255,0.14)',
+        padding: '3px 8px', borderRadius: 20,
+      }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+        Visita
       </span>
     )
   }
@@ -460,13 +478,15 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
             {/* Derecha: monto + badge + chevron */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
               <div style={{ textAlign: 'right' }}>
-                {tieneVenta ? (
+                {tieneVenta && visita.total_pedido ? (
                   <>
                     <p style={{ fontSize: 17, fontWeight: 900, color: T, letterSpacing: '-0.6px', lineHeight: 1.1, marginBottom: 4 }}>
-                      {visita.total_pedido ? fmtPeso(visita.total_pedido) : '—'}
+                      {fmtPeso(visita.total_pedido)}
                     </p>
-                    <StatusBadge tieneVenta={true} deudor={deudor} />
+                    <StatusBadge tieneVenta={true} montoTotal={visita.total_pedido} deudor={deudor} />
                   </>
+                ) : tieneVenta ? (
+                  <StatusBadge tieneVenta={true} montoTotal={visita.total_pedido} deudor={deudor} />
                 ) : (
                   <StatusBadge tieneVenta={false} deudor={deudor} cancelada={visita.estado === 'cancelada'} />
                 )}
