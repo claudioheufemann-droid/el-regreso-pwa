@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/lib/userContext'
 import SettingsPanel from '@/components/ui/SettingsPanel'
+import NotificationsBell from '@/components/ui/NotificationsBell'
 
 /* ── Logo La Ida Kombucha — SVG inline (fallback si no hay archivo) ── */
 function LaIdaLogo({ size = 100 }: { size?: number }) {
@@ -300,6 +301,9 @@ export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boo
       fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
       <div style={{ width: '100%', maxWidth: 420, position: 'relative' }}>
+
+        {/* ── Campanita de notificaciones ── */}
+        <NotificationsBell />
 
         {/* ── Botón de cuenta ── */}
         <button

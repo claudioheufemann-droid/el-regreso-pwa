@@ -26,8 +26,37 @@ export interface PushPayload {
   requireInteraction?: boolean
 }
 
+// Misma resolución de URL destino que usa public/sw.js al hacer click en el
+// push — así la campanita del hub navega exactamente al mismo lugar.
+function resolverUrl(payload: PushPayload): string {
+  if (payload.taskId) return `/gestion?task=${payload.taskId}`
+  return payload.url || '/'
+}
+
+// Deja un registro persistente en `notificaciones` para cada destinatario,
+// sin importar si el push en sí llega a entregarse (dispositivo offline,
+// suscripción vencida, etc.) — la campanita del hub es la fuente de verdad
+// de "qué me llegó", el push es solo el aviso en caliente.
+async function registrarNotificaciones(userIds: string[], payload: PushPayload) {
+  if (userIds.length === 0) return
+  try {
+    const cookieStore = await cookies()
+    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
+    })
+    const url = resolverUrl(payload)
+    const unicos = Array.from(new Set(userIds))
+    await supabase.from('notificaciones').insert(
+      unicos.map(uid => ({ user_id: uid, titulo: payload.title, cuerpo: payload.body, url, tipo: payload.tag ?? null }))
+    )
+  } catch (e) {
+    console.error('registrarNotificaciones error:', e)
+  }
+}
+
 export async function sendPushToUser(userId: string, payload: PushPayload) {
   initVapid()
+  registrarNotificaciones([userId], payload)
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -76,6 +105,9 @@ export async function sendPushToEmail(email: string, payload: PushPayload) {
 
     if (!subs?.length) return
 
+    const userIds = subs.map(s => s.user_id).filter((id): id is string => !!id)
+    registrarNotificaciones(userIds, payload)
+
     const results = await Promise.allSettled(
       subs.map(sub =>
         webpush.sendNotification(
@@ -118,6 +150,12 @@ export async function sendPushToAll(payload: PushPayload) {
     })
     const { data: subs } = await supabase.from('push_subscriptions').select('*')
     if (!subs?.length) return
+
+    // Registro persistente por trabajador (no por suscripción — un mismo
+    // usuario puede tener varios dispositivos y no queremos duplicar filas).
+    const { data: todos } = await supabase.from('users').select('id')
+    registrarNotificaciones((todos ?? []).map(u => u.id), payload)
+
     await Promise.allSettled(
       subs.map(sub =>
         webpush.sendNotification(
