@@ -52,6 +52,77 @@ function IOSToggle({ value, onChange, color = '#3B82F6' }: { value: boolean; onC
   )
 }
 
+// ── Calendario propio ───────────────────────────────────────────────────
+// No usamos <input type=date> + showPicker(): esa API nativa es
+// inconsistente entre navegadores/dispositivos (a veces no abre nada, a
+// veces cierra el modal encima) — construir el calendario en la propia
+// UI elimina esa dependencia por completo.
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const DIAS_SEMANA = ['D','L','M','M','J','V','S']
+
+function MiniCalendar({ value, minDate, accent, onSelect }: { value: string; minDate: string; accent: string; onSelect: (iso: string) => void }) {
+  const base = value ? new Date(value + 'T12:00:00') : new Date()
+  const [viewY, setViewY] = useState(base.getFullYear())
+  const [viewM, setViewM] = useState(base.getMonth())
+
+  const startWeekday = new Date(viewY, viewM, 1).getDay()
+  const daysInMonth = new Date(viewY, viewM + 1, 0).getDate()
+  const minD = new Date(minDate + 'T00:00:00')
+  const cells: (number | null)[] = Array(startWeekday).fill(null).concat(
+    Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  )
+
+  function iso(d: number) {
+    return `${viewY}-${String(viewM + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  }
+  function changeMonth(delta: number) {
+    let m = viewM + delta, y = viewY
+    if (m < 0) { m = 11; y-- }
+    if (m > 11) { m = 0; y++ }
+    setViewM(m); setViewY(y)
+  }
+
+  return (
+    <div onClick={e => e.stopPropagation()} style={{
+      position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 300,
+      background: '#111827', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16,
+      padding: 14, boxShadow: '0 20px 60px rgba(0,0,0,0.8)', width: 272,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <button type="button" onClick={() => changeMonth(-1)} style={{ background: 'transparent', border: 'none', color: '#9CA3AF', fontSize: 18, cursor: 'pointer', padding: '4px 8px', lineHeight: 1 }}>‹</button>
+        <span style={{ fontSize: 13, fontWeight: 800, color: '#F4EEDF' }}>{MESES[viewM]} {viewY}</span>
+        <button type="button" onClick={() => changeMonth(1)} style={{ background: 'transparent', border: 'none', color: '#9CA3AF', fontSize: 18, cursor: 'pointer', padding: '4px 8px', lineHeight: 1 }}>›</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+        {DIAS_SEMANA.map((d, i) => (
+          <div key={i} style={{ textAlign: 'center', fontSize: 10, color: 'rgba(255,255,255,0.3)', fontWeight: 700, padding: '4px 0' }}>{d}</div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+        {cells.map((d, i) => {
+          if (d === null) return <div key={i} />
+          const dateIso = iso(d)
+          const isSelected = dateIso === value
+          const isPast = new Date(viewY, viewM, d) < minD
+          return (
+            <button
+              key={i} type="button" disabled={isPast}
+              onClick={() => onSelect(dateIso)}
+              style={{
+                aspectRatio: '1', borderRadius: 8, border: 'none',
+                cursor: isPast ? 'not-allowed' : 'pointer',
+                background: isSelected ? accent : 'transparent',
+                color: isPast ? 'rgba(255,255,255,0.15)' : isSelected ? '#000' : '#E5E7EB',
+                fontSize: 12, fontWeight: isSelected ? 800 : 500,
+              }}
+            >{d}</button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Sidebar expandable row (desktop) ───────────────────────────────────
 function SidebarRow({ icon, label, sub, children }: { icon: string; label: string; sub: string; children?: React.ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -104,6 +175,7 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   // UI state
   const [showResponsablesDropdown, setShowResponsablesDropdown] = useState(false)
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
+  const [showCalendar, setShowCalendar] = useState(false)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -114,9 +186,9 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
   useEffect(() => setMounted(true), [])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const dateInputRef = useRef<HTMLInputElement>(null)
   const responsablesRef = useRef<HTMLDivElement>(null)
   const areaRef = useRef<HTMLDivElement>(null)
+  const fechaRef = useRef<HTMLDivElement>(null)
 
   const minDate = new Date().toISOString().split('T')[0]
   const canSubmit = titulo.trim().length > 0 && plazo && selectedIds.length > 0
@@ -136,24 +208,12 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
         setShowResponsablesDropdown(false)
       if (areaRef.current && !areaRef.current.contains(e.target as Node))
         setShowAreaDropdown(false)
+      if (fechaRef.current && !fechaRef.current.contains(e.target as Node))
+        setShowCalendar(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
-
-  // El input <input type=date> invisible superpuesto no siempre capta el
-  // tap de forma confiable en mobile (dentro de un contenedor con scroll,
-  // detrás de backdrop-filter, etc.) — se dispara el selector nativo
-  // explícitamente al tocar la card visible, con fallback a .click() en
-  // navegadores sin showPicker() (Safari < 16.4).
-  function abrirSelectorFecha() {
-    const el = dateInputRef.current
-    if (!el) return
-    if (typeof el.showPicker === 'function') {
-      try { el.showPicker(); return } catch { /* cae a .click() */ }
-    }
-    el.click()
-  }
 
   function handleAreaChange(area: string) { setSelectedArea(area); setSelectedIds([]); setShowAreaDropdown(false) }
   function toggleUser(id: string) {
@@ -414,8 +474,8 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
 
               {/* Fecha */}
               <span style={LABEL}>Fecha de vencimiento *</span>
-              <div style={{ position: 'relative' }}>
-                <div onClick={abrirSelectorFecha} style={{
+              <div ref={fechaRef} style={{ position: 'relative' }}>
+                <div onClick={() => setShowCalendar(v => !v)} style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '13px 16px', borderRadius: 14, cursor: 'pointer',
                     background: plazo ? `rgba(255,255,255,0.06)` : 'rgba(255,255,255,0.04)',
@@ -427,9 +487,9 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
                     {plazo ? new Date(plazo+'T12:00:00').toLocaleDateString('es-CL', { weekday:'long', day:'2-digit', month:'long' }) : 'Seleccionar fecha'}
                   </span>
                 </div>
-                <input ref={dateInputRef} type="date" value={plazo} onChange={e => setPlazo(e.target.value)}
-                  min={minDate} required
-                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer', pointerEvents: 'none' }} />
+                {showCalendar && (
+                  <MiniCalendar value={plazo} minDate={minDate} accent={cfg.color} onSelect={iso => { setPlazo(iso); setShowCalendar(false) }} />
+                )}
               </div>
             </div>
 
@@ -740,13 +800,14 @@ export default function NewTaskModal({ defaultArea, availableAreas, users, onClo
           {/* Fecha */}
           <div>
             <label style={LBL}>Fecha vencimiento *</label>
-            <div style={{ position: 'relative', height: 44 }}>
-              <div onClick={abrirSelectorFecha} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: plazo ? 'rgba(255,255,255,0.06)' : '#1A1D24', border: `1.5px solid ${plazo ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'}`, fontSize: 13, color: plazo ? '#F4EEDF' : '#6B7280', height: 44, boxSizing: 'border-box' }}>
+            <div ref={fechaRef} style={{ position: 'relative', height: 44 }}>
+              <div onClick={() => setShowCalendar(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: plazo ? 'rgba(255,255,255,0.06)' : '#1A1D24', border: `1.5px solid ${plazo ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'}`, fontSize: 13, color: plazo ? '#F4EEDF' : '#6B7280', height: 44, boxSizing: 'border-box' }}>
                 <span>📅</span>
                 <span style={{ flex: 1 }}>{plazo ? new Date(plazo+'T12:00:00').toLocaleDateString('es-CL', { day:'2-digit', month:'short', year:'numeric' }) : 'Seleccionar fecha'}</span>
               </div>
-              <input ref={dateInputRef} type="date" value={plazo} onChange={e => setPlazo(e.target.value)}
-                min={minDate} required style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer', pointerEvents: 'none' }} />
+              {showCalendar && (
+                <MiniCalendar value={plazo} minDate={minDate} accent={cfg.color} onSelect={iso => { setPlazo(iso); setShowCalendar(false) }} />
+              )}
             </div>
           </div>
         </div>
