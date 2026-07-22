@@ -25,7 +25,9 @@ export default function EntregarClient() {
   const [parada, setParada] = useState<ParadaDetalle | null>(null)
   const [loading, setLoading] = useState(true)
   const [modo, setModo] = useState<'entregado' | 'rechazado' | 'devuelto'>('entregado')
-  const [cantidadEntregada, setCantidadEntregada] = useState(1)
+  const [barriles, setBarriles] = useState(0)
+  const [cajasCerveza, setCajasCerveza] = useState(0)
+  const [cajasKombucha, setCajasKombucha] = useState(0)
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [guiaUrl, setGuiaUrl] = useState<string | null>(null)
   const [fotoUrl, setFotoUrl] = useState<string | null>(null)
@@ -40,10 +42,7 @@ export default function EntregarClient() {
     if (!paradaId) { setLoading(false); return }
     fetch(`/api/logistica/paradas/${paradaId}`)
       .then(r => r.json())
-      .then(data => {
-        setParada(data)
-        setCantidadEntregada(data.cantidad_pedida ?? 1)
-      })
+      .then(data => setParada(data))
       .finally(() => setLoading(false))
   }, [paradaId])
 
@@ -80,8 +79,13 @@ export default function EntregarClient() {
 
   async function confirmar() {
     if (!paradaId) return
+    const totalEntregado = barriles + cajasCerveza + cajasKombucha
     if (modo === 'entregado' && (!guiaUrl || !fotoUrl)) {
       alert('La guía de despacho y la foto de entrega son obligatorias.')
+      return
+    }
+    if (modo === 'entregado' && totalEntregado === 0) {
+      alert('Indica al menos un barril o caja entregada.')
       return
     }
     if (modo !== 'entregado' && !motivoRechazo.trim()) {
@@ -97,7 +101,8 @@ export default function EntregarClient() {
         body: JSON.stringify({
           guia_url: guiaUrl ?? undefined,
           foto_entrega_url: fotoUrl ?? undefined,
-          cantidad_entregada: cantidadEntregada,
+          cantidad_entregada: totalEntregado,
+          barriles, cajas_cerveza: cajasCerveza, cajas_kombucha: cajasKombucha,
           estado: modo,
           motivo_rechazo: modo !== 'entregado' ? motivoRechazo.trim() : undefined,
           ...gps,
@@ -165,12 +170,27 @@ export default function EntregarClient() {
 
         {modo === 'entregado' ? (
           <>
-            <label style={labelStyle}>Cantidad entregada</label>
-            <input
-              type="number" min={0} value={cantidadEntregada}
-              onChange={e => setCantidadEntregada(Math.max(0, parseInt(e.target.value) || 0))}
-              style={{ ...inputStyle, marginBottom: 16 }}
-            />
+            <label style={labelStyle}>Mercadería entregada</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+              <div>
+                <p style={desgloseLabel}>🍺 Barriles</p>
+                <input type="number" min={0} value={barriles}
+                  onChange={e => setBarriles(Math.max(0, parseInt(e.target.value) || 0))}
+                  style={inputStyle} />
+              </div>
+              <div>
+                <p style={desgloseLabel}>🥫 Cajas cerveza</p>
+                <input type="number" min={0} value={cajasCerveza}
+                  onChange={e => setCajasCerveza(Math.max(0, parseInt(e.target.value) || 0))}
+                  style={inputStyle} />
+              </div>
+              <div>
+                <p style={desgloseLabel}>🍵 Cajas kombucha</p>
+                <input type="number" min={0} value={cajasKombucha}
+                  onChange={e => setCajasKombucha(Math.max(0, parseInt(e.target.value) || 0))}
+                  style={inputStyle} />
+              </div>
+            </div>
 
             {/* Guía de despacho */}
             <input ref={guiaInputRef} type="file" accept="image/*,.pdf" capture="environment" hidden
@@ -223,6 +243,9 @@ const inputStyle: React.CSSProperties = {
 }
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5,
+}
+const desgloseLabel: React.CSSProperties = {
+  fontSize: 10, color: 'rgba(255,255,255,0.45)', marginBottom: 4, fontWeight: 600, textAlign: 'center',
 }
 function captureBtnStyle(done: boolean): React.CSSProperties {
   return {

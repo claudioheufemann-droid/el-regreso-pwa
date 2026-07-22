@@ -17,6 +17,9 @@ interface EntregarInput {
   guia_url?: string
   foto_entrega_url?: string
   cantidad_entregada: number
+  barriles?: number
+  cajas_cerveza?: number
+  cajas_kombucha?: number
   estado: 'entregado' | 'rechazado' | 'devuelto'
   motivo_rechazo?: string
   lat?: number
@@ -50,6 +53,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       guia_url: body.guia_url ?? '',
       foto_entrega_url: body.foto_entrega_url ?? '',
       cantidad_entregada: body.cantidad_entregada,
+      barriles: body.barriles ?? 0,
+      cajas_cerveza: body.cajas_cerveza ?? 0,
+      cajas_kombucha: body.cajas_kombucha ?? 0,
       estado: body.estado,
       motivo_rechazo: body.motivo_rechazo ?? null,
       lat: body.lat ?? null,

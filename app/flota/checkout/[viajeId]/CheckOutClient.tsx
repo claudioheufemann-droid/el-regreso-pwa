@@ -139,6 +139,10 @@ export default function CheckOutClient({ user, viaje }: Props) {
   const [fotoBoleta, setFotoBoleta] = useState('')
   const boletaRef = useRef<HTMLInputElement>(null)
 
+  // Retorno a bodega — solo aplica a rutas de reparto
+  const [barrilesVacios, setBarrilesVacios] = useState('')
+  const [mermaDeclarada, setMermaDeclarada] = useState('')
+
   const kmRecorridos = kmFin ? parseInt(kmFin) - (viaje.km_inicio ?? 0) : null
   const desvio = kmRecorridos && viaje.km_teoricos ? kmRecorridos - viaje.km_teoricos : null
   const desvioPorc = desvio && viaje.km_teoricos ? (desvio / viaje.km_teoricos) * 100 : null
@@ -233,6 +237,10 @@ export default function CheckOutClient({ user, viaje }: Props) {
         foto_360_atras_fin: urlAtras,
         foto_combustible_fin: urlComb,
         foto_boleta_combustible: urlBoleta,
+        ...(viaje.tipo === 'reparto' ? {
+          barriles_vacios_devueltos: barrilesVacios ? parseInt(barrilesVacios) : null,
+          merma_declarada: mermaDeclarada.trim() || null,
+        } : {}),
       }).eq('id', viaje.id)
       await supabase.from('vehiculos').update({ estado: 'disponible', km_actual: km, combustible: combustibleFin }).eq('id', viaje.vehiculo_id)
       router.push('/flota')
@@ -378,6 +386,36 @@ export default function CheckOutClient({ user, viaje }: Props) {
                 ← Volver al nivel detectado
               </button>
             )}
+          </div>
+        )}
+
+        {/* ── Retorno a bodega (solo reparto) ──────────────────────────────── */}
+        {viaje.tipo === 'reparto' && (
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+              Retorno a bodega
+            </p>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>
+                Barriles vacíos devueltos
+              </label>
+              <input
+                value={barrilesVacios} onChange={e => setBarrilesVacios(e.target.value.replace(/\D/g, ''))}
+                placeholder="Ej: 4" type="text" inputMode="numeric"
+                style={{ width: '100%', padding: '12px', borderRadius: 10, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 15, fontWeight: 700, outline: 'none' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>
+                Merma declarada (opcional)
+              </label>
+              <textarea
+                value={mermaDeclarada} onChange={e => setMermaDeclarada(e.target.value)}
+                placeholder="Ej: 2 latas dañadas en transporte, 1 botella quebrada…"
+                rows={2}
+                style={{ width: '100%', padding: '12px', borderRadius: 10, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+              />
+            </div>
           </div>
         )}
 

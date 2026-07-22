@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
     .select(`*,
       chofer:users!despachos_chofer_id_fkey(nombre),
       vehiculo:vehiculos(nombre, patente),
+      viaje_flota:viajes_flota(barriles_vacios_devueltos, merma_declarada),
       paradas:despacho_paradas(*,
         cliente:clientes(nombre_fantasia, direccion_entrega, telefono),
         cliente_terreno:clientes_terreno(nombre_fantasia, direccion, telefono),
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
     region: string
     chofer_id?: string
     vehiculo_id?: string
+    km_inicio?: number
     paradas: ParadaInput[]
   }
 
@@ -112,6 +114,30 @@ export async function POST(req: NextRequest) {
     })))
 
   if (paradasErr) return NextResponse.json({ error: paradasErr.message }, { status: 500 })
+
+  // Unificación Flota+Despacho: si se indicó vehículo, este despacho ES la
+  // salida del vehículo — se crea el viaje de flota vinculado y el vehículo
+  // pasa a en_uso, sin necesitar pasar por el check-in de Flota por separado.
+  if (body.vehiculo_id) {
+    const { data: viaje, error: viajeErr } = await supabase
+      .from('viajes_flota')
+      .insert({
+        vehiculo_id: body.vehiculo_id,
+        conductor_id: body.chofer_id ?? profile.id,
+        tipo: 'reparto',
+        motivo: `Despacho ${body.region} · ${body.fecha}`,
+        km_inicio: body.km_inicio ?? 0,
+        estado: 'en_curso',
+      })
+      .select('id')
+      .single()
+
+    if (!viajeErr && viaje) {
+      await supabase.from('despachos').update({ viaje_flota_id: viaje.id }).eq('id', despacho.id)
+      await supabase.from('vehiculos').update({ estado: 'en_uso' }).eq('id', body.vehiculo_id)
+      despacho.viaje_flota_id = viaje.id
+    }
+  }
 
   return NextResponse.json(despacho, { status: 201 })
 }

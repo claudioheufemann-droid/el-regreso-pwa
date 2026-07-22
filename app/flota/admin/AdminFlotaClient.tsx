@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, AlertTriangle, CheckCircle, TrendingUp, Truck, Clock, Fuel } from 'lucide-react'
+import { ChevronLeft, AlertTriangle, CheckCircle, TrendingUp, Truck, Clock, Fuel, PackageCheck } from 'lucide-react'
 
 const F = '#D4AF37'
 const F_BORDER = 'rgba(212,175,55,0.28)'
@@ -172,10 +172,17 @@ export default function AdminFlotaClient({ viajes, vehiculos }: Props) {
           <button onClick={() => router.push('/flota')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
             <ChevronLeft size={18} /> Flota
           </button>
-          <div>
+          <div style={{ flex: 1 }}>
             <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>Panel Admin</p>
             <p style={{ fontSize: 11, color: 'var(--muted)' }}>Controles y alertas de flota</p>
           </div>
+          <button onClick={() => router.push('/flota/admin/entregas')} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+            background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
+            color: F, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}>
+            <PackageCheck size={14} /> Entregas
+          </button>
         </div>
       </div>
 
