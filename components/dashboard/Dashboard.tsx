@@ -735,36 +735,42 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
       <ContentArea />
 
-      {/* ── Bottom nav flotante — solo mobile, desktop usa tabs ── */}
+      {/* ── Bottom nav flotante — solo mobile, desktop usa tabs ──
+          Ancho acotado al viewport y botones a flex:1 para que, con hasta 6
+          pestañas (admin ve "Análisis" además de las 5 normales), nunca se
+          corten fuera de pantalla en un iPhone angosto — antes tenían ancho
+          fijo por contenido y "Análisis" quedaba literalmente cortado por el
+          borde de la pantalla. */}
       <nav className="lg:hidden" style={{
         position: 'fixed',
         display: showNewTask ? 'none' : 'flex',
         bottom: 'max(16px, env(safe-area-inset-bottom))',
         left: '50%',
         transform: 'translateX(-50%)',
+        width: 'calc(100vw - 24px)',
+        maxWidth: 460,
         alignItems: 'center',
-        gap: 4,
+        gap: 2,
         background: 'rgba(10,10,10,0.88)',
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
         border: '1px solid rgba(255,255,255,0.08)',
         borderRadius: 100,
-        padding: '8px 12px',
+        padding: '8px 8px',
         boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
         zIndex: showNewTask ? -1 : 50,
-        justifyContent: 'space-around',
       } as React.CSSProperties}>
         {visibleNavItems.map(({ key, icon: Icon, label }) => {
           const active = isNavActive(key)
           return (
             <button key={key} onClick={() => goToNav(key)} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-              padding: '6px 14px', borderRadius: 80, border: 'none', cursor: 'pointer',
+              flex: '1 1 0', minWidth: 0,
+              padding: '6px 4px', borderRadius: 80, border: 'none', cursor: 'pointer',
               background: active ? 'rgba(212,175,55,0.12)' : 'transparent',
               outline: active ? '1px solid rgba(212,175,55,0.2)' : '1px solid transparent',
               transition: 'all 0.2s ease',
               color: active ? '#D4AF37' : 'rgba(255,255,255,0.35)',
-              minWidth: 52,
             }}>
               <div style={{ position: 'relative' }}>
                 <Icon size={19} strokeWidth={active ? 2.5 : 1.8} />
@@ -772,7 +778,10 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                   <div style={{ position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: '50%', background: '#D4AF37', boxShadow: '0 0 6px #D4AF37' }} />
                 )}
               </div>
-              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>{label}</span>
+              <span style={{
+                fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: '0.1px',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+              }}>{label}</span>
             </button>
           )
         })}
