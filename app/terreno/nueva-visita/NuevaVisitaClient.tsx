@@ -590,12 +590,24 @@ function DeudaSection({ clienteNombre }: { clienteNombre: string }) {
 // ─── Motivos sin venta ────────────────────────────────────────
 
 const MOTIVOS_SIN_VENTA = [
-  'Ya compró esta semana',
-  'No había encargado',
-  'Precio no convenció',
-  'Sin stock del cliente',
+  'Cliente con stock',
+  'Cliente no estaba',
+  'Precio alto',
+  'Competencia',
+  'Solo presentación',
   'Local cerrado',
   'Otro motivo',
+]
+
+// ─── Paso de seguimiento (CRM) ─────────────────────────────────
+type TipoSeguimiento = 'llamar' | 'email' | 'whatsapp' | 'visita' | 'ninguna'
+interface AccionSeguimiento { tipo: TipoSeguimiento; fechaHora: string; nota: string }
+const TIPOS_SEGUIMIENTO: { key: TipoSeguimiento; label: string; emoji: string }[] = [
+  { key: 'llamar',   label: 'Llamar por teléfono',      emoji: '📞' },
+  { key: 'email',    label: 'Enviar correo',            emoji: '✉️' },
+  { key: 'whatsapp', label: 'Enviar WhatsApp',          emoji: '💬' },
+  { key: 'visita',   label: 'Nueva visita presencial',  emoji: '🚗' },
+  { key: 'ninguna',  label: 'No requiere seguimiento',  emoji: '🚫' },
 ]
 
 interface ItemCarrito { producto: string; categoria: string; envase: string; cantidad: number; precio: number }
@@ -1176,10 +1188,18 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
   clienteNombre: string
   vendedorNombre: string
   carritoInicial?: ItemCarrito[]
-  onCerrar: (carrito: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null) => void
+  onCerrar: (carrito: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null, seguimiento: AccionSeguimiento | null) => void
 }) {
   const [tabCat, setTabCat]     = useState<'Cerveza' | 'Kombucha'>('Cerveza')
   const [tabEnvase, setTabEnvase] = useState<'lata' | 'barril'>('lata')
+  // Seguimiento (CRM) — obligatorio elegir un tipo antes de poder guardar,
+  // aunque sea "No requiere seguimiento".
+  const [tipoSeg, setTipoSeg]   = useState<TipoSeguimiento | null>(null)
+  const [fechaSeg, setFechaSeg] = useState('')
+  const [horaSeg, setHoraSeg]   = useState('')
+  const [notaSeg, setNotaSeg]   = useState('')
+  const requiereDatosSeg = tipoSeg !== null && tipoSeg !== 'ninguna'
+  const seguimientoListo = tipoSeg !== null && (!requiereDatosSeg || (fechaSeg && horaSeg && notaSeg.trim()))
   const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(() => {
     const m = new Map<string, ItemCarrito>()
     // Key: "producto|envase" para permitir lata y barril del mismo producto
@@ -1387,10 +1407,51 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
             </div>
           )}
 
-          <div>
+          <div style={{ marginBottom: 16 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 8 }}>Observaciones (opcional)</p>
             <textarea value={obs} onChange={e => setObs(e.target.value)} placeholder="Notas adicionales..." rows={3}
               style={{ width: '100%', padding: '12px 14px', borderRadius: 12, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 14, resize: 'none', outline: 'none' }} />
+          </div>
+
+          {/* Seguimiento (CRM) — obligatorio elegir un tipo antes de guardar */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+            <p style={{ fontSize: 13, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>¿Este cliente requiere seguimiento?</p>
+            <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>Elige una acción antes de finalizar la visita</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: tipoSeg && requiereDatosSeg ? 14 : 0 }}>
+              {TIPOS_SEGUIMIENTO.map(t => (
+                <div key={t.key} onClick={() => setTipoSeg(t.key)} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                  background: tipoSeg === t.key ? T_DIM : '#1C1C1C',
+                  border: `1.5px solid ${tipoSeg === t.key ? T : 'rgba(255,255,255,0.06)'}`,
+                }}>
+                  <span style={{ fontSize: 16 }}>{t.emoji}</span>
+                  <span style={{ fontSize: 13, fontWeight: tipoSeg === t.key ? 700 : 500, color: tipoSeg === t.key ? T : '#F4EEDF' }}>{t.label}</span>
+                  {tipoSeg === t.key && <CheckCircle size={16} color={T} style={{ marginLeft: 'auto' }} />}
+                </div>
+              ))}
+            </div>
+
+            {requiereDatosSeg && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>Fecha</label>
+                    <input type="date" value={fechaSeg} onChange={e => setFechaSeg(e.target.value)} min={format(new Date(), 'yyyy-MM-dd')}
+                      style={{ width: '100%', padding: '11px 12px', borderRadius: 10, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 14, outline: 'none' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>Hora</label>
+                    <input type="time" value={horaSeg} onChange={e => setHoraSeg(e.target.value)}
+                      style={{ width: '100%', padding: '11px 12px', borderRadius: 10, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 14, outline: 'none' }} />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>Nota de seguimiento</label>
+                  <textarea value={notaSeg} onChange={e => setNotaSeg(e.target.value)} placeholder="Ej: Llamar para confirmar si le queda stock de IPA" rows={2}
+                    style={{ width: '100%', padding: '11px 12px', borderRadius: 10, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 13, resize: 'none', outline: 'none' }} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1398,18 +1459,23 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           <button
             onClick={() => {
               if (sinVenta && !motivo) return
+              if (!seguimientoListo) return
               const tienVenta = !sinVenta
+              const seguimiento: AccionSeguimiento | null = tipoSeg && tipoSeg !== 'ninguna'
+                ? { tipo: tipoSeg, fechaHora: `${fechaSeg}T${horaSeg}:00`, nota: notaSeg.trim() }
+                : null
               onCerrar(
                 items, tienVenta, motivo, obs,
                 tienVenta ? metodoPago : null,
                 tienVenta && metodoPago === 'credito' ? diasCredito : null,
                 tienVenta && metodoPago === 'credito' ? format(fechaVence, 'yyyy-MM-dd') : null,
+                seguimiento,
               )
             }}
-            disabled={sinVenta && !motivo}
-            style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: sinVenta && !motivo ? 'not-allowed' : 'pointer', background: sinVenta && !motivo ? 'rgba(255,255,255,0.06)' : C, color: sinVenta && !motivo ? 'var(--muted)' : '#080808', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}
+            disabled={(sinVenta && !motivo) || !seguimientoListo}
+            style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: (sinVenta && !motivo) || !seguimientoListo ? 'not-allowed' : 'pointer', background: (sinVenta && !motivo) || !seguimientoListo ? 'rgba(255,255,255,0.06)' : C, color: (sinVenta && !motivo) || !seguimientoListo ? 'var(--muted)' : '#080808', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}
           >
-            Confirmar y finalizar ✓
+            {!tipoSeg ? 'Elige una acción de seguimiento ↑' : 'Confirmar y finalizar ✓'}
           </button>
         </div>
 
@@ -1795,6 +1861,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
   const [pendingCierre, setPendingCierre] = useState<{
     items: ItemCarrito[]; tienVenta: boolean; motivo: string; obs: string
     metodoPago: MetodoPago | null; diasCredito: number | null; fechaPagoEstimada: string | null
+    seguimiento: AccionSeguimiento | null
   } | null>(null)
 
   // Jornada de ruta abierta (para vincular la visita y calcular el km GPS al cerrar)
@@ -1924,15 +1991,15 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
   // datos pendientes y muestra el modal de aviso en vez de bloquear como
   // antes exigía el check-in. El vendedor decide si carga fotos ahora o
   // finaliza igual (quedando fotos_status = 'PENDIENTE').
-  function onCerrarIntentado(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null) {
+  function onCerrarIntentado(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null, seguimiento: AccionSeguimiento | null) {
     if (Object.keys(fotos).length === 0) {
-      setPendingCierre({ items, tienVenta, motivo, obs, metodoPago, diasCredito, fechaPagoEstimada })
+      setPendingCierre({ items, tienVenta, motivo, obs, metodoPago, diasCredito, fechaPagoEstimada, seguimiento })
       return
     }
-    ejecutarCierre(items, tienVenta, motivo, obs, metodoPago, diasCredito, fechaPagoEstimada)
+    ejecutarCierre(items, tienVenta, motivo, obs, metodoPago, diasCredito, fechaPagoEstimada, seguimiento)
   }
 
-  async function ejecutarCierre(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null) {
+  async function ejecutarCierre(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null, seguimiento: AccionSeguimiento | null) {
     if (!visitaId) return
     setPendingCierre(null)
     setGuardando(true)
@@ -1959,6 +2026,17 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
         )
         itemsQuedaronPendientes = resultados.some(r => r.queued)
       }
+
+      // CRM: registra el compromiso de seguimiento (llamar/email/whatsapp/visita)
+      // para que aparezca en la Agenda del vendedor y dispare el recordatorio.
+      if (seguimiento) {
+        await upsertOrQueue(supabase, 'seguimientos', {
+          id: crypto.randomUUID(), visita_id: visitaId, vendedor_id: vendedor.id,
+          cliente_nombre: cliente?.nombre ?? '', tipo_accion: seguimiento.tipo,
+          fecha_hora_compromiso: seguimiento.fechaHora, nota: seguimiento.nota, estado: 'pendiente',
+        })
+      }
+
       setSyncPendiente(!rVisita.ok || itemsQuedaronPendientes)
 
       // 🔔 Notificar según resultado
@@ -2065,6 +2143,7 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
           onFinalizarIgual={() => ejecutarCierre(
             pendingCierre.items, pendingCierre.tienVenta, pendingCierre.motivo, pendingCierre.obs,
             pendingCierre.metodoPago, pendingCierre.diasCredito, pendingCierre.fechaPagoEstimada,
+            pendingCierre.seguimiento,
           )}
         />
       )}
