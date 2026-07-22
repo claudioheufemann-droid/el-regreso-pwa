@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { MapPin, CheckCircle, XCircle, Filter, ChevronDown, ChevronUp, Package, TrendingUp, AlertTriangle, Clock, Camera } from 'lucide-react'
+import { MapPin, CheckCircle, XCircle, Filter, ChevronDown, ChevronUp, Package, TrendingUp, AlertTriangle, Clock, Camera, Trash2 } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import AppHeader from '@/components/ui/AppHeader'
@@ -324,14 +324,31 @@ function FotoLightbox({ fotos, startIdx, onClose }: { fotos: FotoEntry[]; startI
 }
 
 // ── VisitaCard premium ────────────────────────────────────────────────────────
-function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPorVisita, vendedorNombre }: {
+function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPorVisita, vendedorNombre, isAdmin, onEliminar }: {
   visita: Visita; items: Item[]; deudor: Deudor | undefined
   ventasHist: VentaHist[]; visitasCliente: Visita[]
   itemsPorVisita: Record<string, Item[]>; vendedorNombre: string
+  isAdmin: boolean; onEliminar: (id: string) => void
 }) {
   const [open, setOpen]             = useState(false)
   const [tabDetalle, setTabDetalle] = useState<'pedido' | 'cliente'>('pedido')
   const [lightbox, setLightbox]     = useState<{ idx: number } | null>(null)
+  const [borrando, setBorrando]     = useState(false)
+
+  async function eliminar(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!window.confirm(`¿Eliminar del historial la visita a "${visita.cliente_nombre}"? Esta acción no se puede deshacer.`)) return
+    setBorrando(true)
+    try {
+      const res = await fetch(`/api/terreno/visitas/${visita.id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'No se pudo eliminar')
+      onEliminar(visita.id)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo eliminar la visita')
+      setBorrando(false)
+    }
+  }
 
   const totalItems = items.reduce((s, i) => s + i.cantidad, 0)
   const fotoEntries: FotoEntry[] = [
@@ -417,6 +434,22 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                   <StatusBadge tieneVenta={false} deudor={deudor} cancelada={visita.estado === 'cancelada'} />
                 )}
               </div>
+              {isAdmin && (
+                <button
+                  onClick={eliminar}
+                  disabled={borrando}
+                  title="Eliminar del historial"
+                  style={{
+                    width: 28, height: 28, borderRadius: 9, flexShrink: 0,
+                    background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.18)',
+                    color: '#F87171', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: borrando ? 'default' : 'pointer', opacity: borrando ? 0.4 : 1,
+                  }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+
               <div style={{ color: 'rgba(255,255,255,0.2)', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>
                 <ChevronDown size={16} />
               </div>
@@ -553,11 +586,16 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function HistorialClient({ user, visitas, items, vendedores, deudores, ventasHist }: Props) {
+export default function HistorialClient({ user, visitas: visitasIniciales, items, vendedores, deudores, ventasHist }: Props) {
   const isDesktop = useIsDesktop()
+  const [visitas, setVisitas]                 = useState(visitasIniciales)
   const [filtroVendedor, setFiltroVendedor]   = useState('todos')
   const [filtroResultado, setFiltroResultado] = useState<'todos' | 'con_venta' | 'sin_venta'>('todos')
   const [showFiltros, setShowFiltros]         = useState(false)
+
+  function eliminarVisita(id: string) {
+    setVisitas(vs => vs.filter(v => v.id !== id))
+  }
 
   const deudorMap     = useMemo(() => Object.fromEntries(deudores.map(d => [d.nombre_fantasia, d])), [deudores])
   const vendedorMap   = useMemo(() => Object.fromEntries(vendedores.map(v => [v.id, v.nombre])), [vendedores])
@@ -767,6 +805,8 @@ export default function HistorialClient({ user, visitas, items, vendedores, deud
                         visitasCliente={visitasByCliente[v.cliente_nombre] ?? []}
                         itemsPorVisita={itemsByVisita}
                         vendedorNombre={vendedorMap[v.vendedor_id] ?? ''}
+                        isAdmin={user.isAdmin}
+                        onEliminar={eliminarVisita}
                       />
                     ))}
                   </div>
