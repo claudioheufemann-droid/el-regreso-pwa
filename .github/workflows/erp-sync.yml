@@ -2,9 +2,10 @@ name: ERP Sync — Carga automática de ventas
 
 on:
   schedule:
-    # Diario 11:00 UTC (~07:00–08:00 Chile). Corre ANTES de las misiones (12:00 UTC)
-    # para que la generación use datos frescos del día.
-    - cron: '0 11 * * *'
+    # Cada hora en punto, horario comercial: 11:00-23:00 UTC (~07:00-19:00 Chile).
+    # No corre de noche para no reintentar logins sin necesidad (riesgo de bloqueo
+    # del ERP por "demasiados intentos") cuando no hay ventas nuevas que traer.
+    - cron: '0 11-23 * * *'
   workflow_dispatch:   # permite dispararlo a mano desde la pestaña Actions
 
 jobs:
