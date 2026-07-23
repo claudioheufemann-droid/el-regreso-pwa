@@ -120,7 +120,7 @@ interface CatalogoInfo {
   envase_ml: number
 }
 
-const CATALOGO_INFO: Record<string, CatalogoInfo> = {
+const CATALOGO_INFO_DEFAULT: Record<string, CatalogoInfo> = {
   'Nitro Coffee':                { estilo: 'Nitro Cold Brew',           precio_lata: 0,    precio_barril: 120000, envase_ml: 470, descripcion: 'Cold brew de café con nitrógeno. Cremoso, suave y con notas a chocolate y avellana.' },
   'Arboretum':                   { estilo: 'Kölsch',                   precio_lata: 2100, precio_barril: 83000,  envase_ml: 470, descripcion: 'Color amarillo pajizo, aromas a grano y pan con notas florales. Super ligera y fácil de beber.' },
   'Mocho English':               { estilo: 'English Red Ale',          precio_lata: 2100, precio_barril: 83000,  envase_ml: 470, abv: '5.5%', ibu: '25', descripcion: 'Rojizo brillante con aromas a galleta, almendras y caramelo. Retrogusto semi dulce y tostado.' },
@@ -136,6 +136,39 @@ const CATALOGO_INFO: Record<string, CatalogoInfo> = {
   'Kombucha Natural':            { estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Bajo',  acidez: 'Media-alta', descripcion: 'Esencia pura de fermentación. Notas a pera y florales. Para puristas.' },
   'Kombucha Mango':              { estilo: 'Kombucha',                  precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, descripcion: 'Kombucha de mango con toque de merkén. Dulce y tropical.' },
 }
+
+// Precios Santiago — solo para el vendedor de esa zona (ver EMAIL_LISTA_PRECIOS_SANTIAGO).
+// Solo sobreescribe precio_lata/precio_barril; el resto de los datos del producto se heredan del catálogo default.
+const CATALOGO_PRECIOS_SANTIAGO: Record<string, Pick<CatalogoInfo, 'precio_lata' | 'precio_barril'>> = {
+  'Arboretum':                   { precio_lata: 2300, precio_barril: 98000 },
+  'Mocho English':               { precio_lata: 2300, precio_barril: 98000 },
+  'Fisura':                      { precio_lata: 2450, precio_barril: 105000 },
+  'La Barra APA':                { precio_lata: 2450, precio_barril: 105000 },
+  'Descenso West Coast IPA':     { precio_lata: 2950, precio_barril: 125000 },
+  'Aguas Blancas':               { precio_lata: 3200, precio_barril: 140000 },
+  'Kombucha Berry Menta':        { precio_lata: 1625, precio_barril: 90000 },
+  'Kombucha Detox':              { precio_lata: 1625, precio_barril: 90000 },
+  'Kombucha Lemon':              { precio_lata: 1625, precio_barril: 90000 },
+  'Kombucha Mango':              { precio_lata: 1625, precio_barril: 90000 },
+  'Kombucha Maqui':              { precio_lata: 1625, precio_barril: 90000 },
+  'Kombucha Maracuyá Cardamomo': { precio_lata: 1625, precio_barril: 90000 },
+  'Kombucha Natural':            { precio_lata: 1625, precio_barril: 90000 },
+}
+
+const EMAIL_LISTA_PRECIOS_SANTIAGO = 'yadro.favijancic@elregresobeer.com'
+
+function catalogoParaVendedor(email: string): Record<string, CatalogoInfo> {
+  if (email.toLowerCase() !== EMAIL_LISTA_PRECIOS_SANTIAGO) return CATALOGO_INFO_DEFAULT
+  const resultado: Record<string, CatalogoInfo> = {}
+  for (const [nombre, info] of Object.entries(CATALOGO_INFO_DEFAULT)) {
+    resultado[nombre] = { ...info, ...CATALOGO_PRECIOS_SANTIAGO[nombre] }
+  }
+  return resultado
+}
+
+// Catálogo activo del vendedor logueado — se fija en NuevaVisitaClient() en cada render,
+// antes de que se rendericen sus componentes hijos (Paso3Vista360, Paso4Catalogo, WhatsAppModal, etc.)
+let CATALOGO_INFO: Record<string, CatalogoInfo> = CATALOGO_INFO_DEFAULT
 
 function fmtPrecioCLP(n: number) {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
@@ -1948,6 +1981,10 @@ function FotosPendientesModal({ onCargarAhora, onFinalizarIgual }: {
 export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos, visitaRetomada, deudores = [], clientePre = null }: Props) {
   const router = useRouter()
   const supabase = createClient()
+
+  // Lista de precios distinta para Santiago (ver EMAIL_LISTA_PRECIOS_SANTIAGO) — se fija
+  // antes del return para que todos los sub-componentes (Paso3, Paso4, WhatsApp) la usen.
+  CATALOGO_INFO = catalogoParaVendedor(vendedor.email)
 
   // Si retomamos visita, inicializar estado directamente en el paso correcto
   const pasoInicial = visitaRetomada
