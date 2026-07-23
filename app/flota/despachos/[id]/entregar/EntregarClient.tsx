@@ -17,6 +17,8 @@ interface ParadaDetalle {
 
 const ORANGE = '#F97316'
 
+const MOTIVOS_INCIDENCIA = ['Local cerrado', 'Rechazo del pedido', 'Problema de facturación', 'Otro motivo']
+
 export default function EntregarClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -28,7 +30,9 @@ export default function EntregarClient() {
   const [barriles, setBarriles] = useState(0)
   const [cajasCerveza, setCajasCerveza] = useState(0)
   const [cajasKombucha, setCajasKombucha] = useState(0)
-  const [motivoRechazo, setMotivoRechazo] = useState('')
+  const [barrilesVacios, setBarrilesVacios] = useState(0)
+  const [motivoPreset, setMotivoPreset] = useState<string | null>(null)
+  const [motivoDetalle, setMotivoDetalle] = useState('')
   const [guiaUrl, setGuiaUrl] = useState<string | null>(null)
   const [fotoUrl, setFotoUrl] = useState<string | null>(null)
   const [subiendoGuia, setSubiendoGuia] = useState(false)
@@ -77,6 +81,10 @@ export default function EntregarClient() {
     })
   }
 
+  const motivoCompleto = motivoPreset
+    ? (motivoDetalle.trim() ? `${motivoPreset}: ${motivoDetalle.trim()}` : motivoPreset)
+    : ''
+
   async function confirmar() {
     if (!paradaId) return
     const totalEntregado = barriles + cajasCerveza + cajasKombucha
@@ -88,8 +96,12 @@ export default function EntregarClient() {
       alert('Indica al menos un barril o caja entregada.')
       return
     }
-    if (modo !== 'entregado' && !motivoRechazo.trim()) {
-      alert('Indica el motivo.')
+    if (modo !== 'entregado' && !motivoPreset) {
+      alert('Indica el motivo de la incidencia.')
+      return
+    }
+    if (modo !== 'entregado' && !fotoUrl) {
+      alert('La foto de evidencia es obligatoria para reportar una incidencia.')
       return
     }
     setGuardando(true)
@@ -103,8 +115,9 @@ export default function EntregarClient() {
           foto_entrega_url: fotoUrl ?? undefined,
           cantidad_entregada: totalEntregado,
           barriles, cajas_cerveza: cajasCerveza, cajas_kombucha: cajasKombucha,
+          barriles_vacios_devueltos: barrilesVacios,
           estado: modo,
-          motivo_rechazo: modo !== 'entregado' ? motivoRechazo.trim() : undefined,
+          motivo_rechazo: modo !== 'entregado' ? motivoCompleto : undefined,
           ...gps,
         }),
       })
@@ -207,17 +220,62 @@ export default function EntregarClient() {
               <Camera size={16} />
               {subiendoFoto ? 'Subiendo…' : fotoUrl ? '✓ Foto de entrega cargada' : 'Tomar foto del pedido entregado (obligatorio)'}
             </button>
+
+            {/* Retorno de envases */}
+            <label style={{ ...labelStyle, marginTop: 4 }}>🔄 Barriles vacíos retirados</label>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+              {[0, 1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setBarrilesVacios(n)}
+                  style={{
+                    flex: 1, padding: '10px 0', borderRadius: 10, cursor: 'pointer',
+                    border: `1.5px solid ${barrilesVacios === n ? ORANGE : 'var(--border)'}`,
+                    background: barrilesVacios === n ? `${ORANGE}18` : 'transparent',
+                    color: barrilesVacios === n ? ORANGE : 'rgba(255,255,255,0.5)',
+                    fontSize: 13, fontWeight: 800,
+                  }}
+                >
+                  {n === 5 ? '5+' : n}
+                </button>
+              ))}
+            </div>
           </>
         ) : (
           <>
-            <label style={labelStyle}>Motivo (obligatorio)</label>
+            <label style={labelStyle}>Motivo de la incidencia (obligatorio)</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+              {MOTIVOS_INCIDENCIA.map(m => (
+                <button
+                  key={m}
+                  onClick={() => setMotivoPreset(m)}
+                  style={{
+                    padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
+                    border: `1.5px solid ${motivoPreset === m ? '#FF6666' : 'var(--border)'}`,
+                    background: motivoPreset === m ? 'rgba(255,102,102,0.12)' : 'transparent',
+                    color: motivoPreset === m ? '#FF6666' : 'rgba(255,255,255,0.5)',
+                    fontSize: 12, fontWeight: 700,
+                  }}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
             <textarea
-              value={motivoRechazo}
-              onChange={e => setMotivoRechazo(e.target.value)}
-              placeholder="Ej: cliente cerrado, mercadería dañada, rechazo por diferencia de precio..."
-              rows={3}
+              value={motivoDetalle}
+              onChange={e => setMotivoDetalle(e.target.value)}
+              placeholder="Detalle adicional (opcional)"
+              rows={2}
               style={{ ...inputStyle, marginBottom: 16, resize: 'vertical' }}
             />
+
+            {/* Foto de evidencia — obligatoria para toda incidencia */}
+            <input ref={fotoInputRef} type="file" accept="image/*" capture="environment" hidden
+              onChange={e => { const f = e.target.files?.[0]; if (f) subir(f, 'foto') }} />
+            <button onClick={() => fotoInputRef.current?.click()} style={captureBtnStyle(!!fotoUrl)}>
+              <Camera size={16} />
+              {subiendoFoto ? 'Subiendo…' : fotoUrl ? '✓ Foto de evidencia cargada' : 'Foto del local / evidencia (obligatorio)'}
+            </button>
           </>
         )}
 

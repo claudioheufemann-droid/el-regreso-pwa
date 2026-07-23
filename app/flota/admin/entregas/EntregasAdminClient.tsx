@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { ChevronLeft, CheckCircle2, FileText, Camera, PackageCheck } from 'lucide-react'
+import { ChevronLeft, CheckCircle2, FileText, Camera, PackageCheck, AlertTriangle } from 'lucide-react'
 import type { PuntoEntrega } from './EntregaMap'
 
 const EntregaMap = dynamic(() => import('./EntregaMap'), {
@@ -22,6 +22,7 @@ interface Entrega {
   barriles: number
   cajas_cerveza: number
   cajas_kombucha: number
+  barriles_vacios_devueltos: number
   estado: 'entregado' | 'rechazado' | 'devuelto'
   motivo_rechazo: string | null
   lat: number | null
@@ -84,6 +85,7 @@ export default function EntregasAdminClient() {
   }, [despachos])
 
   const pendientesAprobar = entregasFlat.filter(r => r.entrega.estado === 'entregado' && !r.entrega.aprobado)
+  const incidencias = entregasFlat.filter(r => r.entrega.estado !== 'entregado')
 
   const puntosMapa: PuntoEntrega[] = entregasFlat
     .filter(r => r.entrega.lat != null && r.entrega.lng != null)
@@ -108,8 +110,9 @@ export default function EntregasAdminClient() {
     acc.barriles += r.entrega.barriles
     acc.cajasCerveza += r.entrega.cajas_cerveza
     acc.cajasKombucha += r.entrega.cajas_kombucha
+    acc.barrilesVacios += r.entrega.barriles_vacios_devueltos ?? 0
     return acc
-  }, { barriles: 0, cajasCerveza: 0, cajasKombucha: 0 })
+  }, { barriles: 0, cajasCerveza: 0, cajasKombucha: 0, barrilesVacios: 0 })
 
   async function aprobar(entregaId: string) {
     setAprobando(entregaId)
@@ -147,15 +150,26 @@ export default function EntregasAdminClient() {
       <div style={{ flex: 1, overflowY: 'auto', padding: 16, maxWidth: 720, margin: '0 auto', width: '100%' }}>
 
         {/* KPIs del día */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
           {[
             { label: 'Entregas', value: entregasFlat.filter(r => r.entrega.estado === 'entregado').length },
             { label: 'Por aprobar', value: pendientesAprobar.length, color: pendientesAprobar.length > 0 ? '#D4AF37' : undefined },
-            { label: 'Barriles', value: totales.barriles },
-            { label: 'Cajas (cerv.+komb.)', value: totales.cajasCerveza + totales.cajasKombucha },
+            { label: 'Incidencias', value: incidencias.length, color: incidencias.length > 0 ? '#FF6666' : undefined },
           ].map(k => (
             <div key={k.label} style={{ background: '#131313', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '10px 10px' }}>
               <p style={{ fontSize: 17, fontWeight: 900, color: k.color ?? '#F4EEDF' }}>{k.value}</p>
+              <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>{k.label}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
+          {[
+            { label: 'Barriles', value: totales.barriles },
+            { label: 'Cajas (cerv.+komb.)', value: totales.cajasCerveza + totales.cajasKombucha },
+            { label: 'Barriles vacíos', value: totales.barrilesVacios },
+          ].map(k => (
+            <div key={k.label} style={{ background: '#131313', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '10px 10px' }}>
+              <p style={{ fontSize: 17, fontWeight: 900, color: '#F4EEDF' }}>{k.value}</p>
               <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>{k.label}</p>
             </div>
           ))}
@@ -209,6 +223,41 @@ export default function EntregasAdminClient() {
                         </a>
                       )}
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Incidencias: local cerrado, rechazo, etc. */}
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
+              Incidencias {incidencias.length > 0 && `(${incidencias.length})`}
+            </p>
+            {incidencias.length === 0 ? (
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 20 }}>Sin incidencias reportadas.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                {incidencias.map(r => (
+                  <div key={r.entrega.id} style={{ background: '#131313', border: '1px solid rgba(255,102,102,0.25)', borderRadius: 14, padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                      <AlertTriangle size={15} color="#FF6666" style={{ flexShrink: 0, marginTop: 1 }} />
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: '#F4EEDF' }}>{r.nombreCliente}</p>
+                        <p style={{ fontSize: 10, color: 'var(--muted)' }}>
+                          {r.despacho.chofer?.nombre ?? '—'} · {r.despacho.vehiculo?.nombre ?? '—'} · {new Date(r.entrega.entregado_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: '#FF6666', textTransform: 'uppercase', flexShrink: 0 }}>
+                        {r.entrega.estado === 'rechazado' ? 'Rechazado' : 'Devuelto'}
+                      </span>
+                    </div>
+                    {r.entrega.motivo_rechazo && (
+                      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 8 }}>{r.entrega.motivo_rechazo}</p>
+                    )}
+                    {r.entrega.foto_entrega_url && (
+                      <a href={r.entrega.foto_entrega_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: F, textDecoration: 'none', width: 'fit-content' }}>
+                        <Camera size={12} /> Ver evidencia
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>
