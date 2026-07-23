@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Plus, X, Search, Navigation2, Clock, CheckCircle } from 'lucide-react'
+import { MapPin, Plus, X, Search, Navigation2, Clock, CheckCircle, FileText, Camera, ChevronDown } from 'lucide-react'
 import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
 import { createClient } from '@/lib/supabase/client'
+import { compressImage } from '@/lib/compress-image'
 import type { AppUser } from '@/lib/auth'
 
 const F = '#D4AF37'
@@ -16,6 +17,8 @@ interface Parada {
   lat?: number
   lng?: number
   verificada?: boolean
+  fotoGuia?: string
+  fotoProducto?: string
 }
 
 interface SugerenciaGeo {
@@ -67,6 +70,8 @@ function parseParadas(destino: string | null): Parada[] {
         lat: p.lat ?? undefined,
         lng: p.lng ?? undefined,
         verificada: !!(p.lat && p.lng),
+        fotoGuia: p.fg ?? undefined,
+        fotoProducto: p.fp ?? undefined,
       }))
     }
   } catch { /* plain text */ }
@@ -240,8 +245,30 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
 
   async function guardarParadas(nuevas: Parada[]) {
     setParadas(nuevas)
-    const destino = JSON.stringify(nuevas.map(p => ({ n: p.nombre, d: p.direccion, lat: p.lat, lng: p.lng })))
+    const destino = JSON.stringify(nuevas.map(p => ({ n: p.nombre, d: p.direccion, lat: p.lat, lng: p.lng, fg: p.fotoGuia, fp: p.fotoProducto })))
     await supabase.from('viajes_flota').update({ destino_declarado: destino }).eq('id', viaje.id)
+  }
+
+  const [paradaAbierta, setParadaAbierta] = useState<string | null>(null)
+  const [subiendoFoto, setSubiendoFoto] = useState<Record<string, boolean>>({})
+
+  async function subirFotoParada(paradaId: string, tipo: 'guia' | 'producto', file: File) {
+    const key = `${paradaId}-${tipo}`
+    setSubiendoFoto(prev => ({ ...prev, [key]: true }))
+    try {
+      const compressed = await compressImage(file, { maxDim: 1600, quality: 0.8 })
+      const path = `viajes/${viaje.id}/parada-${paradaId}-${tipo}-${Date.now()}.jpg`
+      const { error } = await supabase.storage.from('logistica-evidence').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
+      if (error) throw error
+      const { data: { publicUrl } } = supabase.storage.from('logistica-evidence').getPublicUrl(path)
+      const campo = tipo === 'guia' ? 'fotoGuia' : 'fotoProducto'
+      await guardarParadas(paradas.map(p => p.id === paradaId ? { ...p, [campo]: publicUrl } : p))
+    } catch (err) {
+      console.error(err)
+      alert('Error al subir la imagen. Intenta de nuevo.')
+    } finally {
+      setSubiendoFoto(prev => ({ ...prev, [key]: false }))
+    }
   }
 
   const minEst = kmCalculado ? Math.round(kmCalculado / 35 * 60) : null
@@ -322,24 +349,65 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
 
           {paradas.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-              {paradas.map((p, i) => (
-                <div key={p.id} style={{ background: '#141414', border: `1px solid ${p.verificada ? 'rgba(90,138,74,0.2)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.6)', minWidth: 16, marginTop: 2 }}>{i + 1}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
-                      {p.verificada && <CheckCircle size={11} color="#5A8A4A" style={{ flexShrink: 0 }} />}
+              {paradas.map((p, i) => {
+                const abierta = paradaAbierta === p.id
+                return (
+                <div key={p.id} style={{ background: '#141414', border: `1px solid ${p.fotoGuia ? 'rgba(90,138,74,0.3)' : abierta ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, overflow: 'hidden' }}>
+                  <div onClick={() => setParadaAbierta(abierta ? null : p.id)} style={{ padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.6)', minWidth: 16, marginTop: 2 }}>{i + 1}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
+                        {p.verificada && <CheckCircle size={11} color="#5A8A4A" style={{ flexShrink: 0 }} />}
+                        {p.fotoGuia && <FileText size={11} color="#5A8A4A" style={{ flexShrink: 0 }} />}
+                      </div>
+                      {p.direccion && p.direccion !== p.nombre && (
+                        <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.direccion}</p>
+                      )}
+                      {!p.fotoGuia && (
+                        <p style={{ fontSize: 10, color: 'rgba(212,175,55,0.6)', marginTop: 2 }}>Falta foto de guía</p>
+                      )}
                     </div>
-                    {p.direccion && p.direccion !== p.nombre && (
-                      <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.direccion}</p>
-                    )}
+                    <ChevronDown size={14} color="rgba(255,255,255,0.3)" style={{ flexShrink: 0, marginTop: 2, transition: 'transform 0.15s', transform: abierta ? 'rotate(180deg)' : 'none' }} />
+                    <button onClick={e => { e.stopPropagation(); guardarParadas(paradas.filter(x => x.id !== p.id)) }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'rgba(255,255,255,0.25)', display: 'flex', flexShrink: 0 }}>
+                      <X size={14} />
+                    </button>
                   </div>
-                  <button onClick={() => guardarParadas(paradas.filter(x => x.id !== p.id))}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'rgba(255,255,255,0.25)', display: 'flex', flexShrink: 0 }}>
-                    <X size={14} />
-                  </button>
+
+                  {abierta && (
+                    <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {(['guia', 'producto'] as const).map(tipo => {
+                        const url = tipo === 'guia' ? p.fotoGuia : p.fotoProducto
+                        const subiendo = subiendoFoto[`${p.id}-${tipo}`]
+                        const inputId = `foto-${p.id}-${tipo}`
+                        return (
+                          <div key={tipo}>
+                            <input
+                              id={inputId} type="file" accept="image/*" capture="environment" hidden
+                              onChange={e => { const f = e.target.files?.[0]; if (f) subirFotoParada(p.id, tipo, f) }}
+                            />
+                            <label htmlFor={inputId} style={{
+                              display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 10, cursor: 'pointer',
+                              border: `1px solid ${url ? '#5A8A4A55' : 'rgba(255,255,255,0.1)'}`,
+                              background: url ? 'rgba(90,138,74,0.08)' : 'rgba(255,255,255,0.03)',
+                              color: url ? '#5A8A4A' : 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 700,
+                            }}>
+                              {tipo === 'guia' ? <FileText size={15} /> : <Camera size={15} />}
+                              {subiendo
+                                ? 'Subiendo…'
+                                : url
+                                  ? `✓ Foto de ${tipo === 'guia' ? 'guía' : 'producto entregado'} cargada`
+                                  : tipo === 'guia' ? 'Foto de guía (obligatorio)' : 'Foto de producto entregado (opcional)'}
+                            </label>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
 

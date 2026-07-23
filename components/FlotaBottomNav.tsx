@@ -14,7 +14,13 @@ const ITEMS: NavItem[] = [
   { href: '/flota/admin',     icon: BarChart3, label: 'Reportes'                },
 ]
 
+const RUTAS_PANTALLA_COMPLETA = ['/flota/checkin', '/flota/checkout', '/flota/viaje']
+
 export default function FlotaBottomNav() {
   const pathname = usePathname()
+  // Checkin/Checkout/Viaje son flujos a pantalla completa con su propio header
+  // y footer con botones de acción (Iniciar/Terminar viaje) — el nav flotante
+  // les tapaba esos botones al quedar ambos fijos en la misma zona inferior.
+  if (RUTAS_PANTALLA_COMPLETA.some(r => pathname?.startsWith(r))) return null
   return <NavPill items={ITEMS} pathname={pathname} />
 }
