@@ -94,15 +94,330 @@
   --surface: #FFFFFF;
   --surface2: #F4EFE6;
   --gold: #A8870F;
+  --gold-dim: rgba(168, 135, 15, 0.12);
+  --gold-hover: rgba(168, 135, 15, 0.06);
   --cream: #1A1008;
   --muted: #6B6050;
   --dim: #8A7A6A;
   --border: rgba(0, 0, 0, 0.12);
+  --border-subtle: rgba(0, 0, 0, 0.06);
   --input-bg: rgba(0, 0, 0, 0.04);
   --input-color: #1A1008;
   --input-border: rgba(168, 135, 15, 0.35);
   --row-separator: rgba(0, 0, 0, 0.08);
   --card-shadow: 0 2px 16px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+
+  /* Tokens del "Sistema El Regreso" — antes no tenían override de modo
+     claro, así que texto/separadores construidos con var(--rg-text-2),
+     var(--rg-text-3), var(--rg-hairline), var(--rg-card-border) seguían
+     usando su valor blanco-translúcido de modo oscuro y quedaban
+     invisibles sobre fondo claro. */
+  --rg-text-2: rgba(26, 16, 8, 0.55);
+  --rg-text-3: rgba(26, 16, 8, 0.4);
+  --rg-hairline: rgba(0, 0, 0, 0.08);
+  --rg-card-border: rgba(0, 0, 0, 0.08);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AUDITORÍA DE CONTRASTE — MODO CLARO (2026-07-23)
+   Generado por scripts/gen-light-mode-fixes.mjs — no editar a mano.
+
+   Causa raíz: cientos de estilos inline usan literales de la familia
+   blanco/crema (#F4EEDF, rgba(255,255,255,X), etc.) pensados para texto
+   SOBRE fondo oscuro. Esos literales no son variables de tema, así que
+   al cambiar a modo claro (fondos casi blancos) el texto queda casi
+   invisible. Estas reglas interceptan esos literales exactos por
+   selector de atributo — sin tocar los ~1000 usos correctos de
+   var(--cream)/var(--muted) que sí funcionan bien en ambos modos.
+
+   Fuera de alcance a propósito: colores semánticos/de marca (dorado,
+   verde, rojo, azul de estado) — esos tienen su propio contraste por
+   diseño y recalibrarlos es una decisión de marca, no un bug de tema.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Texto: nivel primario ── */
+[data-theme="light"] [style*=";color:#FFFFFF"],
+[data-theme="light"] [style^="color:#FFFFFF"],
+[data-theme="light"] [style*=";color:#fff"],
+[data-theme="light"] [style^="color:#fff"],
+[data-theme="light"] [style*=";color:white"],
+[data-theme="light"] [style^="color:white"],
+[data-theme="light"] [style*=";color:#F4EEDF"],
+[data-theme="light"] [style^="color:#F4EEDF"],
+[data-theme="light"] [style*=";color:#F8F6F0"],
+[data-theme="light"] [style^="color:#F8F6F0"],
+[data-theme="light"] [style*=";color:#F0EDE8"],
+[data-theme="light"] [style^="color:#F0EDE8"],
+[data-theme="light"] [style*=";color:#F0E8D4"],
+[data-theme="light"] [style^="color:#F0E8D4"],
+[data-theme="light"] [style*=";color:#E8DFC8"],
+[data-theme="light"] [style^="color:#E8DFC8"],
+[data-theme="light"] [style*=";color:rgba(244,238,223,0.8)"],
+[data-theme="light"] [style^="color:rgba(244,238,223,0.8)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.55)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.55)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.6)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.6)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.65)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.65)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.7)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.7)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.8)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.8)"] {
+  color: #1A1008 !important;
+}
+
+/* ── Texto: nivel secundario ── */
+[data-theme="light"] [style*=";color:#C8BEA4"],
+[data-theme="light"] [style^="color:#C8BEA4"],
+[data-theme="light"] [style*=";color:#eee"],
+[data-theme="light"] [style^="color:#eee"],
+[data-theme="light"] [style*=";color:#ddd"],
+[data-theme="light"] [style^="color:#ddd"],
+[data-theme="light"] [style*=";color:#ccc"],
+[data-theme="light"] [style^="color:#ccc"],
+[data-theme="light"] [style*=";color:#999"],
+[data-theme="light"] [style^="color:#999"],
+[data-theme="light"] [style*=";color:rgba(244,238,223,0.5)"],
+[data-theme="light"] [style^="color:rgba(244,238,223,0.5)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.3)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.3)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.32)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.32)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.35)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.35)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.38)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.38)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.4)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.4)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.45)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.45)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.5)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.5)"],
+[data-theme="light"] [style*=";color:rgba(128,128,128,0.4)"],
+[data-theme="light"] [style^="color:rgba(128,128,128,0.4)"],
+[data-theme="light"] [style*=";color:rgba(128,128,128,0.5)"],
+[data-theme="light"] [style^="color:rgba(128,128,128,0.5)"],
+[data-theme="light"] [style*=";color:rgba(128,128,128,0.6)"],
+[data-theme="light"] [style^="color:rgba(128,128,128,0.6)"],
+[data-theme="light"] [style*=";color:rgba(156,163,175,0.4)"],
+[data-theme="light"] [style^="color:rgba(156,163,175,0.4)"] {
+  color: #6B6050 !important;
+}
+
+/* ── Texto: nivel terciario / deshabilitado ── */
+[data-theme="light"] [style*=";color:#bbb"],
+[data-theme="light"] [style^="color:#bbb"],
+[data-theme="light"] [style*=";color:#aaa"],
+[data-theme="light"] [style^="color:#aaa"],
+[data-theme="light"] [style*=";color:#888"],
+[data-theme="light"] [style^="color:#888"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.12)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.12)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.15)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.15)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.18)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.18)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.2)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.2)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.22)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.22)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.25)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.25)"],
+[data-theme="light"] [style*=";color:rgba(255,255,255,0.28)"],
+[data-theme="light"] [style^="color:rgba(255,255,255,0.28)"],
+[data-theme="light"] [style*=";color:rgba(128,128,128,0.3)"],
+[data-theme="light"] [style^="color:rgba(128,128,128,0.3)"] {
+  color: #8A7A6A !important;
+}
+
+/* ── Fondos translúcidos blancos → tinta oscura translúcida ── */
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.01)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.01)"] {
+  background: rgba(26,16,8,0.01) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.015)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.015)"] {
+  background: rgba(26,16,8,0.015) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.02)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.02)"] {
+  background: rgba(26,16,8,0.02) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.025)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.025)"] {
+  background: rgba(26,16,8,0.025) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.03)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.03)"] {
+  background: rgba(26,16,8,0.03) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.035)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.035)"] {
+  background: rgba(26,16,8,0.035) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.04)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.04)"] {
+  background: rgba(26,16,8,0.04) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.05)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.05)"] {
+  background: rgba(26,16,8,0.05) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.055)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.055)"] {
+  background: rgba(26,16,8,0.055) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.06)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.06)"] {
+  background: rgba(26,16,8,0.06) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.07)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.07)"] {
+  background: rgba(26,16,8,0.07) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.08)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.08)"] {
+  background: rgba(26,16,8,0.08) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.1)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.1)"] {
+  background: rgba(26,16,8,0.1) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.12)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.12)"] {
+  background: rgba(26,16,8,0.12) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.15)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.15)"] {
+  background: rgba(26,16,8,0.15) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.18)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.18)"] {
+  background: rgba(26,16,8,0.18) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.4)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.4)"] {
+  background: rgba(26,16,8,0.4) !important;
+}
+[data-theme="light"] [style*=";background:rgba(255,255,255,0.5)"],
+[data-theme="light"] [style^="background:rgba(255,255,255,0.5)"] {
+  background: rgba(26,16,8,0.5) !important;
+}
+
+/* ── Bordes shorthand con blanco translúcido → border-color oscuro ── */
+[data-theme="light"] [style*=";border:1.5px solid rgba(255,255,255,0.08)"],
+[data-theme="light"] [style^="border:1.5px solid rgba(255,255,255,0.08)"] {
+  border-color: rgba(26,16,8,0.08) !important;
+}
+[data-theme="light"] [style*=";border:1.5px solid rgba(255,255,255,0.1)"],
+[data-theme="light"] [style^="border:1.5px solid rgba(255,255,255,0.1)"] {
+  border-color: rgba(26,16,8,0.1) !important;
+}
+[data-theme="light"] [style*=";border:1.5px solid rgba(255,255,255,0.2)"],
+[data-theme="light"] [style^="border:1.5px solid rgba(255,255,255,0.2)"] {
+  border-color: rgba(26,16,8,0.2) !important;
+}
+[data-theme="light"] [style*=";border:1px dashed rgba(255,255,255,0.06)"],
+[data-theme="light"] [style^="border:1px dashed rgba(255,255,255,0.06)"] {
+  border-color: rgba(26,16,8,0.06) !important;
+}
+[data-theme="light"] [style*=";border:1px dashed rgba(255,255,255,0.08)"],
+[data-theme="light"] [style^="border:1px dashed rgba(255,255,255,0.08)"] {
+  border-color: rgba(26,16,8,0.08) !important;
+}
+[data-theme="light"] [style*=";border:1px dashed rgba(255,255,255,0.12)"],
+[data-theme="light"] [style^="border:1px dashed rgba(255,255,255,0.12)"] {
+  border-color: rgba(26,16,8,0.12) !important;
+}
+[data-theme="light"] [style*=";border:1px dashed rgba(255,255,255,0.15)"],
+[data-theme="light"] [style^="border:1px dashed rgba(255,255,255,0.15)"] {
+  border-color: rgba(26,16,8,0.15) !important;
+}
+[data-theme="light"] [style*=";border:1px dashed rgba(255,255,255,0.2)"],
+[data-theme="light"] [style^="border:1px dashed rgba(255,255,255,0.2)"] {
+  border-color: rgba(26,16,8,0.2) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.05)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.05)"] {
+  border-color: rgba(26,16,8,0.05) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.055)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.055)"] {
+  border-color: rgba(26,16,8,0.055) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.06)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.06)"] {
+  border-color: rgba(26,16,8,0.06) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.07)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.07)"] {
+  border-color: rgba(26,16,8,0.07) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.08)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.08)"] {
+  border-color: rgba(26,16,8,0.08) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.09)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.09)"] {
+  border-color: rgba(26,16,8,0.09) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.1)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.1)"] {
+  border-color: rgba(26,16,8,0.1) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.12)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.12)"] {
+  border-color: rgba(26,16,8,0.12) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.14)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.14)"] {
+  border-color: rgba(26,16,8,0.14) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.15)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.15)"] {
+  border-color: rgba(26,16,8,0.15) !important;
+}
+[data-theme="light"] [style*=";border:1px solid rgba(255,255,255,0.2)"],
+[data-theme="light"] [style^="border:1px solid rgba(255,255,255,0.2)"] {
+  border-color: rgba(26,16,8,0.2) !important;
+}
+[data-theme="light"] [style*=";border:2px solid rgba(255,255,255,0.12)"],
+[data-theme="light"] [style^="border:2px solid rgba(255,255,255,0.12)"] {
+  border-color: rgba(26,16,8,0.12) !important;
+}
+[data-theme="light"] [style*=";border:3px solid rgba(255,255,255,0.35)"],
+[data-theme="light"] [style^="border:3px solid rgba(255,255,255,0.35)"] {
+  border-color: rgba(26,16,8,0.35) !important;
+}
+
+/* ── Íconos lucide-react (prop color → atributo SVG stroke) ── */
+[data-theme="light"] svg[stroke="rgba(255,255,255,0.1)"] {
+  stroke: #8A7A6A !important;
+}
+[data-theme="light"] svg[stroke="rgba(255,255,255,0.12)"] {
+  stroke: #8A7A6A !important;
+}
+[data-theme="light"] svg[stroke="rgba(255,255,255,0.15)"] {
+  stroke: #8A7A6A !important;
+}
+[data-theme="light"] svg[stroke="rgba(255,255,255,0.25)"] {
+  stroke: #8A7A6A !important;
+}
+[data-theme="light"] svg[stroke="rgba(255,255,255,0.3)"] {
+  stroke: #6B6050 !important;
+}
+[data-theme="light"] svg[stroke="rgba(255,255,255,0.35)"] {
+  stroke: #6B6050 !important;
+}
+[data-theme="light"] svg[stroke="rgba(255,255,255,0.4)"] {
+  stroke: #6B6050 !important;
+}
+[data-theme="light"] svg[stroke="rgba(255,255,255,0.5)"] {
+  stroke: #6B6050 !important;
+}
+[data-theme="light"] svg[stroke="rgba(255,255,255,0.55)"] {
+  stroke: #1A1008 !important;
 }
 
 [data-theme="light"] body {
