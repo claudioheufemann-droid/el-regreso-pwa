@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Plus, X, Search, Navigation2, Clock, CheckCircle, FileText, Camera, ChevronDown } from 'lucide-react'
+import { MapPin, Plus, X, Search, Navigation2, Clock, CheckCircle, FileText, Camera, ChevronDown, XCircle } from 'lucide-react'
 import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
 import type { AppUser } from '@/lib/auth'
 
 const F = '#D4AF37'
+
+const MOTIVOS_NO_ENTREGA = ['Negocio cerrado', 'No contestó nadie', 'Rechazó el pedido', 'Otro motivo']
 
 interface Parada {
   id: string
@@ -19,6 +21,8 @@ interface Parada {
   verificada?: boolean
   fotoGuia?: string
   fotoProducto?: string
+  entregado?: 'si' | 'no'
+  motivoNoEntrega?: string
 }
 
 interface SugerenciaGeo {
@@ -72,6 +76,8 @@ function parseParadas(destino: string | null): Parada[] {
         verificada: !!(p.lat && p.lng),
         fotoGuia: p.fg ?? undefined,
         fotoProducto: p.fp ?? undefined,
+        entregado: p.en ?? undefined,
+        motivoNoEntrega: p.mn ?? undefined,
       }))
     }
   } catch { /* plain text */ }
@@ -245,12 +251,21 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
 
   async function guardarParadas(nuevas: Parada[]) {
     setParadas(nuevas)
-    const destino = JSON.stringify(nuevas.map(p => ({ n: p.nombre, d: p.direccion, lat: p.lat, lng: p.lng, fg: p.fotoGuia, fp: p.fotoProducto })))
+    const destino = JSON.stringify(nuevas.map(p => ({ n: p.nombre, d: p.direccion, lat: p.lat, lng: p.lng, fg: p.fotoGuia, fp: p.fotoProducto, en: p.entregado, mn: p.motivoNoEntrega })))
     await supabase.from('viajes_flota').update({ destino_declarado: destino }).eq('id', viaje.id)
   }
 
   const [paradaAbierta, setParadaAbierta] = useState<string | null>(null)
   const [subiendoFoto, setSubiendoFoto] = useState<Record<string, boolean>>({})
+  const [otroMotivoTexto, setOtroMotivoTexto] = useState<Record<string, string>>({})
+
+  function marcarEntregado(paradaId: string, valor: 'si' | 'no') {
+    guardarParadas(paradas.map(p => p.id === paradaId ? { ...p, entregado: valor } : p))
+  }
+
+  function marcarMotivo(paradaId: string, motivo: string) {
+    guardarParadas(paradas.map(p => p.id === paradaId ? { ...p, motivoNoEntrega: motivo } : p))
+  }
 
   async function subirFotoParada(paradaId: string, tipo: 'guia' | 'producto', file: File) {
     const key = `${paradaId}-${tipo}`
@@ -351,21 +366,31 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
               {paradas.map((p, i) => {
                 const abierta = paradaAbierta === p.id
+                const estadoBorde = p.entregado === 'no' ? 'rgba(181,84,62,0.35)' : p.entregado === 'si' && p.fotoGuia ? 'rgba(90,138,74,0.3)' : abierta ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.07)'
                 return (
-                <div key={p.id} style={{ background: '#141414', border: `1px solid ${p.fotoGuia ? 'rgba(90,138,74,0.3)' : abierta ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, overflow: 'hidden' }}>
+                <div key={p.id} style={{ background: '#141414', border: `1px solid ${estadoBorde}`, borderRadius: 10, overflow: 'hidden' }}>
                   <div onClick={() => setParadaAbierta(abierta ? null : p.id)} style={{ padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
                     <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.6)', minWidth: 16, marginTop: 2 }}>{i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
                         {p.verificada && <CheckCircle size={11} color="#5A8A4A" style={{ flexShrink: 0 }} />}
-                        {p.fotoGuia && <FileText size={11} color="#5A8A4A" style={{ flexShrink: 0 }} />}
+                        {p.entregado === 'si' && p.fotoGuia && <FileText size={11} color="#5A8A4A" style={{ flexShrink: 0 }} />}
+                        {p.entregado === 'no' && <XCircle size={11} color="#B5543E" style={{ flexShrink: 0 }} />}
                       </div>
                       {p.direccion && p.direccion !== p.nombre && (
                         <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.direccion}</p>
                       )}
-                      {!p.fotoGuia && (
+                      {!p.entregado && (
+                        <p style={{ fontSize: 10, color: 'rgba(212,175,55,0.6)', marginTop: 2 }}>Falta marcar si se entregó</p>
+                      )}
+                      {p.entregado === 'si' && !p.fotoGuia && (
                         <p style={{ fontSize: 10, color: 'rgba(212,175,55,0.6)', marginTop: 2 }}>Falta foto de guía</p>
+                      )}
+                      {p.entregado === 'no' && (
+                        <p style={{ fontSize: 10, color: '#B5543E', marginTop: 2 }}>
+                          No entregado{p.motivoNoEntrega ? `: ${p.motivoNoEntrega}` : ' · falta indicar motivo'}
+                        </p>
                       )}
                     </div>
                     <ChevronDown size={14} color="rgba(255,255,255,0.3)" style={{ flexShrink: 0, marginTop: 2, transition: 'transform 0.15s', transform: abierta ? 'rotate(180deg)' : 'none' }} />
@@ -377,7 +402,64 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
 
                   {abierta && (
                     <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {(['guia', 'producto'] as const).map(tipo => {
+                      {/* ── ¿Se entregó el pedido? ── */}
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          onClick={() => marcarEntregado(p.id, 'si')}
+                          style={{
+                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0', borderRadius: 10, cursor: 'pointer',
+                            border: `1.5px solid ${p.entregado === 'si' ? '#5A8A4A' : 'rgba(255,255,255,0.1)'}`,
+                            background: p.entregado === 'si' ? 'rgba(90,138,74,0.12)' : 'transparent',
+                            color: p.entregado === 'si' ? '#5A8A4A' : 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 700,
+                          }}
+                        >
+                          <CheckCircle size={14} /> Entregado
+                        </button>
+                        <button
+                          onClick={() => marcarEntregado(p.id, 'no')}
+                          style={{
+                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0', borderRadius: 10, cursor: 'pointer',
+                            border: `1.5px solid ${p.entregado === 'no' ? '#B5543E' : 'rgba(255,255,255,0.1)'}`,
+                            background: p.entregado === 'no' ? 'rgba(181,84,62,0.12)' : 'transparent',
+                            color: p.entregado === 'no' ? '#B5543E' : 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 700,
+                          }}
+                        >
+                          <XCircle size={14} /> No entregado
+                        </button>
+                      </div>
+
+                      {p.entregado === 'no' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {MOTIVOS_NO_ENTREGA.map(m => (
+                              <button
+                                key={m}
+                                onClick={() => marcarMotivo(p.id, m === 'Otro motivo' ? (otroMotivoTexto[p.id]?.trim() ? `Otro: ${otroMotivoTexto[p.id].trim()}` : 'Otro motivo') : m)}
+                                style={{
+                                  padding: '8px 12px', borderRadius: 10, cursor: 'pointer',
+                                  border: `1.5px solid ${p.motivoNoEntrega === m || (m === 'Otro motivo' && p.motivoNoEntrega?.startsWith('Otro:')) ? '#B5543E' : 'rgba(255,255,255,0.1)'}`,
+                                  background: p.motivoNoEntrega === m || (m === 'Otro motivo' && p.motivoNoEntrega?.startsWith('Otro:')) ? 'rgba(181,84,62,0.12)' : 'transparent',
+                                  color: p.motivoNoEntrega === m || (m === 'Otro motivo' && p.motivoNoEntrega?.startsWith('Otro:')) ? '#B5543E' : 'rgba(255,255,255,0.5)',
+                                  fontSize: 11, fontWeight: 700,
+                                }}
+                              >
+                                {m}
+                              </button>
+                            ))}
+                          </div>
+                          {(p.motivoNoEntrega === 'Otro motivo' || p.motivoNoEntrega?.startsWith('Otro:')) && (
+                            <input
+                              value={otroMotivoTexto[p.id] ?? (p.motivoNoEntrega?.startsWith('Otro: ') ? p.motivoNoEntrega.slice(6) : '')}
+                              onChange={e => setOtroMotivoTexto(prev => ({ ...prev, [p.id]: e.target.value }))}
+                              onBlur={() => { const t = otroMotivoTexto[p.id]?.trim(); if (t) marcarMotivo(p.id, `Otro: ${t}`) }}
+                              placeholder="Escribe el motivo…"
+                              style={{ padding: '10px 12px', borderRadius: 10, background: '#0D0D0D', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 13, outline: 'none' }}
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      {p.entregado === 'si' && (['guia', 'producto'] as const).map(tipo => {
                         const url = tipo === 'guia' ? p.fotoGuia : p.fotoProducto
                         const subiendo = subiendoFoto[`${p.id}-${tipo}`]
                         const inputId = `foto-${p.id}-${tipo}`

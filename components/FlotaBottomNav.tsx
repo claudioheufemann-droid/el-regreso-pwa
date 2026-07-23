@@ -14,7 +14,7 @@ const ITEMS: NavItem[] = [
   { href: '/flota/admin',     icon: BarChart3, label: 'Reportes'                },
 ]
 
-const RUTAS_PANTALLA_COMPLETA = ['/flota/checkin', '/flota/checkout', '/flota/viaje']
+const RUTAS_PANTALLA_COMPLETA = ['/flota/checkin', '/flota/checkout', '/flota/viaje', '/flota/vehiculo']
 
 export default function FlotaBottomNav() {
   const pathname = usePathname()
