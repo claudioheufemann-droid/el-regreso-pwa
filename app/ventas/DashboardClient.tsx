@@ -107,7 +107,7 @@ function fTiempoRelativo(iso: string): string {
   return `hace ${d}d`
 }
 
-function UltimaSyncBadge({ ultimaSync }: { ultimaSync?: string | null }) {
+function UltimaSyncBadge({ ultimaSync, compact }: { ultimaSync?: string | null; compact?: boolean }) {
   const [, forceTick] = useState(0)
   useEffect(() => {
     const t = setInterval(() => forceTick(n => n + 1), 60000) // refresca el texto cada minuto
@@ -119,13 +119,14 @@ function UltimaSyncBadge({ ultimaSync }: { ultimaSync?: string | null }) {
   const stale = min > 150 // sin sync hace más de 2.5h en horario comercial → alerta visual
   return (
     <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 20,
+      display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+      padding: compact ? '4px 7px' : '4px 9px', borderRadius: 20,
       background: stale ? 'rgba(239,68,68,0.08)' : 'rgba(52,211,153,0.08)',
       border: `1px solid ${stale ? 'rgba(239,68,68,0.25)' : 'rgba(52,211,153,0.2)'}`,
       fontSize: 10, fontWeight: 700, color: stale ? '#EF4444' : '#5A8A4A', whiteSpace: 'nowrap',
     }}>
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: stale ? '#EF4444' : '#4ADE80', flexShrink: 0 }} />
-      Datos {fTiempoRelativo(ultimaSync)}
+      {compact ? fTiempoRelativo(ultimaSync) : `Datos ${fTiempoRelativo(ultimaSync)}`}
     </div>
   )
 }
@@ -1559,8 +1560,8 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         eyebrow={new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         title="Ventas"
         extraAction={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <UltimaSyncBadge ultimaSync={ultimaSync} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <UltimaSyncBadge ultimaSync={ultimaSync} compact={!isDesktop} />
             <button
               onClick={() => router.push('/ventas/actividad')}
               aria-label="Actividad"
