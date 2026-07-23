@@ -87,12 +87,48 @@ interface Props {
   vendedorAvatars?: Record<string, string | null>
   litrosMesAnterior?: number
   litrosMesAnteriorPorVendedor?: Record<string, number>
+  ultimaSync?: string | null
 }
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
 function fL(n: number) { return n.toFixed(1) + ' L' }
 function fP(n: number) { return '$' + Math.round(n).toLocaleString('es-CL') }
 function getInitials(name: string) { return name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() }
+
+// ── Badge "Última actualización" — refleja cuándo el ERP sync (u carga
+// manual) escribió filas por última vez, no la fecha de la venta en sí.
+function fTiempoRelativo(iso: string): string {
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (min < 1) return 'justo ahora'
+  if (min < 60) return `hace ${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `hace ${h}h`
+  const d = Math.floor(h / 24)
+  return `hace ${d}d`
+}
+
+function UltimaSyncBadge({ ultimaSync }: { ultimaSync?: string | null }) {
+  const [, forceTick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => forceTick(n => n + 1), 60000) // refresca el texto cada minuto
+    return () => clearInterval(t)
+  }, [])
+
+  if (!ultimaSync) return null
+  const min = Math.floor((Date.now() - new Date(ultimaSync).getTime()) / 60000)
+  const stale = min > 150 // sin sync hace más de 2.5h en horario comercial → alerta visual
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 20,
+      background: stale ? 'rgba(239,68,68,0.08)' : 'rgba(52,211,153,0.08)',
+      border: `1px solid ${stale ? 'rgba(239,68,68,0.25)' : 'rgba(52,211,153,0.2)'}`,
+      fontSize: 10, fontWeight: 700, color: stale ? '#EF4444' : '#5A8A4A', whiteSpace: 'nowrap',
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: stale ? '#EF4444' : '#4ADE80', flexShrink: 0 }} />
+      Datos {fTiempoRelativo(ultimaSync)}
+    </div>
+  )
+}
 
 // ── Avatar vendedor (foto o iniciales) ──────────────────────────────────────
 function VendedorAvatar({ vendedor, color, size, avatars }: {
@@ -1483,7 +1519,7 @@ function MisionesWidgetCard({ misiones }: { misiones: MisionResumen[] }) {
 }
 
 // ── Main Component ───────────────────────────────────────────────────────────
-export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, periodo, evolution, productRanking, productDetail, vendedoresScope, planSemana, misionesResumen, vendedorAvatars }: Props) {
+export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, periodo, evolution, productRanking, productDetail, vendedoresScope, planSemana, misionesResumen, vendedorAvatars, ultimaSync }: Props) {
   const isDesktop = useIsDesktop()
   const router = useRouter()
   const [showPlanModal, setShowPlanModal] = useState(false)
@@ -1523,7 +1559,8 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         eyebrow={new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
         title="Ventas"
         extraAction={
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <UltimaSyncBadge ultimaSync={ultimaSync} />
             <button
               onClick={() => router.push('/ventas/actividad')}
               aria-label="Actividad"

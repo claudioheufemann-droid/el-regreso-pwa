@@ -77,6 +77,7 @@ export default async function DashboardPage({
   // ── FASE A: queries independientes en paralelo ───────────
   const [
     { data: ultimaFecha },
+    { data: ultimaSyncRow },
     { data: periodo },
     { data: fechasRows },
     { data: planRaw },
@@ -88,6 +89,9 @@ export default async function DashboardPage({
       ? supabase.from('ventas').select('fecha_pedido').in('provincia', provinciasScope)
       : supabase.from('ventas').select('fecha_pedido').in('vendedor_actual', scope)
     ).order('fecha_pedido', { ascending: false }).limit(1).maybeSingle(),
+    // Última vez que el ERP sync (u carga manual) escribió filas — refleja
+    // cuándo se actualizó la info, no la fecha de la venta en sí.
+    supabase.from('ventas').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('periodos').select('*').eq('activo', true).maybeSingle(),
     (provinciasScope
       ? supabase.from('ventas').select('fecha_pedido').in('provincia', provinciasScope)
@@ -447,6 +451,7 @@ export default async function DashboardPage({
       vendedorAvatars={vendedorAvatars}
       litrosMesAnterior={litrosMesAnteriorTotal}
       litrosMesAnteriorPorVendedor={litrosMesAnteriorPorVendedor}
+      ultimaSync={ultimaSyncRow?.created_at ?? null}
     />
   )
 }
