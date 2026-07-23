@@ -15,7 +15,7 @@ export default async function VehiculoActivoPage({ params }: { params: Promise<{
   // Buscar viaje activo por vehiculo
   const { data: viaje } = await supabase
     .from('viajes_flota')
-    .select('id, tipo, motivo, km_inicio, km_teoricos, iniciado_at, destino_declarado, conductor_id, vehiculo_id, estado')
+    .select('id, tipo, motivo, km_inicio, km_teoricos, iniciado_at, destino_declarado, conductor_id, vehiculo_id, estado, repartos_terminados')
     .eq('vehiculo_id', vehiculoId)
     .eq('estado', 'en_curso')
     .order('iniciado_at', { ascending: false })

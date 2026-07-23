@@ -57,6 +57,7 @@ interface Props {
     iniciado_at: string
     destino_declarado: string | null
     estado: string
+    repartos_terminados?: boolean
     conductor: { nombre: string } | null
     vehiculo: Vehiculo
   }
@@ -210,6 +211,21 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
   const [kmFin, setKmFin] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [completado, setCompletado] = useState(viaje.estado === 'completado')
+  const [repartosTerminados, setRepartosTerminados] = useState(!!viaje.repartos_terminados)
+  const [marcandoRepartos, setMarcandoRepartos] = useState(false)
+
+  // El viaje NO termina al entregar el último pedido — termina cuando el
+  // repartidor vuelve a la base/bodega. Este paso intermedio solo marca
+  // que ya no quedan entregas pendientes, sin cerrar el viaje todavía.
+  async function marcarRepartosTerminados() {
+    setMarcandoRepartos(true)
+    try {
+      await supabase.from('viajes_flota').update({ repartos_terminados: true }).eq('id', viaje.id)
+      setRepartosTerminados(true)
+    } finally {
+      setMarcandoRepartos(false)
+    }
+  }
 
   async function terminarViaje() {
     setGuardando(true)
@@ -568,6 +584,18 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
               Volver
             </button>
           </>
+        ) : repartosTerminados ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <p style={{ fontSize: 11, color: '#D4AF37', textAlign: 'center', fontWeight: 700 }}>
+              Repartos terminados — cuando llegues a la base/bodega, toca "Viaje terminado"
+            </p>
+            <button
+              onClick={() => setTerminando(true)}
+              style={{ padding: '16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: '#5A8A4A', color: '#000', fontSize: 15, fontWeight: 900 }}
+            >
+              Viaje terminado ✓
+            </button>
+          </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {paradasPendientes.length > 0 && (
@@ -576,15 +604,16 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
               </p>
             )}
             <button
-              onClick={() => { if (paradasPendientes.length === 0) setTerminando(true) }}
-              disabled={paradasPendientes.length > 0}
+              onClick={() => { if (paradasPendientes.length === 0) marcarRepartosTerminados() }}
+              disabled={paradasPendientes.length > 0 || marcandoRepartos}
               style={{
                 padding: '16px', borderRadius: 14, border: 'none', cursor: paradasPendientes.length > 0 ? 'not-allowed' : 'pointer',
                 background: paradasPendientes.length > 0 ? 'rgba(255,255,255,0.06)' : '#5A8A4A',
                 color: paradasPendientes.length > 0 ? 'var(--muted)' : '#000', fontSize: 15, fontWeight: 900,
+                opacity: marcandoRepartos ? 0.7 : 1,
               }}
             >
-              Viaje terminado ✓
+              {marcandoRepartos ? 'Guardando…' : 'Repartos terminados ✓'}
             </button>
           </div>
         )}
