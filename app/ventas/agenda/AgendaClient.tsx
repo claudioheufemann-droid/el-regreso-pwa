@@ -1,7 +1,10 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Phone, Mail, MessageCircle, Car, Ban, CheckCircle2, Clock, AlertTriangle, Share2 } from 'lucide-react'
+import {
+  Phone, Mail, MessageCircle, Car, Ban, CheckCircle2, Clock, AlertTriangle,
+  Share2, ChevronLeft, ChevronRight, CalendarClock,
+} from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import AppHeader from '@/components/ui/AppHeader'
@@ -19,13 +22,11 @@ interface Seguimiento {
   tipo_accion: TipoAccion; fecha_hora_compromiso: string | null; nota: string | null
   estado: 'pendiente' | 'realizado'; realizado_at: string | null; created_at: string
 }
-interface Vendedor { id: string; nombre: string }
 interface Cliente { nombre_fantasia: string; telefono: string | null; email: string | null }
 
 interface Props {
   user: AppUser
   seguimientos: Seguimiento[]
-  vendedores: Vendedor[]
   clientes: Cliente[]
 }
 
@@ -37,24 +38,41 @@ const TIPO_CFG: Record<TipoAccion, { label: string; icon: typeof Phone; color: s
   ninguna:  { label: 'Sin seguimiento', icon: Ban,    color: 'rgba(255,255,255,0.3)' },
 }
 
+// ─── Helpers de fecha (siempre en hora local para evitar desfases de zona) ───
+function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
+function addDays(d: Date, n: number) { const x = new Date(d); x.setDate(x.getDate() + n); return x }
+function dateKey(d: Date) { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` }
+function startOfWeekMon(d: Date) {
+  const x = startOfDay(d)
+  const dow = (x.getDay() + 6) % 7 // 0 = lunes
+  return addDays(x, -dow)
+}
 function fmtHora(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
 }
 function fmtFecha(iso: string) {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
 }
+function capitalizar(s: string) { return s.charAt(0).toUpperCase() + s.slice(1) }
+function etiquetaDia(d: Date) {
+  const diff = Math.round((startOfDay(d).getTime() - startOfDay(new Date()).getTime()) / 86400000)
+  if (diff === 0) return 'Hoy'
+  if (diff === 1) return 'Mañana'
+  if (diff === -1) return 'Ayer'
+  return capitalizar(d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' }))
+}
 function waLink(telefono: string, mensaje: string) {
   const num = telefono.replace(/[\s\-\(\)]/g, '').replace(/^\+?56/, '56').replace(/^(?!56)/, '56')
   return `https://wa.me/${num}?text=${encodeURIComponent(mensaje)}`
 }
 
-function SeguimientoRow({ s, cliente, vendedorNombre, onMarcarRealizado }: {
-  s: Seguimiento; cliente: Cliente | undefined; vendedorNombre?: string
+function SeguimientoRow({ s, cliente, mostrarFecha, onMarcarRealizado }: {
+  s: Seguimiento; cliente: Cliente | undefined; mostrarFecha?: boolean
   onMarcarRealizado: (id: string) => void
 }) {
   const cfg = TIPO_CFG[s.tipo_accion]
   const Icon = cfg.icon
-  const atrasado = s.estado === 'pendiente' && s.fecha_hora_compromiso && new Date(s.fecha_hora_compromiso) < new Date()
+  const atrasado = s.estado === 'pendiente' && !!s.fecha_hora_compromiso && new Date(s.fecha_hora_compromiso) < new Date()
   const [marcando, setMarcando] = useState(false)
 
   async function marcar() {
@@ -92,10 +110,9 @@ function SeguimientoRow({ s, cliente, vendedorNombre, onMarcarRealizado }: {
               <>
                 <span>·</span>
                 <Clock size={10} />
-                <span>{fmtFecha(s.fecha_hora_compromiso)} {fmtHora(s.fecha_hora_compromiso)}</span>
+                <span>{mostrarFecha ? `${fmtFecha(s.fecha_hora_compromiso)} · ${fmtHora(s.fecha_hora_compromiso)}` : fmtHora(s.fecha_hora_compromiso)}</span>
               </>
             )}
-            {vendedorNombre && <><span>·</span><span>{vendedorNombre.split(' ')[0]}</span></>}
           </div>
           {s.nota && <p style={{ fontSize: 12, color: '#F4EEDF', lineHeight: 1.4 }}>{s.nota}</p>}
         </div>
@@ -179,18 +196,64 @@ function ReporteWhatsAppModal({ texto, onClose }: { texto: string; onClose: () =
   )
 }
 
-export default function AgendaClient({ user, seguimientos: seguimientosIniciales, vendedores, clientes }: Props) {
+export default function AgendaClient({ user, seguimientos: seguimientosIniciales, clientes }: Props) {
   const isDesktop = useIsDesktop()
   const [seguimientos, setSeguimientos] = useState(seguimientosIniciales)
-  const [filtroVendedor, setFiltroVendedor] = useState('todos')
+  const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()))
   const [reporteTexto, setReporteTexto] = useState<string | null>(null)
   const [cargandoReporte, setCargandoReporte] = useState(false)
+  const [verAtrasados, setVerAtrasados] = useState(true)
 
-  // Vendedor sobre el que se genera el reporte: uno mismo, o el filtrado por el admin
-  const vendedorReporteId = user.isAdmin ? (filtroVendedor !== 'todos' ? filtroVendedor : user.id) : user.id
-  const vendedorReporteNombre = user.isAdmin
-    ? (vendedores.find(v => v.id === vendedorReporteId)?.nombre ?? user.nombre)
-    : user.nombre
+  const clienteMap = useMemo(() => Object.fromEntries(clientes.map(c => [c.nombre_fantasia, c])), [clientes])
+
+  async function marcarRealizado(id: string) {
+    const supabase = createClient()
+    const nowIso = new Date().toISOString()
+    const { error } = await supabase.from('seguimientos').update({ estado: 'realizado', realizado_at: nowIso }).eq('id', id)
+    if (error) { alert('No se pudo actualizar: ' + error.message); return }
+    setSeguimientos(prev => prev.map(s => s.id === id ? { ...s, estado: 'realizado' as const, realizado_at: nowIso } : s))
+  }
+
+  const hoy0 = startOfDay(new Date())
+  const selKey = dateKey(selectedDate)
+
+  const { pendientesPorDia, atrasados, sinFecha, delDia } = useMemo(() => {
+    // Compromisos pendientes por día (para los puntos de la tira de semana)
+    const ppd: Record<string, { total: number; pasado: boolean }> = {}
+    const atr: Seguimiento[] = []
+    const sf: Seguimiento[] = []
+
+    for (const s of seguimientos) {
+      if (!s.fecha_hora_compromiso) {
+        if (s.estado === 'pendiente') sf.push(s) // nunca perder un compromiso sin fecha
+        continue
+      }
+      if (s.estado !== 'pendiente') continue
+      const d = new Date(s.fecha_hora_compromiso)
+      const k = dateKey(d)
+      const pasadoDia = startOfDay(d).getTime() < hoy0.getTime()
+      if (!ppd[k]) ppd[k] = { total: 0, pasado: pasadoDia }
+      ppd[k].total++
+      if (pasadoDia) atr.push(s) // "atrasado" = de un día anterior a hoy
+    }
+
+    // Compromisos del día seleccionado (pendientes y realizados juntos)
+    const del = seguimientos
+      .filter(s => s.fecha_hora_compromiso && dateKey(new Date(s.fecha_hora_compromiso)) === selKey)
+      .sort((a, b) => {
+        const ra = a.estado === 'realizado' ? 1 : 0
+        const rb = b.estado === 'realizado' ? 1 : 0
+        if (ra !== rb) return ra - rb // pendientes primero, realizados al final
+        return (a.fecha_hora_compromiso ?? '').localeCompare(b.fecha_hora_compromiso ?? '')
+      })
+
+    atr.sort((a, b) => (a.fecha_hora_compromiso ?? '').localeCompare(b.fecha_hora_compromiso ?? ''))
+    return { pendientesPorDia: ppd, atrasados: atr, sinFecha: sf, delDia: del }
+  }, [seguimientos, selKey, hoy0])
+
+  const weekStart = startOfWeekMon(selectedDate)
+  const dias = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  const esHoySel = selKey === dateKey(hoy0)
 
   async function generarReporte() {
     setCargandoReporte(true)
@@ -202,7 +265,7 @@ export default function AgendaClient({ user, seguimientos: seguimientosIniciales
       const { data: visitasHoy } = await supabase
         .from('visitas_terreno')
         .select('id, tiene_venta, total_pedido')
-        .eq('vendedor_id', vendedorReporteId)
+        .eq('vendedor_id', user.id)
         .neq('estado', 'cancelada')
         .gte('iniciada_at', inicioHoy.toISOString())
         .lte('iniciada_at', finHoy.toISOString())
@@ -219,45 +282,26 @@ export default function AgendaClient({ user, seguimientos: seguimientosIniciales
 
       const manana = new Date(); manana.setDate(manana.getDate() + 1)
       const seguimientosManana = seguimientos
-        .filter(s => s.vendedor_id === vendedorReporteId && s.estado === 'pendiente' && s.fecha_hora_compromiso && new Date(s.fecha_hora_compromiso).toDateString() === manana.toDateString())
+        .filter(s => s.estado === 'pendiente' && s.fecha_hora_compromiso && new Date(s.fecha_hora_compromiso).toDateString() === manana.toDateString())
         .sort((a, b) => (a.fecha_hora_compromiso ?? '').localeCompare(b.fecha_hora_compromiso ?? ''))
         .map(s => ({ cliente: s.cliente_nombre, tipo: s.tipo_accion, hora: fmtHora(s.fecha_hora_compromiso!), nota: s.nota }))
 
-      setReporteTexto(generarTextoReporte(vendedorReporteNombre, { montoTotal, unidades, visitasConVenta, visitasSinVenta, seguimientosManana }))
+      setReporteTexto(generarTextoReporte(user.nombre, { montoTotal, unidades, visitasConVenta, visitasSinVenta, seguimientosManana }))
     } finally {
       setCargandoReporte(false)
     }
   }
 
-  const clienteMap = useMemo(() => Object.fromEntries(clientes.map(c => [c.nombre_fantasia, c])), [clientes])
-  const vendedorMap = useMemo(() => Object.fromEntries(vendedores.map(v => [v.id, v.nombre])), [vendedores])
-
-  async function marcarRealizado(id: string) {
-    const supabase = createClient()
-    const nowIso = new Date().toISOString()
-    const { error } = await supabase.from('seguimientos').update({ estado: 'realizado', realizado_at: nowIso }).eq('id', id)
-    if (error) { alert('No se pudo actualizar: ' + error.message); return }
-    setSeguimientos(prev => prev.map(s => s.id === id ? { ...s, estado: 'realizado', realizado_at: nowIso } : s))
+  const chevBtn: React.CSSProperties = {
+    width: 34, height: 34, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer',
   }
-
-  const filtrados = useMemo(() => {
-    if (filtroVendedor === 'todos') return seguimientos
-    return seguimientos.filter(s => s.vendedor_id === filtroVendedor)
-  }, [seguimientos, filtroVendedor])
-
-  const now = Date.now()
-  const hoyStr = new Date().toDateString()
-
-  const atrasados = filtrados.filter(s => s.estado === 'pendiente' && s.fecha_hora_compromiso && new Date(s.fecha_hora_compromiso).getTime() < now)
-  const hoy = filtrados.filter(s => s.estado === 'pendiente' && s.fecha_hora_compromiso && new Date(s.fecha_hora_compromiso).getTime() >= now && new Date(s.fecha_hora_compromiso).toDateString() === hoyStr)
-  const proximos = filtrados.filter(s => s.estado === 'pendiente' && s.fecha_hora_compromiso && new Date(s.fecha_hora_compromiso).toDateString() !== hoyStr && new Date(s.fecha_hora_compromiso).getTime() >= now)
-  const realizados = filtrados.filter(s => s.estado === 'realizado').slice(0, 20)
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100 }}>
       <div style={{ padding: isDesktop ? '20px 28px 0' : '16px 20px 0' }}>
         <AppHeader
-          eyebrow="Ventas" title="Agenda y Compromisos"
+          eyebrow="Ventas" title="Mi Agenda"
           extraAction={
             <button onClick={generarReporte} disabled={cargandoReporte} style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
@@ -273,58 +317,101 @@ export default function AgendaClient({ user, seguimientos: seguimientosIniciales
 
       <div style={{ padding: isDesktop ? '20px 28px' : '16px 20px', maxWidth: 720, margin: '0 auto' }}>
 
-        {user.isAdmin && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
-            {[{ id: 'todos', nombre: 'Todos' }, ...vendedores].map(v => (
-              <button key={v.id} onClick={() => setFiltroVendedor(v.id)} style={{
-                padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                border: `1px solid ${filtroVendedor === v.id ? T_BORDER : 'rgba(255,255,255,0.09)'}`,
-                background: filtroVendedor === v.id ? T_DIM : 'transparent',
-                color: filtroVendedor === v.id ? T : 'rgba(255,255,255,0.4)',
-              }}>{v.nombre.split(' ')[0]}</button>
-            ))}
+        {/* ── Navegador de semana ── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <button aria-label="Semana anterior" onClick={() => setSelectedDate(addDays(selectedDate, -7))} style={chevBtn}>
+            <ChevronLeft size={18} color={T} />
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: '#F4EEDF' }}>
+              {capitalizar(selectedDate.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }))}
+            </span>
+            {!esHoySel && (
+              <button onClick={() => setSelectedDate(startOfDay(new Date()))} style={{
+                padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                background: T_DIM, border: `1px solid ${T_BORDER}`, color: T,
+              }}>Hoy</button>
+            )}
           </div>
-        )}
+          <button aria-label="Semana siguiente" onClick={() => setSelectedDate(addDays(selectedDate, 7))} style={chevBtn}>
+            <ChevronRight size={18} color={T} />
+          </button>
+        </div>
 
-        {atrasados.length === 0 && hoy.length === 0 && proximos.length === 0 && (
-          <div style={{ textAlign: 'center', paddingTop: 56 }}>
-            <CheckCircle2 size={40} color="rgba(255,255,255,0.1)" style={{ margin: '0 auto 16px', display: 'block' }} />
-            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.25)', fontWeight: 500 }}>Sin compromisos pendientes</p>
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 22 }}>
+          {dias.map(d => {
+            const k = dateKey(d)
+            const sel = k === selKey
+            const esHoy = k === dateKey(hoy0)
+            const info = pendientesPorDia[k]
+            return (
+              <button key={k} onClick={() => setSelectedDate(startOfDay(d))} style={{
+                flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                padding: '8px 0', borderRadius: 14, cursor: 'pointer',
+                background: sel ? T_DIM : 'transparent',
+                border: `1px solid ${sel ? T_BORDER : 'transparent'}`,
+              }}>
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: esHoy ? T : 'rgba(255,255,255,0.35)' }}>
+                  {d.toLocaleDateString('es-CL', { weekday: 'short' }).replace('.', '').slice(0, 3)}
+                </span>
+                <span style={{
+                  width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, fontWeight: 800,
+                  background: sel ? T : 'transparent',
+                  color: sel ? '#0A0A0A' : (esHoy ? T : '#F4EEDF'),
+                  border: (!sel && esHoy) ? `1.5px solid ${T}` : '1.5px solid transparent',
+                }}>{d.getDate()}</span>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: info ? (info.pasado ? RED : T) : 'transparent' }} />
+              </button>
+            )
+          })}
+        </div>
 
+        {/* ── Alerta de atrasados (siempre visible, no se pierden) ── */}
         {atrasados.length > 0 && (
-          <div style={{ marginBottom: 24 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: RED, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10 }}>Atrasados ({atrasados.length})</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {atrasados.map(s => <SeguimientoRow key={s.id} s={s} cliente={clienteMap[s.cliente_nombre]} vendedorNombre={user.isAdmin ? vendedorMap[s.vendedor_id] : undefined} onMarcarRealizado={marcarRealizado} />)}
-            </div>
+          <div style={{ marginBottom: 22, border: '1px solid rgba(181,84,62,0.3)', borderRadius: 16, overflow: 'hidden' }}>
+            <button onClick={() => setVerAtrasados(v => !v)} style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '12px 14px', background: 'rgba(181,84,62,0.08)', border: 'none', cursor: 'pointer',
+            }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: RED, fontSize: 13, fontWeight: 800 }}>
+                <AlertTriangle size={15} /> {atrasados.length} atrasado{atrasados.length !== 1 ? 's' : ''}
+              </span>
+              <ChevronRight size={16} color={RED} style={{ transform: verAtrasados ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
+            </button>
+            {verAtrasados && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12 }}>
+                {atrasados.map(s => <SeguimientoRow key={s.id} s={s} cliente={clienteMap[s.cliente_nombre]} mostrarFecha onMarcarRealizado={marcarRealizado} />)}
+              </div>
+            )}
           </div>
         )}
 
-        {hoy.length > 0 && (
-          <div style={{ marginBottom: 24 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: T, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10 }}>Hoy ({hoy.length})</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {hoy.map(s => <SeguimientoRow key={s.id} s={s} cliente={clienteMap[s.cliente_nombre]} vendedorNombre={user.isAdmin ? vendedorMap[s.vendedor_id] : undefined} onMarcarRealizado={marcarRealizado} />)}
+        {/* ── Día seleccionado ── */}
+        <div style={{ marginBottom: 22 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: T, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10 }}>
+            {etiquetaDia(selectedDate)}
+          </p>
+          {delDia.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 16 }}>
+              <CalendarClock size={28} color="rgba(255,255,255,0.12)" style={{ margin: '0 auto 10px', display: 'block' }} />
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)' }}>Sin compromisos este día</p>
             </div>
-          </div>
-        )}
-
-        {proximos.length > 0 && (
-          <div style={{ marginBottom: 24 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10 }}>Próximos ({proximos.length})</p>
+          ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {proximos.map(s => <SeguimientoRow key={s.id} s={s} cliente={clienteMap[s.cliente_nombre]} vendedorNombre={user.isAdmin ? vendedorMap[s.vendedor_id] : undefined} onMarcarRealizado={marcarRealizado} />)}
+              {delDia.map(s => <SeguimientoRow key={s.id} s={s} cliente={clienteMap[s.cliente_nombre]} onMarcarRealizado={marcarRealizado} />)}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {realizados.length > 0 && (
+        {/* ── Sin fecha programada ── */}
+        {sinFecha.length > 0 && (
           <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10 }}>Realizados recientemente</p>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10 }}>
+              Sin fecha ({sinFecha.length})
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {realizados.map(s => <SeguimientoRow key={s.id} s={s} cliente={clienteMap[s.cliente_nombre]} vendedorNombre={user.isAdmin ? vendedorMap[s.vendedor_id] : undefined} onMarcarRealizado={marcarRealizado} />)}
+              {sinFecha.map(s => <SeguimientoRow key={s.id} s={s} cliente={clienteMap[s.cliente_nombre]} onMarcarRealizado={marcarRealizado} />)}
             </div>
           </div>
         )}
