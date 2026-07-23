@@ -287,6 +287,12 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
     }
   }
 
+  // Una parada queda "resuelta" cuando el repartidor dejó constancia de qué pasó:
+  // entregada con foto de guía (el producto es opcional), o marcada como no
+  // entregada con su motivo — sin esto no se puede cerrar el viaje.
+  const paradaResuelta = (p: Parada) => (p.entregado === 'si' && !!p.fotoGuia) || (p.entregado === 'no' && !!p.motivoNoEntrega)
+  const paradasPendientes = paradas.filter(p => !paradaResuelta(p))
+
   const minEst = kmCalculado ? Math.round(kmCalculado / 35 * 60) : null
   const tiempoEst = !minEst ? null : minEst < 60 ? `${minEst} min` : `${Math.floor(minEst / 60)}h${minEst % 60 > 0 ? ` ${minEst % 60}m` : ''}`
 
@@ -563,19 +569,24 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
             </button>
           </>
         ) : (
-          <>
-            <a href={urlGoogleMaps(paradas)} target="_blank" rel="noopener noreferrer"
-              style={{ flex: 1, padding: '16px', borderRadius: 14, background: 'rgba(66,133,244,0.15)', border: '1px solid rgba(66,133,244,0.35)', color: '#F4EEDF', fontSize: 15, fontWeight: 900, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#F4EEDF"/>
-              </svg>
-              Iniciar viaje
-            </a>
-            <button onClick={() => setTerminando(true)}
-              style={{ flex: 1, padding: '16px', borderRadius: 14, border: 'none', background: '#5A8A4A', color: '#000', fontSize: 15, fontWeight: 900, cursor: 'pointer' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {paradasPendientes.length > 0 && (
+              <p style={{ fontSize: 11, color: '#D4AF37', textAlign: 'center', fontWeight: 700 }}>
+                Faltan {paradasPendientes.length} parada{paradasPendientes.length !== 1 ? 's' : ''} por resolver (entregada con guía, o no entregada con motivo)
+              </p>
+            )}
+            <button
+              onClick={() => { if (paradasPendientes.length === 0) setTerminando(true) }}
+              disabled={paradasPendientes.length > 0}
+              style={{
+                padding: '16px', borderRadius: 14, border: 'none', cursor: paradasPendientes.length > 0 ? 'not-allowed' : 'pointer',
+                background: paradasPendientes.length > 0 ? 'rgba(255,255,255,0.06)' : '#5A8A4A',
+                color: paradasPendientes.length > 0 ? 'var(--muted)' : '#000', fontSize: 15, fontWeight: 900,
+              }}
+            >
               Viaje terminado ✓
             </button>
-          </>
+          </div>
         )}
       </div>
     </div>
