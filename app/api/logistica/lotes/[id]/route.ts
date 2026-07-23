@@ -30,21 +30,35 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json(lote)
 }
 
-// DELETE /api/logistica/lotes/[id] — Producción elimina un envío que aún no salió a bodega
+// DELETE /api/logistica/lotes/[id] — puede borrar un admin, o quien declaró el envío.
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
+  const { data: profile } = await supabase.from('users').select('id, is_admin').eq('email', user.email!).single()
+  if (!profile) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
+
+  const { data: lote } = await supabase.from('lotes_produccion').select('declarado_por').eq('id', id).single()
+  if (!lote) return NextResponse.json({ error: 'Envío no encontrado' }, { status: 404 })
+
+  const puedeBorrar = profile.is_admin || lote.declarado_por === profile.id
+  if (!puedeBorrar) {
+    return NextResponse.json({ error: 'Solo un administrador o quien declaró el envío puede eliminarlo' }, { status: 403 })
+  }
+
+  // alertas_inventario no tiene borrado en cascada — sin esto, un envío con
+  // descuadre (el caso más visible en Historial) fallaría por la llave foránea.
+  await supabase.from('alertas_inventario').delete().eq('lote_id', id)
+
   const { error, count } = await supabase
     .from('lotes_produccion')
     .delete({ count: 'exact' })
     .eq('id', id)
-    .eq('estado', 'declarado')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!count) return NextResponse.json({ error: 'No se encontró el envío o ya salió a bodega' }, { status: 400 })
+  if (!count) return NextResponse.json({ error: 'No se pudo eliminar el envío (permisos de base de datos)' }, { status: 403 })
 
   return NextResponse.json({ ok: true })
 }

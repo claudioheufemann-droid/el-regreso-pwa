@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
-import { Archive, FileText, ImageIcon, AlertTriangle } from 'lucide-react'
+import { Archive, FileText, ImageIcon, AlertTriangle, Trash2 } from 'lucide-react'
+import type { AppUser } from '@/lib/auth'
 
 interface LoteItem {
   id: string
@@ -31,6 +32,7 @@ interface LoteRow {
   guia_recepcion_url: string | null
   enviado_at: string | null
   created_at: string
+  declarado_por: string
   declarante: { nombre: string } | null
   items: LoteItem[]
   alertas: AlertaRow[]
@@ -43,9 +45,10 @@ const ESTADO_INFO: Record<string, { label: string; color: string }> = {
   con_discrepancia:  { label: 'Con descuadre',           color: '#FF6666' },
 }
 
-export default function HistorialClient() {
+export default function HistorialClient({ user }: { user: AppUser }) {
   const [lotes, setLotes] = useState<LoteRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [borrandoId, setBorrandoId] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -56,6 +59,22 @@ export default function HistorialClient() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  async function eliminarLote(loteId: string) {
+    if (!confirm('¿Eliminar este envío del historial? Esta acción no se puede deshacer.')) return
+    setBorrandoId(loteId)
+    try {
+      const res = await fetch(`/api/logistica/lotes/${loteId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error ?? 'Error al eliminar el envío')
+        return
+      }
+      setLotes(prev => prev.filter(l => l.id !== loteId))
+    } finally {
+      setBorrandoId(null)
+    }
+  }
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
@@ -90,12 +109,29 @@ export default function HistorialClient() {
                         {l.declarante?.nombre ?? 'Producción'} · {l.items.length} producto{l.items.length === 1 ? '' : 's'} · {totalUnidades} unidad{totalUnidades === 1 ? '' : 'es'}
                       </p>
                     </div>
-                    <span style={{
-                      flexShrink: 0, padding: '4px 9px', borderRadius: 8, fontSize: 10, fontWeight: 800,
-                      color: info.color, background: `${info.color}18`, border: `1px solid ${info.color}40`,
-                    }}>
-                      {info.label}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                      <span style={{
+                        padding: '4px 9px', borderRadius: 8, fontSize: 10, fontWeight: 800,
+                        color: info.color, background: `${info.color}18`, border: `1px solid ${info.color}40`,
+                      }}>
+                        {info.label}
+                      </span>
+                      {(user.isAdmin || l.declarado_por === user.id) && (
+                        <button
+                          onClick={() => eliminarLote(l.id)}
+                          disabled={borrandoId === l.id}
+                          title="Eliminar del historial"
+                          style={{
+                            width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                            background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.18)',
+                            color: '#F87171', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: borrandoId === l.id ? 'default' : 'pointer', opacity: borrandoId === l.id ? 0.4 : 1,
+                          }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
