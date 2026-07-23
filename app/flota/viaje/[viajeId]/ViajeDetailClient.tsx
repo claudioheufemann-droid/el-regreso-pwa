@@ -222,6 +222,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
       await supabase.from('vehiculos').update({ estado: 'disponible' }).eq('id', viaje.vehiculo_id)
       setCompletado(true)
       setTerminando(false)
+      router.push('/flota')
     } catch { /* silently fail */ } finally { setGuardando(false) }
   }
 
@@ -394,10 +395,6 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                       )}
                     </div>
                     <ChevronDown size={14} color="rgba(255,255,255,0.3)" style={{ flexShrink: 0, marginTop: 2, transition: 'transform 0.15s', transform: abierta ? 'rotate(180deg)' : 'none' }} />
-                    <button onClick={e => { e.stopPropagation(); guardarParadas(paradas.filter(x => x.id !== p.id)) }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'rgba(255,255,255,0.25)', display: 'flex', flexShrink: 0 }}>
-                      <X size={14} />
-                    </button>
                   </div>
 
                   {abierta && (
