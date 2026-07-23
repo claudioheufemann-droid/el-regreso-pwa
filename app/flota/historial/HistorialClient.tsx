@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, MapPin, Truck, Clock, Navigation2, User } from 'lucide-react'
+import { ChevronDown, ChevronUp, MapPin, Truck, Clock, Navigation2, User, Trash2 } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import AppHeader from '@/components/ui/AppHeader'
 
@@ -82,11 +82,29 @@ function EstadoBadge({ estado }: { estado: string }) {
   )
 }
 
-function ViajeCard({ viaje }: { viaje: Viaje }) {
+function ViajeCard({ viaje, puedeBorrar, onEliminado }: { viaje: Viaje; puedeBorrar: boolean; onEliminado: (id: string) => void }) {
   const [open, setOpen] = useState(false)
+  const [borrando, setBorrando] = useState(false)
   const paradas = parseParadas(viaje.destino_declarado)
   const kmRecorridos = viaje.km_fin && viaje.km_inicio ? viaje.km_fin - viaje.km_inicio : viaje.km_teoricos
   const duracion = fmtDuracion(viaje.iniciado_at, viaje.completado_at)
+
+  async function eliminar(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirm('¿Eliminar este viaje del historial? Esta acción no se puede deshacer.')) return
+    setBorrando(true)
+    try {
+      const res = await fetch(`/api/flota/viajes/${viaje.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error ?? 'Error al eliminar el viaje')
+        return
+      }
+      onEliminado(viaje.id)
+    } finally {
+      setBorrando(false)
+    }
+  }
 
   return (
     <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
@@ -100,6 +118,11 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <EstadoBadge estado={viaje.estado} />
+            {puedeBorrar && (
+              <button onClick={eliminar} disabled={borrando} style={{ background: 'rgba(181,84,62,0.1)', border: 'none', borderRadius: 8, padding: 6, cursor: 'pointer', display: 'flex', opacity: borrando ? 0.5 : 1 }}>
+                <Trash2 size={13} color="#B5543E" />
+              </button>
+            )}
             {open ? <ChevronUp size={14} color="var(--muted)" /> : <ChevronDown size={14} color="var(--muted)" />}
           </div>
         </div>
@@ -255,7 +278,8 @@ function ViajeCard({ viaje }: { viaje: Viaje }) {
   )
 }
 
-export default function HistorialClient({ user, viajes }: Props) {
+export default function HistorialClient({ user, viajes: viajesIniciales }: Props) {
+  const [viajes, setViajes] = useState(viajesIniciales)
   const [filtroVehiculo, setFiltroVehiculo] = useState('todos')
   const [filtroConductor, setFiltroConductor] = useState('todos')
 
@@ -324,7 +348,14 @@ export default function HistorialClient({ user, viajes }: Props) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {filtrados.map(v => <ViajeCard key={v.id} viaje={v} />)}
+          {filtrados.map(v => (
+            <ViajeCard
+              key={v.id}
+              viaje={v}
+              puedeBorrar={user.isAdmin || v.conductor?.id === user.id}
+              onEliminado={id => setViajes(prev => prev.filter(x => x.id !== id))}
+            />
+          ))}
         </div>
       )}
     </div>
