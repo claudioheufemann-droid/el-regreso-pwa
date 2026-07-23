@@ -7,7 +7,12 @@ import AppHeader from '@/components/ui/AppHeader'
 
 const F = '#D4AF37'
 
-interface Parada { n: string; d: string }
+interface Parada {
+  n: string; d: string
+  fg?: string; fp?: string
+  en?: 'si' | 'no'; mn?: string
+  lat?: number; lng?: number
+}
 
 interface Viaje {
   id: string
@@ -46,7 +51,12 @@ function parseParadas(dest: string | null): Parada[] {
   if (!dest) return []
   try {
     const d = JSON.parse(dest)
-    if (Array.isArray(d)) return d.map(p => ({ n: p.n || p.nombre || '', d: p.d || p.direccion || '' }))
+    if (Array.isArray(d)) return d.map(p => ({
+      n: p.n || p.nombre || '', d: p.d || p.direccion || '',
+      fg: p.fg ?? undefined, fp: p.fp ?? undefined,
+      en: p.en ?? undefined, mn: p.mn ?? undefined,
+      lat: p.lat ?? undefined, lng: p.lng ?? undefined,
+    }))
   } catch { /* plain text */ }
   return dest.trim() ? [{ n: dest, d: dest }] : []
 }
@@ -192,16 +202,51 @@ function ViajeCard({ viaje, puedeBorrar, onEliminado }: { viaje: Viaje; puedeBor
               <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>
                 Paradas visitadas ({paradas.length})
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {paradas.map((p, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.5)', minWidth: 16, marginTop: 1 }}>{i + 1}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.n}</p>
-                      {p.d && p.d !== p.n && (
-                        <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.d}</p>
-                      )}
+                  <div key={i} style={{ padding: '10px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.5)', minWidth: 16, marginTop: 1 }}>{i + 1}</span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.n}</p>
+                          {p.en === 'si' && (
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#4ADE80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', padding: '2px 7px', borderRadius: 20 }}>
+                              ✓ Entregado
+                            </span>
+                          )}
+                          {p.en === 'no' && (
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#F87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', padding: '2px 7px', borderRadius: 20 }}>
+                              ✕ No entregado
+                            </span>
+                          )}
+                        </div>
+                        {p.d && p.d !== p.n && (
+                          <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.d}</p>
+                        )}
+                        {p.en === 'no' && p.mn && (
+                          <p style={{ fontSize: 11, color: '#F87171', marginTop: 2 }}>{p.mn}</p>
+                        )}
+                      </div>
                     </div>
+                    {(p.fg || p.fp) && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8, marginLeft: 26 }}>
+                        {p.fg && (
+                          <a href={p.fg} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: 64, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={p.fg} alt="Guía" style={{ width: '100%', height: 64, objectFit: 'cover', display: 'block' }} />
+                            <div style={{ padding: '3px 5px', fontSize: 8, fontWeight: 700, color: 'var(--muted)', textAlign: 'center' }}>Guía</div>
+                          </a>
+                        )}
+                        {p.fp && (
+                          <a href={p.fp} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: 64, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={p.fp} alt="Producto" style={{ width: '100%', height: 64, objectFit: 'cover', display: 'block' }} />
+                            <div style={{ padding: '3px 5px', fontSize: 8, fontWeight: 700, color: 'var(--muted)', textAlign: 'center' }}>Producto</div>
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -260,7 +305,7 @@ function ViajeCard({ viaje, puedeBorrar, onEliminado }: { viaje: Viaje; puedeBor
             <a
               href={(() => {
                 const base = encodeURIComponent('El Regreso Beer, Valdivia, Chile')
-                const stops = paradas.map(p => encodeURIComponent(p.d || p.n)).join('/')
+                const stops = paradas.map(p => p.lat && p.lng ? `${p.lat},${p.lng}` : encodeURIComponent(p.d || p.n)).join('/')
                 return `https://www.google.com/maps/dir/${base}/${stops}/${base}`
               })()}
               target="_blank" rel="noopener noreferrer"
