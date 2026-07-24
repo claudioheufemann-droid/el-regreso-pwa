@@ -107,7 +107,7 @@ function fTiempoRelativo(iso: string): string {
   return `hace ${d}d`
 }
 
-function UltimaSyncBadge({ ultimaSync, compact }: { ultimaSync?: string | null; compact?: boolean }) {
+function UltimaSyncBadge({ ultimaSync, compact, onClick }: { ultimaSync?: string | null; compact?: boolean; onClick?: () => void }) {
   const [, forceTick] = useState(0)
   useEffect(() => {
     const t = setInterval(() => forceTick(n => n + 1), 60000) // refresca el texto cada minuto
@@ -118,15 +118,92 @@ function UltimaSyncBadge({ ultimaSync, compact }: { ultimaSync?: string | null; 
   const min = Math.floor((Date.now() - new Date(ultimaSync).getTime()) / 60000)
   const stale = min > 30 // sync cada 10min — sin actualizar hace más de 30min → alerta visual
   return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
-      padding: compact ? '4px 7px' : '4px 9px', borderRadius: 20,
-      background: stale ? 'rgba(239,68,68,0.08)' : 'rgba(52,211,153,0.08)',
-      border: `1px solid ${stale ? 'rgba(239,68,68,0.25)' : 'rgba(52,211,153,0.2)'}`,
-      fontSize: 10, fontWeight: 700, color: stale ? '#EF4444' : '#5A8A4A', whiteSpace: 'nowrap',
-    }}>
+    <button
+      onClick={onClick}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+        padding: compact ? '4px 7px' : '4px 9px', borderRadius: 20,
+        background: stale ? 'rgba(239,68,68,0.08)' : 'rgba(52,211,153,0.08)',
+        border: `1px solid ${stale ? 'rgba(239,68,68,0.25)' : 'rgba(52,211,153,0.2)'}`,
+        fontSize: 10, fontWeight: 700, color: stale ? '#EF4444' : '#5A8A4A', whiteSpace: 'nowrap',
+        cursor: onClick ? 'pointer' : 'default', WebkitTapHighlightColor: 'transparent',
+      }}
+    >
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: stale ? '#EF4444' : '#4ADE80', flexShrink: 0 }} />
       {compact ? fTiempoRelativo(ultimaSync) : `Datos ${fTiempoRelativo(ultimaSync)}`}
+    </button>
+  )
+}
+
+interface EventoSync { hora: string; filas: number }
+
+function fFechaHora(iso: string): string {
+  const d = new Date(iso)
+  const fecha = capitalizarPrimera(d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' }))
+  const hora = d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+  return `${fecha} · ${hora}`
+}
+function capitalizarPrimera(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1) }
+
+function ActualizacionesModal({ onClose }: { onClose: () => void }) {
+  const [eventos, setEventos] = useState<EventoSync[] | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/ventas/actualizaciones')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => setEventos(Array.isArray(data) ? data : []))
+      .catch(() => setError(true))
+  }, [])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.7)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="sheet-up w-full safe-bottom" style={{
+        background: 'var(--surface)', borderTop: '2px solid rgba(52,211,153,0.25)',
+        borderRadius: '20px 20px 0 0', maxHeight: '78vh', display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 6px' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(128,128,128,0.25)' }} />
+        </div>
+
+        <div style={{ padding: '4px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(128,128,128,0.1)' }}>
+          <div>
+            <p style={{ fontSize: 16, fontWeight: 800, color: 'var(--cream)' }}>🔄 Actualizaciones de datos</p>
+            <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Últimas veces que se sincronizaron las ventas</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(128,128,128,0.1)', border: 'none', color: 'var(--cream)', cursor: 'pointer', fontSize: 16, padding: 8, borderRadius: '50%', flexShrink: 0 }}>✕</button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 20px' }}>
+          {error ? (
+            <p style={{ textAlign: 'center', color: '#EF4444', fontSize: 13, padding: 30 }}>No se pudo cargar el historial.</p>
+          ) : eventos === null ? (
+            <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 30 }}>Cargando…</p>
+          ) : eventos.length === 0 ? (
+            <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 30 }}>Sin sincronizaciones registradas en los últimos 7 días.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {eventos.map((ev, i) => (
+                <div key={ev.hora} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12,
+                  background: i === 0 ? 'rgba(52,211,153,0.06)' : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${i === 0 ? 'rgba(52,211,153,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: i === 0 ? '#4ADE80' : 'rgba(128,128,128,0.4)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{fFechaHora(ev.hora)}</p>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>{ev.filas} filas</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -1525,6 +1602,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
   const router = useRouter()
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [showBuscar, setShowBuscar] = useState(false)
+  const [showActualizaciones, setShowActualizaciones] = useState(false)
 
   // Mostrar popup plan semanal solo los lunes, una vez por día
   useEffect(() => {
@@ -1561,7 +1639,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         title="Ventas"
         extraAction={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <UltimaSyncBadge ultimaSync={ultimaSync} compact={!isDesktop} />
+            <UltimaSyncBadge ultimaSync={ultimaSync} compact={!isDesktop} onClick={() => setShowActualizaciones(true)} />
             <button
               onClick={() => router.push('/ventas/actividad')}
               aria-label="Actividad"
@@ -1588,6 +1666,7 @@ export default function DashboardClient({ resumen, fechaHoy, fechasDisponibles, 
         }
       />
       {showBuscar && <BuscarClienteSheet onClose={() => setShowBuscar(false)} />}
+      {showActualizaciones && <ActualizacionesModal onClose={() => setShowActualizaciones(false)} />}
 
       {/* === POPUP PLAN SEMANAL (solo lunes) === */}
       {showPlanModal && (
