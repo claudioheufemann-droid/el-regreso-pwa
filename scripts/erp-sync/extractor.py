@@ -84,10 +84,11 @@ def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
     page.evaluate(_JS_SET_FECHA, ["#fechaDesde", desde.strftime("%d/%m/%Y")])
     page.evaluate(_JS_SET_FECHA, ["#fechaHasta", hasta.strftime("%d/%m/%Y")])
 
-    # Dataset completo: incluir pedidos listos para entregar.
+    # Dataset completo: incluir pedidos listos para entregar + pedidos pendientes.
     # (NO marcar "Solo Ventas PDV": excluiría la mayoría de las ventas.)
     try:
-        page.check("#check")
+        page.check("#check2")  # Incluir pedidos listos para entregar
+        page.check("#check3")  # Incluir pedidos pendientes
     except Exception:
         pass
 
