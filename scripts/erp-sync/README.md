@@ -1,11 +1,11 @@
 # ERP Sync — Carga automática de ventas
 
-Robot que cada hora (horario comercial) descarga el informe de **Ventas
+Robot que cada 10 minutos (horario comercial) descarga el informe de **Ventas
 Detalladas** desde **Gestión Cervecera** y lo sube a la PWA, sin intervención
 manual.
 
 ```
-GitHub Actions (cada hora, 11:00-23:00 UTC / ~07:00-19:00 Chile)
+GitHub Actions (cada 10 min, 11:00-23:00 UTC / ~07:00-19:00 Chile)
   → Playwright: login + descarga del Excel del período (24 → hoy)
   → POST a /api/upload-ventas  ← reusa TODA la lógica de la carga manual
       (alias Charly→Carlos, dedup, exclusión de internos, reemplazo día a día)

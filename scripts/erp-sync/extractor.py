@@ -8,8 +8,8 @@ reemplazo día a día). NO escribe directo a Supabase: una sola fuente de verdad
 
 Ejecución local :  python extractor.py            (ventana visible)
                    HEADLESS=1 python extractor.py (sin ventana, como en CI)
-En producción   :  GitHub Actions (.github/workflows/erp-sync.yml), cada hora
-                   en horario comercial (11:00-23:00 UTC).
+En producción   :  GitHub Actions (.github/workflows/erp-sync.yml), cada 10
+                   minutos en horario comercial (11:00-23:00 UTC).
 
 Variables de entorno (.env local / secrets en GitHub):
   ERP_URL          https://www.gestioncervecera.com/login

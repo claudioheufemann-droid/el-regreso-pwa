@@ -116,7 +116,7 @@ function UltimaSyncBadge({ ultimaSync, compact }: { ultimaSync?: string | null; 
 
   if (!ultimaSync) return null
   const min = Math.floor((Date.now() - new Date(ultimaSync).getTime()) / 60000)
-  const stale = min > 150 // sin sync hace más de 2.5h en horario comercial → alerta visual
+  const stale = min > 30 // sync cada 10min — sin actualizar hace más de 30min → alerta visual
   return (
     <div style={{
       display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
