@@ -8,8 +8,8 @@ reemplazo día a día). NO escribe directo a Supabase: una sola fuente de verdad
 
 Ejecución local :  python extractor.py            (ventana visible)
                    HEADLESS=1 python extractor.py (sin ventana, como en CI)
-En producción   :  GitHub Actions (.github/workflows/erp-sync.yml), cada 10
-                   minutos en horario comercial (11:00-23:00 UTC).
+En producción   :  GitHub Actions (.github/workflows/erp-sync-ventas.yml), cada
+                   10 minutos en horario comercial (11:00-23:00 UTC).
 
 Variables de entorno (.env local / secrets en GitHub):
   ERP_URL          https://www.gestioncervecera.com/login
@@ -134,6 +134,11 @@ def login(page) -> None:
     print(f"[2/4] Login OK -> {page.url}")
 
 
+class SinDatosAun(Exception):
+    """El ERP no tiene ventas todavia para el rango pedido (normal al
+    arrancar un periodo nuevo, antes de la primera venta del dia)."""
+
+
 def subir_a_pwa(filepath: Path) -> dict:
     """Sube el Excel al endpoint de la PWA (misma logica que la carga manual)."""
     print(f"[4/4] Subiendo {filepath.name} a {UPLOAD_URL}")
@@ -148,6 +153,8 @@ def subir_a_pwa(filepath: Path) -> dict:
         body = r.json()
     except Exception:
         body = {"raw": r.text[:500]}
+    if r.status_code == 400 and "no contiene datos" in str(body.get("error", "")):
+        raise SinDatosAun(str(body.get("error")))
     if r.status_code != 200:
         raise RuntimeError(f"Upload fallo (HTTP {r.status_code}): {body}")
     return body
@@ -173,7 +180,12 @@ def main() -> int:
         archivo = navegar_y_descargar(page, desde, hasta)
         browser.close()
 
-    resultado = subir_a_pwa(archivo)
+    try:
+        resultado = subir_a_pwa(archivo)
+    except SinDatosAun as e:
+        print(f"=== SIN DATOS TODAVIA ({e}) — normal, no es un error ===")
+        return 0
+
     print("=== RESULTADO ===")
     print(f"  Insertadas        : {resultado.get('insertadas')}")
     print(f"  Rango cargado     : {resultado.get('fechaMin')} -> {resultado.get('fechaMax')}")
