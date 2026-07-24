@@ -135,8 +135,19 @@ def login(page) -> None:
 
 
 class SinDatosAun(Exception):
-    """El ERP no tiene ventas todavia para el rango pedido (normal al
-    arrancar un periodo nuevo, antes de la primera venta del dia)."""
+    """El informe no tiene ventas reales que cargar en este momento. Normal:
+    - al arrancar un periodo nuevo o muy temprano (archivo vacio), o
+    - cuando el informe solo trae movimientos internos (ej. CERVECERIA ->
+      Cliente PDV), que el endpoint excluye legitimamente dejando 0 validas.
+    En ambos casos NO es un error: no hay nada que subir todavia."""
+
+
+# Mensajes de error (HTTP 400) del endpoint que significan "nada valido que
+# cargar ahora", no un fallo real. Se comparan en minusculas.
+_MENSAJES_SIN_DATOS = (
+    "no contiene datos",
+    "no se encontraron ventas",
+)
 
 
 def subir_a_pwa(filepath: Path) -> dict:
@@ -153,7 +164,8 @@ def subir_a_pwa(filepath: Path) -> dict:
         body = r.json()
     except Exception:
         body = {"raw": r.text[:500]}
-    if r.status_code == 400 and "no contiene datos" in str(body.get("error", "")):
+    err = str(body.get("error", "")).lower()
+    if r.status_code == 400 and any(m in err for m in _MENSAJES_SIN_DATOS):
         raise SinDatosAun(str(body.get("error")))
     if r.status_code != 200:
         raise RuntimeError(f"Upload fallo (HTTP {r.status_code}): {body}")
