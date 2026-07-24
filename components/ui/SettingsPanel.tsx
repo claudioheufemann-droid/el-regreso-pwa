@@ -149,8 +149,8 @@ export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl:
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-end"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
+      className="fixed inset-0 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.7)', zIndex: 300 }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div className="sheet-up w-full safe-bottom" style={{
