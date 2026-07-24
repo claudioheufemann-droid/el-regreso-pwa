@@ -2,10 +2,12 @@ name: ERP Sync — Carga automática de ventas
 
 on:
   schedule:
-    # Cada 10 minutos, horario comercial: 11:00-23:00 UTC (~07:00-19:00 Chile).
-    # No corre de noche para no reintentar logins sin necesidad. GitHub puede
-    # retrasar el disparo bajo carga; el intervalo real puede variar unos minutos.
-    - cron: '*/10 11-23 * * *'
+    # Cada 15 minutos, horario comercial: 11:00-23:00 UTC (~07:00-19:00 Chile).
+    # GitHub Actions no garantiza el cron exacto (se retrasa/salta bajo carga,
+    # sobre todo con intervalos cortos como */10). 15 min es más estable: GitHub
+    # lo omite menos y sigue dando datos frescos. Para exactitud real haría falta
+    # un disparador externo (cron-job.org) llamando a workflow_dispatch.
+    - cron: '*/15 11-23 * * *'
   workflow_dispatch:   # permite dispararlo a mano desde la pestaña Actions
 
 jobs:

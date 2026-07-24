@@ -116,7 +116,7 @@ function UltimaSyncBadge({ ultimaSync, compact, onClick }: { ultimaSync?: string
 
   if (!ultimaSync) return null
   const min = Math.floor((Date.now() - new Date(ultimaSync).getTime()) / 60000)
-  const stale = min > 30 // sync cada 10min — sin actualizar hace más de 30min → alerta visual
+  const stale = min > 45 // sync cada 15min — >45min sin actualizar (≈3 ciclos) → alerta visual
   return (
     <button
       onClick={onClick}
