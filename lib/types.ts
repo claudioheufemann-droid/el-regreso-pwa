@@ -25,7 +25,10 @@ export const VENDEDOR_GRUPOS: Record<string, string[]> = {
   // grupo para no cortar las series históricas.
   'Equipo Ventas':     ['Equipo Ventas', 'Vendedor 1', 'Javier Badilla', 'Carlos Urrejola', 'Transición 1', 'Transición 2', 'Claudio Heufemann', 'Douglas Koenig', 'Mariel Lillo', 'Rodrigo Solis', 'Benja Alarcón', 'CERVECERÍA'],
   'OnLine':            ['OnLine'],
-  'R. Metropolitana':  ['Región Metropolitana', 'Yadro Fabijancic'],
+  // Yadro va con las dos grafías a propósito: la BD las tiene inconsistentes
+  // (users → 'Favijancic' con v, clientes.vendedor → 'Fabijancic' con b) y no
+  // sabemos cuál usará el ERP cuando empiece a reportar sus ventas.
+  'R. Metropolitana':  ['Región Metropolitana', 'Yadro Fabijancic', 'Yadro Favijancic'],
   'R. Araucanía':      ['Región de la Araucanía', 'Marcelo Diaz'],
   'R. de los Ríos':    ['Región de los Ríos'],
   'R. de los Lagos':   ['Región de los Lagos'],
