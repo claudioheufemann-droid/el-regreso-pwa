@@ -64,20 +64,24 @@ export const CATEGORIAS_NEGOCIO = [
  * Todos los strings están en minúscula para evitar variantes.
  */
 export const CLIENTES_EXCLUIR = [
-  // Movimientos de personal de ventas
-  'cliente ventas (javier)',
-  'cliente ventas (charly)',
-  'cliente ventas (carlos)',
+  // Movimientos de personal de ventas. Prefijo abierto a propósito: antes había
+  // una entrada por persona (javier/charly/carlos) y al aparecer '(Benja)' se
+  // colaba como venta real. Así cubre a cualquiera sin tener que editar la lista.
+  'cliente ventas (',
   // PDV y mermas
   'cliente pdv',
   'cliente merma pdv',
   'cliente mermas producto terminado',
-  // Consumo interno / marketing
+  // Muestras por vendedor ('Cliente muestras Marcelo' y futuras variantes)
+  'cliente muestras',
+  // Consumo interno / marketing / calidad
   'cliente feria',
   'cliente marketing',
   'cliente calidad reclamos',
+  'cliente control calidad',
   'cliente copas/medallas',
   'basecamp el regreso',
+  'cliente consumos base camp',
   'beneficios clientes',
 ]
 
