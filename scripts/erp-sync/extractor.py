@@ -144,9 +144,15 @@ class SinDatosAun(Exception):
 
 # Mensajes de error (HTTP 400) del endpoint que significan "nada valido que
 # cargar ahora", no un fallo real. Se comparan en minusculas.
+#
+# OJO: "no se encontraron ventas de vendedores validos" NO va aca. Ese mensaje
+# es ambiguo: puede ser legitimo (solo movimientos internos) o sintoma de un
+# problema real — paso el 24-jul-2026, cuando el ERP renombro a los vendedores
+# ('Transicion 1/2') y la version desplegada del endpoint los descartaba por
+# lista blanca, perdiendo ~100 filas de ventas reales en silencio. Tratarlo como
+# "normal" oculta ese tipo de fallo, asi que se deja fallar en rojo a proposito.
 _MENSAJES_SIN_DATOS = (
     "no contiene datos",
-    "no se encontraron ventas",
 )
 
 

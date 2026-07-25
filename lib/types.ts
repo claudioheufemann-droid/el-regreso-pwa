@@ -19,8 +19,11 @@ export const VENDEDORES_DB = ['Equipo Ventas'] as const
 //
 export const VENDEDOR_GRUPOS: Record<string, string[]> = {
   // histórico despersonalizado + ex-vendedores + cuentas internas/admin que
-  // quedaron como dueños de algunos clientes en la BD (clientes.vendedor)
-  'Equipo Ventas':     ['Equipo Ventas', 'Vendedor 1', 'Javier Badilla', 'Carlos Urrejola', 'Douglas Koenig', 'Mariel Lillo', 'Rodrigo Solis', 'Benja Alarcón', 'CERVECERÍA'],
+  // quedaron como dueños de algunos clientes en la BD (clientes.vendedor).
+  // 'Transición 1' y 'Transición 2': nombres que el ERP empezó a usar (jul 2026)
+  // para la cartera de Valdivia tras la salida de Javier/Carlos — van al mismo
+  // grupo para no cortar las series históricas.
+  'Equipo Ventas':     ['Equipo Ventas', 'Vendedor 1', 'Javier Badilla', 'Carlos Urrejola', 'Transición 1', 'Transición 2', 'Claudio Heufemann', 'Douglas Koenig', 'Mariel Lillo', 'Rodrigo Solis', 'Benja Alarcón', 'CERVECERÍA'],
   'OnLine':            ['OnLine'],
   'R. Metropolitana':  ['Región Metropolitana', 'Yadro Fabijancic'],
   'R. Araucanía':      ['Región de la Araucanía', 'Marcelo Diaz'],
