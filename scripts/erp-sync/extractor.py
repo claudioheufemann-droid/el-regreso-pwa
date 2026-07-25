@@ -140,9 +140,15 @@ def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
     except Exception:
         pass
 
-    # Generar aplica los filtros (valida fechas y arma la tabla).
+    # Generar aplica los filtros (valida fechas y arma la tabla). Con rangos
+    # amplios el armado tarda bastante; esperar a que la red se calme en vez de
+    # un timeout fijo (3 s alcanzaba para 5 días, no para 2 meses).
     page.get_by_text("Generar", exact=True).first.click()
-    page.wait_for_timeout(3000)
+    try:
+        page.wait_for_load_state("networkidle", timeout=180000)
+    except PWTimeout:
+        print("   (el informe sigue cargando tras 3 min; se intenta exportar igual)")
+    page.wait_for_timeout(2000)
 
     # ¿El ERP respetó las fechas o las revirtió al generar?
     post = page.evaluate(
@@ -162,6 +168,8 @@ def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
 
     # Exportar a excel → descarga.
     exportar = page.locator("a.generarInforme[data-formato='excel']").first
+    exportar.scroll_into_view_if_needed(timeout=60000)
+    exportar.wait_for(state="visible", timeout=60000)
 
     # Diagnóstico: el Excel llega con un rango distinto al del formulario, así que
     # hay que ver con qué parámetros se pide realmente (href/dataset del enlace y
