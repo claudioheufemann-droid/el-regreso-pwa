@@ -110,11 +110,13 @@ def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
         print(f"   (no se pudo volcar filtros: {e})")
 
     # Fechas (dd/mm/yyyy) vía JS + eventos change/blur.
-    page.evaluate(_JS_SET_FECHA, ["#fechaDesde", desde.strftime("%d/%m/%Y")])
-    page.evaluate(_JS_SET_FECHA, ["#fechaHasta", hasta.strftime("%d/%m/%Y")])
+    r1 = page.evaluate(_JS_SET_FECHA, ["#fechaDesde", desde.strftime("%d/%m/%Y")])
+    r2 = page.evaluate(_JS_SET_FECHA, ["#fechaHasta", hasta.strftime("%d/%m/%Y")])
+    print(f"   Fechas pedidas: {desde:%d/%m/%Y} -> {hasta:%d/%m/%Y} | inputs quedaron: {r1!r} -> {r2!r}")
 
     # Dataset completo: incluir pedidos listos para entregar + pedidos pendientes.
-    # (NO marcar "Solo Ventas PDV": excluiría la mayoría de las ventas.)
+    # (NO marcar "Solo Ventas PDV": excluiría la mayoría de las ventas.
+    #  #check tampoco: es "Sin bonificaciones aplicadas", no lo que su nombre sugiere.)
     try:
         page.check("#check2")  # Incluir pedidos listos para entregar
         page.check("#check3")  # Incluir pedidos pendientes
@@ -124,6 +126,13 @@ def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
     # Generar aplica los filtros (valida fechas y arma la tabla).
     page.get_by_text("Generar", exact=True).first.click()
     page.wait_for_timeout(3000)
+
+    # ¿El ERP respetó las fechas o las revirtió al generar?
+    post = page.evaluate(
+        "() => [document.querySelector('#fechaDesde')?.value,"
+        "       document.querySelector('#fechaHasta')?.value]"
+    )
+    print(f"   Fechas en el form DESPUES de Generar: {post[0]!r} -> {post[1]!r}")
 
     # Verificar que no haya error de validación visible.
     warn = page.evaluate(
