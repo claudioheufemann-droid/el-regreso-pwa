@@ -42,12 +42,14 @@ jobs:
           UPLOAD_SECRET: ${{ secrets.CRON_SECRET }}
         run: python extractor.py
 
-      - name: Guardar Excel descargado (para inspeccionar el formato)
+      - name: Guardar Excel descargado + filtros del informe (diagnóstico)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ventas-detalladas-xlsx
-          path: scripts/erp-sync/downloads/*.xlsx
+          path: |
+            scripts/erp-sync/downloads/*.xlsx
+            scripts/erp-sync/downloads/*.json
           if-no-files-found: ignore
           retention-days: 7
 

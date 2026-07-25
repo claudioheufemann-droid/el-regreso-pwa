@@ -75,10 +75,39 @@ _JS_SET_FECHA = """([sel, v]) => {
 }"""
 
 
+# Vuelca los controles del formulario del informe (selects, checkboxes, radios,
+# inputs) para poder auditar qué filtros existen sin tener que entrar al ERP a
+# mano. Se guarda junto al Excel y viaja en el artifact del workflow.
+_JS_DUMP_FILTROS = """() => {
+    const out = [];
+    document.querySelectorAll('select, input, textarea').forEach(el => {
+        if (['hidden','submit','button'].includes(el.type)) return;
+        const lbl = (el.closest('.form-group')?.innerText || '').replace(/\\s+/g,' ').trim().slice(0,80);
+        const item = { tag: el.tagName, type: el.type || null, id: el.id || null,
+                       name: el.name || null, label: lbl,
+                       value: el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value };
+        if (el.tagName === 'SELECT') {
+            item.selected = el.options[el.selectedIndex]?.text ?? null;
+            item.options = [...el.options].slice(0, 40).map(o => `${o.value} = ${o.text}`);
+        }
+        out.push(item);
+    });
+    return JSON.stringify(out, null, 2);
+}"""
+
+
 def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
     """Abre el informe Ventas Detalladas, fija el rango y descarga el Excel."""
     print(f"   Informe: {REPORT_URL}")
     page.goto(REPORT_URL, wait_until="networkidle")
+
+    # Auditoría de filtros disponibles (diagnóstico; no altera la descarga).
+    try:
+        (DOWNLOAD_DIR / "filtros_informe.json").write_text(
+            page.evaluate(_JS_DUMP_FILTROS), encoding="utf-8")
+        print("   Filtros del informe volcados en filtros_informe.json")
+    except Exception as e:
+        print(f"   (no se pudo volcar filtros: {e})")
 
     # Fechas (dd/mm/yyyy) vía JS + eventos change/blur.
     page.evaluate(_JS_SET_FECHA, ["#fechaDesde", desde.strftime("%d/%m/%Y")])
