@@ -190,11 +190,26 @@ def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
             )
         download = dl_info.value
     except Exception:
+        # Con rangos grandes el ERP no descarga: abre un modal avisando que
+        # mandará el informe por email. Detectarlo para que el error diga eso y
+        # no un timeout ciego.
+        try:
+            txt = page.evaluate(
+                "() => (document.body.innerText || '').replace(/\\s+/g,' ')"
+            ).lower()
+        except Exception:
+            txt = ""
         try:
             page.screenshot(path=str(Path(__file__).parent / "error_export.png"), full_page=True)
             print("   Captura de la pantalla de error: error_export.png")
         except Exception:
             pass
+        if "por email" in txt or "por e-mail" in txt:
+            raise RuntimeError(
+                "El ERP no descargó el archivo: el rango pedido es demasiado grande y "
+                "respondió 'Se enviará la información solicitada por email'. "
+                "Usa un rango más corto."
+            )
         raise
     for p in peticiones:
         print(f"   req> {p}")
