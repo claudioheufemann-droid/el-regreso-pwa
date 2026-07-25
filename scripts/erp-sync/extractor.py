@@ -145,9 +145,29 @@ def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
 
     # Exportar a excel → descarga.
     exportar = page.locator("a.generarInforme[data-formato='excel']").first
+
+    # Diagnóstico: el Excel llega con un rango distinto al del formulario, así que
+    # hay que ver con qué parámetros se pide realmente (href/dataset del enlace y
+    # la request que dispara).
+    try:
+        info = page.evaluate(
+            "() => { const a = document.querySelector(\"a.generarInforme[data-formato='excel']\");"
+            "  return a ? { href: a.getAttribute('href'), onclick: (a.getAttribute('onclick')||'').slice(0,200),"
+            "               data: Object.assign({}, a.dataset), form: a.closest('form')?.getAttribute('action') ?? null } : null; }"
+        )
+        print(f"   Enlace exportar: {info}")
+    except Exception as e:
+        print(f"   (no se pudo inspeccionar el enlace: {e})")
+
+    peticiones: list[str] = []
+    page.on("request", lambda r: peticiones.append(f"{r.method} {r.url[:300]}")
+            if any(k in r.url.lower() for k in ("export", "excel", "informe", "descarg")) else None)
+
     with page.expect_download(timeout=120000) as dl_info:
         exportar.click()
     download = dl_info.value
+    for p in peticiones[-6:]:
+        print(f"   req> {p}")
 
     destino = DOWNLOAD_DIR / (download.suggested_filename or "ventas_detalladas.xlsx")
     download.save_as(destino)
