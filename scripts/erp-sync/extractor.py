@@ -160,13 +160,22 @@ def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
         print(f"   (no se pudo inspeccionar el enlace: {e})")
 
     peticiones: list[str] = []
-    page.on("request", lambda r: peticiones.append(f"{r.method} {r.url[:300]}")
-            if any(k in r.url.lower() for k in ("export", "excel", "informe", "descarg")) else None)
+
+    def _cap(r):
+        if "informeventasdet" not in r.url.lower():
+            return
+        try:
+            body = r.post_data or ""
+        except Exception:
+            body = "(sin body)"
+        peticiones.append(f"{r.method} {r.url[:120]} :: {body[:600]}")
+
+    page.on("request", _cap)
 
     with page.expect_download(timeout=120000) as dl_info:
         exportar.click()
     download = dl_info.value
-    for p in peticiones[-6:]:
+    for p in peticiones:
         print(f"   req> {p}")
 
     destino = DOWNLOAD_DIR / (download.suggested_filename or "ventas_detalladas.xlsx")
