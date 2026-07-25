@@ -36,12 +36,25 @@ ERP_PASSWORD  = os.getenv("ERP_PASSWORD")
 UPLOAD_URL    = os.getenv("UPLOAD_URL", "https://el-regreso-pwa-psi.vercel.app/api/upload-ventas")
 UPLOAD_SECRET = os.getenv("UPLOAD_SECRET")
 HEADLESS      = os.getenv("HEADLESS", "0") == "1"
+# Overrides opcionales (workflow_dispatch) para diagnosticar rangos sin tocar
+# la carga normal. SOLO_DESCARGAR deja el Excel como artifact sin subirlo.
+FECHA_DESDE   = (os.getenv("FECHA_DESDE") or "").strip()
+FECHA_HASTA   = (os.getenv("FECHA_HASTA") or "").strip()
+SOLO_DESCARGAR = (os.getenv("SOLO_DESCARGAR") or "").strip().lower() == "true"
 DOWNLOAD_DIR  = Path(__file__).parent / "downloads"
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
 
+def _parse_ddmmyyyy(s: str) -> date:
+    d, m, y = (int(x) for x in s.split("/"))
+    return date(y, m, d)
+
+
 def rango_periodo() -> tuple[date, date]:
-    """Período de venta 24->23: desde el dia 24 vigente hasta hoy.
+    """Rango a consultar. OJO: el ERP filtra por FECHA DE ENTREGA, no por fecha
+    de pedido — el Excel trae pedidos con FechaPedido anterior al rango pedido.
+
+    Por defecto: período de venta 24->23 (desde el dia 24 vigente hasta hoy).
     Si hoy es >= 24, abrio este mes; si no, abrio el mes pasado."""
     hoy = date.today()
     if hoy.day >= 24:
@@ -49,6 +62,10 @@ def rango_periodo() -> tuple[date, date]:
     else:
         primero = hoy.replace(day=1)
         desde = (primero - timedelta(days=1)).replace(day=24)
+    if FECHA_DESDE:
+        desde = _parse_ddmmyyyy(FECHA_DESDE)
+    if FECHA_HASTA:
+        hoy = _parse_ddmmyyyy(FECHA_HASTA)
     return desde, hoy
 
 
@@ -264,6 +281,10 @@ def main() -> int:
         print("[3/4] Navegando al informe y descargando...")
         archivo = navegar_y_descargar(page, desde, hasta)
         browser.close()
+
+    if SOLO_DESCARGAR:
+        print("=== SOLO_DESCARGAR=true: el Excel queda como artifact, NO se sube ===")
+        return 0
 
     try:
         resultado = subir_a_pwa(archivo)

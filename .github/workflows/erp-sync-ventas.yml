@@ -9,6 +9,17 @@ on:
     # un disparador externo (cron-job.org) llamando a workflow_dispatch.
     - cron: '*/15 11-23 * * *'
   workflow_dispatch:   # permite dispararlo a mano desde la pestaña Actions
+    inputs:
+      fecha_desde:
+        description: 'Sobrescribir fecha desde (dd/mm/aaaa). Vacío = período normal'
+        required: false
+      fecha_hasta:
+        description: 'Sobrescribir fecha hasta (dd/mm/aaaa). Vacío = hasta hoy'
+        required: false
+      solo_descargar:
+        description: 'true = descarga el Excel como artifact SIN subirlo a la app'
+        required: false
+        default: 'false'
 
 jobs:
   sync:
@@ -40,6 +51,9 @@ jobs:
           ERP_PASSWORD: ${{ secrets.ERP_PASSWORD }}
           UPLOAD_URL: ${{ secrets.UPLOAD_URL }}
           UPLOAD_SECRET: ${{ secrets.CRON_SECRET }}
+          FECHA_DESDE: ${{ inputs.fecha_desde }}
+          FECHA_HASTA: ${{ inputs.fecha_hasta }}
+          SOLO_DESCARGAR: ${{ inputs.solo_descargar }}
         run: python extractor.py
 
       - name: Guardar Excel descargado + filtros del informe (diagnóstico)
