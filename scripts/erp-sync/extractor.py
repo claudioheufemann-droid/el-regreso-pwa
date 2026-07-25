@@ -167,23 +167,6 @@ def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
         raise RuntimeError(f"El ERP rechazó el filtro: {warn}")
 
     # Exportar a excel → descarga.
-    exportar = page.locator("a.generarInforme[data-formato='excel']").first
-    exportar.scroll_into_view_if_needed(timeout=60000)
-    exportar.wait_for(state="visible", timeout=60000)
-
-    # Diagnóstico: el Excel llega con un rango distinto al del formulario, así que
-    # hay que ver con qué parámetros se pide realmente (href/dataset del enlace y
-    # la request que dispara).
-    try:
-        info = page.evaluate(
-            "() => { const a = document.querySelector(\"a.generarInforme[data-formato='excel']\");"
-            "  return a ? { href: a.getAttribute('href'), onclick: (a.getAttribute('onclick')||'').slice(0,200),"
-            "               data: Object.assign({}, a.dataset), form: a.closest('form')?.getAttribute('action') ?? null } : null; }"
-        )
-        print(f"   Enlace exportar: {info}")
-    except Exception as e:
-        print(f"   (no se pudo inspeccionar el enlace: {e})")
-
     peticiones: list[str] = []
 
     def _cap(r):
@@ -197,9 +180,22 @@ def navegar_y_descargar(page, desde: date, hasta: date) -> Path:
 
     page.on("request", _cap)
 
-    with page.expect_download(timeout=120000) as dl_info:
-        exportar.click()
-    download = dl_info.value
+    # El click normal de Playwright exige que el elemento sea "actionable"; con
+    # rangos amplios queda tapado por el overlay de carga y da timeout aunque el
+    # enlace ya esté listo. Se dispara por JS, que no pasa por esa verificación.
+    try:
+        with page.expect_download(timeout=180000) as dl_info:
+            page.evaluate(
+                "() => document.querySelector(\"a.generarInforme[data-formato='excel']\").click()"
+            )
+        download = dl_info.value
+    except Exception:
+        try:
+            page.screenshot(path=str(Path(__file__).parent / "error_export.png"), full_page=True)
+            print("   Captura de la pantalla de error: error_export.png")
+        except Exception:
+            pass
+        raise
     for p in peticiones:
         print(f"   req> {p}")
 
