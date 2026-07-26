@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Menu, Bell, ChevronDown, ChevronRight, Droplet, Users, ShoppingBag,
-  DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar,
+  DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar, CheckCircle2, Truck,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import { RANGOS, type RangoKey, type HoyData, type PuntoSerie, type VendedorRango, type DatosRango } from './hoyTypes'
@@ -730,6 +730,69 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               onClick={() => router.push('/ventas/ranking')} />
           ))}
         </div>
+
+        {/* Estado de entrega — separa lo despachado de lo que sigue pendiente.
+            Antes no se distinguía y parecía que "faltaban ventas" cuando en
+            realidad eran pedidos tomados pero aún no entregados. */}
+        {(d.entregas.litrosEntregados > 0 || d.entregas.litrosPorEntregar > 0) && (() => {
+          const tot = d.entregas.litrosEntregados + d.entregas.litrosPorEntregar
+          const pctEnt = tot > 0 ? (d.entregas.litrosEntregados / tot) * 100 : 0
+          const sinDato = d.entregas.litrosSinDato
+          return (
+            <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>ESTADO DE ENTREGA</p>
+                <span style={{ fontSize: 12, color: C.muted }}>{Math.round(pctEnt)}% despachado</span>
+              </div>
+
+              <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: C.line, marginBottom: 14 }}>
+                <div style={{ width: `${pctEnt}%`, background: C.green }} />
+                <div style={{ width: `${100 - pctEnt}%`, background: C.amber }} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                <div style={{ background: C.greenSoft, borderRadius: 12, padding: '12px 13px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
+                    <CheckCircle2 size={15} color={C.green} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Entregado</span>
+                  </div>
+                  <p style={{ fontSize: 20, fontWeight: 800, color: C.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+                    {fL(d.entregas.litrosEntregados)}
+                  </p>
+                  <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    {fNum(d.entregas.pedidosEntregados)} {d.entregas.pedidosEntregados === 1 ? 'pedido' : 'pedidos'} · {fPeso(d.entregas.revenueEntregado)}
+                  </p>
+                </div>
+
+                <div style={{ background: C.amberSoft, borderRadius: 12, padding: '12px 13px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
+                    <Truck size={15} color={C.amber} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Por entregar</span>
+                  </div>
+                  <p style={{ fontSize: 20, fontWeight: 800, color: C.amber, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+                    {fL(d.entregas.litrosPorEntregar)}
+                  </p>
+                  <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    {fNum(d.entregas.pedidosPorEntregar)} {d.entregas.pedidosPorEntregar === 1 ? 'pedido' : 'pedidos'} · {fPeso(d.entregas.revenuePorEntregar)}
+                  </p>
+                </div>
+              </div>
+
+              {d.entregas.litrosPorEntregar > 0 && (
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 10, lineHeight: 1.45 }}>
+                  Los litros del período incluyen ambos. «Por entregar» son pedidos ya
+                  tomados que el ERP todavía no despachó.
+                </p>
+              )}
+              {sinDato > 0 && (
+                <p style={{ fontSize: 11, color: C.faint, marginTop: 6, lineHeight: 1.45 }}>
+                  Otros {fL(sinDato)} del período son anteriores a que se registrara el
+                  estado de entrega, así que no se cuentan acá.
+                </p>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Envases — cuánto se vendió en latas y barriles */}
         {d.envases.length > 0 && (

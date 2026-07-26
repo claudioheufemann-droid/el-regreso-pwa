@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { vendedorCanonico } from '@/lib/types'
 import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
-         type PuntoSerie, type DatosRango, type PeriodoOpcion, type EnvaseRango,
+         type PuntoSerie, type DatosRango, type PeriodoOpcion, type EnvaseRango, type EntregasRango,
          type AlertaInsight, type HoyData } from './hoyTypes'
 
 /**
@@ -20,7 +20,7 @@ import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
  * arrastrar lib/supabase/server al bundle del navegador.
  */
 
-export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, EnvaseRango, AlertaInsight, HoyData }
+export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, EnvaseRango, EntregasRango, AlertaInsight, HoyData }
 
 /** Cuántos períodos anteriores se ofrecen en el selector. */
 const PERIODOS_VISIBLES = 4
@@ -107,6 +107,25 @@ function armarVendedores(
       acc.set(n, { vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev })
   }
   return [...acc.values()].sort((a, b) => b.litros - a.litros)
+}
+
+const ENTREGAS_CERO: EntregasRango = {
+  litrosEntregados: 0, litrosPorEntregar: 0, litrosSinDato: 0, revenueEntregado: 0,
+  revenuePorEntregar: 0, pedidosEntregados: 0, pedidosPorEntregar: 0,
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapEntregas(row: any): EntregasRango {
+  if (!row) return { ...ENTREGAS_CERO }
+  return {
+    litrosEntregados: Number(row.litros_entregados ?? 0),
+    litrosPorEntregar: Number(row.litros_por_entregar ?? 0),
+    litrosSinDato: Number(row.litros_sin_dato ?? 0),
+    revenueEntregado: Number(row.revenue_entregado ?? 0),
+    revenuePorEntregar: Number(row.revenue_por_entregar ?? 0),
+    pedidosEntregados: Number(row.pedidos_entregados ?? 0),
+    pedidosPorEntregar: Number(row.pedidos_por_entregar ?? 0),
+  }
 }
 
 /** Unidades por envase del rango, con las del rango previo para comparar. */
@@ -201,10 +220,11 @@ export async function getHoyData(
     ...(customDef ? [customDef.prevDesde] : []),
   ].sort()[0]
 
-  const [kpisAll, vendAll, envAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
+  const [kpisAll, vendAll, envAll, entAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
     Promise.all(consultas.map(c => supabase.rpc('ventas_dashboard_kpis', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_agg_periodo', { p_ini: c.desde, p_fin: c.hasta, p_vendedor: null, p_provincias: p_prov }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_envases_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
+    Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     supabase.rpc('ventas_serie_diaria', { p_ini: serieDesde, p_fin: iso(hoy), p_provincias: p_prov }),
     supabase.from('metas').select('periodo_id, meta_litros').eq('tipo', 'mensual'),
     supabase.rpc('get_client_scores', { p_vendedor: null }),
@@ -223,6 +243,7 @@ export async function getHoyData(
   const kpiEn = (i: number) => mapKpis((kpisAll[i].data as unknown[])?.[0])
   const vendEn = (i: number) => (vendAll[i].data as Record<string, unknown>[] | null)
   const envEn  = (i: number) => (envAll[i].data as Record<string, unknown>[] | null)
+  const entEn  = (i: number) => mapEntregas((entAll[i].data as unknown[])?.[0])
 
   // ── Rangos relativos ──────────────────────────────────────────────────────
   const rangos = {} as Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>
@@ -238,6 +259,7 @@ export async function getHoyData(
       previo: kpiEn(iPrev),
       vendedores: armarVendedores(vendEn(iAct), vendEn(iPrev)),
       envases: armarEnvases(envEn(iAct), envEn(iPrev)),
+      entregas: entEn(iAct),
       serie: recorte(r.desde, r.hasta),
     }
   })
@@ -270,6 +292,7 @@ export async function getHoyData(
           previo: anterior ? kpiEn(iPrev) : { ...KPIS_CERO },
           vendedores: armarVendedores(vendEn(iAct), anterior ? vendEn(iPrev) : null),
           envases: armarEnvases(envEn(iAct), anterior ? envEn(iPrev) : null),
+          entregas: entEn(iAct),
           serie: recorte(p.fecha_inicio, p.fecha_fin),
         },
       }
@@ -327,6 +350,7 @@ export async function getHoyData(
         previo: kpiEn(iCustom + 1),
         vendedores: armarVendedores(vendEn(iCustom), vendEn(iCustom + 1)),
         envases: armarEnvases(envEn(iCustom), envEn(iCustom + 1)),
+        entregas: entEn(iCustom),
         serie: recorte(customDef.desde, customDef.hasta),
       }
     : null

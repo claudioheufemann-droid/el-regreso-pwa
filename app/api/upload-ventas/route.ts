@@ -133,6 +133,9 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
         fecha_pedido: fechaPedido,
         fecha_entrega: fechaEntrega,
         fecha_entrega_estimada: fechaEntregaEstimada,
+        // El archivo sí trae el estado de entrega, así que fecha_entrega es
+        // confiable: NULL significa "aún no entregado", no "no sabemos".
+        entrega_informada: true,
         vendedor_actual: vendedor,
         nombre_fantasia: nombreFantasia,
         categoria_producto:

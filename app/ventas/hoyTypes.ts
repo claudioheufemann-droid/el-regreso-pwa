@@ -49,6 +49,23 @@ export interface PuntoSerie {
   pedidos: number
 }
 
+/**
+ * Desglose entregado / por entregar.
+ * "Por entregar" = venta ya tomada que el ERP aún no despachó (sin fecha de
+ * entrega). Es la razón por la que un pedido puede existir y no aparecer en un
+ * informe filtrado por fecha de entrega.
+ */
+export interface EntregasRango {
+  litrosEntregados: number
+  litrosPorEntregar: number
+  /** Cargados antes de guardar el estado: no se puede afirmar si se entregaron */
+  litrosSinDato: number
+  revenueEntregado: number
+  revenuePorEntregar: number
+  pedidosEntregados: number
+  pedidosPorEntregar: number
+}
+
 /** Unidades por tipo de envase (latas / barriles), derivadas de los litros. */
 export interface EnvaseRango {
   tipo: string        // 'Lata 354 ml' | 'Lata 473 ml' | 'Barril 30L' | 'Otros'
@@ -67,6 +84,7 @@ export interface DatosRango {
   previo: KpisRango
   vendedores: VendedorRango[]
   envases: EnvaseRango[]
+  entregas: EntregasRango
   serie: PuntoSerie[]
 }
 
