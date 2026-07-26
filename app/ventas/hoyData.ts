@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { vendedorCanonico } from '@/lib/types'
 import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
          type PuntoSerie, type DatosRango, type PeriodoOpcion,
          type AlertaInsight, type HoyData } from './hoyTypes'
@@ -58,6 +59,11 @@ function mapKpis(row: any): KpisRango {
 /**
  * Ranking por vendedor con el nombre REAL del ERP (Transición 2, Yadro
  * Fabijancic, ...), no agrupado por región. Se omiten los que no son personas.
+ *
+ * Los alias por renombre se unifican con vendedorCanonico: si no, tras un
+ * renombre la misma cartera sale dos veces (las ventas anteriores quedan bajo
+ * el nombre viejo, que el ERP ya no reporta). Ej: 'Javier Badilla' suma a
+ * 'Transición 2'.
  */
 function armarVendedores(
   rows: Record<string, unknown>[] | null,
@@ -65,17 +71,22 @@ function armarVendedores(
 ): VendedorRango[] {
   const prev = new Map<string, number>()
   for (const r of prevRows ?? []) {
-    const n = String(r.vendedor ?? '')
-    if (VENDEDORES_NO_PERSONA.has(n)) continue
+    const bruto = String(r.vendedor ?? '')
+    if (VENDEDORES_NO_PERSONA.has(bruto)) continue
+    const n = vendedorCanonico(bruto)
+    if (!n) continue
     prev.set(n, (prev.get(n) ?? 0) + Number(r.litros ?? 0))
   }
   const acc = new Map<string, VendedorRango>()
   for (const r of rows ?? []) {
-    const n = String(r.vendedor ?? '')
-    if (!n || VENDEDORES_NO_PERSONA.has(n)) continue
+    const bruto = String(r.vendedor ?? '')
+    if (!bruto || VENDEDORES_NO_PERSONA.has(bruto)) continue
+    const n = vendedorCanonico(bruto)
     const cur = acc.get(n) ?? { vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev: prev.get(n) ?? 0 }
     cur.litros += Number(r.litros ?? 0)
     cur.revenue += Number(r.revenue ?? 0)
+    // Nota: al unificar alias, `clientes` puede contar dos veces a un cliente
+    // que compró bajo ambos nombres. Se usa sólo como referencia en la fila.
     cur.clientes += Number(r.clientes ?? 0)
     acc.set(n, cur)
   }

@@ -39,6 +39,30 @@ export const VENDEDOR_DISPLAY: Record<string, string> = Object.entries(VENDEDOR_
   .flatMap(([display, dbNames]) => dbNames.map(n => [n, display] as [string, string]))
   .reduce((acc, [k, v]) => ({ ...acc, [k]: v }), {} as Record<string, string>)
 
+/**
+ * Alias de una MISMA cartera cuando el ERP renombra a quien la lleva.
+ * Distinto de VENDEDOR_GRUPOS: eso agrupa por región/equipo (varias personas),
+ * esto unifica nombres que son la misma cartera a lo largo del tiempo.
+ *
+ * Se usa en el ranking por vendedor: sin esto, tras un renombre la misma
+ * cartera aparece dos veces (las ventas viejas quedan bajo el nombre anterior
+ * porque el ERP ya no las reporta con el nuevo).
+ *
+ * clave = nombre viejo en `ventas.vendedor_actual` → valor = nombre vigente.
+ */
+export const VENDEDOR_ALIAS: Record<string, string> = {
+  'Javier Badilla':  'Transición 2',
+  'Carlos Urrejola': 'Transición 1',
+  // Yadro: la BD tiene dos grafías del apellido; se unifica a la del ERP
+  'Yadro Favijancic': 'Yadro Fabijancic',
+}
+
+/** Nombre vigente de un vendedor, resolviendo alias por renombre. */
+export function vendedorCanonico(nombre: string | null | undefined): string {
+  if (!nombre) return ''
+  return VENDEDOR_ALIAS[nombre] ?? nombre
+}
+
 // Scope completo: todos los nombres de BD aceptados en consultas y reportes
 export const VENDEDORES_SCOPE: string[] = Object.values(VENDEDOR_GRUPOS).flat()
 
