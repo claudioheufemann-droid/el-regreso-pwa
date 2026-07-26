@@ -119,8 +119,20 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
         advertenciasLitros.push(`Fila ${idx + 2}: litros negativos ${litros} (${row['Producto'] ?? ''})`)
       }
 
+      // Fecha real de entrega: NULL = el pedido aún no se entregó (pendiente o
+      // listo para entregar). Es la que usa el ERP para filtrar el informe, así
+      // que guardarla permite distinguir en la app lo entregado de lo pendiente.
+      const fechaEntrega = parseFecha(
+        row['FechaEntrega'] ?? row['Fecha entrega'] ?? row['Fecha Entrega']
+      )
+      const fechaEntregaEstimada = parseFecha(
+        row['FechaEntregaEstimada'] ?? row['Fecha Entrega Estimada'] ?? row['Fecha entrega estimada']
+      )
+
       return {
         fecha_pedido: fechaPedido,
+        fecha_entrega: fechaEntrega,
+        fecha_entrega_estimada: fechaEntregaEstimada,
         vendedor_actual: vendedor,
         nombre_fantasia: nombreFantasia,
         categoria_producto:
@@ -319,8 +331,14 @@ export async function POST(req: NextRequest) {
     }).catch(() => {})
   }
 
+  // Visibilidad del estado de entrega en el log del sync: si un día "faltan"
+  // ventas, se ve de una si es que están cargadas pero sin entregar.
+  const sinEntregar = registros.filter(r => !r.fecha_entrega).length
+
   return NextResponse.json({
     insertadas,
+    entregadas: insertadas - sinEntregar,
+    pendientesDeEntrega: sinEntregar,
     duplicadosEnArchivo,
     clientesInternosExcluidos,
     litrosInternosExcluidos,

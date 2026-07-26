@@ -326,6 +326,8 @@ def main() -> int:
 
     print("=== RESULTADO ===")
     print(f"  Insertadas        : {resultado.get('insertadas')}")
+    print(f"    entregadas      : {resultado.get('entregadas')}")
+    print(f"    por entregar    : {resultado.get('pendientesDeEntrega')}")
     print(f"  Rango cargado     : {resultado.get('fechaMin')} -> {resultado.get('fechaMax')}")
     print(f"  Internos excluidos: {resultado.get('clientesInternosExcluidos')}")
     for v in resultado.get("vendedores", []):
