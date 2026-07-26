@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Menu, Bell, ChevronDown, ChevronRight, Droplet, Users, ShoppingBag,
@@ -94,14 +94,27 @@ function Delta({ pct, size = 12 }: { pct: number | null; size?: number }) {
 }
 
 // ── KPI card ─────────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, tint, tintSoft, label, valor, pct, serie }: {
+function KpiCard({ icon: Icon, tint, tintSoft, label, valor, pct, serie, onClick }: {
   icon: typeof Droplet; tint: string; tintSoft: string
   label: string; valor: string; pct: number | null; serie: number[]
+  /** Si viene, la tarjeta abre el detalle correspondiente */
+  onClick?: () => void
 }) {
+  const Contenedor = onClick ? 'button' : 'div'
   return (
-    <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 14, minWidth: 0 }}>
-      <div style={{ width: 34, height: 34, borderRadius: 10, background: tintSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-        <Icon size={17} color={tint} />
+    <Contenedor
+      onClick={onClick}
+      style={{
+        background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 14,
+        minWidth: 0, width: '100%', textAlign: 'left', display: 'block',
+        cursor: onClick ? 'pointer' : 'default', font: 'inherit', color: 'inherit',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: tintSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon size={17} color={tint} />
+        </div>
+        {onClick && <ChevronRight size={15} color={C.faint} style={{ marginLeft: 'auto' }} />}
       </div>
       <p style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>{label}</p>
       <p style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -109,6 +122,139 @@ function KpiCard({ icon: Icon, tint, tintSoft, label, valor, pct, serie }: {
       </p>
       <div style={{ marginTop: 4, marginBottom: 6 }}><Delta pct={pct} /></div>
       <Sparkline puntos={serie} color={tint} />
+    </Contenedor>
+  )
+}
+
+// ── Detalle (drill-down de Pedidos / Clientes) ──────────────────────────────
+interface FilaProducto {
+  producto: string; envase: string; categoria: string
+  litros: number; revenue: number; pedidos: number; clientes: number
+}
+interface FilaCliente {
+  cliente: string; vendedor: string; localidad: string | null
+  litros: number; revenue: number; pedidos: number; ultimaCompra: string | null
+}
+
+function SheetDetalle({ tipo, desde, hasta, onClose }: {
+  tipo: 'productos' | 'clientes'; desde: string; hasta: string; onClose: () => void
+}) {
+  const [filas, setFilas] = useState<(FilaProducto | FilaCliente)[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busca, setBusca] = useState('')
+
+  useEffect(() => {
+    let vivo = true
+    fetch(`/api/ventas/detalle?tipo=${tipo}&desde=${desde}&hasta=${hasta}`)
+      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
+      .then(d => { if (vivo) setFilas(Array.isArray(d) ? d : []) })
+      .catch(e => { if (vivo) setError(String(e)) })
+    return () => { vivo = false }
+  }, [tipo, desde, hasta])
+
+  const esProd = tipo === 'productos'
+  const titulo = esProd ? 'Productos vendidos' : 'Clientes que compraron'
+
+  const visibles = useMemo(() => {
+    if (!filas) return []
+    const q = busca.trim().toLowerCase()
+    if (!q) return filas
+    return filas.filter(f =>
+      esProd
+        ? (f as FilaProducto).producto.toLowerCase().includes(q)
+        : (f as FilaCliente).cliente.toLowerCase().includes(q)
+        || ((f as FilaCliente).vendedor ?? '').toLowerCase().includes(q))
+  }, [filas, busca, esProd])
+
+  const totalLitros = visibles.reduce((s, f) => s + f.litros, 0)
+
+  return (
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(15,23,42,.45)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+    >
+      <div style={{ background: C.bg, borderRadius: '20px 20px 0 0', maxHeight: '86vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '10px 0 6px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ width: 38, height: 4, borderRadius: 2, background: '#CBD5E1' }} />
+        </div>
+
+        <div style={{ padding: '4px 16px 12px', borderBottom: `1px solid ${C.line}` }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{titulo}</p>
+              <p style={{ fontSize: 12, color: C.muted }}>
+                {fFechaCorta(desde)} – {fFechaCorta(hasta)}
+                {filas && ` · ${filas.length} ${esProd ? 'productos' : 'clientes'}`}
+              </p>
+            </div>
+            <button onClick={onClose} aria-label="Cerrar"
+              style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#E2E8F0', color: C.text, cursor: 'pointer', flexShrink: 0, fontSize: 15 }}>
+              ✕
+            </button>
+          </div>
+          {filas && filas.length > 6 && (
+            <input
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder={esProd ? 'Buscar producto…' : 'Buscar cliente o vendedor…'}
+              style={{
+                marginTop: 10, width: '100%', padding: '9px 12px', borderRadius: 10,
+                border: `1px solid ${C.line}`, background: C.card, fontSize: 13, color: C.text, outline: 'none',
+              }}
+            />
+          )}
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px 24px' }}>
+          {error ? (
+            <p style={{ textAlign: 'center', color: C.red, fontSize: 13, padding: 28 }}>No se pudo cargar: {error}</p>
+          ) : !filas ? (
+            <p style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 28 }}>Cargando…</p>
+          ) : visibles.length === 0 ? (
+            <p style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 28 }}>
+              {busca ? 'Sin coincidencias' : 'Sin ventas en este rango'}
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {visibles.map((f, i) => {
+                const share = totalLitros > 0 ? (f.litros / totalLitros) * 100 : 0
+                const p = esProd ? (f as FilaProducto) : null
+                const c = esProd ? null : (f as FilaCliente)
+                const tintCat = p?.categoria === 'Kombucha' ? C.green : p?.categoria === 'Cerveza' ? C.hero : C.purple
+                return (
+                  <div key={i} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '11px 13px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 7 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.faint, minWidth: 18, flexShrink: 0 }}>{i + 1}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>
+                          {p ? p.producto : c!.cliente}
+                        </p>
+                        <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                          {p
+                            ? `${p.envase} · ${p.categoria} · ${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}`
+                            : [c!.vendedor, c!.localidad].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fL(f.litros)}</p>
+                        <p style={{ fontSize: 11, color: C.muted }}>{fPeso(f.revenue)}</p>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
+                        <div style={{ width: `${share}%`, height: '100%', background: p ? tintCat : C.blue, borderRadius: 3 }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: C.faint, flexShrink: 0 }}>
+                        {f.pedidos} {f.pedidos === 1 ? 'pedido' : 'pedidos'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -149,6 +295,11 @@ function iniciales(nombre: string) {
   return nombre.split(/\s+/).filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase()
 }
 
+/**
+ * Fila del ranking en DOS niveles: arriba el nombre completo (sin truncar) y
+ * abajo las métricas. Antes iba todo en una línea con 6 columnas y los nombres
+ * largos ("Claudio Heufemann", "Yadro Fabijancic") quedaban cortados.
+ */
 function FilaVendedor({ v, pos, total, onClick }: { v: VendedorRango; pos: number; total: number; onClick: () => void }) {
   const share = total > 0 ? (v.litros / total) * 100 : 0
   const color = COLOR_VEND[pos % COLOR_VEND.length]
@@ -156,37 +307,42 @@ function FilaVendedor({ v, pos, total, onClick }: { v: VendedorRango; pos: numbe
     <button
       onClick={onClick}
       style={{
-        display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+        display: 'block', width: '100%', textAlign: 'left',
         background: 'transparent', border: 'none', borderTop: pos === 0 ? 'none' : `1px solid ${C.line}`,
-        padding: '11px 0', cursor: 'pointer',
+        padding: '12px 0', cursor: 'pointer',
       }}
     >
-      <span style={{ width: 20, fontSize: 12, fontWeight: 700, color: pos === 0 ? C.text : C.faint, flexShrink: 0 }}>
-        {pos + 1}
-      </span>
-      <span style={{
-        width: 32, height: 32, borderRadius: '50%', background: color, color: '#fff', flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
-      }}>
-        {iniciales(v.vendedor)}
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {/* Nombre — se permite que ocupe dos líneas si hace falta */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span style={{ width: 18, fontSize: 12, fontWeight: 700, color: pos === 0 ? C.text : C.faint, flexShrink: 0 }}>
+          {pos + 1}
+        </span>
+        <span style={{
+          width: 30, height: 30, borderRadius: '50%', background: color, color: '#fff', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
+        }}>
+          {iniciales(v.vendedor)}
+        </span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>
           {v.vendedor}
-        </p>
-        <div style={{ height: 5, borderRadius: 3, background: C.line, overflow: 'hidden', marginTop: 5 }}>
-          <div style={{ width: `${share}%`, height: '100%', background: color, borderRadius: 3 }} />
+        </span>
+        <ChevronRight size={15} color={C.faint} style={{ flexShrink: 0 }} />
+      </div>
+
+      {/* Métricas, alineadas bajo el nombre */}
+      <div style={{ paddingLeft: 58 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{fL(v.litros)}</span>
+          <span style={{ fontSize: 12, color: C.muted }}>{share.toFixed(1)}% del total</span>
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Delta pct={variacion(v.litros, v.litrosPrev)} size={11} />
+            <span style={{ fontSize: 10, color: C.faint }}>vs ant.</span>
+          </span>
+        </div>
+        <div style={{ height: 6, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
+          <div style={{ width: `${share}%`, height: '100%', background: color, borderRadius: 3, transition: 'width .4s' }} />
         </div>
       </div>
-      <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 76 }}>
-        <p style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fL(v.litros)}</p>
-        <p style={{ fontSize: 11, color: C.faint }}>{share.toFixed(1)}% del total</p>
-      </div>
-      <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 52 }}>
-        <Delta pct={variacion(v.litros, v.litrosPrev)} size={11} />
-        <p style={{ fontSize: 10, color: C.faint }}>vs ant.</p>
-      </div>
-      <ChevronRight size={15} color={C.faint} style={{ flexShrink: 0 }} />
     </button>
   )
 }
@@ -194,18 +350,35 @@ function FilaVendedor({ v, pos, total, onClick }: { v: VendedorRango; pos: numbe
 // ── Vista ────────────────────────────────────────────────────────────────────
 export default function VentasHoyClient({ data }: { data: HoyData }) {
   const router = useRouter()
-  const [rango, setRango] = useState<RangoKey>('periodo')
+  // Si la URL trae un rango a mano, se entra directo en esa vista
+  const [rango, setRango] = useState<RangoKey>(data.custom ? 'custom' : 'periodo')
   const [periodoIdx, setPeriodoIdx] = useState(0)   // 0 = período activo
   const [showSettings, setShowSettings] = useState(false)
+  const [detalle, setDetalle] = useState<'productos' | 'clientes' | null>(null)
   const [showPeriodos, setShowPeriodos] = useState(false)
+  const [customDesde, setCustomDesde] = useState(data.custom?.desde ?? '')
+  const [customHasta, setCustomHasta] = useState(data.custom?.hasta ?? '')
 
   const periodoSel = data.periodos[periodoIdx] ?? null
 
-  // La pestaña "Período" muestra el período 24→23 elegido en el selector; el
-  // resto son rangos relativos a hoy.
-  const d: DatosRango | null = rango === 'periodo'
-    ? (periodoSel?.datos ?? null)
-    : data.rangos[rango as Exclude<RangoKey, 'periodo'>]
+  // "Período" = el período 24→23 elegido; "custom" = rango a mano (viene del
+  // servidor por searchParams); el resto son rangos relativos a hoy.
+  const d: DatosRango | null =
+    rango === 'periodo' ? (periodoSel?.datos ?? null)
+    : rango === 'custom' ? data.custom
+    : data.rangos[rango as Exclude<RangoKey, 'periodo' | 'custom'>]
+
+  function aplicarRango(desde: string, hasta: string) {
+    if (!desde || !hasta) return
+    // Se recarga en el servidor: el rango alimenta tarjetas, mix, ranking y detalles
+    router.push(`/ventas?desde=${desde}&hasta=${hasta}`)
+    setShowPeriodos(false)
+  }
+  function limpiarRango() {
+    setRango('periodo')
+    setCustomDesde(''); setCustomHasta('')
+    router.push('/ventas')
+  }
 
   if (!d) {
     return (
@@ -280,33 +453,31 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
 
         {/* Rango + pestañas */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {/* Selector de período de venta (24→23). Sólo tiene sentido en la
-              pestaña "Período"; en las demás muestra el rango, sin desplegable. */}
+          {/* Selector: períodos de venta 24→23 + rango a mano. Se puede abrir
+              desde cualquier pestaña para elegir fechas. */}
           <div style={{ position: 'relative', flex: '1 1 230px', minWidth: 0 }}>
             <button
-              onClick={() => rango === 'periodo' && setShowPeriodos(v => !v)}
-              disabled={rango !== 'periodo'}
+              onClick={() => setShowPeriodos(v => !v)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, width: '100%',
                 background: C.card, border: `1px solid ${showPeriodos ? C.blue : C.line}`,
-                borderRadius: 12, padding: '9px 12px',
-                cursor: rango === 'periodo' ? 'pointer' : 'default', textAlign: 'left',
+                borderRadius: 12, padding: '9px 12px', cursor: 'pointer', textAlign: 'left',
               }}
             >
               <Calendar size={15} color={C.faint} style={{ flexShrink: 0 }} />
               <span style={{ minWidth: 0, overflow: 'hidden' }}>
                 <span style={{ display: 'block', fontSize: 13, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {rango === 'periodo' && periodoSel ? periodoSel.nombre : `${fFechaCorta(d.desde)} – ${fFechaCorta(d.hasta)}`}
+                  {rango === 'periodo' && periodoSel ? periodoSel.nombre
+                    : rango === 'custom' ? 'Rango elegido'
+                    : `${fFechaCorta(d.desde)} – ${fFechaCorta(d.hasta)}`}
                 </span>
-                {rango === 'periodo' && (
+                {(rango === 'periodo' || rango === 'custom') && (
                   <span style={{ display: 'block', fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {fFechaCorta(d.desde)} – {fFechaCorta(d.hasta)}
                   </span>
                 )}
               </span>
-              {rango === 'periodo' && (
-                <ChevronDown size={15} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0, transform: showPeriodos ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }} />
-              )}
+              <ChevronDown size={15} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0, transform: showPeriodos ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }} />
             </button>
 
             {showPeriodos && (
@@ -346,13 +517,54 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                       </button>
                     )
                   })}
+
+                  {/* Rango a mano */}
+                  <div style={{ borderTop: `1px solid ${C.line}`, padding: '10px 12px', background: C.bg }}>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em', marginBottom: 8 }}>
+                      O ELEGIR FECHAS
+                    </p>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+                      <input
+                        type="date" value={customDesde} max={customHasta || undefined}
+                        onChange={e => setCustomDesde(e.target.value)}
+                        style={{ flex: 1, minWidth: 0, padding: '7px 8px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.card, fontSize: 12, color: C.text }}
+                      />
+                      <span style={{ fontSize: 12, color: C.faint }}>a</span>
+                      <input
+                        type="date" value={customHasta} min={customDesde || undefined}
+                        onChange={e => setCustomHasta(e.target.value)}
+                        style={{ flex: 1, minWidth: 0, padding: '7px 8px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.card, fontSize: 12, color: C.text }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={() => aplicarRango(customDesde, customHasta)}
+                        disabled={!customDesde || !customHasta || customDesde > customHasta}
+                        style={{
+                          flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700,
+                          background: (!customDesde || !customHasta || customDesde > customHasta) ? C.line : C.blue,
+                          color: (!customDesde || !customHasta || customDesde > customHasta) ? C.faint : '#fff',
+                          cursor: (!customDesde || !customHasta || customDesde > customHasta) ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        Aplicar
+                      </button>
+                      {data.custom && (
+                        <button onClick={limpiarRango}
+                          style={{ padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.card, fontSize: 12, color: C.muted, cursor: 'pointer' }}>
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </>
             )}
           </div>
 
           <div style={{ display: 'flex', gap: 2, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 3, flexWrap: 'wrap' }}>
-            {RANGOS.map(r => {
+            {/* La pestaña del rango a mano sólo existe si hay uno aplicado */}
+            {(data.custom ? [...RANGOS, { key: 'custom' as RangoKey, label: 'Rango' }] : RANGOS).map(r => {
               const on = r.key === rango
               return (
                 <button
@@ -376,7 +588,9 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 190px', minWidth: 0 }}>
               <p style={{ fontSize: 11, letterSpacing: '0.08em', color: '#94A3B8', fontWeight: 600, marginBottom: 8 }}>
-                {rango === 'periodo' && periodoSel ? `VENTAS · ${periodoSel.nombre.toUpperCase()}` : 'VENTAS DEL RANGO'}
+                {rango === 'periodo' && periodoSel
+                  ? `VENTAS · ${periodoSel.nombre.toUpperCase()}`
+                  : rango === 'custom' ? 'VENTAS · RANGO ELEGIDO' : 'VENTAS DEL RANGO'}
               </p>
               <p style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-2px', lineHeight: 1 }}>
                 {actual.litros.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
@@ -452,9 +666,11 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           <KpiCard icon={Droplet} tint={C.blue} tintSoft={C.blueSoft} label="Litros vendidos"
             valor={fL(actual.litros)} pct={variacion(actual.litros, previo.litros)} serie={serieDe('litros')} />
           <KpiCard icon={Users} tint={C.green} tintSoft={C.greenSoft} label="Clientes"
-            valor={fNum(actual.clientes)} pct={variacion(actual.clientes, previo.clientes)} serie={serieDe('clientes')} />
+            valor={fNum(actual.clientes)} pct={variacion(actual.clientes, previo.clientes)} serie={serieDe('clientes')}
+            onClick={() => setDetalle('clientes')} />
           <KpiCard icon={ShoppingBag} tint={C.purple} tintSoft={C.purpleSoft} label="Pedidos"
-            valor={fNum(actual.pedidos)} pct={variacion(actual.pedidos, previo.pedidos)} serie={serieDe('pedidos')} />
+            valor={fNum(actual.pedidos)} pct={variacion(actual.pedidos, previo.pedidos)} serie={serieDe('pedidos')}
+            onClick={() => setDetalle('productos')} />
           <KpiCard icon={DollarSign} tint={C.amber} tintSoft={C.amberSoft} label="Ticket promedio"
             valor={fPeso(ticket)} pct={variacion(ticket, ticketPrev)} serie={serieTicket} />
         </div>
@@ -538,6 +754,10 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           </p>
         )}
       </div>
+
+      {detalle && (
+        <SheetDetalle tipo={detalle} desde={d.desde} hasta={d.hasta} onClose={() => setDetalle(null)} />
+      )}
 
       {showSettings && (
         <SettingsPanel

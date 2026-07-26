@@ -12,8 +12,9 @@
  * del negocio, que va del 24 de un mes al 23 del siguiente (tabla `periodos`).
  * Cuál período concreto se muestra lo decide el selector de arriba.
  */
-export type RangoKey = 'hoy' | '7d' | '30d' | 'periodo' | 'anio'
+export type RangoKey = 'hoy' | '7d' | '30d' | 'periodo' | 'anio' | 'custom'
 
+/** Pestañas fijas. 'custom' no va acá: aparece sólo cuando hay rango elegido. */
 export const RANGOS: { key: RangoKey; label: string }[] = [
   { key: 'hoy',     label: 'Hoy'     },
   { key: '7d',      label: '7D'      },
@@ -78,10 +79,12 @@ export interface AlertaInsight {
 }
 
 export interface HoyData {
-  /** Rangos relativos a hoy (no incluye 'periodo', que sale de `periodos`) */
-  rangos: Record<Exclude<RangoKey, 'periodo'>, DatosRango>
+  /** Rangos relativos a hoy (no incluye 'periodo' ni 'custom') */
+  rangos: Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>
   /** Período activo primero, luego los anteriores */
   periodos: PeriodoOpcion[]
+  /** Rango elegido a mano (?desde=&hasta=). null si no hay ninguno. */
+  custom: DatosRango | null
   alertas: AlertaInsight[]
   ultimaSync: string | null
   usuario: { nombre: string; iniciales: string; avatarUrl: string | null } | null

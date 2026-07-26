@@ -26,12 +26,20 @@ export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, Period
 const PERIODOS_VISIBLES = 4
 
 /**
- * Valores de `ventas.vendedor_actual` que no son personas y no deben aparecer
- * en el ranking (consumo interno, cuentas de estado o sin asignar).
+ * Valores de `ventas.vendedor_actual` que NO van en el ranking de vendedores.
+ *
+ * Dos motivos distintos:
+ * - No son personas: consumo interno, cuentas de estado o ventas sin asignar.
+ * - Son personas pero no vendedores de terreno (gerencia/administración): sus
+ *   ventas puntuales distorsionan el ranking. Siguen contando en los totales
+ *   del período y en el resto de las vistas; sólo se omiten de este ranking.
  */
-const VENDEDORES_NO_PERSONA = new Set([
+const VENDEDORES_FUERA_RANKING = new Set([
+  // no-persona
   'CERVECERÍA', 'CERVECERIA', 'Inactivo', 'No indica',
   'Incobrable', 'Incobrable 2024', 'Incobrable 2025',
+  // no son vendedores de terreno
+  'Mariel Lillo', 'Douglas Koenig', 'Rodrigo Solis',
 ])
 
 const KPIS_CERO: KpisRango = {
@@ -72,7 +80,7 @@ function armarVendedores(
   const prev = new Map<string, number>()
   for (const r of prevRows ?? []) {
     const bruto = String(r.vendedor ?? '')
-    if (VENDEDORES_NO_PERSONA.has(bruto)) continue
+    if (VENDEDORES_FUERA_RANKING.has(bruto)) continue
     const n = vendedorCanonico(bruto)
     if (!n) continue
     prev.set(n, (prev.get(n) ?? 0) + Number(r.litros ?? 0))
@@ -80,7 +88,7 @@ function armarVendedores(
   const acc = new Map<string, VendedorRango>()
   for (const r of rows ?? []) {
     const bruto = String(r.vendedor ?? '')
-    if (!bruto || VENDEDORES_NO_PERSONA.has(bruto)) continue
+    if (!bruto || VENDEDORES_FUERA_RANKING.has(bruto)) continue
     const n = vendedorCanonico(bruto)
     const cur = acc.get(n) ?? { vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev: prev.get(n) ?? 0 }
     cur.litros += Number(r.litros ?? 0)
@@ -101,6 +109,8 @@ function armarVendedores(
 export async function getHoyData(
   provinciasScope: string[] | null,
   usuario: { nombre: string; iniciales: string; avatarUrl: string | null } | null,
+  /** Rango elegido a mano en la UI (?desde=&hasta=), ya validado */
+  custom?: { desde: string; hasta: string } | null,
 ): Promise<HoyData> {
   const supabase = await createClient()
   const hoy = new Date()
@@ -128,7 +138,7 @@ export async function getHoyData(
     return { desde: iso(desde), hasta: iso(hasta), prevDesde: iso(prevDesde), prevHasta: iso(prevHasta), etiqueta }
   }
   const anioIni = new Date(hoy.getFullYear(), 0, 1)
-  const relativos: Record<Exclude<RangoKey, 'periodo'>, ReturnType<typeof relDef>> = {
+  const relativos: Record<Exclude<RangoKey, 'periodo' | 'custom'>, ReturnType<typeof relDef>> = {
     hoy:  relDef(hoy, hoy, 'vs ayer'),
     '7d': relDef(addDias(hoy, -6), hoy, 'vs 7 días previos'),
     '30d': relDef(addDias(hoy, -29), hoy, 'vs 30 días previos'),
@@ -140,21 +150,42 @@ export async function getHoyData(
     },
   }
 
-  // Cada rango a consultar: los relativos + cada período 24→23.
+  // Rango elegido a mano: se compara contra el lapso previo de igual largo
+  const customDef = custom
+    ? (() => {
+        const ini = new Date(custom.desde + 'T12:00:00')
+        const fin = new Date(custom.hasta + 'T12:00:00')
+        const dias = Math.max(1, Math.round((fin.getTime() - ini.getTime()) / 86400000) + 1)
+        const prevHasta = addDias(ini, -1)
+        const prevDesde = addDias(prevHasta, -(dias - 1))
+        return {
+          desde: custom.desde, hasta: custom.hasta,
+          prevDesde: iso(prevDesde), prevHasta: iso(prevHasta),
+          etiqueta: `vs ${dias} ${dias === 1 ? 'día' : 'días'} previos`,
+        }
+      })()
+    : null
+
+  // Cada rango a consultar: los relativos + cada período 24→23 + el custom.
   // Para los períodos, el "previo" es el período 24→23 anterior de la lista.
   const consultas: { desde: string; hasta: string }[] = [
     ...Object.values(relativos).flatMap(r => [{ desde: r.desde, hasta: r.hasta }, { desde: r.prevDesde, hasta: r.prevHasta }]),
     ...periodosLista.map(p => ({ desde: p.fecha_inicio, hasta: p.fecha_fin })),
+    ...(customDef ? [{ desde: customDef.desde, hasta: customDef.hasta }, { desde: customDef.prevDesde, hasta: customDef.prevHasta }] : []),
   ]
 
-  const serieDesde = periodosLista.length
-    ? periodosLista[periodosLista.length - 1].fecha_inicio
-    : iso(anioIni)
+  // La serie tiene que cubrir el más antiguo de todos los rangos pedidos (el
+  // custom puede ser de años anteriores), si no los sparklines saldrían vacíos.
+  const serieDesde = [
+    iso(anioIni),
+    ...(periodosLista.length ? [periodosLista[periodosLista.length - 1].fecha_inicio] : []),
+    ...(customDef ? [customDef.prevDesde] : []),
+  ].sort()[0]
 
   const [kpisAll, vendAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
     Promise.all(consultas.map(c => supabase.rpc('ventas_dashboard_kpis', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_agg_periodo', { p_ini: c.desde, p_fin: c.hasta, p_vendedor: null, p_provincias: p_prov }))),
-    supabase.rpc('ventas_serie_diaria', { p_ini: serieDesde < iso(anioIni) ? serieDesde : iso(anioIni), p_fin: iso(hoy), p_provincias: p_prov }),
+    supabase.rpc('ventas_serie_diaria', { p_ini: serieDesde, p_fin: iso(hoy), p_provincias: p_prov }),
     supabase.from('metas').select('periodo_id, meta_litros').eq('tipo', 'mensual'),
     supabase.rpc('get_client_scores', { p_vendedor: null }),
     supabase.from('ventas').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
@@ -173,8 +204,8 @@ export async function getHoyData(
   const vendEn = (i: number) => (vendAll[i].data as Record<string, unknown>[] | null)
 
   // ── Rangos relativos ──────────────────────────────────────────────────────
-  const rangos = {} as Record<Exclude<RangoKey, 'periodo'>, DatosRango>
-  const clavesRel = Object.keys(relativos) as Exclude<RangoKey, 'periodo'>[]
+  const rangos = {} as Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>
+  const clavesRel = Object.keys(relativos) as Exclude<RangoKey, 'periodo' | 'custom'>[]
   clavesRel.forEach((k, idx) => {
     const r = relativos[k]
     const iAct = idx * 2, iPrev = idx * 2 + 1
@@ -262,9 +293,24 @@ export async function getHoyData(
     }
   }
 
+  // El custom va al final de `consultas`, después de los períodos
+  const iCustom = offsetPeriodos + periodosLista.length
+  const datosCustom: DatosRango | null = customDef
+    ? {
+        desde: customDef.desde,
+        hasta: customDef.hasta,
+        etiquetaComparacion: customDef.etiqueta,
+        actual: kpiEn(iCustom),
+        previo: kpiEn(iCustom + 1),
+        vendedores: armarVendedores(vendEn(iCustom), vendEn(iCustom + 1)),
+        serie: recorte(customDef.desde, customDef.hasta),
+      }
+    : null
+
   return {
     rangos,
     periodos,
+    custom: datosCustom,
     alertas,
     ultimaSync: (syncRes.data as { created_at?: string } | null)?.created_at ?? null,
     usuario,

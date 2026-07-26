@@ -5,7 +5,14 @@ import VentasHoyClient from './VentasHoyClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function VentasHoyPage() {
+const esFecha = (s: string | undefined): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s)
+
+export default async function VentasHoyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ desde?: string; hasta?: string }>
+}) {
+  const { desde, hasta } = await searchParams
   const appUser = await getServerUser()
 
   // Scope geográfico: las ventas están consolidadas por nombre de vendedor, así
@@ -14,11 +21,16 @@ export default async function VentasHoyPage() {
   const provincias = provinciasDeRegion(scopeRegion)
   const provinciasScope = provincias.length ? provincias : null
 
+  // Rango elegido a mano. Se ignora si viene mal formado o invertido, para que
+  // una URL manipulada no rompa la vista.
+  const custom = esFecha(desde) && esFecha(hasta) && desde <= hasta ? { desde, hasta } : null
+
   const data = await getHoyData(
     provinciasScope,
     appUser
       ? { nombre: appUser.nombre, iniciales: appUser.iniciales, avatarUrl: appUser.avatarUrl }
       : null,
+    custom,
   )
 
   return <VentasHoyClient data={data} />
