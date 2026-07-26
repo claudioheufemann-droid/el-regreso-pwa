@@ -4,10 +4,10 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Menu, Bell, ChevronDown, ChevronRight, Droplet, Users, ShoppingBag,
-  DollarSign, AlertTriangle, TrendingUp, TrendingDown,
+  DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
-import { RANGOS, type RangoKey, type HoyData, type PuntoSerie, type VendedorRango } from './hoyTypes'
+import { RANGOS, type RangoKey, type HoyData, type PuntoSerie, type VendedorRango, type DatosRango } from './hoyTypes'
 
 /**
  * Vista principal de Ventas — tema CLARO, propio de esta pantalla.
@@ -194,11 +194,31 @@ function FilaVendedor({ v, pos, total, onClick }: { v: VendedorRango; pos: numbe
 // ── Vista ────────────────────────────────────────────────────────────────────
 export default function VentasHoyClient({ data }: { data: HoyData }) {
   const router = useRouter()
-  const [rango, setRango] = useState<RangoKey>('30d')
+  const [rango, setRango] = useState<RangoKey>('periodo')
+  const [periodoIdx, setPeriodoIdx] = useState(0)   // 0 = período activo
   const [showSettings, setShowSettings] = useState(false)
+  const [showPeriodos, setShowPeriodos] = useState(false)
 
-  const d = data.rangos[rango]
+  const periodoSel = data.periodos[periodoIdx] ?? null
+
+  // La pestaña "Período" muestra el período 24→23 elegido en el selector; el
+  // resto son rangos relativos a hoy.
+  const d: DatosRango | null = rango === 'periodo'
+    ? (periodoSel?.datos ?? null)
+    : data.rangos[rango as Exclude<RangoKey, 'periodo'>]
+
+  if (!d) {
+    return (
+      <div style={{ background: C.bg, minHeight: '100%', padding: 24 }}>
+        <p style={{ fontSize: 14, color: C.muted, textAlign: 'center' }}>
+          No hay períodos de venta configurados.
+        </p>
+      </div>
+    )
+  }
+
   const { actual, previo, serie } = d
+  const metaLitros = rango === 'periodo' ? (periodoSel?.metaLitros ?? 0) : 0
 
   const serieDe = (campo: keyof PuntoSerie) =>
     serie.map(p => Number(p[campo] ?? 0))
@@ -214,7 +234,8 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
   )
 
   const hoyTxt = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
-  const avanceMeta = data.metaLitros > 0 ? Math.min(100, (actual.litros / data.metaLitros) * 100) : null
+  // La meta se define por período de venta (24→23), así que sólo aplica ahí
+  const avanceMeta = metaLitros > 0 ? Math.min(100, (actual.litros / metaLitros) * 100) : null
 
   return (
     <div style={{ background: C.bg, minHeight: '100%', margin: -1, padding: '1px 0 0' }}>
@@ -259,23 +280,88 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
 
         {/* Rango + pestañas */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '9px 12px', flex: '1 1 210px', minWidth: 0 }}>
-            <span style={{ fontSize: 13, color: C.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {fFechaCorta(d.desde)} – {fFechaCorta(d.hasta)}
-            </span>
-            <ChevronDown size={15} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0 }} />
+          {/* Selector de período de venta (24→23). Sólo tiene sentido en la
+              pestaña "Período"; en las demás muestra el rango, sin desplegable. */}
+          <div style={{ position: 'relative', flex: '1 1 230px', minWidth: 0 }}>
+            <button
+              onClick={() => rango === 'periodo' && setShowPeriodos(v => !v)}
+              disabled={rango !== 'periodo'}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                background: C.card, border: `1px solid ${showPeriodos ? C.blue : C.line}`,
+                borderRadius: 12, padding: '9px 12px',
+                cursor: rango === 'periodo' ? 'pointer' : 'default', textAlign: 'left',
+              }}
+            >
+              <Calendar size={15} color={C.faint} style={{ flexShrink: 0 }} />
+              <span style={{ minWidth: 0, overflow: 'hidden' }}>
+                <span style={{ display: 'block', fontSize: 13, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {rango === 'periodo' && periodoSel ? periodoSel.nombre : `${fFechaCorta(d.desde)} – ${fFechaCorta(d.hasta)}`}
+                </span>
+                {rango === 'periodo' && (
+                  <span style={{ display: 'block', fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {fFechaCorta(d.desde)} – {fFechaCorta(d.hasta)}
+                  </span>
+                )}
+              </span>
+              {rango === 'periodo' && (
+                <ChevronDown size={15} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0, transform: showPeriodos ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }} />
+              )}
+            </button>
+
+            {showPeriodos && (
+              <>
+                <div onClick={() => setShowPeriodos(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 41,
+                  background: C.card, border: `1px solid ${C.line}`, borderRadius: 12,
+                  boxShadow: '0 8px 28px rgba(15,23,42,.14)', overflow: 'hidden',
+                }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em', padding: '9px 12px 5px' }}>
+                    PERÍODO DE VENTA (24 → 23)
+                  </p>
+                  {data.periodos.map((p, i) => {
+                    const on = i === periodoIdx
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => { setPeriodoIdx(i); setShowPeriodos(false) }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+                          background: on ? C.blueSoft : 'transparent', border: 'none',
+                          borderTop: `1px solid ${C.line}`, padding: '10px 12px', cursor: 'pointer',
+                        }}
+                      >
+                        <span style={{ minWidth: 0, flex: 1 }}>
+                          <span style={{ display: 'block', fontSize: 13, fontWeight: on ? 700 : 500, color: on ? C.blue : C.text }}>
+                            {p.nombre}{p.activo ? ' · en curso' : ''}
+                          </span>
+                          <span style={{ display: 'block', fontSize: 11, color: C.muted }}>
+                            {fFechaCorta(p.inicio)} – {fFechaCorta(p.fin)}
+                          </span>
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: on ? C.blue : C.muted, flexShrink: 0 }}>
+                          {fL(p.datos.actual.litros)}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </div>
-          <div style={{ display: 'flex', gap: 2, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 3 }}>
+
+          <div style={{ display: 'flex', gap: 2, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 3, flexWrap: 'wrap' }}>
             {RANGOS.map(r => {
               const on = r.key === rango
               return (
                 <button
                   key={r.key}
-                  onClick={() => setRango(r.key)}
+                  onClick={() => { setRango(r.key); setShowPeriodos(false) }}
                   style={{
-                    padding: '7px 13px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                    padding: '7px 12px', borderRadius: 9, border: 'none', cursor: 'pointer',
                     background: on ? C.hero : 'transparent', color: on ? '#fff' : C.muted,
-                    fontSize: 13, fontWeight: on ? 700 : 500,
+                    fontSize: 13, fontWeight: on ? 700 : 500, whiteSpace: 'nowrap',
                   }}
                 >
                   {r.label}
@@ -290,7 +376,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 190px', minWidth: 0 }}>
               <p style={{ fontSize: 11, letterSpacing: '0.08em', color: '#94A3B8', fontWeight: 600, marginBottom: 8 }}>
-                VENTAS DEL PERÍODO
+                {rango === 'periodo' && periodoSel ? `VENTAS · ${periodoSel.nombre.toUpperCase()}` : 'VENTAS DEL RANGO'}
               </p>
               <p style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-2px', lineHeight: 1 }}>
                 {actual.litros.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
@@ -306,7 +392,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: pos ? 'rgba(16,185,129,.16)' : 'rgba(239,68,68,.16)', color: pos ? '#34D399' : '#F87171', borderRadius: 8, padding: '3px 8px', fontSize: 12, fontWeight: 700 }}>
                         {pos ? <TrendingUp size={13} /> : <TrendingDown size={13} />} {pos ? '+' : ''}{Math.round(p)}%
                       </span>
-                      <span style={{ fontSize: 12, color: '#94A3B8' }}>vs período anterior</span>
+                      <span style={{ fontSize: 12, color: '#94A3B8' }}>{d.etiquetaComparacion}</span>
                     </>
                   )
                 })()}
@@ -314,7 +400,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               {avanceMeta !== null && (
                 <div style={{ marginTop: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
-                    <span style={{ color: '#94A3B8' }}>Meta: {fNum(Math.round(data.metaLitros))} L</span>
+                    <span style={{ color: '#94A3B8' }}>Meta: {fNum(Math.round(metaLitros))} L</span>
                     <span style={{ fontWeight: 700 }}>{Math.round(avanceMeta)}%</span>
                   </div>
                   <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>

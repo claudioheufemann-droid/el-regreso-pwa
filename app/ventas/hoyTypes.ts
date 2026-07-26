@@ -7,14 +7,19 @@
  * bundle del navegador y el build falla.
  */
 
-export type RangoKey = 'hoy' | '7d' | '30d' | 'mes' | 'anio'
+/**
+ * Pestañas de rango. 'periodo' NO es el mes calendario: es el período de venta
+ * del negocio, que va del 24 de un mes al 23 del siguiente (tabla `periodos`).
+ * Cuál período concreto se muestra lo decide el selector de arriba.
+ */
+export type RangoKey = 'hoy' | '7d' | '30d' | 'periodo' | 'anio'
 
 export const RANGOS: { key: RangoKey; label: string }[] = [
-  { key: 'hoy',  label: 'Hoy'  },
-  { key: '7d',   label: '7D'   },
-  { key: '30d',  label: '30D'  },
-  { key: 'mes',  label: 'Mes'  },
-  { key: 'anio', label: 'Año'  },
+  { key: 'hoy',     label: 'Hoy'     },
+  { key: '7d',      label: '7D'      },
+  { key: '30d',     label: '30D'     },
+  { key: 'periodo', label: 'Período' },
+  { key: 'anio',    label: 'Año'     },
 ]
 
 export interface KpisRango {
@@ -28,7 +33,7 @@ export interface KpisRango {
 }
 
 export interface VendedorRango {
-  vendedor: string      // nombre de display (agrupado)
+  vendedor: string      // nombre tal cual viene del ERP (Transición 2, Yadro Fabijancic, ...)
   litros: number
   revenue: number
   clientes: number
@@ -46,10 +51,23 @@ export interface PuntoSerie {
 export interface DatosRango {
   desde: string
   hasta: string
+  /** Qué se compara contra qué, para poder explicarlo en la UI */
+  etiquetaComparacion: string
   actual: KpisRango
   previo: KpisRango
   vendedores: VendedorRango[]
   serie: PuntoSerie[]
+}
+
+/** Un período de venta 24→23 con sus datos ya calculados. */
+export interface PeriodoOpcion {
+  id: number
+  nombre: string        // "Agosto 2026"
+  inicio: string        // 2026-07-24
+  fin: string           // 2026-08-23
+  activo: boolean
+  datos: DatosRango
+  metaLitros: number
 }
 
 export interface AlertaInsight {
@@ -60,9 +78,10 @@ export interface AlertaInsight {
 }
 
 export interface HoyData {
-  rangos: Record<RangoKey, DatosRango>
-  periodo: { nombre: string; inicio: string; fin: string } | null
-  metaLitros: number
+  /** Rangos relativos a hoy (no incluye 'periodo', que sale de `periodos`) */
+  rangos: Record<Exclude<RangoKey, 'periodo'>, DatosRango>
+  /** Período activo primero, luego los anteriores */
+  periodos: PeriodoOpcion[]
   alertas: AlertaInsight[]
   ultimaSync: string | null
   usuario: { nombre: string; iniciales: string; avatarUrl: string | null } | null
