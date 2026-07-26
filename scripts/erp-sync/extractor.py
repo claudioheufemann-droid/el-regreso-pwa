@@ -41,6 +41,10 @@ HEADLESS      = os.getenv("HEADLESS", "0") == "1"
 FECHA_DESDE   = (os.getenv("FECHA_DESDE") or "").strip()
 FECHA_HASTA   = (os.getenv("FECHA_HASTA") or "").strip()
 SOLO_DESCARGAR = (os.getenv("SOLO_DESCARGAR") or "").strip().lower() == "true"
+# Dias que se retrocede sobre el inicio del periodo para capturar entregas
+# rezagadas (ver rango_periodo). 7 cubre una semana de atraso de despacho sin
+# agrandar tanto el rango como para que el ERP mande el informe por email.
+DIAS_SOLAPE = 7
 DOWNLOAD_DIR  = Path(__file__).parent / "downloads"
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
@@ -54,14 +58,23 @@ def rango_periodo() -> tuple[date, date]:
     """Rango a consultar. OJO: el ERP filtra por FECHA DE ENTREGA, no por fecha
     de pedido — el Excel trae pedidos con FechaPedido anterior al rango pedido.
 
-    Por defecto: período de venta 24->23 (desde el dia 24 vigente hasta hoy).
-    Si hoy es >= 24, abrio este mes; si no, abrio el mes pasado."""
+    Por defecto: período de venta 24->23 (desde el dia 24 vigente hasta hoy),
+    pero retrocediendo DIAS_SOLAPE dias mas.
+
+    Por que el solape: como el filtro es por fecha de ENTREGA, arrancar justo
+    el dia 24 deja fuera para siempre los pedidos entregados el 23 o antes —
+    el periodo anterior ya no se vuelve a consultar. Paso de verdad: el pedido
+    00052061 de Zaatar (23-jul, entregado el 23-jul) nunca se cargo hasta que
+    se pidio ese rango a mano. Con el solape esas entregas rezagadas entran
+    solas. Recargar dias ya cargados no duplica: /api/upload-ventas borra por
+    (vendedor_actual, fecha_pedido) antes de insertar."""
     hoy = date.today()
     if hoy.day >= 24:
         desde = hoy.replace(day=24)
     else:
         primero = hoy.replace(day=1)
         desde = (primero - timedelta(days=1)).replace(day=24)
+    desde -= timedelta(days=DIAS_SOLAPE)
     if FECHA_DESDE:
         desde = _parse_ddmmyyyy(FECHA_DESDE)
     if FECHA_HASTA:
