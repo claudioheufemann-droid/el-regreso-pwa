@@ -106,6 +106,8 @@ export const CLIENTES_EXCLUIR = [
   'cliente copas/medallas',
   'basecamp el regreso',
   'cliente consumos base camp',
+  'cliente metas base camp',
+  'cliente douglas koenig',
   'beneficios clientes',
 ]
 

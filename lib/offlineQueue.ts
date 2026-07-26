@@ -20,9 +20,20 @@ interface QueuedOp {
   payload: Record<string, unknown>
   onConflict: string
   createdAt: number
+  intentos?: number    // reintentos fallidos acumulados
 }
 
 const KEY = 'el-regreso-offline-queue-v1'
+/** Operaciones que se dieron por perdidas (no se borran: quedan para revisar). */
+const KEY_MUERTOS = 'el-regreso-offline-queue-fallidos-v1'
+
+/**
+ * Tras estos reintentos se deja de insistir. El flush corre cada 20 s, así que
+ * son ~10 min: si en ese lapso no entró, no es un problema de red pasajero sino
+ * algo permanente (payload inválido, RLS, constraint). Antes se reintentaba para
+ * siempre y el badge quedaba pegado en "Sincronizando N pendientes…".
+ */
+const MAX_INTENTOS = 30
 
 function readQueue(): QueuedOp[] {
   if (typeof window === 'undefined') return []
@@ -74,20 +85,50 @@ export async function upsertOrQueue(
   }
 }
 
-/** Reintenta todas las operaciones pendientes. Las que sigan fallando se mantienen en cola. */
+/**
+ * Reintenta las operaciones pendientes.
+ *
+ * Las que fallan vuelven a la cola con un intento más. Al superar MAX_INTENTOS
+ * se mueven a la cola de fallidos: dejan de reintentarse y de contarse como
+ * "pendientes", pero NO se borran — quedan en localStorage por si hay que
+ * recuperarlas a mano. Sin esto, un item con un error permanente se reintentaba
+ * indefinidamente y el aviso de sincronización no se iba nunca.
+ */
 export async function flushQueue(supabase: SupabaseClient): Promise<void> {
   const queue = readQueue()
   if (queue.length === 0) return
   const remaining: QueuedOp[] = []
+  const muertos: QueuedOp[] = []
   for (const op of queue) {
     try {
       const { error } = await supabase.from(op.table).upsert(op.payload, { onConflict: op.onConflict })
       if (error) throw error
     } catch {
-      remaining.push(op)
+      const intentos = (op.intentos ?? 0) + 1
+      if (intentos >= MAX_INTENTOS) {
+        muertos.push({ ...op, intentos })
+        console.error(
+          `[offlineQueue] descartada tras ${intentos} intentos: ${op.table}`,
+          op.payload,
+        )
+      } else {
+        remaining.push({ ...op, intentos })
+      }
     }
   }
+  if (muertos.length) {
+    try {
+      const previos: QueuedOp[] = JSON.parse(localStorage.getItem(KEY_MUERTOS) ?? '[]')
+      localStorage.setItem(KEY_MUERTOS, JSON.stringify([...previos, ...muertos]))
+    } catch {}
+  }
   writeQueue(remaining)
+}
+
+/** Operaciones que se dieron por perdidas, para diagnóstico. */
+export function fallidosCount(): number {
+  if (typeof window === 'undefined') return 0
+  try { return (JSON.parse(localStorage.getItem(KEY_MUERTOS) ?? '[]') as unknown[]).length } catch { return 0 }
 }
 
 let started = false

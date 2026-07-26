@@ -491,6 +491,28 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                   <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em', padding: '9px 12px 5px' }}>
                     PERÍODO DE VENTA (24 → 23)
                   </p>
+                  {/* Atajos: los dos períodos que más se consultan */}
+                  <div style={{ display: 'flex', gap: 6, padding: '0 12px 9px' }}>
+                    {[0, 1].map(i => {
+                      const p = data.periodos[i]
+                      if (!p) return null
+                      const on = rango === 'periodo' && periodoIdx === i
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => { setPeriodoIdx(i); setRango('periodo'); setShowPeriodos(false) }}
+                          style={{
+                            flex: 1, padding: '8px 6px', borderRadius: 9, cursor: 'pointer',
+                            border: `1px solid ${on ? C.blue : C.line}`,
+                            background: on ? C.blue : C.card, color: on ? '#fff' : C.text,
+                            fontSize: 12, fontWeight: 700,
+                          }}
+                        >
+                          {i === 0 ? 'Período actual' : 'Período anterior'}
+                        </button>
+                      )
+                    })}
+                  </div>
                   {data.periodos.map((p, i) => {
                     const on = i === periodoIdx
                     return (
@@ -708,6 +730,40 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               onClick={() => router.push('/ventas/ranking')} />
           ))}
         </div>
+
+        {/* Envases — cuánto se vendió en latas y barriles */}
+        {d.envases.length > 0 && (
+          <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>LATAS Y BARRILES</p>
+              <span style={{ fontSize: 12, color: C.muted }}>unidades del período</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+              {d.envases.map(e => {
+                const esBarril = e.tipo.toLowerCase().includes('barril')
+                const tint = esBarril ? C.amber : e.tipo.includes('473') ? C.hero : C.green
+                const soft = esBarril ? C.amberSoft : e.tipo.includes('473') ? '#E2E8F0' : C.greenSoft
+                return (
+                  <div key={e.tipo} style={{ background: soft, borderRadius: 12, padding: '12px 13px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                      <span style={{ fontSize: 17 }}>{esBarril ? '🛢️' : '🥫'}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: C.text, minWidth: 0, wordBreak: 'break-word' }}>{e.tipo}</span>
+                    </div>
+                    <p style={{ fontSize: 22, fontWeight: 800, color: tint, letterSpacing: '-0.6px', lineHeight: 1.1 }}>
+                      {fNum(Math.round(e.unidades))}
+                    </p>
+                    <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                      {esBarril ? 'barriles' : 'latas'} · {fL(e.litros)}
+                    </p>
+                    <div style={{ marginTop: 5 }}>
+                      <Delta pct={variacion(e.unidades, e.unidadesPrev)} size={11} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Alertas e insights */}
         {data.alertas.length > 0 && (

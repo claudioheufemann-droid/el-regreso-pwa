@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { vendedorCanonico } from '@/lib/types'
 import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
-         type PuntoSerie, type DatosRango, type PeriodoOpcion,
+         type PuntoSerie, type DatosRango, type PeriodoOpcion, type EnvaseRango,
          type AlertaInsight, type HoyData } from './hoyTypes'
 
 /**
@@ -20,7 +20,7 @@ import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
  * arrastrar lib/supabase/server al bundle del navegador.
  */
 
-export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, AlertaInsight, HoyData }
+export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, EnvaseRango, AlertaInsight, HoyData }
 
 /** Cuántos períodos anteriores se ofrecen en el selector. */
 const PERIODOS_VISIBLES = 4
@@ -40,6 +40,9 @@ const VENDEDORES_FUERA_RANKING = new Set([
   'Incobrable', 'Incobrable 2024', 'Incobrable 2025',
   // no son vendedores de terreno
   'Mariel Lillo', 'Douglas Koenig', 'Rodrigo Solis',
+  // bolsa histórica despersonalizada, no una persona: mezcla ventas viejas de
+  // varios vendedores y compite con ellos en el ranking
+  'Equipo Ventas', 'Vendedor 1',
 ])
 
 const KPIS_CERO: KpisRango = {
@@ -104,6 +107,22 @@ function armarVendedores(
       acc.set(n, { vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev })
   }
   return [...acc.values()].sort((a, b) => b.litros - a.litros)
+}
+
+/** Unidades por envase del rango, con las del rango previo para comparar. */
+function armarEnvases(
+  rows: Record<string, unknown>[] | null,
+  prevRows: Record<string, unknown>[] | null,
+): EnvaseRango[] {
+  const prev = new Map<string, number>()
+  for (const r of prevRows ?? []) prev.set(String(r.tipo), Number(r.unidades ?? 0))
+  return (rows ?? []).map(r => ({
+    tipo: String(r.tipo),
+    unidades: Number(r.unidades ?? 0),
+    litros: Number(r.litros ?? 0),
+    revenue: Number(r.revenue ?? 0),
+    unidadesPrev: prev.get(String(r.tipo)) ?? 0,
+  }))
 }
 
 export async function getHoyData(
@@ -182,9 +201,10 @@ export async function getHoyData(
     ...(customDef ? [customDef.prevDesde] : []),
   ].sort()[0]
 
-  const [kpisAll, vendAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
+  const [kpisAll, vendAll, envAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
     Promise.all(consultas.map(c => supabase.rpc('ventas_dashboard_kpis', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_agg_periodo', { p_ini: c.desde, p_fin: c.hasta, p_vendedor: null, p_provincias: p_prov }))),
+    Promise.all(consultas.map(c => supabase.rpc('ventas_envases_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     supabase.rpc('ventas_serie_diaria', { p_ini: serieDesde, p_fin: iso(hoy), p_provincias: p_prov }),
     supabase.from('metas').select('periodo_id, meta_litros').eq('tipo', 'mensual'),
     supabase.rpc('get_client_scores', { p_vendedor: null }),
@@ -202,6 +222,7 @@ export async function getHoyData(
 
   const kpiEn = (i: number) => mapKpis((kpisAll[i].data as unknown[])?.[0])
   const vendEn = (i: number) => (vendAll[i].data as Record<string, unknown>[] | null)
+  const envEn  = (i: number) => (envAll[i].data as Record<string, unknown>[] | null)
 
   // ── Rangos relativos ──────────────────────────────────────────────────────
   const rangos = {} as Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>
@@ -216,6 +237,7 @@ export async function getHoyData(
       actual: kpiEn(iAct),
       previo: kpiEn(iPrev),
       vendedores: armarVendedores(vendEn(iAct), vendEn(iPrev)),
+      envases: armarEnvases(envEn(iAct), envEn(iPrev)),
       serie: recorte(r.desde, r.hasta),
     }
   })
@@ -247,6 +269,7 @@ export async function getHoyData(
           actual: kpiEn(iAct),
           previo: anterior ? kpiEn(iPrev) : { ...KPIS_CERO },
           vendedores: armarVendedores(vendEn(iAct), anterior ? vendEn(iPrev) : null),
+          envases: armarEnvases(envEn(iAct), anterior ? envEn(iPrev) : null),
           serie: recorte(p.fecha_inicio, p.fecha_fin),
         },
       }
@@ -303,6 +326,7 @@ export async function getHoyData(
         actual: kpiEn(iCustom),
         previo: kpiEn(iCustom + 1),
         vendedores: armarVendedores(vendEn(iCustom), vendEn(iCustom + 1)),
+        envases: armarEnvases(envEn(iCustom), envEn(iCustom + 1)),
         serie: recorte(customDef.desde, customDef.hasta),
       }
     : null

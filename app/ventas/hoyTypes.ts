@@ -49,6 +49,15 @@ export interface PuntoSerie {
   pedidos: number
 }
 
+/** Unidades por tipo de envase (latas / barriles), derivadas de los litros. */
+export interface EnvaseRango {
+  tipo: string        // 'Lata 354 ml' | 'Lata 473 ml' | 'Barril 30L' | 'Otros'
+  unidades: number
+  litros: number
+  revenue: number
+  unidadesPrev: number
+}
+
 export interface DatosRango {
   desde: string
   hasta: string
@@ -57,6 +66,7 @@ export interface DatosRango {
   actual: KpisRango
   previo: KpisRango
   vendedores: VendedorRango[]
+  envases: EnvaseRango[]
   serie: PuntoSerie[]
 }
 
