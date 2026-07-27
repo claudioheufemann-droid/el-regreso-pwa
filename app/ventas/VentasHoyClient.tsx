@@ -141,9 +141,11 @@ interface FilaPedido {
   litros: number; revenue: number
 }
 
-function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, desde, hasta, onClose }: {
+function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega = true, desde, hasta, onClose }: {
   tipo: 'productos' | 'clientes' | 'envase' | 'pedidos'
   envaseBucket?: string; categoria?: string; estadoPedidos?: 'despachado' | 'pendiente'
+  /** Debe coincidir con el criterio de la tarjeta que abrió esto (ver ventas_dashboard_kpis) */
+  porEntrega?: boolean
   desde: string; hasta: string; onClose: () => void
 }) {
   const [filas, setFilas] = useState<(FilaProducto | FilaCliente | FilaPedido)[] | null>(null)
@@ -156,13 +158,14 @@ function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, desde, has
       tipo === 'envase' ? `bucket=${encodeURIComponent(envaseBucket ?? '')}` : '',
       tipo === 'productos' && categoria ? `categoria=${encodeURIComponent(categoria)}` : '',
       tipo === 'pedidos' ? `estado=${estadoPedidos}` : '',
+      `porEntrega=${porEntrega}`,
     ].filter(Boolean).join('&')
     fetch(`/api/ventas/detalle?tipo=${tipo}&${qs}&desde=${desde}&hasta=${hasta}`)
       .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
       .then(d => { if (vivo) setFilas(Array.isArray(d) ? d : []) })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
-  }, [tipo, envaseBucket, categoria, estadoPedidos, desde, hasta])
+  }, [tipo, envaseBucket, categoria, estadoPedidos, porEntrega, desde, hasta])
 
   const esProd = tipo === 'productos' || tipo === 'envase'
   const esPedidos = tipo === 'pedidos'
@@ -983,6 +986,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           envaseBucket={detalleEnvaseBucket}
           categoria={detalleCategoria}
           estadoPedidos={detalleEstadoPedidos}
+          porEntrega={rango !== 'anio'}
           desde={d.desde}
           hasta={d.hasta}
           onClose={() => {

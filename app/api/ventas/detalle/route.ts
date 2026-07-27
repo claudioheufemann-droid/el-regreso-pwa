@@ -39,6 +39,11 @@ export async function GET(req: Request) {
   const estado = searchParams.get('estado') ?? ''
   const desde = searchParams.get('desde') ?? ''
   const hasta = searchParams.get('hasta') ?? ''
+  // Debe coincidir con el criterio de la tarjeta que abrió este detalle (ver
+  // ventas_dashboard_kpis): "Año" usa fecha_pedido porque abarca meses sin
+  // fecha_entrega confiable; el resto usa fecha_entrega. Default true porque
+  // así es el criterio en casi todas las tarjetas.
+  const porEntrega = searchParams.get('porEntrega') !== 'false'
 
   if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos')
     return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase o pedidos' }, { status: 400 })
@@ -76,7 +81,7 @@ export async function GET(req: Request) {
   }
 
   const fn = tipo === 'clientes' ? 'ventas_detalle_clientes' : 'ventas_detalle_productos'
-  const { data, error } = await supabase.rpc(fn, { p_ini: desde, p_fin: hasta, p_provincias })
+  const { data, error } = await supabase.rpc(fn, { p_ini: desde, p_fin: hasta, p_provincias, p_por_entrega: porEntrega })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

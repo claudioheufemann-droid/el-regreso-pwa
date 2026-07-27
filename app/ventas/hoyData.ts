@@ -227,10 +227,22 @@ export async function getHoyData(
 
   // Cada rango a consultar: los relativos + cada período 24→23 + el custom.
   // Para los períodos, el "previo" es el período 24→23 anterior de la lista.
-  const consultas: { desde: string; hasta: string }[] = [
-    ...Object.values(relativos).flatMap(r => [{ desde: r.desde, hasta: r.hasta }, { desde: r.prevDesde, hasta: r.prevHasta }]),
-    ...periodosLista.map(p => ({ desde: p.fecha_inicio, hasta: p.fecha_fin })),
-    ...(customDef ? [{ desde: customDef.desde, hasta: customDef.hasta }, { desde: customDef.prevDesde, hasta: customDef.prevHasta }] : []),
+  //
+  // "Año" es la excepción: acumula desde el 1-ene, mucho antes de que
+  // existiera fecha_entrega (recién desde el 26-jul-2026). Filtrarlo por
+  // entrega dejaba fuera ~73% de las ventas del año y mostraba un total muy
+  // por debajo del real. Para ese rango se vuelve a fecha_pedido; el resto
+  // (Hoy/7D/30D/Período/custom) cae dentro de la ventana con dato confiable.
+  const consultas: { desde: string; hasta: string; porEntrega: boolean }[] = [
+    ...Object.entries(relativos).flatMap(([k, r]) => [
+      { desde: r.desde, hasta: r.hasta, porEntrega: k !== 'anio' },
+      { desde: r.prevDesde, hasta: r.prevHasta, porEntrega: k !== 'anio' },
+    ]),
+    ...periodosLista.map(p => ({ desde: p.fecha_inicio, hasta: p.fecha_fin, porEntrega: true })),
+    ...(customDef ? [
+      { desde: customDef.desde, hasta: customDef.hasta, porEntrega: true },
+      { desde: customDef.prevDesde, hasta: customDef.prevHasta, porEntrega: true },
+    ] : []),
   ]
 
   // El período ACTIVO (en curso) no se compara contra el período anterior
@@ -251,7 +263,7 @@ export async function getHoyData(
     return { desde: iso(inicioAnt), hasta: iso(finTruncado > finAntCompleto ? finAntCompleto : finTruncado) }
   })()
   const iTruncado = truncadoDef ? consultas.length : -1
-  if (truncadoDef) consultas.push({ desde: truncadoDef.desde, hasta: truncadoDef.hasta })
+  if (truncadoDef) consultas.push({ desde: truncadoDef.desde, hasta: truncadoDef.hasta, porEntrega: true })
 
   // La serie tiene que cubrir el más antiguo de todos los rangos pedidos (el
   // custom puede ser de años anteriores), si no los sparklines saldrían vacíos.
@@ -262,12 +274,17 @@ export async function getHoyData(
   ].sort()[0]
 
   const [kpisAll, vendAll, envAll, entAll, porEntregarVendAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
-    Promise.all(consultas.map(c => supabase.rpc('ventas_dashboard_kpis', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
-    Promise.all(consultas.map(c => supabase.rpc('ventas_agg_periodo', { p_ini: c.desde, p_fin: c.hasta, p_vendedor: null, p_provincias: p_prov }))),
-    Promise.all(consultas.map(c => supabase.rpc('ventas_envases_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
+    Promise.all(consultas.map(c => supabase.rpc('ventas_dashboard_kpis', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
+    Promise.all(consultas.map(c => supabase.rpc('ventas_agg_periodo', { p_ini: c.desde, p_fin: c.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
+    Promise.all(consultas.map(c => supabase.rpc('ventas_envases_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_por_vendedor', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
-    supabase.rpc('ventas_serie_diaria', { p_ini: serieDesde, p_fin: iso(hoy), p_provincias: p_prov }),
+    // Una sola serie se recorta (recorte()) para todas las tarjetas de todos
+    // los rangos, incluido "Año" que llega hasta enero — antes de que
+    // existiera fecha_entrega. Por eso el sparkline usa fecha_pedido (cobertura
+    // completa siempre): es una mini-tendencia visual, no el número auditado
+    // de cada tarjeta (ese sí usa el criterio correcto por rango, ver arriba).
+    supabase.rpc('ventas_serie_diaria', { p_ini: serieDesde, p_fin: iso(hoy), p_provincias: p_prov, p_por_entrega: false }),
     supabase.from('metas').select('periodo_id, meta_litros').eq('tipo', 'mensual'),
     supabase.rpc('get_client_scores', { p_vendedor: null }),
     supabase.from('ventas').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
