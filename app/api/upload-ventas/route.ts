@@ -3,11 +3,14 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { SUPABASE_URL as SUPABASE_URL_CFG } from '@/lib/supabase/config'
 import * as XLSX from 'xlsx'
-import { esClienteExcluido } from '@/lib/types'
+import { esClienteNoGuardar } from '@/lib/types'
 import { sendPushToAllAdmins } from '@/lib/push'
 
-// Alias local para mantener compatibilidad con el nombre anterior
-const esClienteInterno = esClienteExcluido
+// Alias local para mantener compatibilidad con el nombre anterior. Usa
+// esClienteNoGuardar (no esClienteExcluido): PDV/Feria/BaseCamp ahora SÍ se
+// guardan para poder mostrarlos en su propia tarjeta — siguen excluidos de
+// "litros vendidos" porque eso lo filtra _excluir_cliente en SQL, no esto.
+const esClienteInterno = esClienteNoGuardar
 
 function parseFecha(raw: unknown): string | null {
   if (raw instanceof Date) {

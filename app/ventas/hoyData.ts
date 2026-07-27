@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { vendedorCanonico } from '@/lib/types'
 import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
          type PuntoSerie, type DatosRango, type PeriodoOpcion, type EnvaseRango, type EntregasRango,
-         type AlertaInsight, type HoyData } from './hoyTypes'
+         type ConsumoInternoRango, type AlertaInsight, type HoyData } from './hoyTypes'
 
 /**
  * Datos de la vista principal de Ventas. Sólo servidor.
@@ -20,7 +20,7 @@ import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
  * arrastrar lib/supabase/server al bundle del navegador.
  */
 
-export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, EnvaseRango, EntregasRango, AlertaInsight, HoyData }
+export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, EnvaseRango, EntregasRango, ConsumoInternoRango, AlertaInsight, HoyData }
 
 /** Cuántos períodos anteriores se ofrecen en el selector. */
 const PERIODOS_VISIBLES = 4
@@ -149,6 +149,15 @@ function mapEntregas(row: any): EntregasRango {
   }
 }
 
+function mapConsumoInterno(rows: Record<string, unknown>[] | null): ConsumoInternoRango[] {
+  return (rows ?? []).map(r => ({
+    categoria: String(r.categoria ?? ''),
+    litros: Number(r.litros ?? 0),
+    revenue: Number(r.revenue ?? 0),
+    pedidos: Number(r.pedidos ?? 0),
+  }))
+}
+
 /** Unidades por envase del rango, con las del rango previo para comparar. */
 function armarEnvases(
   rows: Record<string, unknown>[] | null,
@@ -273,12 +282,13 @@ export async function getHoyData(
     ...(customDef ? [customDef.prevDesde] : []),
   ].sort()[0]
 
-  const [kpisAll, vendAll, envAll, entAll, porEntregarVendAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
+  const [kpisAll, vendAll, envAll, entAll, porEntregarVendAll, consumoInternoAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
     Promise.all(consultas.map(c => supabase.rpc('ventas_dashboard_kpis', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_agg_periodo', { p_ini: c.desde, p_fin: c.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_envases_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_por_vendedor', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
+    Promise.all(consultas.map(c => supabase.rpc('ventas_consumo_interno_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
     // Una sola serie se recorta (recorte()) para todas las tarjetas de todos
     // los rangos, incluido "Año" que llega hasta enero — antes de que
     // existiera fecha_entrega. Por eso el sparkline usa fecha_pedido (cobertura
@@ -304,6 +314,7 @@ export async function getHoyData(
   const envEn  = (i: number) => (envAll[i].data as Record<string, unknown>[] | null)
   const entEn  = (i: number) => mapEntregas((entAll[i].data as unknown[])?.[0])
   const porEntregarVendEn = (i: number) => (porEntregarVendAll[i].data as Record<string, unknown>[] | null)
+  const consumoInternoEn = (i: number) => mapConsumoInterno(consumoInternoAll[i].data as Record<string, unknown>[] | null)
 
   // ── Rangos relativos ──────────────────────────────────────────────────────
   const rangos = {} as Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>
@@ -320,6 +331,7 @@ export async function getHoyData(
       vendedores: armarVendedores(vendEn(iAct), vendEn(iPrev), porEntregarVendEn(iAct)),
       envases: armarEnvases(envEn(iAct), envEn(iPrev)),
       entregas: entEn(iAct),
+      consumoInterno: consumoInternoEn(iAct),
       serie: recorte(r.desde, r.hasta),
     }
   })
@@ -359,6 +371,7 @@ export async function getHoyData(
           vendedores: armarVendedores(vendEn(iAct), anterior ? vendEn(iComparar) : null, porEntregarVendEn(iAct)),
           envases: armarEnvases(envEn(iAct), anterior ? envEn(iComparar) : null),
           entregas: entEn(iAct),
+          consumoInterno: consumoInternoEn(iAct),
           serie: recorte(p.fecha_inicio, p.fecha_fin),
         },
       }
@@ -417,6 +430,7 @@ export async function getHoyData(
         vendedores: armarVendedores(vendEn(iCustom), vendEn(iCustom + 1), porEntregarVendEn(iCustom)),
         envases: armarEnvases(envEn(iCustom), envEn(iCustom + 1)),
         entregas: entEn(iCustom),
+        consumoInterno: consumoInternoEn(iCustom),
         serie: recorte(customDef.desde, customDef.hasta),
       }
     : null

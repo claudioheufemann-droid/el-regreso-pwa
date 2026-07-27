@@ -1016,6 +1016,34 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           </div>
         )}
 
+        {/* Consumo interno y promocional — PDV, Ferias y BaseCamp. No son
+            clientes reales asi que no cuentan como "litros vendidos" (eso lo
+            filtra _excluir_cliente en las funciones SQL del dashboard), pero
+            son volumen real que vale la pena ver aparte. */}
+        {d.consumoInterno.length > 0 && (
+          <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>CONSUMO INTERNO Y PROMOCIONAL</p>
+            </div>
+            <p style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>
+              PDV, ferias y BaseCamp — no cuentan como litros vendidos
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+              {d.consumoInterno.map(c => (
+                <div key={c.categoria} style={{ background: C.purpleSoft, borderRadius: 12, padding: '12px 13px' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{c.categoria}</span>
+                  <p style={{ fontSize: 20, fontWeight: 800, color: C.purple, letterSpacing: '-0.5px', lineHeight: 1.3, marginTop: 4 }}>
+                    {fL(c.litros)}
+                  </p>
+                  <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    {fNum(c.pedidos)} {c.pedidos === 1 ? 'pedido' : 'pedidos'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Alertas e insights */}
         {data.alertas.length > 0 && (
           <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 16 }}>

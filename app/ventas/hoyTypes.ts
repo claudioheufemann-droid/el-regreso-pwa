@@ -68,6 +68,18 @@ export interface EntregasRango {
   pedidosPorEntregar: number
 }
 
+/**
+ * Litros de PDV (degustaciones en punto de venta), Ferias y BaseCamp.
+ * No cuentan como "litros vendidos" (no son clientes reales), pero son
+ * volumen real que vale la pena visualizar aparte.
+ */
+export interface ConsumoInternoRango {
+  categoria: string   // 'PDV' | 'Ferias' | 'BaseCamp'
+  litros: number
+  revenue: number
+  pedidos: number
+}
+
 /** Unidades por tipo de envase (latas / barriles), derivadas de los litros. */
 export interface EnvaseRango {
   tipo: string        // 'Lata 354 ml' | 'Lata 473 ml' | 'Barril 30L' | 'Otros'
@@ -87,6 +99,7 @@ export interface DatosRango {
   vendedores: VendedorRango[]
   envases: EnvaseRango[]
   entregas: EntregasRango
+  consumoInterno: ConsumoInternoRango[]
   serie: PuntoSerie[]
 }
 

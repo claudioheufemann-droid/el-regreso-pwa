@@ -122,6 +122,27 @@ export function esClienteExcluido(nombre: string | null | undefined): boolean {
   return CLIENTES_EXCLUIR.some(ex => n.includes(ex))
 }
 
+/**
+ * Subconjunto de CLIENTES_EXCLUIR que además de excluirse de los reportes de
+ * venta real, ni siquiera se GUARDA en `ventas` al cargar un archivo del ERP.
+ *
+ * PDV, Feria y BaseCamp se sacaron de esta lista a pedido del usuario: siguen
+ * sin contar como "litros vendidos" (siguen en CLIENTES_EXCLUIR, que es lo
+ * que usan las funciones SQL del dashboard), pero ahora sí se guardan para
+ * poder mostrarlos aparte en su propia tarjeta. El resto (marketing, muestras,
+ * mermas, calidad, copas/medallas, Douglas Koenig, beneficios) sigue sin
+ * guardarse: es ruido operativo sin volumen que valga la pena visualizar.
+ */
+const CLIENTES_NO_GUARDAR = CLIENTES_EXCLUIR.filter(ex =>
+  !['cliente pdv', 'cliente feria', 'basecamp el regreso', 'cliente consumos base camp', 'cliente metas base camp'].includes(ex)
+)
+
+export function esClienteNoGuardar(nombre: string | null | undefined): boolean {
+  if (!nombre) return false
+  const n = nombre.toLowerCase().trim()
+  return CLIENTES_NO_GUARDAR.some(ex => n.includes(ex))
+}
+
 /** Alias para compatibilidad con código existente */
 export const esInterno = esClienteExcluido
 
