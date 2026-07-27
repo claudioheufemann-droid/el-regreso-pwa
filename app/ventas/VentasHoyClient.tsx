@@ -618,6 +618,15 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                 {actual.litros.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                 <span style={{ fontSize: 20, marginLeft: 4, color: '#CBD5E1' }}>L</span>
               </p>
+              {d.entregas.litrosPorEntregar > 0 && (
+                <p style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>
+                  entregado{' '}
+                  <span style={{ color: '#F59E0B', fontWeight: 600 }}>
+                    + {fL(d.entregas.litrosPorEntregar)} por entregar
+                  </span>
+                  {' '}= {fL(actual.litros + d.entregas.litrosPorEntregar)} total
+                </p>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                 {(() => {
                   const p = variacion(actual.litros, previo.litros)
