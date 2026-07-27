@@ -52,7 +52,7 @@ function fFechaCorta(iso: string) {
   return `${d} ${meses[m - 1]} ${y}`
 }
 function fFechaHora(iso: string) {
-  return new Date(iso).toLocaleString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })
 }
 function fTiempoRelativo(iso: string): string {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
@@ -499,7 +499,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
     [serie],
   )
 
-  const hoyTxt = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
+  const hoyTxt = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Santiago' })
   // La meta se define por período de venta (24→23), así que sólo aplica ahí
   const avanceMeta = metaLitros > 0 ? Math.min(100, (actual.litros / metaLitros) * 100) : null
 
@@ -1085,7 +1085,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
 
         {data.ultimaSync && (
           <p style={{ fontSize: 11, color: C.faint, textAlign: 'center' }}>
-            Datos actualizados: {new Date(data.ultimaSync).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            Datos actualizados: {new Date(data.ultimaSync).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })}
           </p>
         )}
       </div>
