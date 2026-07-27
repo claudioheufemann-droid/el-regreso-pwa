@@ -30,7 +30,17 @@ export default async function VentasLayout({ children }: { children: React.React
       <div className="hidden lg:flex">
         <Sidebar />
       </div>
-      <main className="flex-1 min-w-0 flex flex-col min-h-screen overflow-y-auto overflow-x-hidden pb-24 lg:pb-0 mobile-safe-top">
+      {/* Sin overflow-y-auto/min-h-screen acá a propósito: un <main> con su
+          propio contenedor de scroll ANIDADO dentro de una página larga y con
+          muchos botones (el dashboard de Ventas) hace que el navegador tenga
+          que resolver, en cada toque, si el arrastre es "scrollear el div
+          interno" o "activar el botón de abajo" — esa ambigüedad extra es lo
+          que reportó el usuario como "con un dedo no anda bien, con dos sí"
+          (el gesto de dos dedos lo reconoce el sistema directo, sin pasar por
+          esa resolución). Dejando que sea la página completa (documento) la
+          que scrollea, como en el resto de los layouts, se elimina el
+          contenedor de scroll de más. */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-x-hidden pb-24 lg:pb-0 mobile-safe-top">
         <div className="hidden lg:block">
           <PageTabs tabs={TABS} />
         </div>
