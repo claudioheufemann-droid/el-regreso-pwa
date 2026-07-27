@@ -132,7 +132,23 @@ export default async function MisionesPage() {
   const semanaNext = getMondayOfWeek(new Date(Date.now() + 7 * 86400000))
   const semana4ago = getMondayOfWeek(new Date(Date.now() - 28 * 86400000))
 
-  const vendedoresScope: string[] = [...VENDEDORES_SCOPE]
+  // ── Scope por VENDEDOR ────────────────────────────────────────────────────
+  // Antes esto era siempre VENDEDORES_SCOPE (todos), así que cada vendedor
+  // veía las misiones de todos sus colegas. Ahora:
+  //   - admin           → ve todo (incluye las carteras sin dueño:
+  //                       'Equipo Ventas', 'Transición 1/2')
+  //   - vendedor        → sólo los nombres con que aparece en el ERP
+  //                       (users.vendedores_erp; el nombre de login no sirve
+  //                       para comparar, casi nunca calza con el del ERP)
+  //   - sin vendedores_erp → no tiene cartera propia; no se le muestran
+  //                       misiones de otros (lista vacía en vez de "todas").
+  const esAdmin = !!appUser?.isAdmin
+  const vendedoresScope: string[] = esAdmin
+    ? [...VENDEDORES_SCOPE]
+    : (appUser?.vendedoresErp ?? [])
+  // `.in()` con arreglo vacío genera SQL inválido en PostgREST; el centinela
+  // fuerza "ningún resultado", que es lo correcto para un usuario sin cartera.
+  const vendedoresIn = vendedoresScope.length ? vendedoresScope : ['__none__']
   const p_vendedor = null
 
   // ── Scope geográfico del vendedor ────────────────────────────────────────
@@ -170,12 +186,12 @@ export default async function MisionesPage() {
     supabase.from('misiones')
       .select('*')
       .eq('semana', semana)
-      .in('vendedor', vendedoresScope)
+      .in('vendedor', vendedoresIn)
       .order('score', { ascending: false }),
 
     supabase.from('misiones')
       .select('*')
-      .in('vendedor', vendedoresScope)
+      .in('vendedor', vendedoresIn)
       .gte('semana', semana4ago)
       .lt('semana', semana)
       .order('semana', { ascending: false }),
@@ -184,13 +200,13 @@ export default async function MisionesPage() {
 
     supabase.from('clientes')
       .select('id, nombre_fantasia, ruta_despacho, localidad, localidad_entrega, telefono')
-      .in('vendedor', vendedoresScope.length ? vendedoresScope : ['__none__']),
+      .in('vendedor', vendedoresIn),
 
     getUltimaVentasCached(vendedoresScope),
 
     supabase.from('client_scores')
       .select('nombre_fantasia, tipo_cliente')
-      .in('vendedor_actual', vendedoresScope.length ? vendedoresScope : ['__none__']),
+      .in('vendedor_actual', vendedoresIn),
 
     supabase.from('clientes_estado')
       .select('nombre_fantasia')
@@ -208,7 +224,7 @@ export default async function MisionesPage() {
     // Último contacto registrado por cliente (WhatsApp / llamada)
     supabase.from('contactos')
       .select('cliente_nombre_fantasia, fecha_hora, tipo')
-      .in('vendedor', vendedoresScope.length ? vendedoresScope : ['__none__'])
+      .in('vendedor', vendedoresIn)
       .order('fecha_hora', { ascending: false })
       .limit(2000),
   ])

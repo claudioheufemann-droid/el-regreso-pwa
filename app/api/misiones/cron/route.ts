@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { calcularVolumen, calcularPrioridad } from '@/lib/misiones'
+import { getComprasDesde, cerrarMisionesConCompra } from '@/lib/misionesCompras'
 
 function getMondayOfWeek(date: Date): string {
   const d = new Date(date)
@@ -86,6 +87,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, insertadas: 0, semana, mensaje: 'Sin clientes en ventana 14 días' })
   }
 
+  // ── Excluir clientes que YA compraron esta semana ────────────────────────
+  // Mismo criterio que app/api/misiones/route.ts (acción 'generar') — ver
+  // lib/misionesCompras.ts para el porqué.
+  const compras = await getComprasDesde(supabase, semana)
+  const alertsSinCompra = alertsFiltrados.filter(a => !((compras.get(a.nombre_fantasia) ?? 0) > 0))
+
+  if (!alertsSinCompra.length) {
+    return NextResponse.json({ ok: true, insertadas: 0, semana, mensaje: 'Todos los clientes ya compraron esta semana' })
+  }
+
   // Verificar estados ya existentes para respetar acciones del vendedor
   const { data: existentes } = await supabase
     .from('misiones')
@@ -97,11 +108,11 @@ export async function POST(req: Request) {
   )
 
   // Priorización por volumen
-  const nombresVol = [...new Set(alertsFiltrados.map(a => a.nombre_fantasia))]
+  const nombresVol = [...new Set(alertsSinCompra.map(a => a.nombre_fantasia))]
   const volMap = await calcularVolumen(supabase, nombresVol)
   const maxVol = Math.max(1, ...[...volMap.values()].map(v => v.volumen_promedio))
 
-  const rows = alertsFiltrados.map(a => {
+  const rows = alertsSinCompra.map(a => {
     const tipo = clasificarTipo(a.siguiente_compra_estimada, hoy)
     const key  = `${a.vendedor_actual}|${a.nombre_fantasia}|${tipo}`
     const estadoExistente = existMap.get(key)
@@ -148,8 +159,11 @@ export async function POST(req: Request) {
     }
   }
 
+  // Cerrar (no borrar) las misiones activas de clientes que ya compraron.
+  await cerrarMisionesConCompra(supabase, semana, compras)
+
   // Limpiar misiones de la semana cuyos clientes ya no califican (inactivos >90d).
-  const vivos = new Set(alertsFiltrados.map(a => `${a.vendedor_actual}|${a.nombre_fantasia}`))
+  const vivos = new Set(alertsSinCompra.map(a => `${a.vendedor_actual}|${a.nombre_fantasia}`))
   const { data: pendientes } = await supabase
     .from('misiones')
     .select('id, vendedor, nombre_fantasia')
@@ -166,7 +180,8 @@ export async function POST(req: Request) {
     ok: true,
     semana,
     total_alertas: alerts.length,
-    filtradas: alertsFiltrados.length,
+    filtradas: alertsSinCompra.length,
+    ya_compraron: alertsFiltrados.length - alertsSinCompra.length,
     insertadas: inserted?.length ?? 0,
     por_tipo: {
       esta_semana:    rows.filter(r => r.tipo === 'esta_semana').length,

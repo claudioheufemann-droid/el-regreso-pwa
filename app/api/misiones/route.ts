@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { calcularVolumen, calcularPrioridad } from '@/lib/misiones'
+import { getComprasDesde, cerrarMisionesConCompra } from '@/lib/misionesCompras'
 import { sendPushToAllAdmins } from '@/lib/push'
 
 /** Devuelve el lunes de la semana actual */
@@ -84,6 +85,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, insertadas: 0, semana })
     }
 
+    // ── Excluir clientes que YA compraron esta semana ──────────────────────
+    // Bug reportado: un cliente que ya hizo pedido seguía apareciendo como
+    // misión. get_pending_call_alerts recalcula dias_sin_compra a diario, no
+    // al instante — un pedido de hace 10 minutos puede no reflejarse ahí
+    // todavía. Se chequea ventas directo, con la misma ventana (desde el
+    // lunes) que usa la reconciliación, así generar y reconciliar coinciden.
+    const compras = await getComprasDesde(supabase, semana)
+    const alertsSinCompra = alertsFiltrados.filter(a => !((compras.get(a.nombre_fantasia) ?? 0) > 0))
+
+    if (!alertsSinCompra.length) {
+      return NextResponse.json({ ok: true, insertadas: 0, semana })
+    }
+
     // Verificar qué misiones ya existen para esta semana (respetar estados de vendedor)
     const { data: existentes } = await supabase
       .from('misiones')
@@ -95,11 +109,11 @@ export async function POST(req: Request) {
     )
 
     // ── Priorización por volumen: agregamos litros por cliente ──
-    const nombresVol = [...new Set(alertsFiltrados.map(a => a.nombre_fantasia))]
+    const nombresVol = [...new Set(alertsSinCompra.map(a => a.nombre_fantasia))]
     const volMap = await calcularVolumen(supabase, nombresVol)
     const maxVol = Math.max(1, ...[...volMap.values()].map(v => v.volumen_promedio))
 
-    const rows = alertsFiltrados.map(a => {
+    const rows = alertsSinCompra.map(a => {
       const tipo = clasificarTipo(a.siguiente_compra_estimada, hoy)
       const key  = `${a.vendedor_actual}|${a.nombre_fantasia}|${tipo}`
       const estadoExistente = existMap.get(key)
@@ -144,9 +158,14 @@ export async function POST(req: Request) {
       }
     }
 
+    // Cerrar como 'auto_completado' (no borrar) las misiones activas de
+    // clientes que ya compraron — si se dejan como 'pendiente' la limpieza de
+    // abajo las borra sin dejar rastro de que el cliente sí compró.
+    await cerrarMisionesConCompra(supabase, semana, compras)
+
     // Limpiar misiones de la semana cuyos clientes ya no califican (inactivos >90d).
     // Solo 'pendiente'; se conservan las accionadas por el vendedor.
-    const vivos = new Set(alertsFiltrados.map(a => `${a.vendedor_actual}|${a.nombre_fantasia}`))
+    const vivos = new Set(alertsSinCompra.map(a => `${a.vendedor_actual}|${a.nombre_fantasia}`))
     const { data: pendientes } = await supabase
       .from('misiones')
       .select('id, vendedor, nombre_fantasia')
@@ -196,7 +215,11 @@ export async function POST(req: Request) {
       .single()
 
     if (!mision) return NextResponse.json({ error: 'Misión no encontrada' }, { status: 404 })
-    if (!user.isAdmin && mision.vendedor !== user.nombre)
+    // Antes comparaba mision.vendedor (nombre del ERP) contra user.nombre
+    // (nombre de login) — nunca coincidían, así que NINGÚN vendedor podía
+    // actualizar sus propias misiones (siempre 403). Se usa el vínculo
+    // explícito users.vendedores_erp.
+    if (!user.isAdmin && !user.vendedoresErp.includes(mision.vendedor))
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
     const update: Record<string, unknown> = { estado }
@@ -282,7 +305,15 @@ export async function POST(req: Request) {
       .select('id, vendedor, nombre_fantasia, estado')
       .eq('semana', semana)
       .in('estado', ['pendiente', 'sin_respuesta', 'contactado_sin_pedido', 'pospuesto'])
-    if (!user.isAdmin) q = q.eq('vendedor', user.nombre ?? '__none__')
+    // Antes: .eq('vendedor', user.nombre) — comparaba el nombre de LOGIN contra
+    // el nombre del ERP guardado en misiones.vendedor, y casi nunca calzaban
+    // ('Claudio H.' vs 'Claudio Heufemann', 'Yadro Favijancic' vs
+    // '...Fabijancic'). La consulta no encontraba nada y por eso las misiones
+    // de un cliente que YA compró seguían apareciendo semana tras semana.
+    // Ahora se usa el vínculo explícito users.vendedores_erp.
+    if (!user.isAdmin) {
+      q = q.in('vendedor', user.vendedoresErp.length ? user.vendedoresErp : ['__none__'])
+    }
 
     const { data: activas } = await q
     if (!activas?.length) return NextResponse.json({ ok: true, changed: 0 })
@@ -333,7 +364,11 @@ export async function POST(req: Request) {
       .single()
 
     if (!mision) return NextResponse.json({ error: 'Misión no encontrada' }, { status: 404 })
-    if (!user.isAdmin && mision.vendedor !== user.nombre)
+    // Antes comparaba mision.vendedor (nombre del ERP) contra user.nombre
+    // (nombre de login) — nunca coincidían, así que NINGÚN vendedor podía
+    // actualizar sus propias misiones (siempre 403). Se usa el vínculo
+    // explícito users.vendedores_erp.
+    if (!user.isAdmin && !user.vendedoresErp.includes(mision.vendedor))
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
     const nuevoEstado = (action === 'completar' || completar) ? 'contactado_pedido' : 'pendiente'
