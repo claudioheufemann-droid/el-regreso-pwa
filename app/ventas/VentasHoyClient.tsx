@@ -136,8 +136,9 @@ interface FilaCliente {
   litros: number; revenue: number; pedidos: number; ultimaCompra: string | null
 }
 
-function SheetDetalle({ tipo, desde, hasta, onClose }: {
-  tipo: 'productos' | 'clientes'; desde: string; hasta: string; onClose: () => void
+function SheetDetalle({ tipo, envaseBucket, desde, hasta, onClose }: {
+  tipo: 'productos' | 'clientes' | 'envase'; envaseBucket?: string
+  desde: string; hasta: string; onClose: () => void
 }) {
   const [filas, setFilas] = useState<(FilaProducto | FilaCliente)[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -145,15 +146,16 @@ function SheetDetalle({ tipo, desde, hasta, onClose }: {
 
   useEffect(() => {
     let vivo = true
-    fetch(`/api/ventas/detalle?tipo=${tipo}&desde=${desde}&hasta=${hasta}`)
+    const bucketQs = tipo === 'envase' ? `&bucket=${encodeURIComponent(envaseBucket ?? '')}` : ''
+    fetch(`/api/ventas/detalle?tipo=${tipo}${bucketQs}&desde=${desde}&hasta=${hasta}`)
       .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
       .then(d => { if (vivo) setFilas(Array.isArray(d) ? d : []) })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
-  }, [tipo, desde, hasta])
+  }, [tipo, envaseBucket, desde, hasta])
 
-  const esProd = tipo === 'productos'
-  const titulo = esProd ? 'Productos vendidos' : 'Clientes que compraron'
+  const esProd = tipo === 'productos' || tipo === 'envase'
+  const titulo = tipo === 'envase' ? `Productos · ${envaseBucket}` : esProd ? 'Productos vendidos' : 'Clientes que compraron'
 
   const visibles = useMemo(() => {
     if (!filas) return []
@@ -342,6 +344,12 @@ function FilaVendedor({ v, pos, total, onClick }: { v: VendedorRango; pos: numbe
         <div style={{ height: 6, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
           <div style={{ width: `${share}%`, height: '100%', background: color, borderRadius: 3, transition: 'width .4s' }} />
         </div>
+        {v.litrosPorEntregar > 0 && (
+          <p style={{ fontSize: 11, color: C.amber, marginTop: 6 }}>
+            + {fL(v.litrosPorEntregar)} por entregar
+            <span style={{ color: C.muted }}> · {fL(v.litros + v.litrosPorEntregar)} total</span>
+          </p>
+        )}
       </div>
     </button>
   )
@@ -354,7 +362,8 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
   const [rango, setRango] = useState<RangoKey>(data.custom ? 'custom' : 'periodo')
   const [periodoIdx, setPeriodoIdx] = useState(0)   // 0 = período activo
   const [showSettings, setShowSettings] = useState(false)
-  const [detalle, setDetalle] = useState<'productos' | 'clientes' | null>(null)
+  const [detalle, setDetalle] = useState<'productos' | 'clientes' | 'envase' | null>(null)
+  const [detalleEnvaseBucket, setDetalleEnvaseBucket] = useState<string | undefined>(undefined)
   const [showPeriodos, setShowPeriodos] = useState(false)
   const [customDesde, setCustomDesde] = useState(data.custom?.desde ?? '')
   const [customHasta, setCustomHasta] = useState(data.custom?.hasta ?? '')
@@ -830,10 +839,15 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                 const tint = esBarril ? C.amber : e.tipo.includes('473') ? C.hero : C.green
                 const soft = esBarril ? C.amberSoft : e.tipo.includes('473') ? '#E2E8F0' : C.greenSoft
                 return (
-                  <div key={e.tipo} style={{ background: soft, borderRadius: 12, padding: '12px 13px' }}>
+                  <button
+                    key={e.tipo}
+                    onClick={() => { setDetalleEnvaseBucket(e.tipo); setDetalle('envase') }}
+                    style={{ background: soft, borderRadius: 12, padding: '12px 13px', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%' }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
                       <span style={{ fontSize: 17 }}>{esBarril ? '🛢️' : '🥫'}</span>
                       <span style={{ fontSize: 12, fontWeight: 600, color: C.text, minWidth: 0, wordBreak: 'break-word' }}>{e.tipo}</span>
+                      <ChevronRight size={14} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0 }} />
                     </div>
                     <p style={{ fontSize: 22, fontWeight: 800, color: tint, letterSpacing: '-0.6px', lineHeight: 1.1 }}>
                       {fNum(Math.round(e.unidades))}
@@ -844,7 +858,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                     <div style={{ marginTop: 5 }}>
                       <Delta pct={variacion(e.unidades, e.unidadesPrev)} size={11} />
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>
@@ -898,7 +912,13 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
       </div>
 
       {detalle && (
-        <SheetDetalle tipo={detalle} desde={d.desde} hasta={d.hasta} onClose={() => setDetalle(null)} />
+        <SheetDetalle
+          tipo={detalle}
+          envaseBucket={detalleEnvaseBucket}
+          desde={d.desde}
+          hasta={d.hasta}
+          onClose={() => { setDetalle(null); setDetalleEnvaseBucket(undefined) }}
+        />
       )}
 
       {showSettings && (

@@ -79,6 +79,7 @@ function mapKpis(row: any): KpisRango {
 function armarVendedores(
   rows: Record<string, unknown>[] | null,
   prevRows: Record<string, unknown>[] | null,
+  porEntregarRows: Record<string, unknown>[] | null,
 ): VendedorRango[] {
   const prev = new Map<string, number>()
   for (const r of prevRows ?? []) {
@@ -88,12 +89,26 @@ function armarVendedores(
     if (!n) continue
     prev.set(n, (prev.get(n) ?? 0) + Number(r.litros ?? 0))
   }
+  // Por fecha de PEDIDO (no de entrega): lo que este vendedor cerró en el
+  // período y todavía no se despachó. Población distinta a `litros`, que ya
+  // sólo cuenta lo entregado — se muestra aparte, no se suma al ranking.
+  const porEntregar = new Map<string, number>()
+  for (const r of porEntregarRows ?? []) {
+    const bruto = String(r.vendedor ?? '')
+    if (VENDEDORES_FUERA_RANKING.has(bruto)) continue
+    const n = vendedorCanonico(bruto)
+    if (!n) continue
+    porEntregar.set(n, (porEntregar.get(n) ?? 0) + Number(r.litros_por_entregar ?? 0))
+  }
   const acc = new Map<string, VendedorRango>()
   for (const r of rows ?? []) {
     const bruto = String(r.vendedor ?? '')
     if (!bruto || VENDEDORES_FUERA_RANKING.has(bruto)) continue
     const n = vendedorCanonico(bruto)
-    const cur = acc.get(n) ?? { vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev: prev.get(n) ?? 0 }
+    const cur = acc.get(n) ?? {
+      vendedor: n, litros: 0, revenue: 0, clientes: 0,
+      litrosPrev: prev.get(n) ?? 0, litrosPorEntregar: porEntregar.get(n) ?? 0,
+    }
     cur.litros += Number(r.litros ?? 0)
     cur.revenue += Number(r.revenue ?? 0)
     // Nota: al unificar alias, `clientes` puede contar dos veces a un cliente
@@ -104,7 +119,13 @@ function armarVendedores(
   // Quien vendió antes pero no ahora también aparece, para que se note la caída
   for (const [n, litrosPrev] of prev) {
     if (!acc.has(n) && litrosPrev > 0)
-      acc.set(n, { vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev })
+      acc.set(n, { vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev, litrosPorEntregar: porEntregar.get(n) ?? 0 })
+  }
+  // Quien sólo tiene pedidos pendientes (sin nada entregado aún) también debe
+  // aparecer, si no su "por entregar" queda invisible en el ranking.
+  for (const [n, litrosPend] of porEntregar) {
+    if (!acc.has(n) && litrosPend > 0)
+      acc.set(n, { vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev: prev.get(n) ?? 0, litrosPorEntregar: litrosPend })
   }
   return [...acc.values()].sort((a, b) => b.litros - a.litros)
 }
@@ -240,11 +261,12 @@ export async function getHoyData(
     ...(customDef ? [customDef.prevDesde] : []),
   ].sort()[0]
 
-  const [kpisAll, vendAll, envAll, entAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
+  const [kpisAll, vendAll, envAll, entAll, porEntregarVendAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
     Promise.all(consultas.map(c => supabase.rpc('ventas_dashboard_kpis', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_agg_periodo', { p_ini: c.desde, p_fin: c.hasta, p_vendedor: null, p_provincias: p_prov }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_envases_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
+    Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_por_vendedor', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     supabase.rpc('ventas_serie_diaria', { p_ini: serieDesde, p_fin: iso(hoy), p_provincias: p_prov }),
     supabase.from('metas').select('periodo_id, meta_litros').eq('tipo', 'mensual'),
     supabase.rpc('get_client_scores', { p_vendedor: null }),
@@ -264,6 +286,7 @@ export async function getHoyData(
   const vendEn = (i: number) => (vendAll[i].data as Record<string, unknown>[] | null)
   const envEn  = (i: number) => (envAll[i].data as Record<string, unknown>[] | null)
   const entEn  = (i: number) => mapEntregas((entAll[i].data as unknown[])?.[0])
+  const porEntregarVendEn = (i: number) => (porEntregarVendAll[i].data as Record<string, unknown>[] | null)
 
   // ── Rangos relativos ──────────────────────────────────────────────────────
   const rangos = {} as Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>
@@ -277,7 +300,7 @@ export async function getHoyData(
       etiquetaComparacion: r.etiqueta,
       actual: kpiEn(iAct),
       previo: kpiEn(iPrev),
-      vendedores: armarVendedores(vendEn(iAct), vendEn(iPrev)),
+      vendedores: armarVendedores(vendEn(iAct), vendEn(iPrev), porEntregarVendEn(iAct)),
       envases: armarEnvases(envEn(iAct), envEn(iPrev)),
       entregas: entEn(iAct),
       serie: recorte(r.desde, r.hasta),
@@ -316,7 +339,7 @@ export async function getHoyData(
             : esActivo ? `vs mismos días de ${anterior.nombre}` : `vs ${anterior.nombre}`,
           actual: kpiEn(iAct),
           previo: anterior ? kpiEn(iComparar) : { ...KPIS_CERO },
-          vendedores: armarVendedores(vendEn(iAct), anterior ? vendEn(iComparar) : null),
+          vendedores: armarVendedores(vendEn(iAct), anterior ? vendEn(iComparar) : null, porEntregarVendEn(iAct)),
           envases: armarEnvases(envEn(iAct), anterior ? envEn(iComparar) : null),
           entregas: entEn(iAct),
           serie: recorte(p.fecha_inicio, p.fecha_fin),
@@ -374,7 +397,7 @@ export async function getHoyData(
         etiquetaComparacion: customDef.etiqueta,
         actual: kpiEn(iCustom),
         previo: kpiEn(iCustom + 1),
-        vendedores: armarVendedores(vendEn(iCustom), vendEn(iCustom + 1)),
+        vendedores: armarVendedores(vendEn(iCustom), vendEn(iCustom + 1), porEntregarVendEn(iCustom)),
         envases: armarEnvases(envEn(iCustom), envEn(iCustom + 1)),
         entregas: entEn(iCustom),
         serie: recorte(customDef.desde, customDef.hasta),
