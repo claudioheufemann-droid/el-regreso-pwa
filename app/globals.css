@@ -456,7 +456,15 @@ body {
   color: var(--cream);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-weight: 500;
-  overscroll-behavior: none;
+  /* 'none' (en vez de 'contain') es la causa real del scroll pegado en iOS:
+     <main> usa min-height, no height, así que nunca queda con una altura
+     acotada -> overflow-y:auto ahi no llega a recortar/scrollear de verdad,
+     y quien scrollea es el documento (html/body). 'none' desactiva el rebote
+     elastico nativo de WebKit por completo, lo que en iOS Safari congela el
+     gesto de scroll a mitad de camino de forma intermitente. 'contain' sigue
+     evitando que el gesto se encadene al pull-to-refresh / swipe-back del
+     navegador, pero sin matar el rebote nativo -> el scroll deja de pegarse. */
+  overscroll-behavior-y: contain;
   -webkit-font-smoothing: antialiased;
 }
 
