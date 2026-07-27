@@ -40,7 +40,14 @@ export default async function VentasLayout({ children }: { children: React.React
           esa resolución). Dejando que sea la página completa (documento) la
           que scrollea, como en el resto de los layouts, se elimina el
           contenedor de scroll de más. */}
-      <main className="flex-1 min-w-0 flex flex-col overflow-x-hidden pb-24 lg:pb-0 mobile-safe-top">
+      {/* overflow-x-clip, NO overflow-x-hidden: por spec de CSS, si un eje tiene
+          overflow distinto de 'visible' el navegador fuerza el OTRO eje (acá,
+          overflow-y, dejado sin especificar a propósito arriba) a 'auto'
+          automáticamente — así main volvía a ser un contenedor de scroll
+          propio (computed overflow-y:auto) aunque el className ya no diga
+          overflow-y-auto, reintroduciendo el mismo scroll anidado/ambiguo que
+          se había sacado. 'clip' no dispara ese acoplamiento. */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-x-clip pb-24 lg:pb-0 mobile-safe-top">
         <div className="hidden lg:block">
           <PageTabs tabs={TABS} />
         </div>
