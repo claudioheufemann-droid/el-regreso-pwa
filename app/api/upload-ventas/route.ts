@@ -239,7 +239,6 @@ export async function POST(req: NextRequest) {
 
   const {
     registros,
-    combinaciones,
     duplicadosEnArchivo,
     erroresMapeo,
     advertenciasLitros,
@@ -291,12 +290,51 @@ export async function POST(req: NextRequest) {
   }
 
   // MODO CONFIRMADO — borrar e insertar
-  for (const { vendedor, fecha } of combinaciones) {
+  //
+  // El pedido (no el vendedor+fecha) es la unidad atómica correcta para el
+  // reemplazo. El informe del ERP filtra por FECHA DE ENTREGA, así que un
+  // mismo vendedor+día de pedido puede repartirse en varios archivos
+  // entregados en fechas distintas. Borrar por (vendedor, fecha_pedido) en
+  // cada carga terminaba eliminando pedidos que un archivo anterior había
+  // cargado y que no venían en este — se detectó en la auditoría del 27-jul:
+  // de 1.390 pedidos reales del período sólo quedaban 163 en la base tras
+  // varias cargas sucesivas. El pedido es único en el ERP y sus líneas
+  // siempre viajan juntas, así que borrar/reinsertar por pedido es
+  // idempotente sin importar qué ventana de fechas se haya pedido.
+  const pedidosEnArchivo = [
+    ...new Set(registros.map(r => r.pedido).filter((p): p is string => !!p)),
+  ]
+  for (let i = 0; i < pedidosEnArchivo.length; i += 500) {
+    const lote = pedidosEnArchivo.slice(i, i + 500)
+    const { error: deleteError } = await supabase.from('ventas').delete().in('pedido', lote)
+    if (deleteError) {
+      return NextResponse.json(
+        { error: `Error al limpiar datos: ${deleteError.message}` },
+        { status: 500 }
+      )
+    }
+  }
+
+  // Filas sin número de pedido (cargas manuales antiguas sin ese dato):
+  // mantener el criterio anterior de reemplazo por vendedor+fecha, acotado a
+  // esas mismas filas para no interferir con el borrado por pedido de arriba.
+  const combinacionesSinPedido = [
+    ...new Map(
+      registros
+        .filter(r => !r.pedido)
+        .map(r => [
+          `${r.vendedor_actual}__${r.fecha_pedido}`,
+          { vendedor: r.vendedor_actual as string, fecha: r.fecha_pedido as string },
+        ])
+    ).values(),
+  ]
+  for (const { vendedor, fecha } of combinacionesSinPedido) {
     const { error: deleteError } = await supabase
       .from('ventas')
       .delete()
       .eq('vendedor_actual', vendedor)
       .eq('fecha_pedido', fecha)
+      .is('pedido', null)
 
     if (deleteError) {
       return NextResponse.json(
