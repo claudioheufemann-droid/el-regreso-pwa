@@ -212,6 +212,26 @@ export async function getHoyData(
     ...(customDef ? [{ desde: customDef.desde, hasta: customDef.hasta }, { desde: customDef.prevDesde, hasta: customDef.prevHasta }] : []),
   ]
 
+  // El período ACTIVO (en curso) no se compara contra el período anterior
+  // completo — eso hace ver una caída falsa cuando en realidad sólo llevamos
+  // unos días. Se compara contra el mismo tramo de días ya transcurridos del
+  // período anterior ("mismo día acumulado"). Los períodos ya cerrados siguen
+  // comparándose completo contra completo (ambos terminaron, no hay sesgo).
+  const idxActivo = periodosLista.findIndex(p => p.activo)
+  const periodoActivo = idxActivo >= 0 ? periodosLista[idxActivo] : null
+  const periodoAnteriorAlActivo = periodoActivo ? periodosLista[idxActivo + 1] : null
+  const truncadoDef = (() => {
+    if (!periodoActivo || !periodoAnteriorAlActivo) return null
+    const inicioAct = new Date(periodoActivo.fecha_inicio + 'T12:00:00')
+    const diasTranscurridos = Math.max(1, Math.round((hoy.getTime() - inicioAct.getTime()) / 86400000) + 1)
+    const inicioAnt = new Date(periodoAnteriorAlActivo.fecha_inicio + 'T12:00:00')
+    const finAntCompleto = new Date(periodoAnteriorAlActivo.fecha_fin + 'T12:00:00')
+    const finTruncado = addDias(inicioAnt, diasTranscurridos - 1)
+    return { desde: iso(inicioAnt), hasta: iso(finTruncado > finAntCompleto ? finAntCompleto : finTruncado) }
+  })()
+  const iTruncado = truncadoDef ? consultas.length : -1
+  if (truncadoDef) consultas.push({ desde: truncadoDef.desde, hasta: truncadoDef.hasta })
+
   // La serie tiene que cubrir el más antiguo de todos los rangos pedidos (el
   // custom puede ser de años anteriores), si no los sparklines saldrían vacíos.
   const serieDesde = [
@@ -277,6 +297,10 @@ export async function getHoyData(
       const iAct = offsetPeriodos + i
       const iPrev = offsetPeriodos + i + 1   // el período 24→23 anterior
       const anterior = periodosLista[i + 1]
+      // El período activo compara "mismo día acumulado" (iTruncado); los
+      // períodos ya cerrados comparan completo contra completo (iPrev).
+      const esActivo = p.activo && iTruncado >= 0
+      const iComparar = esActivo ? iTruncado : iPrev
       return {
         id: p.id,
         nombre: p.nombre,
@@ -287,11 +311,13 @@ export async function getHoyData(
         datos: {
           desde: p.fecha_inicio,
           hasta: p.fecha_fin,
-          etiquetaComparacion: anterior ? `vs ${anterior.nombre}` : 'sin período anterior',
+          etiquetaComparacion: !anterior
+            ? 'sin período anterior'
+            : esActivo ? `vs mismos días de ${anterior.nombre}` : `vs ${anterior.nombre}`,
           actual: kpiEn(iAct),
-          previo: anterior ? kpiEn(iPrev) : { ...KPIS_CERO },
-          vendedores: armarVendedores(vendEn(iAct), anterior ? vendEn(iPrev) : null),
-          envases: armarEnvases(envEn(iAct), anterior ? envEn(iPrev) : null),
+          previo: anterior ? kpiEn(iComparar) : { ...KPIS_CERO },
+          vendedores: armarVendedores(vendEn(iAct), anterior ? vendEn(iComparar) : null),
+          envases: armarEnvases(envEn(iAct), anterior ? envEn(iComparar) : null),
           entregas: entEn(iAct),
           serie: recorte(p.fecha_inicio, p.fecha_fin),
         },
