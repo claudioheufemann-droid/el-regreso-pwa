@@ -558,7 +558,7 @@ const [file, setFile] = useState<File | null>(null)
         {/* Acceso a metas */}
         {!preview && (
           <Link
-            href="/admin/metas"
+            href="/ventas/admin/metas"
             style={{
               width: '100%', padding: '12px 0', borderRadius: 14, fontWeight: 600, fontSize: 14,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 20,

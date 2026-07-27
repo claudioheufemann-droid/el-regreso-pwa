@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Upload, Users, AlertCircle, Target, BarChart3, UserPlus, TrendingUp, DollarSign } from 'lucide-react'
+import { Upload, Users, AlertCircle, Target, BarChart3, UserPlus, TrendingUp, DollarSign, FileText, Route } from 'lucide-react'
 import AppHeader from '@/components/ui/AppHeader'
 import CargarClient from './cargar/CargarClient'
 import ClientesUploadClient from './clientes-upload/ClientesUploadClient'
@@ -74,6 +74,20 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores }
               color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: 'pointer',
             }}>
               <BarChart3 size={14} /> Métricas
+            </button>
+            <button onClick={() => router.push('/ventas/admin/reportes')} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)',
+              color: '#60A5FA', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <FileText size={14} /> Reportes
+            </button>
+            <button onClick={() => router.push('/ventas/admin/rutas-clientes')} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
+              color: '#D4AF37', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <Route size={14} /> Rutas
             </button>
           </div>
         }
