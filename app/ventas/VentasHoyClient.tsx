@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Menu, Bell, ChevronDown, ChevronRight, Droplet, Users, ShoppingBag,
-  DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar, CheckCircle2, Truck,
+  DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar, CheckCircle2, Truck, RefreshCw,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import { RANGOS, type RangoKey, type HoyData, type PuntoSerie, type VendedorRango, type DatosRango } from './hoyTypes'
@@ -50,6 +50,17 @@ function fFechaCorta(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
   const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
   return `${d} ${meses[m - 1]} ${y}`
+}
+function fFechaHora(iso: string) {
+  return new Date(iso).toLocaleString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+function fTiempoRelativo(iso: string): string {
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (min < 1) return 'justo ahora'
+  if (min < 60) return `hace ${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `hace ${h}h`
+  return `hace ${Math.floor(h / 24)}d`
 }
 /** % de variación; null cuando no hay base con que comparar (evita "+∞%"). */
 function variacion(actual: number, previo: number): number | null {
@@ -421,6 +432,26 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
   const [customDesde, setCustomDesde] = useState(data.custom?.desde ?? '')
   const [customHasta, setCustomHasta] = useState(data.custom?.hasta ?? '')
 
+  const [showActualizaciones, setShowActualizaciones] = useState(false)
+  const [eventosSync, setEventosSync] = useState<{ hora: string; filas: number }[] | null>(null)
+  const [errorSync, setErrorSync] = useState(false)
+  useEffect(() => {
+    if (!showActualizaciones || eventosSync !== null) return
+    fetch('/api/ventas/actualizaciones')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(evs => setEventosSync(Array.isArray(evs) ? evs : []))
+      .catch(() => setErrorSync(true))
+  }, [showActualizaciones, eventosSync])
+
+  const [syncStale, setSyncStale] = useState(false)
+  useEffect(() => {
+    if (!data.ultimaSync) return
+    const tick = () => setSyncStale((Date.now() - new Date(data.ultimaSync!).getTime()) / 60000 > 30)
+    tick()
+    const t = setInterval(tick, 60000)
+    return () => clearInterval(t)
+  }, [data.ultimaSync])
+
   const periodoSel = data.periodos[periodoIdx] ?? null
 
   // "Período" = el período 24→23 elegido; "custom" = rango a mano (viene del
@@ -491,6 +522,57 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               {hoyTxt}
             </p>
           </div>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              onClick={() => setShowActualizaciones(v => !v)}
+              aria-label="Cargas de datos"
+              style={{ position: 'relative', width: 40, height: 40, borderRadius: 12, background: C.card, border: `1px solid ${showActualizaciones ? C.blue : C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            >
+              <RefreshCw size={17} color={C.text} />
+              {data.ultimaSync && (
+                <span style={{ position: 'absolute', top: 9, right: 9, width: 8, height: 8, borderRadius: '50%', background: syncStale ? C.red : C.green, border: `2px solid ${C.card}` }} />
+              )}
+            </button>
+
+            {showActualizaciones && (
+              <>
+                <div onClick={() => setShowActualizaciones(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 280, maxWidth: '80vw', zIndex: 41,
+                  background: C.card, border: `1px solid ${C.line}`, borderRadius: 12,
+                  boxShadow: '0 8px 28px rgba(15,23,42,.14)', overflow: 'hidden',
+                }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em', padding: '10px 12px 6px' }}>
+                    CARGAS DE DATOS · VENTAS
+                  </p>
+                  <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                    {errorSync ? (
+                      <p style={{ textAlign: 'center', color: C.red, fontSize: 12, padding: 20 }}>No se pudo cargar el historial.</p>
+                    ) : eventosSync === null ? (
+                      <p style={{ textAlign: 'center', color: C.muted, fontSize: 12, padding: 20 }}>Cargando…</p>
+                    ) : eventosSync.length === 0 ? (
+                      <p style={{ textAlign: 'center', color: C.muted, fontSize: 12, padding: 20 }}>Sin cargas en los últimos 7 días.</p>
+                    ) : (
+                      eventosSync.map((ev, i) => (
+                        <div key={ev.hora} style={{
+                          display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px',
+                          borderTop: i === 0 ? 'none' : `1px solid ${C.line}`,
+                          background: i === 0 ? C.greenSoft : 'transparent',
+                        }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: i === 0 ? C.green : C.faint, flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: 12, fontWeight: 600, color: C.text, textTransform: 'capitalize' }}>{fFechaHora(ev.hora)}</p>
+                            <p style={{ fontSize: 10, color: C.muted }}>{fTiempoRelativo(ev.hora)} · {ev.filas} filas</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
           <button
             onClick={() => router.push('/ventas/misiones')}
             aria-label="Alertas"
