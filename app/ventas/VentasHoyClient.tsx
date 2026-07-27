@@ -126,7 +126,7 @@ function KpiCard({ icon: Icon, tint, tintSoft, label, valor, pct, serie, onClick
   )
 }
 
-// ── Detalle (drill-down de Pedidos / Clientes) ──────────────────────────────
+// ── Detalle (drill-down de tarjetas del dashboard) ──────────────────────────
 interface FilaProducto {
   producto: string; envase: string; categoria: string
   litros: number; revenue: number; pedidos: number; clientes: number
@@ -135,38 +135,55 @@ interface FilaCliente {
   cliente: string; vendedor: string; localidad: string | null
   litros: number; revenue: number; pedidos: number; ultimaCompra: string | null
 }
+interface FilaPedido {
+  pedido: string; cliente: string; vendedor: string
+  fechaPedido: string | null; fechaEntrega: string | null
+  litros: number; revenue: number
+}
 
-function SheetDetalle({ tipo, envaseBucket, desde, hasta, onClose }: {
-  tipo: 'productos' | 'clientes' | 'envase'; envaseBucket?: string
+function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, desde, hasta, onClose }: {
+  tipo: 'productos' | 'clientes' | 'envase' | 'pedidos'
+  envaseBucket?: string; categoria?: string; estadoPedidos?: 'despachado' | 'pendiente'
   desde: string; hasta: string; onClose: () => void
 }) {
-  const [filas, setFilas] = useState<(FilaProducto | FilaCliente)[] | null>(null)
+  const [filas, setFilas] = useState<(FilaProducto | FilaCliente | FilaPedido)[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
 
   useEffect(() => {
     let vivo = true
-    const bucketQs = tipo === 'envase' ? `&bucket=${encodeURIComponent(envaseBucket ?? '')}` : ''
-    fetch(`/api/ventas/detalle?tipo=${tipo}${bucketQs}&desde=${desde}&hasta=${hasta}`)
+    const qs = [
+      tipo === 'envase' ? `bucket=${encodeURIComponent(envaseBucket ?? '')}` : '',
+      tipo === 'productos' && categoria ? `categoria=${encodeURIComponent(categoria)}` : '',
+      tipo === 'pedidos' ? `estado=${estadoPedidos}` : '',
+    ].filter(Boolean).join('&')
+    fetch(`/api/ventas/detalle?tipo=${tipo}&${qs}&desde=${desde}&hasta=${hasta}`)
       .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
       .then(d => { if (vivo) setFilas(Array.isArray(d) ? d : []) })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
-  }, [tipo, envaseBucket, desde, hasta])
+  }, [tipo, envaseBucket, categoria, estadoPedidos, desde, hasta])
 
   const esProd = tipo === 'productos' || tipo === 'envase'
-  const titulo = tipo === 'envase' ? `Productos · ${envaseBucket}` : esProd ? 'Productos vendidos' : 'Clientes que compraron'
+  const esPedidos = tipo === 'pedidos'
+  const titulo = tipo === 'envase' ? `Productos · ${envaseBucket}`
+    : tipo === 'productos' && categoria ? `Productos · ${categoria}`
+    : esPedidos ? (estadoPedidos === 'pendiente' ? 'Pedidos pendientes de entrega' : 'Pedidos ya despachados')
+    : esProd ? 'Productos vendidos' : 'Clientes que compraron'
 
   const visibles = useMemo(() => {
     if (!filas) return []
     const q = busca.trim().toLowerCase()
     if (!q) return filas
-    return filas.filter(f =>
-      esProd
-        ? (f as FilaProducto).producto.toLowerCase().includes(q)
-        : (f as FilaCliente).cliente.toLowerCase().includes(q)
-        || ((f as FilaCliente).vendedor ?? '').toLowerCase().includes(q))
-  }, [filas, busca, esProd])
+    return filas.filter(f => {
+      if (esProd) return (f as FilaProducto).producto.toLowerCase().includes(q)
+      if (esPedidos) {
+        const p = f as FilaPedido
+        return p.pedido.toLowerCase().includes(q) || p.cliente.toLowerCase().includes(q) || (p.vendedor ?? '').toLowerCase().includes(q)
+      }
+      return (f as FilaCliente).cliente.toLowerCase().includes(q) || ((f as FilaCliente).vendedor ?? '').toLowerCase().includes(q)
+    })
+  }, [filas, busca, esProd, esPedidos])
 
   const totalLitros = visibles.reduce((s, f) => s + f.litros, 0)
 
@@ -186,7 +203,7 @@ function SheetDetalle({ tipo, envaseBucket, desde, hasta, onClose }: {
               <p style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{titulo}</p>
               <p style={{ fontSize: 12, color: C.muted }}>
                 {fFechaCorta(desde)} – {fFechaCorta(hasta)}
-                {filas && ` · ${filas.length} ${esProd ? 'productos' : 'clientes'}`}
+                {filas && ` · ${filas.length} ${esProd ? 'productos' : esPedidos ? 'pedidos' : 'clientes'}`}
               </p>
             </div>
             <button onClick={onClose} aria-label="Cerrar"
@@ -198,7 +215,7 @@ function SheetDetalle({ tipo, envaseBucket, desde, hasta, onClose }: {
             <input
               value={busca}
               onChange={e => setBusca(e.target.value)}
-              placeholder={esProd ? 'Buscar producto…' : 'Buscar cliente o vendedor…'}
+              placeholder={esProd ? 'Buscar producto…' : esPedidos ? 'Buscar pedido, cliente o vendedor…' : 'Buscar cliente o vendedor…'}
               style={{
                 marginTop: 10, width: '100%', padding: '9px 12px', borderRadius: 10,
                 border: `1px solid ${C.line}`, background: C.card, fontSize: 13, color: C.text, outline: 'none',
@@ -214,26 +231,32 @@ function SheetDetalle({ tipo, envaseBucket, desde, hasta, onClose }: {
             <p style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 28 }}>Cargando…</p>
           ) : visibles.length === 0 ? (
             <p style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 28 }}>
-              {busca ? 'Sin coincidencias' : 'Sin ventas en este rango'}
+              {busca ? 'Sin coincidencias' : esPedidos ? 'Sin pedidos en este estado' : 'Sin ventas en este rango'}
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {visibles.map((f, i) => {
                 const share = totalLitros > 0 ? (f.litros / totalLitros) * 100 : 0
                 const p = esProd ? (f as FilaProducto) : null
-                const c = esProd ? null : (f as FilaCliente)
+                const ped = esPedidos ? (f as FilaPedido) : null
+                const c = esProd || esPedidos ? null : (f as FilaCliente)
                 const tintCat = p?.categoria === 'Kombucha' ? C.green : p?.categoria === 'Cerveza' ? C.hero : C.purple
+                const diasEsperando = ped?.fechaPedido
+                  ? Math.round((Date.now() - new Date(ped.fechaPedido + 'T12:00:00').getTime()) / 86400000)
+                  : null
                 return (
                   <div key={i} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '11px 13px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 7 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: C.faint, minWidth: 18, flexShrink: 0 }}>{i + 1}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>
-                          {p ? p.producto : c!.cliente}
+                          {p ? p.producto : ped ? ped.cliente : c!.cliente}
                         </p>
                         <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
                           {p
                             ? `${p.envase} · ${p.categoria} · ${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}`
+                            : ped
+                            ? `#${ped.pedido} · ${ped.vendedor}${ped.fechaPedido ? ` · ${fFechaCorta(ped.fechaPedido)}` : ''}`
                             : [c!.vendedor, c!.localidad].filter(Boolean).join(' · ')}
                         </p>
                       </div>
@@ -242,14 +265,22 @@ function SheetDetalle({ tipo, envaseBucket, desde, hasta, onClose }: {
                         <p style={{ fontSize: 11, color: C.muted }}>{fPeso(f.revenue)}</p>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ flex: 1, height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
-                        <div style={{ width: `${share}%`, height: '100%', background: p ? tintCat : C.blue, borderRadius: 3 }} />
+                    {ped ? (
+                      diasEsperando !== null && estadoPedidos === 'pendiente' && (
+                        <p style={{ fontSize: 11, color: diasEsperando >= 7 ? C.red : C.amber, fontWeight: 600 }}>
+                          {diasEsperando <= 0 ? 'Tomado hoy' : `${diasEsperando} ${diasEsperando === 1 ? 'día' : 'días'} esperando despacho`}
+                        </p>
+                      )
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ flex: 1, height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
+                          <div style={{ width: `${share}%`, height: '100%', background: p ? tintCat : C.blue, borderRadius: 3 }} />
+                        </div>
+                        <span style={{ fontSize: 11, color: C.faint, flexShrink: 0 }}>
+                          {(f as FilaProducto | FilaCliente).pedidos} {(f as FilaProducto | FilaCliente).pedidos === 1 ? 'pedido' : 'pedidos'}
+                        </span>
                       </div>
-                      <span style={{ fontSize: 11, color: C.faint, flexShrink: 0 }}>
-                        {f.pedidos} {f.pedidos === 1 ? 'pedido' : 'pedidos'}
-                      </span>
-                    </div>
+                    )}
                   </div>
                 )
               })}
@@ -262,13 +293,21 @@ function SheetDetalle({ tipo, envaseBucket, desde, hasta, onClose }: {
 }
 
 // ── Barra de mix ─────────────────────────────────────────────────────────────
-function FilaMix({ nombre, litros, total, pct, color, colorSoft, emoji }: {
+function FilaMix({ nombre, litros, total, pct, color, colorSoft, emoji, onClick }: {
   nombre: string; litros: number; total: number; pct: number | null
-  color: string; colorSoft: string; emoji: string
+  color: string; colorSoft: string; emoji: string; onClick?: () => void
 }) {
   const share = total > 0 ? (litros / total) * 100 : 0
+  const Contenedor = onClick ? 'button' : 'div'
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <Contenedor
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+        background: 'transparent', border: 'none', padding: 0, cursor: onClick ? 'pointer' : 'default',
+        textAlign: 'left', font: 'inherit', color: 'inherit',
+      }}
+    >
       <div style={{ width: 34, height: 34, borderRadius: 10, background: colorSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>
         {emoji}
       </div>
@@ -287,7 +326,8 @@ function FilaMix({ nombre, litros, total, pct, color, colorSoft, emoji }: {
           <Delta pct={pct} size={11} />
         </div>
       </div>
-    </div>
+      {onClick && <ChevronRight size={14} color={C.faint} style={{ flexShrink: 0 }} />}
+    </Contenedor>
   )
 }
 
@@ -362,8 +402,18 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
   const [rango, setRango] = useState<RangoKey>(data.custom ? 'custom' : 'periodo')
   const [periodoIdx, setPeriodoIdx] = useState(0)   // 0 = período activo
   const [showSettings, setShowSettings] = useState(false)
-  const [detalle, setDetalle] = useState<'productos' | 'clientes' | 'envase' | null>(null)
+  const [detalle, setDetalle] = useState<'productos' | 'clientes' | 'envase' | 'pedidos' | null>(null)
   const [detalleEnvaseBucket, setDetalleEnvaseBucket] = useState<string | undefined>(undefined)
+  const [detalleCategoria, setDetalleCategoria] = useState<string | undefined>(undefined)
+  const [detalleEstadoPedidos, setDetalleEstadoPedidos] = useState<'despachado' | 'pendiente' | undefined>(undefined)
+  function abrirDetalle(tipo: 'productos' | 'clientes' | 'envase' | 'pedidos', extra?: {
+    envaseBucket?: string; categoria?: string; estadoPedidos?: 'despachado' | 'pendiente'
+  }) {
+    setDetalleEnvaseBucket(extra?.envaseBucket)
+    setDetalleCategoria(extra?.categoria)
+    setDetalleEstadoPedidos(extra?.estadoPedidos)
+    setDetalle(tipo)
+  }
   const [showPeriodos, setShowPeriodos] = useState(false)
   const [customDesde, setCustomDesde] = useState(data.custom?.desde ?? '')
   const [customHasta, setCustomHasta] = useState(data.custom?.hasta ?? '')
@@ -615,7 +665,10 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
         </div>
 
         {/* Hero */}
-        <div style={{ background: C.hero, borderRadius: 20, padding: 20, color: '#fff' }}>
+        <button
+          onClick={() => abrirDetalle('productos')}
+          style={{ background: C.hero, borderRadius: 20, padding: 20, color: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', display: 'block', font: 'inherit' }}
+        >
           <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 190px', minWidth: 0 }}>
               <p style={{ fontSize: 11, letterSpacing: '0.08em', color: '#94A3B8', fontWeight: 600, marginBottom: 8 }}>
@@ -699,20 +752,22 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               </div>
             </div>
           </div>
-        </div>
+        </button>
 
         {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
           <KpiCard icon={Droplet} tint={C.blue} tintSoft={C.blueSoft} label="Litros vendidos"
-            valor={fL(actual.litros)} pct={variacion(actual.litros, previo.litros)} serie={serieDe('litros')} />
+            valor={fL(actual.litros)} pct={variacion(actual.litros, previo.litros)} serie={serieDe('litros')}
+            onClick={() => abrirDetalle('productos')} />
           <KpiCard icon={Users} tint={C.green} tintSoft={C.greenSoft} label="Clientes"
             valor={fNum(actual.clientes)} pct={variacion(actual.clientes, previo.clientes)} serie={serieDe('clientes')}
-            onClick={() => setDetalle('clientes')} />
+            onClick={() => abrirDetalle('clientes')} />
           <KpiCard icon={ShoppingBag} tint={C.purple} tintSoft={C.purpleSoft} label="Pedidos"
             valor={fNum(actual.pedidos)} pct={variacion(actual.pedidos, previo.pedidos)} serie={serieDe('pedidos')}
-            onClick={() => setDetalle('productos')} />
+            onClick={() => abrirDetalle('productos')} />
           <KpiCard icon={DollarSign} tint={C.amber} tintSoft={C.amberSoft} label="Ticket promedio"
-            valor={fPeso(ticket)} pct={variacion(ticket, ticketPrev)} serie={serieTicket} />
+            valor={fPeso(ticket)} pct={variacion(ticket, ticketPrev)} serie={serieTicket}
+            onClick={() => abrirDetalle('clientes')} />
         </div>
 
         {/* Product mix */}
@@ -726,12 +781,15 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <FilaMix nombre="Cerveza" emoji="🍺" litros={actual.litrosCerveza} total={totalMix}
-                pct={variacion(actual.litrosCerveza, previo.litrosCerveza)} color={C.hero} colorSoft="#E2E8F0" />
+                pct={variacion(actual.litrosCerveza, previo.litrosCerveza)} color={C.hero} colorSoft="#E2E8F0"
+                onClick={() => abrirDetalle('productos', { categoria: 'Cerveza' })} />
               <FilaMix nombre="Kombucha" emoji="🧃" litros={actual.litrosKombucha} total={totalMix}
-                pct={variacion(actual.litrosKombucha, previo.litrosKombucha)} color={C.green} colorSoft={C.greenSoft} />
+                pct={variacion(actual.litrosKombucha, previo.litrosKombucha)} color={C.green} colorSoft={C.greenSoft}
+                onClick={() => abrirDetalle('productos', { categoria: 'Kombucha' })} />
               {actual.litrosOtros > 0 && (
                 <FilaMix nombre="Otros" emoji="📦" litros={actual.litrosOtros} total={totalMix}
-                  pct={variacion(actual.litrosOtros, previo.litrosOtros)} color={C.purple} colorSoft={C.purpleSoft} />
+                  pct={variacion(actual.litrosOtros, previo.litrosOtros)} color={C.purple} colorSoft={C.purpleSoft}
+                  onClick={() => abrirDetalle('productos', { categoria: 'Otros' })} />
               )}
             </div>
           )}
@@ -782,10 +840,14 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-                <div style={{ background: C.greenSoft, borderRadius: 12, padding: '12px 13px' }}>
+                <button
+                  onClick={() => abrirDetalle('pedidos', { estadoPedidos: 'despachado' })}
+                  style={{ background: C.greenSoft, borderRadius: 12, padding: '12px 13px', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%' }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
                     <CheckCircle2 size={15} color={C.green} />
                     <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Ya despachados</span>
+                    <ChevronRight size={14} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0 }} />
                   </div>
                   <p style={{ fontSize: 20, fontWeight: 800, color: C.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
                     {fL(d.entregas.litrosEntregados)}
@@ -793,12 +855,16 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                   <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
                     {fNum(d.entregas.pedidosEntregados)} {d.entregas.pedidosEntregados === 1 ? 'pedido' : 'pedidos'} · {fPeso(d.entregas.revenueEntregado)}
                   </p>
-                </div>
+                </button>
 
-                <div style={{ background: C.amberSoft, borderRadius: 12, padding: '12px 13px' }}>
+                <button
+                  onClick={() => abrirDetalle('pedidos', { estadoPedidos: 'pendiente' })}
+                  style={{ background: C.amberSoft, borderRadius: 12, padding: '12px 13px', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%' }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
                     <Truck size={15} color={C.amber} />
                     <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Pendientes de entrega</span>
+                    <ChevronRight size={14} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0 }} />
                   </div>
                   <p style={{ fontSize: 20, fontWeight: 800, color: C.amber, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
                     {fL(d.entregas.litrosPorEntregar)}
@@ -806,7 +872,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                   <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
                     {fNum(d.entregas.pedidosPorEntregar)} {d.entregas.pedidosPorEntregar === 1 ? 'pedido' : 'pedidos'} · {fPeso(d.entregas.revenuePorEntregar)}
                   </p>
-                </div>
+                </button>
               </div>
 
               {d.entregas.litrosPorEntregar > 0 && (
@@ -841,7 +907,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                 return (
                   <button
                     key={e.tipo}
-                    onClick={() => { setDetalleEnvaseBucket(e.tipo); setDetalle('envase') }}
+                    onClick={() => abrirDetalle('envase', { envaseBucket: e.tipo })}
                     style={{ background: soft, borderRadius: 12, padding: '12px 13px', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
@@ -915,9 +981,16 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
         <SheetDetalle
           tipo={detalle}
           envaseBucket={detalleEnvaseBucket}
+          categoria={detalleCategoria}
+          estadoPedidos={detalleEstadoPedidos}
           desde={d.desde}
           hasta={d.hasta}
-          onClose={() => { setDetalle(null); setDetalleEnvaseBucket(undefined) }}
+          onClose={() => {
+            setDetalle(null)
+            setDetalleEnvaseBucket(undefined)
+            setDetalleCategoria(undefined)
+            setDetalleEstadoPedidos(undefined)
+          }}
         />
       )}
 

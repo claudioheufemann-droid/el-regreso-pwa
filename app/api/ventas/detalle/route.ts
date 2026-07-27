@@ -17,8 +17,10 @@ function claseEnvase(envase: string): string {
 }
 
 /**
- * GET /api/ventas/detalle?tipo=productos|clientes|envase&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
- * tipo=envase requiere &bucket=Barril%2030L|Lata%20354%20ml|Lata%20473%20ml|Otros
+ * GET /api/ventas/detalle?tipo=productos|clientes|envase|pedidos&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+ * tipo=envase   requiere &bucket=Barril%2030L|Lata%20354%20ml|Lata%20473%20ml|Otros
+ * tipo=productos admite &categoria=Cerveza|Kombucha|Otros (opcional, filtra el mix)
+ * tipo=pedidos  requiere &estado=despachado|pendiente
  *
  * Drill-down de las tarjetas del dashboard de Ventas. Va aparte de la carga de
  * la página porque son listas largas que sólo se piden al tocar la tarjeta.
@@ -33,13 +35,17 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const tipo = searchParams.get('tipo')
   const bucket = searchParams.get('bucket') ?? ''
+  const categoria = searchParams.get('categoria') ?? ''
+  const estado = searchParams.get('estado') ?? ''
   const desde = searchParams.get('desde') ?? ''
   const hasta = searchParams.get('hasta') ?? ''
 
-  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase')
-    return NextResponse.json({ error: 'tipo debe ser productos, clientes o envase' }, { status: 400 })
+  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos')
+    return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase o pedidos' }, { status: 400 })
   if (tipo === 'envase' && !bucket)
     return NextResponse.json({ error: 'envase requiere bucket' }, { status: 400 })
+  if (tipo === 'pedidos' && estado !== 'despachado' && estado !== 'pendiente')
+    return NextResponse.json({ error: 'pedidos requiere estado=despachado|pendiente' }, { status: 400 })
 
   const esFecha = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
   if (!esFecha(desde) || !esFecha(hasta))
@@ -52,6 +58,23 @@ export async function GET(req: Request) {
   const p_provincias = provincias.length ? provincias : null
 
   const supabase = await createClient()
+
+  if (tipo === 'pedidos') {
+    const { data, error } = await supabase.rpc('ventas_pedidos_por_estado', {
+      p_ini: desde, p_fin: hasta, p_entregado: estado === 'despachado', p_provincias,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
+      pedido: String(r.pedido ?? ''),
+      cliente: String(r.cliente ?? ''),
+      vendedor: vendedorCanonico(String(r.vendedor ?? '')),
+      fechaPedido: r.fecha_pedido ? String(r.fecha_pedido) : null,
+      fechaEntrega: r.fecha_entrega ? String(r.fecha_entrega) : null,
+      litros: Number(r.litros ?? 0),
+      revenue: Number(r.revenue ?? 0),
+    })))
+  }
+
   const fn = tipo === 'clientes' ? 'ventas_detalle_clientes' : 'ventas_detalle_productos'
   const { data, error } = await supabase.rpc(fn, { p_ini: desde, p_fin: hasta, p_provincias })
 
@@ -60,7 +83,7 @@ export async function GET(req: Request) {
   const filas = (data ?? []) as Record<string, unknown>[]
 
   if (tipo === 'productos' || tipo === 'envase') {
-    const productos = filas.map(r => ({
+    let productos = filas.map(r => ({
       producto: String(r.producto ?? ''),
       envase: String(r.envase ?? ''),
       categoria: String(r.categoria ?? ''),
@@ -71,10 +94,10 @@ export async function GET(req: Request) {
     }))
     // ventas_detalle_productos agrupa por (producto, envase, categoria): un
     // mismo producto puede salir en 354ml y 473ml como filas separadas, así
-    // que sólo filtrar por bucket ya da el detalle correcto de esa tarjeta.
-    return NextResponse.json(
-      tipo === 'envase' ? productos.filter(p => claseEnvase(p.envase) === bucket) : productos
-    )
+    // que sólo filtrar por bucket/categoría ya da el detalle correcto.
+    if (tipo === 'envase') productos = productos.filter(p => claseEnvase(p.envase) === bucket)
+    if (categoria) productos = productos.filter(p => p.categoria === categoria)
+    return NextResponse.json(productos)
   }
 
   return NextResponse.json(filas.map(r => ({
