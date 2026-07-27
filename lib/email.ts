@@ -4,6 +4,7 @@
  */
 
 import { Resend } from 'resend'
+import { buildIcs } from './ics'
 
 const FROM = process.env.RESEND_FROM_EMAIL ?? 'notificaciones@elregresobeer.com'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://control.elregresobeer.com'
@@ -123,6 +124,45 @@ function taskAsignadaHtml(params: {
     </div>`
 
   return baseTemplate(content, COLOR.blue)
+}
+
+function taskEnProcesoHtml(params: {
+  destinatarioNombre: string
+  taskTitulo: string
+  taskArea: string
+  taskPlazo: string
+}): string {
+  const plazoDate = new Date(params.taskPlazo)
+  const fechaStr = plazoDate.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  const content = `
+    <div style="border-bottom:1px solid rgba(255,255,255,0.06);padding:24px 0 20px;">
+      <p style="margin:0 0 6px;font-size:11px;color:${COLOR.orange};letter-spacing:1.5px;text-transform:uppercase;font-weight:700;">🚀 Tarea en proceso</p>
+      <h1 style="margin:0;font-size:22px;font-weight:900;color:${COLOR.text};line-height:1.2;">${params.taskTitulo}</h1>
+    </div>
+    <div style="padding:20px 0;">
+      <p style="margin:0 0 16px;font-size:14px;color:${COLOR.muted};">
+        Hola <strong style="color:${COLOR.text};">${params.destinatarioNombre}</strong>, marcaste esta tarea como <strong style="color:${COLOR.orange};">en proceso</strong>.
+        Te dejamos el evento adjunto para agregarlo a tu calendario (Google Calendar, Outlook, etc.) con el plazo límite.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+        <tr>
+          <td style="padding:4px 0;">
+            <span style="font-size:10px;color:${COLOR.muted};text-transform:uppercase;letter-spacing:1px;">Área</span><br>
+            <strong style="font-size:14px;color:${COLOR.text};">${params.taskArea}</strong>
+          </td>
+          <td style="padding:4px 0;padding-left:24px;">
+            <span style="font-size:10px;color:${COLOR.muted};text-transform:uppercase;letter-spacing:1px;">Plazo</span><br>
+            <strong style="font-size:16px;color:${COLOR.orange};">${fechaStr}</strong>
+          </td>
+        </tr>
+      </table>
+      <a href="${APP_URL}" style="display:inline-block;padding:13px 24px;background:${COLOR.orange};color:#0A0A0A;text-decoration:none;border-radius:10px;font-weight:800;font-size:13px;letter-spacing:0.5px;">
+        Ver tarea en la app →
+      </a>
+    </div>`
+
+  return baseTemplate(content, COLOR.orange)
 }
 
 function taskAprobadaHtml(params: {
@@ -280,6 +320,39 @@ export async function emailTaskAsignada(params: {
     html: taskAsignadaHtml({ destinatarioNombre: params.toNombre, taskTitulo: params.taskTitulo, taskArea: params.taskArea, taskPlazo: params.taskPlazo, taskDescripcion: params.taskDescripcion, asignadoPor: params.asignadoPor }),
   }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
   logResultado('asignada', [params.toEmail], result)
+}
+
+export async function emailTaskEnProceso(params: {
+  toEmail: string
+  toNombre: string
+  taskTitulo: string
+  taskArea: string
+  taskPlazo: string
+  taskDescripcion?: string
+  horaLimite?: string | null
+}) {
+  const resend = getResend()
+  if (!resend) { console.error('emailTaskEnProceso: RESEND_API_KEY no configurada'); return }
+
+  const icsContent = buildIcs({
+    titulo: params.taskTitulo,
+    descripcion: params.taskDescripcion ?? '',
+    plazo: params.taskPlazo,
+    area: params.taskArea,
+    horaLimite: params.horaLimite,
+  })
+
+  const result = await resend.emails.send({
+    from: `El Regreso Control <${FROM}>`,
+    to: [params.toEmail],
+    subject: `🚀 En proceso: ${params.taskTitulo}`,
+    html: taskEnProcesoHtml({ destinatarioNombre: params.toNombre, taskTitulo: params.taskTitulo, taskArea: params.taskArea, taskPlazo: params.taskPlazo }),
+    attachments: [{
+      filename: 'tarea.ics',
+      content: Buffer.from(icsContent).toString('base64'),
+    }],
+  }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
+  logResultado('en proceso', [params.toEmail], result)
 }
 
 export async function emailTaskAprobada(params: {

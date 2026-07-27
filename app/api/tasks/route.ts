@@ -5,7 +5,7 @@ import { cookies } from 'next/headers'
 import { Resend } from 'resend'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 import { sendPushToAllAdmins, sendPushToUser } from '@/lib/push'
-import { emailTaskAprobada, emailTaskRechazada, emailTaskPorAprobar } from '@/lib/email'
+import { emailTaskAprobada, emailTaskRechazada, emailTaskPorAprobar, emailTaskEnProceso } from '@/lib/email'
 
 const ADMIN_REVIEW_EMAIL = process.env.ADMIN_REVIEW_EMAIL ?? ''
 
@@ -175,7 +175,8 @@ export async function PATCH(req: NextRequest) {
   const { data: before } = await supabase.from('tasks').select('estado, started_at').eq('id', id).single()
 
   // Capturar timestamp de inicio cuando pasa a 'En Proceso' por primera vez
-  if (updates.estado === 'En Proceso' && before?.estado === 'Asignada' && !before?.started_at) {
+  const recienIniciada = updates.estado === 'En Proceso' && before?.estado === 'Asignada' && !before?.started_at
+  if (recienIniciada) {
     updates.started_at = new Date().toISOString()
   }
 
@@ -187,6 +188,35 @@ export async function PATCH(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Email con adjunto .ics a TODOS los asignados cuando la tarea arranca —
+  // así queda agendado el plazo en su calendario (Google Calendar, Outlook…)
+  // apenas empiezan a trabajarla, no solo cuando se les asignó.
+  if (recienIniciada) {
+    const destinatarioIds: string[] = Array.from(new Set(
+      (data.responsable_ids?.length ? data.responsable_ids : [data.responsable_id]).filter(Boolean)
+    ))
+    if (destinatarioIds.length > 0) {
+      const { data: destinatarios } = await supabase
+        .from('users')
+        .select('id, nombre, email')
+        .in('id', destinatarioIds)
+
+      await Promise.allSettled((destinatarios ?? []).map(dest =>
+        dest.email
+          ? emailTaskEnProceso({
+              toEmail: dest.email,
+              toNombre: dest.nombre,
+              taskTitulo: data.titulo,
+              taskArea: data.area,
+              taskPlazo: data.plazo,
+              taskDescripcion: data.descripcion,
+              horaLimite: data.hora_limite,
+            }).catch(err => console.error(`tasks PATCH: email en-proceso a ${dest.email} falló:`, err))
+          : Promise.resolve()
+      ))
+    }
+  }
 
   // Notificar a admins si la tarea acaba de pasar a "Por Aprobar"
   if (updates.estado === 'Por Aprobar' && before?.estado !== 'Por Aprobar') {
