@@ -301,8 +301,18 @@ export async function POST(req: NextRequest) {
   // varias cargas sucesivas. El pedido es único en el ERP y sus líneas
   // siempre viajan juntas, así que borrar/reinsertar por pedido es
   // idempotente sin importar qué ventana de fechas se haya pedido.
+  // Las devoluciones no tienen número de pedido propio: el ERP les pone el
+  // texto literal "Devolución" a todas. Tratarlo como clave de borrado
+  // eliminaría de golpe las devoluciones de cualquier otra fecha ya cargadas,
+  // así que sólo se usa el pedido como unidad atómica cuando tiene el formato
+  // numérico real del ERP.
+  const esPedidoReal = (p: string) => /^\d+$/.test(p)
   const pedidosEnArchivo = [
-    ...new Set(registros.map(r => r.pedido).filter((p): p is string => !!p)),
+    ...new Set(
+      registros
+        .map(r => r.pedido as string | null)
+        .filter((p): p is string => !!p && esPedidoReal(p))
+    ),
   ]
   for (let i = 0; i < pedidosEnArchivo.length; i += 500) {
     const lote = pedidosEnArchivo.slice(i, i + 500)
@@ -315,13 +325,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Filas sin número de pedido (cargas manuales antiguas sin ese dato):
+  // Filas sin pedido numérico real (devoluciones, cargas manuales antiguas):
   // mantener el criterio anterior de reemplazo por vendedor+fecha, acotado a
   // esas mismas filas para no interferir con el borrado por pedido de arriba.
   const combinacionesSinPedido = [
     ...new Map(
       registros
-        .filter(r => !r.pedido)
+        .filter(r => !r.pedido || !esPedidoReal(r.pedido as string))
         .map(r => [
           `${r.vendedor_actual}__${r.fecha_pedido}`,
           { vendedor: r.vendedor_actual as string, fecha: r.fecha_pedido as string },
@@ -334,7 +344,9 @@ export async function POST(req: NextRequest) {
       .delete()
       .eq('vendedor_actual', vendedor)
       .eq('fecha_pedido', fecha)
-      .is('pedido', null)
+      // NULL no matchea el regex bajo lógica de 3 valores, así que .not() solo
+      // no alcanza — hay que pedirlo explícito con is.null.
+      .or('pedido.is.null,pedido.not.match.^[0-9]+$')
 
     if (deleteError) {
       return NextResponse.json(
