@@ -51,15 +51,18 @@ export const VENDEDOR_DISPLAY: Record<string, string> = Object.entries(VENDEDOR_
  * clave = nombre viejo en `ventas.vendedor_actual` → valor = nombre vigente.
  */
 export const VENDEDOR_ALIAS: Record<string, string> = {
-  // Transición 2 = cartera de Los Ríos · Transición 1 = cartera de Los Lagos
-  // (dato de Claudio, 2026-07-27 — dejarlo así siempre, no son nombres
-  // intercambiables). Se mapean ambos caminos: el nombre viejo (para ventas
-  // históricas) y el nombre nuevo tal cual lo reporta el ERP hoy, porque
-  // vendedorCanonico() solo transforma lo que encuentra como llave acá.
-  'Javier Badilla':  'Transición 2 · Los Ríos',
-  'Transición 2':    'Transición 2 · Los Ríos',
-  'Carlos Urrejola': 'Transición 1 · Los Lagos',
-  'Transición 1':    'Transición 1 · Los Lagos',
+  // Cartera de Los Ríos / Los Lagos: el ERP la ha renombrado varias veces
+  // (Javier Badilla → 'Transición 2' → ahora 'Los Rios' tal cual, sin tilde;
+  // Carlos Urrejola → 'Transición 1' → 'Los Lagos'). Dato de Claudio,
+  // 2026-07-27: Transición 2 = Los Ríos, Transición 1 = Los Lagos — dejarlo
+  // así siempre. TODOS los nombres que el ERP haya usado para esta misma
+  // cartera se mapean al nombre limpio final, para que no vuelva a aparecer
+  // partida en el ranking la próxima vez que el ERP la vuelva a renombrar.
+  'Javier Badilla':  'Los Ríos',
+  'Transición 2':    'Los Ríos',
+  'Los Rios':        'Los Ríos', // el ERP lo reporta sin tilde
+  'Carlos Urrejola': 'Los Lagos',
+  'Transición 1':    'Los Lagos',
   // Yadro: la BD tiene dos grafías del apellido; se unifica a la del ERP
   'Yadro Favijancic': 'Yadro Fabijancic',
 }
