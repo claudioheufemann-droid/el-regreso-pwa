@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Menu, Bell, ChevronDown, ChevronRight, Droplet, Users, ShoppingBag,
+  ChevronLeft, Bell, ChevronDown, ChevronRight, Droplet, Users, ShoppingBag,
   DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar, CheckCircle2, Truck, RefreshCw,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
@@ -507,15 +507,24 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
     <div style={{ background: C.bg, minHeight: '100%', margin: -1, padding: '1px 0 0' }}>
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '14px 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+        {/* Volver — mismo botón que el resto de la app, lleva al hub principal */}
+        <button
+          onClick={() => router.push('/')}
+          aria-label="Volver"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
+            background: C.card, border: `1px solid ${C.line}`,
+            borderRadius: 100, padding: '7px 14px 7px 10px',
+            color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            minHeight: 36,
+          }}
+        >
+          <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
+          Volver
+        </button>
+
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={() => router.push('/')}
-            aria-label="Menú"
-            style={{ width: 40, height: 40, borderRadius: 12, background: C.card, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
-          >
-            <Menu size={19} color={C.text} />
-          </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.1 }}>Ventas</h1>
             <p style={{ fontSize: 12, color: C.muted, textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
