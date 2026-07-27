@@ -731,18 +731,31 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           ))}
         </div>
 
-        {/* Estado de entrega — separa lo despachado de lo que sigue pendiente.
-            Antes no se distinguía y parecía que "faltaban ventas" cuando en
-            realidad eran pedidos tomados pero aún no entregados. */}
+        {/* Pedidos tomados en el período, según su estado de despacho.
+            OJO: esto NO es un desglose de la tarjeta "Litros vendidos" de
+            arriba. Esa tarjeta ya sólo cuenta litros ENTREGADOS dentro del
+            rango de fechas (fecha_entrega); "vendido" = "entregado" es la
+            premisa del negocio. Esta tarjeta mira otra población — pedidos
+            por FECHA DE PEDIDO — para responder una pregunta distinta y
+            complementaria: de lo que los vendedores cerraron en este
+            período, ¿cuánto ya salió de bodega y cuánto sigue pendiente?
+            Por eso los números de acá no tienen por qué calzar con los de
+            arriba (un pedido puede cerrarse en el período y entregarse
+            semanas después, quedando fuera del "vendido" hasta que eso pase). */}
         {(d.entregas.litrosEntregados > 0 || d.entregas.litrosPorEntregar > 0) && (() => {
           const tot = d.entregas.litrosEntregados + d.entregas.litrosPorEntregar
           const pctEnt = tot > 0 ? (d.entregas.litrosEntregados / tot) * 100 : 0
           const sinDato = d.entregas.litrosSinDato
           return (
             <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>ESTADO DE ENTREGA</p>
-                <span style={{ fontSize: 12, color: C.muted }}>{Math.round(pctEnt)}% despachado</span>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>PEDIDOS DE ESTE PERÍODO</p>
+                  <span style={{ fontSize: 12, color: C.muted }}>{Math.round(pctEnt)}% ya despachado</span>
+                </div>
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
+                  Por fecha en que se tomó el pedido — no es el mismo total que &quot;Litros vendidos&quot;
+                </p>
               </div>
 
               <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: C.line, marginBottom: 14 }}>
@@ -754,7 +767,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                 <div style={{ background: C.greenSoft, borderRadius: 12, padding: '12px 13px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
                     <CheckCircle2 size={15} color={C.green} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Entregado</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Ya despachados</span>
                   </div>
                   <p style={{ fontSize: 20, fontWeight: 800, color: C.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
                     {fL(d.entregas.litrosEntregados)}
@@ -767,7 +780,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                 <div style={{ background: C.amberSoft, borderRadius: 12, padding: '12px 13px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
                     <Truck size={15} color={C.amber} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Por entregar</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Pendientes de entrega</span>
                   </div>
                   <p style={{ fontSize: 20, fontWeight: 800, color: C.amber, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
                     {fL(d.entregas.litrosPorEntregar)}
@@ -780,8 +793,9 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
 
               {d.entregas.litrosPorEntregar > 0 && (
                 <p style={{ fontSize: 11, color: C.muted, marginTop: 10, lineHeight: 1.45 }}>
-                  Los litros del período incluyen ambos. «Por entregar» son pedidos ya
-                  tomados que el ERP todavía no despachó.
+                  Estos {fL(d.entregas.litrosPorEntregar)} pendientes aún no cuentan como
+                  vendidos en ningún período — se sumarán a &quot;Litros vendidos&quot; recién cuando
+                  el ERP registre su entrega.
                 </p>
               )}
               {sinDato > 0 && (
