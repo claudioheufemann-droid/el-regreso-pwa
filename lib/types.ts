@@ -51,8 +51,15 @@ export const VENDEDOR_DISPLAY: Record<string, string> = Object.entries(VENDEDOR_
  * clave = nombre viejo en `ventas.vendedor_actual` → valor = nombre vigente.
  */
 export const VENDEDOR_ALIAS: Record<string, string> = {
-  'Javier Badilla':  'Transición 2',
-  'Carlos Urrejola': 'Transición 1',
+  // Transición 2 = cartera de Los Ríos · Transición 1 = cartera de Los Lagos
+  // (dato de Claudio, 2026-07-27 — dejarlo así siempre, no son nombres
+  // intercambiables). Se mapean ambos caminos: el nombre viejo (para ventas
+  // históricas) y el nombre nuevo tal cual lo reporta el ERP hoy, porque
+  // vendedorCanonico() solo transforma lo que encuentra como llave acá.
+  'Javier Badilla':  'Transición 2 · Los Ríos',
+  'Transición 2':    'Transición 2 · Los Ríos',
+  'Carlos Urrejola': 'Transición 1 · Los Lagos',
+  'Transición 1':    'Transición 1 · Los Lagos',
   // Yadro: la BD tiene dos grafías del apellido; se unifica a la del ERP
   'Yadro Favijancic': 'Yadro Fabijancic',
 }
