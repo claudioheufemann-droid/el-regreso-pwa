@@ -539,10 +539,16 @@ html { height: 100%; }
    ese bloqueo: al llegar al borde del scroll interno, iOS intenta encadenar
    el gesto al body -que está bloqueado- y el drag se congela a mitad de
    camino ("queda pegado"). -webkit-overflow-scrolling:touch da inercia;
-   overscroll-behavior:contain evita que el gesto se propague al body. */
+   overscroll-behavior:contain evita que el gesto se propague al body.
+   Incluye .overflow-y-auto (clase Tailwind) además de los selectores de
+   inline-style: el <main> de cada layout (ventas/flota/gestion/terreno/
+   logistica) -el scroll principal de toda pantalla en móvil- usa esta
+   clase, no un style inline, y sin esta regla queda con el mismo bug de
+   "a veces no sube, a veces no baja" reportado en el dashboard de Ventas. */
 [style*="overflow-y: auto"],
 [style*="overflow-y:auto"],
-[style*="overflowY: auto"] {
+[style*="overflowY: auto"],
+.overflow-y-auto {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
