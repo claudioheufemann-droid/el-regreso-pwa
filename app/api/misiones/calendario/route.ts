@@ -14,13 +14,15 @@ export async function GET(req: NextRequest) {
   const desde = searchParams.get('desde')
   const hasta = searchParams.get('hasta')
 
-  // No-admins: forzar su propio scope
-  const p_vendedor = user.isAdmin
-    ? (vendedorParam && vendedorParam !== 'all' ? vendedorParam : null)
-    : user.nombre
+  // No-admins: forzar su propio scope. user.nombre es el nombre de LOGIN, no
+  // sirve para comparar contra vendedor_actual del ERP — se usa el vínculo
+  // explícito users.vendedores_erp (ver lib/auth.ts).
+  const p_vendedores = user.isAdmin
+    ? (vendedorParam && vendedorParam !== 'all' ? [vendedorParam] : null)
+    : (user.vendedoresErp.length ? user.vendedoresErp : ['__none__'])
 
   const { data, error } = await supabase.rpc('get_calendario_pedidos', {
-    p_vendedor,
+    p_vendedores,
     p_desde: desde,
     p_hasta: hasta,
   })
