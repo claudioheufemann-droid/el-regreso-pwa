@@ -22,11 +22,16 @@ export default async function FlotaLayout({ children }: { children: React.ReactN
   if (!user) redirect('/login')
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
+    <div className="h-dvh flex" style={{ background: 'var(--bg)' }}>
       <div className="hidden lg:flex">
         <FlotaSidebar />
       </div>
-      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-32 lg:pb-0 mobile-safe-top">
+      {/* h-full (no min-h-screen): el padre ahora tiene una altura ACOTADA
+          (h-dvh), así este <main> se recorta a esa altura y overflow-y-auto
+          scrollea de verdad su propio contenido, en vez de delegar al
+          documento (html/body) — que es la causa real reportada de que la
+          pantalla de Flota no permitía hacer scroll. */}
+      <main className="flex-1 flex flex-col h-full overflow-y-auto pb-32 lg:pb-0 mobile-safe-top">
         <div className="hidden lg:block">
           <FlotaTabBar tabs={TABS} accent={ORANGE} />
         </div>
