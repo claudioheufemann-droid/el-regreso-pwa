@@ -31,6 +31,9 @@ export interface KpisRango {
   litrosCerveza: number
   litrosKombucha: number
   litrosOtros: number
+  revenueCerveza: number
+  revenueKombucha: number
+  revenueOtros: number
 }
 
 export interface VendedorRango {

@@ -729,7 +729,6 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
   const ticket = actual.pedidos > 0 ? actual.revenue / actual.pedidos : 0
   const ticketPrev = previo.pedidos > 0 ? previo.revenue / previo.pedidos : 0
   const totalMix = actual.litrosCerveza + actual.litrosKombucha + actual.litrosOtros
-  const clientesNuevos = actual.clientes - previo.clientes
 
   const serieTicket = useMemo(
     () => serie.map(p => (p.pedidos > 0 ? p.revenue / p.pedidos : 0)),
@@ -995,92 +994,98 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           </div>
         </div>
 
-        {/* Hero */}
+        {/* Hero — rediseño pedido por Claudio: "por entregar" y "total" pasan
+            a ser tan grandes como litros entregado (antes iban en una línea
+            de 12px); se saca Clientes; se agrega el monto total de la venta
+            completa (entregado + por entregar, no sólo lo ya entregado); y
+            abajo el desglose de litros y plata de Cerveza/Kombucha. */}
         <button
           onClick={() => abrirDetalle('productos')}
           style={{ background: C.hero, borderRadius: 20, padding: 20, color: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', display: 'block', font: 'inherit' }}
         >
-          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 190px', minWidth: 0 }}>
-              <p style={{ fontSize: 11, letterSpacing: '0.08em', color: '#94A3B8', fontWeight: 600, marginBottom: 8 }}>
-                {rango === 'periodo' && periodoSel
-                  ? `VENTAS · ${periodoSel.nombre.toUpperCase()}`
-                  : rango === 'custom' ? 'VENTAS · RANGO ELEGIDO' : 'VENTAS DEL RANGO'}
-              </p>
-              <p style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-2px', lineHeight: 1 }}>
-                {actual.litros.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                <span style={{ fontSize: 20, marginLeft: 4, color: '#CBD5E1' }}>L</span>
-              </p>
-              {d.entregas.litrosPorEntregar > 0 && (
-                <p style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>
-                  entregado{' '}
-                  <span style={{ color: '#F59E0B', fontWeight: 600 }}>
-                    + {fL(d.entregas.litrosPorEntregar)} por entregar
+          <p style={{ fontSize: 11, letterSpacing: '0.08em', color: '#94A3B8', fontWeight: 600, marginBottom: 8 }}>
+            {rango === 'periodo' && periodoSel
+              ? `VENTAS · ${periodoSel.nombre.toUpperCase()}`
+              : rango === 'custom' ? 'VENTAS · RANGO ELEGIDO' : 'VENTAS DEL RANGO'}
+          </p>
+          <p style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-2px', lineHeight: 1 }}>
+            {actual.litros.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+            <span style={{ fontSize: 20, marginLeft: 4, color: '#CBD5E1' }}>L</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: '#94A3B8', marginLeft: 8 }}>entregado</span>
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            {(() => {
+              const p = variacion(actual.litros, previo.litros)
+              if (p === null) return <span style={{ fontSize: 12, color: '#94A3B8' }}>Sin período anterior</span>
+              const pos = p >= 0
+              return (
+                <>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: pos ? 'rgba(16,185,129,.16)' : 'rgba(239,68,68,.16)', color: pos ? '#34D399' : '#F87171', borderRadius: 8, padding: '3px 8px', fontSize: 12, fontWeight: 700 }}>
+                    {pos ? <TrendingUp size={13} /> : <TrendingDown size={13} />} {pos ? '+' : ''}{Math.round(p)}%
                   </span>
-                  {' '}= {fL(actual.litros + d.entregas.litrosPorEntregar)} total
-                </p>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                {(() => {
-                  const p = variacion(actual.litros, previo.litros)
-                  if (p === null) return <span style={{ fontSize: 12, color: '#94A3B8' }}>Sin período anterior</span>
-                  const pos = p >= 0
-                  return (
-                    <>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: pos ? 'rgba(16,185,129,.16)' : 'rgba(239,68,68,.16)', color: pos ? '#34D399' : '#F87171', borderRadius: 8, padding: '3px 8px', fontSize: 12, fontWeight: 700 }}>
-                        {pos ? <TrendingUp size={13} /> : <TrendingDown size={13} />} {pos ? '+' : ''}{Math.round(p)}%
-                      </span>
-                      <span style={{ fontSize: 12, color: '#94A3B8' }}>{d.etiquetaComparacion}</span>
-                    </>
-                  )
-                })()}
+                  <span style={{ fontSize: 12, color: '#94A3B8' }}>{d.etiquetaComparacion}</span>
+                </>
+              )
+            })()}
+          </div>
+          {avanceMeta !== null && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
+                <span style={{ color: '#94A3B8' }}>Meta: {fNum(Math.round(metaLitros))} L</span>
+                <span style={{ fontWeight: 700 }}>{Math.round(avanceMeta)}%</span>
               </div>
-              {avanceMeta !== null && (
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
-                    <span style={{ color: '#94A3B8' }}>Meta: {fNum(Math.round(metaLitros))} L</span>
-                    <span style={{ fontWeight: 700 }}>{Math.round(avanceMeta)}%</span>
-                  </div>
-                  <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
-                    <div style={{ width: `${avanceMeta}%`, height: '100%', background: C.blue, borderRadius: 3, transition: 'width .4s' }} />
-                  </div>
-                </div>
-              )}
+              <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
+                <div style={{ width: `${avanceMeta}%`, height: '100%', background: C.blue, borderRadius: 3, transition: 'width .4s' }} />
+              </div>
             </div>
+          )}
 
-            <div style={{ flex: '1 1 190px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14, justifyContent: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                <span style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(37,99,235,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Users size={20} color="#60A5FA" />
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1 }}>
-                    {fNum(actual.clientes)} <span style={{ fontSize: 13, fontWeight: 500, color: '#94A3B8' }}>Clientes</span>
+          {d.entregas.litrosPorEntregar > 0 && (
+            <>
+              <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '18px 0' }} />
+              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 130px', minWidth: 0 }}>
+                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4 }}>Por entregar</p>
+                  <p style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1, color: '#F59E0B' }}>
+                    {fL(d.entregas.litrosPorEntregar)}
                   </p>
-                  {clientesNuevos !== 0 && (
-                    <p style={{ fontSize: 12, color: clientesNuevos > 0 ? '#34D399' : '#F87171' }}>
-                      {clientesNuevos > 0 ? '+' : ''}{clientesNuevos} vs anterior
-                    </p>
-                  )}
+                </div>
+                <div style={{ flex: '1 1 130px', minWidth: 0 }}>
+                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4 }}>Total (entregado + por entregar)</p>
+                  <p style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1 }}>
+                    {fL(actual.litros + d.entregas.litrosPorEntregar)}
+                  </p>
                 </div>
               </div>
-              <div style={{ height: 1, background: 'rgba(255,255,255,.08)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                <span style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(16,185,129,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <DollarSign size={20} color="#34D399" />
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1 }}>{fPeso(actual.revenue)}</p>
-                  <div style={{ fontSize: 12, color: '#94A3B8', display: 'flex', gap: 5, alignItems: 'center' }}>
-                    {(() => {
-                      const p = variacion(actual.revenue, previo.revenue)
-                      if (p === null) return <span>Sin comparación</span>
-                      const pos = p >= 0
-                      return <><span style={{ color: pos ? '#34D399' : '#F87171', fontWeight: 600 }}>{pos ? '↑' : '↓'} {Math.abs(Math.round(p))}%</span> vs anterior</>
-                    })()}
-                  </div>
-                </div>
-              </div>
+            </>
+          )}
+
+          <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '18px 0' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+            <span style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(16,185,129,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <DollarSign size={20} color="#34D399" />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 11, color: '#94A3B8', marginBottom: 1 }}>Total de la venta completa</p>
+              <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+                {fPeso(actual.revenue + d.entregas.revenuePorEntregar)}
+              </p>
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '18px 0' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 15, flexShrink: 0 }}>🍺</span>
+              <span style={{ fontSize: 13, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Cerveza</span>
+              <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litrosCerveza)}</span>
+              <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{fPeso(actual.revenueCerveza)}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 15, flexShrink: 0 }}>🧃</span>
+              <span style={{ fontSize: 13, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Kombucha</span>
+              <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litrosKombucha)}</span>
+              <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{fPeso(actual.revenueKombucha)}</span>
             </div>
           </div>
         </button>

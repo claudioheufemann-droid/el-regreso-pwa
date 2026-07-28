@@ -49,6 +49,7 @@ const VENDEDORES_FUERA_RANKING = new Set([
 const KPIS_CERO: KpisRango = {
   litros: 0, revenue: 0, clientes: 0, pedidos: 0,
   litrosCerveza: 0, litrosKombucha: 0, litrosOtros: 0,
+  revenueCerveza: 0, revenueKombucha: 0, revenueOtros: 0,
 }
 
 const iso = (d: Date) => d.toISOString().split('T')[0]
@@ -65,6 +66,9 @@ function mapKpis(row: any): KpisRango {
     litrosCerveza: Number(row.litros_cerveza ?? 0),
     litrosKombucha: Number(row.litros_kombucha ?? 0),
     litrosOtros: Number(row.litros_otros ?? 0),
+    revenueCerveza: Number(row.revenue_cerveza ?? 0),
+    revenueKombucha: Number(row.revenue_kombucha ?? 0),
+    revenueOtros: Number(row.revenue_otros ?? 0),
   }
 }
 
