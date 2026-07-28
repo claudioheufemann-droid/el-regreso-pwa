@@ -17,12 +17,13 @@ function claseEnvase(envase: string): string {
 }
 
 /**
- * GET /api/ventas/detalle?tipo=productos|clientes|envase|pedidos|cliente-productos|clientes-vendedor&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+ * GET /api/ventas/detalle?tipo=productos|clientes|envase|pedidos|cliente-productos|clientes-vendedor|pedido-productos&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
  * tipo=envase   requiere &bucket=Barril%2030L|Lata%20354%20ml|Lata%20473%20ml|Otros
  * tipo=productos admite &categoria=Cerveza|Kombucha|Otros (opcional, filtra el mix)
  * tipo=pedidos  requiere &estado=despachado|pendiente
  * tipo=cliente-productos requiere &cliente=<nombre_fantasia> — qué se le vendió
  * tipo=clientes-vendedor requiere &vendedor=<nombre vigente, ej "Los Ríos"> — qué locales le compraron
+ * tipo=pedido-productos requiere &pedido=<número> — qué contiene ese pedido (no usa desde/hasta)
  *
  * Drill-down de las tarjetas del dashboard de Ventas. Va aparte de la carga de
  * la página porque son listas largas que sólo se piden al tocar la tarjeta.
@@ -41,6 +42,7 @@ export async function GET(req: Request) {
   const estado = searchParams.get('estado') ?? ''
   const cliente = searchParams.get('cliente') ?? ''
   const vendedor = searchParams.get('vendedor') ?? ''
+  const pedidoNum = searchParams.get('pedido') ?? ''
   const desde = searchParams.get('desde') ?? ''
   const hasta = searchParams.get('hasta') ?? ''
   // Debe coincidir con el criterio de la tarjeta que abrió este detalle (ver
@@ -49,8 +51,8 @@ export async function GET(req: Request) {
   // así es el criterio en casi todas las tarjetas.
   const porEntrega = searchParams.get('porEntrega') !== 'false'
 
-  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos' && tipo !== 'cliente-productos' && tipo !== 'clientes-vendedor')
-    return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase, pedidos, cliente-productos o clientes-vendedor' }, { status: 400 })
+  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos' && tipo !== 'cliente-productos' && tipo !== 'clientes-vendedor' && tipo !== 'pedido-productos')
+    return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase, pedidos, cliente-productos, clientes-vendedor o pedido-productos' }, { status: 400 })
   if (tipo === 'envase' && !bucket)
     return NextResponse.json({ error: 'envase requiere bucket' }, { status: 400 })
   if (tipo === 'pedidos' && estado !== 'despachado' && estado !== 'pendiente')
@@ -59,18 +61,37 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'cliente-productos requiere cliente' }, { status: 400 })
   if (tipo === 'clientes-vendedor' && !vendedor)
     return NextResponse.json({ error: 'clientes-vendedor requiere vendedor' }, { status: 400 })
-
-  const esFecha = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
-  if (!esFecha(desde) || !esFecha(hasta))
-    return NextResponse.json({ error: 'desde/hasta deben ser YYYY-MM-DD' }, { status: 400 })
-  if (desde > hasta)
-    return NextResponse.json({ error: 'desde no puede ser posterior a hasta' }, { status: 400 })
+  if (tipo === 'pedido-productos' && !pedidoNum)
+    return NextResponse.json({ error: 'pedido-productos requiere pedido' }, { status: 400 })
 
   const scopeRegion = user.isAdmin ? null : (user.region ?? null)
   const provincias = provinciasDeRegion(scopeRegion)
   const p_provincias = provincias.length ? provincias : null
 
   const supabase = await createClient()
+
+  // pedido-productos no usa rango de fechas -un pedido es un hecho puntual,
+  // no depende de desde/hasta- así que se resuelve antes de exigirlas.
+  if (tipo === 'pedido-productos') {
+    const { data, error } = await supabase.rpc('ventas_pedido_productos', {
+      p_pedido: pedidoNum, p_provincias,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
+      producto: String(r.producto ?? ''),
+      envase: String(r.envase ?? ''),
+      categoria: String(r.categoria ?? ''),
+      litros: Number(r.litros ?? 0),
+      revenue: Number(r.revenue ?? 0),
+      unidades: Number(r.unidades ?? 0),
+    })))
+  }
+
+  const esFecha = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
+  if (!esFecha(desde) || !esFecha(hasta))
+    return NextResponse.json({ error: 'desde/hasta deben ser YYYY-MM-DD' }, { status: 400 })
+  if (desde > hasta)
+    return NextResponse.json({ error: 'desde no puede ser posterior a hasta' }, { status: 400 })
 
   if (tipo === 'pedidos') {
     const { data, error } = await supabase.rpc('ventas_pedidos_por_estado', {

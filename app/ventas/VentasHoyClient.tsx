@@ -222,6 +222,59 @@ function DetalleCompraCliente({ cliente, desde, hasta, porEntrega }: {
   )
 }
 
+interface FilaPedidoProducto {
+  producto: string; envase: string; categoria: string
+  litros: number; revenue: number; unidades: number
+}
+
+/** Qué contiene un pedido — se despliega al tocar su fila en "Ya
+ *  despachados" / "Pendientes de entrega". No usa rango de fechas: un
+ *  pedido es un hecho puntual. */
+function DetallePedidoProductos({ pedido }: { pedido: string }) {
+  const [items, setItems] = useState<FilaPedidoProducto[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    fetch(`/api/ventas/detalle?tipo=pedido-productos&pedido=${encodeURIComponent(pedido)}`)
+      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
+      .then(d => { if (vivo) setItems(Array.isArray(d) ? d : []) })
+      .catch(e => { if (vivo) setError(String(e)) })
+    return () => { vivo = false }
+  }, [pedido])
+
+  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
+  if (!items) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
+  if (items.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin detalle de productos.</p>
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>QUÉ CONTIENE ESTE PEDIDO</p>
+      {items.map((it, j) => (
+        <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0,
+            background: it.categoria === 'Kombucha' ? C.green : it.categoria === 'Cerveza' ? C.hero : C.purple,
+          }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{it.producto}</p>
+            <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+              {[it.envase, fUnidades(it.unidades, it.envase)].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(it.litros)}</p>
+            <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(it.revenue)}</p>
+            {it.unidades > 0 && (
+              <p style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap', marginTop: 1 }}>{fPrecioUnitario(it.revenue, it.unidades)}</p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega = true, desde, hasta, onClose }: {
   tipo: 'productos' | 'clientes' | 'envase' | 'pedidos'
   envaseBucket?: string; categoria?: string; estadoPedidos?: 'despachado' | 'pendiente'
@@ -329,13 +382,17 @@ function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega
                 const diasEsperando = ped?.fechaPedido
                   ? Math.round((Date.now() - new Date(ped.fechaPedido + 'T12:00:00').getTime()) / 86400000)
                   : null
-                const expandible = !!c
-                const expandido = expandible && abierto === c!.cliente
+                // Clave de expansión: nombre de cliente o número de pedido, según
+                // la vista. Ambas caben en el mismo estado `abierto` porque una
+                // instancia de SheetDetalle siempre muestra un solo tipo de fila.
+                const claveExpand = c ? c.cliente : ped ? ped.pedido : null
+                const expandible = !!claveExpand
+                const expandido = expandible && abierto === claveExpand
                 const Fila = expandible ? 'button' : 'div'
                 return (
                   <div key={i} style={{ background: C.card, border: `1px solid ${expandido ? C.blue : C.line}`, borderRadius: 12, padding: '11px 13px' }}>
                     <Fila
-                      onClick={expandible ? () => setAbierto(prev => prev === c!.cliente ? null : c!.cliente) : undefined}
+                      onClick={expandible ? () => setAbierto(prev => prev === claveExpand ? null : claveExpand) : undefined}
                       style={{
                         display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 7,
                         width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
@@ -401,8 +458,11 @@ function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega
                         </span>
                       </div>
                     )}
-                    {expandido && (
-                      <DetalleCompraCliente cliente={c!.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+                    {expandido && c && (
+                      <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+                    )}
+                    {expandido && ped && (
+                      <DetallePedidoProductos pedido={ped.pedido} />
                     )}
                   </div>
                 )
@@ -1104,8 +1164,11 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                   <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>PEDIDOS DE ESTE PERÍODO</p>
                   <span style={{ fontSize: 12, color: C.muted }}>{Math.round(pctEnt)}% ya despachado</span>
                 </div>
-                <p style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
-                  Por fecha en que se tomó el pedido — no es el mismo total que &quot;Litros vendidos&quot;
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.45 }}>
+                  Por fecha en que se TOMÓ el pedido, no en que se entregó. &quot;Litros
+                  vendidos&quot; (arriba) cuenta lo entregado en este período sin importar
+                  cuándo se pidió —incluye pedidos de meses anteriores recién
+                  despachados—, así que estos números no tienen por qué coincidir.
                 </p>
               </div>
 
