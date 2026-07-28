@@ -1,6 +1,6 @@
 'use client'
 
-import { BarChart2, Target, Map, Users, Settings, BarChart, Route, Zap, Crosshair, ListChecks, Trophy, Activity } from 'lucide-react'
+import { BarChart2, Users, Zap, Crosshair, ListChecks } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
 const navItems: SidebarNavItem[] = [
@@ -9,13 +9,6 @@ const navItems: SidebarNavItem[] = [
   { href: '/ventas/misiones',            icon: Zap,        label: 'Misiones',               adminOnly: false },
   { href: '/ventas/clientes',            icon: Users,      label: 'Clientes',               adminOnly: false },
   { href: '/ventas/leads',               icon: Crosshair,  label: 'Leads',                  adminOnly: false },
-  { href: '/ventas/mapa',                icon: Map,        label: 'Mapa',                   adminOnly: false },
-  { href: '/ventas/metas',               icon: Target,     label: 'Metas',                  adminOnly: false },
-  { href: '/ventas/ranking',             icon: Trophy,     label: 'Ranking',                adminOnly: false },
-  { href: '/ventas/actividad',           icon: Activity,   label: 'Actividad',              adminOnly: false },
-  { href: '/ventas/admin',               icon: Settings,   label: 'Admin',                  adminOnly: true  },
-  { href: '/ventas/admin/reportes',      icon: BarChart,   label: 'Reportes',               adminOnly: true  },
-  { href: '/ventas/admin/rutas-clientes',icon: Route,      label: 'Rutas',                  adminOnly: true  },
 ]
 
 export default function Sidebar() {

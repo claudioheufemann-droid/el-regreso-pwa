@@ -11,13 +11,6 @@ const TABS: PageTab[] = [
   { href: '/ventas/clientes',             label: 'Clientes'               },
   { href: '/ventas/leads',                label: 'Leads'                  },
   { href: '/ventas/misiones',             label: 'Misiones'               },
-  { href: '/ventas/ranking',              label: 'Ranking'                },
-  { href: '/ventas/actividad',            label: 'Actividad'              },
-  { href: '/ventas/mapa',                 label: 'Mapa'                   },
-  { href: '/ventas/metas',                label: 'Metas'                  },
-  { href: '/ventas/admin',                label: 'Admin',    adminOnly: true },
-  { href: '/ventas/admin/reportes',       label: 'Reportes', adminOnly: true },
-  { href: '/ventas/admin/rutas-clientes', label: 'Rutas',    adminOnly: true },
 ]
 
 export default async function VentasLayout({ children }: { children: React.ReactNode }) {
