@@ -143,6 +143,9 @@ interface FilaProducto {
 interface FilaCliente {
   cliente: string; vendedor: string; localidad: string | null
   litros: number; revenue: number; pedidos: number; ultimaCompra: string | null
+  /** Solo viene poblado en el detalle de "clientes-vendedor": litros/revenue
+   *  de pedidos de ese cliente tomados en el rango pero aun no despachados. */
+  litrosPorEntregar?: number; revenuePorEntregar?: number
 }
 interface FilaPedido {
   pedido: string; cliente: string; vendedor: string
@@ -611,6 +614,7 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
       <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>LOCALES · {clientes.length}</p>
       {clientes.map(c => {
         const abiertoAqui = abierto === c.cliente
+        const soloPendiente = c.litros === 0 && !!c.litrosPorEntregar && c.litrosPorEntregar > 0
         return (
           <div key={c.cliente} style={{ background: C.bg, border: `1px solid ${abiertoAqui ? C.blue : C.line}`, borderRadius: 10, padding: '9px 11px' }}>
             <button
@@ -627,14 +631,30 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
                 </p>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(c.litros)}</p>
-                <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(c.revenue)}</p>
+                {soloPendiente ? (
+                  <>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: C.amber, whiteSpace: 'nowrap' }}>{fL(c.litrosPorEntregar!)}</p>
+                    <p style={{ fontSize: 11, color: C.amber, whiteSpace: 'nowrap' }}>{fPesoFull(c.revenuePorEntregar ?? 0)}</p>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(c.litros)}</p>
+                    <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(c.revenue)}</p>
+                  </>
+                )}
               </div>
               <ChevronDown size={14} color={abiertoAqui ? C.blue : C.faint} style={{
                 flexShrink: 0, marginTop: 2,
                 transform: abiertoAqui ? 'rotate(180deg)' : undefined, transition: 'transform .15s',
               }} />
             </button>
+            {soloPendiente ? (
+              <p style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Por entregar · sin nada despachado aún</p>
+            ) : !!c.litrosPorEntregar && c.litrosPorEntregar > 0 && (
+              <p style={{ fontSize: 11, color: C.amber, marginTop: 6 }}>
+                + {fL(c.litrosPorEntregar)} por entregar
+              </p>
+            )}
             {abiertoAqui && <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />}
           </div>
         )
