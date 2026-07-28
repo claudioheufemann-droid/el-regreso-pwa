@@ -47,7 +47,7 @@ export default async function VentasLayout({ children }: { children: React.React
           propio (computed overflow-y:auto) aunque el className ya no diga
           overflow-y-auto, reintroduciendo el mismo scroll anidado/ambiguo que
           se había sacado. 'clip' no dispara ese acoplamiento. */}
-      <main className="flex-1 min-w-0 flex flex-col overflow-x-clip pb-24 lg:pb-0 mobile-safe-top">
+      <main className="flex-1 min-w-0 flex flex-col overflow-x-clip pb-36 lg:pb-0 mobile-safe-top">
         <div className="hidden lg:block">
           <PageTabs tabs={TABS} />
         </div>
