@@ -170,16 +170,6 @@ function fPrecioUnitario(revenue: number, unidades: number): string {
   if (unidades <= 0) return ''
   return `${fPesoFull(revenue / unidades)} c/u`
 }
-/** Dato de Claudio: la lata de 354 ml es Kombucha, la de 473 ml es Cerveza
- *  (el envase define el formato exclusivo de cada línea). El barril no
- *  entra acá porque se usa para ambas (verificado con datos reales: hay
- *  barriles de Cerveza y de Kombucha en el mismo período). */
-function etiquetaEnvase(tipo: string): string {
-  if (tipo.includes('354')) return 'Lata Kombucha 354 ml'
-  if (tipo.includes('473')) return 'Lata Cerveza 473 ml'
-  return tipo
-}
-
 /** Qué se le vendió a un cliente — se despliega al tocar su fila. */
 function DetalleCompraCliente({ cliente, desde, hasta, porEntrega }: {
   cliente: string; desde: string; hasta: string; porEntrega: boolean
@@ -1445,8 +1435,10 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
               {d.envases.map(e => {
                 const esBarril = e.tipo.toLowerCase().includes('barril')
-                const tint = esBarril ? C.amber : e.tipo.includes('473') ? C.hero : C.green
-                const soft = esBarril ? C.amberSoft : e.tipo.includes('473') ? '#E2E8F0' : C.greenSoft
+                const esCerveza = e.tipo.includes('Cerveza')
+                const esKombucha = e.tipo.includes('Kombucha')
+                const tint = esCerveza ? C.hero : esKombucha ? C.green : C.amber
+                const soft = esCerveza ? '#E2E8F0' : esKombucha ? C.greenSoft : C.amberSoft
                 return (
                   <button
                     key={e.tipo}
@@ -1455,7 +1447,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
                       <span style={{ fontSize: 17 }}>{esBarril ? '🛢️' : '🥫'}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: C.text, minWidth: 0, wordBreak: 'break-word' }}>{etiquetaEnvase(e.tipo)}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: C.text, minWidth: 0, wordBreak: 'break-word' }}>{e.tipo}</span>
                       <ChevronRight size={14} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0 }} />
                     </div>
                     <p style={{ fontSize: 22, fontWeight: 800, color: tint, letterSpacing: '-0.6px', lineHeight: 1.1 }}>

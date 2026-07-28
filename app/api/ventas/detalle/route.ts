@@ -7,18 +7,24 @@ import { vendedorCanonico, nombresErpDe } from '@/lib/types'
 export const dynamic = 'force-dynamic'
 
 /** Misma clasificación que ventas_envases_periodo (SQL), para que el drill-down
- * de "Latas y barriles" filtre exactamente el mismo bucket que la tarjeta. */
-function claseEnvase(envase: string): string {
+ * de "Latas y barriles" filtre exactamente el mismo bucket que la tarjeta.
+ * El tamaño de la lata NO define la categoría -hay latas de cerveza de
+ * 354ml y de kombucha de 473ml, y barriles de ambas- así que el bucket se
+ * arma con tipo de envase × categoría real del producto, no con el ml. */
+function claseEnvase(envase: string, categoria: string): string {
   const e = envase.toLowerCase()
-  if (e.includes('barril')) return 'Barril 30L'
-  if (e.includes('354'))    return 'Lata 354 ml'
-  if (e.includes('473'))    return 'Lata 473 ml'
+  const esBarril = e.includes('barril')
+  const esLata = e.includes('lata') || e.includes('354') || e.includes('473')
+  if (esBarril && categoria === 'Cerveza')  return 'Barril Cerveza'
+  if (esBarril && categoria === 'Kombucha') return 'Barril Kombucha'
+  if (esLata && categoria === 'Cerveza')    return 'Lata Cerveza'
+  if (esLata && categoria === 'Kombucha')   return 'Lata Kombucha'
   return 'Otros'
 }
 
 /**
  * GET /api/ventas/detalle?tipo=productos|clientes|envase|pedidos-origen|cliente-productos|clientes-vendedor|pedido-productos&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
- * tipo=envase   requiere &bucket=Barril%2030L|Lata%20354%20ml|Lata%20473%20ml|Otros
+ * tipo=envase   requiere &bucket=Barril%20Cerveza|Barril%20Kombucha|Lata%20Cerveza|Lata%20Kombucha|Otros
  * tipo=productos admite &categoria=Cerveza|Kombucha|Otros (opcional, filtra el mix)
  * tipo=pedidos-origen requiere &origen=backlog|mismo-periodo — de lo entregado
  *   en el rango, pedidos tomados antes del período vs dentro de él
@@ -219,7 +225,7 @@ export async function GET(req: Request) {
     // ventas_detalle_productos agrupa por (producto, envase, categoria): un
     // mismo producto puede salir en 354ml y 473ml como filas separadas, así
     // que sólo filtrar por bucket/categoría ya da el detalle correcto.
-    if (tipo === 'envase') productos = productos.filter(p => claseEnvase(p.envase) === bucket)
+    if (tipo === 'envase') productos = productos.filter(p => claseEnvase(p.envase, p.categoria) === bucket)
     if (categoria) productos = productos.filter(p => p.categoria === categoria)
     return NextResponse.json(productos)
   }
