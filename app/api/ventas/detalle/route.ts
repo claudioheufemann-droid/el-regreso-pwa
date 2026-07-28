@@ -25,6 +25,7 @@ function claseEnvase(envase: string): string {
  * tipo=cliente-productos requiere &cliente=<nombre_fantasia> — qué se le vendió
  * tipo=clientes-vendedor requiere &vendedor=<nombre vigente, ej "Los Ríos"> — qué locales le compraron
  * tipo=pedido-productos requiere &pedido=<número> — qué contiene ese pedido (no usa desde/hasta)
+ * tipo=clientes-producto requiere &producto=&envase= — qué locales compraron ese producto
  *
  * Drill-down de las tarjetas del dashboard de Ventas. Va aparte de la carga de
  * la página porque son listas largas que sólo se piden al tocar la tarjeta.
@@ -44,6 +45,8 @@ export async function GET(req: Request) {
   const cliente = searchParams.get('cliente') ?? ''
   const vendedor = searchParams.get('vendedor') ?? ''
   const pedidoNum = searchParams.get('pedido') ?? ''
+  const producto = searchParams.get('producto') ?? ''
+  const envaseProducto = searchParams.get('envase') ?? ''
   const desde = searchParams.get('desde') ?? ''
   const hasta = searchParams.get('hasta') ?? ''
   // Debe coincidir con el criterio de la tarjeta que abrió este detalle (ver
@@ -52,8 +55,8 @@ export async function GET(req: Request) {
   // así es el criterio en casi todas las tarjetas.
   const porEntrega = searchParams.get('porEntrega') !== 'false'
 
-  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos-origen' && tipo !== 'cliente-productos' && tipo !== 'clientes-vendedor' && tipo !== 'pedido-productos')
-    return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase, pedidos-origen, cliente-productos, clientes-vendedor o pedido-productos' }, { status: 400 })
+  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos-origen' && tipo !== 'cliente-productos' && tipo !== 'clientes-vendedor' && tipo !== 'pedido-productos' && tipo !== 'clientes-producto')
+    return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase, pedidos-origen, cliente-productos, clientes-vendedor, pedido-productos o clientes-producto' }, { status: 400 })
   if (tipo === 'envase' && !bucket)
     return NextResponse.json({ error: 'envase requiere bucket' }, { status: 400 })
   if (tipo === 'pedidos-origen' && origen !== 'backlog' && origen !== 'mismo-periodo')
@@ -64,6 +67,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'clientes-vendedor requiere vendedor' }, { status: 400 })
   if (tipo === 'pedido-productos' && !pedidoNum)
     return NextResponse.json({ error: 'pedido-productos requiere pedido' }, { status: 400 })
+  if (tipo === 'clientes-producto' && (!producto || !envaseProducto))
+    return NextResponse.json({ error: 'clientes-producto requiere producto y envase' }, { status: 400 })
 
   const scopeRegion = user.isAdmin ? null : (user.region ?? null)
   const provincias = provinciasDeRegion(scopeRegion)
@@ -123,6 +128,22 @@ export async function GET(req: Request) {
       revenue: Number(r.revenue ?? 0),
       pedidos: Number(r.pedidos ?? 0),
       unidades: Number(r.unidades ?? 0),
+    })))
+  }
+
+  if (tipo === 'clientes-producto') {
+    const { data, error } = await supabase.rpc('ventas_detalle_clientes_por_producto', {
+      p_producto: producto, p_envase: envaseProducto, p_ini: desde, p_fin: hasta, p_provincias, p_por_entrega: porEntrega,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
+      cliente: String(r.cliente ?? ''),
+      vendedor: vendedorCanonico(String(r.vendedor ?? '')),
+      localidad: r.localidad ? String(r.localidad) : null,
+      litros: Number(r.litros ?? 0),
+      revenue: Number(r.revenue ?? 0),
+      pedidos: Number(r.pedidos ?? 0),
+      ultimaCompra: r.ultima_compra ? String(r.ultima_compra) : null,
     })))
   }
 

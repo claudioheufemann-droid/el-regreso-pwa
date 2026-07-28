@@ -172,6 +172,15 @@ function fPrecioUnitario(revenue: number, unidades: number): string {
   if (unidades <= 0) return ''
   return `${fPesoFull(revenue / unidades)} c/u`
 }
+/** Dato de Claudio: la lata de 354 ml es Kombucha, la de 473 ml es Cerveza
+ *  (el envase define el formato exclusivo de cada línea). El barril no
+ *  entra acá porque se usa para ambas (verificado con datos reales: hay
+ *  barriles de Cerveza y de Kombucha en el mismo período). */
+function etiquetaEnvase(tipo: string): string {
+  if (tipo.includes('354')) return 'Lata Kombucha 354 ml'
+  if (tipo.includes('473')) return 'Lata Cerveza 473 ml'
+  return tipo
+}
 
 /** Qué se le vendió a un cliente — se despliega al tocar su fila. */
 function DetalleCompraCliente({ cliente, desde, hasta, porEntrega }: {
@@ -379,10 +388,13 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                 const ped = esPedidos ? (f as FilaPedido) : null
                 const c = esProd || esPedidos ? null : (f as FilaCliente)
                 const tintCat = p?.categoria === 'Kombucha' ? C.green : p?.categoria === 'Cerveza' ? C.hero : C.purple
-                // Clave de expansión: nombre de cliente o número de pedido, según
-                // la vista. Ambas caben en el mismo estado `abierto` porque una
-                // instancia de SheetDetalle siempre muestra un solo tipo de fila.
-                const claveExpand = c ? c.cliente : ped ? ped.pedido : null
+                // Clave de expansión: cliente, pedido o producto+envase, según
+                // la vista. Las tres caben en el mismo estado `abierto` porque
+                // una instancia de SheetDetalle siempre muestra un solo tipo
+                // de fila. producto+envase porque esa es la clave real de la
+                // fila (un mismo producto puede salir dos veces con envases
+                // distintos, ver ventas_detalle_productos).
+                const claveExpand = c ? c.cliente : ped ? ped.pedido : p ? `${p.producto}|${p.envase}` : null
                 const expandible = !!claveExpand
                 const expandido = expandible && abierto === claveExpand
                 const Fila = expandible ? 'button' : 'div'
@@ -459,6 +471,9 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                     )}
                     {expandido && ped && (
                       <DetallePedidoProductos pedido={ped.pedido} />
+                    )}
+                    {expandido && p && (
+                      <DetalleClientesProducto producto={p.producto} envase={p.envase} desde={desde} hasta={hasta} porEntrega={porEntrega} />
                     )}
                   </div>
                 )
@@ -559,6 +574,68 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
                 <p style={{ fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{c.cliente}</p>
                 <p style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
                   {[c.localidad, c.ultimaCompra ? fFechaCorta(c.ultimaCompra) : null].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(c.litros)}</p>
+                <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(c.revenue)}</p>
+              </div>
+              <ChevronDown size={14} color={abiertoAqui ? C.blue : C.faint} style={{
+                flexShrink: 0, marginTop: 2,
+                transform: abiertoAqui ? 'rotate(180deg)' : undefined, transition: 'transform .15s',
+              }} />
+            </button>
+            {abiertoAqui && <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Clientes que compraron UN producto — se despliega al tocar su fila en
+ *  "Productos vendidos" o "Latas y barriles". Cada cliente, a su vez, se
+ *  puede desplegar para ver TODO lo que se le vendió (no sólo este
+ *  producto), reutilizando DetalleCompraCliente igual que en el resto. */
+function DetalleClientesProducto({ producto, envase, desde, hasta, porEntrega }: {
+  producto: string; envase: string; desde: string; hasta: string; porEntrega: boolean
+}) {
+  const [clientes, setClientes] = useState<FilaCliente[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [abierto, setAbierto] = useState<string | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    const qs = `tipo=clientes-producto&producto=${encodeURIComponent(producto)}&envase=${encodeURIComponent(envase)}&desde=${desde}&hasta=${hasta}&porEntrega=${porEntrega}`
+    fetch(`/api/ventas/detalle?${qs}`)
+      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
+      .then(d => { if (vivo) setClientes(Array.isArray(d) ? d : []) })
+      .catch(e => { if (vivo) setError(String(e)) })
+    return () => { vivo = false }
+  }, [producto, envase, desde, hasta, porEntrega])
+
+  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
+  if (!clientes) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
+  if (clientes.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin clientes en este rango.</p>
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>CLIENTES · {clientes.length}</p>
+      {clientes.map(c => {
+        const abiertoAqui = abierto === c.cliente
+        return (
+          <div key={c.cliente} style={{ background: C.bg, border: `1px solid ${abiertoAqui ? C.blue : C.line}`, borderRadius: 10, padding: '9px 11px' }}>
+            <button
+              onClick={() => setAbierto(prev => prev === c.cliente ? null : c.cliente)}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%', textAlign: 'left',
+                background: 'transparent', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{c.cliente}</p>
+                <p style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
+                  {[c.vendedor, c.localidad, c.ultimaCompra ? fFechaCorta(c.ultimaCompra) : null].filter(Boolean).join(' · ')}
                 </p>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -1235,7 +1312,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
                       <span style={{ fontSize: 17 }}>{esBarril ? '🛢️' : '🥫'}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: C.text, minWidth: 0, wordBreak: 'break-word' }}>{e.tipo}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: C.text, minWidth: 0, wordBreak: 'break-word' }}>{etiquetaEnvase(e.tipo)}</span>
                       <ChevronRight size={14} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0 }} />
                     </div>
                     <p style={{ fontSize: 22, fontWeight: 800, color: tint, letterSpacing: '-0.6px', lineHeight: 1.1 }}>
