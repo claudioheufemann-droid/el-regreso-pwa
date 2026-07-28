@@ -143,7 +143,7 @@ function KpiCard({ icon: Icon, tint, tintSoft, label, valor, pct, serie, onClick
 // ── Detalle (drill-down de tarjetas del dashboard) ──────────────────────────
 interface FilaProducto {
   producto: string; envase: string; categoria: string
-  litros: number; revenue: number; pedidos: number; clientes: number
+  litros: number; revenue: number; pedidos: number; clientes: number; unidades: number
 }
 interface FilaCliente {
   cliente: string; vendedor: string; localidad: string | null
@@ -156,7 +156,15 @@ interface FilaPedido {
 }
 interface FilaClienteProducto {
   producto: string; envase: string; categoria: string
-  litros: number; revenue: number; pedidos: number
+  litros: number; revenue: number; pedidos: number; unidades: number
+}
+
+/** "24 latas" / "2 barriles" — singular/plural según el envase. */
+function fUnidades(unidades: number, envase: string): string {
+  if (unidades <= 0) return ''
+  const esBarril = envase.toLowerCase().includes('barril')
+  const palabra = esBarril ? (unidades === 1 ? 'barril' : 'barriles') : (unidades === 1 ? 'lata' : 'latas')
+  return `${unidades.toLocaleString('es-CL')} ${palabra}`
 }
 
 /** Qué se le vendió a un cliente — se despliega al tocar su fila. */
@@ -192,7 +200,7 @@ function DetalleCompraCliente({ cliente, desde, hasta, porEntrega }: {
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{it.producto}</p>
             <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-              {it.envase} · {it.pedidos} {it.pedidos === 1 ? 'pedido' : 'pedidos'}
+              {[it.envase, fUnidades(it.unidades, it.envase), `${it.pedidos} ${it.pedidos === 1 ? 'pedido' : 'pedidos'}`].filter(Boolean).join(' · ')}
             </p>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -332,7 +340,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega
                         </p>
                         <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
                           {p
-                            ? `${p.envase} · ${p.categoria} · ${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}`
+                            ? [p.envase, fUnidades(p.unidades, p.envase), p.categoria, `${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}`].filter(Boolean).join(' · ')
                             : ped
                             ? `#${ped.pedido} · ${ped.vendedor}${ped.fechaPedido ? ` · ${fFechaCorta(ped.fechaPedido)}` : ''}`
                             : (

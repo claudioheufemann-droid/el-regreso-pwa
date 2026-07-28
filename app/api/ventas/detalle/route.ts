@@ -96,6 +96,7 @@ export async function GET(req: Request) {
       litros: Number(r.litros ?? 0),
       revenue: Number(r.revenue ?? 0),
       pedidos: Number(r.pedidos ?? 0),
+      unidades: Number(r.unidades ?? 0),
     })))
   }
 
@@ -115,6 +116,7 @@ export async function GET(req: Request) {
       revenue: Number(r.revenue ?? 0),
       pedidos: Number(r.pedidos ?? 0),
       clientes: Number(r.clientes ?? 0),
+      unidades: Number(r.unidades ?? 0),
     }))
     // ventas_detalle_productos agrupa por (producto, envase, categoria): un
     // mismo producto puede salir en 354ml y 473ml como filas separadas, así
