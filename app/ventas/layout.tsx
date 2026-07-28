@@ -9,7 +9,6 @@ const TABS: PageTab[] = [
   { href: '/ventas',                      label: 'Hoy',      exact: true  },
   { href: '/ventas/agenda',               label: 'Agenda'                 },
   { href: '/ventas/clientes',             label: 'Clientes'               },
-  { href: '/ventas/leads',                label: 'Leads'                  },
   { href: '/ventas/misiones',             label: 'Misiones'               },
 ]
 
