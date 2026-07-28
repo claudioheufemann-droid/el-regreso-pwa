@@ -73,6 +73,16 @@ export function vendedorCanonico(nombre: string | null | undefined): string {
   return VENDEDOR_ALIAS[nombre] ?? nombre
 }
 
+/** Inverso de vendedorCanonico: dado el nombre vigente (ej. "Los Ríos"),
+ *  devuelve TODOS los nombres crudos del ERP que resuelven a él (incluido
+ *  el propio nombre vigente, porque puede aparecer tal cual en la BD).
+ *  Se usa para filtrar `ventas.vendedor_actual` por el vendedor/región que
+ *  se ve en el ranking, sin perder ventas históricas bajo un nombre viejo. */
+export function nombresErpDe(vigente: string): string[] {
+  const raws = Object.entries(VENDEDOR_ALIAS).filter(([, v]) => v === vigente).map(([k]) => k)
+  return [...new Set([vigente, ...raws])]
+}
+
 // Scope completo: todos los nombres de BD aceptados en consultas y reportes
 export const VENDEDORES_SCOPE: string[] = Object.values(VENDEDOR_GRUPOS).flat()
 

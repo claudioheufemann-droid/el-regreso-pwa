@@ -460,61 +460,133 @@ function iniciales(nombre: string) {
   return nombre.split(/\s+/).filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase()
 }
 
+/** Locales de un vendedor/región — se despliega al tocar su fila en el
+ *  ranking. Cada local, a su vez, se puede desplegar para ver qué se le
+ *  vendió (reutiliza DetalleCompraCliente, igual que en "Clientes que
+ *  compraron"). */
+function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
+  vendedor: string; desde: string; hasta: string; porEntrega: boolean
+}) {
+  const [clientes, setClientes] = useState<FilaCliente[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [abierto, setAbierto] = useState<string | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    const qs = `tipo=clientes-vendedor&vendedor=${encodeURIComponent(vendedor)}&desde=${desde}&hasta=${hasta}&porEntrega=${porEntrega}`
+    fetch(`/api/ventas/detalle?${qs}`)
+      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
+      .then(d => { if (vivo) setClientes(Array.isArray(d) ? d : []) })
+      .catch(e => { if (vivo) setError(String(e)) })
+    return () => { vivo = false }
+  }, [vendedor, desde, hasta, porEntrega])
+
+  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
+  if (!clientes) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
+  if (clientes.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin locales en este rango.</p>
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>LOCALES · {clientes.length}</p>
+      {clientes.map(c => {
+        const abiertoAqui = abierto === c.cliente
+        return (
+          <div key={c.cliente} style={{ background: C.bg, border: `1px solid ${abiertoAqui ? C.blue : C.line}`, borderRadius: 10, padding: '9px 11px' }}>
+            <button
+              onClick={() => setAbierto(prev => prev === c.cliente ? null : c.cliente)}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%', textAlign: 'left',
+                background: 'transparent', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{c.cliente}</p>
+                <p style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
+                  {[c.localidad, c.ultimaCompra ? fFechaCorta(c.ultimaCompra) : null].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(c.litros)}</p>
+                <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(c.revenue)}</p>
+              </div>
+              <ChevronDown size={14} color={abiertoAqui ? C.blue : C.faint} style={{
+                flexShrink: 0, marginTop: 2,
+                transform: abiertoAqui ? 'rotate(180deg)' : undefined, transition: 'transform .15s',
+              }} />
+            </button>
+            {abiertoAqui && <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /**
  * Fila del ranking en DOS niveles: arriba el nombre completo (sin truncar) y
  * abajo las métricas. Antes iba todo en una línea con 6 columnas y los nombres
  * largos ("Claudio Heufemann", "Yadro Fabijancic") quedaban cortados.
+ * Se toca para desplegar los locales de esa cartera (antes navegaba a
+ * /ventas/ranking; ahora es in-situ, igual que "Clientes que compraron").
  */
-function FilaVendedor({ v, pos, total, onClick }: { v: VendedorRango; pos: number; total: number; onClick: () => void }) {
+function FilaVendedor({ v, pos, total, desde, hasta, porEntrega }: {
+  v: VendedorRango; pos: number; total: number; desde: string; hasta: string; porEntrega: boolean
+}) {
+  const [abierto, setAbierto] = useState(false)
   const share = total > 0 ? (v.litros / total) * 100 : 0
   const color = COLOR_VEND[pos % COLOR_VEND.length]
   return (
-    <button
-      onClick={onClick}
-      style={{
-        display: 'block', width: '100%', textAlign: 'left',
-        background: 'transparent', border: 'none', borderTop: pos === 0 ? 'none' : `1px solid ${C.line}`,
-        padding: '12px 0', cursor: 'pointer',
-      }}
-    >
-      {/* Nombre — se permite que ocupe dos líneas si hace falta */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <span style={{ width: 18, fontSize: 12, fontWeight: 700, color: pos === 0 ? C.text : C.faint, flexShrink: 0 }}>
-          {pos + 1}
-        </span>
-        <span style={{
-          width: 30, height: 30, borderRadius: '50%', background: color, color: '#fff', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
-        }}>
-          {iniciales(v.vendedor)}
-        </span>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>
-          {v.vendedor}
-        </span>
-        <ChevronRight size={15} color={C.faint} style={{ flexShrink: 0 }} />
-      </div>
-
-      {/* Métricas, alineadas bajo el nombre */}
-      <div style={{ paddingLeft: 58 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{fL(v.litros)}</span>
-          <span style={{ fontSize: 12, color: C.muted }}>{share.toFixed(1)}% del total</span>
-          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Delta pct={variacion(v.litros, v.litrosPrev)} size={11} />
-            <span style={{ fontSize: 10, color: C.faint }}>vs ant.</span>
+    <div style={{ borderTop: pos === 0 ? 'none' : `1px solid ${C.line}`, padding: '12px 0' }}>
+      <button
+        onClick={() => setAbierto(a => !a)}
+        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+      >
+        {/* Nombre — se permite que ocupe dos líneas si hace falta */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <span style={{ width: 18, fontSize: 12, fontWeight: 700, color: pos === 0 ? C.text : C.faint, flexShrink: 0 }}>
+            {pos + 1}
           </span>
+          <span style={{
+            width: 30, height: 30, borderRadius: '50%', background: color, color: '#fff', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
+          }}>
+            {iniciales(v.vendedor)}
+          </span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>
+            {v.vendedor}
+          </span>
+          <ChevronDown size={15} color={abierto ? C.blue : C.faint} style={{
+            flexShrink: 0, transform: abierto ? 'rotate(180deg)' : undefined, transition: 'transform .15s',
+          }} />
         </div>
-        <div style={{ height: 6, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
-          <div style={{ width: `${share}%`, height: '100%', background: color, borderRadius: 3, transition: 'width .4s' }} />
+
+        {/* Métricas, alineadas bajo el nombre */}
+        <div style={{ paddingLeft: 58 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{fL(v.litros)}</span>
+            <span style={{ fontSize: 12, color: C.muted }}>{share.toFixed(1)}% del total</span>
+            <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Delta pct={variacion(v.litros, v.litrosPrev)} size={11} />
+              <span style={{ fontSize: 10, color: C.faint }}>vs ant.</span>
+            </span>
+          </div>
+          <div style={{ height: 6, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
+            <div style={{ width: `${share}%`, height: '100%', background: color, borderRadius: 3, transition: 'width .4s' }} />
+          </div>
+          {v.litrosPorEntregar > 0 && (
+            <p style={{ fontSize: 11, color: C.amber, marginTop: 6 }}>
+              + {fL(v.litrosPorEntregar)} por entregar
+              <span style={{ color: C.muted }}> · {fL(v.litros + v.litrosPorEntregar)} total</span>
+            </p>
+          )}
         </div>
-        {v.litrosPorEntregar > 0 && (
-          <p style={{ fontSize: 11, color: C.amber, marginTop: 6 }}>
-            + {fL(v.litrosPorEntregar)} por entregar
-            <span style={{ color: C.muted }}> · {fL(v.litros + v.litrosPorEntregar)} total</span>
-          </p>
-        )}
-      </div>
-    </button>
+      </button>
+      {abierto && (
+        <div style={{ paddingLeft: 58 }}>
+          <DetalleClientesVendedor vendedor={v.vendedor} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1006,7 +1078,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           </div>
           {d.vendedores.map((v, i) => (
             <FilaVendedor key={v.vendedor} v={v} pos={i} total={actual.litros}
-              onClick={() => router.push('/ventas/ranking')} />
+              desde={d.desde} hasta={d.hasta} porEntrega={rango !== 'anio'} />
           ))}
         </div>
 
