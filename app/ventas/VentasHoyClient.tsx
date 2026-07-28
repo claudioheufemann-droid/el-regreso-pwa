@@ -1193,8 +1193,13 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 11, color: '#94A3B8', marginBottom: 1 }}>Total de la venta completa</p>
               <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
-                {fPesoFull(actual.revenue + d.entregas.revenuePorEntregar)}
+                {fPesoFull(actual.revenue)}
               </p>
+              {d.entregas.revenuePorEntregar > 0 && (
+                <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
+                  Por entregar <span style={{ color: '#F59E0B', fontWeight: 600 }}>{fPesoFull(d.entregas.revenuePorEntregar)}</span>
+                </p>
+              )}
               {actual.pedidos > 0 && (
                 <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
                   Ticket promedio <span style={{ color: '#CBD5E1', fontWeight: 600 }}>{fPesoFull(ticket)}</span>
