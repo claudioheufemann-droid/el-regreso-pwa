@@ -17,10 +17,11 @@ function claseEnvase(envase: string): string {
 }
 
 /**
- * GET /api/ventas/detalle?tipo=productos|clientes|envase|pedidos&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+ * GET /api/ventas/detalle?tipo=productos|clientes|envase|pedidos|cliente-productos&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
  * tipo=envase   requiere &bucket=Barril%2030L|Lata%20354%20ml|Lata%20473%20ml|Otros
  * tipo=productos admite &categoria=Cerveza|Kombucha|Otros (opcional, filtra el mix)
  * tipo=pedidos  requiere &estado=despachado|pendiente
+ * tipo=cliente-productos requiere &cliente=<nombre_fantasia> — qué se le vendió
  *
  * Drill-down de las tarjetas del dashboard de Ventas. Va aparte de la carga de
  * la página porque son listas largas que sólo se piden al tocar la tarjeta.
@@ -37,6 +38,7 @@ export async function GET(req: Request) {
   const bucket = searchParams.get('bucket') ?? ''
   const categoria = searchParams.get('categoria') ?? ''
   const estado = searchParams.get('estado') ?? ''
+  const cliente = searchParams.get('cliente') ?? ''
   const desde = searchParams.get('desde') ?? ''
   const hasta = searchParams.get('hasta') ?? ''
   // Debe coincidir con el criterio de la tarjeta que abrió este detalle (ver
@@ -45,12 +47,14 @@ export async function GET(req: Request) {
   // así es el criterio en casi todas las tarjetas.
   const porEntrega = searchParams.get('porEntrega') !== 'false'
 
-  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos')
-    return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase o pedidos' }, { status: 400 })
+  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos' && tipo !== 'cliente-productos')
+    return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase, pedidos o cliente-productos' }, { status: 400 })
   if (tipo === 'envase' && !bucket)
     return NextResponse.json({ error: 'envase requiere bucket' }, { status: 400 })
   if (tipo === 'pedidos' && estado !== 'despachado' && estado !== 'pendiente')
     return NextResponse.json({ error: 'pedidos requiere estado=despachado|pendiente' }, { status: 400 })
+  if (tipo === 'cliente-productos' && !cliente)
+    return NextResponse.json({ error: 'cliente-productos requiere cliente' }, { status: 400 })
 
   const esFecha = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
   if (!esFecha(desde) || !esFecha(hasta))
@@ -77,6 +81,21 @@ export async function GET(req: Request) {
       fechaEntrega: r.fecha_entrega ? String(r.fecha_entrega) : null,
       litros: Number(r.litros ?? 0),
       revenue: Number(r.revenue ?? 0),
+    })))
+  }
+
+  if (tipo === 'cliente-productos') {
+    const { data, error } = await supabase.rpc('ventas_detalle_cliente_productos', {
+      p_cliente: cliente, p_ini: desde, p_fin: hasta, p_provincias, p_por_entrega: porEntrega,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
+      producto: String(r.producto ?? ''),
+      envase: String(r.envase ?? ''),
+      categoria: String(r.categoria ?? ''),
+      litros: Number(r.litros ?? 0),
+      revenue: Number(r.revenue ?? 0),
+      pedidos: Number(r.pedidos ?? 0),
     })))
   }
 

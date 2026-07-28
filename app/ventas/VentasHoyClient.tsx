@@ -151,6 +151,56 @@ interface FilaPedido {
   fechaPedido: string | null; fechaEntrega: string | null
   litros: number; revenue: number
 }
+interface FilaClienteProducto {
+  producto: string; envase: string; categoria: string
+  litros: number; revenue: number; pedidos: number
+}
+
+/** Qué se le vendió a un cliente — se despliega al tocar su fila. */
+function DetalleCompraCliente({ cliente, desde, hasta, porEntrega }: {
+  cliente: string; desde: string; hasta: string; porEntrega: boolean
+}) {
+  const [items, setItems] = useState<FilaClienteProducto[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    const qs = `tipo=cliente-productos&cliente=${encodeURIComponent(cliente)}&desde=${desde}&hasta=${hasta}&porEntrega=${porEntrega}`
+    fetch(`/api/ventas/detalle?${qs}`)
+      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
+      .then(d => { if (vivo) setItems(Array.isArray(d) ? d : []) })
+      .catch(e => { if (vivo) setError(String(e)) })
+    return () => { vivo = false }
+  }, [cliente, desde, hasta, porEntrega])
+
+  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
+  if (!items) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
+  if (items.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin detalle de productos.</p>
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>QUÉ SE LE VENDIÓ</p>
+      {items.map((it, j) => (
+        <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0,
+            background: it.categoria === 'Kombucha' ? C.green : it.categoria === 'Cerveza' ? C.hero : C.purple,
+          }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{it.producto}</p>
+            <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+              {it.envase} · {it.pedidos} {it.pedidos === 1 ? 'pedido' : 'pedidos'}
+            </p>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fL(it.litros)}</p>
+            <p style={{ fontSize: 11, color: C.muted }}>{fPeso(it.revenue)}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega = true, desde, hasta, onClose }: {
   tipo: 'productos' | 'clientes' | 'envase' | 'pedidos'
@@ -162,6 +212,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega
   const [filas, setFilas] = useState<(FilaProducto | FilaCliente | FilaPedido)[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
+  const [abierto, setAbierto] = useState<string | null>(null)
 
   useEffect(() => {
     let vivo = true
@@ -258,9 +309,19 @@ function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega
                 const diasEsperando = ped?.fechaPedido
                   ? Math.round((Date.now() - new Date(ped.fechaPedido + 'T12:00:00').getTime()) / 86400000)
                   : null
+                const expandible = !!c
+                const expandido = expandible && abierto === c!.cliente
+                const Fila = expandible ? 'button' : 'div'
                 return (
-                  <div key={i} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '11px 13px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 7 }}>
+                  <div key={i} style={{ background: C.card, border: `1px solid ${expandido ? C.blue : C.line}`, borderRadius: 12, padding: '11px 13px' }}>
+                    <Fila
+                      onClick={expandible ? () => setAbierto(prev => prev === c!.cliente ? null : c!.cliente) : undefined}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 7,
+                        width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
+                        padding: 0, font: 'inherit', color: 'inherit', cursor: expandible ? 'pointer' : 'default',
+                      }}
+                    >
                       <span style={{ fontSize: 12, fontWeight: 700, color: C.faint, minWidth: 18, flexShrink: 0 }}>{i + 1}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>
@@ -278,7 +339,13 @@ function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega
                         <p style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fL(f.litros)}</p>
                         <p style={{ fontSize: 11, color: C.muted }}>{fPeso(f.revenue)}</p>
                       </div>
-                    </div>
+                      {expandible && (
+                        <ChevronDown size={16} color={expandido ? C.blue : C.faint} style={{
+                          flexShrink: 0, marginTop: 3,
+                          transform: expandido ? 'rotate(180deg)' : undefined, transition: 'transform .15s',
+                        }} />
+                      )}
+                    </Fila>
                     {ped ? (
                       diasEsperando !== null && estadoPedidos === 'pendiente' && (
                         <p style={{ fontSize: 11, color: diasEsperando >= 7 ? C.red : C.amber, fontWeight: 600 }}>
@@ -294,6 +361,9 @@ function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega
                           {(f as FilaProducto | FilaCliente).pedidos} {(f as FilaProducto | FilaCliente).pedidos === 1 ? 'pedido' : 'pedidos'}
                         </span>
                       </div>
+                    )}
+                    {expandido && (
+                      <DetalleCompraCliente cliente={c!.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
                     )}
                   </div>
                 )
