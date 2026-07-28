@@ -576,18 +576,21 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
 }
 
 // ── Barra de mix ─────────────────────────────────────────────────────────────
-function FilaMix({ nombre, litros, total, pct, color, colorSoft, emoji, onClick }: {
+/** Fila clickeable de "Mix de productos" dentro del hero —
+ *  mismo patrón (ícono, barra, litros, % y flecha) pero con los tokens de
+ *  color del hero en vez de los de tarjeta clara. Reemplaza a la extinta
+ *  tarjeta blanca "PRODUCT MIX", que quedaba duplicando esta misma info. */
+function FilaMixHero({ nombre, litros, total, pct, color, colorSoft, emoji, onClick }: {
   nombre: string; litros: number; total: number; pct: number | null
-  color: string; colorSoft: string; emoji: string; onClick?: () => void
+  color: string; colorSoft: string; emoji: string; onClick: () => void
 }) {
   const share = total > 0 ? (litros / total) * 100 : 0
-  const Contenedor = onClick ? 'button' : 'div'
   return (
-    <Contenedor
+    <button
       onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-        background: 'transparent', border: 'none', padding: 0, cursor: onClick ? 'pointer' : 'default',
+        background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
         textAlign: 'left', font: 'inherit', color: 'inherit',
       }}
     >
@@ -595,22 +598,22 @@ function FilaMix({ nombre, litros, total, pct, color, colorSoft, emoji, onClick 
         {emoji}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 5 }}>{nombre}</p>
-        <div style={{ height: 6, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 5 }}>{nombre}</p>
+        <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
           <div style={{ width: `${share}%`, height: '100%', background: color, borderRadius: 3, transition: 'width .4s' }} />
         </div>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 92 }}>
-        <p style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fL(litros)}</p>
+        <p style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{fL(litros)}</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, background: C.bg, borderRadius: 6, padding: '1px 5px' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#CBD5E1', background: 'rgba(255,255,255,.1)', borderRadius: 6, padding: '1px 5px' }}>
             {Math.round(share)}%
           </span>
           <Delta pct={pct} size={11} />
         </div>
       </div>
-      {onClick && <ChevronRight size={14} color={C.faint} style={{ flexShrink: 0 }} />}
-    </Contenedor>
+      <ChevronRight size={14} color="#94A3B8" style={{ flexShrink: 0 }} />
+    </button>
   )
 }
 
@@ -914,7 +917,6 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
     serie.map(p => Number(p[campo] ?? 0))
 
   const ticket = actual.pedidos > 0 ? actual.revenue / actual.pedidos : 0
-  const totalMix = actual.litrosCerveza + actual.litrosKombucha + actual.litrosOtros
 
   const hoyTxt = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Santiago' })
   // La meta se define por período de venta (24→23), así que sólo aplica ahí
@@ -1179,10 +1181,17 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             a ser tan grandes como litros entregado (antes iban en una línea
             de 12px); se saca Clientes; se agrega el monto total de la venta
             completa (entregado + por entregar, no sólo lo ya entregado); y
-            abajo el desglose de litros y plata de Cerveza/Kombucha. */}
+            abajo "Mix de productos" con el mismo look que tenía la extinta
+            tarjeta blanca "PRODUCT MIX" (duplicaba esta info). Va en un
+            <div> aparte, no dentro del <button> del hero, porque cada
+            categoría necesita ser su propio botón clickeable — un <button>
+            no puede anidar otro. El overflow:hidden del contenedor exterior
+            es lo que hace que las dos piezas se vean como una sola tarjeta
+            con esquinas redondeadas. */}
+        <div style={{ borderRadius: 20, overflow: 'hidden' }}>
         <button
           onClick={() => abrirDetalle('productos')}
-          style={{ background: C.hero, borderRadius: 20, padding: 20, color: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', display: 'block', font: 'inherit' }}
+          style={{ background: C.hero, padding: 20, color: '#fff', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', display: 'block', font: 'inherit' }}
         >
           <p style={{ fontSize: 11, letterSpacing: '0.08em', color: '#94A3B8', fontWeight: 600, marginBottom: 8 }}>
             {rango === 'periodo' && periodoSel
@@ -1273,36 +1282,44 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             </div>
           </div>
 
-          <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '18px 0' }} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 15, flexShrink: 0 }}>🍺</span>
-              <span style={{ fontSize: 13, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Cerveza</span>
-              <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litrosCerveza)}</span>
-              <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenueCerveza)}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 15, flexShrink: 0 }}>🧃</span>
-              <span style={{ fontSize: 13, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Kombucha</span>
-              <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litrosKombucha)}</span>
-              <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenueKombucha)}</span>
-            </div>
-            {actual.litrosOtros > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 15, flexShrink: 0 }}>📦</span>
-                <span style={{ fontSize: 13, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Otros</span>
-                <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litrosOtros)}</span>
-                <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenueOtros)}</span>
-              </div>
-            )}
-            <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '2px 0' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Total</span>
-              <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litros)}</span>
-              <span style={{ fontSize: 12, color: '#CBD5E1', fontWeight: 600, flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenue)}</span>
-            </div>
-          </div>
         </button>
+
+        {/* Mix de productos — reemplaza a la extinta tarjeta blanca
+            "PRODUCT MIX" (misma info, quedaba duplicada). Cada categoría es
+            clickeable y abre el mismo detalle que ya abría la tarjeta
+            blanca; el litraje y la plata sumados siguen mostrándose en la
+            fila "Total" de abajo. */}
+        <div style={{ background: C.hero, padding: '0 20px 20px', color: '#fff' }}>
+          <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '0 0 18px' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>MIX DE PRODUCTOS</p>
+            <span style={{ fontSize: 12, color: '#94A3B8' }}>{fNum(actual.clientes)} clientes</span>
+          </div>
+          {actual.litros === 0 ? (
+            <p style={{ fontSize: 13, color: '#94A3B8', textAlign: 'center', padding: '14px 0' }}>Sin ventas en este período</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <FilaMixHero nombre="Cerveza" emoji="🍺" litros={actual.litrosCerveza} total={actual.litros}
+                pct={variacion(actual.litrosCerveza, previo.litrosCerveza)} color="#F59E0B" colorSoft="rgba(245,158,11,.18)"
+                onClick={() => abrirDetalle('productos', { categoria: 'Cerveza' })} />
+              <FilaMixHero nombre="Kombucha" emoji="🧃" litros={actual.litrosKombucha} total={actual.litros}
+                pct={variacion(actual.litrosKombucha, previo.litrosKombucha)} color="#34D399" colorSoft="rgba(52,211,153,.18)"
+                onClick={() => abrirDetalle('productos', { categoria: 'Kombucha' })} />
+              {actual.litrosOtros > 0 && (
+                <FilaMixHero nombre="Otros" emoji="📦" litros={actual.litrosOtros} total={actual.litros}
+                  pct={variacion(actual.litrosOtros, previo.litrosOtros)} color="#A78BFA" colorSoft="rgba(167,139,250,.18)"
+                  onClick={() => abrirDetalle('productos', { categoria: 'Otros' })} />
+              )}
+              <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '2px 0' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Total</span>
+                <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litros)}</span>
+                <span style={{ fontSize: 12, color: '#CBD5E1', fontWeight: 600, flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenue)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+        </div>
 
         {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
@@ -1318,31 +1335,6 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           <KpiCard icon={Truck} tint={C.amber} tintSoft={C.amberSoft} label="Venta por entregar"
             valor={fPesoFull(d.entregas.revenuePorEntregar)} pct={null} serie={[]}
             onClick={() => abrirDetalle('clientes-por-entregar')} />
-        </div>
-
-        {/* Product mix */}
-        <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>PRODUCT MIX</p>
-            <span style={{ fontSize: 12, color: C.muted }}>{fNum(actual.clientes)} clientes</span>
-          </div>
-          {totalMix === 0 ? (
-            <p style={{ fontSize: 13, color: C.faint, textAlign: 'center', padding: '14px 0' }}>Sin ventas en este período</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <FilaMix nombre="Cerveza" emoji="🍺" litros={actual.litrosCerveza} total={totalMix}
-                pct={variacion(actual.litrosCerveza, previo.litrosCerveza)} color={C.hero} colorSoft="#E2E8F0"
-                onClick={() => abrirDetalle('productos', { categoria: 'Cerveza' })} />
-              <FilaMix nombre="Kombucha" emoji="🧃" litros={actual.litrosKombucha} total={totalMix}
-                pct={variacion(actual.litrosKombucha, previo.litrosKombucha)} color={C.green} colorSoft={C.greenSoft}
-                onClick={() => abrirDetalle('productos', { categoria: 'Kombucha' })} />
-              {actual.litrosOtros > 0 && (
-                <FilaMix nombre="Otros" emoji="📦" litros={actual.litrosOtros} total={totalMix}
-                  pct={variacion(actual.litrosOtros, previo.litrosOtros)} color={C.purple} colorSoft={C.purpleSoft}
-                  onClick={() => abrirDetalle('productos', { categoria: 'Otros' })} />
-              )}
-            </div>
-          )}
         </div>
 
         {/* Ranking */}
