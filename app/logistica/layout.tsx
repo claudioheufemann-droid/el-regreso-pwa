@@ -13,7 +13,17 @@ export default async function LogisticaLayout({ children }: { children: React.Re
       <div className="hidden lg:flex">
         <LogisticaSidebar />
       </div>
-      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-32 lg:pb-0 mobile-safe-top">
+      {/* Sin overflow-y-auto/min-h-screen acá a propósito — mismo fix que
+          app/ventas/layout.tsx: un <main> con su propio contenedor de
+          scroll ANIDADO dentro de una página larga con el nav flotante
+          abajo hace que el navegador no sepa resolver el gesto de scroll
+          (por eso "no se puede hacer scroll en nada"). Dejando que sea la
+          página completa (documento) la que scrollea se elimina el
+          contenedor de scroll de más. overflow-x-clip, NO overflow-x-hidden:
+          por spec de CSS, 'hidden' fuerza el otro eje (overflow-y) a 'auto'
+          automáticamente y reintroduce el mismo contenedor anidado; 'clip'
+          no dispara ese acoplamiento. */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-x-clip pb-32 lg:pb-0 mobile-safe-top">
         {children}
       </main>
       <div className="lg:hidden">
