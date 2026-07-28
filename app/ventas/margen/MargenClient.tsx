@@ -13,11 +13,6 @@ import { TrendingUp, AlertTriangle, Droplets } from 'lucide-react'
 import AppHeader from '@/components/ui/AppHeader'
 import type { MargenRow } from './page'
 
-function fmtPeso(n: number) {
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
-  if (Math.abs(n) >= 1000) return `$${Math.round(n / 1000)}k`
-  return `$${Math.round(n)}`
-}
 function fmtPesoFull(n: number) { return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n) }
 
 function colorMargen(pct: number) {
@@ -59,7 +54,7 @@ export default function MargenClient({ rows }: { rows: MargenRow[] }) {
               <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.6px', textTransform: 'uppercase' }}>Margen total</span>
             </div>
             <p style={{ fontSize: 20, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.6px' }}>{fmtPesoFull(totalMargen)}</p>
-            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>{margenPromedioPonderado.toFixed(1)}% ponderado sobre {fmtPeso(totalRevenue)}</p>
+            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>{margenPromedioPonderado.toFixed(1)}% ponderado sobre {fmtPesoFull(totalRevenue)}</p>
           </div>
           <div className="card card-pad" style={{ borderTop: '2px solid #D4AF37' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -106,10 +101,10 @@ export default function MargenClient({ rows }: { rows: MargenRow[] }) {
                     <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${((r.margen_clp ?? 0) / maxMargen) * 100}%`, background: color, borderRadius: 3 }} />
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)', flexShrink: 0, minWidth: 64, textAlign: 'right' }}>{fmtPeso(r.margen_clp ?? 0)}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)', flexShrink: 0, minWidth: 64, textAlign: 'right' }}>{fmtPesoFull(r.margen_clp ?? 0)}</span>
                   </div>
                   <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>
-                    {r.litros.toLocaleString('es-CL')} L · PPL {fmtPesoFull(Math.round(r.ppl ?? 0))} · revenue {fmtPeso(r.revenue)}
+                    {r.litros.toLocaleString('es-CL')} L · PPL {fmtPesoFull(Math.round(r.ppl ?? 0))} · revenue {fmtPesoFull(r.revenue)}
                   </p>
                 </div>
               )
@@ -125,13 +120,13 @@ export default function MargenClient({ rows }: { rows: MargenRow[] }) {
               <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>Sin dato de costo cargado</p>
             </div>
             <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 12 }}>
-              {sinDato.length} SKUs · {litrosSinDato.toLocaleString('es-CL')} L · {fmtPeso(revenueSinDato)} de revenue sin margen calculable. Carga su costo para incluirlos.
+              {sinDato.length} SKUs · {litrosSinDato.toLocaleString('es-CL')} L · {fmtPesoFull(revenueSinDato)} de revenue sin margen calculable. Carga su costo para incluirlos.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {sinDato.sort((a, b) => b.revenue - a.revenue).map(r => (
                 <div key={r.producto} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.02)' }}>
                   <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.producto}</span>
-                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', flexShrink: 0, marginLeft: 8 }}>{fmtPeso(r.revenue)}</span>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', flexShrink: 0, marginLeft: 8 }}>{fmtPesoFull(r.revenue)}</span>
                 </div>
               ))}
             </div>

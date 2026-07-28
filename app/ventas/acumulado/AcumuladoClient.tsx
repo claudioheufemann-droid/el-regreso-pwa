@@ -23,7 +23,7 @@ const MIX_COLORS = ['#D4AF37','#D4AF37','#5A8A4A','#F472B6','#8A6D1F','#FB923C',
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fL   = (n:number) => n>=1000?`${(n/1000).toFixed(1)}k`:n.toFixed(1)
 const fLn  = (n:number) => n.toFixed(1)
-const fP   = (n:number) => n>=1_000_000?`$${(n/1_000_000).toFixed(2)}M`:`$${Math.round(n).toLocaleString('es-CL')}`
+const fP   = (n:number) => `$${Math.round(n).toLocaleString('es-CL')}`
 const fPk  = (n:number) => `$${Math.round(n).toLocaleString('es-CL')}`
 const dlt  = (a:number,b:number) => b>0?Math.round(((a-b)/b)*100):0
 const MESES= ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']

@@ -68,8 +68,6 @@ function fDias(d: number | null): string {
   return `hace ${d}d`
 }
 function fPeso(n: number): string {
-  if (n >= 1_000_000) return `$${(n/1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `$${Math.round(n/1000)}k`
   return `$${Math.round(n).toLocaleString('es-CL')}`
 }
 function esPasada(f: string | null | undefined): boolean {

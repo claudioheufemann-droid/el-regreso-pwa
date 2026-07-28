@@ -128,7 +128,6 @@ function fFecha(s: string | null): string {
 }
 function fPeso(n: number): string {
   if (!n) return '$0'
-  if (n >= 1_000_000) return `$${(n/1_000_000).toFixed(1)}M`
   return `$${Math.round(n).toLocaleString('es-CL')}`
 }
 function rangoSemana(lunes: string) {

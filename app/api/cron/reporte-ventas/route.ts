@@ -14,7 +14,7 @@ const esComp = (e: string) => e === 'contactado_pedido' || e === 'auto_completad
 
 function ymd(d: Date) { return d.toISOString().split('T')[0] }
 function fmt(s: string) { const [y, m, d] = s.split('-'); return `${+d}/${+m}/${y}` }
-function fPeso(n: number) { return n >= 1_000_000 ? `$${(n/1_000_000).toFixed(1)}M` : `$${Math.round(n).toLocaleString('es-CL')}` }
+function fPeso(n: number) { return `$${Math.round(n).toLocaleString('es-CL')}` }
 function fL(n: number) { return `${n.toLocaleString('es-CL', { maximumFractionDigits: 0 })} L` }
 
 // Lunes de hace N semanas (0 = esta, 1 = pasada)

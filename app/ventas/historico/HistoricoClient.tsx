@@ -18,11 +18,6 @@ const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'O
 // Color por año (más reciente = dorado fuerte)
 const ANIO_COLOR = ['#D4AF37', '#60A5FA', '#4ADE80', '#F87171', '#A78BFA', '#FB923C']
 
-function fmtPeso(n: number) {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `$${Math.round(n / 1000)}k`
-  return `$${Math.round(n)}`
-}
 function fmtPesoFull(n: number) { return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n) }
 function fmtL(n: number) { return n >= 1000 ? `${(n / 1000).toFixed(1)}k L` : `${Math.round(n)} L` }
 
@@ -123,7 +118,7 @@ export default function HistoricoClient({ mensualInicial, paretoInicial, canales
 
         {/* ── KPIs año actual vs anterior ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16 }}>
-          <KpiAnio icon={DollarSign} label={`Facturación ${anioActual}`} value={fmtPesoFull(tActual.revenue)} delta={deltaRev} prevLabel={`${anioActual - 1}: ${fmtPeso(tPrev.revenue)}`} color="#4ADE80" />
+          <KpiAnio icon={DollarSign} label={`Facturación ${anioActual}`} value={fmtPesoFull(tActual.revenue)} delta={deltaRev} prevLabel={`${anioActual - 1}: ${fmtPesoFull(tPrev.revenue)}`} color="#4ADE80" />
           <KpiAnio icon={Droplets} label={`Volumen ${anioActual}`} value={fmtL(tActual.litros)} delta={deltaLit} prevLabel={`${anioActual - 1}: ${fmtL(tPrev.litros)}`} color="#D4AF37" />
         </div>
 
@@ -195,7 +190,7 @@ export default function HistoricoClient({ mensualInicial, paretoInicial, canales
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <p style={{ fontSize: 12, fontWeight: 800, color: '#D4AF37' }}>{fmtPeso(p.revenue)}</p>
+                  <p style={{ fontSize: 12, fontWeight: 800, color: '#D4AF37' }}>{fmtPesoFull(p.revenue)}</p>
                   <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>{fmtL(p.litros)}</p>
                 </div>
               </div>

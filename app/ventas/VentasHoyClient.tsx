@@ -41,13 +41,8 @@ const C = {
 // ── Formato ──────────────────────────────────────────────────────────────────
 const fL = (n: number) => `${n.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`
 const fNum = (n: number) => n.toLocaleString('es-CL')
-function fPeso(n: number) {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toLocaleString('es-CL', { maximumFractionDigits: 1 })}M`
-  if (n >= 1_000) return `$${Math.round(n / 1000)}k`
-  return `$${Math.round(n).toLocaleString('es-CL')}`
-}
-/** Monto sin abreviar ($254.150). En los drill-down se prefiere el número
- *  exacto: son listados de detalle, donde el redondeo a "k" esconde plata. */
+/** Monto siempre completo, nunca abreviado ($254.150, no "$254k"): el
+ *  redondeo a "k"/"M" esconde plata real. */
 function fPesoFull(n: number) { return `$${Math.round(n).toLocaleString('es-CL')}` }
 function fFechaCorta(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -1237,7 +1232,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             valor={fNum(actual.pedidos)} pct={variacion(actual.pedidos, previo.pedidos)} serie={serieDe('pedidos')}
             onClick={() => abrirDetalle('productos')} />
           <KpiCard icon={Truck} tint={C.amber} tintSoft={C.amberSoft} label="Venta por entregar"
-            valor={fPeso(d.entregas.revenuePorEntregar)} pct={null} serie={[]}
+            valor={fPesoFull(d.entregas.revenuePorEntregar)} pct={null} serie={[]}
             onClick={() => abrirDetalle('clientes-por-entregar')} />
         </div>
 
@@ -1321,7 +1316,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                     {fL(litrosBacklog)}
                   </p>
                   <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                    {fNum(d.origenEntregado.pedidosBacklog)} {d.origenEntregado.pedidosBacklog === 1 ? 'pedido' : 'pedidos'} · {fPeso(d.origenEntregado.revenueBacklog)}
+                    {fNum(d.origenEntregado.pedidosBacklog)} {d.origenEntregado.pedidosBacklog === 1 ? 'pedido' : 'pedidos'} · {fPesoFull(d.origenEntregado.revenueBacklog)}
                   </p>
                 </button>
 
@@ -1338,7 +1333,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                     {fL(litrosMismoPeriodo)}
                   </p>
                   <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                    {fNum(d.origenEntregado.pedidosMismoPeriodo)} {d.origenEntregado.pedidosMismoPeriodo === 1 ? 'pedido' : 'pedidos'} · {fPeso(d.origenEntregado.revenueMismoPeriodo)}
+                    {fNum(d.origenEntregado.pedidosMismoPeriodo)} {d.origenEntregado.pedidosMismoPeriodo === 1 ? 'pedido' : 'pedidos'} · {fPesoFull(d.origenEntregado.revenueMismoPeriodo)}
                   </p>
                 </button>
               </div>
