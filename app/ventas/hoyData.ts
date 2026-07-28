@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { vendedorCanonico } from '@/lib/types'
 import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
          type PuntoSerie, type DatosRango, type PeriodoOpcion, type EnvaseRango, type EntregasRango,
+         type OrigenEntregadoRango,
          type ConsumoInternoRango, type AlertaInsight, type HoyData } from './hoyTypes'
 
 /**
@@ -20,7 +21,7 @@ import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
  * arrastrar lib/supabase/server al bundle del navegador.
  */
 
-export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, EnvaseRango, EntregasRango, ConsumoInternoRango, AlertaInsight, HoyData }
+export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, EnvaseRango, EntregasRango, OrigenEntregadoRango, ConsumoInternoRango, AlertaInsight, HoyData }
 
 /** Cuántos períodos anteriores se ofrecen en el selector. */
 const PERIODOS_VISIBLES = 4
@@ -146,6 +147,28 @@ function mapEntregas(row: any): EntregasRango {
     revenuePorEntregar: Number(row.revenue_por_entregar ?? 0),
     pedidosEntregados: Number(row.pedidos_entregados ?? 0),
     pedidosPorEntregar: Number(row.pedidos_por_entregar ?? 0),
+  }
+}
+
+const ORIGEN_ENTREGADO_CERO: OrigenEntregadoRango = {
+  litrosTotal: 0, revenueTotal: 0, pedidosTotal: 0,
+  litrosBacklog: 0, revenueBacklog: 0, pedidosBacklog: 0,
+  litrosMismoPeriodo: 0, revenueMismoPeriodo: 0, pedidosMismoPeriodo: 0,
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapOrigenEntregado(row: any): OrigenEntregadoRango {
+  if (!row) return { ...ORIGEN_ENTREGADO_CERO }
+  return {
+    litrosTotal: Number(row.litros_total ?? 0),
+    revenueTotal: Number(row.revenue_total ?? 0),
+    pedidosTotal: Number(row.pedidos_total ?? 0),
+    litrosBacklog: Number(row.litros_backlog ?? 0),
+    revenueBacklog: Number(row.revenue_backlog ?? 0),
+    pedidosBacklog: Number(row.pedidos_backlog ?? 0),
+    litrosMismoPeriodo: Number(row.litros_mismo_periodo ?? 0),
+    revenueMismoPeriodo: Number(row.revenue_mismo_periodo ?? 0),
+    pedidosMismoPeriodo: Number(row.pedidos_mismo_periodo ?? 0),
   }
 }
 
@@ -282,11 +305,12 @@ export async function getHoyData(
     ...(customDef ? [customDef.prevDesde] : []),
   ].sort()[0]
 
-  const [kpisAll, vendAll, envAll, entAll, porEntregarVendAll, consumoInternoAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
+  const [kpisAll, vendAll, envAll, entAll, origenEntregadoAll, porEntregarVendAll, consumoInternoAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
     Promise.all(consultas.map(c => supabase.rpc('ventas_dashboard_kpis', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_agg_periodo', { p_ini: c.desde, p_fin: c.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_envases_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
+    Promise.all(consultas.map(c => supabase.rpc('ventas_entregado_origen_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_por_vendedor', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
     Promise.all(consultas.map(c => supabase.rpc('ventas_consumo_interno_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
     // Una sola serie se recorta (recorte()) para todas las tarjetas de todos
@@ -313,6 +337,7 @@ export async function getHoyData(
   const vendEn = (i: number) => (vendAll[i].data as Record<string, unknown>[] | null)
   const envEn  = (i: number) => (envAll[i].data as Record<string, unknown>[] | null)
   const entEn  = (i: number) => mapEntregas((entAll[i].data as unknown[])?.[0])
+  const origenEntEn = (i: number) => mapOrigenEntregado((origenEntregadoAll[i].data as unknown[])?.[0])
   const porEntregarVendEn = (i: number) => (porEntregarVendAll[i].data as Record<string, unknown>[] | null)
   const consumoInternoEn = (i: number) => mapConsumoInterno(consumoInternoAll[i].data as Record<string, unknown>[] | null)
 
@@ -331,6 +356,7 @@ export async function getHoyData(
       vendedores: armarVendedores(vendEn(iAct), vendEn(iPrev), porEntregarVendEn(iAct)),
       envases: armarEnvases(envEn(iAct), envEn(iPrev)),
       entregas: entEn(iAct),
+      origenEntregado: origenEntEn(iAct),
       consumoInterno: consumoInternoEn(iAct),
       serie: recorte(r.desde, r.hasta),
     }
@@ -371,6 +397,7 @@ export async function getHoyData(
           vendedores: armarVendedores(vendEn(iAct), anterior ? vendEn(iComparar) : null, porEntregarVendEn(iAct)),
           envases: armarEnvases(envEn(iAct), anterior ? envEn(iComparar) : null),
           entregas: entEn(iAct),
+          origenEntregado: origenEntEn(iAct),
           consumoInterno: consumoInternoEn(iAct),
           serie: recorte(p.fecha_inicio, p.fecha_fin),
         },
@@ -430,6 +457,7 @@ export async function getHoyData(
         vendedores: armarVendedores(vendEn(iCustom), vendEn(iCustom + 1), porEntregarVendEn(iCustom)),
         envases: armarEnvases(envEn(iCustom), envEn(iCustom + 1)),
         entregas: entEn(iCustom),
+        origenEntregado: origenEntEn(iCustom),
         consumoInterno: consumoInternoEn(iCustom),
         serie: recorte(customDef.desde, customDef.hasta),
       }

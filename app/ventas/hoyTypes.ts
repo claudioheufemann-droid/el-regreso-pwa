@@ -55,7 +55,8 @@ export interface PuntoSerie {
  * Desglose entregado / por entregar.
  * "Por entregar" = venta ya tomada que el ERP aún no despachó (sin fecha de
  * entrega). Es la razón por la que un pedido puede existir y no aparecer en un
- * informe filtrado por fecha de entrega.
+ * informe filtrado por fecha de entrega. Alimenta el "+ X por entregar" de la
+ * tarjeta principal (arriba del todo) — eso NO cambió.
  */
 export interface EntregasRango {
   litrosEntregados: number
@@ -66,6 +67,27 @@ export interface EntregasRango {
   revenuePorEntregar: number
   pedidosEntregados: number
   pedidosPorEntregar: number
+}
+
+/**
+ * De dónde viene lo entregado en el período: la MISMA población que
+ * `actual.litros` (litrosTotal tiene que calzar exacto con esa tarjeta — el
+ * período lo define la fecha de ENTREGA, no la de pedido), separada según si
+ * el pedido se tomó antes de este período (backlog que se puso al día) o
+ * dentro de él (se pidió y se entregó en el mismo ciclo). Alimenta la
+ * tarjeta "PEDIDOS DE ESTE PERÍODO" — distinto de EntregasRango de arriba,
+ * que mide el pipeline de lo pedido (independiente de si se entregó).
+ */
+export interface OrigenEntregadoRango {
+  litrosTotal: number
+  revenueTotal: number
+  pedidosTotal: number
+  litrosBacklog: number
+  revenueBacklog: number
+  pedidosBacklog: number
+  litrosMismoPeriodo: number
+  revenueMismoPeriodo: number
+  pedidosMismoPeriodo: number
 }
 
 /**
@@ -99,6 +121,7 @@ export interface DatosRango {
   vendedores: VendedorRango[]
   envases: EnvaseRango[]
   entregas: EntregasRango
+  origenEntregado: OrigenEntregadoRango
   consumoInterno: ConsumoInternoRango[]
   serie: PuntoSerie[]
 }

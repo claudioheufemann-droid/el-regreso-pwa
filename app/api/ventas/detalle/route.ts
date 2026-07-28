@@ -17,10 +17,11 @@ function claseEnvase(envase: string): string {
 }
 
 /**
- * GET /api/ventas/detalle?tipo=productos|clientes|envase|pedidos|cliente-productos|clientes-vendedor|pedido-productos&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+ * GET /api/ventas/detalle?tipo=productos|clientes|envase|pedidos-origen|cliente-productos|clientes-vendedor|pedido-productos&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
  * tipo=envase   requiere &bucket=Barril%2030L|Lata%20354%20ml|Lata%20473%20ml|Otros
  * tipo=productos admite &categoria=Cerveza|Kombucha|Otros (opcional, filtra el mix)
- * tipo=pedidos  requiere &estado=despachado|pendiente
+ * tipo=pedidos-origen requiere &origen=backlog|mismo-periodo — de lo entregado
+ *   en el rango, pedidos tomados antes del período vs dentro de él
  * tipo=cliente-productos requiere &cliente=<nombre_fantasia> — qué se le vendió
  * tipo=clientes-vendedor requiere &vendedor=<nombre vigente, ej "Los Ríos"> — qué locales le compraron
  * tipo=pedido-productos requiere &pedido=<número> — qué contiene ese pedido (no usa desde/hasta)
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
   const tipo = searchParams.get('tipo')
   const bucket = searchParams.get('bucket') ?? ''
   const categoria = searchParams.get('categoria') ?? ''
-  const estado = searchParams.get('estado') ?? ''
+  const origen = searchParams.get('origen') ?? ''
   const cliente = searchParams.get('cliente') ?? ''
   const vendedor = searchParams.get('vendedor') ?? ''
   const pedidoNum = searchParams.get('pedido') ?? ''
@@ -51,12 +52,12 @@ export async function GET(req: Request) {
   // así es el criterio en casi todas las tarjetas.
   const porEntrega = searchParams.get('porEntrega') !== 'false'
 
-  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos' && tipo !== 'cliente-productos' && tipo !== 'clientes-vendedor' && tipo !== 'pedido-productos')
-    return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase, pedidos, cliente-productos, clientes-vendedor o pedido-productos' }, { status: 400 })
+  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos-origen' && tipo !== 'cliente-productos' && tipo !== 'clientes-vendedor' && tipo !== 'pedido-productos')
+    return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase, pedidos-origen, cliente-productos, clientes-vendedor o pedido-productos' }, { status: 400 })
   if (tipo === 'envase' && !bucket)
     return NextResponse.json({ error: 'envase requiere bucket' }, { status: 400 })
-  if (tipo === 'pedidos' && estado !== 'despachado' && estado !== 'pendiente')
-    return NextResponse.json({ error: 'pedidos requiere estado=despachado|pendiente' }, { status: 400 })
+  if (tipo === 'pedidos-origen' && origen !== 'backlog' && origen !== 'mismo-periodo')
+    return NextResponse.json({ error: 'pedidos-origen requiere origen=backlog|mismo-periodo' }, { status: 400 })
   if (tipo === 'cliente-productos' && !cliente)
     return NextResponse.json({ error: 'cliente-productos requiere cliente' }, { status: 400 })
   if (tipo === 'clientes-vendedor' && !vendedor)
@@ -93,9 +94,9 @@ export async function GET(req: Request) {
   if (desde > hasta)
     return NextResponse.json({ error: 'desde no puede ser posterior a hasta' }, { status: 400 })
 
-  if (tipo === 'pedidos') {
-    const { data, error } = await supabase.rpc('ventas_pedidos_por_estado', {
-      p_ini: desde, p_fin: hasta, p_entregado: estado === 'despachado', p_provincias,
+  if (tipo === 'pedidos-origen') {
+    const { data, error } = await supabase.rpc('ventas_pedidos_por_origen', {
+      p_ini: desde, p_fin: hasta, p_backlog: origen === 'backlog', p_provincias, p_por_entrega: porEntrega,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
