@@ -1216,9 +1216,14 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                 {fPesoFull(actual.revenue)}
               </p>
               {d.entregas.revenuePorEntregar > 0 && (
-                <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
-                  Por entregar <span style={{ color: '#F59E0B', fontWeight: 600 }}>{fPesoFull(d.entregas.revenuePorEntregar)}</span>
-                </p>
+                <>
+                  <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
+                    Por entregar <span style={{ color: '#F59E0B', fontWeight: 600 }}>{fPesoFull(d.entregas.revenuePorEntregar)}</span>
+                  </p>
+                  <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
+                    Total (entregado + por entregar) <span style={{ color: '#CBD5E1', fontWeight: 600 }}>{fPesoFull(actual.revenue + d.entregas.revenuePorEntregar)}</span>
+                  </p>
+                </>
               )}
               {actual.pedidos > 0 && (
                 <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
