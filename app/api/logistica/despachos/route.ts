@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
+import { sendPushToAll } from '@/lib/push'
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -136,6 +137,28 @@ export async function POST(req: NextRequest) {
       await supabase.from('despachos').update({ viaje_flota_id: viaje.id }).eq('id', despacho.id)
       await supabase.from('vehiculos').update({ estado: 'en_uso' }).eq('id', body.vehiculo_id)
       despacho.viaje_flota_id = viaje.id
+
+      // 🔔 Notificar a todos que un camión salió — mismo evento
+      // "camion_salida" que ya dispara el check-in de Flota
+      // (CheckinClient.tsx), pero este flujo (armar el despacho) también
+      // deja el vehículo en_uso y antes no avisaba a nadie: si el despacho
+      // se crea desde acá en vez de por check-in, nunca sonaba ninguna
+      // notificación. Se espera la promesa (no fire-and-forget) porque
+      // esto corre en la misma función serverless que crea el despacho —
+      // sin await, Vercel puede cortar la función apenas se envía la
+      // respuesta y la notificación se pierde en silencio.
+      const [{ data: vehiculo }, { data: chofer }] = await Promise.all([
+        supabase.from('vehiculos').select('nombre').eq('id', body.vehiculo_id).single(),
+        body.chofer_id
+          ? supabase.from('users').select('nombre').eq('id', body.chofer_id).single()
+          : Promise.resolve({ data: null as { nombre: string } | null }),
+      ])
+      await sendPushToAll({
+        title: `🚚 ${vehiculo?.nombre ?? 'Vehículo'} en ruta`,
+        body: `${chofer?.nombre?.split(' ')[0] ?? 'Conductor'} salió en reparto — ${body.region}`,
+        url: '/flota',
+        tag: 'camion_salida',
+      })
     }
   }
 

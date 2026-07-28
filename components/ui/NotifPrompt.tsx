@@ -31,11 +31,32 @@ export default function NotifPrompt() {
 
   useEffect(() => {
     if (!('Notification' in window) || !('serviceWorker' in navigator)) return
-    // Ya está activo — no mostrar
+    // Ya está activo — no mostrar el prompt, pero sí verificar que la
+    // suscripción push siga viva. El permiso del navegador ("granted") y la
+    // suscripción real (endpoint/keys) son cosas distintas: la suscripción
+    // puede morir en silencio (actualización del service worker, el SO
+    // rota el endpoint, la PWA se reinstala) sin que el permiso cambie, y
+    // sin esto nadie se entera hasta que un aviso importante no llega.
+    // Se resuscribe solo, sin pedir permiso de nuevo (ya está "granted").
     if (Notification.permission === 'granted') {
-      // Pero sí enviar APP_OPENED para limpiar badge al abrir
-      navigator.serviceWorker.ready.then(reg => {
+      navigator.serviceWorker.ready.then(async reg => {
         reg.active?.postMessage({ type: 'APP_OPENED' })
+        try {
+          const existente = await reg.pushManager.getSubscription()
+          const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+          const sub = existente ?? (vapidKey
+            ? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) })
+            : null)
+          if (sub) {
+            await fetch('/api/push/subscribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(sub.toJSON()),
+            })
+          }
+        } catch (e) {
+          console.error('Push resubscribe error:', e)
+        }
       }).catch(() => {})
       return
     }
