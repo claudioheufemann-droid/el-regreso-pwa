@@ -1297,11 +1297,19 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litrosKombucha)}</span>
               <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenueKombucha)}</span>
             </div>
+            {actual.litrosOtros > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 15, flexShrink: 0 }}>📦</span>
+                <span style={{ fontSize: 13, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Otros</span>
+                <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litrosOtros)}</span>
+                <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenueOtros)}</span>
+              </div>
+            )}
             <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '2px 0' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Total</span>
-              <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litrosCerveza + actual.litrosKombucha)}</span>
-              <span style={{ fontSize: 12, color: '#CBD5E1', fontWeight: 600, flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenueCerveza + actual.revenueKombucha)}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litros)}</span>
+              <span style={{ fontSize: 12, color: '#CBD5E1', fontWeight: 600, flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenue)}</span>
             </div>
           </div>
         </button>
