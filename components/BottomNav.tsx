@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { BarChart2, Users, Map, Upload, Target, TrendingUp, CalendarDays, Settings2, Trophy, ListChecks, Crosshair, Activity, BarChart, Route } from 'lucide-react'
+import { BarChart2, Users, Map, Upload, Target, TrendingUp, Settings2, Trophy, ListChecks, Crosshair, Activity, BarChart, Route } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
@@ -21,7 +21,6 @@ const VENDEDOR_ITEMS: NavItem[] = [
 const ADMIN_ITEMS: NavItem[] = [
   { href: '/ventas',                      icon: BarChart2,   label: 'Hoy',      exact: true },
   { href: '/ventas/agenda',               icon: ListChecks,  label: 'Agenda'                },
-  { href: '/ventas/acumulado',            icon: CalendarDays,label: 'Período'               },
   { href: '/ventas/misiones',             icon: Target,      label: 'Misiones'              },
   { href: '/ventas/clientes',             icon: Users,       label: 'Clientes'              },
   { href: '/ventas/leads',                icon: Crosshair,   label: 'Leads'                 },
