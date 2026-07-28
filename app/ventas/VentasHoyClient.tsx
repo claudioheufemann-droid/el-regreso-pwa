@@ -1044,14 +1044,18 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             <>
               <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '18px 0' }} />
               <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+                {/* Mismo texto ("Por entregar" y "Total") en las dos etiquetas
+                    para que midan lo mismo y los números de abajo queden
+                    parejos — antes "Total (entregado + por entregar)" se
+                    partía en dos líneas y desalineaba el número. */}
                 <div style={{ flex: '1 1 130px', minWidth: 0 }}>
-                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4 }}>Por entregar</p>
+                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, whiteSpace: 'nowrap' }}>Por entregar</p>
                   <p style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1, color: '#F59E0B' }}>
                     {fL(d.entregas.litrosPorEntregar)}
                   </p>
                 </div>
                 <div style={{ flex: '1 1 130px', minWidth: 0 }}>
-                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4 }}>Total (entregado + por entregar)</p>
+                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, whiteSpace: 'nowrap' }}>Total</p>
                   <p style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1 }}>
                     {fL(actual.litros + d.entregas.litrosPorEntregar)}
                   </p>
@@ -1068,7 +1072,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 11, color: '#94A3B8', marginBottom: 1 }}>Total de la venta completa</p>
               <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
-                {fPeso(actual.revenue + d.entregas.revenuePorEntregar)}
+                {fPesoFull(actual.revenue + d.entregas.revenuePorEntregar)}
               </p>
             </div>
           </div>
@@ -1079,13 +1083,13 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               <span style={{ fontSize: 15, flexShrink: 0 }}>🍺</span>
               <span style={{ fontSize: 13, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Cerveza</span>
               <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litrosCerveza)}</span>
-              <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{fPeso(actual.revenueCerveza)}</span>
+              <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenueCerveza)}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 15, flexShrink: 0 }}>🧃</span>
               <span style={{ fontSize: 13, color: '#CBD5E1', flex: 1, minWidth: 0 }}>Kombucha</span>
               <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{fL(actual.litrosKombucha)}</span>
-              <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{fPeso(actual.revenueKombucha)}</span>
+              <span style={{ fontSize: 12, color: '#94A3B8', flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenueKombucha)}</span>
             </div>
           </div>
         </button>
