@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft, Bell, ChevronDown, ChevronRight, Droplet, Users, ShoppingBag,
+  ChevronLeft, Bell, ChevronDown, ChevronRight, ArrowRight, Droplet, Users, ShoppingBag,
   DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar, CheckCircle2, Truck, RefreshCw,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
-import { RANGOS, type RangoKey, type HoyData, type PuntoSerie, type VendedorRango, type DatosRango } from './hoyTypes'
+import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango } from './hoyTypes'
 
 /**
  * Vista principal de Ventas — tema CLARO, propio de esta pantalla.
@@ -66,31 +66,6 @@ function variacion(actual: number, previo: number): number | null {
   return ((actual - previo) / previo) * 100
 }
 
-// ── Sparkline ────────────────────────────────────────────────────────────────
-function Sparkline({ puntos, color }: { puntos: number[]; color: string }) {
-  const w = 120, h = 34
-  if (puntos.length < 2) return <div style={{ height: h }} />
-  const max = Math.max(...puntos), min = Math.min(...puntos)
-  const span = max - min || 1
-  const paso = w / (puntos.length - 1)
-  const pts = puntos.map((v, i) => [i * paso, h - ((v - min) / span) * (h - 6) - 3] as const)
-  const linea = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
-  const area = `${linea} L${w},${h} L0,${h} Z`
-  const gid = `sp-${color.replace('#', '')}`
-  return (
-    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill={`url(#${gid})`} />
-      <path d={linea} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 function Delta({ pct, size = 12 }: { pct: number | null; size?: number }) {
   if (pct === null) return <span style={{ fontSize: size, color: C.faint }}>—</span>
   const pos = pct >= 0
@@ -103,9 +78,14 @@ function Delta({ pct, size = 12 }: { pct: number | null; size?: number }) {
 }
 
 // ── KPI card ─────────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, tint, tintSoft, label, valor, pct, serie, onClick }: {
+/** Tarjeta horizontal compacta (pedido de Claudio, 28-jul): fondo tonal
+ *  suave del color de la categoría, ícono en círculo blanco a la izquierda,
+ *  nombre+valor al centro, flecha en círculo blanco a la derecha. Sin
+ *  gráfico ni guión de "sin dato" — si no hay pct, esa fila simplemente no
+ *  muestra nada ahí, en vez de un "—" vacío. */
+function KpiCard({ icon: Icon, tint, tintSoft, label, valor, pct, onClick }: {
   icon: typeof Droplet; tint: string; tintSoft: string
-  label: string; valor: string; pct: number | null; serie: number[]
+  label: string; valor: string; pct: number | null
   /** Si viene, la tarjeta abre el detalle correspondiente */
   onClick?: () => void
 }) {
@@ -114,23 +94,28 @@ function KpiCard({ icon: Icon, tint, tintSoft, label, valor, pct, serie, onClick
     <Contenedor
       onClick={onClick}
       style={{
-        background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 14,
-        minWidth: 0, width: '100%', textAlign: 'left', display: 'block',
-        cursor: onClick ? 'pointer' : 'default', font: 'inherit', color: 'inherit',
+        background: tintSoft, borderRadius: 18, padding: '14px 14px 14px 12px', maxHeight: 110,
+        display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, width: '100%',
+        border: 'none', textAlign: 'left', cursor: onClick ? 'pointer' : 'default', font: 'inherit', color: 'inherit',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 10, background: tintSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon size={17} color={tint} />
-        </div>
-        {onClick && <ChevronRight size={15} color={C.faint} style={{ marginLeft: 'auto' }} />}
+      <div style={{ width: 44, height: 44, borderRadius: 14, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={20} color={tint} />
       </div>
-      <p style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>{label}</p>
-      <p style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {valor}
-      </p>
-      <div style={{ marginTop: 4, marginBottom: 6 }}><Delta pct={pct} /></div>
-      <Sparkline puntos={serie} color={tint} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: tint, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</p>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 21, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.15, whiteSpace: 'nowrap' }}>
+            {valor}
+          </span>
+          {pct !== null && <Delta pct={pct} size={11} />}
+        </div>
+      </div>
+      {onClick && (
+        <span style={{ width: 34, height: 34, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <ArrowRight size={16} color="#F59E0B" />
+        </span>
+      )}
     </Contenedor>
   )
 }
@@ -910,11 +895,8 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
     )
   }
 
-  const { actual, previo, serie } = d
+  const { actual, previo } = d
   const metaLitros = rango === 'periodo' ? (periodoSel?.metaLitros ?? 0) : 0
-
-  const serieDe = (campo: keyof PuntoSerie) =>
-    serie.map(p => Number(p[campo] ?? 0))
 
   const ticket = actual.pedidos > 0 ? actual.revenue / actual.pedidos : 0
 
@@ -1322,18 +1304,18 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
         </div>
 
         {/* KPIs */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <KpiCard icon={Droplet} tint={C.blue} tintSoft={C.blueSoft} label="Litros vendidos"
-            valor={fL(actual.litros)} pct={variacion(actual.litros, previo.litros)} serie={serieDe('litros')}
+            valor={fL(actual.litros)} pct={variacion(actual.litros, previo.litros)}
             onClick={() => abrirDetalle('productos')} />
           <KpiCard icon={Users} tint={C.green} tintSoft={C.greenSoft} label="Clientes"
-            valor={fNum(actual.clientes)} pct={variacion(actual.clientes, previo.clientes)} serie={serieDe('clientes')}
+            valor={fNum(actual.clientes)} pct={variacion(actual.clientes, previo.clientes)}
             onClick={() => abrirDetalle('clientes')} />
           <KpiCard icon={ShoppingBag} tint={C.purple} tintSoft={C.purpleSoft} label="Pedidos"
-            valor={fNum(actual.pedidos)} pct={variacion(actual.pedidos, previo.pedidos)} serie={serieDe('pedidos')}
+            valor={fNum(actual.pedidos)} pct={variacion(actual.pedidos, previo.pedidos)}
             onClick={() => abrirDetalle('productos')} />
           <KpiCard icon={Truck} tint={C.amber} tintSoft={C.amberSoft} label="Venta por entregar"
-            valor={fPesoFull(d.entregas.revenuePorEntregar)} pct={null} serie={[]}
+            valor={fPesoFull(d.entregas.revenuePorEntregar)} pct={null}
             onClick={() => abrirDetalle('clientes-por-entregar')} />
         </div>
 
