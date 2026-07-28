@@ -284,8 +284,57 @@ function DetallePedidoProductos({ pedido }: { pedido: string }) {
   )
 }
 
+interface FilaPedidoPendiente { pedido: string; fechaPedido: string | null; litros: number; revenue: number }
+
+/** Pedidos pendientes de UN cliente — se despliega al tocar su fila en
+ *  "Clientes con venta por entregar". "El unitario" acá es precio por
+ *  litro (revenue/litros): un pedido mezcla productos/envases distintos,
+ *  no tiene un único precio de fábrica como sí lo tiene una lata o un
+ *  barril (ver fPrecioUnitario, que es por unidad de envase). */
+function DetallePedidosPendientesCliente({ cliente, desde, hasta }: { cliente: string; desde: string; hasta: string }) {
+  const [pedidos, setPedidos] = useState<FilaPedidoPendiente[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    fetch(`/api/ventas/detalle?tipo=pedidos-pendientes-cliente&cliente=${encodeURIComponent(cliente)}&desde=${desde}&hasta=${hasta}`)
+      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
+      .then(d => { if (vivo) setPedidos(Array.isArray(d) ? d : []) })
+      .catch(e => { if (vivo) setError(String(e)) })
+    return () => { vivo = false }
+  }, [cliente, desde, hasta])
+
+  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
+  if (!pedidos) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
+  if (pedidos.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin pedidos pendientes.</p>
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>PEDIDOS PENDIENTES · {pedidos.length}</p>
+      {pedidos.map(ped => (
+        <div key={ped.pedido} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: C.amber }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>#{ped.pedido}</p>
+            <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+              {ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha'}
+            </p>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(ped.litros)}</p>
+            <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(ped.revenue)}</p>
+            {ped.litros > 0 && (
+              <p style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap', marginTop: 1 }}>{fPesoFull(ped.revenue / ped.litros)}/L</p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega = true, desde, hasta, onClose }: {
-  tipo: 'productos' | 'clientes' | 'envase' | 'pedidos-origen'
+  tipo: 'productos' | 'clientes' | 'envase' | 'pedidos-origen' | 'clientes-por-entregar'
   envaseBucket?: string; categoria?: string; origenPedidos?: 'backlog' | 'mismo-periodo'
   /** Debe coincidir con el criterio de la tarjeta que abrió esto (ver ventas_dashboard_kpis) */
   porEntrega?: boolean
@@ -316,7 +365,8 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
   const titulo = tipo === 'envase' ? `Productos · ${envaseBucket}`
     : tipo === 'productos' && categoria ? `Productos · ${categoria}`
     : esPedidos ? (origenPedidos === 'backlog' ? 'Pedidos de backlog anterior' : 'Pedidos tomados este período')
-    : esProd ? 'Productos vendidos' : 'Clientes que compraron'
+    : esProd ? 'Productos vendidos'
+    : tipo === 'clientes-por-entregar' ? 'Clientes con venta por entregar' : 'Clientes que compraron'
 
   const visibles = useMemo(() => {
     if (!filas) return []
@@ -378,7 +428,10 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
             <p style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 28 }}>Cargando…</p>
           ) : visibles.length === 0 ? (
             <p style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 28 }}>
-              {busca ? 'Sin coincidencias' : esPedidos ? 'Sin pedidos en este origen' : 'Sin ventas en este rango'}
+              {busca ? 'Sin coincidencias'
+                : esPedidos ? 'Sin pedidos en este origen'
+                : tipo === 'clientes-por-entregar' ? 'Sin pedidos pendientes en este rango'
+                : 'Sin ventas en este rango'}
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -467,7 +520,9 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                       </div>
                     )}
                     {expandido && c && (
-                      <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+                      tipo === 'clientes-por-entregar'
+                        ? <DetallePedidosPendientesCliente cliente={c.cliente} desde={desde} hasta={hasta} />
+                        : <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
                     )}
                     {expandido && ped && (
                       <DetallePedidoProductos pedido={ped.pedido} />
@@ -730,11 +785,11 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
   const [rango, setRango] = useState<RangoKey>(data.custom ? 'custom' : 'periodo')
   const [periodoIdx, setPeriodoIdx] = useState(0)   // 0 = período activo
   const [showSettings, setShowSettings] = useState(false)
-  const [detalle, setDetalle] = useState<'productos' | 'clientes' | 'envase' | 'pedidos-origen' | null>(null)
+  const [detalle, setDetalle] = useState<'productos' | 'clientes' | 'envase' | 'pedidos-origen' | 'clientes-por-entregar' | null>(null)
   const [detalleEnvaseBucket, setDetalleEnvaseBucket] = useState<string | undefined>(undefined)
   const [detalleCategoria, setDetalleCategoria] = useState<string | undefined>(undefined)
   const [detalleOrigenPedidos, setDetalleOrigenPedidos] = useState<'backlog' | 'mismo-periodo' | undefined>(undefined)
-  function abrirDetalle(tipo: 'productos' | 'clientes' | 'envase' | 'pedidos-origen', extra?: {
+  function abrirDetalle(tipo: 'productos' | 'clientes' | 'envase' | 'pedidos-origen' | 'clientes-por-entregar', extra?: {
     envaseBucket?: string; categoria?: string; origenPedidos?: 'backlog' | 'mismo-periodo'
   }) {
     setDetalleEnvaseBucket(extra?.envaseBucket)
@@ -804,13 +859,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
     serie.map(p => Number(p[campo] ?? 0))
 
   const ticket = actual.pedidos > 0 ? actual.revenue / actual.pedidos : 0
-  const ticketPrev = previo.pedidos > 0 ? previo.revenue / previo.pedidos : 0
   const totalMix = actual.litrosCerveza + actual.litrosKombucha + actual.litrosOtros
-
-  const serieTicket = useMemo(
-    () => serie.map(p => (p.pedidos > 0 ? p.revenue / p.pedidos : 0)),
-    [serie],
-  )
 
   const hoyTxt = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Santiago' })
   // La meta se define por período de venta (24→23), así que sólo aplica ahí
@@ -1151,6 +1200,11 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
                 {fPesoFull(actual.revenue + d.entregas.revenuePorEntregar)}
               </p>
+              {actual.pedidos > 0 && (
+                <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
+                  Ticket promedio <span style={{ color: '#CBD5E1', fontWeight: 600 }}>{fPesoFull(ticket)}</span>
+                </p>
+              )}
             </div>
           </div>
 
@@ -1182,9 +1236,9 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           <KpiCard icon={ShoppingBag} tint={C.purple} tintSoft={C.purpleSoft} label="Pedidos"
             valor={fNum(actual.pedidos)} pct={variacion(actual.pedidos, previo.pedidos)} serie={serieDe('pedidos')}
             onClick={() => abrirDetalle('productos')} />
-          <KpiCard icon={DollarSign} tint={C.amber} tintSoft={C.amberSoft} label="Ticket promedio"
-            valor={fPeso(ticket)} pct={variacion(ticket, ticketPrev)} serie={serieTicket}
-            onClick={() => abrirDetalle('clientes')} />
+          <KpiCard icon={Truck} tint={C.amber} tintSoft={C.amberSoft} label="Venta por entregar"
+            valor={fPeso(d.entregas.revenuePorEntregar)} pct={null} serie={[]}
+            onClick={() => abrirDetalle('clientes-por-entregar')} />
         </div>
 
         {/* Product mix */}

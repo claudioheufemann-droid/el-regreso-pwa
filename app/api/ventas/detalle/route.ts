@@ -26,6 +26,8 @@ function claseEnvase(envase: string): string {
  * tipo=clientes-vendedor requiere &vendedor=<nombre vigente, ej "Los Ríos"> — qué locales le compraron
  * tipo=pedido-productos requiere &pedido=<número> — qué contiene ese pedido (no usa desde/hasta)
  * tipo=clientes-producto requiere &producto=&envase= — qué locales compraron ese producto
+ * tipo=clientes-por-entregar — clientes con pedidos tomados en el rango aún sin despachar
+ * tipo=pedidos-pendientes-cliente requiere &cliente= — sus pedidos pendientes de ese cliente
  *
  * Drill-down de las tarjetas del dashboard de Ventas. Va aparte de la carga de
  * la página porque son listas largas que sólo se piden al tocar la tarjeta.
@@ -55,14 +57,16 @@ export async function GET(req: Request) {
   // así es el criterio en casi todas las tarjetas.
   const porEntrega = searchParams.get('porEntrega') !== 'false'
 
-  if (tipo !== 'productos' && tipo !== 'clientes' && tipo !== 'envase' && tipo !== 'pedidos-origen' && tipo !== 'cliente-productos' && tipo !== 'clientes-vendedor' && tipo !== 'pedido-productos' && tipo !== 'clientes-producto')
-    return NextResponse.json({ error: 'tipo debe ser productos, clientes, envase, pedidos-origen, cliente-productos, clientes-vendedor, pedido-productos o clientes-producto' }, { status: 400 })
+  const tiposValidos = ['productos', 'clientes', 'envase', 'pedidos-origen', 'cliente-productos',
+    'clientes-vendedor', 'pedido-productos', 'clientes-producto', 'clientes-por-entregar', 'pedidos-pendientes-cliente']
+  if (!tipo || !tiposValidos.includes(tipo))
+    return NextResponse.json({ error: `tipo debe ser uno de: ${tiposValidos.join(', ')}` }, { status: 400 })
   if (tipo === 'envase' && !bucket)
     return NextResponse.json({ error: 'envase requiere bucket' }, { status: 400 })
   if (tipo === 'pedidos-origen' && origen !== 'backlog' && origen !== 'mismo-periodo')
     return NextResponse.json({ error: 'pedidos-origen requiere origen=backlog|mismo-periodo' }, { status: 400 })
-  if (tipo === 'cliente-productos' && !cliente)
-    return NextResponse.json({ error: 'cliente-productos requiere cliente' }, { status: 400 })
+  if ((tipo === 'cliente-productos' || tipo === 'pedidos-pendientes-cliente') && !cliente)
+    return NextResponse.json({ error: `${tipo} requiere cliente` }, { status: 400 })
   if (tipo === 'clientes-vendedor' && !vendedor)
     return NextResponse.json({ error: 'clientes-vendedor requiere vendedor' }, { status: 400 })
   if (tipo === 'pedido-productos' && !pedidoNum)
@@ -144,6 +148,35 @@ export async function GET(req: Request) {
       revenue: Number(r.revenue ?? 0),
       pedidos: Number(r.pedidos ?? 0),
       ultimaCompra: r.ultima_compra ? String(r.ultima_compra) : null,
+    })))
+  }
+
+  if (tipo === 'clientes-por-entregar') {
+    const { data, error } = await supabase.rpc('ventas_clientes_por_entregar', {
+      p_ini: desde, p_fin: hasta, p_provincias,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
+      cliente: String(r.cliente ?? ''),
+      vendedor: vendedorCanonico(String(r.vendedor ?? '')),
+      localidad: r.localidad ? String(r.localidad) : null,
+      litros: Number(r.litros ?? 0),
+      revenue: Number(r.revenue ?? 0),
+      pedidos: Number(r.pedidos ?? 0),
+      ultimaCompra: r.ultima_compra ? String(r.ultima_compra) : null,
+    })))
+  }
+
+  if (tipo === 'pedidos-pendientes-cliente') {
+    const { data, error } = await supabase.rpc('ventas_pedidos_pendientes_cliente', {
+      p_cliente: cliente, p_ini: desde, p_fin: hasta, p_provincias,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
+      pedido: String(r.pedido ?? ''),
+      fechaPedido: r.fecha_pedido ? String(r.fecha_pedido) : null,
+      litros: Number(r.litros ?? 0),
+      revenue: Number(r.revenue ?? 0),
     })))
   }
 
