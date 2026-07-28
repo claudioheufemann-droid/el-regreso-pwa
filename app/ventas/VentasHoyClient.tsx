@@ -284,11 +284,54 @@ function DetallePedidoProductos({ pedido }: { pedido: string }) {
 
 interface FilaPedidoPendiente { pedido: string; fechaPedido: string | null; litros: number; revenue: number }
 
+/** Detalle de productos de un pedido pendiente, en línea bajo su fila (ver
+ *  DetallePedidosPendientesCliente). Mismo shape que DetallePedidoProductos
+ *  pero sin encabezado propio ni borde: el pedido que lo contiene ya pone
+ *  el contexto. */
+function DetallePedidoProductosInline({ pedido }: { pedido: string }) {
+  const [items, setItems] = useState<FilaPedidoProducto[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    fetch(`/api/ventas/detalle?tipo=pedido-productos&pedido=${encodeURIComponent(pedido)}`)
+      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
+      .then(d => { if (vivo) setItems(Array.isArray(d) ? d : []) })
+      .catch(e => { if (vivo) setError(String(e)) })
+    return () => { vivo = false }
+  }, [pedido])
+
+  if (error) return <p style={{ fontSize: 11, color: C.red, marginTop: 4, paddingLeft: 14 }}>No se pudo cargar el detalle.</p>
+  if (!items) return <p style={{ fontSize: 11, color: C.muted, marginTop: 4, paddingLeft: 14 }}>Cargando…</p>
+  if (items.length === 0) return null
+
+  return (
+    <div style={{ marginTop: 4, paddingLeft: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {items.map((it, j) => (
+        <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{
+            width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+            background: it.categoria === 'Kombucha' ? C.green : it.categoria === 'Cerveza' ? C.hero : C.purple,
+          }} />
+          <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: C.muted, wordBreak: 'break-word' }}>
+            {[it.producto, it.envase].filter(Boolean).join(' · ')}
+          </span>
+          <span style={{ fontSize: 11, color: C.text, flexShrink: 0, whiteSpace: 'nowrap' }}>{fL(it.litros)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /** Pedidos pendientes de UN cliente — se despliega al tocar su fila en
- *  "Clientes con venta por entregar". "El unitario" acá es precio por
- *  litro (revenue/litros): un pedido mezcla productos/envases distintos,
- *  no tiene un único precio de fábrica como sí lo tiene una lata o un
- *  barril (ver fPrecioUnitario, que es por unidad de envase). */
+ *  "Clientes con venta por entregar" y en "LOCALES" de un vendedor cuando
+ *  el cliente no tiene nada despachado todavía. "El unitario" acá es
+ *  precio por litro (revenue/litros): un pedido mezcla productos/envases
+ *  distintos, no tiene un único precio de fábrica como sí lo tiene una
+ *  lata o un barril (ver fPrecioUnitario, que es por unidad de envase).
+ *  Cada pedido muestra además, en línea, qué productos contiene
+ *  (DetallePedidoProductosInline) — sin esto solo se veía el total del
+ *  pedido, sin decir qué es lo que está pendiente de despachar. */
 function DetallePedidosPendientesCliente({ cliente, desde, hasta }: { cliente: string; desde: string; hasta: string }) {
   const [pedidos, setPedidos] = useState<FilaPedidoPendiente[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -307,24 +350,27 @@ function DetallePedidosPendientesCliente({ cliente, desde, hasta }: { cliente: s
   if (pedidos.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin pedidos pendientes.</p>
 
   return (
-    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 7 }}>
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>PEDIDOS PENDIENTES · {pedidos.length}</p>
       {pedidos.map(ped => (
-        <div key={ped.pedido} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: C.amber }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>#{ped.pedido}</p>
-            <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-              {ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha'}
-            </p>
+        <div key={ped.pedido}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: C.amber }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>#{ped.pedido}</p>
+              <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                {ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha'}
+              </p>
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(ped.litros)}</p>
+              <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(ped.revenue)}</p>
+              {ped.litros > 0 && (
+                <p style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap', marginTop: 1 }}>{fPesoFull(ped.revenue / ped.litros)}/L</p>
+              )}
+            </div>
           </div>
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(ped.litros)}</p>
-            <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(ped.revenue)}</p>
-            {ped.litros > 0 && (
-              <p style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap', marginTop: 1 }}>{fPesoFull(ped.revenue / ped.litros)}/L</p>
-            )}
-          </div>
+          <DetallePedidoProductosInline pedido={ped.pedido} />
         </div>
       ))}
     </div>
@@ -655,7 +701,11 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
                 + {fL(c.litrosPorEntregar)} por entregar
               </p>
             )}
-            {abiertoAqui && <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />}
+            {abiertoAqui && (
+              soloPendiente
+                ? <DetallePedidosPendientesCliente cliente={c.cliente} desde={desde} hasta={hasta} />
+                : <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+            )}
           </div>
         )
       })}
