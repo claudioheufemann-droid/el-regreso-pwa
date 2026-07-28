@@ -166,6 +166,12 @@ function fUnidades(unidades: number, envase: string): string {
   const palabra = esBarril ? (unidades === 1 ? 'barril' : 'barriles') : (unidades === 1 ? 'lata' : 'latas')
   return `${unidades.toLocaleString('es-CL')} ${palabra}`
 }
+/** "$1.297 c/u" — revenue ya incluye el prorrateo de Empaque y Distribución,
+ *  así que esto es el precio real por lata/barril, no el de lista. */
+function fPrecioUnitario(revenue: number, unidades: number): string {
+  if (unidades <= 0) return ''
+  return `${fPesoFull(revenue / unidades)} c/u`
+}
 
 /** Qué se le vendió a un cliente — se despliega al tocar su fila. */
 function DetalleCompraCliente({ cliente, desde, hasta, porEntrega }: {
@@ -206,6 +212,9 @@ function DetalleCompraCliente({ cliente, desde, hasta, porEntrega }: {
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(it.litros)}</p>
             <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(it.revenue)}</p>
+            {it.unidades > 0 && (
+              <p style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap', marginTop: 1 }}>{fPrecioUnitario(it.revenue, it.unidades)}</p>
+            )}
           </div>
         </div>
       ))}
@@ -365,6 +374,9 @@ function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
                         <p style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(f.litros)}</p>
                         <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(f.revenue)}</p>
+                        {p && p.unidades > 0 && (
+                          <p style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap', marginTop: 1 }}>{fPrecioUnitario(p.revenue, p.unidades)}</p>
+                        )}
                       </div>
                       {expandible && (
                         <ChevronDown size={16} color={expandido ? C.blue : C.faint} style={{
