@@ -46,6 +46,9 @@ function fPeso(n: number) {
   if (n >= 1_000) return `$${Math.round(n / 1000)}k`
   return `$${Math.round(n).toLocaleString('es-CL')}`
 }
+/** Monto sin abreviar ($254.150). En los drill-down se prefiere el número
+ *  exacto: son listados de detalle, donde el redondeo a "k" esconde plata. */
+function fPesoFull(n: number) { return `$${Math.round(n).toLocaleString('es-CL')}` }
 function fFechaCorta(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
   const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -193,8 +196,8 @@ function DetalleCompraCliente({ cliente, desde, hasta, porEntrega }: {
             </p>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fL(it.litros)}</p>
-            <p style={{ fontSize: 11, color: C.muted }}>{fPeso(it.revenue)}</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(it.litros)}</p>
+            <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(it.revenue)}</p>
           </div>
         </div>
       ))}
@@ -332,12 +335,28 @@ function SheetDetalle({ tipo, envaseBucket, categoria, estadoPedidos, porEntrega
                             ? `${p.envase} · ${p.categoria} · ${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}`
                             : ped
                             ? `#${ped.pedido} · ${ped.vendedor}${ped.fechaPedido ? ` · ${fFechaCorta(ped.fechaPedido)}` : ''}`
-                            : [c!.vendedor, c!.localidad].filter(Boolean).join(' · ')}
+                            : (
+                              <>
+                                {[c!.vendedor, c!.localidad].filter(Boolean).join(' · ')}
+                                {/* La fecha es el criterio de orden de la lista (más reciente
+                                    primero), así que va destacada para poder escanearla. */}
+                                {c!.ultimaCompra && (
+                                  <>
+                                    {' · '}
+                                    <span style={{ color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                      {fFechaCorta(c!.ultimaCompra)}
+                                    </span>
+                                  </>
+                                )}
+                              </>
+                            )}
                         </p>
                       </div>
+                      {/* nowrap: globals.css pone overflow-wrap:anywhere a todo en
+                          mobile y sin esto un monto largo se parte a mitad del número. */}
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fL(f.litros)}</p>
-                        <p style={{ fontSize: 11, color: C.muted }}>{fPeso(f.revenue)}</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(f.litros)}</p>
+                        <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(f.revenue)}</p>
                       </div>
                       {expandible && (
                         <ChevronDown size={16} color={expandido ? C.blue : C.faint} style={{
