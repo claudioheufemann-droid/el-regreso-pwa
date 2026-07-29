@@ -135,8 +135,14 @@ interface FilaProducto {
 interface FilaCliente {
   cliente: string; vendedor: string; localidad: string | null
   litros: number; revenue: number; pedidos: number; ultimaCompra: string | null
-  /** Solo viene poblado en el detalle de "clientes-vendedor": litros/revenue
-   *  de pedidos de ese cliente tomados en el rango pero aun no despachados. */
+  /** Hora real de entrega (fecha_entrega_hora del ERP) — sólo viene poblada
+   *  cuando el evento más reciente del cliente fue una entrega; si lo más
+   *  reciente es un pedido aún pendiente, no hay hora real disponible y
+   *  esto viene null (no se inventa una hora). */
+  ultimaCompraHora?: string | null
+  /** litros/revenue de pedidos de ese cliente aun sin despachar — pedidos
+   *  de hoy sin entregar todavia cuentan igual para el orden de la lista
+   *  (ver ultimaCompra), aunque litros siga en 0 hasta que se entreguen. */
   litrosPorEntregar?: number; revenuePorEntregar?: number
 }
 interface FilaPedido {
@@ -144,11 +150,6 @@ interface FilaPedido {
   fechaPedido: string | null; fechaEntrega: string | null
   litros: number; revenue: number
 }
-interface FilaClienteProducto {
-  producto: string; envase: string; categoria: string
-  litros: number; revenue: number; pedidos: number; unidades: number
-}
-
 /** "24 latas" / "2 barriles" — singular/plural según el envase. */
 function fUnidades(unidades: number, envase: string): string {
   if (unidades <= 0) return ''
@@ -162,55 +163,6 @@ function fPrecioUnitario(revenue: number, unidades: number): string {
   if (unidades <= 0) return ''
   return `${fPesoFull(revenue / unidades)} c/u`
 }
-/** Qué se le vendió a un cliente — se despliega al tocar su fila. */
-function DetalleCompraCliente({ cliente, desde, hasta, porEntrega }: {
-  cliente: string; desde: string; hasta: string; porEntrega: boolean
-}) {
-  const [items, setItems] = useState<FilaClienteProducto[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let vivo = true
-    const qs = `tipo=cliente-productos&cliente=${encodeURIComponent(cliente)}&desde=${desde}&hasta=${hasta}&porEntrega=${porEntrega}`
-    fetch(`/api/ventas/detalle?${qs}`)
-      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
-      .then(d => { if (vivo) setItems(Array.isArray(d) ? d : []) })
-      .catch(e => { if (vivo) setError(String(e)) })
-    return () => { vivo = false }
-  }, [cliente, desde, hasta, porEntrega])
-
-  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
-  if (!items) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
-  if (items.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin detalle de productos.</p>
-
-  return (
-    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 7 }}>
-      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>QUÉ SE LE VENDIÓ</p>
-      {items.map((it, j) => (
-        <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <span style={{
-            width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0,
-            background: it.categoria === 'Kombucha' ? C.green : it.categoria === 'Cerveza' ? C.hero : C.purple,
-          }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{it.producto}</p>
-            <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-              {[it.envase, fUnidades(it.unidades, it.envase), `${it.pedidos} ${it.pedidos === 1 ? 'pedido' : 'pedidos'}`].filter(Boolean).join(' · ')}
-            </p>
-          </div>
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(it.litros)}</p>
-            <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(it.revenue)}</p>
-            {it.unidades > 0 && (
-              <p style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap', marginTop: 1 }}>{fPrecioUnitario(it.revenue, it.unidades)}</p>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 interface FilaPedidoProducto {
   producto: string; envase: string; categoria: string
   litros: number; revenue: number; unidades: number
@@ -264,10 +216,8 @@ function DetallePedidoProductos({ pedido }: { pedido: string }) {
   )
 }
 
-interface FilaPedidoPendiente { pedido: string; fechaPedido: string | null; litros: number; revenue: number }
-
-/** Detalle de productos de un pedido pendiente, en línea bajo su fila (ver
- *  DetallePedidosPendientesCliente). Mismo shape que DetallePedidoProductos
+/** Detalle de productos de un pedido, en línea bajo su fila (ver
+ *  DetallePedidosCliente). Mismo shape que DetallePedidoProductos
  *  pero sin encabezado propio ni borde: el pedido que lo contiene ya pone
  *  el contexto. */
 function DetallePedidoProductosInline({ pedido }: { pedido: string }) {
@@ -305,109 +255,89 @@ function DetallePedidoProductosInline({ pedido }: { pedido: string }) {
   )
 }
 
-/** Pedidos pendientes de UN cliente — se despliega al tocar su fila en
- *  "Clientes con venta por entregar" y en "LOCALES" de un vendedor cuando
- *  el cliente no tiene nada despachado todavía. "El unitario" acá es
- *  precio por litro (revenue/litros): un pedido mezcla productos/envases
- *  distintos, no tiene un único precio de fábrica como sí lo tiene una
- *  lata o un barril (ver fPrecioUnitario, que es por unidad de envase).
- *  Cada pedido muestra además, en línea, qué productos contiene
- *  (DetallePedidoProductosInline) — sin esto solo se veía el total del
- *  pedido, sin decir qué es lo que está pendiente de despachar. */
-function DetallePedidosPendientesCliente({ cliente, desde, hasta }: { cliente: string; desde: string; hasta: string }) {
-  const [pedidos, setPedidos] = useState<FilaPedidoPendiente[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let vivo = true
-    fetch(`/api/ventas/detalle?tipo=pedidos-pendientes-cliente&cliente=${encodeURIComponent(cliente)}&desde=${desde}&hasta=${hasta}`)
-      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
-      .then(d => { if (vivo) setPedidos(Array.isArray(d) ? d : []) })
-      .catch(e => { if (vivo) setError(String(e)) })
-    return () => { vivo = false }
-  }, [cliente, desde, hasta])
-
-  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
-  if (!pedidos) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
-  if (pedidos.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin pedidos pendientes.</p>
-
-  return (
-    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>PEDIDOS PENDIENTES · {pedidos.length}</p>
-      {pedidos.map(ped => (
-        <div key={ped.pedido}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: C.amber }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>#{ped.pedido}</p>
-              <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-                {ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha'}
-              </p>
-            </div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(ped.litros)}</p>
-              <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(ped.revenue)}</p>
-              {ped.litros > 0 && (
-                <p style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap', marginTop: 1 }}>{fPesoFull(ped.revenue / ped.litros)}/L</p>
-              )}
-            </div>
-          </div>
-          <DetallePedidoProductosInline pedido={ped.pedido} />
-        </div>
-      ))}
-    </div>
-  )
+interface FilaPedidoCliente {
+  pedido: string; fechaPedido: string | null
+  entregado: boolean; fechaEntrega: string | null; fechaEntregaHora: string | null
+  litros: number; revenue: number
 }
 
-interface FilaPedidoEntregado {
-  pedido: string; fechaPedido: string | null; fechaEntrega: string | null
-  fechaEntregaHora: string | null; litros: number; revenue: number
-}
-
-/** Pedidos YA entregados de un cliente, con la hora exacta de entrega
- *  (pedido de Claudio, 29-jul-2026: "para que cuente la venta" — quiere ver
- *  cuándo se marcó cada pedido como entregado, no sólo el total agregado
- *  que ya muestra DetalleCompraCliente). La hora de PEDIDO no se muestra acá
- *  a propósito: el ERP (Gestión Cervecera) nunca la reporta, sólo la fecha —
- *  a diferencia de la hora de entrega, que sí viene en el informe. */
-function DetallePedidosEntregadosCliente({ cliente, desde, hasta, porEntrega }: {
+/** Todos los pedidos de UN cliente en el rango, pendientes y entregados
+ *  juntos en una sola lista por pedido — se despliega al tocar su fila en
+ *  "Clientes que compraron", "Clientes con venta por entregar", "LOCALES"
+ *  de un vendedor, y "Clientes que compraron este producto".
+ *
+ *  Pedido de Claudio (29-jul-2026): antes se mostraba un agregado "QUÉ SE LE
+ *  VENDIÓ" (por producto, sin decir de qué pedido) separado de "PEDIDOS
+ *  ENTREGADOS" (por pedido) — quedaba duplicado y confuso cuando había un
+ *  solo pedido. Ahora es siempre UNA lista por pedido: número (#0...),
+ *  fecha del pedido, estado (pendiente o entregado con su hora), y el
+ *  detalle de productos de ese pedido.
+ *
+ *  NO se muestra hora de pedido (sólo fecha): se intentó usar
+ *  `ventas.created_at` como aproximación, pero el sync borra e reinserta
+ *  filas completas en cada corrida -no hace UPDATE-, así que created_at
+ *  refleja "última vez que el sync tocó esta fila", no cuándo se hizo el
+ *  pedido (verificado: una sola corrida puso el mismo created_at a pedidos
+ *  de hace 6 semanas y de hoy). La hora de ENTREGA sí es real, viene tal
+ *  cual del ERP en fecha_entrega_hora. */
+function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
   cliente: string; desde: string; hasta: string; porEntrega: boolean
 }) {
-  const [pedidos, setPedidos] = useState<FilaPedidoEntregado[] | null>(null)
+  const [pedidos, setPedidos] = useState<FilaPedidoCliente[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let vivo = true
-    const qs = `tipo=pedidos-entregados-cliente&cliente=${encodeURIComponent(cliente)}&desde=${desde}&hasta=${hasta}&porEntrega=${porEntrega}`
-    fetch(`/api/ventas/detalle?${qs}`)
-      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
-      .then(d => { if (vivo) setPedidos(Array.isArray(d) ? d : []) })
+    const base = `cliente=${encodeURIComponent(cliente)}&desde=${desde}&hasta=${hasta}`
+    Promise.all([
+      fetch(`/api/ventas/detalle?tipo=pedidos-pendientes-cliente&${base}`)
+        .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error'))),
+      fetch(`/api/ventas/detalle?tipo=pedidos-entregados-cliente&${base}&porEntrega=${porEntrega}`)
+        .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error'))),
+    ])
+      .then(([pend, ent]) => {
+        if (!vivo) return
+        const pendientes: FilaPedidoCliente[] = (Array.isArray(pend) ? pend : []).map((p: Record<string, unknown>) => ({
+          pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
+          entregado: false, fechaEntrega: null, fechaEntregaHora: null,
+          litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
+        }))
+        const entregados: FilaPedidoCliente[] = (Array.isArray(ent) ? ent : []).map((p: Record<string, unknown>) => ({
+          pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
+          entregado: true, fechaEntrega: (p.fechaEntrega as string) ?? null, fechaEntregaHora: (p.fechaEntregaHora as string) ?? null,
+          litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
+        }))
+        setPedidos([...pendientes, ...entregados])
+      })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
   }, [cliente, desde, hasta, porEntrega])
 
   if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
   if (!pedidos) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
-  if (pedidos.length === 0) return null
+  if (pedidos.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin pedidos en este rango.</p>
+
+  const ordenados = [...pedidos].sort((a, b) =>
+    (b.entregado ? b.fechaEntrega ?? '' : b.fechaPedido ?? '').localeCompare(a.entregado ? a.fechaEntrega ?? '' : a.fechaPedido ?? ''))
 
   return (
     <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>PEDIDOS ENTREGADOS · {pedidos.length}</p>
-      {pedidos.map(ped => {
-        const hora = ped.fechaEntregaHora ? fHoraLiteral(ped.fechaEntregaHora) : null
+      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>PEDIDOS · {ordenados.length}</p>
+      {ordenados.map(ped => {
+        const horaEntrega = ped.fechaEntregaHora ? fHoraLiteral(ped.fechaEntregaHora) : null
         return (
           <div key={ped.pedido}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: C.green }} />
+              <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: ped.entregado ? C.green : C.amber }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>#{ped.pedido}</p>
                 <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
                   {ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha de pedido'}
                 </p>
-                <p style={{ fontSize: 11, color: C.green, marginTop: 1 }}>
-                  {ped.fechaEntrega
-                    ? `Entregado el ${fFechaCorta(ped.fechaEntrega)}${hora ? ` a las ${hora}` : ''}`
-                    : 'Sin fecha de entrega'}
+                <p style={{ fontSize: 11, fontWeight: 600, marginTop: 1, color: ped.entregado ? C.green : C.amber }}>
+                  {ped.entregado
+                    ? `Entregado el ${ped.fechaEntrega ? fFechaCorta(ped.fechaEntrega) : '—'}${horaEntrega ? ` a las ${horaEntrega}` : ''}`
+                    : 'Pendiente de entrega'}
                 </p>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -530,6 +460,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                 const p = esProd ? (f as FilaProducto) : null
                 const ped = esPedidos ? (f as FilaPedido) : null
                 const c = esProd || esPedidos ? null : (f as FilaCliente)
+                const soloPendiente = !!c && c.litros === 0 && !!c.litrosPorEntregar && c.litrosPorEntregar > 0
                 const tintCat = p?.categoria === 'Kombucha' ? C.green : p?.categoria === 'Cerveza' ? C.hero : C.purple
                 // Clave de expansión: cliente, pedido o producto+envase, según
                 // la vista. Las tres caben en el mismo estado `abierto` porque
@@ -569,14 +500,24 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                             : (
                               <>
                                 {[c!.vendedor, c!.localidad].filter(Boolean).join(' · ')}
-                                {/* La fecha es el criterio de orden de la lista (más reciente
-                                    primero), así que va destacada para poder escanearla. */}
+                                {/* La fecha (+ hora real cuando la última actividad fue una
+                                    entrega) es el criterio de orden de la lista (más
+                                    reciente primero), así que va destacada para poder
+                                    escanearla. Un pedido de HOY aunque siga pendiente
+                                    ordena por delante de una entrega de ayer. */}
                                 {c!.ultimaCompra && (
                                   <>
                                     {' · '}
                                     <span style={{ color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>
                                       {fFechaCorta(c!.ultimaCompra)}
+                                      {c!.ultimaCompraHora && ` a las ${fHoraLiteral(c!.ultimaCompraHora)}`}
                                     </span>
+                                  </>
+                                )}
+                                {soloPendiente && (
+                                  <>
+                                    {' · '}
+                                    <span style={{ color: C.amber, fontWeight: 600, whiteSpace: 'nowrap' }}>pendiente</span>
                                   </>
                                 )}
                               </>
@@ -586,8 +527,17 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                       {/* nowrap: globals.css pone overflow-wrap:anywhere a todo en
                           mobile y sin esto un monto largo se parte a mitad del número. */}
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(f.litros)}</p>
-                        <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(f.revenue)}</p>
+                        {soloPendiente ? (
+                          <>
+                            <p style={{ fontSize: 14, fontWeight: 700, color: C.amber, whiteSpace: 'nowrap' }}>{fL(c!.litrosPorEntregar!)}</p>
+                            <p style={{ fontSize: 12, color: C.amber, whiteSpace: 'nowrap' }}>{fPesoFull(c!.revenuePorEntregar ?? 0)}</p>
+                          </>
+                        ) : (
+                          <>
+                            <p style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(f.litros)}</p>
+                            <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(f.revenue)}</p>
+                          </>
+                        )}
                         {p && p.unidades > 0 && (
                           <p style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap', marginTop: 1 }}>{fPrecioUnitario(p.revenue, p.unidades)}</p>
                         )}
@@ -610,9 +560,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                       </div>
                     )}
                     {expandido && c && (
-                      tipo === 'clientes-por-entregar'
-                        ? <DetallePedidosPendientesCliente cliente={c.cliente} desde={desde} hasta={hasta} />
-                        : <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+                      <DetallePedidosCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
                     )}
                     {expandido && ped && (
                       <DetallePedidoProductos pedido={ped.pedido} />
@@ -680,8 +628,8 @@ function iniciales(nombre: string) {
 }
 
 /** Locales de un vendedor/región — se despliega al tocar su fila en el
- *  ranking. Cada local, a su vez, se puede desplegar para ver qué se le
- *  vendió (reutiliza DetalleCompraCliente, igual que en "Clientes que
+ *  ranking. Cada local, a su vez, se puede desplegar para ver sus pedidos
+ *  (reutiliza DetallePedidosCliente, igual que en "Clientes que
  *  compraron"). */
 function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
   vendedor: string; desde: string; hasta: string; porEntrega: boolean
@@ -751,14 +699,7 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
               </p>
             )}
             {abiertoAqui && (
-              soloPendiente ? (
-                <DetallePedidosPendientesCliente cliente={c.cliente} desde={desde} hasta={hasta} />
-              ) : (
-                <>
-                  <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
-                  <DetallePedidosEntregadosCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
-                </>
-              )
+              <DetallePedidosCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
             )}
           </div>
         )
@@ -769,8 +710,8 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
 
 /** Clientes que compraron UN producto — se despliega al tocar su fila en
  *  "Productos vendidos" o "Latas y barriles". Cada cliente, a su vez, se
- *  puede desplegar para ver TODO lo que se le vendió (no sólo este
- *  producto), reutilizando DetalleCompraCliente igual que en el resto. */
+ *  puede desplegar para ver TODOS sus pedidos (no sólo este producto),
+ *  reutilizando DetallePedidosCliente igual que en el resto. */
 function DetalleClientesProducto({ producto, envase, desde, hasta, porEntrega }: {
   producto: string; envase: string; desde: string; hasta: string; porEntrega: boolean
 }) {
@@ -821,7 +762,7 @@ function DetalleClientesProducto({ producto, envase, desde, hasta, porEntrega }:
                 transform: abiertoAqui ? 'rotate(180deg)' : undefined, transition: 'transform .15s',
               }} />
             </button>
-            {abiertoAqui && <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />}
+            {abiertoAqui && <DetallePedidosCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />}
           </div>
         )
       })}
@@ -1451,7 +1392,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           <KpiCard icon={Droplet} tint={C.blue} tintSoft={C.blueSoft} label="Litros vendidos"
             valor={fL(actual.litros)} pct={variacion(actual.litros, previo.litros)}
             onClick={() => abrirDetalle('productos')} />
-          <KpiCard icon={Users} tint={C.green} tintSoft={C.greenSoft} label="Clientes"
+          <KpiCard icon={Users} tint={C.green} tintSoft={C.greenSoft} label="Ventas por Clientes"
             valor={fNum(actual.clientes)} pct={variacion(actual.clientes, previo.clientes)}
             onClick={() => abrirDetalle('clientes')} />
           <KpiCard icon={ShoppingBag} tint={C.purple} tintSoft={C.purpleSoft} label="Pedidos"

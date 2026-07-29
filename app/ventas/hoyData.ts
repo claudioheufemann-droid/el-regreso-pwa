@@ -303,6 +303,18 @@ export async function getHoyData(
   const ENTREGA_CONFIABLE_DESDE = '2026-05-24'
   const porEntregaPeriodo = (fechaFin: string) => fechaFin >= ENTREGA_CONFIABLE_DESDE
 
+  // Pedido de Claudio: un pedido tomado en un período pero no entregado no
+  // debe sumar venta/comisión (ya lo cumple lo de arriba, vía fecha_entrega)
+  // NI perderse de vista al cerrar el período. Las funciones que calculan
+  // "por entregar"/"pendiente" (ventas_entregas_periodo,
+  // ventas_entregas_por_vendedor, ventas_clientes_por_entregar,
+  // ventas_pedidos_pendientes_cliente, ventas_detalle_clientes_por_vendedor)
+  // ya NO filtran por fecha_pedido dentro de [p_ini, p_fin]: el pendiente se
+  // "traslada" solo al período VIGENTE (el que contiene hoy) mientras no se
+  // entregue, y un período ya cerrado siempre da 0 pendientes — así no queda
+  // duplicado en el cerrado ni perdido entre medio. Ver migración
+  // supabase/migrations/pendientes_entrega_trasladan_al_periodo_vigente.sql.
+
   // Cada rango a consultar: los relativos + cada período 24→23 + el custom.
   // Para los períodos, el "previo" es el período 24→23 anterior de la lista.
   const consultas: { desde: string; hasta: string; porEntrega: boolean }[] = [

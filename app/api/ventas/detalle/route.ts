@@ -256,5 +256,8 @@ export async function GET(req: Request) {
     revenue: Number(r.revenue ?? 0),
     pedidos: Number(r.pedidos ?? 0),
     ultimaCompra: r.ultima_compra ? String(r.ultima_compra) : null,
+    ultimaCompraHora: r.ultima_compra_hora ? String(r.ultima_compra_hora) : null,
+    litrosPorEntregar: Number(r.litros_por_entregar ?? 0),
+    revenuePorEntregar: Number(r.revenue_por_entregar ?? 0),
   })))
 }
