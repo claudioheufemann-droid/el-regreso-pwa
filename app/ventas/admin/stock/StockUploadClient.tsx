@@ -165,7 +165,7 @@ export default function StockUploadClient() {
                 <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{fmt(preview.resumen.barriles.litros)} L · {preview.resumen.barriles.productos} productos</p>
               </div>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16 }}>
-                <p style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Envases</p>
+                <p style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Latas</p>
                 <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--cream)' }}>{fmt(preview.resumen.envases.cantidad)}</p>
                 <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>unidades · {preview.resumen.envases.productos} productos</p>
               </div>
@@ -176,7 +176,7 @@ export default function StockUploadClient() {
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '9px 13px', borderTop: i === 0 ? 'none' : '1px solid var(--border)' }}>
                   <div style={{ minWidth: 0 }}>
                     <p style={{ fontSize: 13, color: 'var(--cream)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.producto}</p>
-                    <p style={{ fontSize: 11, color: 'var(--muted)' }}>{p.tipo === 'barril' ? 'Barril' : 'Envase'} · {p.codigoProducto ?? '—'}</p>
+                    <p style={{ fontSize: 11, color: 'var(--muted)' }}>{p.tipo === 'barril' ? 'Barril' : 'Lata'} · {p.codigoProducto ?? '—'}</p>
                   </div>
                   <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', flexShrink: 0 }}>
                     {fmt(p.cantidad)} {p.tipo === 'barril' ? 'barr.' : 'un.'}
@@ -209,7 +209,7 @@ export default function StockUploadClient() {
             <CheckCircle size={48} style={{ color: '#4ADE80', margin: '0 auto 16px' }} />
             <p style={{ fontSize: 17, fontWeight: 800, color: 'var(--cream)', marginBottom: 6 }}>Stock actualizado</p>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
-              {result.insertadas} filas guardadas · {result.resumen.barriles.cantidad} barriles ({fmt(result.resumen.barriles.litros)} L) · {result.resumen.envases.cantidad} envases
+              {result.insertadas} filas guardadas · {result.resumen.barriles.cantidad} barriles ({fmt(result.resumen.barriles.litros)} L) · {result.resumen.envases.cantidad} latas
             </p>
             <button onClick={handleReset} style={{ padding: '11px 24px', borderRadius: 12, fontWeight: 700, fontSize: 13, border: '1px solid var(--border)', background: 'transparent', color: 'var(--cream)', cursor: 'pointer' }}>
               Cargar otro archivo

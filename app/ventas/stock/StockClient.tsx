@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Package, Search, Beer, Layers, Copy, Check, AlertTriangle, CircleAlert } from 'lucide-react'
+import { Package, Search, Beer, Layers, Copy, Check, AlertTriangle, CircleAlert, ChevronDown, Boxes } from 'lucide-react'
 import type { StockProductoRow } from './page'
 
 const C = {
@@ -15,19 +15,33 @@ const C = {
 }
 
 // Umbrales de alerta de stock bajo.
-// Envases (latas): <100 un. = "poco stock", <24 un. = "revisar stock" (más urgente).
+// Latas: <100 un. = "poco stock", <24 un. = "revisar stock" (más urgente).
 // Barriles: <3 barriles = "revisar stock".
-const UMBRAL_ENVASE_BAJO = 100
-const UMBRAL_ENVASE_CRITICO = 24
+const UMBRAL_LATA_BAJO = 100
+const UMBRAL_LATA_CRITICO = 24
 const UMBRAL_BARRIL_CRITICO = 3
+
+// Cada caja de latas trae 24 unidades.
+const UNIDADES_POR_CAJA = 24
 
 type Nivel = 'ok' | 'bajo' | 'critico'
 
 function nivelDe(f: StockProductoRow): Nivel {
   if (f.tipo === 'barril') return f.cantidad < UMBRAL_BARRIL_CRITICO ? 'critico' : 'ok'
-  if (f.cantidad < UMBRAL_ENVASE_CRITICO) return 'critico'
-  if (f.cantidad < UMBRAL_ENVASE_BAJO) return 'bajo'
+  if (f.cantidad < UMBRAL_LATA_CRITICO) return 'critico'
+  if (f.cantidad < UMBRAL_LATA_BAJO) return 'bajo'
   return 'ok'
+}
+
+function cajasDe(cantidad: number) {
+  return { cajas: Math.floor(cantidad / UNIDADES_POR_CAJA), resto: cantidad % UNIDADES_POR_CAJA }
+}
+
+function fCajas(cantidad: number): string {
+  const { cajas, resto } = cajasDe(cantidad)
+  if (cajas === 0) return `${resto} un.`
+  if (resto === 0) return `${fNum(cajas)} caja${cajas === 1 ? '' : 's'}`
+  return `${fNum(cajas)} caja${cajas === 1 ? '' : 's'} + ${resto} un.`
 }
 
 // Mapea codigo_producto (ej. "C-1", "K-4") a la misma imagen de lata usada
@@ -81,11 +95,11 @@ function fFecha(iso: string) {
   return `${d} ${meses[m - 1]} ${y}`
 }
 
-// Texto para compartir: sin cantidades exactas, solo un semáforo de
-// disponibilidad, agrupado por categoría (Cerveza/Kombucha) y tipo (Barriles/Envases).
+// Texto para compartir: cantidades reales (unidades + equivalencia en cajas
+// para latas), agrupado por categoría (Cerveza/Kombucha) y tipo (Barriles/Latas).
 function buildResumenCopiable(filas: StockProductoRow[], fechaInforme: string | null): string {
   const categorias = ['Cerveza', 'Kombucha'] as const
-  const tipos = [{ key: 'barril' as const, label: 'Barriles' }, { key: 'envase' as const, label: 'Envases' }]
+  const tipos = [{ key: 'barril' as const, label: 'Barriles' }, { key: 'envase' as const, label: 'Latas' }]
   let out = `📦 STOCK CÁMARA GENERAL BARRIOS BAJOS`
   if (fechaInforme) out += ` — ${fFecha(fechaInforme)}`
   out += '\n'
@@ -101,8 +115,11 @@ function buildResumenCopiable(filas: StockProductoRow[], fechaInforme: string | 
       for (const f of items) {
         const n = nivelDe(f)
         const icon = n === 'critico' ? '🔴' : n === 'bajo' ? '🟡' : '🟢'
-        const etiqueta = n === 'critico' ? ' (revisar stock)' : n === 'bajo' ? ' (poco stock)' : ''
-        out += `${icon} ${f.producto}${etiqueta}\n`
+        const etiqueta = n === 'critico' ? ' — revisar stock' : n === 'bajo' ? ' — poco stock' : ''
+        const detalle = f.tipo === 'envase'
+          ? `${fNum(f.cantidad)} un. (${fCajas(f.cantidad)})`
+          : `${fNum(f.cantidad)} barr.`
+        out += `${icon} ${f.producto}: ${detalle}${etiqueta}\n`
       }
     }
   }
@@ -124,10 +141,42 @@ function AlertaBadge({ nivel }: { nivel: Nivel }) {
   )
 }
 
+// Detalle de lotes al expandir un producto — el informe de bodega no trae
+// fecha de vencimiento, solo código de lote y cantidad. Se ordena de mayor a
+// menor cantidad (no hay fecha con la cual ordenar por próximo a vencer).
+function DetalleLotes({ f }: { f: StockProductoRow }) {
+  const lotes = [...(f.lotes ?? [])].sort((a, b) => b.cantidad - a.cantidad)
+  if (lotes.length === 0) {
+    return <p style={{ fontSize: 12, color: C.muted, padding: '10px 16px 14px' }}>Sin detalle de lotes disponible.</p>
+  }
+  return (
+    <div style={{ padding: '2px 16px 14px' }}>
+      <p style={{ fontSize: 10.5, fontWeight: 700, color: C.faint, letterSpacing: '0.04em', marginBottom: 6 }}>
+        {lotes.length} LOTE{lotes.length === 1 ? '' : 'S'}
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {lotes.map((l, i) => (
+          <div key={`${l.codigo}-${i}`} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: C.bg, borderRadius: 9, padding: '7px 10px',
+          }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>Lote {l.codigo}</span>
+            <span style={{ fontSize: 12, color: C.muted, textAlign: 'right' }}>
+              {fNum(l.cantidad)} {f.tipo === 'barril' ? 'barr.' : 'un.'}
+              {f.tipo === 'envase' && <span style={{ color: C.faint }}> · {fCajas(l.cantidad)}</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function StockClient({ filas, fechaInforme }: { filas: StockProductoRow[]; fechaInforme: string | null }) {
   const [tab, setTab] = useState<'barril' | 'envase'>('barril')
   const [busca, setBusca] = useState('')
   const [copiado, setCopiado] = useState(false)
+  const [expandido, setExpandido] = useState<string | null>(null)
 
   const barriles = useMemo(() => filas.filter(f => f.tipo === 'barril'), [filas])
   const envases = useMemo(() => filas.filter(f => f.tipo === 'envase'), [filas])
@@ -214,10 +263,10 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
                   <div style={{ width: 30, height: 30, borderRadius: 9, background: C.greenSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Beer size={15} color={C.green} />
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>Envases</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>Latas</span>
                 </div>
                 <p style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>{fNum(totEnvasesCant)}</p>
-                <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>unidades</p>
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>un. · ≈{fCajas(totEnvasesCant)}</p>
               </div>
             </div>
 
@@ -246,7 +295,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
                     color: tab === t ? '#fff' : C.muted,
                   }}
                 >
-                  {t === 'barril' ? `Barriles (${barriles.length})` : `Envases (${envases.length})`}
+                  {t === 'barril' ? `Barriles (${barriles.length})` : `Latas (${envases.length})`}
                 </button>
               ))}
             </div>
@@ -282,30 +331,56 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
                       </div>
                       <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
                         {items.map((f, i) => {
+                          const key = `${f.tipo}-${f.producto}`
+                          const abierto = expandido === key
                           const share = (f.cantidad / maxCant) * 100
                           const nivel = nivelDe(f)
                           const barColor = nivel === 'critico' ? C.red : nivel === 'bajo' ? C.amber : tintCat
                           return (
-                            <div key={`${f.producto}-${i}`} style={{ padding: '12px 16px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
-                              <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
-                                <ProductoThumb codigo={f.codigo_producto} categoria={f.categoria} />
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flex: 1, minWidth: 0 }}>
-                                  <div style={{ minWidth: 0 }}>
-                                    <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{f.producto}</p>
-                                    <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{f.codigo_producto ?? '—'}</p>
-                                    <AlertaBadge nivel={nivel} />
-                                  </div>
-                                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                    <p style={{ fontSize: 15, fontWeight: 800, color: C.text }}>
-                                      {fNum(f.cantidad)} <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>{f.tipo === 'barril' ? 'barr.' : 'un.'}</span>
-                                    </p>
-                                    {f.litros != null && <p style={{ fontSize: 11, color: C.muted }}>{fL(f.litros)}</p>}
+                            <div key={key} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
+                              <button
+                                onClick={() => setExpandido(abierto ? null : key)}
+                                style={{
+                                  display: 'block', width: '100%', textAlign: 'left', background: 'transparent',
+                                  border: 'none', cursor: 'pointer', padding: '12px 16px', font: 'inherit',
+                                }}
+                              >
+                                <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
+                                  <ProductoThumb codigo={f.codigo_producto} categoria={f.categoria} />
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flex: 1, minWidth: 0 }}>
+                                    <div style={{ minWidth: 0 }}>
+                                      <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{f.producto}</p>
+                                      <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{f.codigo_producto ?? '—'}</p>
+                                      <AlertaBadge nivel={nivel} />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, flexShrink: 0 }}>
+                                      <div style={{ textAlign: 'right' }}>
+                                        <p style={{ fontSize: 15, fontWeight: 800, color: C.text }}>
+                                          {fNum(f.cantidad)} <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>{f.tipo === 'barril' ? 'barr.' : 'un.'}</span>
+                                        </p>
+                                        {f.litros != null && <p style={{ fontSize: 11, color: C.muted }}>{fL(f.litros)}</p>}
+                                        {f.tipo === 'envase' && (
+                                          <p style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+                                            <Boxes size={11} /> {fCajas(f.cantidad)}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <ChevronDown
+                                        size={16} color={C.faint}
+                                        style={{ marginTop: 2, transform: abierto ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+                                      />
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                              <div style={{ height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
-                                <div style={{ width: `${share}%`, height: '100%', background: barColor, borderRadius: 3 }} />
-                              </div>
+                                <div style={{ height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
+                                  <div style={{ width: `${share}%`, height: '100%', background: barColor, borderRadius: 3 }} />
+                                </div>
+                              </button>
+                              {abierto && (
+                                <div style={{ borderTop: `1px solid ${C.line}` }}>
+                                  <DetalleLotes f={f} />
+                                </div>
+                              )}
                             </div>
                           )
                         })}

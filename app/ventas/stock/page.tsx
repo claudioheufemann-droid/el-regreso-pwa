@@ -3,6 +3,11 @@ import StockClient from './StockClient'
 
 export const dynamic = 'force-dynamic'
 
+export interface LoteRow {
+  codigo: string
+  cantidad: number
+}
+
 export interface StockProductoRow {
   tipo: 'barril' | 'envase'
   producto: string
@@ -10,6 +15,7 @@ export interface StockProductoRow {
   categoria: string | null
   cantidad: number
   litros: number | null
+  lotes: LoteRow[]
 }
 
 export default async function StockPage() {
@@ -17,7 +23,7 @@ export default async function StockPage() {
 
   const { data } = await supabase
     .from('stock_productos')
-    .select('tipo, producto, codigo_producto, categoria, cantidad, litros, fecha_informe')
+    .select('tipo, producto, codigo_producto, categoria, cantidad, litros, lotes, fecha_informe')
     .order('cantidad', { ascending: false })
 
   const filas = (data ?? []) as (StockProductoRow & { fecha_informe: string })[]

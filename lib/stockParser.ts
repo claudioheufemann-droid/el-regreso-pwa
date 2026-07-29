@@ -27,6 +27,11 @@
  */
 import * as XLSX from 'xlsx'
 
+export interface LoteParsed {
+  codigo: string
+  cantidad: number
+}
+
 export interface StockProductoParsed {
   tipo: 'barril' | 'envase'
   producto: string
@@ -34,6 +39,7 @@ export interface StockProductoParsed {
   categoria: 'Cerveza' | 'Kombucha' | 'Otros'
   cantidad: number
   litros: number | null
+  lotes: LoteParsed[]
 }
 
 const CAMARA_OBJETIVO = 'camara general barrios bajos'
@@ -64,9 +70,13 @@ function buscarFila(filas: Fila[], texto: string, desde: number): number {
   return -1
 }
 
+function lotesDeMapa(mapa: Map<string, number>): LoteParsed[] {
+  return Array.from(mapa.entries()).map(([codigo, cantidad]) => ({ codigo, cantidad }))
+}
+
 function parseBarriles(filas: Fila[], inicio: number): StockProductoParsed[] {
   const productos: StockProductoParsed[] = []
-  let actual: { producto: string; codigo: string | null; barriles: number; litros: number } | null = null
+  let actual: { producto: string; codigo: string | null; barriles: number; litros: number; lotes: Map<string, number> } | null = null
 
   for (let i = inicio + 1; i < filas.length; i++) {
     const f = filas[i]
@@ -76,23 +86,27 @@ function parseBarriles(filas: Fila[], inicio: number): StockProductoParsed[] {
       if (actual) productos.push({
         tipo: 'barril', producto: actual.producto, codigoProducto: actual.codigo,
         categoria: categoriaDe(actual.producto), cantidad: actual.barriles, litros: actual.litros,
+        lotes: lotesDeMapa(actual.lotes),
       })
-      actual = { producto: String(f[2]).trim(), codigo: f[3] != null ? String(f[3]).trim() : null, barriles: 0, litros: 0 }
+      actual = { producto: String(f[2]).trim(), codigo: f[3] != null ? String(f[3]).trim() : null, barriles: 0, litros: 0, lotes: new Map() }
     } else if (actual && f[5] != null && String(f[5]).trim() !== '') {
       actual.barriles += 1
       actual.litros += Number(f[7]) || 0
+      const lote = f[6] != null ? String(f[6]).trim() : 'Sin lote'
+      actual.lotes.set(lote, (actual.lotes.get(lote) ?? 0) + 1)
     }
   }
   if (actual) productos.push({
     tipo: 'barril', producto: actual.producto, codigoProducto: actual.codigo,
     categoria: categoriaDe(actual.producto), cantidad: actual.barriles, litros: actual.litros,
+    lotes: lotesDeMapa(actual.lotes),
   })
   return productos
 }
 
 function parseEnvases(filas: Fila[], inicio: number): StockProductoParsed[] {
   const productos: StockProductoParsed[] = []
-  let actual: { producto: string; codigo: string | null; unidades: number } | null = null
+  let actual: { producto: string; codigo: string | null; unidades: number; lotes: Map<string, number> } | null = null
 
   for (let i = inicio + 1; i < filas.length; i++) {
     const f = filas[i]
@@ -102,15 +116,20 @@ function parseEnvases(filas: Fila[], inicio: number): StockProductoParsed[] {
       if (actual) productos.push({
         tipo: 'envase', producto: actual.producto, codigoProducto: actual.codigo,
         categoria: categoriaDe(actual.producto), cantidad: actual.unidades, litros: null,
+        lotes: lotesDeMapa(actual.lotes),
       })
-      actual = { producto: String(f[1]).trim(), codigo: f[2] != null ? String(f[2]).trim() : null, unidades: 0 }
+      actual = { producto: String(f[1]).trim(), codigo: f[2] != null ? String(f[2]).trim() : null, unidades: 0, lotes: new Map() }
     } else if (actual && f[5] != null && f[6] != null) {
-      actual.unidades += Number(f[6]) || 0
+      const cant = Number(f[6]) || 0
+      actual.unidades += cant
+      const lote = String(f[5]).trim()
+      actual.lotes.set(lote, (actual.lotes.get(lote) ?? 0) + cant)
     }
   }
   if (actual) productos.push({
     tipo: 'envase', producto: actual.producto, codigoProducto: actual.codigo,
     categoria: categoriaDe(actual.producto), cantidad: actual.unidades, litros: null,
+    lotes: lotesDeMapa(actual.lotes),
   })
   return productos
 }
