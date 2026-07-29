@@ -41,6 +41,40 @@ function parseFecha(raw: unknown): string | null {
   return null
 }
 
+/** Como parseFecha, pero conserva hora:minuto:segundo cuando el valor los
+ *  trae — el ERP sí reporta hora exacta en "Fecha entrega" (ej.
+ *  "28/07/2026 23:56:01"), a diferencia de "Fecha Pedido", que nunca la
+ *  trae. Se devuelve como timestamp SIN zona horaria (hora literal de Chile
+ *  tal cual la muestra el ERP, sin adivinar offset UTC/DST) — la UI la
+ *  formatea directo, sin pasar por Date/timeZone. 00:00:00 se trata como
+ *  "sin hora real" (probablemente sólo fecha, sin hora capturada). */
+function parseFechaHora(raw: unknown): string | null {
+  if (raw instanceof Date) {
+    const y = raw.getUTCFullYear()
+    const mo = String(raw.getUTCMonth() + 1).padStart(2, '0')
+    const d = String(raw.getUTCDate()).padStart(2, '0')
+    const h = raw.getUTCHours(), mi = raw.getUTCMinutes(), s = raw.getUTCSeconds()
+    if (h === 0 && mi === 0 && s === 0) return null
+    return `${y}-${mo}-${d}T${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+  if (typeof raw === 'string') {
+    const iso = raw.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(:\d{2})?/)
+    if (iso) return `${iso[1]}T${iso[2]}${iso[3] ?? ':00'}`
+    const dmy = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}:\d{2})(:\d{2})?/)
+    if (dmy) {
+      const [, dd, mm, yyyy, hhmm, ss] = dmy
+      return `${yyyy}-${mm}-${dd}T${hhmm}${ss ?? ':00'}`
+    }
+    return null
+  }
+  if (typeof raw === 'number') {
+    const d = XLSX.SSF.parse_date_code(raw)
+    if (!d.H && !d.M && !d.S) return null
+    return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}T${String(d.H).padStart(2, '0')}:${String(d.M).padStart(2, '0')}:${String(Math.round(d.S)).padStart(2, '0')}`
+  }
+  return null
+}
+
 function deduplicarRegistros(registros: Record<string, unknown>[]) {
   // Contador de apariciones por clave base — permite 2 barriles idénticos
   // del mismo cliente en el mismo pedido (e.g. El Growler: 2 × Barril 30L).
@@ -125,9 +159,9 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
       // Fecha real de entrega: NULL = el pedido aún no se entregó (pendiente o
       // listo para entregar). Es la que usa el ERP para filtrar el informe, así
       // que guardarla permite distinguir en la app lo entregado de lo pendiente.
-      const fechaEntrega = parseFecha(
-        row['FechaEntrega'] ?? row['Fecha entrega'] ?? row['Fecha Entrega']
-      )
+      const fechaEntregaRaw = row['FechaEntrega'] ?? row['Fecha entrega'] ?? row['Fecha Entrega']
+      const fechaEntrega = parseFecha(fechaEntregaRaw)
+      const fechaEntregaHora = parseFechaHora(fechaEntregaRaw)
       const fechaEntregaEstimada = parseFecha(
         row['FechaEntregaEstimada'] ?? row['Fecha Entrega Estimada'] ?? row['Fecha entrega estimada']
       )
@@ -135,6 +169,7 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
       return {
         fecha_pedido: fechaPedido,
         fecha_entrega: fechaEntrega,
+        fecha_entrega_hora: fechaEntregaHora,
         fecha_entrega_estimada: fechaEntregaEstimada,
         // El archivo sí trae el estado de entrega, así que fecha_entrega es
         // confiable: NULL significa "aún no entregado", no "no sabemos".

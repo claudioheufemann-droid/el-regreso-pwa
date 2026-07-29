@@ -34,6 +34,7 @@ function claseEnvase(envase: string, categoria: string): string {
  * tipo=clientes-producto requiere &producto=&envase= — qué locales compraron ese producto
  * tipo=clientes-por-entregar — clientes con pedidos tomados en el rango aún sin despachar
  * tipo=pedidos-pendientes-cliente requiere &cliente= — sus pedidos pendientes de ese cliente
+ * tipo=pedidos-entregados-cliente requiere &cliente= — sus pedidos ya entregados, con hora de entrega
  *
  * Drill-down de las tarjetas del dashboard de Ventas. Va aparte de la carga de
  * la página porque son listas largas que sólo se piden al tocar la tarjeta.
@@ -64,14 +65,15 @@ export async function GET(req: Request) {
   const porEntrega = searchParams.get('porEntrega') !== 'false'
 
   const tiposValidos = ['productos', 'clientes', 'envase', 'pedidos-origen', 'cliente-productos',
-    'clientes-vendedor', 'pedido-productos', 'clientes-producto', 'clientes-por-entregar', 'pedidos-pendientes-cliente']
+    'clientes-vendedor', 'pedido-productos', 'clientes-producto', 'clientes-por-entregar',
+    'pedidos-pendientes-cliente', 'pedidos-entregados-cliente']
   if (!tipo || !tiposValidos.includes(tipo))
     return NextResponse.json({ error: `tipo debe ser uno de: ${tiposValidos.join(', ')}` }, { status: 400 })
   if (tipo === 'envase' && !bucket)
     return NextResponse.json({ error: 'envase requiere bucket' }, { status: 400 })
   if (tipo === 'pedidos-origen' && origen !== 'backlog' && origen !== 'mismo-periodo')
     return NextResponse.json({ error: 'pedidos-origen requiere origen=backlog|mismo-periodo' }, { status: 400 })
-  if ((tipo === 'cliente-productos' || tipo === 'pedidos-pendientes-cliente') && !cliente)
+  if ((tipo === 'cliente-productos' || tipo === 'pedidos-pendientes-cliente' || tipo === 'pedidos-entregados-cliente') && !cliente)
     return NextResponse.json({ error: `${tipo} requiere cliente` }, { status: 400 })
   if (tipo === 'clientes-vendedor' && !vendedor)
     return NextResponse.json({ error: 'clientes-vendedor requiere vendedor' }, { status: 400 })
@@ -181,6 +183,21 @@ export async function GET(req: Request) {
     return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
       pedido: String(r.pedido ?? ''),
       fechaPedido: r.fecha_pedido ? String(r.fecha_pedido) : null,
+      litros: Number(r.litros ?? 0),
+      revenue: Number(r.revenue ?? 0),
+    })))
+  }
+
+  if (tipo === 'pedidos-entregados-cliente') {
+    const { data, error } = await supabase.rpc('ventas_pedidos_entregados_cliente', {
+      p_cliente: cliente, p_ini: desde, p_fin: hasta, p_provincias, p_por_entrega: porEntrega,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
+      pedido: String(r.pedido ?? ''),
+      fechaPedido: r.fecha_pedido ? String(r.fecha_pedido) : null,
+      fechaEntrega: r.fecha_entrega ? String(r.fecha_entrega) : null,
+      fechaEntregaHora: r.fecha_entrega_hora ? String(r.fecha_entrega_hora) : null,
       litros: Number(r.litros ?? 0),
       revenue: Number(r.revenue ?? 0),
     })))

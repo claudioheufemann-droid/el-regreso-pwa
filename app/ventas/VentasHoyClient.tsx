@@ -52,6 +52,13 @@ function fFechaCorta(iso: string) {
 function fFechaHora(iso: string) {
   return new Date(iso).toLocaleString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })
 }
+/** "23:56" a partir de un timestamp SIN zona horaria (fecha_entrega_hora):
+ *  se extrae el texto tal cual, sin pasar por Date/timeZone — es la hora
+ *  literal que reportó el ERP, no admite conversión de huso horario. */
+function fHoraLiteral(iso: string): string | null {
+  const m = iso.match(/T(\d{2}:\d{2})/)
+  return m ? m[1] : null
+}
 function fTiempoRelativo(iso: string): string {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
   if (min < 1) return 'justo ahora'
@@ -289,7 +296,7 @@ function DetallePedidoProductosInline({ pedido }: { pedido: string }) {
             background: it.categoria === 'Kombucha' ? C.green : it.categoria === 'Cerveza' ? C.hero : C.purple,
           }} />
           <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: C.muted, wordBreak: 'break-word' }}>
-            {[it.producto, it.envase].filter(Boolean).join(' · ')}
+            {[it.producto, it.envase, fUnidades(it.unidades, it.envase)].filter(Boolean).join(' · ')}
           </span>
           <span style={{ fontSize: 11, color: C.text, flexShrink: 0, whiteSpace: 'nowrap' }}>{fL(it.litros)}</span>
         </div>
@@ -348,6 +355,70 @@ function DetallePedidosPendientesCliente({ cliente, desde, hasta }: { cliente: s
           <DetallePedidoProductosInline pedido={ped.pedido} />
         </div>
       ))}
+    </div>
+  )
+}
+
+interface FilaPedidoEntregado {
+  pedido: string; fechaPedido: string | null; fechaEntrega: string | null
+  fechaEntregaHora: string | null; litros: number; revenue: number
+}
+
+/** Pedidos YA entregados de un cliente, con la hora exacta de entrega
+ *  (pedido de Claudio, 29-jul-2026: "para que cuente la venta" — quiere ver
+ *  cuándo se marcó cada pedido como entregado, no sólo el total agregado
+ *  que ya muestra DetalleCompraCliente). La hora de PEDIDO no se muestra acá
+ *  a propósito: el ERP (Gestión Cervecera) nunca la reporta, sólo la fecha —
+ *  a diferencia de la hora de entrega, que sí viene en el informe. */
+function DetallePedidosEntregadosCliente({ cliente, desde, hasta, porEntrega }: {
+  cliente: string; desde: string; hasta: string; porEntrega: boolean
+}) {
+  const [pedidos, setPedidos] = useState<FilaPedidoEntregado[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    const qs = `tipo=pedidos-entregados-cliente&cliente=${encodeURIComponent(cliente)}&desde=${desde}&hasta=${hasta}&porEntrega=${porEntrega}`
+    fetch(`/api/ventas/detalle?${qs}`)
+      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
+      .then(d => { if (vivo) setPedidos(Array.isArray(d) ? d : []) })
+      .catch(e => { if (vivo) setError(String(e)) })
+    return () => { vivo = false }
+  }, [cliente, desde, hasta, porEntrega])
+
+  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
+  if (!pedidos) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
+  if (pedidos.length === 0) return null
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>PEDIDOS ENTREGADOS · {pedidos.length}</p>
+      {pedidos.map(ped => {
+        const hora = ped.fechaEntregaHora ? fHoraLiteral(ped.fechaEntregaHora) : null
+        return (
+          <div key={ped.pedido}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: C.green }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>#{ped.pedido}</p>
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                  {ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha de pedido'}
+                </p>
+                <p style={{ fontSize: 11, color: C.green, marginTop: 1 }}>
+                  {ped.fechaEntrega
+                    ? `Entregado el ${fFechaCorta(ped.fechaEntrega)}${hora ? ` a las ${hora}` : ''}`
+                    : 'Sin fecha de entrega'}
+                </p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(ped.litros)}</p>
+                <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(ped.revenue)}</p>
+              </div>
+            </div>
+            <DetallePedidoProductosInline pedido={ped.pedido} />
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -680,9 +751,14 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
               </p>
             )}
             {abiertoAqui && (
-              soloPendiente
-                ? <DetallePedidosPendientesCliente cliente={c.cliente} desde={desde} hasta={hasta} />
-                : <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+              soloPendiente ? (
+                <DetallePedidosPendientesCliente cliente={c.cliente} desde={desde} hasta={hasta} />
+              ) : (
+                <>
+                  <DetalleCompraCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+                  <DetallePedidosEntregadosCliente cliente={c.cliente} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+                </>
+              )
             )}
           </div>
         )
@@ -793,7 +869,7 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega }: {
 
         {/* Métricas, alineadas bajo el nombre */}
         <div style={{ paddingLeft: 58 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{fL(v.litros)}</span>
             <span style={{ fontSize: 12, color: C.muted }}>{share.toFixed(1)}% del total</span>
             <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -801,12 +877,13 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega }: {
               <span style={{ fontSize: 10, color: C.faint }}>vs ant.</span>
             </span>
           </div>
+          <p style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>{fPesoFull(v.revenue)}</p>
           <div style={{ height: 6, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
             <div style={{ width: `${share}%`, height: '100%', background: color, borderRadius: 3, transition: 'width .4s' }} />
           </div>
           {v.litrosPorEntregar > 0 && (
             <p style={{ fontSize: 11, color: C.amber, marginTop: 6 }}>
-              + {fL(v.litrosPorEntregar)} por entregar
+              + {fL(v.litrosPorEntregar)} · {fPesoFull(v.revenuePorEntregar)} por entregar
               <span style={{ color: C.muted }}> · {fL(v.litros + v.litrosPorEntregar)} total</span>
             </p>
           )}

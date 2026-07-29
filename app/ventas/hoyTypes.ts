@@ -44,6 +44,7 @@ export interface VendedorRango {
   litrosPrev: number
   /** Litros de pedidos del período aún sin despachar (por fecha de pedido, no de entrega) */
   litrosPorEntregar: number
+  revenuePorEntregar: number
 }
 
 export interface PuntoSerie {

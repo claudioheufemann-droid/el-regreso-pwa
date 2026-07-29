@@ -97,13 +97,16 @@ function armarVendedores(
   // Por fecha de PEDIDO (no de entrega): lo que este vendedor cerró en el
   // período y todavía no se despachó. Población distinta a `litros`, que ya
   // sólo cuenta lo entregado — se muestra aparte, no se suma al ranking.
-  const porEntregar = new Map<string, number>()
+  const porEntregar = new Map<string, { litros: number; revenue: number }>()
   for (const r of porEntregarRows ?? []) {
     const bruto = String(r.vendedor ?? '')
     if (VENDEDORES_FUERA_RANKING.has(bruto)) continue
     const n = vendedorCanonico(bruto)
     if (!n) continue
-    porEntregar.set(n, (porEntregar.get(n) ?? 0) + Number(r.litros_por_entregar ?? 0))
+    const cur = porEntregar.get(n) ?? { litros: 0, revenue: 0 }
+    cur.litros += Number(r.litros_por_entregar ?? 0)
+    cur.revenue += Number(r.revenue_por_entregar ?? 0)
+    porEntregar.set(n, cur)
   }
   const acc = new Map<string, VendedorRango>()
   for (const r of rows ?? []) {
@@ -112,7 +115,9 @@ function armarVendedores(
     const n = vendedorCanonico(bruto)
     const cur = acc.get(n) ?? {
       vendedor: n, litros: 0, revenue: 0, clientes: 0,
-      litrosPrev: prev.get(n) ?? 0, litrosPorEntregar: porEntregar.get(n) ?? 0,
+      litrosPrev: prev.get(n) ?? 0,
+      litrosPorEntregar: porEntregar.get(n)?.litros ?? 0,
+      revenuePorEntregar: porEntregar.get(n)?.revenue ?? 0,
     }
     cur.litros += Number(r.litros ?? 0)
     cur.revenue += Number(r.revenue ?? 0)
@@ -124,13 +129,19 @@ function armarVendedores(
   // Quien vendió antes pero no ahora también aparece, para que se note la caída
   for (const [n, litrosPrev] of prev) {
     if (!acc.has(n) && litrosPrev > 0)
-      acc.set(n, { vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev, litrosPorEntregar: porEntregar.get(n) ?? 0 })
+      acc.set(n, {
+        vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev,
+        litrosPorEntregar: porEntregar.get(n)?.litros ?? 0, revenuePorEntregar: porEntregar.get(n)?.revenue ?? 0,
+      })
   }
   // Quien sólo tiene pedidos pendientes (sin nada entregado aún) también debe
   // aparecer, si no su "por entregar" queda invisible en el ranking.
-  for (const [n, litrosPend] of porEntregar) {
-    if (!acc.has(n) && litrosPend > 0)
-      acc.set(n, { vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev: prev.get(n) ?? 0, litrosPorEntregar: litrosPend })
+  for (const [n, pend] of porEntregar) {
+    if (!acc.has(n) && pend.litros > 0)
+      acc.set(n, {
+        vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev: prev.get(n) ?? 0,
+        litrosPorEntregar: pend.litros, revenuePorEntregar: pend.revenue,
+      })
   }
   return [...acc.values()].sort((a, b) => b.litros - a.litros)
 }
