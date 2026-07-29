@@ -412,7 +412,13 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
   const tiempoEst = !minEst ? null : minEst < 60 ? `${minEst} min` : `${Math.floor(minEst / 60)}h${minEst % 60 > 0 ? ` ${minEst % 60}m` : ''}`
 
   return (
-    <div style={{ flex: 1, minHeight: 0, background: '#080808', display: 'flex', flexDirection: 'column' }}>
+    /* minHeight, NO flex:1+minHeight:0 — ese combo (usado antes acá) hace que
+       esta página quede acotada a la altura del viewport y el div de abajo
+       se vuelva un contenedor de scroll ANIDADO, que en desktop deja de
+       responder a la rueda del mouse. Mismo bug ya resuelto en el resto de
+       los layouts (ver comentario en app/flota/layout.tsx): que sea el
+       documento el que scrollea. */
+    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
 
       <FlotaPageHeader
         title={viaje.vehiculo.nombre}
@@ -422,7 +428,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
       />
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 100 }}>
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 100 }}>
         {/* Banner viaje terminado */}
         {completado && (
           <div style={{ background: 'rgba(90,138,74,0.08)', border: '1px solid rgba(90,138,74,0.25)', borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>

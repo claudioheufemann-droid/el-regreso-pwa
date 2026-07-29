@@ -524,7 +524,10 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, background: '#080808', display: 'flex', flexDirection: 'column' }}>
+    /* minHeight, NO flex:1+minHeight:0 — ver comentario en ViajeDetailClient.tsx
+       y app/flota/layout.tsx: ese combo crea un scroll anidado que no
+       responde al mouse en desktop. */
+    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
       <FlotaPageHeader
         title={vehiculo ? vehiculo.nombre : 'Nueva Salida'}
         subtitle={`Paso ${paso}/${totalPasos} · ${pasoLabel}`}
@@ -536,8 +539,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
       {/* ── Paso 1: Selección vehículo ─────────────────────────────────────── */}
       {paso === 1 && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 0' }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '12px 12px 0' }}>
             {disponibles.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px' }}>
                 <AlertTriangle size={32} color="#D4AF37" style={{ margin: '0 auto 12px', display: 'block' }} />
@@ -599,8 +602,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
       {/* ── Paso 2: Ruta unificada ─────────────────────────────────────────── */}
       {paso === 2 && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Tipo toggle */}
             <div style={{ background: '#111', borderRadius: 12, padding: 4, display: 'flex', gap: 3 }}>
@@ -893,8 +896,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
       {/* ── Paso 3: Fotos + KM ────────────────────────────────────────────── */}
       {paso === 3 && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '16px' }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 }}>
               Documentación obligatoria
             </p>
