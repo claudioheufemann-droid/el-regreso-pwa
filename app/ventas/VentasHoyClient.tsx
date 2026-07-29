@@ -968,31 +968,40 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
 
   // "Período" = el período 24→23 elegido; "custom" = rango a mano (viene del
   // servidor por searchParams); el resto son rangos relativos a hoy.
+  //
+  // Mientras se navega a un período (aplicarRango hace router.push, que
+  // recarga en el servidor), hay una ventana en que `rango` ya cambió a
+  // 'custom' pero `data.custom` todavía es el de ANTES de la navegación
+  // (null, si nunca se había usado un rango a mano). Antes eso mostraba
+  // "No hay períodos de venta configurados" — un error falso, no real.
+  // Se cae al período activo (data.periodos[0]) en vez de a null: se sigue
+  // viendo algo con sentido hasta que llegan los datos nuevos, en vez de un
+  // mensaje de error. Sólo si de verdad no hay NINGÚN período configurado
+  // (periodos.length === 0) es un problema real que vale la pena mostrar.
+  const periodoActivoDatos = data.periodos[0]?.datos ?? null
   const d: DatosRango | null =
-    rango === 'periodo' ? (periodoSel?.datos ?? null)
-    : rango === 'custom' ? data.custom
-    : data.rangos[rango as Exclude<RangoKey, 'periodo' | 'custom'>]
+    rango === 'periodo' ? (periodoSel?.datos ?? periodoActivoDatos)
+    : rango === 'custom' ? (data.custom ?? periodoActivoDatos)
+    : (data.rangos[rango as Exclude<RangoKey, 'periodo' | 'custom'>] ?? periodoActivoDatos)
 
   function aplicarRango(desde: string, hasta: string) {
     if (!desde || !hasta) return
     // Se recarga en el servidor: el rango alimenta tarjetas, mix, ranking y
-    // detalles. router.refresh() de más: el Router Cache de Next puede servir
-    // el payload de una visita anterior a /ventas cuando sólo cambian los
-    // searchParams, mostrando datos viejos o en cero hasta que se fuerza la
-    // invalidación explícita.
+    // detalles.
     //
     // El bug real (pedido de Claudio, "Marzo no se actualiza pero Agosto sí"):
-    // faltaba este setRango('custom'). Sin él, `rango` se queda en lo que
+    // faltaba este setRango('custom'). Sin él, `rango` se quedaba en lo que
     // estuviera antes (típicamente 'periodo'), así que `d` seguía leyendo
     // `data.periodos[periodoIdx]` -el período reciente que ya estaba
-    // elegido- en vez de `data.custom` -el que se acaba de pedir-. Por eso
-    // los períodos recientes (que YA estaban en `rango==='periodo'`) se
-    // veían actualizar bien, y cualquier período fuera de esa ventana no
-    // cambiaba nada en las tarjetas por más que el servidor sí trajera los
-    // datos correctos.
+    // elegido- en vez de `data.custom` -el que se acaba de pedir-.
+    //
+    // OJO: no llamar también router.refresh() acá — hacerlo justo después de
+    // router.push() en el mismo tick puede pisarse con la navegación en vez
+    // de complementarla, dejando la pantalla pegada mostrando `data.custom`
+    // viejo (null) indefinidamente. force-dynamic en page.tsx ya garantiza
+    // que router.push por sí solo trae datos frescos del servidor.
     setRango('custom')
     router.push(`/ventas?desde=${desde}&hasta=${hasta}`)
-    router.refresh()
     setShowPeriodos(false)
   }
   function limpiarRango() {
