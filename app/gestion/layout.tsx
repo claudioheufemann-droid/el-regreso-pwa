@@ -22,7 +22,15 @@ export default async function GestionLayout({ children }: { children: React.Reac
       <div className="hidden lg:flex">
         <GestionSidebar />
       </div>
-      <main className="flex-1 min-w-0 flex flex-col min-h-screen overflow-y-auto overflow-x-hidden pb-24 lg:pb-0 mobile-safe-top">
+      {/* Sin overflow-y-auto/min-h-screen acá — mismo fix que
+          app/ventas/layout.tsx, app/logistica/layout.tsx,
+          app/flota/layout.tsx y app/terreno/layout.tsx: un <main> con su
+          propio contenedor de scroll anidado impide scrollear.
+          overflow-x-clip, NO overflow-x-hidden: 'hidden' fuerza el otro
+          eje (overflow-y) a 'auto' automáticamente y reintroduce el mismo
+          contenedor anidado — que era exactamente el problema acá, con
+          los dos ejes puestos a mano. */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-x-clip pb-24 lg:pb-0 mobile-safe-top">
         <div className="hidden lg:block">
           <PageTabs tabs={TABS} />
         </div>

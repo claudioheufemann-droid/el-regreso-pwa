@@ -23,7 +23,13 @@ export default async function TerrenoLayout({ children }: { children: React.Reac
       <div className="hidden lg:flex">
         <TerrenoSidebar />
       </div>
-      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-28 lg:pb-0 mobile-safe-top">
+      {/* Sin overflow-y-auto/min-h-screen acá — mismo fix que
+          app/ventas/layout.tsx, app/logistica/layout.tsx y
+          app/flota/layout.tsx: un <main> con su propio contenedor de
+          scroll anidado impide scrollear. overflow-x-clip, NO
+          overflow-x-hidden: 'hidden' fuerza el otro eje a 'auto' y
+          reintroduce el mismo contenedor anidado. */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-x-clip pb-28 lg:pb-0 mobile-safe-top">
         <div className="hidden lg:block">
           <PageTabs tabs={TABS} />
         </div>

@@ -26,7 +26,13 @@ export default async function FlotaLayout({ children }: { children: React.ReactN
       <div className="hidden lg:flex">
         <FlotaSidebar />
       </div>
-      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto pb-32 lg:pb-0 mobile-safe-top">
+      {/* Sin overflow-y-auto/min-h-screen acá — mismo fix que
+          app/ventas/layout.tsx y app/logistica/layout.tsx: un <main> con
+          su propio contenedor de scroll anidado impide scrollear (incluso
+          en desktop, con Sidebar+TabBar propios). overflow-x-clip, NO
+          overflow-x-hidden: 'hidden' fuerza el otro eje a 'auto' y
+          reintroduce el mismo contenedor anidado. */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-x-clip pb-32 lg:pb-0 mobile-safe-top">
         <div className="hidden lg:block">
           <FlotaTabBar tabs={TABS} accent={ORANGE} />
         </div>
