@@ -10,6 +10,7 @@ const TABS: PageTab[] = [
   { href: '/ventas/agenda',               label: 'Agenda'                 },
   { href: '/ventas/clientes',             label: 'Clientes'               },
   { href: '/ventas/misiones',             label: 'Misiones'               },
+  { href: '/ventas/stock',                label: 'Stock'                  },
 ]
 
 export default async function VentasLayout({ children }: { children: React.ReactNode }) {
