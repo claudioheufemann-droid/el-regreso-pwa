@@ -163,7 +163,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 32 }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 120px))' }}>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
           <div>
