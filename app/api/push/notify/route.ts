@@ -11,6 +11,7 @@
  *   visita_sin_venta    → admins
  *   camion_salida       → todos
  *   camion_llegada      → todos
+ *   pedido_entregado    → todos
  *   tarea_asignada      → usuario asignado (data.userId requerido)
  *   mision_pedido       → admins
  *   alerta_deuda        → admins
@@ -40,6 +41,7 @@ const EVENT_CONFIG: Record<string, {
   visita_sin_venta:   { audience: 'admins', defaultUrl: '/terreno/historial' },
   camion_salida:      { audience: 'all',    defaultUrl: '/flota' },
   camion_llegada:     { audience: 'all',    defaultUrl: '/flota' },
+  pedido_entregado:   { audience: 'all',    defaultUrl: '/flota/historial' },
   tarea_asignada:     { audience: 'user',   defaultUrl: '/gestion' },
   mision_pedido:      { audience: 'admins', defaultUrl: '/ventas/misiones' },
   alerta_deuda:       { audience: 'admins', defaultUrl: '/ventas/clientes' },

@@ -284,7 +284,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   // repartir directo, el envío se le entrega a un tercero para que él lo
   // despache a otra ciudad. La foto de la guía es obligatoria porque es
   // el único respaldo de que el envío efectivamente se entregó.
-  const OPERADORES_LOGISTICOS = ['Cacem', 'Varmontt'] as const
+  const OPERADORES_LOGISTICOS = ['Cacem', 'Varmontt', 'Taladriz', 'Bluexpress'] as const
   const [operadorLogistico, setOperadorLogistico] = useState<typeof OPERADORES_LOGISTICOS[number] | null>(null)
   const [ciudadDestino, setCiudadDestino] = useState('')
   const [fotoGuiaEnvio, setFotoGuiaEnvio] = useState('')
@@ -611,14 +611,14 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                 const active = tipoViaje === t
                 const color = t === 'reparto' ? F : t === 'tramite' ? '#D4AF37' : '#60A5FA'
                 const rgb = t === 'reparto' ? '212,175,55' : t === 'tramite' ? '245,158,11' : '96,165,250'
-                const label = t === 'reparto' ? '🚚 Reparto' : t === 'tramite' ? '🔧 Trámite' : '📦 Operador'
+                const label = t === 'reparto' ? '🚚 Reparto' : t === 'tramite' ? '🔧 Trámite' : '📦 Operador Logístico'
                 return (
                   <button key={t} onClick={() => setTipoViaje(t)} style={{
                     flex: 1, padding: '11px 4px', borderRadius: 9, cursor: 'pointer',
                     border: active ? `1px solid rgba(${rgb},0.3)` : '1px solid transparent',
                     background: active ? `rgba(${rgb},0.12)` : 'transparent',
                     color: active ? color : 'var(--muted)',
-                    fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap',
+                    fontSize: 12, fontWeight: 800, textAlign: 'center', lineHeight: 1.25,
                   }}>
                     {label}
                   </button>

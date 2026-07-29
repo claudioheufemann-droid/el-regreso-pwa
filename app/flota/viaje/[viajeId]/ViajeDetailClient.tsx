@@ -6,6 +6,7 @@ import { MapPin, Plus, X, Navigation2, Clock, CheckCircle, FileText, Camera, Che
 import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
+import { notificar } from '@/lib/notificar'
 import type { AppUser } from '@/lib/auth'
 
 const F = '#D4AF37'
@@ -390,11 +391,24 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
       alert('Indica el motivo de la no entrega.')
       return
     }
+    const parada = paradas.find(p => p.id === paradaId)
     setGuardandoParada(prev => ({ ...prev, [paradaId]: true }))
     guardarParadas(paradas.map(p => p.id === paradaId ? {
       ...p, entregado: b.entregado, motivoNoEntrega: b.motivoNoEntrega,
       fotoGuia: b.fotoGuia, fotoProducto: b.fotoProducto, entregadoAt: new Date().toISOString(),
-    } : p)).finally(() => {
+    } : p)).then(() => {
+      // Pedido de Claudio: que TODOS los usuarios de la app vean cuando se
+      // entrega un pedido dentro del viaje (no solo admins), para dar
+      // visibilidad al área de logística.
+      if (b.entregado === 'si' && parada) {
+        notificar({
+          event: 'pedido_entregado',
+          title: '📦 Pedido entregado',
+          body: `${viaje.vehiculo.nombre} entregó a ${parada.nombre}`,
+          url: '/flota/historial',
+        })
+      }
+    }).finally(() => {
       setGuardandoParada(prev => ({ ...prev, [paradaId]: false }))
       setBorradores(prev => { const next = { ...prev }; delete next[paradaId]; return next })
       setParadaAbierta(null)

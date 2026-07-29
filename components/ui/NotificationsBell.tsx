@@ -21,6 +21,7 @@ const ICONO_TIPO: Record<string, string> = {
   visita_sin_venta: '📍',
   camion_salida: '🚚',
   camion_llegada: '🚚',
+  pedido_entregado: '📦',
   tarea_asignada: '✅',
   mision_pedido: '🎯',
   alerta_deuda: '⚠️',
