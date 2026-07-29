@@ -980,6 +980,17 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
     // el payload de una visita anterior a /ventas cuando sólo cambian los
     // searchParams, mostrando datos viejos o en cero hasta que se fuerza la
     // invalidación explícita.
+    //
+    // El bug real (pedido de Claudio, "Marzo no se actualiza pero Agosto sí"):
+    // faltaba este setRango('custom'). Sin él, `rango` se queda en lo que
+    // estuviera antes (típicamente 'periodo'), así que `d` seguía leyendo
+    // `data.periodos[periodoIdx]` -el período reciente que ya estaba
+    // elegido- en vez de `data.custom` -el que se acaba de pedir-. Por eso
+    // los períodos recientes (que YA estaban en `rango==='periodo'`) se
+    // veían actualizar bien, y cualquier período fuera de esa ventana no
+    // cambiaba nada en las tarjetas por más que el servidor sí trajera los
+    // datos correctos.
+    setRango('custom')
     router.push(`/ventas?desde=${desde}&hasta=${hasta}`)
     router.refresh()
     setShowPeriodos(false)
