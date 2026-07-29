@@ -183,7 +183,6 @@ export async function GET(req: Request) {
     return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
       pedido: String(r.pedido ?? ''),
       fechaPedido: r.fecha_pedido ? String(r.fecha_pedido) : null,
-      creadoEn: r.creado_en ? String(r.creado_en) : null,
       litros: Number(r.litros ?? 0),
       revenue: Number(r.revenue ?? 0),
     })))
@@ -197,7 +196,6 @@ export async function GET(req: Request) {
     return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
       pedido: String(r.pedido ?? ''),
       fechaPedido: r.fecha_pedido ? String(r.fecha_pedido) : null,
-      creadoEn: r.creado_en ? String(r.creado_en) : null,
       fechaEntrega: r.fecha_entrega ? String(r.fecha_entrega) : null,
       fechaEntregaHora: r.fecha_entrega_hora ? String(r.fecha_entrega_hora) : null,
       litros: Number(r.litros ?? 0),
@@ -258,5 +256,8 @@ export async function GET(req: Request) {
     revenue: Number(r.revenue ?? 0),
     pedidos: Number(r.pedidos ?? 0),
     ultimaCompra: r.ultima_compra ? String(r.ultima_compra) : null,
+    ultimaCompraHora: r.ultima_compra_hora ? String(r.ultima_compra_hora) : null,
+    litrosPorEntregar: Number(r.litros_por_entregar ?? 0),
+    revenuePorEntregar: Number(r.revenue_por_entregar ?? 0),
   })))
 }

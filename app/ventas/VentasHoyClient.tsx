@@ -59,18 +59,6 @@ function fHoraLiteral(iso: string): string | null {
   const m = iso.match(/T(\d{2}:\d{2})/)
   return m ? m[1] : null
 }
-/** Fecha (YYYY-MM-DD) y hora ("14:32") de Chile a partir de un timestamptz
- *  real (creado_en/created_at) — misma fuente para ambas, para no mezclar
- *  el día que reportó el ERP (fecha_pedido) con la hora de otro timestamp
- *  distinto. A diferencia de fHoraLiteral, que NO convierte huso horario
- *  porque fecha_entrega_hora es un timestamp sin zona, literal. */
-function fFechaYHoraDesdeTZ(iso: string): { fecha: string; hora: string } {
-  const d = new Date(iso)
-  return {
-    fecha: d.toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }),
-    hora: d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' }),
-  }
-}
 function fTiempoRelativo(iso: string): string {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
   if (min < 1) return 'justo ahora'
@@ -147,8 +135,14 @@ interface FilaProducto {
 interface FilaCliente {
   cliente: string; vendedor: string; localidad: string | null
   litros: number; revenue: number; pedidos: number; ultimaCompra: string | null
-  /** Solo viene poblado en el detalle de "clientes-vendedor": litros/revenue
-   *  de pedidos de ese cliente tomados en el rango pero aun no despachados. */
+  /** Hora real de entrega (fecha_entrega_hora del ERP) — sólo viene poblada
+   *  cuando el evento más reciente del cliente fue una entrega; si lo más
+   *  reciente es un pedido aún pendiente, no hay hora real disponible y
+   *  esto viene null (no se inventa una hora). */
+  ultimaCompraHora?: string | null
+  /** litros/revenue de pedidos de ese cliente aun sin despachar — pedidos
+   *  de hoy sin entregar todavia cuentan igual para el orden de la lista
+   *  (ver ultimaCompra), aunque litros siga en 0 hasta que se entreguen. */
   litrosPorEntregar?: number; revenuePorEntregar?: number
 }
 interface FilaPedido {
@@ -262,7 +256,7 @@ function DetallePedidoProductosInline({ pedido }: { pedido: string }) {
 }
 
 interface FilaPedidoCliente {
-  pedido: string; fechaPedido: string | null; creadoEn: string | null
+  pedido: string; fechaPedido: string | null
   entregado: boolean; fechaEntrega: string | null; fechaEntregaHora: string | null
   litros: number; revenue: number
 }
@@ -276,13 +270,16 @@ interface FilaPedidoCliente {
  *  VENDIÓ" (por producto, sin decir de qué pedido) separado de "PEDIDOS
  *  ENTREGADOS" (por pedido) — quedaba duplicado y confuso cuando había un
  *  solo pedido. Ahora es siempre UNA lista por pedido: número (#0...),
- *  hora en que el pedido entró al sistema, estado (pendiente o entregado
- *  con su hora), y el detalle de productos de ese pedido.
+ *  fecha del pedido, estado (pendiente o entregado con su hora), y el
+ *  detalle de productos de ese pedido.
  *
- *  La hora de PEDIDO usa `creado_en` (ventas.created_at: cuándo el sync
- *  -corre cada 15 min- insertó la fila) porque el ERP (Gestión Cervecera)
- *  nunca reporta la hora real en que el vendedor tomó el pedido, sólo la
- *  fecha. La hora de ENTREGA sí es real, viene tal cual del ERP. */
+ *  NO se muestra hora de pedido (sólo fecha): se intentó usar
+ *  `ventas.created_at` como aproximación, pero el sync borra e reinserta
+ *  filas completas en cada corrida -no hace UPDATE-, así que created_at
+ *  refleja "última vez que el sync tocó esta fila", no cuándo se hizo el
+ *  pedido (verificado: una sola corrida puso el mismo created_at a pedidos
+ *  de hace 6 semanas y de hoy). La hora de ENTREGA sí es real, viene tal
+ *  cual del ERP en fecha_entrega_hora. */
 function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
   cliente: string; desde: string; hasta: string; porEntrega: boolean
 }) {
@@ -301,12 +298,12 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
       .then(([pend, ent]) => {
         if (!vivo) return
         const pendientes: FilaPedidoCliente[] = (Array.isArray(pend) ? pend : []).map((p: Record<string, unknown>) => ({
-          pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null, creadoEn: (p.creadoEn as string) ?? null,
+          pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
           entregado: false, fechaEntrega: null, fechaEntregaHora: null,
           litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
         }))
         const entregados: FilaPedidoCliente[] = (Array.isArray(ent) ? ent : []).map((p: Record<string, unknown>) => ({
-          pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null, creadoEn: (p.creadoEn as string) ?? null,
+          pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
           entregado: true, fechaEntrega: (p.fechaEntrega as string) ?? null, fechaEntregaHora: (p.fechaEntregaHora as string) ?? null,
           litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
         }))
@@ -327,7 +324,6 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
     <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>PEDIDOS · {ordenados.length}</p>
       {ordenados.map(ped => {
-        const pedidoFechaHora = ped.creadoEn ? fFechaYHoraDesdeTZ(ped.creadoEn) : null
         const horaEntrega = ped.fechaEntregaHora ? fHoraLiteral(ped.fechaEntregaHora) : null
         return (
           <div key={ped.pedido}>
@@ -336,9 +332,7 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>#{ped.pedido}</p>
                 <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-                  {pedidoFechaHora
-                    ? `Pedido el ${fFechaCorta(pedidoFechaHora.fecha)} a las ${pedidoFechaHora.hora}`
-                    : ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha de pedido'}
+                  {ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha de pedido'}
                 </p>
                 <p style={{ fontSize: 11, fontWeight: 600, marginTop: 1, color: ped.entregado ? C.green : C.amber }}>
                   {ped.entregado
@@ -466,6 +460,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                 const p = esProd ? (f as FilaProducto) : null
                 const ped = esPedidos ? (f as FilaPedido) : null
                 const c = esProd || esPedidos ? null : (f as FilaCliente)
+                const soloPendiente = !!c && c.litros === 0 && !!c.litrosPorEntregar && c.litrosPorEntregar > 0
                 const tintCat = p?.categoria === 'Kombucha' ? C.green : p?.categoria === 'Cerveza' ? C.hero : C.purple
                 // Clave de expansión: cliente, pedido o producto+envase, según
                 // la vista. Las tres caben en el mismo estado `abierto` porque
@@ -505,14 +500,24 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                             : (
                               <>
                                 {[c!.vendedor, c!.localidad].filter(Boolean).join(' · ')}
-                                {/* La fecha es el criterio de orden de la lista (más reciente
-                                    primero), así que va destacada para poder escanearla. */}
+                                {/* La fecha (+ hora real cuando la última actividad fue una
+                                    entrega) es el criterio de orden de la lista (más
+                                    reciente primero), así que va destacada para poder
+                                    escanearla. Un pedido de HOY aunque siga pendiente
+                                    ordena por delante de una entrega de ayer. */}
                                 {c!.ultimaCompra && (
                                   <>
                                     {' · '}
                                     <span style={{ color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>
                                       {fFechaCorta(c!.ultimaCompra)}
+                                      {c!.ultimaCompraHora && ` a las ${fHoraLiteral(c!.ultimaCompraHora)}`}
                                     </span>
+                                  </>
+                                )}
+                                {soloPendiente && (
+                                  <>
+                                    {' · '}
+                                    <span style={{ color: C.amber, fontWeight: 600, whiteSpace: 'nowrap' }}>pendiente</span>
                                   </>
                                 )}
                               </>
@@ -522,8 +527,17 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                       {/* nowrap: globals.css pone overflow-wrap:anywhere a todo en
                           mobile y sin esto un monto largo se parte a mitad del número. */}
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(f.litros)}</p>
-                        <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(f.revenue)}</p>
+                        {soloPendiente ? (
+                          <>
+                            <p style={{ fontSize: 14, fontWeight: 700, color: C.amber, whiteSpace: 'nowrap' }}>{fL(c!.litrosPorEntregar!)}</p>
+                            <p style={{ fontSize: 12, color: C.amber, whiteSpace: 'nowrap' }}>{fPesoFull(c!.revenuePorEntregar ?? 0)}</p>
+                          </>
+                        ) : (
+                          <>
+                            <p style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(f.litros)}</p>
+                            <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(f.revenue)}</p>
+                          </>
+                        )}
                         {p && p.unidades > 0 && (
                           <p style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap', marginTop: 1 }}>{fPrecioUnitario(p.revenue, p.unidades)}</p>
                         )}
