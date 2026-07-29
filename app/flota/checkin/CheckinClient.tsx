@@ -268,7 +268,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   const [vehiculo, setVehiculo] = useState<Vehiculo | null>(null)
 
   // Paso 2 — ruta unificada
-  const [tipoViaje, setTipoViaje] = useState<'reparto' | 'tramite'>('reparto')
+  const [tipoViaje, setTipoViaje] = useState<'reparto' | 'tramite' | 'operador_logistico'>('reparto')
   const [paradas, setParadas] = useState<Parada[]>([])
   const [kmPlanificado, setKmPlanificado] = useState<number | null>(null)
   const [kmCalculado, setKmCalculado] = useState<number | null>(null)
@@ -279,6 +279,16 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   const [busquedaCliente, setBusquedaCliente] = useState('')
   const [cargandoExcel, setCargandoExcel] = useState(false)
   const excelRef = useRef<HTMLInputElement>(null)
+
+  // Paso 2 — entrega a operador logístico (Cacem, Varmontt): en vez de
+  // repartir directo, el envío se le entrega a un tercero para que él lo
+  // despache a otra ciudad. La foto de la guía es obligatoria porque es
+  // el único respaldo de que el envío efectivamente se entregó.
+  const OPERADORES_LOGISTICOS = ['Cacem', 'Varmontt'] as const
+  const [operadorLogistico, setOperadorLogistico] = useState<typeof OPERADORES_LOGISTICOS[number] | null>(null)
+  const [ciudadDestino, setCiudadDestino] = useState('')
+  const [fotoGuiaEnvio, setFotoGuiaEnvio] = useState('')
+  const fotoGuiaEnvioFileRef = useRef<File | null>(null)
 
   // Paso 3
   const [fotoOdo, setFotoOdo] = useState('')
@@ -430,6 +440,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
         destino_declarado: paradas.length > 0
           ? JSON.stringify(paradas.map(p => ({ n: p.nombre, d: p.direccion, lat: p.lat, lng: p.lng })))
           : motivoViaje.trim() || null,
+        operador_logistico: tipoViaje === 'operador_logistico' ? operadorLogistico : null,
+        ciudad_destino: tipoViaje === 'operador_logistico' ? ciudadDestino.trim() : null,
         estado: 'en_curso',
       }).select('id').single()
 
@@ -448,13 +460,14 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
         } catch { return null }
       }
 
-      const [urlOdo, urlFrente, urlIzq, urlDer, urlAtras, urlComb] = await Promise.all([
+      const [urlOdo, urlFrente, urlIzq, urlDer, urlAtras, urlComb, urlGuia] = await Promise.all([
         subir(fotoOdoFileRef.current, 'odometro-inicio'),
         subir(fotos360FilesRef.current.frente, '360-frente'),
         subir(fotos360FilesRef.current.izquierdo, '360-izquierdo'),
         subir(fotos360FilesRef.current.derecho, '360-derecho'),
         subir(fotos360FilesRef.current.atras, '360-atras'),
         subir(fotoMarcadorFileRef.current, 'combustible-inicio'),
+        subir(fotoGuiaEnvioFileRef.current, 'guia-envio'),
       ])
 
       await supabase.from('viajes_flota').update({
@@ -464,6 +477,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
         foto_360_derecho_inicio: urlDer,
         foto_360_atras_inicio: urlAtras,
         foto_combustible_inicio: urlComb,
+        foto_guia_envio: urlGuia,
       }).eq('id', viaje.id)
 
       const { error: errVeh } = await supabase
@@ -474,10 +488,13 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
       if (errVeh) throw new Error(errVeh.message)
 
       // 🔔 Notificar a todos que un camión salió
+      const cuerpoAviso = tipoViaje === 'reparto' ? ' en reparto'
+        : tipoViaje === 'operador_logistico' ? ` — entregó envío a ${operadorLogistico} destino ${ciudadDestino.trim()}`
+        : ` — ${motivoViaje}`
       notificar({
         event: 'camion_salida',
         title: `🚚 ${vehiculo.nombre} en ruta`,
-        body: `${user.nombre?.split(' ')[0] ?? 'Conductor'} salió${tipoViaje === 'reparto' ? ' en reparto' : ` — ${motivoViaje}`}`,
+        body: `${user.nombre?.split(' ')[0] ?? 'Conductor'} salió${cuerpoAviso}`,
         url: '/flota',
       })
 
@@ -489,7 +506,9 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
     }
   }
 
-  const paso2Ok = tipoViaje === 'reparto' || motivoViaje.trim().length > 0
+  const paso2Ok = tipoViaje === 'reparto' ? true
+    : tipoViaje === 'tramite' ? motivoViaje.trim().length > 0
+    : !!operadorLogistico && ciudadDestino.trim().length > 0 && !!fotoGuiaEnvio
   const totalPasos = 3
   const pasoLabel = ['', 'Vehículo', 'Ruta', 'Documentación'][paso]
 
@@ -582,24 +601,27 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
             {/* Tipo toggle */}
             <div style={{ background: '#111', borderRadius: 12, padding: 4, display: 'flex', gap: 3 }}>
-              {(['reparto', 'tramite'] as const).map(t => {
+              {(['reparto', 'tramite', 'operador_logistico'] as const).map(t => {
                 const active = tipoViaje === t
-                const color = t === 'reparto' ? F : '#D4AF37'
-                const rgb = t === 'reparto' ? '212,175,55' : '245,158,11'
+                const color = t === 'reparto' ? F : t === 'tramite' ? '#D4AF37' : '#60A5FA'
+                const rgb = t === 'reparto' ? '212,175,55' : t === 'tramite' ? '245,158,11' : '96,165,250'
+                const label = t === 'reparto' ? '🚚 Reparto' : t === 'tramite' ? '🔧 Trámite' : '📦 Operador'
                 return (
                   <button key={t} onClick={() => setTipoViaje(t)} style={{
-                    flex: 1, padding: '11px 8px', borderRadius: 9, cursor: 'pointer',
+                    flex: 1, padding: '11px 4px', borderRadius: 9, cursor: 'pointer',
                     border: active ? `1px solid rgba(${rgb},0.3)` : '1px solid transparent',
                     background: active ? `rgba(${rgb},0.12)` : 'transparent',
                     color: active ? color : 'var(--muted)',
-                    fontSize: 13, fontWeight: 800,
+                    fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap',
                   }}>
-                    {t === 'reparto' ? '🚚  Reparto' : '🔧  Trámite'}
+                    {label}
                   </button>
                 )
               })}
             </div>
 
+            {tipoViaje !== 'operador_logistico' && (
+            <>
             {/* Rutas planificadas del día */}
             {rutasVehiculo.length > 0 && (
               <div>
@@ -795,6 +817,55 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                 </a>
               )}
             </div>
+            </>
+            )}
+
+            {/* Entrega a operador logístico (Cacem/Varmontt): en vez de
+                reparto directo, el envío se le pasa a un tercero para que
+                lo despache a otra ciudad. La foto de la guía es obligatoria. */}
+            {tipoViaje === 'operador_logistico' && (
+              <>
+                <div>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>
+                    Operador logístico
+                  </p>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {OPERADORES_LOGISTICOS.map(op => {
+                      const active = operadorLogistico === op
+                      return (
+                        <button key={op} onClick={() => setOperadorLogistico(op)} style={{
+                          flex: 1, padding: '14px 8px', borderRadius: 12, cursor: 'pointer',
+                          border: active ? '1.5px solid #60A5FA' : '1px solid rgba(255,255,255,0.08)',
+                          background: active ? 'rgba(96,165,250,0.12)' : '#141414',
+                          color: active ? '#60A5FA' : '#F4EEDF', fontSize: 14, fontWeight: 800,
+                        }}>
+                          {op}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>
+                    Ciudad de destino *
+                  </label>
+                  <input
+                    value={ciudadDestino}
+                    onChange={e => setCiudadDestino(e.target.value)}
+                    placeholder="Ej: Temuco"
+                    style={{ width: '100%', padding: '12px', borderRadius: 10, background: '#141414', border: `1px solid ${ciudadDestino.trim() ? 'rgba(96,165,250,0.3)' : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <FotoSlot
+                  label={fotoGuiaEnvio ? 'Foto de la guía cargada' : 'Foto de la guía del envío * (obligatorio)'}
+                  emoji="🧾"
+                  capturada={!!fotoGuiaEnvio}
+                  onCaptura={(url, file) => { setFotoGuiaEnvio(url); fotoGuiaEnvioFileRef.current = file }}
+                />
+              </>
+            )}
 
             {/* Notas / Motivo */}
             <div>
