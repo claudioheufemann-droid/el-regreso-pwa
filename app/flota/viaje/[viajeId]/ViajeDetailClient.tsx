@@ -233,11 +233,13 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
-  // Pedido de Claudio: solo quien maneja este viaje (o un admin, para poder
-  // corregir un error) puede marcar entregas, agregar paradas o cerrar el
-  // viaje. Cualquier otro trabajador que entre a este viaje solo puede ver
-  // el estado y la ruta — nada de tocar los datos de la entrega ajena.
-  const puedeEditar = user.isAdmin || (!!viaje.conductor_id && user.id === viaje.conductor_id)
+  // Pedido explícito de Claudio (corrigiendo una excepción que yo había
+  // agregado para admin): SOLO quien maneja este viaje puede marcar
+  // entregas, agregar paradas o cerrarlo — sin excepción para admin,
+  // aunque sea Claudio mismo. Cualquier otro que entre a este viaje solo
+  // puede ver el estado y la ruta, nada de tocar los datos de la entrega
+  // ajena.
+  const puedeEditar = !!viaje.conductor_id && user.id === viaje.conductor_id
   const [paradas, setParadas] = useState<Parada[]>(() => parseParadas(viaje.destino_declarado))
   const [modoAdd, setModoAdd] = useState(false)
   const [kmCalculado, setKmCalculado] = useState<number | null>(viaje.km_teoricos)
