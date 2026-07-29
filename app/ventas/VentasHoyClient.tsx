@@ -918,6 +918,23 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
     setDetalle(tipo)
   }
   const [showPeriodos, setShowPeriodos] = useState(false)
+  // Litros/monto de TODOS los períodos (no sólo los recientes que ya vienen
+  // calculados) — se piden recién al abrir el selector, una sola vez, para
+  // no cargar cada período completo (ranking, mix, envases) en cada visita
+  // a /ventas. Antes el selector no mostraba nada para los períodos viejos,
+  // lo que se veía roto (pedido de Claudio: "se sigue sin ver nada").
+  const [resumenPeriodos, setResumenPeriodos] = useState<Record<number, { litros: number; revenue: number }> | null>(null)
+  useEffect(() => {
+    if (!showPeriodos || resumenPeriodos !== null) return
+    fetch('/api/ventas/periodos-resumen')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((filas: { id: number; litros: number; revenue: number }[]) => {
+        const mapa: Record<number, { litros: number; revenue: number }> = {}
+        for (const f of filas) mapa[f.id] = { litros: f.litros, revenue: f.revenue }
+        setResumenPeriodos(mapa)
+      })
+      .catch(() => setResumenPeriodos({}))
+  }, [showPeriodos, resumenPeriodos])
   const [customDesde, setCustomDesde] = useState(data.custom?.desde ?? '')
   const [customHasta, setCustomHasta] = useState(data.custom?.hasta ?? '')
 
@@ -1185,11 +1202,25 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                               {fFechaCorta(p.inicio)} – {fFechaCorta(p.fin)}
                             </span>
                           </span>
-                          {eager && (
-                            <span style={{ fontSize: 12, fontWeight: 700, color: on ? C.blue : C.muted, flexShrink: 0 }}>
-                              {fL(eager.datos.actual.litros)}
-                            </span>
-                          )}
+                          {(() => {
+                            // Los eager ya tienen su dato calculado en memoria;
+                            // el resto se pide una vez al abrir el selector.
+                            if (eager) return (
+                              <span style={{ textAlign: 'right', flexShrink: 0 }}>
+                                <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: on ? C.blue : C.muted }}>{fL(eager.datos.actual.litros)}</span>
+                                <span style={{ display: 'block', fontSize: 10, color: C.faint }}>{fPesoFull(eager.datos.actual.revenue)}</span>
+                              </span>
+                            )
+                            const r = resumenPeriodos?.[p.id]
+                            if (r) return (
+                              <span style={{ textAlign: 'right', flexShrink: 0 }}>
+                                <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: on ? C.blue : C.muted }}>{fL(r.litros)}</span>
+                                <span style={{ display: 'block', fontSize: 10, color: C.faint }}>{fPesoFull(r.revenue)}</span>
+                              </span>
+                            )
+                            if (resumenPeriodos === null) return <span style={{ fontSize: 11, color: C.faint, flexShrink: 0 }}>…</span>
+                            return null
+                          })()}
                         </button>
                       )
                     })}
