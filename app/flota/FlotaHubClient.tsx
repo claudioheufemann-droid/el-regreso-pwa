@@ -230,6 +230,16 @@ function tiempoTranscurrido(iso: string) {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`
 }
 
+/** Hora exacta de salida (pedido de Claudio) — además del "hace cuánto",
+ *  poder ver a qué hora salió realmente. */
+function horaExacta(iso: string) {
+  return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })
+}
+
+const TIPO_VIAJE_LABEL: Record<string, string> = {
+  reparto: 'Reparto', tramite: 'Trámite', operador_logistico: 'Operador logístico',
+}
+
 function EstadoChip({ estado }: { estado: string }) {
   const cfg = {
     disponible:    { color: '#5A8A4A', bg: 'rgba(90,138,74,0.1)',  label: 'Disponible',    icon: CheckCircle },
@@ -381,7 +391,7 @@ export default function FlotaHubClient({ user, vehiculos, viajesActivos, conduct
                 {viaje && (
                   <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                     <p style={{ fontSize: 11, color: '#D4AF37' }}>
-                      {conductor?.nombre?.split(' ')[0] ?? 'En uso'} · {viaje.tipo === 'reparto' ? 'Reparto' : 'Trámite'} · {tiempoTranscurrido(viaje.iniciado_at)}
+                      {conductor?.nombre?.split(' ')[0] ?? 'En uso'} · {TIPO_VIAJE_LABEL[viaje.tipo] ?? viaje.tipo} · salió {horaExacta(viaje.iniciado_at)} · hace {tiempoTranscurrido(viaje.iniciado_at)}
                     </p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
                       Ver viaje <ChevronRight size={13} color={F} />

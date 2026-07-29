@@ -311,7 +311,10 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   const disponibles = vehiculos.filter(v => v.estado === 'disponible')
   const rutasVehiculo = vehiculo ? rutasHoy.filter(r => r.vehiculo_id === vehiculo.id) : []
   const fotos360ok = ANGULOS_360.every(a => !!fotos360[a.key])
-  const listo = !!kmInicio && !!combustible
+  // Pedido de Claudio: TODAS las fotos del vehículo son obligatorias antes
+  // de poder iniciar el viaje — antes alcanzaba con tipear el km y elegir
+  // el nivel de combustible a mano, sin sacar ninguna foto.
+  const listo = !!kmInicio && !!combustible && !!fotoOdo && fotos360ok && !!fotoMarcador
 
   // km y tiempo finales: OSRM > planificado
   const kmMostrado = kmCalculado ?? kmPlanificado
@@ -959,9 +962,9 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
               </div>
             )}
 
-            {/* Foto tablero — opcional, mejora la detección */}
+            {/* Foto tablero — obligatoria (respaldo del nivel de combustible declarado) */}
             <div style={{ marginBottom: 8 }}>
-              <FotoSlot label="Foto del tablero (opcional)" emoji="⛽" onCaptura={(url, file) => { setFotoMarcador(url); fotoMarcadorFileRef.current = file; analizarCombustible(file) }} capturada={!!fotoMarcador} />
+              <FotoSlot label="Foto del tablero *" emoji="⛽" onCaptura={(url, file) => { setFotoMarcador(url); fotoMarcadorFileRef.current = file; analizarCombustible(file) }} capturada={!!fotoMarcador} />
             </div>
           </div>
 
@@ -972,7 +975,13 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
             </button>
             <button onClick={confirmar} disabled={!listo || guardando}
               style={{ flex: 1, padding: '17px', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed', background: listo && !guardando ? F : 'rgba(255,255,255,0.06)', color: listo && !guardando ? '#fff' : 'var(--muted)', fontSize: 15, fontWeight: 900 }}>
-              {guardando ? 'Iniciando…' : listo ? 'Iniciar viaje →' : `Faltan ${[!kmInicio && 'km', !combustible && 'combustible'].filter(Boolean).join(' y ')}`}
+              {guardando ? 'Iniciando…' : listo ? 'Iniciar viaje →' : `Faltan ${[
+                !fotoOdo && 'foto odómetro',
+                !fotos360ok && 'fotos 360°',
+                !fotoMarcador && 'foto tablero',
+                !kmInicio && 'km',
+                !combustible && 'combustible',
+              ].filter(Boolean).join(', ')}`}
             </button>
           </div>
         </div>

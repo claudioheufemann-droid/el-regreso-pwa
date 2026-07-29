@@ -13,7 +13,7 @@ export default async function HistorialPage() {
 
   const { data: rawViajes } = await supabase
     .from('viajes_flota')
-    .select('id, tipo, estado, motivo, km_inicio, km_fin, km_teoricos, iniciado_at, completado_at, destino_declarado, vehiculo_id, conductor_id, foto_odometro_inicio, foto_360_frente_inicio, foto_360_izquierdo_inicio, foto_360_derecho_inicio, foto_360_atras_inicio, foto_combustible_inicio, foto_odometro_fin, foto_360_frente_fin, foto_360_izquierdo_fin, foto_360_derecho_fin, foto_360_atras_fin, foto_combustible_fin, foto_boleta_combustible')
+    .select('id, tipo, estado, motivo, km_inicio, km_fin, km_teoricos, iniciado_at, completado_at, destino_declarado, vehiculo_id, conductor_id, repartos_terminados, operador_logistico, ciudad_destino, foto_guia_envio, foto_odometro_inicio, foto_360_frente_inicio, foto_360_izquierdo_inicio, foto_360_derecho_inicio, foto_360_atras_inicio, foto_combustible_inicio, foto_odometro_fin, foto_360_frente_fin, foto_360_izquierdo_fin, foto_360_derecho_fin, foto_360_atras_fin, foto_combustible_fin, foto_boleta_combustible')
     .order('iniciado_at', { ascending: false })
     .limit(200)
 

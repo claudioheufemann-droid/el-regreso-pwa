@@ -7,11 +7,20 @@ import AppHeader from '@/components/ui/AppHeader'
 
 const F = '#D4AF37'
 
+const TIPO_VIAJE_INFO: Record<string, { label: string; color: string; bg: string }> = {
+  reparto:             { label: '🚚 Reparto',            color: F,        bg: 'rgba(212,175,55,0.1)' },
+  tramite:             { label: '🔧 Trámite',            color: '#D4AF37', bg: 'rgba(245,158,11,0.1)' },
+  operador_logistico:  { label: '📦 Operador logístico', color: '#60A5FA', bg: 'rgba(96,165,250,0.1)' },
+}
+
 interface Parada {
   n: string; d: string
   fg?: string; fp?: string
   en?: 'si' | 'no'; mn?: string
   lat?: number; lng?: number
+  /** Hora exacta en que se marcó la entrega (pedido de Claudio: el
+   *  historial tiene que dejar registrado cuándo se hizo cada cosa). */
+  ea?: string
 }
 
 interface Viaje {
@@ -38,6 +47,10 @@ interface Viaje {
   foto_360_atras_fin: string | null
   foto_combustible_fin: string | null
   foto_boleta_combustible: string | null
+  repartos_terminados: boolean | null
+  operador_logistico: string | null
+  ciudad_destino: string | null
+  foto_guia_envio: string | null
   vehiculo: { id?: string; nombre: string; patente: string | null } | null
   conductor: { id?: string; nombre: string } | null
 }
@@ -56,6 +69,7 @@ function parseParadas(dest: string | null): Parada[] {
       fg: p.fg ?? undefined, fp: p.fp ?? undefined,
       en: p.en ?? undefined, mn: p.mn ?? undefined,
       lat: p.lat ?? undefined, lng: p.lng ?? undefined,
+      ea: p.ea ?? undefined,
     }))
   } catch { /* plain text */ }
   return dest.trim() ? [{ n: dest, d: dest }] : []
@@ -150,8 +164,8 @@ function ViajeCard({ viaje, puedeBorrar, onEliminado }: { viaje: Viaje; puedeBor
             <User size={13} color="var(--muted)" />
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>{viaje.conductor?.nombre?.split(' ')[0] ?? '—'}</span>
           </div>
-          <span style={{ fontSize: 11, color: viaje.tipo === 'reparto' ? F : '#D4AF37', fontWeight: 700, background: viaje.tipo === 'reparto' ? 'rgba(212,175,55,0.1)' : 'rgba(245,158,11,0.1)', padding: '2px 8px', borderRadius: 10 }}>
-            {viaje.tipo === 'reparto' ? '🚚 Reparto' : '🔧 Trámite'}
+          <span style={{ fontSize: 11, color: (TIPO_VIAJE_INFO[viaje.tipo] ?? TIPO_VIAJE_INFO.tramite).color, fontWeight: 700, background: (TIPO_VIAJE_INFO[viaje.tipo] ?? TIPO_VIAJE_INFO.tramite).bg, padding: '2px 8px', borderRadius: 10 }}>
+            {(TIPO_VIAJE_INFO[viaje.tipo] ?? TIPO_VIAJE_INFO.tramite).label}
           </span>
         </div>
 
@@ -227,6 +241,9 @@ function ViajeCard({ viaje, puedeBorrar, onEliminado }: { viaje: Viaje; puedeBor
                         {p.en === 'no' && p.mn && (
                           <p style={{ fontSize: 11, color: '#F87171', marginTop: 2 }}>{p.mn}</p>
                         )}
+                        {p.en && p.ea && (
+                          <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Marcado a las {fmtHora(p.ea)}</p>
+                        )}
                       </div>
                     </div>
                     {(p.fg || p.fp) && (
@@ -250,6 +267,32 @@ function ViajeCard({ viaje, puedeBorrar, onEliminado }: { viaje: Viaje; puedeBor
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Entrega a operador logístico (Cacem/Varmontt) */}
+          {viaje.tipo === 'operador_logistico' && (
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>
+                Entrega a operador logístico
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: (viaje.foto_guia_envio ? 8 : 0) }}>
+                <div style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 10, padding: '8px 12px' }}>
+                  <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Operador</p>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: '#60A5FA' }}>{viaje.operador_logistico ?? '—'}</p>
+                </div>
+                <div style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 10, padding: '8px 12px' }}>
+                  <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Ciudad destino</p>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>{viaje.ciudad_destino ?? '—'}</p>
+                </div>
+              </div>
+              {viaje.foto_guia_envio && (
+                <a href={viaje.foto_guia_envio} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: 100, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={viaje.foto_guia_envio} alt="Guía de envío" style={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} />
+                  <div style={{ padding: '3px 5px', fontSize: 8, fontWeight: 700, color: 'var(--muted)', textAlign: 'center' }}>Guía de envío</div>
+                </a>
+              )}
             </div>
           )}
 

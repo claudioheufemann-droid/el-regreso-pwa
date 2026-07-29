@@ -23,6 +23,9 @@ interface Parada {
   fotoProducto?: string
   entregado?: 'si' | 'no'
   motivoNoEntrega?: string
+  /** Hora exacta en que se marcó la entrega — pedido de Claudio, para que
+   *  el historial muestre horarios reales, no solo el estado final. */
+  entregadoAt?: string
 }
 
 interface SugerenciaGeo {
@@ -80,6 +83,7 @@ function parseParadas(destino: string | null): Parada[] {
         fotoProducto: p.fp ?? undefined,
         entregado: p.en ?? undefined,
         motivoNoEntrega: p.mn ?? undefined,
+        entregadoAt: p.ea ?? undefined,
       }))
     }
   } catch { /* plain text */ }
@@ -111,6 +115,15 @@ function urlWaze(paradas: Parada[]): string {
   const dir = siguiente.direccion || siguiente.nombre
   const q = encodeURIComponent(dir.toLowerCase().includes('valdivia') ? dir : `${dir}, Valdivia, Chile`)
   return `https://waze.com/ul?q=${q}&navigate=yes`
+}
+
+/** Hora exacta de salida (pedido de Claudio), además del "hace cuánto". */
+function horaExacta(iso: string) {
+  return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })
+}
+
+const TIPO_VIAJE_LABEL: Record<string, string> = {
+  reparto: 'Reparto', tramite: 'Trámite', operador_logistico: 'Operador logístico',
 }
 
 function tiempoTranscurrido(iso: string) {
@@ -291,7 +304,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
 
   async function guardarParadas(nuevas: Parada[]) {
     setParadas(nuevas)
-    const destino = JSON.stringify(nuevas.map(p => ({ n: p.nombre, d: p.direccion, lat: p.lat, lng: p.lng, fg: p.fotoGuia, fp: p.fotoProducto, en: p.entregado, mn: p.motivoNoEntrega })))
+    const destino = JSON.stringify(nuevas.map(p => ({ n: p.nombre, d: p.direccion, lat: p.lat, lng: p.lng, fg: p.fotoGuia, fp: p.fotoProducto, en: p.entregado, mn: p.motivoNoEntrega, ea: p.entregadoAt })))
     await supabase.from('viajes_flota').update({ destino_declarado: destino }).eq('id', viaje.id)
   }
 
@@ -300,7 +313,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
   const [otroMotivoTexto, setOtroMotivoTexto] = useState<Record<string, string>>({})
 
   function marcarEntregado(paradaId: string, valor: 'si' | 'no') {
-    guardarParadas(paradas.map(p => p.id === paradaId ? { ...p, entregado: valor } : p))
+    guardarParadas(paradas.map(p => p.id === paradaId ? { ...p, entregado: valor, entregadoAt: new Date().toISOString() } : p))
   }
 
   function marcarMotivo(paradaId: string, motivo: string) {
@@ -340,7 +353,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
 
       <FlotaPageHeader
         title={viaje.vehiculo.nombre}
-        subtitle={`${viaje.tipo === 'reparto' ? 'Reparto' : 'Trámite'} · En curso · ${tiempo}`}
+        subtitle={`${TIPO_VIAJE_LABEL[viaje.tipo] ?? viaje.tipo} · Salió ${horaExacta(viaje.iniciado_at)} · hace ${tiempo}`}
         onBack={() => router.push('/flota')}
         backLabel="Volver"
       />
@@ -412,9 +425,16 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
               {paradas.map((p, i) => {
                 const abierta = paradaAbierta === p.id
-                const estadoBorde = p.entregado === 'no' ? 'rgba(181,84,62,0.35)' : p.entregado === 'si' && p.fotoGuia ? 'rgba(90,138,74,0.3)' : abierta ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.07)'
+                // Pedido de Claudio: la tarjeta completa cambia de color
+                // según el estado de la entrega -no solo el borde-, y se
+                // mantiene el color actual (neutro) mientras esté pendiente.
+                const estadoCard = p.entregado === 'no'
+                  ? { bg: 'rgba(181,84,62,0.14)', border: 'rgba(181,84,62,0.4)' }
+                  : p.entregado === 'si' && p.fotoGuia
+                    ? { bg: 'rgba(90,138,74,0.14)', border: 'rgba(90,138,74,0.4)' }
+                    : { bg: '#141414', border: abierta ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.07)' }
                 return (
-                <div key={p.id} style={{ background: '#141414', border: `1px solid ${estadoBorde}`, borderRadius: 10, overflow: 'hidden' }}>
+                <div key={p.id} style={{ background: estadoCard.bg, border: `1px solid ${estadoCard.border}`, borderRadius: 10, overflow: 'hidden' }}>
                   <div onClick={() => setParadaAbierta(abierta ? null : p.id)} style={{ padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
                     <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.6)', minWidth: 16, marginTop: 2 }}>{i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -433,9 +453,14 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                       {p.entregado === 'si' && !p.fotoGuia && (
                         <p style={{ fontSize: 10, color: 'rgba(212,175,55,0.6)', marginTop: 2 }}>Falta foto de guía</p>
                       )}
+                      {p.entregado === 'si' && p.fotoGuia && (
+                        <p style={{ fontSize: 10, color: '#5A8A4A', marginTop: 2 }}>
+                          Entregado{p.entregadoAt ? ` · ${horaExacta(p.entregadoAt)}` : ''}
+                        </p>
+                      )}
                       {p.entregado === 'no' && (
                         <p style={{ fontSize: 10, color: '#B5543E', marginTop: 2 }}>
-                          No entregado{p.motivoNoEntrega ? `: ${p.motivoNoEntrega}` : ' · falta indicar motivo'}
+                          No entregado{p.motivoNoEntrega ? `: ${p.motivoNoEntrega}` : ' · falta indicar motivo'}{p.entregadoAt ? ` · ${horaExacta(p.entregadoAt)}` : ''}
                         </p>
                       )}
                     </div>
