@@ -1392,7 +1392,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           <KpiCard icon={Droplet} tint={C.blue} tintSoft={C.blueSoft} label="Litros vendidos"
             valor={fL(actual.litros)} pct={variacion(actual.litros, previo.litros)}
             onClick={() => abrirDetalle('productos')} />
-          <KpiCard icon={Users} tint={C.green} tintSoft={C.greenSoft} label="Clientes"
+          <KpiCard icon={Users} tint={C.green} tintSoft={C.greenSoft} label="Ventas por Clientes"
             valor={fNum(actual.clientes)} pct={variacion(actual.clientes, previo.clientes)}
             onClick={() => abrirDetalle('clientes')} />
           <KpiCard icon={ShoppingBag} tint={C.purple} tintSoft={C.purpleSoft} label="Pedidos"
