@@ -14,7 +14,7 @@ export default async function ViajeDetailPage({ params }: { params: Promise<{ vi
 
   const { data: viaje } = await supabase
     .from('viajes_flota')
-    .select('id, tipo, motivo, km_inicio, km_teoricos, iniciado_at, destino_declarado, conductor_id, vehiculo_id, estado, repartos_terminados')
+    .select('id, tipo, motivo, km_inicio, km_teoricos, km_fin, iniciado_at, destino_declarado, conductor_id, vehiculo_id, estado, repartos_terminados, foto_odometro_inicio, foto_360_frente_inicio, foto_360_izquierdo_inicio, foto_360_derecho_inicio, foto_360_atras_inicio, foto_combustible_inicio, foto_odometro_fin, foto_360_frente_fin, foto_360_izquierdo_fin, foto_360_derecho_fin, foto_360_atras_fin, foto_combustible_fin, foto_boleta_combustible')
     .eq('id', viajeId)
     .single()
 

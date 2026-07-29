@@ -224,14 +224,19 @@ function ViajeCard({ viaje, puedeBorrar, onEliminado }: { viaje: Viaje; puedeBor
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.n}</p>
-                          {p.en === 'si' && (
+                          {p.en === 'si' && p.fg && (
                             <span style={{ fontSize: 9, fontWeight: 800, color: '#4ADE80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', padding: '2px 7px', borderRadius: 20 }}>
                               ✓ Entregado
                             </span>
                           )}
-                          {p.en === 'no' && (
+                          {p.en === 'no' && p.fg && (
                             <span style={{ fontSize: 9, fontWeight: 800, color: '#F87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', padding: '2px 7px', borderRadius: 20 }}>
                               ✕ No entregado
+                            </span>
+                          )}
+                          {p.en && !p.fg && (
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#FBBF24', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.25)', padding: '2px 7px', borderRadius: 20 }}>
+                              ⚠ Sin foto de respaldo
                             </span>
                           )}
                         </div>
@@ -251,8 +256,8 @@ function ViajeCard({ viaje, puedeBorrar, onEliminado }: { viaje: Viaje; puedeBor
                         {p.fg && (
                           <a href={p.fg} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: 64, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={p.fg} alt="Guía" style={{ width: '100%', height: 64, objectFit: 'cover', display: 'block' }} />
-                            <div style={{ padding: '3px 5px', fontSize: 8, fontWeight: 700, color: 'var(--muted)', textAlign: 'center' }}>Guía</div>
+                            <img src={p.fg} alt={p.en === 'no' ? 'Evidencia' : 'Guía'} style={{ width: '100%', height: 64, objectFit: 'cover', display: 'block' }} />
+                            <div style={{ padding: '3px 5px', fontSize: 8, fontWeight: 700, color: 'var(--muted)', textAlign: 'center' }}>{p.en === 'no' ? 'Evidencia' : 'Guía'}</div>
                           </a>
                         )}
                         {p.fp && (

@@ -28,6 +28,17 @@ interface Parada {
   entregadoAt?: string
 }
 
+/** Estado en edición de una parada, antes de confirmar — nada de esto se
+ *  persiste hasta tocar "Confirmar" en confirmarParada(). Así la foto de
+ *  guía (o de evidencia si no se entregó) queda garantizada como
+ *  obligatoria: no existe forma de que quede "Entregado" grabado sin ella. */
+interface Borrador {
+  entregado?: 'si' | 'no'
+  motivoNoEntrega?: string
+  fotoGuia?: string
+  fotoProducto?: string
+}
+
 interface SugerenciaGeo {
   place_id: number
   display_name: string
@@ -57,6 +68,7 @@ interface Props {
     motivo: string | null
     km_inicio: number | null
     km_teoricos: number | null
+    km_fin?: number | null
     iniciado_at: string
     destino_declarado: string | null
     estado: string
@@ -64,7 +76,41 @@ interface Props {
     conductor_id: string | null
     conductor: { nombre: string } | null
     vehiculo: Vehiculo
+    foto_odometro_inicio?: string | null
+    foto_360_frente_inicio?: string | null
+    foto_360_izquierdo_inicio?: string | null
+    foto_360_derecho_inicio?: string | null
+    foto_360_atras_inicio?: string | null
+    foto_combustible_inicio?: string | null
+    foto_odometro_fin?: string | null
+    foto_360_frente_fin?: string | null
+    foto_360_izquierdo_fin?: string | null
+    foto_360_derecho_fin?: string | null
+    foto_360_atras_fin?: string | null
+    foto_combustible_fin?: string | null
+    foto_boleta_combustible?: string | null
   }
+}
+
+/** Toda la evidencia fotográfica del check-in (siempre) y del checkout (solo
+ *  si el viaje ya se cerró) — pedido de Claudio: esta pantalla no mostraba
+ *  ninguna de estas fotos aunque ya existieran en la base de datos. */
+function fotosVehiculo(viaje: Props['viaje']): { url: string; label: string }[] {
+  return [
+    { url: viaje.foto_odometro_inicio ?? '', label: 'Odómetro (salida)' },
+    { url: viaje.foto_combustible_inicio ?? '', label: 'Combustible (salida)' },
+    { url: viaje.foto_360_frente_inicio ?? '', label: '360° Frente (salida)' },
+    { url: viaje.foto_360_izquierdo_inicio ?? '', label: '360° Izq. (salida)' },
+    { url: viaje.foto_360_derecho_inicio ?? '', label: '360° Der. (salida)' },
+    { url: viaje.foto_360_atras_inicio ?? '', label: '360° Atrás (salida)' },
+    { url: viaje.foto_odometro_fin ?? '', label: 'Odómetro (llegada)' },
+    { url: viaje.foto_combustible_fin ?? '', label: 'Combustible (llegada)' },
+    { url: viaje.foto_360_frente_fin ?? '', label: '360° Frente (llegada)' },
+    { url: viaje.foto_360_izquierdo_fin ?? '', label: '360° Izq. (llegada)' },
+    { url: viaje.foto_360_derecho_fin ?? '', label: '360° Der. (llegada)' },
+    { url: viaje.foto_360_atras_fin ?? '', label: '360° Atrás (llegada)' },
+    { url: viaje.foto_boleta_combustible ?? '', label: 'Boleta combustible' },
+  ].filter(f => f.url)
 }
 
 function parseParadas(destino: string | null): Parada[] {
@@ -245,12 +291,11 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
   const [kmCalculado, setKmCalculado] = useState<number | null>(viaje.km_teoricos)
   const [calculandoRuta, setCalculandoRuta] = useState(false)
   const [tiempo, setTiempo] = useState(tiempoTranscurrido(viaje.iniciado_at))
-  const [terminando, setTerminando] = useState(false)
-  const [kmFin, setKmFin] = useState('')
-  const [guardando, setGuardando] = useState(false)
-  const [completado, setCompletado] = useState(viaje.estado === 'completado')
+  const completado = viaje.estado === 'completado'
   const [repartosTerminados, setRepartosTerminados] = useState(!!viaje.repartos_terminados)
   const [marcandoRepartos, setMarcandoRepartos] = useState(false)
+  const [mostrarFotosVehiculo, setMostrarFotosVehiculo] = useState(false)
+  const fotosDelVehiculo = fotosVehiculo(viaje)
 
   // El viaje NO termina al entregar el último pedido — termina cuando el
   // repartidor vuelve a la base/bodega. Este paso intermedio solo marca
@@ -263,21 +308,6 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
     } finally {
       setMarcandoRepartos(false)
     }
-  }
-
-  async function terminarViaje() {
-    setGuardando(true)
-    try {
-      await supabase.from('viajes_flota').update({
-        estado: 'completado',
-        completado_at: new Date().toISOString(),
-        km_fin: kmFin ? Math.round(parseFloat(kmFin)) : null,
-      }).eq('id', viaje.id)
-      await supabase.from('vehiculos').update({ estado: 'disponible' }).eq('id', viaje.vehiculo_id)
-      setCompletado(true)
-      setTerminando(false)
-      router.push('/flota')
-    } catch { /* silently fail */ } finally { setGuardando(false) }
   }
 
   // Actualizar reloj cada minuto
@@ -313,13 +343,16 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
   const [paradaAbierta, setParadaAbierta] = useState<string | null>(null)
   const [subiendoFoto, setSubiendoFoto] = useState<Record<string, boolean>>({})
   const [otroMotivoTexto, setOtroMotivoTexto] = useState<Record<string, string>>({})
+  const [borradores, setBorradores] = useState<Record<string, Borrador>>({})
+  const [guardandoParada, setGuardandoParada] = useState<Record<string, boolean>>({})
 
-  function marcarEntregado(paradaId: string, valor: 'si' | 'no') {
-    guardarParadas(paradas.map(p => p.id === paradaId ? { ...p, entregado: valor, entregadoAt: new Date().toISOString() } : p))
+  function borradorBase(paradaId: string): Borrador {
+    const p = paradas.find(pp => pp.id === paradaId)
+    return { entregado: p?.entregado, motivoNoEntrega: p?.motivoNoEntrega, fotoGuia: p?.fotoGuia, fotoProducto: p?.fotoProducto }
   }
 
-  function marcarMotivo(paradaId: string, motivo: string) {
-    guardarParadas(paradas.map(p => p.id === paradaId ? { ...p, motivoNoEntrega: motivo } : p))
+  function actualizarBorrador(paradaId: string, patch: Partial<Borrador>) {
+    setBorradores(prev => ({ ...prev, [paradaId]: { ...(prev[paradaId] ?? borradorBase(paradaId)), ...patch } }))
   }
 
   async function subirFotoParada(paradaId: string, tipo: 'guia' | 'producto', file: File) {
@@ -331,8 +364,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
       const { error } = await supabase.storage.from('logistica-evidence').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
       if (error) throw error
       const { data: { publicUrl } } = supabase.storage.from('logistica-evidence').getPublicUrl(path)
-      const campo = tipo === 'guia' ? 'fotoGuia' : 'fotoProducto'
-      await guardarParadas(paradas.map(p => p.id === paradaId ? { ...p, [campo]: publicUrl } : p))
+      actualizarBorrador(paradaId, tipo === 'guia' ? { fotoGuia: publicUrl } : { fotoProducto: publicUrl })
     } catch (err) {
       console.error(err)
       alert('Error al subir la imagen. Intenta de nuevo.')
@@ -341,10 +373,39 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
     }
   }
 
+  // Pedido explícito de Claudio: la foto de guía es obligatoria SIEMPRE,
+  // se haya entregado el pedido o no (en ese caso es la evidencia de por qué
+  // no se entregó) — nada se persiste hasta que esta validación pasa, igual
+  // que confirmar() en EntregarClient.tsx (módulo de despachos).
+  function confirmarParada(paradaId: string) {
+    const b = borradores[paradaId] ?? borradorBase(paradaId)
+    if (!b.entregado) return
+    if (!b.fotoGuia) {
+      alert(b.entregado === 'si'
+        ? 'La foto de guía es obligatoria para marcar el pedido como entregado.'
+        : 'La foto de evidencia es obligatoria aunque el pedido no se haya entregado.')
+      return
+    }
+    if (b.entregado === 'no' && !b.motivoNoEntrega) {
+      alert('Indica el motivo de la no entrega.')
+      return
+    }
+    setGuardandoParada(prev => ({ ...prev, [paradaId]: true }))
+    guardarParadas(paradas.map(p => p.id === paradaId ? {
+      ...p, entregado: b.entregado, motivoNoEntrega: b.motivoNoEntrega,
+      fotoGuia: b.fotoGuia, fotoProducto: b.fotoProducto, entregadoAt: new Date().toISOString(),
+    } : p)).finally(() => {
+      setGuardandoParada(prev => ({ ...prev, [paradaId]: false }))
+      setBorradores(prev => { const next = { ...prev }; delete next[paradaId]; return next })
+      setParadaAbierta(null)
+    })
+  }
+
   // Una parada queda "resuelta" cuando el repartidor dejó constancia de qué pasó:
   // entregada con foto de guía (el producto es opcional), o marcada como no
-  // entregada con su motivo — sin esto no se puede cerrar el viaje.
-  const paradaResuelta = (p: Parada) => (p.entregado === 'si' && !!p.fotoGuia) || (p.entregado === 'no' && !!p.motivoNoEntrega)
+  // entregada con su motivo Y su foto de evidencia — sin esto no se puede
+  // cerrar el viaje.
+  const paradaResuelta = (p: Parada) => (p.entregado === 'si' && !!p.fotoGuia) || (p.entregado === 'no' && !!p.motivoNoEntrega && !!p.fotoGuia)
   const paradasPendientes = paradas.filter(p => !paradaResuelta(p))
 
   const minEst = kmCalculado ? Math.round(kmCalculado / 35 * 60) : null
@@ -411,6 +472,33 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
           )}
         </div>
 
+        {/* Evidencia fotográfica del vehículo — check-in siempre, checkout
+            solo si el viaje ya se cerró (esta pantalla no la mostraba). */}
+        {fotosDelVehiculo.length > 0 && (
+          <div>
+            <button
+              onClick={() => setMostrarFotosVehiculo(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.07)', background: '#141414', cursor: 'pointer', color: '#F4EEDF', fontSize: 12, fontWeight: 700 }}
+            >
+              <span>📸 Evidencia fotográfica del vehículo ({fotosDelVehiculo.length})</span>
+              <ChevronDown size={14} color="rgba(255,255,255,0.4)" style={{ transition: 'transform 0.15s', transform: mostrarFotosVehiculo ? 'rotate(180deg)' : 'none' }} />
+            </button>
+            {mostrarFotosVehiculo && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 8 }}>
+                {fotosDelVehiculo.map(f => (
+                  <div key={f.label} style={{ borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <a href={f.url} target="_blank" rel="noopener noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={f.url} alt={f.label} style={{ width: '100%', height: 90, objectFit: 'cover', display: 'block' }} />
+                      <div style={{ padding: '5px 8px', fontSize: 9, fontWeight: 700, color: 'var(--muted)' }}>{f.label}</div>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Paradas */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -430,7 +518,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                 // Pedido de Claudio: la tarjeta completa cambia de color
                 // según el estado de la entrega -no solo el borde-, y se
                 // mantiene el color actual (neutro) mientras esté pendiente.
-                const estadoCard = p.entregado === 'no'
+                const estadoCard = p.entregado === 'no' && p.fotoGuia
                   ? { bg: 'rgba(181,84,62,0.14)', border: 'rgba(181,84,62,0.4)' }
                   : p.entregado === 'si' && p.fotoGuia
                     ? { bg: 'rgba(90,138,74,0.14)', border: 'rgba(90,138,74,0.4)' }
@@ -444,7 +532,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                         <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
                         {p.verificada && <CheckCircle size={11} color="#5A8A4A" style={{ flexShrink: 0 }} />}
                         {p.entregado === 'si' && p.fotoGuia && <FileText size={11} color="#5A8A4A" style={{ flexShrink: 0 }} />}
-                        {p.entregado === 'no' && <XCircle size={11} color="#B5543E" style={{ flexShrink: 0 }} />}
+                        {p.entregado === 'no' && p.fotoGuia && <XCircle size={11} color="#B5543E" style={{ flexShrink: 0 }} />}
                       </div>
                       {p.direccion && p.direccion !== p.nombre && (
                         <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.direccion}</p>
@@ -460,9 +548,14 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                           Entregado{p.entregadoAt ? ` · ${horaExacta(p.entregadoAt)}` : ''}
                         </p>
                       )}
-                      {p.entregado === 'no' && (
+                      {p.entregado === 'no' && !p.fotoGuia && (
+                        <p style={{ fontSize: 10, color: 'rgba(212,175,55,0.6)', marginTop: 2 }}>
+                          {p.motivoNoEntrega ? 'Falta foto de evidencia' : 'Falta indicar motivo y foto de evidencia'}
+                        </p>
+                      )}
+                      {p.entregado === 'no' && p.fotoGuia && (
                         <p style={{ fontSize: 10, color: '#B5543E', marginTop: 2 }}>
-                          No entregado{p.motivoNoEntrega ? `: ${p.motivoNoEntrega}` : ' · falta indicar motivo'}{p.entregadoAt ? ` · ${horaExacta(p.entregadoAt)}` : ''}
+                          No entregado{p.motivoNoEntrega ? `: ${p.motivoNoEntrega}` : ''}{p.entregadoAt ? ` · ${horaExacta(p.entregadoAt)}` : ''}
                         </p>
                       )}
                     </div>
@@ -486,46 +579,49 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                     </div>
                   )}
 
-                  {abierta && puedeEditar && (
+                  {abierta && puedeEditar && (() => {
+                    const b = borradores[p.id] ?? borradorBase(p.id)
+                    const esEvidenciaNoEntrega = b.entregado === 'no'
+                    return (
                     <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {/* ── ¿Se entregó el pedido? ── */}
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button
-                          onClick={() => marcarEntregado(p.id, 'si')}
+                          onClick={() => actualizarBorrador(p.id, { entregado: 'si' })}
                           style={{
                             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0', borderRadius: 10, cursor: 'pointer',
-                            border: `1.5px solid ${p.entregado === 'si' ? '#5A8A4A' : 'rgba(255,255,255,0.1)'}`,
-                            background: p.entregado === 'si' ? 'rgba(90,138,74,0.12)' : 'transparent',
-                            color: p.entregado === 'si' ? '#5A8A4A' : 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 700,
+                            border: `1.5px solid ${b.entregado === 'si' ? '#5A8A4A' : 'rgba(255,255,255,0.1)'}`,
+                            background: b.entregado === 'si' ? 'rgba(90,138,74,0.12)' : 'transparent',
+                            color: b.entregado === 'si' ? '#5A8A4A' : 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 700,
                           }}
                         >
                           <CheckCircle size={14} /> Entregado
                         </button>
                         <button
-                          onClick={() => marcarEntregado(p.id, 'no')}
+                          onClick={() => actualizarBorrador(p.id, { entregado: 'no' })}
                           style={{
                             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0', borderRadius: 10, cursor: 'pointer',
-                            border: `1.5px solid ${p.entregado === 'no' ? '#B5543E' : 'rgba(255,255,255,0.1)'}`,
-                            background: p.entregado === 'no' ? 'rgba(181,84,62,0.12)' : 'transparent',
-                            color: p.entregado === 'no' ? '#B5543E' : 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 700,
+                            border: `1.5px solid ${b.entregado === 'no' ? '#B5543E' : 'rgba(255,255,255,0.1)'}`,
+                            background: b.entregado === 'no' ? 'rgba(181,84,62,0.12)' : 'transparent',
+                            color: b.entregado === 'no' ? '#B5543E' : 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 700,
                           }}
                         >
                           <XCircle size={14} /> No entregado
                         </button>
                       </div>
 
-                      {p.entregado === 'no' && (
+                      {b.entregado === 'no' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {MOTIVOS_NO_ENTREGA.map(m => (
                               <button
                                 key={m}
-                                onClick={() => marcarMotivo(p.id, m === 'Otro motivo' ? (otroMotivoTexto[p.id]?.trim() ? `Otro: ${otroMotivoTexto[p.id].trim()}` : 'Otro motivo') : m)}
+                                onClick={() => actualizarBorrador(p.id, { motivoNoEntrega: m === 'Otro motivo' ? (otroMotivoTexto[p.id]?.trim() ? `Otro: ${otroMotivoTexto[p.id].trim()}` : 'Otro motivo') : m })}
                                 style={{
                                   padding: '8px 12px', borderRadius: 10, cursor: 'pointer',
-                                  border: `1.5px solid ${p.motivoNoEntrega === m || (m === 'Otro motivo' && p.motivoNoEntrega?.startsWith('Otro:')) ? '#B5543E' : 'rgba(255,255,255,0.1)'}`,
-                                  background: p.motivoNoEntrega === m || (m === 'Otro motivo' && p.motivoNoEntrega?.startsWith('Otro:')) ? 'rgba(181,84,62,0.12)' : 'transparent',
-                                  color: p.motivoNoEntrega === m || (m === 'Otro motivo' && p.motivoNoEntrega?.startsWith('Otro:')) ? '#B5543E' : 'rgba(255,255,255,0.5)',
+                                  border: `1.5px solid ${b.motivoNoEntrega === m || (m === 'Otro motivo' && b.motivoNoEntrega?.startsWith('Otro:')) ? '#B5543E' : 'rgba(255,255,255,0.1)'}`,
+                                  background: b.motivoNoEntrega === m || (m === 'Otro motivo' && b.motivoNoEntrega?.startsWith('Otro:')) ? 'rgba(181,84,62,0.12)' : 'transparent',
+                                  color: b.motivoNoEntrega === m || (m === 'Otro motivo' && b.motivoNoEntrega?.startsWith('Otro:')) ? '#B5543E' : 'rgba(255,255,255,0.5)',
                                   fontSize: 11, fontWeight: 700,
                                 }}
                               >
@@ -533,11 +629,11 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                               </button>
                             ))}
                           </div>
-                          {(p.motivoNoEntrega === 'Otro motivo' || p.motivoNoEntrega?.startsWith('Otro:')) && (
+                          {(b.motivoNoEntrega === 'Otro motivo' || b.motivoNoEntrega?.startsWith('Otro:')) && (
                             <input
-                              value={otroMotivoTexto[p.id] ?? (p.motivoNoEntrega?.startsWith('Otro: ') ? p.motivoNoEntrega.slice(6) : '')}
+                              value={otroMotivoTexto[p.id] ?? (b.motivoNoEntrega?.startsWith('Otro: ') ? b.motivoNoEntrega.slice(6) : '')}
                               onChange={e => setOtroMotivoTexto(prev => ({ ...prev, [p.id]: e.target.value }))}
-                              onBlur={() => { const t = otroMotivoTexto[p.id]?.trim(); if (t) marcarMotivo(p.id, `Otro: ${t}`) }}
+                              onBlur={() => { const t = otroMotivoTexto[p.id]?.trim(); if (t) actualizarBorrador(p.id, { motivoNoEntrega: `Otro: ${t}` }) }}
                               placeholder="Escribe el motivo…"
                               style={{ padding: '10px 12px', borderRadius: 10, background: '#0D0D0D', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 13, outline: 'none' }}
                             />
@@ -545,10 +641,12 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                         </div>
                       )}
 
-                      {p.entregado === 'si' && (['guia', 'producto'] as const).map(tipo => {
-                        const url = tipo === 'guia' ? p.fotoGuia : p.fotoProducto
+                      {/* Foto de guía (entregado) o de evidencia (no entregado) — siempre obligatoria */}
+                      {b.entregado && (['guia', 'producto'] as const).filter(tipo => tipo === 'guia' || b.entregado === 'si').map(tipo => {
+                        const url = tipo === 'guia' ? b.fotoGuia : b.fotoProducto
                         const subiendo = subiendoFoto[`${p.id}-${tipo}`]
                         const inputId = `foto-${p.id}-${tipo}`
+                        const esEvidencia = tipo === 'guia' && esEvidenciaNoEntrega
                         return (
                           <div key={tipo}>
                             <input
@@ -565,14 +663,29 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                               {subiendo
                                 ? 'Subiendo…'
                                 : url
-                                  ? `✓ Foto de ${tipo === 'guia' ? 'guía' : 'producto entregado'} cargada`
-                                  : tipo === 'guia' ? 'Foto de guía (obligatorio)' : 'Foto de producto entregado (opcional)'}
+                                  ? `✓ Foto de ${esEvidencia ? 'evidencia' : tipo === 'guia' ? 'guía' : 'producto entregado'} cargada`
+                                  : esEvidencia ? 'Foto de evidencia (obligatorio)' : tipo === 'guia' ? 'Foto de guía (obligatorio)' : 'Foto de producto entregado (opcional)'}
                             </label>
                           </div>
                         )
                       })}
+
+                      {b.entregado && (
+                        <button
+                          onClick={() => confirmarParada(p.id)}
+                          disabled={!!guardandoParada[p.id]}
+                          style={{
+                            padding: '11px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
+                            background: F, color: '#000', fontSize: 13, fontWeight: 800,
+                            opacity: guardandoParada[p.id] ? 0.7 : 1,
+                          }}
+                        >
+                          {guardandoParada[p.id] ? 'Guardando…' : 'Confirmar'}
+                        </button>
+                      )}
                     </div>
-                  )}
+                    )
+                  })()}
                 </div>
                 )
               })}
@@ -617,36 +730,6 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
 
       </div>
 
-      {/* Overlay: confirmar término */}
-      {terminando && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'flex-end', zIndex: 200 }}>
-          <div style={{ width: '100%', background: '#141414', borderRadius: '20px 20px 0 0', padding: '24px 20px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
-            <p style={{ fontSize: 18, fontWeight: 900, color: '#F4EEDF', marginBottom: 6 }}>¿Terminar viaje?</p>
-            <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>El vehículo quedará disponible y el viaje se cerrará.</p>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 8 }}>
-              Km odómetro al llegar (opcional)
-            </label>
-            <input
-              value={kmFin}
-              onChange={e => setKmFin(e.target.value.replace(/\D/g, ''))}
-              placeholder={`Ej: ${(viaje.km_inicio ?? 0) + (kmCalculado ?? 0)}`}
-              type="text" inputMode="numeric"
-              style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#0D0D0D', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 18, fontWeight: 800, outline: 'none', textAlign: 'center', marginBottom: 16, boxSizing: 'border-box' }}
-            />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setTerminando(false)} disabled={guardando}
-                style={{ flex: 1, padding: '15px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'var(--muted)', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-                Cancelar
-              </button>
-              <button onClick={terminarViaje} disabled={guardando}
-                style={{ flex: 1, padding: '15px', borderRadius: 12, border: 'none', background: '#5A8A4A', color: '#000', fontSize: 15, fontWeight: 900, cursor: 'pointer' }}>
-                {guardando ? 'Cerrando…' : 'Confirmar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Footer sticky */}
       <div style={{ padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', background: '#0F0F0F', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
         {completado ? (
@@ -672,10 +755,10 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
         ) : repartosTerminados ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <p style={{ fontSize: 11, color: '#D4AF37', textAlign: 'center', fontWeight: 700 }}>
-              Repartos terminados — cuando llegues a la base/bodega, toca "Viaje terminado"
+              Repartos terminados — cuando llegues a la base/bodega, toca &ldquo;Viaje terminado&rdquo; para registrar odómetro, inspección 360° y combustible de cierre
             </p>
             <button
-              onClick={() => setTerminando(true)}
+              onClick={() => router.push(`/flota/checkout/${viaje.id}`)}
               style={{ padding: '16px', borderRadius: 14, border: 'none', cursor: 'pointer', background: '#5A8A4A', color: '#000', fontSize: 15, fontWeight: 900 }}
             >
               Viaje terminado ✓
@@ -685,7 +768,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {paradasPendientes.length > 0 && (
               <p style={{ fontSize: 11, color: '#D4AF37', textAlign: 'center', fontWeight: 700 }}>
-                Faltan {paradasPendientes.length} parada{paradasPendientes.length !== 1 ? 's' : ''} por resolver (entregada con guía, o no entregada con motivo)
+                Faltan {paradasPendientes.length} parada{paradasPendientes.length !== 1 ? 's' : ''} por resolver (entregada con foto de guía, o no entregada con motivo y foto de evidencia)
               </p>
             )}
             <button
