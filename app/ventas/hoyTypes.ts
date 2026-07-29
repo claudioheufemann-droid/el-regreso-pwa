@@ -148,11 +148,26 @@ export interface AlertaInsight {
   href?: string
 }
 
+/** Un período 24→23 sin sus datos calculados — sólo para listar en el
+ *  selector. Los períodos fuera de la ventana visible (PERIODOS_VISIBLES) no
+ *  traen `datos`: calcularlo para TODO el historial en cada carga de la
+ *  página multiplicaría las consultas por cada período que exista. Elegir
+ *  uno de estos navega a `/ventas?desde=&hasta=` (mismo mecanismo que el
+ *  rango a mano), que sí calcula ese período completo en el servidor. */
+export interface PeriodoLigero {
+  id: number
+  nombre: string
+  inicio: string
+  fin: string
+}
+
 export interface HoyData {
   /** Rangos relativos a hoy (no incluye 'periodo' ni 'custom') */
   rangos: Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>
-  /** Período activo primero, luego los anteriores */
+  /** Período activo primero, luego los anteriores — con datos ya calculados */
   periodos: PeriodoOpcion[]
+  /** TODOS los períodos que existen (para el selector) — sin datos calculados */
+  periodosDisponibles: PeriodoLigero[]
   /** Rango elegido a mano (?desde=&hasta=). null si no hay ninguno. */
   custom: DatosRango | null
   alertas: AlertaInsight[]

@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { vendedorCanonico } from '@/lib/types'
 import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
-         type PuntoSerie, type DatosRango, type PeriodoOpcion, type EnvaseRango, type EntregasRango,
+         type PuntoSerie, type DatosRango, type PeriodoOpcion, type PeriodoLigero, type EnvaseRango, type EntregasRango,
          type OrigenEntregadoRango,
          type ConsumoInternoRango, type AlertaInsight, type HoyData } from './hoyTypes'
 
@@ -21,7 +21,7 @@ import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
  * arrastrar lib/supabase/server al bundle del navegador.
  */
 
-export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, EnvaseRango, EntregasRango, OrigenEntregadoRango, ConsumoInternoRango, AlertaInsight, HoyData }
+export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, PeriodoLigero, EnvaseRango, EntregasRango, OrigenEntregadoRango, ConsumoInternoRango, AlertaInsight, HoyData }
 
 /** Cuántos períodos anteriores se ofrecen en el selector. */
 const PERIODOS_VISIBLES = 4
@@ -235,6 +235,19 @@ export async function getHoyData(
   const periodosLista = (periodosRaw ?? []) as {
     id: number; nombre: string; fecha_inicio: string; fecha_fin: string; activo: boolean
   }[]
+
+  // Lista liviana de TODOS los períodos que existen (para el selector) — sin
+  // los cálculos pesados de arriba. Elegir uno de acá fuera de la ventana
+  // visible navega a /ventas?desde=&hasta= (ver aplicarRango en el cliente),
+  // que sí calcula ese período completo en el servidor.
+  const { data: periodosTodosRaw } = await supabase
+    .from('periodos')
+    .select('id, nombre, fecha_inicio, fecha_fin')
+    .lte('fecha_inicio', iso(hoy))
+    .order('fecha_inicio', { ascending: false })
+  const periodosDisponibles: PeriodoLigero[] = ((periodosTodosRaw ?? []) as {
+    id: number; nombre: string; fecha_inicio: string; fecha_fin: string
+  }[]).map(p => ({ id: p.id, nombre: p.nombre, inicio: p.fecha_inicio, fin: p.fecha_fin }))
 
   // ── Rangos relativos a hoy ────────────────────────────────────────────────
   const relDef = (desde: Date, hasta: Date, etiqueta: string) => {
@@ -481,6 +494,7 @@ export async function getHoyData(
   return {
     rangos,
     periodos,
+    periodosDisponibles,
     custom: datosCustom,
     alertas,
     ultimaSync: (syncRes.data as { created_at?: string } | null)?.created_at ?? null,

@@ -942,6 +942,12 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
   }, [data.ultimaSync])
 
   const periodoSel = data.periodos[periodoIdx] ?? null
+  // Si el rango a mano calza con un período histórico (elegido desde el
+  // selector, no tipeado a mano), mostrar su nombre en vez de "Rango elegido".
+  const customPeriodoNombre = useMemo(() => {
+    if (!data.custom) return null
+    return data.periodosDisponibles.find(p => p.inicio === data.custom!.desde && p.fin === data.custom!.hasta)?.nombre ?? null
+  }, [data.custom, data.periodosDisponibles])
 
   // "Período" = el período 24→23 elegido; "custom" = rango a mano (viene del
   // servidor por searchParams); el resto son rangos relativos a hoy.
@@ -1099,7 +1105,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               <span style={{ minWidth: 0, overflow: 'hidden' }}>
                 <span style={{ display: 'block', fontSize: 13, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {rango === 'periodo' && periodoSel ? periodoSel.nombre
-                    : rango === 'custom' ? 'Rango elegido'
+                    : rango === 'custom' ? (customPeriodoNombre ?? 'Rango elegido')
                     : `${fFechaCorta(d.desde)} – ${fFechaCorta(d.hasta)}`}
                 </span>
                 {(rango === 'periodo' || rango === 'custom') && (
@@ -1144,32 +1150,45 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                       )
                     })}
                   </div>
-                  {data.periodos.map((p, i) => {
-                    const on = i === periodoIdx
-                    return (
-                      <button
-                        key={p.id}
-                        onClick={() => { setPeriodoIdx(i); setShowPeriodos(false) }}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
-                          background: on ? C.blueSoft : 'transparent', border: 'none',
-                          borderTop: `1px solid ${C.line}`, padding: '10px 12px', cursor: 'pointer',
-                        }}
-                      >
-                        <span style={{ minWidth: 0, flex: 1 }}>
-                          <span style={{ display: 'block', fontSize: 13, fontWeight: on ? 700 : 500, color: on ? C.blue : C.text }}>
-                            {p.nombre}{p.activo ? ' · en curso' : ''}
+                  <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                    {data.periodosDisponibles.map(p => {
+                      // Los primeros N (ventana visible) ya traen sus datos
+                      // calculados y se seleccionan al instante; el resto del
+                      // historial navega al servidor a calcularlos (mismo
+                      // mecanismo que "elegir fechas" a mano).
+                      const iEager = data.periodos.findIndex(pe => pe.id === p.id)
+                      const eager = iEager >= 0 ? data.periodos[iEager] : null
+                      const on = eager ? (rango === 'periodo' && periodoIdx === iEager) : (rango === 'custom' && data.custom?.desde === p.inicio && data.custom?.hasta === p.fin)
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            if (eager) { setPeriodoIdx(iEager); setRango('periodo'); setShowPeriodos(false) }
+                            else aplicarRango(p.inicio, p.fin)
+                          }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+                            background: on ? C.blueSoft : 'transparent', border: 'none',
+                            borderTop: `1px solid ${C.line}`, padding: '10px 12px', cursor: 'pointer',
+                          }}
+                        >
+                          <span style={{ minWidth: 0, flex: 1 }}>
+                            <span style={{ display: 'block', fontSize: 13, fontWeight: on ? 700 : 500, color: on ? C.blue : C.text }}>
+                              {p.nombre}{eager?.activo ? ' · en curso' : ''}
+                            </span>
+                            <span style={{ display: 'block', fontSize: 11, color: C.muted }}>
+                              {fFechaCorta(p.inicio)} – {fFechaCorta(p.fin)}
+                            </span>
                           </span>
-                          <span style={{ display: 'block', fontSize: 11, color: C.muted }}>
-                            {fFechaCorta(p.inicio)} – {fFechaCorta(p.fin)}
-                          </span>
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: on ? C.blue : C.muted, flexShrink: 0 }}>
-                          {fL(p.datos.actual.litros)}
-                        </span>
-                      </button>
-                    )
-                  })}
+                          {eager && (
+                            <span style={{ fontSize: 12, fontWeight: 700, color: on ? C.blue : C.muted, flexShrink: 0 }}>
+                              {fL(eager.datos.actual.litros)}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
 
                   {/* Rango a mano */}
                   <div style={{ borderTop: `1px solid ${C.line}`, padding: '10px 12px', background: C.bg }}>
@@ -1255,7 +1274,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           <p style={{ fontSize: 11, letterSpacing: '0.08em', color: '#94A3B8', fontWeight: 600, marginBottom: 8 }}>
             {rango === 'periodo' && periodoSel
               ? `VENTAS · ${periodoSel.nombre.toUpperCase()}`
-              : rango === 'custom' ? 'VENTAS · RANGO ELEGIDO' : 'VENTAS DEL RANGO'}
+              : rango === 'custom' ? `VENTAS · ${(customPeriodoNombre ?? 'RANGO ELEGIDO').toUpperCase()}` : 'VENTAS DEL RANGO'}
           </p>
           <p style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-2px', lineHeight: 1 }}>
             {actual.litros.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
