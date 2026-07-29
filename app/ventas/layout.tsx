@@ -6,11 +6,11 @@ import PageTabs from '@/components/PageTabs'
 import type { PageTab } from '@/components/PageTabs'
 
 const TABS: PageTab[] = [
-  { href: '/ventas',                      label: 'Hoy',      exact: true  },
-  { href: '/ventas/agenda',               label: 'Agenda'                 },
-  { href: '/ventas/clientes',             label: 'Clientes'               },
-  { href: '/ventas/misiones',             label: 'Misiones'               },
+  { href: '/ventas',                      label: 'Ventas',   exact: true  },
   { href: '/ventas/stock',                label: 'Stock'                  },
+  { href: '/ventas/misiones',             label: 'Misiones'               },
+  { href: '/ventas/clientes',             label: 'Clientes'               },
+  { href: '/ventas/agenda',               label: 'Agenda'                 },
 ]
 
 export default async function VentasLayout({ children }: { children: React.ReactNode }) {
