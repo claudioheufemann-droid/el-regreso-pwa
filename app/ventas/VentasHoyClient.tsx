@@ -958,8 +958,13 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
 
   function aplicarRango(desde: string, hasta: string) {
     if (!desde || !hasta) return
-    // Se recarga en el servidor: el rango alimenta tarjetas, mix, ranking y detalles
+    // Se recarga en el servidor: el rango alimenta tarjetas, mix, ranking y
+    // detalles. router.refresh() de más: el Router Cache de Next puede servir
+    // el payload de una visita anterior a /ventas cuando sólo cambian los
+    // searchParams, mostrando datos viejos o en cero hasta que se fuerza la
+    // invalidación explícita.
     router.push(`/ventas?desde=${desde}&hasta=${hasta}`)
+    router.refresh()
     setShowPeriodos(false)
   }
   function limpiarRango() {
@@ -1296,6 +1301,14 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               )
             })()}
           </div>
+          {/* Cifras absolutas del período anterior — antes solo se veía el %,
+              y para comparar bien (pedido de Claudio) hace falta ver también
+              cuánto fue en litros y en plata, no solo la variación relativa. */}
+          {previo.litros > 0 && (
+            <p style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>
+              Período anterior: <span style={{ color: '#CBD5E1', fontWeight: 600 }}>{fL(previo.litros)} · {fPesoFull(previo.revenue)}</span>
+            </p>
+          )}
           {avanceMeta !== null && (
             <div style={{ marginTop: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
