@@ -285,23 +285,35 @@ export async function getHoyData(
       })()
     : null
 
+  // "Año" es la excepción histórica: acumula desde el 1-ene, mucho antes de
+  // que existiera fecha_entrega. Filtrarlo por entrega dejaba fuera buena
+  // parte de las ventas del año y mostraba un total muy por debajo del real.
+  // Para ese rango se vuelve a fecha_pedido.
+  //
+  // Mismo problema con los PERÍODOS 24→23 y el rango a mano: fecha_entrega
+  // recién existe desde el 25-may-2026 (verificado contra la base: mayo 514
+  // filas, junio 2264, julio 3812 — antes de eso, NADA tiene fecha_entrega).
+  // Un período que termina antes de esa fecha da 0,0 L si se filtra por
+  // entrega, no porque no hubiera ventas sino porque el dato no existía
+  // todavía. Se usa fecha_pedido para esos períodos/rangos, igual criterio
+  // que "Año". `porEntrega` viaja también en cada DatosRango (ver
+  // hoyTypes.ts) para que el cliente sepa qué criterio se usó al pedir el
+  // detalle — antes lo adivinaba con `rango !== 'anio'`, que quedaba mal
+  // para un período histórico.
+  const ENTREGA_CONFIABLE_DESDE = '2026-05-24'
+  const porEntregaPeriodo = (fechaFin: string) => fechaFin >= ENTREGA_CONFIABLE_DESDE
+
   // Cada rango a consultar: los relativos + cada período 24→23 + el custom.
   // Para los períodos, el "previo" es el período 24→23 anterior de la lista.
-  //
-  // "Año" es la excepción: acumula desde el 1-ene, mucho antes de que
-  // existiera fecha_entrega (recién desde el 26-jul-2026). Filtrarlo por
-  // entrega dejaba fuera ~73% de las ventas del año y mostraba un total muy
-  // por debajo del real. Para ese rango se vuelve a fecha_pedido; el resto
-  // (Hoy/7D/30D/Período/custom) cae dentro de la ventana con dato confiable.
   const consultas: { desde: string; hasta: string; porEntrega: boolean }[] = [
     ...Object.entries(relativos).flatMap(([k, r]) => [
       { desde: r.desde, hasta: r.hasta, porEntrega: k !== 'anio' },
       { desde: r.prevDesde, hasta: r.prevHasta, porEntrega: k !== 'anio' },
     ]),
-    ...periodosLista.map(p => ({ desde: p.fecha_inicio, hasta: p.fecha_fin, porEntrega: true })),
+    ...periodosLista.map(p => ({ desde: p.fecha_inicio, hasta: p.fecha_fin, porEntrega: porEntregaPeriodo(p.fecha_fin) })),
     ...(customDef ? [
-      { desde: customDef.desde, hasta: customDef.hasta, porEntrega: true },
-      { desde: customDef.prevDesde, hasta: customDef.prevHasta, porEntrega: true },
+      { desde: customDef.desde, hasta: customDef.hasta, porEntrega: porEntregaPeriodo(customDef.hasta) },
+      { desde: customDef.prevDesde, hasta: customDef.prevHasta, porEntrega: porEntregaPeriodo(customDef.hasta) },
     ] : []),
   ]
 
@@ -379,6 +391,7 @@ export async function getHoyData(
       desde: r.desde,
       hasta: r.hasta,
       etiquetaComparacion: r.etiqueta,
+      porEntrega: k !== 'anio',
       actual: kpiEn(iAct),
       previo: kpiEn(iPrev),
       vendedores: armarVendedores(vendEn(iAct), vendEn(iPrev), porEntregarVendEn(iAct)),
@@ -420,6 +433,7 @@ export async function getHoyData(
           etiquetaComparacion: !anterior
             ? 'sin período anterior'
             : esActivo ? `vs mismos días de ${anterior.nombre}` : `vs ${anterior.nombre}`,
+          porEntrega: porEntregaPeriodo(p.fecha_fin),
           actual: kpiEn(iAct),
           previo: anterior ? kpiEn(iComparar) : { ...KPIS_CERO },
           vendedores: armarVendedores(vendEn(iAct), anterior ? vendEn(iComparar) : null, porEntregarVendEn(iAct)),
@@ -480,6 +494,7 @@ export async function getHoyData(
         desde: customDef.desde,
         hasta: customDef.hasta,
         etiquetaComparacion: customDef.etiqueta,
+        porEntrega: porEntregaPeriodo(customDef.hasta),
         actual: kpiEn(iCustom),
         previo: kpiEn(iCustom + 1),
         vendedores: armarVendedores(vendEn(iCustom), vendEn(iCustom + 1), porEntregarVendEn(iCustom)),

@@ -120,6 +120,12 @@ export interface DatosRango {
   hasta: string
   /** Qué se compara contra qué, para poder explicarlo en la UI */
   etiquetaComparacion: string
+  /** Criterio real usado para calcular `actual`/`previo`: true = fecha de
+   *  entrega, false = fecha de pedido (para rangos que caen antes del
+   *  25-may-2026, cuando fecha_entrega no existía todavía). El cliente lo
+   *  necesita para pedir el mismo criterio en los drill-downs y para
+   *  rotular "pedido" en vez de "entregado" cuando corresponde. */
+  porEntrega: boolean
   actual: KpisRango
   previo: KpisRango
   vendedores: VendedorRango[]

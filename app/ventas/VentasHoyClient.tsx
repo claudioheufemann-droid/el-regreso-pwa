@@ -1279,7 +1279,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           <p style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-2px', lineHeight: 1 }}>
             {actual.litros.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
             <span style={{ fontSize: 20, marginLeft: 4, color: '#CBD5E1' }}>L</span>
-            <span style={{ fontSize: 13, fontWeight: 500, color: '#94A3B8', marginLeft: 8 }}>entregado</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: '#94A3B8', marginLeft: 8 }}>{d.porEntrega ? 'entregado' : 'pedido'}</span>
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             {(() => {
@@ -1423,7 +1423,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           </div>
           {d.vendedores.map((v, i) => (
             <FilaVendedor key={v.vendedor} v={v} pos={i} total={actual.litros}
-              desde={d.desde} hasta={d.hasta} porEntrega={rango !== 'anio'} />
+              desde={d.desde} hasta={d.hasta} porEntrega={d.porEntrega} />
           ))}
         </div>
 
@@ -1616,7 +1616,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           envaseBucket={detalleEnvaseBucket}
           categoria={detalleCategoria}
           origenPedidos={detalleOrigenPedidos}
-          porEntrega={rango !== 'anio'}
+          porEntrega={d.porEntrega}
           desde={d.desde}
           hasta={d.hasta}
           onClose={() => {
