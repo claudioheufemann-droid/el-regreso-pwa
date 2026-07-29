@@ -16,6 +16,7 @@ const TABS: PageTab[] = [
   { href: '/ventas/actividad',            label: 'Actividad'              },
   { href: '/ventas/mapa',                 label: 'Mapa'                   },
   { href: '/ventas/metas',                label: 'Metas'                  },
+  { href: '/ventas/stock',                label: 'Stock'                  },
   { href: '/ventas/admin',                label: 'Admin',    adminOnly: true },
   { href: '/ventas/admin/reportes',       label: 'Reportes', adminOnly: true },
   { href: '/ventas/admin/rutas-clientes', label: 'Rutas',    adminOnly: true },
