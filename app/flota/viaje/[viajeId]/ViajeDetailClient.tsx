@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Plus, X, Search, Navigation2, Clock, CheckCircle, FileText, Camera, ChevronDown, XCircle } from 'lucide-react'
+import { MapPin, Plus, X, Navigation2, Clock, CheckCircle, FileText, Camera, ChevronDown, XCircle, Lock } from 'lucide-react'
 import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
@@ -58,6 +58,7 @@ interface Props {
     destino_declarado: string | null
     estado: string
     repartos_terminados?: boolean
+    conductor_id: string | null
     conductor: { nombre: string } | null
     vehiculo: Vehiculo
   }
@@ -94,6 +95,22 @@ function urlGoogleMaps(paradas: Parada[]): string {
     return encodeURIComponent(dir.toLowerCase().includes('valdivia') ? dir : `${dir}, Valdivia, Chile`)
   }).join('/')
   return `https://www.google.com/maps/dir/${base}/${stops}/${base}`
+}
+
+/** Waze no soporta rutas de varias paradas por URL como Google Maps (solo
+ *  navega a UN destino a la vez) — así que en vez de fingir soportarlo,
+ *  siempre apunta a la próxima parada sin resolver (o a la primera si ya
+ *  quedaron todas resueltas), que es lo que el conductor necesita en el
+ *  momento. */
+function urlWaze(paradas: Parada[]): string {
+  if (paradas.length === 0) return 'https://waze.com/ul?q=El%20Regreso%20Beer%2C%20Valdivia%2C%20Chile&navigate=yes'
+  const siguiente = paradas.find(p => !p.entregado) ?? paradas[0]
+  if (siguiente.lat && siguiente.lng) {
+    return `https://waze.com/ul?ll=${siguiente.lat}%2C${siguiente.lng}&navigate=yes`
+  }
+  const dir = siguiente.direccion || siguiente.nombre
+  const q = encodeURIComponent(dir.toLowerCase().includes('valdivia') ? dir : `${dir}, Valdivia, Chile`)
+  return `https://waze.com/ul?q=${q}&navigate=yes`
 }
 
 function tiempoTranscurrido(iso: string) {
@@ -202,6 +219,12 @@ function InputDireccionValidada({ onConfirmar, onCancelar }: {
 export default function ViajeDetailClient({ user, viaje }: Props) {
   const router = useRouter()
   const supabase = createClient()
+
+  // Pedido de Claudio: solo quien maneja este viaje (o un admin, para poder
+  // corregir un error) puede marcar entregas, agregar paradas o cerrar el
+  // viaje. Cualquier otro trabajador que entre a este viaje solo puede ver
+  // el estado y la ruta — nada de tocar los datos de la entrega ajena.
+  const puedeEditar = user.isAdmin || (!!viaje.conductor_id && user.id === viaje.conductor_id)
   const [paradas, setParadas] = useState<Parada[]>(() => parseParadas(viaje.destino_declarado))
   const [modoAdd, setModoAdd] = useState(false)
   const [kmCalculado, setKmCalculado] = useState<number | null>(viaje.km_teoricos)
@@ -419,7 +442,24 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
                     <ChevronDown size={14} color="rgba(255,255,255,0.3)" style={{ flexShrink: 0, marginTop: 2, transition: 'transform 0.15s', transform: abierta ? 'rotate(180deg)' : 'none' }} />
                   </div>
 
-                  {abierta && (
+                  {abierta && !puedeEditar && (
+                    <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Lock size={12} color="var(--muted)" style={{ flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                          Solo {viaje.conductor?.nombre?.split(' ')[0] ?? 'quien maneja este viaje'} puede marcar esta entrega
+                        </span>
+                      </div>
+                      {(p.fotoGuia || p.fotoProducto) && (
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {p.fotoGuia && <a href={p.fotoGuia} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: 'block' }}><img src={p.fotoGuia} alt="Guía" style={{ width: '100%', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)' }} /></a>}
+                          {p.fotoProducto && <a href={p.fotoProducto} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: 'block' }}><img src={p.fotoProducto} alt="Producto" style={{ width: '100%', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)' }} /></a>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {abierta && puedeEditar && (
                     <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {/* ── ¿Se entregó el pedido? ── */}
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -512,7 +552,7 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
             </div>
           )}
 
-          {modoAdd && (
+          {puedeEditar && modoAdd && (
             <InputDireccionValidada
               onConfirmar={async (datos) => {
                 const nueva: Parada = { id: Date.now().toString(), ...datos }
@@ -523,20 +563,29 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
             />
           )}
 
-          {!modoAdd && (
+          {puedeEditar && !modoAdd && (
             <button onClick={() => setModoAdd(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 14px', borderRadius: 10, border: '1px dashed rgba(255,255,255,0.15)', background: 'transparent', color: 'var(--muted)', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
               <Plus size={14} /> Agregar parada
             </button>
           )}
         </div>
 
-        {/* Google Maps — siempre visible */}
+        {/* Google Maps — ruta completa con todas las paradas en orden */}
         <a href={urlGoogleMaps(paradas)} target="_blank" rel="noopener noreferrer"
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '15px', borderRadius: 12, background: 'rgba(66,133,244,0.12)', border: '1px solid rgba(66,133,244,0.3)', color: '#F4EEDF', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#F4EEDF"/>
           </svg>
           {paradas.length > 0 ? `Ver ruta en Google Maps (${paradas.length} paradas)` : 'Abrir Google Maps'}
+        </a>
+
+        {/* Waze — a diferencia de Google Maps, no soporta varias paradas en
+            una sola ruta por URL, así que navega a la próxima parada sin
+            resolver (la que el conductor necesita ahora). */}
+        <a href={urlWaze(paradas)} target="_blank" rel="noopener noreferrer"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '15px', borderRadius: 12, background: 'rgba(51,199,255,0.12)', border: '1px solid rgba(51,199,255,0.3)', color: '#F4EEDF', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
+          <Navigation2 size={18} color="#33C7FF" />
+          {paradas.length > 1 ? 'Ver en Waze (próxima parada)' : 'Abrir en Waze'}
         </a>
 
       </div>
@@ -584,6 +633,15 @@ export default function ViajeDetailClient({ user, viaje }: Props) {
               Volver
             </button>
           </>
+        ) : !puedeEditar ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 14, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <Lock size={14} color="var(--muted)" />
+            <span style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+              {repartosTerminados
+                ? `Repartos terminados — esperando que ${viaje.conductor?.nombre?.split(' ')[0] ?? 'el conductor'} cierre el viaje`
+                : 'Solo quien maneja este viaje puede marcar las entregas'}
+            </span>
+          </div>
         ) : repartosTerminados ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <p style={{ fontSize: 11, color: '#D4AF37', textAlign: 'center', fontWeight: 700 }}>
