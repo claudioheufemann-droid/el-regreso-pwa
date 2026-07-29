@@ -284,7 +284,7 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   // repartir directo, el envío se le entrega a un tercero para que él lo
   // despache a otra ciudad. La foto de la guía es obligatoria porque es
   // el único respaldo de que el envío efectivamente se entregó.
-  const OPERADORES_LOGISTICOS = ['Cacem', 'Varmontt'] as const
+  const OPERADORES_LOGISTICOS = ['Cacem', 'Varmontt', 'Taladriz', 'Bluexpress'] as const
   const [operadorLogistico, setOperadorLogistico] = useState<typeof OPERADORES_LOGISTICOS[number] | null>(null)
   const [ciudadDestino, setCiudadDestino] = useState('')
   const [fotoGuiaEnvio, setFotoGuiaEnvio] = useState('')
@@ -524,7 +524,10 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, background: '#080808', display: 'flex', flexDirection: 'column' }}>
+    /* minHeight, NO flex:1+minHeight:0 — ver comentario en ViajeDetailClient.tsx
+       y app/flota/layout.tsx: ese combo crea un scroll anidado que no
+       responde al mouse en desktop. */
+    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
       <FlotaPageHeader
         title={vehiculo ? vehiculo.nombre : 'Nueva Salida'}
         subtitle={`Paso ${paso}/${totalPasos} · ${pasoLabel}`}
@@ -536,8 +539,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
       {/* ── Paso 1: Selección vehículo ─────────────────────────────────────── */}
       {paso === 1 && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 0' }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '12px 12px 0' }}>
             {disponibles.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px' }}>
                 <AlertTriangle size={32} color="#D4AF37" style={{ margin: '0 auto 12px', display: 'block' }} />
@@ -599,8 +602,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
       {/* ── Paso 2: Ruta unificada ─────────────────────────────────────────── */}
       {paso === 2 && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Tipo toggle */}
             <div style={{ background: '#111', borderRadius: 12, padding: 4, display: 'flex', gap: 3 }}>
@@ -608,14 +611,14 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                 const active = tipoViaje === t
                 const color = t === 'reparto' ? F : t === 'tramite' ? '#D4AF37' : '#60A5FA'
                 const rgb = t === 'reparto' ? '212,175,55' : t === 'tramite' ? '245,158,11' : '96,165,250'
-                const label = t === 'reparto' ? '🚚 Reparto' : t === 'tramite' ? '🔧 Trámite' : '📦 Operador'
+                const label = t === 'reparto' ? '🚚 Reparto' : t === 'tramite' ? '🔧 Trámite' : '📦 Operador Logístico'
                 return (
                   <button key={t} onClick={() => setTipoViaje(t)} style={{
                     flex: 1, padding: '11px 4px', borderRadius: 9, cursor: 'pointer',
                     border: active ? `1px solid rgba(${rgb},0.3)` : '1px solid transparent',
                     background: active ? `rgba(${rgb},0.12)` : 'transparent',
                     color: active ? color : 'var(--muted)',
-                    fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap',
+                    fontSize: 12, fontWeight: 800, textAlign: 'center', lineHeight: 1.25,
                   }}>
                     {label}
                   </button>
@@ -893,8 +896,8 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
 
       {/* ── Paso 3: Fotos + KM ────────────────────────────────────────────── */}
       {paso === 3 && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '16px' }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 }}>
               Documentación obligatoria
             </p>

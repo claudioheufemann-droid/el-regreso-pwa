@@ -250,7 +250,10 @@ export default function CheckOutClient({ user, viaje }: Props) {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, background: '#080808', display: 'flex', flexDirection: 'column' }}>
+    /* minHeight, NO flex:1+minHeight:0 — ver comentario en ViajeDetailClient.tsx
+       y app/flota/layout.tsx: ese combo crea un scroll anidado que no
+       responde al mouse en desktop. */
+    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
       <FlotaPageHeader
         title="Cerrar viaje"
         subtitle={`${viaje.vehiculos?.nombre ?? ''} · ${fmtDuracion(viaje.iniciado_at)}`}
@@ -258,7 +261,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
         backLabel="Volver"
       />
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+      <div style={{ padding: '16px' }}>
 
         {/* Resumen */}
         <div style={{ background: '#131313', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
