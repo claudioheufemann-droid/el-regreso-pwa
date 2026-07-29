@@ -1,6 +1,6 @@
 'use client'
 
-import { BarChart2, Users, Zap, ListChecks } from 'lucide-react'
+import { BarChart2, Users, Zap, ListChecks, Package } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
 const navItems: SidebarNavItem[] = [
@@ -8,6 +8,7 @@ const navItems: SidebarNavItem[] = [
   { href: '/ventas/agenda',              icon: ListChecks, label: 'Agenda',                 adminOnly: false },
   { href: '/ventas/misiones',            icon: Zap,        label: 'Misiones',               adminOnly: false },
   { href: '/ventas/clientes',            icon: Users,      label: 'Clientes',               adminOnly: false },
+  { href: '/ventas/stock',               icon: Package,    label: 'Stock',                  adminOnly: false },
 ]
 
 export default function Sidebar() {
