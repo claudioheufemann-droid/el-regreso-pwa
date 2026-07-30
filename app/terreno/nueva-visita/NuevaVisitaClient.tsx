@@ -79,8 +79,11 @@ const PRODUCTO_IMAGENES: Record<string, string> = {
   'Aguas Blancas':               '/productos/cerveza/aguas-blancas.webp',
 }
 
-function ProductoThumb({ nombre, categoria, size = 44 }: { nombre: string; categoria: string; size?: number }) {
-  const src = PRODUCTO_IMAGENES[nombre]
+// Foto genérica de barril — se usa para todos los barriles sin importar el sabor.
+const IMAGEN_BARRIL = '/productos/cerveza/barril.webp'
+
+function ProductoThumb({ nombre, categoria, esBarril = false, size = 44 }: { nombre: string; categoria: string; esBarril?: boolean; size?: number }) {
+  const src = esBarril ? IMAGEN_BARRIL : PRODUCTO_IMAGENES[nombre]
   const [imgOk, setImgOk] = useState(!!src)
   const esKombucha = (categoria ?? '').toLowerCase().includes('kombucha')
   const emoji = esKombucha ? '🫧' : '🍺'
@@ -1409,7 +1412,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
               </div>
               {items.map((item, i) => (
                 <div key={item.producto} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-                  <ProductoThumb nombre={item.producto} categoria={item.categoria} size={36} />
+                  <ProductoThumb nombre={item.producto} categoria={item.categoria} esBarril={item.envase.toLowerCase().includes('barril')} size={36} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto}</p>
                     {item.envase && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{item.envase}</p>}
@@ -1739,7 +1742,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
                   transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
                   boxShadow: cant > 0 ? '0 0 20px rgba(212,175,55,0.07)' : 'none',
                 }}>
-                  <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} size={48} />
+                  <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} esBarril={esBarril} size={48} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 14, fontWeight: 600, color: '#F0EDE8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2, letterSpacing: '-0.2px' }}>
                       {p.producto}
@@ -1789,7 +1792,7 @@ function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicia
           <div style={{ background: '#131313', border: `1px solid ${C_BORDER}`, borderRadius: '14px 14px 0 0', overflow: 'hidden', marginBottom: -1 }}>
             {items.map((item, i) => (
               <div key={`${item.producto}|${item.envase}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-                <ProductoThumb nombre={item.producto} categoria={item.categoria} size={30} />
+                <ProductoThumb nombre={item.producto} categoria={item.categoria} esBarril={item.envase.toLowerCase().includes('barril')} size={30} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 13, fontWeight: 600, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto}</p>
                   {item.envase && <p style={{ fontSize: 10, color: 'var(--muted)' }}>{item.envase}</p>}

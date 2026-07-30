@@ -63,8 +63,11 @@ const CODIGO_IMAGENES: Record<string, string> = {
   'K-22': '/productos/kombucha/detox.webp',
 }
 
-function ProductoThumb({ codigo, categoria, size = 44 }: { codigo: string | null; categoria: string | null; size?: number }) {
-  const src = codigo ? CODIGO_IMAGENES[codigo] : undefined
+// Foto genérica de barril — se usa para todos los barriles sin importar el sabor.
+const IMAGEN_BARRIL = '/productos/cerveza/barril.webp'
+
+function ProductoThumb({ codigo, categoria, tipo, size = 44 }: { codigo: string | null; categoria: string | null; tipo?: 'barril' | 'envase'; size?: number }) {
+  const src = tipo === 'barril' ? IMAGEN_BARRIL : (codigo ? CODIGO_IMAGENES[codigo] : undefined)
   const [imgOk, setImgOk] = useState(!!src)
   const emoji = categoria === 'Kombucha' ? '🫧' : '🍺'
   if (src && imgOk) {
@@ -346,7 +349,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
                                 }}
                               >
                                 <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
-                                  <ProductoThumb codigo={f.codigo_producto} categoria={f.categoria} />
+                                  <ProductoThumb codigo={f.codigo_producto} categoria={f.categoria} tipo={f.tipo} />
                                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flex: 1, minWidth: 0 }}>
                                     <div style={{ minWidth: 0 }}>
                                       <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{f.producto}</p>
