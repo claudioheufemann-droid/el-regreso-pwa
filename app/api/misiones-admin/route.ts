@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDOR_DISPLAY } from '@/lib/types'
+import { VENDEDOR_DISPLAY, esClienteExcluido } from '@/lib/types'
 
 // Consolida nombres históricos de la BD (Javier/Carlos/…) en un solo vendedor display
 const dspV = (v: string | null): string => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
@@ -49,8 +49,8 @@ export async function GET(req: NextRequest) {
     { data: mHist },
     { data: riesgo },
     { data: agendados },
-    { data: vActual },
-    { data: vAnt },
+    { data: vActualRaw },
+    { data: vAntRaw },
     { data: mHist8 },   // historial completado_at para mejores días
   ] = await Promise.all([
     supabase.from('misiones').select('vendedor, estado, tipo, resultado_litros').eq('semana', semana),
@@ -58,10 +58,15 @@ export async function GET(req: NextRequest) {
     supabase.from('misiones').select('semana, estado, tipo').gte('semana', sem8ago).lte('semana', semana).order('semana'),
     supabase.from('client_scores').select('nombre, dias_sin_compra, vendedor_actual, ultima_compra, segmento').gt('dias_sin_compra', 30).order('dias_sin_compra', { ascending: false }).limit(20),
     supabase.from('followups').select('id').eq('estado', 'pendiente').gte('fecha_recordatorio', semana).lte('fecha_recordatorio', semanaFin),
-    supabase.from('ventas').select('vendedor_actual, litros, total_sin_impuesto, pedido, localidad').gte('fecha_pedido', semana).lte('fecha_pedido', semanaFin),
-    supabase.from('ventas').select('vendedor_actual, litros, total_sin_impuesto').gte('fecha_pedido', semAnt).lte('fecha_pedido', semAntFin),
+    supabase.from('ventas').select('vendedor_actual, litros, total_sin_impuesto, pedido, localidad, nombre_fantasia').gte('fecha_pedido', semana).lte('fecha_pedido', semanaFin),
+    supabase.from('ventas').select('vendedor_actual, litros, total_sin_impuesto, nombre_fantasia').gte('fecha_pedido', semAnt).lte('fecha_pedido', semAntFin),
     supabase.from('misiones').select('completado_at, estado').gte('semana', sem8ago).lte('semana', semana).not('completado_at', 'is', null),
   ])
+
+  // Servicios de enlatado/co-packing a terceros (EWU Ginger Beer, etc.) no son
+  // venta de cerveza propia — se excluyen antes de calcular cualquier KPI.
+  const vActual = (vActualRaw ?? []).filter(v => !esClienteExcluido(v.nombre_fantasia))
+  const vAnt = (vAntRaw ?? []).filter(v => !esClienteExcluido(v.nombre_fantasia))
 
   // ── Telefono de top clientes en riesgo ──────────────────────────────────────
   const top5nombres = (riesgo ?? []).slice(0, 5).map(r => r.nombre)

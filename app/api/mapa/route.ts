@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { esClienteExcluido } from '@/lib/types'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -127,6 +128,7 @@ export async function GET(req: NextRequest) {
 
   for (const v of (ventas ?? [])) {
     if (!v.nombre_fantasia) continue
+    if (esClienteExcluido(v.nombre_fantasia)) continue // servicio de enlatado/co-packing, no venta de cerveza
     const coords = clientesMap.get(v.nombre_fantasia)
     if (!coords) continue
 

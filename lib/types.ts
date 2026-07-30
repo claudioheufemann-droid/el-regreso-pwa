@@ -129,6 +129,8 @@ export const CLIENTES_EXCLUIR = [
   'cliente metas base camp',
   'cliente douglas koenig',
   'beneficios clientes',
+  // Servicio de enlatado/co-packing a terceros (Niebla Fermentos SPA) — no es venta de cerveza propia
+  'ewu ginger beer',
 ]
 
 /**
