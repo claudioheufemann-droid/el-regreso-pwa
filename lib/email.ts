@@ -435,3 +435,43 @@ export async function emailTaskPorAprobar(params: {
   }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
   logResultado('por aprobar', params.toEmails, result)
 }
+
+function cotizacionHtml(params: { clienteNombre: string; numero: number; vendedorNombre: string }): string {
+  const content = `
+    <div style="padding:24px 0 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <p style="margin:0 0 6px;font-size:11px;color:${COLOR.gold};letter-spacing:1.5px;text-transform:uppercase;font-weight:700;">El Regreso Beer Co.</p>
+      <h1 style="margin:0;font-size:22px;font-weight:900;color:${COLOR.text};line-height:1.2;">Cotización N° ${String(params.numero).padStart(4, '0')}</h1>
+    </div>
+    <div style="padding:20px 0;">
+      <p style="margin:0 0 16px;font-size:14px;color:${COLOR.muted};line-height:1.6;">
+        Hola <strong style="color:${COLOR.text};">${params.clienteNombre}</strong>, te adjuntamos la cotización solicitada.
+        Cualquier consulta, quedamos atentos.
+      </p>
+      <p style="margin:0;font-size:13px;color:${COLOR.muted};">Preparada por <strong style="color:${COLOR.text};">${params.vendedorNombre}</strong></p>
+    </div>`
+  return baseTemplate(content, COLOR.gold)
+}
+
+export async function emailCotizacion(params: {
+  toEmail: string
+  clienteNombre: string
+  numero: number
+  vendedorNombre: string
+  imagenBase64: string
+}) {
+  const resend = getResend()
+  if (!resend) { console.error('emailCotizacion: RESEND_API_KEY no configurada'); return { error: 'RESEND_API_KEY no configurada' } }
+
+  const result = await resend.emails.send({
+    from: `El Regreso Beer Co. <${FROM}>`,
+    to: [params.toEmail],
+    subject: `🍺 Cotización El Regreso N° ${String(params.numero).padStart(4, '0')}`,
+    html: cotizacionHtml({ clienteNombre: params.clienteNombre, numero: params.numero, vendedorNombre: params.vendedorNombre }),
+    attachments: [{
+      filename: `cotizacion-el-regreso-${String(params.numero).padStart(4, '0')}.png`,
+      content: params.imagenBase64,
+    }],
+  }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
+  logResultado('cotización', [params.toEmail], result)
+  return result
+}
