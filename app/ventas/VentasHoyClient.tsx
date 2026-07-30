@@ -974,14 +974,14 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
         </button>
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.1 }}>Ventas</h1>
             <p style={{ fontSize: 12, color: C.muted, textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {hoyTxt}
             </p>
           </div>
-          <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div style={{ flexShrink: 0 }}>
             <button
               onClick={() => setShowActualizaciones(v => !v)}
               aria-label="Cargas de datos"
@@ -997,7 +997,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               <>
                 <div onClick={() => setShowActualizaciones(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
                 <div style={{
-                  position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 280, maxWidth: '80vw', zIndex: 41,
+                  position: 'absolute', top: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)', width: 280, maxWidth: '80vw', zIndex: 41,
                   background: C.card, border: `1px solid ${C.line}`, borderRadius: 12,
                   boxShadow: '0 8px 28px rgba(15,23,42,.14)', overflow: 'hidden',
                 }}>
