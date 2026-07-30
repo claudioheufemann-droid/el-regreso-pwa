@@ -120,13 +120,13 @@ function buildResumenCopiable(filas: StockProductoRow[], fechaInforme: string | 
       if (!items.length) continue
       out += `\n${t.emoji} ${t.label}\n`
       for (const f of items) {
-        const n = nivelDe(f)
-        const icon = n === 'critico' ? '🔴' : n === 'bajo' ? '🟡' : '🟢'
-        const etiqueta = n === 'critico' ? ' _(revisar stock)_' : n === 'bajo' ? ' _(poco stock)_' : ''
+        // Solo verde/rojo — sin texto de alerta: esto lo lee el cliente,
+        // no debe ver "poco stock" ni "revisar stock".
+        const icon = nivelDe(f) === 'ok' ? '🟢' : '🔴'
         const detalle = f.tipo === 'envase'
-          ? `${fNum(f.cantidad)} un. (${fCajas(f.cantidad)})`
-          : `${fNum(f.cantidad)} barril${f.cantidad === 1 ? '' : 'es'}`
-        out += `${icon} *${f.producto}* — ${detalle}${etiqueta}\n`
+          ? `${fNum(f.cantidad)} latas (${fCajas(f.cantidad)})`
+          : `${fNum(f.cantidad)} Barril${f.cantidad === 1 ? '' : 'es'}`
+        out += `${icon} *${f.producto}*: ${detalle}\n`
       }
     }
   }
