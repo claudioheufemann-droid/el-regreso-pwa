@@ -27,6 +27,8 @@ const C = {
 type Envase = 'lata' | 'barril'
 type ItemCarrito = ItemCotizacionImagen
 
+const ZONA_LABEL: Record<Zona, string> = { valdivia: 'Zona Sur', santiago: 'Santiago' }
+
 function claveItem(producto: string, envase: Envase) {
   return `${producto}|${envase}`
 }
@@ -207,8 +209,8 @@ export default function NuevaCotizacionClient({ user, clientes }: { user: AppUse
                 <button key={z} onClick={() => setZona(z)} style={{
                   flex: 1, padding: '9px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
                   background: zona === z ? C.blue : 'transparent', color: zona === z ? '#fff' : C.muted,
-                  fontSize: 13, fontWeight: 700, textTransform: 'capitalize',
-                }}>{z}</button>
+                  fontSize: 13, fontWeight: 700,
+                }}>{ZONA_LABEL[z]}</button>
               ))}
             </div>
 

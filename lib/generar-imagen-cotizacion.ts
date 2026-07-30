@@ -101,7 +101,7 @@ export async function generarImagenCotizacion(datos: DatosCotizacionImagen): Pro
     { label: 'CLIENTE',  value: datos.clienteEmpresa ? `${datos.clienteNombre} (${datos.clienteEmpresa})` : datos.clienteNombre },
     { label: 'FECHA',    value: datos.fecha },
     { label: 'VENDEDOR', value: datos.vendedorNombre },
-    { label: 'ZONA',     value: datos.zona === 'santiago' ? 'Santiago' : 'Valdivia' },
+    { label: 'ZONA',     value: datos.zona === 'santiago' ? 'Santiago' : 'Zona Sur' },
   ]
   filas.forEach((f, i) => {
     const col = i % 2
