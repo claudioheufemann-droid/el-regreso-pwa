@@ -17,9 +17,9 @@ import type { ClienteParaCotizacion } from './page'
 
 const C = {
   bg: '#F1F5F9', card: '#FFFFFF', hero: '#0F172A',
-  text: '#0F172A', muted: '#64748B', faint: '#94A3B8', line: '#E2E8F0',
+  text: '#0F172A', label: '#475569', muted: '#64748B', faint: '#94A3B8', line: '#E2E8F0',
   blue: '#2563EB', blueSoft: '#EFF6FF',
-  green: '#059669', greenSoft: '#ECFDF5',
+  green: '#059669', greenSoft: '#ECFDF5', greenLine: '#A7D8BE',
   amber: '#D97706', amberSoft: '#FFFBEB',
   red: '#DC2626', redSoft: '#FEF2F2',
 }
@@ -327,7 +327,7 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
             {/* Productos */}
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Agregar productos</p>
-              <p style={{ fontSize: 11, color: C.faint }}>Toca Lata o Barril para agregar</p>
+              <p style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>Toca Lata o Barril para agregar</p>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
               <GrupoCategoria titulo="CERVEZAS" emoji="🍺" tint="#B45309" tintSoft="#FFFBEB" productos={cervezas} stockPorCodigo={stockPorCodigo} carrito={carrito} ultimoAgregado={ultimoAgregado} onAgregar={agregarProducto} />
@@ -343,55 +343,82 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
                 <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                   Detalle de la cotización · {items.length}
                 </p>
-                <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden', marginBottom: 14 }}>
+                <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden', marginBottom: 14, boxShadow: '0 1px 2px rgba(15,23,42,0.04)' }}>
                   {items.map((it, i) => {
                     const key = claveItem(it.producto, it.envase)
                     const d = desgloseLinea(it)
                     const conDescuento = it.cantidadConDescuento ?? it.cantidad
+                    const tieneDescuento = it.descuentoPct > 0
+                    const disponible = catalogo[it.producto] ? disponibleDe(catalogo[it.producto], it.envase, stockPorCodigo) : 0
+                    const sinStock = it.cantidad > disponible
                     return (
-                      <div key={key} style={{ padding: '12px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                      <div key={key} style={{
+                        padding: '13px 14px 13px 12px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}`,
+                        borderLeft: tieneDescuento ? `4px solid ${C.green}` : '4px solid transparent',
+                        background: tieneDescuento ? '#F7FDFA' : C.card,
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
                           <div style={{ minWidth: 0 }}>
-                            <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{it.producto}</p>
-                            <p style={{ fontSize: 11, color: C.faint }}>{it.envase === 'barril' ? 'Barril 30L' : 'Lata'} · {fmtPrecioCLP(it.precioUnitario)}</p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <p style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{it.producto}</p>
+                              {tieneDescuento && (
+                                <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: C.green, borderRadius: 999, padding: '1px 7px' }}>
+                                  -{it.descuentoPct}%
+                                </span>
+                              )}
+                            </div>
+                            <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginTop: 1 }}>
+                              {it.envase === 'barril' ? 'Barril 30L' : 'Lata'} · {fmtPrecioCLP(it.precioUnitario)}
+                            </p>
+                            <p style={{ fontSize: 11, color: sinStock ? C.amber : C.muted, fontWeight: sinStock ? 800 : 600, marginTop: 1 }}>
+                              {disponible.toLocaleString('es-CL')} {it.envase === 'barril' ? 'barriles' : 'un.'} disponibles en stock
+                            </p>
                           </div>
-                          <button onClick={() => quitarItem(key)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
-                            <X size={15} color={C.faint} />
+                          <button onClick={() => quitarItem(key)} style={{ background: C.bg, border: `1px solid ${C.line}`, borderRadius: 8, cursor: 'pointer', padding: 5, flexShrink: 0 }}>
+                            <X size={14} color={C.muted} />
                           </button>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
                           <div>
-                            <p style={{ fontSize: 9.5, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Cantidad</p>
+                            <p style={{ fontSize: 10, fontWeight: 800, color: C.label, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Cantidad</p>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <button onClick={() => actualizarItem(key, { cantidad: Math.max(1, it.cantidad - 1) })} style={stepperBtnStyle}><Minus size={13} /></button>
-                              <span style={{ fontSize: 13, fontWeight: 800, color: C.text, minWidth: 22, textAlign: 'center' }}>{it.cantidad}</span>
+                              <span style={{ fontSize: 14, fontWeight: 800, color: C.text, minWidth: 22, textAlign: 'center' }}>{it.cantidad}</span>
                               <button onClick={() => actualizarItem(key, { cantidad: it.cantidad + 1 })} style={stepperBtnStyle}><Plus size={13} /></button>
                             </div>
                           </div>
                           <div>
-                            <p style={{ fontSize: 9.5, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Descuento</p>
+                            <p style={{ fontSize: 10, fontWeight: 800, color: C.label, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Descuento</p>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                               <input
                                 type="number" min={0} max={100} value={it.descuentoPct === 0 ? '' : it.descuentoPct}
                                 placeholder="0"
                                 onChange={e => actualizarItem(key, { descuentoPct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
-                                style={{ width: 46, padding: '5px 4px', textAlign: 'center', borderRadius: 7, border: `1px solid ${C.line}`, fontSize: 12.5, fontWeight: 700, color: C.green, outline: 'none' }}
+                                style={{
+                                  width: 50, padding: '6px 4px', textAlign: 'center', borderRadius: 8, outline: 'none',
+                                  border: `1.5px solid ${tieneDescuento ? C.green : C.line}`,
+                                  background: tieneDescuento ? C.greenSoft : C.card,
+                                  fontSize: 13, fontWeight: 800, color: tieneDescuento ? C.green : C.text,
+                                }}
                               />
-                              <span style={{ fontSize: 11.5, color: C.muted, fontWeight: 700 }}>%</span>
+                              <span style={{ fontSize: 12, color: C.label, fontWeight: 800 }}>%</span>
                             </div>
                           </div>
-                          <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: C.text }}>{fmtPrecioCLP(d.totalLinea)}</span>
+                          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                            <p style={{ fontSize: 10, fontWeight: 800, color: C.label, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total línea</p>
+                            <span style={{ fontSize: 16, fontWeight: 900, color: C.text }}>{fmtPrecioCLP(d.totalLinea)}</span>
+                          </div>
                         </div>
 
-                        {it.descuentoPct > 0 && it.cantidad > 1 && (
-                          <div style={{ marginTop: 10, background: C.greenSoft, borderRadius: 10, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 11.5, color: C.green, fontWeight: 700 }}>{it.descuentoPct}% dcto. aplica a:</span>
+                        {tieneDescuento && it.cantidad > 1 && (
+                          <div style={{ marginTop: 10, background: '#fff', border: `1.5px solid ${C.greenLine}`, borderRadius: 10, padding: '9px 11px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 12, color: C.green, fontWeight: 800 }}>{it.descuentoPct}% dcto. aplica a:</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <button onClick={() => actualizarItem(key, { cantidadConDescuento: Math.max(1, conDescuento - 1) })} style={stepperBtnStyleSm}><Minus size={11} /></button>
-                              <span style={{ fontSize: 12.5, fontWeight: 800, color: C.text, minWidth: 16, textAlign: 'center' }}>{conDescuento}</span>
+                              <span style={{ fontSize: 13, fontWeight: 900, color: C.text, minWidth: 16, textAlign: 'center' }}>{conDescuento}</span>
                               <button onClick={() => actualizarItem(key, { cantidadConDescuento: Math.min(it.cantidad, conDescuento + 1) })} style={stepperBtnStyleSm}><Plus size={11} /></button>
                             </div>
-                            <span style={{ fontSize: 11.5, color: C.green, fontWeight: 700 }}>de {it.cantidad} unidades</span>
+                            <span style={{ fontSize: 12, color: C.green, fontWeight: 800 }}>de {it.cantidad} unidades</span>
                           </div>
                         )}
                       </div>
@@ -533,7 +560,7 @@ function GrupoCategoria({ titulo, emoji, tint, tintSoft, productos, stockPorCodi
           return (
             <div key={producto} style={{ padding: '10px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
               <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{producto}</p>
-              <p style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>{info.estilo}</p>
+              <p style={{ fontSize: 11.5, color: C.muted, fontWeight: 600, marginBottom: 8 }}>{info.estilo}</p>
               <div style={{ display: 'flex', gap: 8 }}>
                 {dispLata > 0 && (
                   <ChipProducto
@@ -585,7 +612,7 @@ function ChipProducto({ label, precio, disponible, unidad, enCarrito, destacar, 
           <Plus size={13} color={C.blue} style={{ flexShrink: 0 }} />
         )}
       </span>
-      <span style={{ fontSize: 10.5, color: C.faint, fontWeight: 600 }}>{disponible.toLocaleString('es-CL')} {unidad} disponibles</span>
+      <span style={{ fontSize: 11, color: disponible <= 3 ? C.amber : C.muted, fontWeight: 700 }}>{disponible.toLocaleString('es-CL')} {unidad} disponibles</span>
     </button>
   )
 }
@@ -613,7 +640,7 @@ function FilaTotal({ label, value, muted, color }: { label: string; value: strin
 }
 
 const stepperBtnStyle: CSSProperties = {
-  width: 26, height: 26, borderRadius: 7, border: `1px solid ${C.line}`, background: C.bg,
+  width: 28, height: 28, borderRadius: 8, border: `1.5px solid ${C.text}`, background: C.card,
   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.text,
 }
 const stepperBtnStyleSm: CSSProperties = {
