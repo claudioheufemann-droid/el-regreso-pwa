@@ -358,16 +358,9 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
                             <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{it.producto}</p>
                             <p style={{ fontSize: 11, color: C.faint }}>{it.envase === 'barril' ? 'Barril 30L' : 'Lata'} · {fmtPrecioCLP(it.precioUnitario)}</p>
                           </div>
-                          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                            {it.cantidad > 1 && (
-                              <button onClick={() => dividirLinea(it.id)} title="Separar 1 unidad en línea aparte (para darle otro descuento)" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-                                <Copy size={14} color={C.faint} />
-                              </button>
-                            )}
-                            <button onClick={() => quitarItem(it.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-                              <X size={15} color={C.faint} />
-                            </button>
-                          </div>
+                          <button onClick={() => quitarItem(it.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
+                            <X size={15} color={C.faint} />
+                          </button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -386,6 +379,14 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
                           </div>
                           <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: C.text }}>{fmtPrecioCLP(lineaTotal)}</span>
                         </div>
+                        {it.cantidad > 1 && (
+                          <button onClick={() => dividirLinea(it.id)} style={{
+                            display: 'flex', alignItems: 'center', gap: 5, marginTop: 8, padding: '5px 0',
+                            background: 'none', border: 'none', cursor: 'pointer', color: C.blue, fontSize: 11.5, fontWeight: 700,
+                          }}>
+                            <Copy size={13} /> ¿Solo parte de estas {it.cantidad} unidades con descuento? Separar 1 en línea aparte
+                          </button>
+                        )}
                       </div>
                     )
                   })}
