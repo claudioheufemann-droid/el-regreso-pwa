@@ -10,6 +10,8 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
+import { compressImage } from '@/lib/compress-image'
+import { fetchConTimeout } from '@/lib/utils'
 
 const F = '#D4AF37'
 const F_DIM = 'rgba(212,175,55,0.12)'
@@ -409,8 +411,9 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   async function analizarOdometro(file: File) {
     setAnalizandoOdo(true); setKmLeido(null)
     try {
-      const base64 = await fileToBase64(file)
-      const res = await fetch('/api/analizar-odometro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagen: base64, tipo: file.type }) })
+      const comprimido = await compressImage(file)
+      const base64 = await fileToBase64(comprimido)
+      const res = await fetchConTimeout('/api/analizar-odometro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagen: base64, tipo: comprimido.type }) })
       const { km } = await res.json()
       if (km) { setKmInicio(String(km)); setKmLeido(String(km)) }
     } catch { /* silently fail */ } finally { setAnalizandoOdo(false) }
@@ -419,8 +422,9 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
   async function analizarCombustible(file: File) {
     setAnalizandoComb(true); setNivelDetectado(null); setIaFalloComb(false); setMostrarSelectorComb(false)
     try {
-      const base64 = await fileToBase64(file)
-      const res = await fetch('/api/analizar-combustible', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagen: base64, tipo: file.type }) })
+      const comprimido = await compressImage(file)
+      const base64 = await fileToBase64(comprimido)
+      const res = await fetchConTimeout('/api/analizar-combustible', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagen: base64, tipo: comprimido.type }) })
       const { nivel } = await res.json()
       if (nivel) { setCombustible(nivel); setNivelDetectado(nivel) }
       else { setIaFalloComb(true); setMostrarSelectorComb(true) }

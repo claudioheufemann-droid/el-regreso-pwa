@@ -6,6 +6,8 @@ import AppHeader from '@/components/ui/AppHeader'
 import { createClient } from '@/lib/supabase/client'
 import { upsertOrQueue } from '@/lib/offlineQueue'
 import { uploadConTimeout, queuePhoto } from '@/lib/offlinePhotoQueue'
+import { compressImage } from '@/lib/compress-image'
+import { fetchConTimeout } from '@/lib/utils'
 import { Gauge, Fuel, CheckCircle2, AlertTriangle, Flag } from 'lucide-react'
 
 const ORANGE = '#F97316'
@@ -102,10 +104,11 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
     const setKm = tipo === 'inicio' ? setKmInicio : setKmFin
     setAnalizando(true)
     try {
-      const base64 = await fileToBase64(file)
-      const res = await fetch('/api/analizar-odometro', {
+      const comprimido = await compressImage(file)
+      const base64 = await fileToBase64(comprimido)
+      const res = await fetchConTimeout('/api/analizar-odometro', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagen: base64, tipo: file.type }),
+        body: JSON.stringify({ imagen: base64, tipo: comprimido.type }),
       })
       const { km } = await res.json()
       if (km) setKm(String(km))
