@@ -12,18 +12,18 @@ import { NavPill, type NavItem } from '@/components/ui/NavPill'
 const VENDEDOR_ITEMS: NavItem[] = [
   { href: '/ventas',              icon: BarChart2,  label: 'Ventas',       exact: true },
   { href: '/ventas/stock',        icon: Package,    label: 'Stock'                     },
-  { href: '/ventas/misiones',     icon: Target,     label: 'Misiones'                  },
-  { href: '/ventas/clientes',     icon: Users,      label: 'Clientes'                  },
   { href: '/ventas/cotizaciones', icon: FileText,   label: 'Cotizaciones'              },
+  { href: '/ventas/clientes',     icon: Users,      label: 'Clientes'                  },
+  { href: '/ventas/misiones',     icon: Target,     label: 'Misiones'                  },
   { href: '/ventas/agenda',       icon: ListChecks, label: 'Agenda'                    },
 ]
 
 const ADMIN_ITEMS: NavItem[] = [
   { href: '/ventas',                      icon: BarChart2,   label: 'Ventas',       exact: true },
   { href: '/ventas/stock',                icon: Package,     label: 'Stock'                     },
-  { href: '/ventas/misiones',             icon: Target,      label: 'Misiones'                  },
-  { href: '/ventas/clientes',             icon: Users,       label: 'Clientes'                  },
   { href: '/ventas/cotizaciones',         icon: FileText,    label: 'Cotizaciones'              },
+  { href: '/ventas/clientes',             icon: Users,       label: 'Clientes'                  },
+  { href: '/ventas/misiones',             icon: Target,      label: 'Misiones'                  },
   { href: '/ventas/agenda',               icon: ListChecks,  label: 'Agenda'                    },
   { href: '/ventas/admin/cargar',         icon: Upload,      label: 'Cargar'                    },
 ]
