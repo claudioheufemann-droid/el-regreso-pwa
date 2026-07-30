@@ -3,12 +3,12 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft, Search, Plus, Minus, X, FileText, Send, Share2, Check,
-  User, Building2, Mail, Phone, Loader2, ImageIcon,
+  ChevronLeft, Search, Plus, Minus, X, FileText, Send, Share2, Check, Copy,
+  User, Building2, Mail, Phone, Loader2, ImageIcon, AlertTriangle,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
-import { catalogoPorZona, fmtPrecioCLP, type Zona } from '@/lib/catalogo-productos'
+import { catalogoPorZona, esKombucha, fmtPrecioCLP, type CatalogoInfo, type StockPorCodigo, type Zona } from '@/lib/catalogo-productos'
 import {
   generarImagenCotizacion, compartirImagenCotizacion, calcularTotalesCotizacion,
   type ItemCotizacionImagen,
@@ -25,20 +25,46 @@ const C = {
 }
 
 type Envase = 'lata' | 'barril'
-type ItemCarrito = ItemCotizacionImagen
+interface ItemCarrito extends ItemCotizacionImagen { id: string }
 
 const ZONA_LABEL: Record<Zona, string> = { valdivia: 'Zona Sur', santiago: 'Santiago' }
 
 function claveItem(producto: string, envase: Envase) {
   return `${producto}|${envase}`
 }
+function nuevoId() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+}
+function disponibleDe(info: CatalogoInfo, envase: Envase, stockPorCodigo: StockPorCodigo): number {
+  if (!info.codigo) return 0
+  const s = stockPorCodigo[info.codigo]
+  if (!s) return 0
+  return envase === 'barril' ? s.barril : s.envase
+}
 
-export default function NuevaCotizacionClient({ user, clientes }: { user: AppUser; clientes: ClienteParaCotizacion[] }) {
+export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }: {
+  user: AppUser; clientes: ClienteParaCotizacion[]; stockPorCodigo: StockPorCodigo
+}) {
   const router = useRouter()
   const supabase = createClient()
 
   const [zona, setZona] = useState<Zona>('valdivia')
   const catalogo = useMemo(() => catalogoPorZona(zona), [zona])
+
+  // Solo se ofrece lo que hoy tiene stock real — si un producto/formato no
+  // aparece en bodega, no se muestra como opción para cotizar.
+  const { cervezas, kombuchas } = useMemo(() => {
+    const cervezas: [string, CatalogoInfo][] = []
+    const kombuchas: [string, CatalogoInfo][] = []
+    for (const entry of Object.entries(catalogo)) {
+      const [, info] = entry
+      const dispLata = info.precio_lata > 0 ? disponibleDe(info, 'lata', stockPorCodigo) : 0
+      const dispBarril = info.precio_barril > 0 ? disponibleDe(info, 'barril', stockPorCodigo) : 0
+      if (dispLata <= 0 && dispBarril <= 0) continue
+      ;(esKombucha(info) ? kombuchas : cervezas).push(entry)
+    }
+    return { cervezas, kombuchas }
+  }, [catalogo, stockPorCodigo])
 
   // ── Cliente ──────────────────────────────────────────────────────────
   const [modoCliente, setModoCliente] = useState<'existente' | 'nuevo'>('existente')
@@ -70,32 +96,62 @@ export default function NuevaCotizacionClient({ user, clientes }: { user: AppUse
   }, [modoCliente, clienteSel, nombreManual, empresaManual, emailManual, telefonoManual])
 
   // ── Carrito de productos ─────────────────────────────────────────────
-  const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(new Map())
-  const items = useMemo(() => Array.from(carrito.values()), [carrito])
+  // Array (no Map) para poder tener varias líneas del mismo producto/envase
+  // con descuentos distintos — ej. 2 unidades sin descuento + 1 con 20%.
+  const [items, setItems] = useState<ItemCarrito[]>([])
   const { subtotal, descuentoTotal, total } = useMemo(() => calcularTotalesCotizacion(items), [items])
 
   function agregarProducto(producto: string, envase: Envase, precioUnitario: number) {
-    const key = claveItem(producto, envase)
-    setCarrito(prev => {
-      const next = new Map(prev)
-      const existente = next.get(key)
-      if (existente) next.set(key, { ...existente, cantidad: existente.cantidad + 1 })
-      else next.set(key, { producto, envase, precioUnitario, cantidad: 1, descuentoPct: 0 })
-      return next
+    setItems(prev => {
+      // Si ya hay una línea sin descuento para el mismo producto/envase, se
+      // suma ahí. Si esa línea ya tiene descuento (fue editada), se crea una
+      // línea nueva para no cambiarle el descuento a algo que el vendedor ya ajustó.
+      const idx = prev.findIndex(it => it.producto === producto && it.envase === envase && it.descuentoPct === 0)
+      if (idx >= 0) {
+        const next = [...prev]
+        next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 }
+        return next
+      }
+      return [...prev, { id: nuevoId(), producto, envase, precioUnitario, cantidad: 1, descuentoPct: 0 }]
     })
   }
-  function actualizarItem(key: string, cambios: Partial<ItemCarrito>) {
-    setCarrito(prev => {
-      const next = new Map(prev)
-      const it = next.get(key)
-      if (!it) return prev
-      next.set(key, { ...it, ...cambios })
-      return next
+  function actualizarItem(id: string, cambios: Partial<ItemCarrito>) {
+    setItems(prev => prev.map(it => it.id === id ? { ...it, ...cambios } : it))
+  }
+  function quitarItem(id: string) {
+    setItems(prev => prev.filter(it => it.id !== id))
+  }
+  // Separa 1 unidad de la línea en una línea nueva independiente, para poder
+  // darle un descuento distinto sin afectar al resto de las unidades.
+  function dividirLinea(id: string) {
+    setItems(prev => {
+      const it = prev.find(i => i.id === id)
+      if (!it || it.cantidad <= 1) return prev
+      return prev.flatMap(i => i.id === id
+        ? [{ ...i, cantidad: i.cantidad - 1 }, { ...i, id: nuevoId(), cantidad: 1 }]
+        : [i])
     })
   }
-  function quitarItem(key: string) {
-    setCarrito(prev => { const next = new Map(prev); next.delete(key); return next })
-  }
+
+  // ── Aviso si se pidió más de lo que hay en stock ─────────────────────
+  const avisosStock = useMemo(() => {
+    const acumulado = new Map<string, number>()
+    for (const it of items) {
+      const key = claveItem(it.producto, it.envase)
+      acumulado.set(key, (acumulado.get(key) ?? 0) + it.cantidad)
+    }
+    const avisos: string[] = []
+    for (const [key, pedido] of acumulado) {
+      const [producto, envase] = key.split('|') as [string, Envase]
+      const info = catalogo[producto]
+      if (!info) continue
+      const disp = disponibleDe(info, envase, stockPorCodigo)
+      if (pedido > disp) {
+        avisos.push(`${producto} · ${envase === 'barril' ? 'Barril' : 'Lata'}: pediste ${pedido}, ${disp === 0 ? 'no queda stock' : `solo hay ${disp}`}`)
+      }
+    }
+    return avisos
+  }, [items, catalogo, stockPorCodigo])
 
   // ── Notas ────────────────────────────────────────────────────────────
   const [notas, setNotas] = useState('')
@@ -114,6 +170,7 @@ export default function NuevaCotizacionClient({ user, clientes }: { user: AppUse
     setGenerando(true)
     setError(null)
     try {
+      const itemsParaGuardar: ItemCotizacionImagen[] = items.map(({ id: _id, ...rest }) => rest)
       const { data: fila, error: errInsert } = await supabase
         .from('cotizaciones')
         .insert({
@@ -126,7 +183,7 @@ export default function NuevaCotizacionClient({ user, clientes }: { user: AppUse
           cliente_empresa: clienteFinal.empresa,
           cliente_email: clienteFinal.email,
           cliente_telefono: clienteFinal.telefono,
-          items,
+          items: itemsParaGuardar,
           subtotal, descuento_total: descuentoTotal, total,
           notas: notas.trim() || null,
           estado: 'borrador',
@@ -139,7 +196,7 @@ export default function NuevaCotizacionClient({ user, clientes }: { user: AppUse
       const blob = await generarImagenCotizacion({
         numero: fila.numero, fecha,
         clienteNombre: clienteFinal.nombre, clienteEmpresa: clienteFinal.empresa,
-        vendedorNombre: user.nombre, zona, items, notas: notas.trim() || null,
+        vendedorNombre: user.nombre, zona, items: itemsParaGuardar, notas: notas.trim() || null,
       })
 
       const path = `${fila.id}.png`
@@ -182,7 +239,7 @@ export default function NuevaCotizacionClient({ user, clientes }: { user: AppUse
   }
 
   function nuevaCotizacion() {
-    setCarrito(new Map())
+    setItems([])
     setClienteSel(null); setBusqueda(''); setNombreManual(''); setEmpresaManual(''); setEmailManual(''); setTelefonoManual('')
     setNotas(''); setResultado(null); setEmailEnviado(false); setError(null)
   }
@@ -276,33 +333,12 @@ export default function NuevaCotizacionClient({ user, clientes }: { user: AppUse
 
             {/* Productos */}
             <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Agregar productos</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
-              {Object.entries(catalogo).map(([producto, info]) => (
-                <div key={producto} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '10px 12px' }}>
-                  <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{producto}</p>
-                  <p style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>{info.estilo}</p>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {info.precio_lata > 0 && (
-                      <button onClick={() => agregarProducto(producto, 'lata', info.precio_lata)} style={{
-                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
-                        padding: '8px 10px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.bg, cursor: 'pointer',
-                      }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Lata · {fmtPrecioCLP(info.precio_lata)}</span>
-                        <Plus size={14} color={C.blue} />
-                      </button>
-                    )}
-                    {info.precio_barril > 0 && (
-                      <button onClick={() => agregarProducto(producto, 'barril', info.precio_barril)} style={{
-                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
-                        padding: '8px 10px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.bg, cursor: 'pointer',
-                      }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Barril 30L · {fmtPrecioCLP(info.precio_barril)}</span>
-                        <Plus size={14} color={C.blue} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+              <GrupoCategoria titulo="CERVEZAS" emoji="🍺" tint="#B45309" tintSoft="#FFFBEB" productos={cervezas} stockPorCodigo={stockPorCodigo} onAgregar={agregarProducto} />
+              <GrupoCategoria titulo="KOMBUCHAS" emoji="🫧" tint="#7C3AED" tintSoft="#F5F3FF" productos={kombuchas} stockPorCodigo={stockPorCodigo} onAgregar={agregarProducto} />
+              {cervezas.length === 0 && kombuchas.length === 0 && (
+                <p style={{ fontSize: 12.5, color: C.faint, textAlign: 'center', padding: '20px 0' }}>Sin stock disponible para cotizar en este momento.</p>
+              )}
             </div>
 
             {/* Carrito */}
@@ -313,31 +349,37 @@ export default function NuevaCotizacionClient({ user, clientes }: { user: AppUse
                 </p>
                 <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden', marginBottom: 14 }}>
                   {items.map((it, i) => {
-                    const key = claveItem(it.producto, it.envase)
                     const bruto = it.precioUnitario * it.cantidad
                     const lineaTotal = bruto * (1 - it.descuentoPct / 100)
                     return (
-                      <div key={key} style={{ padding: '12px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
+                      <div key={it.id} style={{ padding: '12px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                           <div style={{ minWidth: 0 }}>
                             <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{it.producto}</p>
                             <p style={{ fontSize: 11, color: C.faint }}>{it.envase === 'barril' ? 'Barril 30L' : 'Lata'} · {fmtPrecioCLP(it.precioUnitario)}</p>
                           </div>
-                          <button onClick={() => quitarItem(key)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
-                            <X size={15} color={C.faint} />
-                          </button>
+                          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                            {it.cantidad > 1 && (
+                              <button onClick={() => dividirLinea(it.id)} title="Separar 1 unidad en línea aparte (para darle otro descuento)" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                                <Copy size={14} color={C.faint} />
+                              </button>
+                            )}
+                            <button onClick={() => quitarItem(it.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                              <X size={15} color={C.faint} />
+                            </button>
+                          </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <button onClick={() => actualizarItem(key, { cantidad: Math.max(1, it.cantidad - 1) })} style={stepperBtnStyle}><Minus size={13} /></button>
+                            <button onClick={() => actualizarItem(it.id, { cantidad: Math.max(1, it.cantidad - 1) })} style={stepperBtnStyle}><Minus size={13} /></button>
                             <span style={{ fontSize: 13, fontWeight: 800, color: C.text, minWidth: 22, textAlign: 'center' }}>{it.cantidad}</span>
-                            <button onClick={() => actualizarItem(key, { cantidad: it.cantidad + 1 })} style={stepperBtnStyle}><Plus size={13} /></button>
+                            <button onClick={() => actualizarItem(it.id, { cantidad: it.cantidad + 1 })} style={stepperBtnStyle}><Plus size={13} /></button>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <input
                               type="number" min={0} max={100} value={it.descuentoPct === 0 ? '' : it.descuentoPct}
                               placeholder="0"
-                              onChange={e => actualizarItem(key, { descuentoPct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
+                              onChange={e => actualizarItem(it.id, { descuentoPct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
                               style={{ width: 46, padding: '5px 4px', textAlign: 'center', borderRadius: 7, border: `1px solid ${C.line}`, fontSize: 12.5, fontWeight: 700, color: C.green, outline: 'none' }}
                             />
                             <span style={{ fontSize: 11.5, color: C.muted, fontWeight: 700 }}>% dcto.</span>
@@ -348,6 +390,16 @@ export default function NuevaCotizacionClient({ user, clientes }: { user: AppUse
                     )
                   })}
                 </div>
+
+                {avisosStock.length > 0 && (
+                  <div style={{ background: C.amberSoft, border: `1px solid ${C.amber}`, borderRadius: 12, padding: '10px 12px', marginBottom: 14 }}>
+                    {avisosStock.map((a, i) => (
+                      <p key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12, color: C.amber, fontWeight: 600, marginTop: i === 0 ? 0 : 4 }}>
+                        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} /> {a}
+                      </p>
+                    ))}
+                  </div>
+                )}
 
                 <textarea
                   value={notas} onChange={e => setNotas(e.target.value)}
@@ -433,6 +485,54 @@ export default function NuevaCotizacionClient({ user, clientes }: { user: AppUse
   )
 }
 
+function GrupoCategoria({ titulo, emoji, tint, tintSoft, productos, stockPorCodigo, onAgregar }: {
+  titulo: string; emoji: string; tint: string; tintSoft: string
+  productos: [string, CatalogoInfo][]; stockPorCodigo: StockPorCodigo
+  onAgregar: (producto: string, envase: Envase, precio: number) => void
+}) {
+  if (productos.length === 0) return null
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', background: tintSoft }}>
+        <span style={{ fontSize: 14 }}>{emoji}</span>
+        <p style={{ fontSize: 11.5, fontWeight: 800, color: tint, letterSpacing: '0.05em' }}>{titulo} · {productos.length}</p>
+      </div>
+      <div>
+        {productos.map(([producto, info], i) => {
+          const dispLata = info.precio_lata > 0 ? disponibleDe(info, 'lata', stockPorCodigo) : 0
+          const dispBarril = info.precio_barril > 0 ? disponibleDe(info, 'barril', stockPorCodigo) : 0
+          return (
+            <div key={producto} style={{ padding: '10px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
+              <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{producto}</p>
+              <p style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>{info.estilo}</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {dispLata > 0 && (
+                  <button onClick={() => onAgregar(producto, 'lata', info.precio_lata)} style={chipStyle}>
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Lata · {fmtPrecioCLP(info.precio_lata)}</span>
+                      <Plus size={13} color={C.blue} style={{ flexShrink: 0 }} />
+                    </span>
+                    <span style={{ fontSize: 10.5, color: C.faint, fontWeight: 600 }}>{dispLata.toLocaleString('es-CL')} un. disponibles</span>
+                  </button>
+                )}
+                {dispBarril > 0 && (
+                  <button onClick={() => onAgregar(producto, 'barril', info.precio_barril)} style={chipStyle}>
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Barril 30L · {fmtPrecioCLP(info.precio_barril)}</span>
+                      <Plus size={13} color={C.blue} style={{ flexShrink: 0 }} />
+                    </span>
+                    <span style={{ fontSize: 10.5, color: C.faint, fontWeight: 600 }}>{dispBarril} barril{dispBarril === 1 ? '' : 'es'} disponibles</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function CampoIcono({ icon: Icon, ...props }: { icon: typeof User; placeholder: string; value: string; onChange: (v: string) => void; type?: string }) {
   return (
     <div style={{ position: 'relative' }}>
@@ -458,4 +558,9 @@ function FilaTotal({ label, value, muted, color }: { label: string; value: strin
 const stepperBtnStyle: CSSProperties = {
   width: 26, height: 26, borderRadius: 7, border: `1px solid ${C.line}`, background: C.bg,
   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.text,
+}
+
+const chipStyle: CSSProperties = {
+  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
+  padding: '8px 10px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.bg, cursor: 'pointer',
 }

@@ -19,25 +19,27 @@ export interface CatalogoInfo {
   dulzor?: string
   acidez?: string
   envase_ml: number
+  /** codigo_producto real, para cruzar contra stock_productos (Cotizaciones). '' = sin código conocido, no se cruza con stock. */
+  codigo: string
 }
 
 export type Zona = 'valdivia' | 'santiago'
 
 export const CATALOGO_INFO_DEFAULT: Record<string, CatalogoInfo> = {
-  'Nitro Coffee':                { estilo: 'Nitro Cold Brew',           precio_lata: 0,    precio_barril: 120000, envase_ml: 470, descripcion: 'Cold brew de café con nitrógeno. Cremoso, suave y con notas a chocolate y avellana.' },
-  'Arboretum':                   { estilo: 'Kölsch',                   precio_lata: 2100, precio_barril: 83000,  envase_ml: 470, descripcion: 'Color amarillo pajizo, aromas a grano y pan con notas florales. Super ligera y fácil de beber.' },
-  'Mocho English':               { estilo: 'English Red Ale',          precio_lata: 2100, precio_barril: 83000,  envase_ml: 470, abv: '5.5%', ibu: '25', descripcion: 'Rojizo brillante con aromas a galleta, almendras y caramelo. Retrogusto semi dulce y tostado.' },
-  'La Barra APA':                { estilo: 'American Pale Ale',        precio_lata: 2250, precio_barril: 90000,  envase_ml: 470, descripcion: 'Dorado intenso y cítrico con lúpulos Citra y Cascade. Amargor medio y final seco.' },
-  'Fisura':                      { estilo: 'Robust Porter',            precio_lata: 2250, precio_barril: 90000,  envase_ml: 470, descripcion: 'Negro intenso, notas a chocolate amargo, cacao y café. Cuerpo medio-alto con avena.' },
-  'Descenso West Coast IPA':     { estilo: 'West Coast IPA',           precio_lata: 2750, precio_barril: 110000, envase_ml: 470, abv: '6.5%', descripcion: 'Aromas resinosos a pino, mentol y pomelo. Sabor intenso con amargor potente.' },
-  'Aguas Blancas':               { estilo: 'Hazy IPA',                 precio_lata: 3000, precio_barril: 125000, envase_ml: 470, abv: '5.5%', ibu: '25', descripcion: 'Turbia y tropical con Centennial, Mosaic y Citra. Notas a durazno, mango y maracuyá.' },
-  'Kombucha Berry Menta':        { estilo: 'Kombucha · Té Negro',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Medio', acidez: 'Media',      descripcion: 'Frambuesa y menta fresca. Equilibrio perfecto entre dulzor y acidez.' },
-  'Kombucha Lemon':              { estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Medio', acidez: 'Media-alta', descripcion: 'Limón, jengibre y cilantro. Cítrica, especiada y muy refrescante.' },
-  'Kombucha Maqui':              { estilo: 'Kombucha · Té Verde+Negro',precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Medio', acidez: 'Media',      descripcion: 'Maqui, mora y lúpulos nobles. Frutal y terroso con toque herbal. Color púrpura.' },
-  'Kombucha Maracuyá Cardamomo': { estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Alto',  acidez: 'Baja',       descripcion: 'Maracuyá tropical con cardamomo verde. Dulce, aromático y floral.' },
-  'Kombucha Detox':              { estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Bajo',  acidez: 'Media-alta', descripcion: 'Arándano, manzanilla e hinojo. Fresco, limpio y con propiedades diuréticas.' },
-  'Kombucha Natural':            { estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Bajo',  acidez: 'Media-alta', descripcion: 'Esencia pura de fermentación. Notas a pera y florales. Para puristas.' },
-  'Kombucha Mango':              { estilo: 'Kombucha',                  precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, descripcion: 'Kombucha de mango con toque de merkén. Dulce y tropical.' },
+  'Nitro Coffee':                { codigo: '',     estilo: 'Nitro Cold Brew',           precio_lata: 0,    precio_barril: 120000, envase_ml: 470, descripcion: 'Cold brew de café con nitrógeno. Cremoso, suave y con notas a chocolate y avellana.' },
+  'Arboretum':                   { codigo: 'C-1',  estilo: 'Kölsch',                   precio_lata: 2100, precio_barril: 83000,  envase_ml: 470, descripcion: 'Color amarillo pajizo, aromas a grano y pan con notas florales. Super ligera y fácil de beber.' },
+  'Mocho English':               { codigo: 'C-8',  estilo: 'English Red Ale',          precio_lata: 2100, precio_barril: 83000,  envase_ml: 470, abv: '5.5%', ibu: '25', descripcion: 'Rojizo brillante con aromas a galleta, almendras y caramelo. Retrogusto semi dulce y tostado.' },
+  'La Barra APA':                { codigo: 'C-2',  estilo: 'American Pale Ale',        precio_lata: 2250, precio_barril: 90000,  envase_ml: 470, descripcion: 'Dorado intenso y cítrico con lúpulos Citra y Cascade. Amargor medio y final seco.' },
+  'Fisura':                      { codigo: 'C-9',  estilo: 'Robust Porter',            precio_lata: 2250, precio_barril: 90000,  envase_ml: 470, descripcion: 'Negro intenso, notas a chocolate amargo, cacao y café. Cuerpo medio-alto con avena.' },
+  'Descenso West Coast IPA':     { codigo: 'C-4',  estilo: 'West Coast IPA',           precio_lata: 2750, precio_barril: 110000, envase_ml: 470, abv: '6.5%', descripcion: 'Aromas resinosos a pino, mentol y pomelo. Sabor intenso con amargor potente.' },
+  'Aguas Blancas':               { codigo: 'C-5',  estilo: 'Hazy IPA',                 precio_lata: 3000, precio_barril: 125000, envase_ml: 470, abv: '5.5%', ibu: '25', descripcion: 'Turbia y tropical con Centennial, Mosaic y Citra. Notas a durazno, mango y maracuyá.' },
+  'Kombucha Berry Menta':        { codigo: 'K-4',  estilo: 'Kombucha · Té Negro',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Medio', acidez: 'Media',      descripcion: 'Frambuesa y menta fresca. Equilibrio perfecto entre dulzor y acidez.' },
+  'Kombucha Lemon':              { codigo: 'K-2',  estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Medio', acidez: 'Media-alta', descripcion: 'Limón, jengibre y cilantro. Cítrica, especiada y muy refrescante.' },
+  'Kombucha Maqui':              { codigo: 'K-6',  estilo: 'Kombucha · Té Verde+Negro',precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Medio', acidez: 'Media',      descripcion: 'Maqui, mora y lúpulos nobles. Frutal y terroso con toque herbal. Color púrpura.' },
+  'Kombucha Maracuyá Cardamomo': { codigo: 'K-10', estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Alto',  acidez: 'Baja',       descripcion: 'Maracuyá tropical con cardamomo verde. Dulce, aromático y floral.' },
+  'Kombucha Detox':              { codigo: 'K-22', estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Bajo',  acidez: 'Media-alta', descripcion: 'Arándano, manzanilla e hinojo. Fresco, limpio y con propiedades diuréticas.' },
+  'Kombucha Natural':            { codigo: 'K-1',  estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Bajo',  acidez: 'Media-alta', descripcion: 'Esencia pura de fermentación. Notas a pera y florales. Para puristas.' },
+  'Kombucha Mango':              { codigo: 'K-11', estilo: 'Kombucha',                  precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, descripcion: 'Kombucha de mango con toque de merkén. Dulce y tropical.' },
 }
 
 // Precios Santiago — solo sobreescribe precio_lata/precio_barril; el resto
@@ -79,3 +81,11 @@ export function catalogoPorZona(zona: Zona): Record<string, CatalogoInfo> {
 export function fmtPrecioCLP(n: number): string {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
 }
+
+export function esKombucha(info: CatalogoInfo): boolean {
+  return info.estilo.toLowerCase().includes('kombucha')
+}
+
+/** Stock disponible por código de producto, cruzado desde stock_productos. */
+export type StockPorCodigo = Record<string, { barril: number; envase: number }>
+
