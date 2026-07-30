@@ -12,6 +12,18 @@ export interface ItemCotizacionImagen {
   precioUnitario: number
   cantidad: number
   descuentoPct: number
+  /** Cuántas de "cantidad" llevan el descuento — si no viene, aplica a todas (caso normal). */
+  cantidadConDescuento?: number
+}
+
+/** Desglose de una línea: cuántas unidades van con/sin descuento y sus montos. */
+export function desgloseLinea(it: ItemCotizacionImagen) {
+  const conDescuento = Math.min(Math.max(it.cantidadConDescuento ?? it.cantidad, 0), it.cantidad)
+  const sinDescuento = it.cantidad - conDescuento
+  const brutoConDescuento = it.precioUnitario * conDescuento
+  const brutoSinDescuento = it.precioUnitario * sinDescuento
+  const descuentoMonto = brutoConDescuento * (it.descuentoPct / 100)
+  return { conDescuento, sinDescuento, brutoConDescuento, brutoSinDescuento, descuentoMonto, totalLinea: brutoConDescuento + brutoSinDescuento - descuentoMonto }
 }
 
 export interface DatosCotizacionImagen {
@@ -29,9 +41,9 @@ export function calcularTotalesCotizacion(items: ItemCotizacionImagen[]) {
   let subtotal = 0
   let descuentoTotal = 0
   for (const it of items) {
-    const bruto = it.precioUnitario * it.cantidad
-    subtotal += bruto
-    descuentoTotal += bruto * (it.descuentoPct / 100)
+    const d = desgloseLinea(it)
+    subtotal += d.brutoConDescuento + d.brutoSinDescuento
+    descuentoTotal += d.descuentoMonto
   }
   return { subtotal, descuentoTotal, total: subtotal - descuentoTotal }
 }
@@ -138,9 +150,10 @@ export async function generarImagenCotizacion(datos: DatosCotizacionImagen): Pro
     ctx.fillStyle = idx % 2 === 0 ? '#0F0F0F' : '#111111'
     ctx.fillRect(0, y, W, ROW)
 
-    const bruto = it.precioUnitario * it.cantidad
-    const descMonto = bruto * (it.descuentoPct / 100)
-    const subtotalLinea = bruto - descMonto
+    const d = desgloseLinea(it)
+    const descLabel = it.descuentoPct > 0
+      ? (d.conDescuento < it.cantidad ? `-${it.descuentoPct}% (${d.conDescuento}/${it.cantidad})` : `-${it.descuentoPct}%`)
+      : '—'
 
     ctx.font = '700 14px system-ui, sans-serif'
     ctx.fillStyle = CREAM
@@ -156,11 +169,12 @@ export async function generarImagenCotizacion(datos: DatosCotizacionImagen): Pro
     ctx.font = '400 12px system-ui, sans-serif'
     ctx.fillStyle = MUTED_1
     ctx.fillText(fmtPrecioCLP(it.precioUnitario), COLX.precio + 60, y + ROW / 2 + 5)
+    ctx.font = '700 11.5px system-ui, sans-serif'
     ctx.fillStyle = it.descuentoPct > 0 ? '#7CA86A' : MUTED_2
-    ctx.fillText(it.descuentoPct > 0 ? `-${it.descuentoPct}%` : '—', COLX.desc + 50, y + ROW / 2 + 5)
+    ctx.fillText(descLabel, COLX.desc + 50, y + ROW / 2 + 5)
     ctx.font = '800 14px system-ui, sans-serif'
     ctx.fillStyle = GOLD
-    ctx.fillText(fmtPrecioCLP(subtotalLinea), COLX.subtotal, y + ROW / 2 + 5)
+    ctx.fillText(fmtPrecioCLP(d.totalLinea), COLX.subtotal, y + ROW / 2 + 5)
     ctx.textAlign = 'left'
 
     ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(0, y + ROW - 1, W, 1)

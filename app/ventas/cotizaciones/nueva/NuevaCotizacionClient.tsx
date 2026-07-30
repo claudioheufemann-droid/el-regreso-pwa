@@ -1,16 +1,16 @@
 'use client'
 
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft, Search, Plus, Minus, X, FileText, Send, Share2, Check, Copy,
-  User, Building2, Mail, Phone, Loader2, ImageIcon, AlertTriangle,
+  ChevronLeft, Search, Plus, Minus, X, FileText, Send, Share2, Check,
+  User, Building2, Mail, Phone, Loader2, ImageIcon, AlertTriangle, ShoppingCart, ChevronDown,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 import { catalogoPorZona, esKombucha, fmtPrecioCLP, type CatalogoInfo, type StockPorCodigo, type Zona } from '@/lib/catalogo-productos'
 import {
-  generarImagenCotizacion, compartirImagenCotizacion, calcularTotalesCotizacion,
+  generarImagenCotizacion, compartirImagenCotizacion, calcularTotalesCotizacion, desgloseLinea,
   type ItemCotizacionImagen,
 } from '@/lib/generar-imagen-cotizacion'
 import type { ClienteParaCotizacion } from './page'
@@ -25,15 +25,12 @@ const C = {
 }
 
 type Envase = 'lata' | 'barril'
-interface ItemCarrito extends ItemCotizacionImagen { id: string }
+type ItemCarrito = ItemCotizacionImagen
 
 const ZONA_LABEL: Record<Zona, string> = { valdivia: 'Zona Sur', santiago: 'Santiago' }
 
 function claveItem(producto: string, envase: Envase) {
   return `${producto}|${envase}`
-}
-function nuevoId() {
-  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
 }
 function disponibleDe(info: CatalogoInfo, envase: Envase, stockPorCodigo: StockPorCodigo): number {
   if (!info.codigo) return 0
@@ -47,6 +44,7 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
 }) {
   const router = useRouter()
   const supabase = createClient()
+  const carritoRef = useRef<HTMLDivElement>(null)
 
   const [zona, setZona] = useState<Zona>('valdivia')
   const catalogo = useMemo(() => catalogoPorZona(zona), [zona])
@@ -96,58 +94,54 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
   }, [modoCliente, clienteSel, nombreManual, empresaManual, emailManual, telefonoManual])
 
   // ── Carrito de productos ─────────────────────────────────────────────
-  // Array (no Map) para poder tener varias líneas del mismo producto/envase
-  // con descuentos distintos — ej. 2 unidades sin descuento + 1 con 20%.
-  const [items, setItems] = useState<ItemCarrito[]>([])
+  // Una línea por producto+envase (clave = "producto|envase"). El descuento
+  // parcial (solo N de las unidades) se maneja con cantidadConDescuento
+  // dentro de la misma línea, no con líneas separadas.
+  const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(new Map())
+  const items = useMemo(() => Array.from(carrito.values()), [carrito])
   const { subtotal, descuentoTotal, total } = useMemo(() => calcularTotalesCotizacion(items), [items])
 
   function agregarProducto(producto: string, envase: Envase, precioUnitario: number) {
-    setItems(prev => {
-      // Si ya hay una línea sin descuento para el mismo producto/envase, se
-      // suma ahí. Si esa línea ya tiene descuento (fue editada), se crea una
-      // línea nueva para no cambiarle el descuento a algo que el vendedor ya ajustó.
-      const idx = prev.findIndex(it => it.producto === producto && it.envase === envase && it.descuentoPct === 0)
-      if (idx >= 0) {
-        const next = [...prev]
-        next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 }
-        return next
-      }
-      return [...prev, { id: nuevoId(), producto, envase, precioUnitario, cantidad: 1, descuentoPct: 0 }]
+    const key = claveItem(producto, envase)
+    setCarrito(prev => {
+      const next = new Map(prev)
+      const existente = next.get(key)
+      if (existente) next.set(key, { ...existente, cantidad: existente.cantidad + 1 })
+      else next.set(key, { producto, envase, precioUnitario, cantidad: 1, descuentoPct: 0 })
+      return next
+    })
+    // Confirmación visual + guía de que el detalle está más abajo.
+    setUltimoAgregado(key)
+    window.clearTimeout(flashTimeoutRef.current)
+    flashTimeoutRef.current = window.setTimeout(() => setUltimoAgregado(null), 1400)
+  }
+  function actualizarItem(key: string, cambios: Partial<ItemCarrito>) {
+    setCarrito(prev => {
+      const next = new Map(prev)
+      const it = next.get(key)
+      if (!it) return prev
+      next.set(key, { ...it, ...cambios })
+      return next
     })
   }
-  function actualizarItem(id: string, cambios: Partial<ItemCarrito>) {
-    setItems(prev => prev.map(it => it.id === id ? { ...it, ...cambios } : it))
+  function quitarItem(key: string) {
+    setCarrito(prev => { const next = new Map(prev); next.delete(key); return next })
   }
-  function quitarItem(id: string) {
-    setItems(prev => prev.filter(it => it.id !== id))
-  }
-  // Separa 1 unidad de la línea en una línea nueva independiente, para poder
-  // darle un descuento distinto sin afectar al resto de las unidades.
-  function dividirLinea(id: string) {
-    setItems(prev => {
-      const it = prev.find(i => i.id === id)
-      if (!it || it.cantidad <= 1) return prev
-      return prev.flatMap(i => i.id === id
-        ? [{ ...i, cantidad: i.cantidad - 1 }, { ...i, id: nuevoId(), cantidad: 1 }]
-        : [i])
-    })
+
+  const [ultimoAgregado, setUltimoAgregado] = useState<string | null>(null)
+  const flashTimeoutRef = useRef<number | undefined>(undefined)
+
+  function irAlCarrito() {
+    carritoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   // ── Aviso si se pidió más de lo que hay en stock ─────────────────────
   const avisosStock = useMemo(() => {
-    const acumulado = new Map<string, number>()
-    for (const it of items) {
-      const key = claveItem(it.producto, it.envase)
-      acumulado.set(key, (acumulado.get(key) ?? 0) + it.cantidad)
-    }
     const avisos: string[] = []
-    for (const [key, pedido] of acumulado) {
-      const [producto, envase] = key.split('|') as [string, Envase]
-      const info = catalogo[producto]
-      if (!info) continue
-      const disp = disponibleDe(info, envase, stockPorCodigo)
-      if (pedido > disp) {
-        avisos.push(`${producto} · ${envase === 'barril' ? 'Barril' : 'Lata'}: pediste ${pedido}, ${disp === 0 ? 'no queda stock' : `solo hay ${disp}`}`)
+    for (const it of items) {
+      const disp = catalogo[it.producto] ? disponibleDe(catalogo[it.producto], it.envase, stockPorCodigo) : 0
+      if (it.cantidad > disp) {
+        avisos.push(`${it.producto} · ${it.envase === 'barril' ? 'Barril' : 'Lata'}: pediste ${it.cantidad}, ${disp === 0 ? 'no queda stock' : `solo hay ${disp}`}`)
       }
     }
     return avisos
@@ -170,7 +164,6 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
     setGenerando(true)
     setError(null)
     try {
-      const itemsParaGuardar: ItemCotizacionImagen[] = items.map(({ id: _id, ...rest }) => rest)
       const { data: fila, error: errInsert } = await supabase
         .from('cotizaciones')
         .insert({
@@ -183,7 +176,7 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
           cliente_empresa: clienteFinal.empresa,
           cliente_email: clienteFinal.email,
           cliente_telefono: clienteFinal.telefono,
-          items: itemsParaGuardar,
+          items,
           subtotal, descuento_total: descuentoTotal, total,
           notas: notas.trim() || null,
           estado: 'borrador',
@@ -196,7 +189,7 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
       const blob = await generarImagenCotizacion({
         numero: fila.numero, fecha,
         clienteNombre: clienteFinal.nombre, clienteEmpresa: clienteFinal.empresa,
-        vendedorNombre: user.nombre, zona, items: itemsParaGuardar, notas: notas.trim() || null,
+        vendedorNombre: user.nombre, zona, items, notas: notas.trim() || null,
       })
 
       const path = `${fila.id}.png`
@@ -239,13 +232,13 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
   }
 
   function nuevaCotizacion() {
-    setItems([])
+    setCarrito(new Map())
     setClienteSel(null); setBusqueda(''); setNombreManual(''); setEmpresaManual(''); setEmailManual(''); setTelefonoManual('')
     setNotas(''); setResultado(null); setEmailEnviado(false); setError(null)
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 120px))' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: items.length > 0 && !resultado ? 'max(200px, calc(env(safe-area-inset-bottom, 0px) + 180px))' : 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 120px))' }}>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
         <button
           onClick={() => router.push('/ventas/cotizaciones')}
@@ -332,10 +325,13 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
             )}
 
             {/* Productos */}
-            <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Agregar productos</p>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Agregar productos</p>
+              <p style={{ fontSize: 11, color: C.faint }}>Toca Lata o Barril para agregar</p>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
-              <GrupoCategoria titulo="CERVEZAS" emoji="🍺" tint="#B45309" tintSoft="#FFFBEB" productos={cervezas} stockPorCodigo={stockPorCodigo} onAgregar={agregarProducto} />
-              <GrupoCategoria titulo="KOMBUCHAS" emoji="🫧" tint="#7C3AED" tintSoft="#F5F3FF" productos={kombuchas} stockPorCodigo={stockPorCodigo} onAgregar={agregarProducto} />
+              <GrupoCategoria titulo="CERVEZAS" emoji="🍺" tint="#B45309" tintSoft="#FFFBEB" productos={cervezas} stockPorCodigo={stockPorCodigo} carrito={carrito} ultimoAgregado={ultimoAgregado} onAgregar={agregarProducto} />
+              <GrupoCategoria titulo="KOMBUCHAS" emoji="🫧" tint="#7C3AED" tintSoft="#F5F3FF" productos={kombuchas} stockPorCodigo={stockPorCodigo} carrito={carrito} ultimoAgregado={ultimoAgregado} onAgregar={agregarProducto} />
               {cervezas.length === 0 && kombuchas.length === 0 && (
                 <p style={{ fontSize: 12.5, color: C.faint, textAlign: 'center', padding: '20px 0' }}>Sin stock disponible para cotizar en este momento.</p>
               )}
@@ -343,49 +339,60 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
 
             {/* Carrito */}
             {items.length > 0 && (
-              <>
+              <div ref={carritoRef} style={{ scrollMarginTop: 16 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                   Detalle de la cotización · {items.length}
                 </p>
                 <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden', marginBottom: 14 }}>
                   {items.map((it, i) => {
-                    const bruto = it.precioUnitario * it.cantidad
-                    const lineaTotal = bruto * (1 - it.descuentoPct / 100)
+                    const key = claveItem(it.producto, it.envase)
+                    const d = desgloseLinea(it)
+                    const conDescuento = it.cantidadConDescuento ?? it.cantidad
                     return (
-                      <div key={it.id} style={{ padding: '12px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
+                      <div key={key} style={{ padding: '12px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                           <div style={{ minWidth: 0 }}>
                             <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{it.producto}</p>
                             <p style={{ fontSize: 11, color: C.faint }}>{it.envase === 'barril' ? 'Barril 30L' : 'Lata'} · {fmtPrecioCLP(it.precioUnitario)}</p>
                           </div>
-                          <button onClick={() => quitarItem(it.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
+                          <button onClick={() => quitarItem(key)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
                             <X size={15} color={C.faint} />
                           </button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <button onClick={() => actualizarItem(it.id, { cantidad: Math.max(1, it.cantidad - 1) })} style={stepperBtnStyle}><Minus size={13} /></button>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: C.text, minWidth: 22, textAlign: 'center' }}>{it.cantidad}</span>
-                            <button onClick={() => actualizarItem(it.id, { cantidad: it.cantidad + 1 })} style={stepperBtnStyle}><Plus size={13} /></button>
+                          <div>
+                            <p style={{ fontSize: 9.5, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Cantidad</p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <button onClick={() => actualizarItem(key, { cantidad: Math.max(1, it.cantidad - 1) })} style={stepperBtnStyle}><Minus size={13} /></button>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: C.text, minWidth: 22, textAlign: 'center' }}>{it.cantidad}</span>
+                              <button onClick={() => actualizarItem(key, { cantidad: it.cantidad + 1 })} style={stepperBtnStyle}><Plus size={13} /></button>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <input
-                              type="number" min={0} max={100} value={it.descuentoPct === 0 ? '' : it.descuentoPct}
-                              placeholder="0"
-                              onChange={e => actualizarItem(it.id, { descuentoPct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
-                              style={{ width: 46, padding: '5px 4px', textAlign: 'center', borderRadius: 7, border: `1px solid ${C.line}`, fontSize: 12.5, fontWeight: 700, color: C.green, outline: 'none' }}
-                            />
-                            <span style={{ fontSize: 11.5, color: C.muted, fontWeight: 700 }}>% dcto.</span>
+                          <div>
+                            <p style={{ fontSize: 9.5, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Descuento</p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <input
+                                type="number" min={0} max={100} value={it.descuentoPct === 0 ? '' : it.descuentoPct}
+                                placeholder="0"
+                                onChange={e => actualizarItem(key, { descuentoPct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
+                                style={{ width: 46, padding: '5px 4px', textAlign: 'center', borderRadius: 7, border: `1px solid ${C.line}`, fontSize: 12.5, fontWeight: 700, color: C.green, outline: 'none' }}
+                              />
+                              <span style={{ fontSize: 11.5, color: C.muted, fontWeight: 700 }}>%</span>
+                            </div>
                           </div>
-                          <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: C.text }}>{fmtPrecioCLP(lineaTotal)}</span>
+                          <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: C.text }}>{fmtPrecioCLP(d.totalLinea)}</span>
                         </div>
-                        {it.cantidad > 1 && (
-                          <button onClick={() => dividirLinea(it.id)} style={{
-                            display: 'flex', alignItems: 'center', gap: 5, marginTop: 8, padding: '5px 0',
-                            background: 'none', border: 'none', cursor: 'pointer', color: C.blue, fontSize: 11.5, fontWeight: 700,
-                          }}>
-                            <Copy size={13} /> ¿Solo parte de estas {it.cantidad} unidades con descuento? Separar 1 en línea aparte
-                          </button>
+
+                        {it.descuentoPct > 0 && it.cantidad > 1 && (
+                          <div style={{ marginTop: 10, background: C.greenSoft, borderRadius: 10, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 11.5, color: C.green, fontWeight: 700 }}>{it.descuentoPct}% dcto. aplica a:</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <button onClick={() => actualizarItem(key, { cantidadConDescuento: Math.max(1, conDescuento - 1) })} style={stepperBtnStyleSm}><Minus size={11} /></button>
+                              <span style={{ fontSize: 12.5, fontWeight: 800, color: C.text, minWidth: 16, textAlign: 'center' }}>{conDescuento}</span>
+                              <button onClick={() => actualizarItem(key, { cantidadConDescuento: Math.min(it.cantidad, conDescuento + 1) })} style={stepperBtnStyleSm}><Plus size={11} /></button>
+                            </div>
+                            <span style={{ fontSize: 11.5, color: C.green, fontWeight: 700 }}>de {it.cantidad} unidades</span>
+                          </div>
                         )}
                       </div>
                     )
@@ -417,7 +424,7 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
                     <span style={{ fontSize: 22, fontWeight: 900, color: '#D4AF37' }}>{fmtPrecioCLP(total)}</span>
                   </div>
                 </div>
-              </>
+              </div>
             )}
 
             {error && <p style={{ fontSize: 12.5, color: C.red, background: C.redSoft, borderRadius: 10, padding: '10px 12px', marginBottom: 14 }}>{error}</p>}
@@ -482,13 +489,34 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
           </div>
         )}
       </div>
+
+      {/* Barra flotante: guía al vendedor a que hay un carrito más abajo */}
+      {items.length > 0 && !resultado && (
+        <button
+          onClick={irAlCarrito}
+          style={{
+            position: 'fixed', left: 16, right: 16, bottom: 'max(90px, calc(env(safe-area-inset-bottom, 0px) + 86px))',
+            maxWidth: 688, margin: '0 auto', zIndex: 40,
+            display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderRadius: 100,
+            background: C.hero, border: 'none', cursor: 'pointer', boxShadow: '0 8px 24px rgba(15,23,42,0.35)',
+          }}
+        >
+          <ShoppingCart size={18} color="#D4AF37" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: '#fff', flex: 1, textAlign: 'left' }}>
+            {items.length} producto{items.length === 1 ? '' : 's'} agregado{items.length === 1 ? '' : 's'}
+          </span>
+          <span style={{ fontSize: 15, fontWeight: 900, color: '#D4AF37' }}>{fmtPrecioCLP(total)}</span>
+          <ChevronDown size={16} color="rgba(255,255,255,0.5)" style={{ flexShrink: 0 }} />
+        </button>
+      )}
     </div>
   )
 }
 
-function GrupoCategoria({ titulo, emoji, tint, tintSoft, productos, stockPorCodigo, onAgregar }: {
+function GrupoCategoria({ titulo, emoji, tint, tintSoft, productos, stockPorCodigo, carrito, ultimoAgregado, onAgregar }: {
   titulo: string; emoji: string; tint: string; tintSoft: string
   productos: [string, CatalogoInfo][]; stockPorCodigo: StockPorCodigo
+  carrito: Map<string, ItemCarrito>; ultimoAgregado: string | null
   onAgregar: (producto: string, envase: Envase, precio: number) => void
 }) {
   if (productos.length === 0) return null
@@ -508,22 +536,20 @@ function GrupoCategoria({ titulo, emoji, tint, tintSoft, productos, stockPorCodi
               <p style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>{info.estilo}</p>
               <div style={{ display: 'flex', gap: 8 }}>
                 {dispLata > 0 && (
-                  <button onClick={() => onAgregar(producto, 'lata', info.precio_lata)} style={chipStyle}>
-                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Lata · {fmtPrecioCLP(info.precio_lata)}</span>
-                      <Plus size={13} color={C.blue} style={{ flexShrink: 0 }} />
-                    </span>
-                    <span style={{ fontSize: 10.5, color: C.faint, fontWeight: 600 }}>{dispLata.toLocaleString('es-CL')} un. disponibles</span>
-                  </button>
+                  <ChipProducto
+                    label="Lata" precio={info.precio_lata} disponible={dispLata} unidad="un."
+                    enCarrito={carrito.get(claveItem(producto, 'lata'))?.cantidad ?? 0}
+                    destacar={ultimoAgregado === claveItem(producto, 'lata')}
+                    onClick={() => onAgregar(producto, 'lata', info.precio_lata)}
+                  />
                 )}
                 {dispBarril > 0 && (
-                  <button onClick={() => onAgregar(producto, 'barril', info.precio_barril)} style={chipStyle}>
-                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Barril 30L · {fmtPrecioCLP(info.precio_barril)}</span>
-                      <Plus size={13} color={C.blue} style={{ flexShrink: 0 }} />
-                    </span>
-                    <span style={{ fontSize: 10.5, color: C.faint, fontWeight: 600 }}>{dispBarril} barril{dispBarril === 1 ? '' : 'es'} disponibles</span>
-                  </button>
+                  <ChipProducto
+                    label="Barril 30L" precio={info.precio_barril} disponible={dispBarril} unidad="barril"
+                    enCarrito={carrito.get(claveItem(producto, 'barril'))?.cantidad ?? 0}
+                    destacar={ultimoAgregado === claveItem(producto, 'barril')}
+                    onClick={() => onAgregar(producto, 'barril', info.precio_barril)}
+                  />
                 )}
               </div>
             </div>
@@ -531,6 +557,36 @@ function GrupoCategoria({ titulo, emoji, tint, tintSoft, productos, stockPorCodi
         })}
       </div>
     </div>
+  )
+}
+
+function ChipProducto({ label, precio, disponible, unidad, enCarrito, destacar, onClick }: {
+  label: string; precio: number; disponible: number; unidad: string; enCarrito: number; destacar: boolean; onClick: () => void
+}) {
+  const seleccionado = enCarrito > 0
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
+        padding: '8px 10px', borderRadius: 9, cursor: 'pointer',
+        border: `1.5px solid ${destacar ? C.green : seleccionado ? C.blue : C.line}`,
+        background: destacar ? C.greenSoft : seleccionado ? C.blueSoft : C.bg,
+        transition: 'background 0.15s, border-color 0.15s',
+      }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{label} · {fmtPrecioCLP(precio)}</span>
+        {seleccionado ? (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, background: C.blue, color: '#fff', borderRadius: 999, padding: '1px 7px', fontSize: 11, fontWeight: 800 }}>
+            <Check size={11} /> {enCarrito}
+          </span>
+        ) : (
+          <Plus size={13} color={C.blue} style={{ flexShrink: 0 }} />
+        )}
+      </span>
+      <span style={{ fontSize: 10.5, color: C.faint, fontWeight: 600 }}>{disponible.toLocaleString('es-CL')} {unidad} disponibles</span>
+    </button>
   )
 }
 
@@ -560,8 +616,7 @@ const stepperBtnStyle: CSSProperties = {
   width: 26, height: 26, borderRadius: 7, border: `1px solid ${C.line}`, background: C.bg,
   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.text,
 }
-
-const chipStyle: CSSProperties = {
-  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
-  padding: '8px 10px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.bg, cursor: 'pointer',
+const stepperBtnStyleSm: CSSProperties = {
+  width: 20, height: 20, borderRadius: 6, border: `1px solid ${C.green}`, background: '#fff',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.green,
 }
