@@ -98,34 +98,39 @@ function fFecha(iso: string) {
   return `${d} ${meses[m - 1]} ${y}`
 }
 
-// Texto para compartir: cantidades reales (unidades + equivalencia en cajas
-// para latas), agrupado por categoría (Cerveza/Kombucha) y tipo (Barriles/Latas).
+// Texto para compartir por WhatsApp: usa el formato que WhatsApp sí renderiza
+// (*negrita*, _cursiva_, líneas divisorias) para que se vea prolijo y de marca
+// sin agregar pasos — sigue siendo copiar → pegar, sin fotos ni adjuntos.
+const DIVISOR = '━━━━━━━━━━━━━━━━'
+
 function buildResumenCopiable(filas: StockProductoRow[], fechaInforme: string | null): string {
   const categorias = ['Cerveza', 'Kombucha'] as const
-  const tipos = [{ key: 'barril' as const, label: 'Barriles' }, { key: 'envase' as const, label: 'Latas' }]
-  let out = `📦 STOCK CÁMARA GENERAL BARRIOS BAJOS`
-  if (fechaInforme) out += ` — ${fFecha(fechaInforme)}`
-  out += '\n'
+  const tipos = [{ key: 'barril' as const, label: 'Barriles (30L)', emoji: '🛢️' }, { key: 'envase' as const, label: 'Latas', emoji: '🥫' }]
+
+  let out = `🍺 *EL REGRESO BEER* — Stock disponible\n📍 Cámara General Barrios Bajos`
+  if (fechaInforme) out += ` · ${fFecha(fechaInforme)}`
+  out += `\n${DIVISOR}`
 
   for (const cat of categorias) {
     const deCategoria = filas.filter(f => (f.categoria ?? 'Otros') === cat)
     if (!deCategoria.length) continue
-    out += `\n${cat === 'Kombucha' ? '🫧' : '🍺'} ${cat.toUpperCase()}\n`
+    out += `\n*${cat === 'Kombucha' ? 'KOMBUCHAS' : 'CERVEZAS'}*\n`
     for (const t of tipos) {
       const items = deCategoria.filter(f => f.tipo === t.key).sort((a, b) => a.producto.localeCompare(b.producto))
       if (!items.length) continue
-      out += `\n${t.label}:\n`
+      out += `\n${t.emoji} ${t.label}\n`
       for (const f of items) {
         const n = nivelDe(f)
         const icon = n === 'critico' ? '🔴' : n === 'bajo' ? '🟡' : '🟢'
-        const etiqueta = n === 'critico' ? ' — revisar stock' : n === 'bajo' ? ' — poco stock' : ''
+        const etiqueta = n === 'critico' ? ' _(revisar stock)_' : n === 'bajo' ? ' _(poco stock)_' : ''
         const detalle = f.tipo === 'envase'
           ? `${fNum(f.cantidad)} un. (${fCajas(f.cantidad)})`
-          : `${fNum(f.cantidad)} barr.`
-        out += `${icon} ${f.producto}: ${detalle}${etiqueta}\n`
+          : `${fNum(f.cantidad)} barril${f.cantidad === 1 ? '' : 'es'}`
+        out += `${icon} *${f.producto}* — ${detalle}${etiqueta}\n`
       }
     }
   }
+  out += `\n${DIVISOR}\n_Cervecería Artesanal · Valdivia_`
   return out.trim()
 }
 
