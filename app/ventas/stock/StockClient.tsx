@@ -181,9 +181,18 @@ function DetalleLotes({ f }: { f: StockProductoRow }) {
           }}>
             <div style={{ minWidth: 0 }}>
               <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>Lote {l.codigo}</span>
-              <p style={{ fontSize: 11, color: dias != null && dias > 90 ? C.amber : C.faint, marginTop: 1 }}>
-                {dias != null ? `${dias} día${dias === 1 ? '' : 's'} en bodega` : 'Sin fecha de embarrilado'}
-              </p>
+              {dias != null ? (() => {
+                const [bg, fg] = dias > 90 ? [C.redSoft, C.red] : dias > 30 ? [C.amberSoft, C.amber] : [C.greenSoft, C.green]
+                return (
+                  <p style={{ marginTop: 3 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: fg, background: bg, borderRadius: 7, padding: '2px 7px', letterSpacing: '-0.2px' }}>
+                      {dias} día{dias === 1 ? '' : 's'} en bodega
+                    </span>
+                  </p>
+                )
+              })() : (
+                <p style={{ fontSize: 11, color: C.faint, marginTop: 1 }}>Sin fecha de embarrilado</p>
+              )}
             </div>
             <span style={{ fontSize: 12, color: C.muted, textAlign: 'right', flexShrink: 0 }}>
               {fNum(l.cantidad)} {f.tipo === 'barril' ? 'barr.' : 'un.'}
