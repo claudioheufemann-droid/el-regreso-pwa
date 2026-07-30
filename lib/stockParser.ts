@@ -24,12 +24,25 @@
  * parseo NO usa números de fila fijos: son frágiles a que el informe traiga
  * más o menos productos la próxima vez. En cambio, busca los textos de
  * sección/cámara y se guía por las transiciones de columnas vacías.
+ *
+ * Fecha de embarrilado por lote:
+ * Ni "Barriles en Depósitos" ni "Envases en Depósitos" (las secciones de
+ * arriba) traen fecha — solo código de lote y cantidad. La fecha SÍ existe,
+ * pero en una tabla previa y separada, "Stock de producto en barriles"
+ * (listado plano, sin desglose por cámara), con una fila por barril físico
+ * que incluye su fecha de embarrilado. El mismo código de lote se repite
+ * también en las latas de ese mismo producto (se embarrila y se enlata el
+ * mismo día), así que un lote sin match directo en barriles simplemente
+ * queda sin fecha. Se cruza por código de lote (normalizado, sin "#") y se
+ * usa la fecha más frecuente de ese lote si hay variantes menores.
  */
 import * as XLSX from 'xlsx'
 
 export interface LoteParsed {
   codigo: string
   cantidad: number
+  /** Fecha de embarrilado (ISO yyyy-mm-dd), o null si no se encontró el lote en el listado plano. */
+  fechaEmbarrilado: string | null
 }
 
 export interface StockProductoParsed {
@@ -43,6 +56,7 @@ export interface StockProductoParsed {
 }
 
 const CAMARA_OBJETIVO = 'camara general barrios bajos'
+const SECCION_STOCK_BARRILES_PLANO = 'stock de producto en barriles'
 const SECCION_BARRILES = 'barriles en depositos'
 const SECCION_ENVASES = 'envases en depositos'
 
@@ -51,6 +65,47 @@ function norm(v: unknown): string {
   return String(v)
     .normalize('NFD').replace(/[̀-ͯ]/g, '') // saca tildes
     .toLowerCase().trim()
+}
+
+/** Normaliza un código de lote para cruzar entre secciones (algunas lo traen con "#", otras sin). */
+function normalizarLote(codigo: string): string {
+  return codigo.trim().replace(/^#/, '').toLowerCase()
+}
+
+/** Serial de fecha de Excel (sistema 1900) → ISO yyyy-mm-dd. */
+function serialAFechaISO(serial: number): string {
+  const utcDias = Math.floor(serial - 25569)
+  return new Date(utcDias * 86400 * 1000).toISOString().split('T')[0]
+}
+
+/**
+ * Recorre el listado plano "Stock de producto en barriles" (con fecha por
+ * barril físico) y arma un mapa lote→fecha, quedándose con la fecha más
+ * frecuente cuando el mismo lote aparece con más de una (variantes menores
+ * de captura de datos, no un error de parseo).
+ */
+function construirMapaFechasPorLote(filas: Fila[], inicio: number, fin: number): Map<string, string> {
+  const conteos = new Map<string, Map<string, number>>()
+  for (let i = inicio; i < fin; i++) {
+    const f = filas[i]
+    const colLote = f[5]
+    const colFecha = f[6]
+    if (colLote == null || String(colLote).trim() === '') continue
+    if (typeof colFecha !== 'number') continue
+    const lote = normalizarLote(String(colLote))
+    const fecha = serialAFechaISO(colFecha)
+    if (!conteos.has(lote)) conteos.set(lote, new Map())
+    const m = conteos.get(lote)!
+    m.set(fecha, (m.get(fecha) ?? 0) + 1)
+  }
+  const resultado = new Map<string, string>()
+  for (const [lote, fechas] of conteos) {
+    let mejorFecha = ''
+    let mejorConteo = -1
+    for (const [fecha, n] of fechas) if (n > mejorConteo) { mejorFecha = fecha; mejorConteo = n }
+    resultado.set(lote, mejorFecha)
+  }
+  return resultado
 }
 
 function categoriaDe(producto: string): 'Cerveza' | 'Kombucha' | 'Otros' {
@@ -70,11 +125,14 @@ function buscarFila(filas: Fila[], texto: string, desde: number): number {
   return -1
 }
 
-function lotesDeMapa(mapa: Map<string, number>): LoteParsed[] {
-  return Array.from(mapa.entries()).map(([codigo, cantidad]) => ({ codigo, cantidad }))
+function lotesDeMapa(mapa: Map<string, number>, mapaFechas: Map<string, string>): LoteParsed[] {
+  return Array.from(mapa.entries()).map(([codigo, cantidad]) => ({
+    codigo, cantidad,
+    fechaEmbarrilado: mapaFechas.get(normalizarLote(codigo)) ?? null,
+  }))
 }
 
-function parseBarriles(filas: Fila[], inicio: number): StockProductoParsed[] {
+function parseBarriles(filas: Fila[], inicio: number, mapaFechas: Map<string, string>): StockProductoParsed[] {
   const productos: StockProductoParsed[] = []
   let actual: { producto: string; codigo: string | null; barriles: number; litros: number; lotes: Map<string, number> } | null = null
 
@@ -86,7 +144,7 @@ function parseBarriles(filas: Fila[], inicio: number): StockProductoParsed[] {
       if (actual) productos.push({
         tipo: 'barril', producto: actual.producto, codigoProducto: actual.codigo,
         categoria: categoriaDe(actual.producto), cantidad: actual.barriles, litros: actual.litros,
-        lotes: lotesDeMapa(actual.lotes),
+        lotes: lotesDeMapa(actual.lotes, mapaFechas),
       })
       actual = { producto: String(f[2]).trim(), codigo: f[3] != null ? String(f[3]).trim() : null, barriles: 0, litros: 0, lotes: new Map() }
     } else if (actual && f[5] != null && String(f[5]).trim() !== '') {
@@ -99,12 +157,12 @@ function parseBarriles(filas: Fila[], inicio: number): StockProductoParsed[] {
   if (actual) productos.push({
     tipo: 'barril', producto: actual.producto, codigoProducto: actual.codigo,
     categoria: categoriaDe(actual.producto), cantidad: actual.barriles, litros: actual.litros,
-    lotes: lotesDeMapa(actual.lotes),
+    lotes: lotesDeMapa(actual.lotes, mapaFechas),
   })
   return productos
 }
 
-function parseEnvases(filas: Fila[], inicio: number): StockProductoParsed[] {
+function parseEnvases(filas: Fila[], inicio: number, mapaFechas: Map<string, string>): StockProductoParsed[] {
   const productos: StockProductoParsed[] = []
   let actual: { producto: string; codigo: string | null; unidades: number; lotes: Map<string, number> } | null = null
 
@@ -116,7 +174,7 @@ function parseEnvases(filas: Fila[], inicio: number): StockProductoParsed[] {
       if (actual) productos.push({
         tipo: 'envase', producto: actual.producto, codigoProducto: actual.codigo,
         categoria: categoriaDe(actual.producto), cantidad: actual.unidades, litros: null,
-        lotes: lotesDeMapa(actual.lotes),
+        lotes: lotesDeMapa(actual.lotes, mapaFechas),
       })
       actual = { producto: String(f[1]).trim(), codigo: f[2] != null ? String(f[2]).trim() : null, unidades: 0, lotes: new Map() }
     } else if (actual && f[5] != null && f[6] != null) {
@@ -129,7 +187,7 @@ function parseEnvases(filas: Fila[], inicio: number): StockProductoParsed[] {
   if (actual) productos.push({
     tipo: 'envase', producto: actual.producto, codigoProducto: actual.codigo,
     categoria: categoriaDe(actual.producto), cantidad: actual.unidades, litros: null,
-    lotes: lotesDeMapa(actual.lotes),
+    lotes: lotesDeMapa(actual.lotes, mapaFechas),
   })
   return productos
 }
@@ -146,6 +204,14 @@ export function parseStockExcel(buffer: ArrayBuffer): StockProductoParsed[] {
     throw new Error('No se encontraron las secciones "Barriles en Depósitos" / "Envases en Depósitos" en el archivo — ¿es el informe de stock correcto?')
   }
 
+  // Fecha de embarrilado por lote: vive en el listado plano previo a
+  // "Barriles en Depósitos", no en las secciones por cámara. Si el informe
+  // cambia de formato y no aparece, seguimos sin fecha (no bloquea la carga).
+  const idxStockBarrilesPlano = buscarFila(filas, SECCION_STOCK_BARRILES_PLANO, 0)
+  const mapaFechas = idxStockBarrilesPlano >= 0
+    ? construirMapaFechasPorLote(filas, idxStockBarrilesPlano, idxSeccionBarriles)
+    : new Map<string, string>()
+
   const idxCamaraBarril = buscarFila(filas, CAMARA_OBJETIVO, idxSeccionBarriles + 1)
   const idxCamaraEnvase = buscarFila(filas, CAMARA_OBJETIVO, idxSeccionEnvases + 1)
 
@@ -157,7 +223,7 @@ export function parseStockExcel(buffer: ArrayBuffer): StockProductoParsed[] {
   }
 
   return [
-    ...parseBarriles(filas, idxCamaraBarril),
-    ...parseEnvases(filas, idxCamaraEnvase),
+    ...parseBarriles(filas, idxCamaraBarril, mapaFechas),
+    ...parseEnvases(filas, idxCamaraEnvase, mapaFechas),
   ]
 }

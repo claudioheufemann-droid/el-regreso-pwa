@@ -149,9 +149,18 @@ function AlertaBadge({ nivel }: { nivel: Nivel }) {
   )
 }
 
-// Detalle de lotes al expandir un producto — el informe de bodega no trae
-// fecha de vencimiento, solo código de lote y cantidad. Se ordena de mayor a
-// menor cantidad (no hay fecha con la cual ordenar por próximo a vencer).
+// Días en bodega = hoy - fecha de embarrilado. La fecha se cruza por código
+// de lote contra el listado plano del informe (ver lib/stockParser.ts) — no
+// todos los lotes tienen match, en ese caso no se muestra el dato.
+function diasEnBodega(fechaISO: string): number {
+  const [y, m, d] = fechaISO.split('-').map(Number)
+  const fecha = new Date(y, m - 1, d)
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+  return Math.round((hoy.getTime() - fecha.getTime()) / 86400000)
+}
+
+// Detalle de lotes al expandir un producto. Se ordena de mayor a menor
+// cantidad (no hay fecha de vencimiento con la cual ordenar por próximo a vencer).
 function DetalleLotes({ f }: { f: StockProductoRow }) {
   const lotes = [...(f.lotes ?? [])].sort((a, b) => b.cantidad - a.cantidad)
   if (lotes.length === 0) {
@@ -163,18 +172,26 @@ function DetalleLotes({ f }: { f: StockProductoRow }) {
         {lotes.length} LOTE{lotes.length === 1 ? '' : 'S'}
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {lotes.map((l, i) => (
+        {lotes.map((l, i) => {
+          const dias = l.fechaEmbarrilado ? diasEnBodega(l.fechaEmbarrilado) : null
+          return (
           <div key={`${l.codigo}-${i}`} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             background: C.bg, borderRadius: 9, padding: '7px 10px',
           }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>Lote {l.codigo}</span>
-            <span style={{ fontSize: 12, color: C.muted, textAlign: 'right' }}>
+            <div style={{ minWidth: 0 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>Lote {l.codigo}</span>
+              <p style={{ fontSize: 11, color: dias != null && dias > 90 ? C.amber : C.faint, marginTop: 1 }}>
+                {dias != null ? `${dias} día${dias === 1 ? '' : 's'} en bodega` : 'Sin fecha de embarrilado'}
+              </p>
+            </div>
+            <span style={{ fontSize: 12, color: C.muted, textAlign: 'right', flexShrink: 0 }}>
               {fNum(l.cantidad)} {f.tipo === 'barril' ? 'barr.' : 'un.'}
               {f.tipo === 'envase' && <span style={{ color: C.faint }}> · {fCajas(l.cantidad)}</span>}
             </span>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
