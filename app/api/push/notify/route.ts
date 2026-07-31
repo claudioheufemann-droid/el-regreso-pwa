@@ -7,8 +7,8 @@
  *
  * Eventos soportados:
  *   venta_cargada       → admins
- *   visita_completada   → admins
- *   visita_sin_venta    → admins
+ *   visita_completada   → todos
+ *   visita_sin_venta    → todos
  *   camion_salida       → todos
  *   camion_llegada      → todos
  *   pedido_entregado    → todos
@@ -37,8 +37,8 @@ const EVENT_CONFIG: Record<string, {
   defaultUrl: string
 }> = {
   venta_cargada:      { audience: 'admins', defaultUrl: '/ventas' },
-  visita_completada:  { audience: 'admins', defaultUrl: '/terreno/historial' },
-  visita_sin_venta:   { audience: 'admins', defaultUrl: '/terreno/historial' },
+  visita_completada:  { audience: 'all',    defaultUrl: '/terreno/historial' },
+  visita_sin_venta:   { audience: 'all',    defaultUrl: '/terreno/historial' },
   camion_salida:      { audience: 'all',    defaultUrl: '/flota' },
   camion_llegada:     { audience: 'all',    defaultUrl: '/flota' },
   pedido_entregado:   { audience: 'all',    defaultUrl: '/flota/historial' },
