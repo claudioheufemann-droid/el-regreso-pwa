@@ -1349,8 +1349,16 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             fila "Total" de abajo. */}
         <div style={{ background: C.hero, padding: '0 20px 20px', color: '#fff' }}>
           <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '0 0 18px' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>MIX DE PRODUCTOS</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>MIX DE PRODUCTOS</p>
+              {/* Aclaración pedida por Claudio: el % de variación acá suma lata +
+                  barril de la categoría — puede no calzar con el % de la tarjeta
+                  "Latas y barriles" de más abajo, que mide cada formato aparte
+                  (ej. si el barril de algo cae mucho más fuerte que la lata, el
+                  combinado queda entre medio de los dos, no igual a ninguno). */}
+              <p style={{ fontSize: 10.5, color: '#64748B', marginTop: 1 }}>% incluye lata + barril combinados</p>
+            </div>
             <span style={{ fontSize: 12, color: '#94A3B8' }}>{fNum(actual.clientes)} clientes</span>
           </div>
           {actual.litros === 0 ? (
