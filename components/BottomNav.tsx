@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { BarChart2, Users, Upload, Target, ListChecks, Package, FileText } from 'lucide-react'
+import { BarChart2, Users, Upload, Target, ListChecks, Package, FileText, TrendingUp } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
@@ -28,9 +28,15 @@ const ADMIN_ITEMS: NavItem[] = [
   { href: '/ventas/admin/cargar',         icon: Upload,      label: 'Cargar'                    },
 ]
 
+// Solo para quienes tienen puede_ver_margenes (Claudio/Benja/Douglas) — se
+// agrega al final de la lista de siempre, así cae dentro de "Más" sin sacar
+// a nadie de los 4 slots visibles del resto del equipo.
+const RENTABILIDAD_ITEM: NavItem = { href: '/ventas/rentabilidad', icon: TrendingUp, label: 'Rentabilidad' }
+
 export default function BottomNav() {
-  const pathname   = usePathname()
-  const { isAdmin } = useUser()
-  const items = isAdmin ? ADMIN_ITEMS : VENDEDOR_ITEMS
+  const pathname = usePathname()
+  const { isAdmin, puedeVerMargenes } = useUser()
+  const base = isAdmin ? ADMIN_ITEMS : VENDEDOR_ITEMS
+  const items = puedeVerMargenes ? [...base, RENTABILIDAD_ITEM] : base
   return <NavPill items={items} pathname={pathname} />
 }
