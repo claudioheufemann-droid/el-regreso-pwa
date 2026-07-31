@@ -89,6 +89,7 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
   const [showSettings, setShowSettings] = useState(false)
   const [tab, setTab] = useState<Tab>('catalogo')
   const [zona, setZona] = useState<Zona>('sur')
+  const [formatoFiltro, setFormatoFiltro] = useState<Formato>('lata')
   const [filas, setFilas] = useState<CostoPrecio[]>(filasIniciales)
   const [guardando, setGuardando] = useState<string | null>(null)
 
@@ -100,8 +101,9 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
 
   const catalogoMap = useMemo(() => new Map(filas.map(f => [f.id, f])), [filas])
   const filasZona = useMemo(() => filas.filter(f => f.zona === zona), [filas, zona])
-  const cervezas = useMemo(() => filasZona.filter(f => f.categoria === 'cerveza').sort((a, b) => a.producto.localeCompare(b.producto)), [filasZona])
-  const kombuchas = useMemo(() => filasZona.filter(f => f.categoria === 'kombucha').sort((a, b) => a.producto.localeCompare(b.producto)), [filasZona])
+  const filasZonaFormato = useMemo(() => filasZona.filter(f => f.formato === formatoFiltro), [filasZona, formatoFiltro])
+  const cervezas = useMemo(() => filasZonaFormato.filter(f => f.categoria === 'cerveza').sort((a, b) => a.producto.localeCompare(b.producto)), [filasZonaFormato])
+  const kombuchas = useMemo(() => filasZonaFormato.filter(f => f.categoria === 'kombucha').sort((a, b) => a.producto.localeCompare(b.producto)), [filasZonaFormato])
 
   async function actualizarCampo(id: string, campo: 'costo_neto' | 'precio_neto', valor: number) {
     setFilas(prev => prev.map(f => f.id === id ? { ...f, [campo]: valor } : f))
@@ -235,7 +237,20 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
         )}
 
         {tab === 'catalogo' && (
-          <CatalogoTab cervezas={cervezas} kombuchas={kombuchas} guardando={guardando} onGuardar={actualizarCampo} />
+          <>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+              {(['lata', 'barril'] as Formato[]).map(f => (
+                <button key={f} onClick={() => setFormatoFiltro(f)} style={{
+                  flex: 1, padding: '8px 0', borderRadius: 10, border: `1.5px solid ${formatoFiltro === f ? C.text : C.line}`,
+                  background: formatoFiltro === f ? C.hero : C.card, color: formatoFiltro === f ? '#fff' : C.muted,
+                  fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                }}>
+                  {f === 'lata' ? 'Latas' : 'Barriles'}
+                </button>
+              ))}
+            </div>
+            <CatalogoTab cervezas={cervezas} kombuchas={kombuchas} guardando={guardando} onGuardar={actualizarCampo} />
+          </>
         )}
 
         {tab === 'simulador' && (
@@ -281,7 +296,7 @@ function FilaProducto({ cp, guardando, onGuardar }: { cp: CostoPrecio; guardando
       <ProductoThumb codigo={cp.codigo} categoria={cp.categoria} formato={cp.formato} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {cp.producto} <span style={{ color: C.faint, fontWeight: 600 }}>· {cp.formato === 'lata' ? 'Lata' : 'Barril'}</span>
+          {cp.producto}
         </p>
         <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.muted }}>
