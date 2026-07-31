@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import NotificationsBell from '@/components/ui/NotificationsBell'
-import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango } from './hoyTypes'
+import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango, type EnvaseRango } from './hoyTypes'
 
 /**
  * Vista principal de Ventas — tema CLARO, propio de esta pantalla.
@@ -581,13 +581,35 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
 }
 
 // ── Barra de mix ─────────────────────────────────────────────────────────────
+/**
+ * Desglose "Lata +17% · Barril +138%" para mostrar junto al % combinado de
+ * la categoría en "Mix de productos". Existe porque ese % (lata+barril
+ * juntos) casi nunca coincide con el % de cada formato por separado que se
+ * ve más abajo en "Latas y barriles" — cuando un formato crece mucho más
+ * que el otro (o desaparece del todo), el combinado queda en un punto
+ * intermedio que a simple vista parece "no calzar". Mostrar el desglose acá
+ * mismo, junto al número que genera la duda, evita tener que comparar dos
+ * tarjetas separadas para entender por qué.
+ */
+function desgloseFormatos(envases: EnvaseRango[], categoria: string): string | null {
+  const rel = envases.filter(e => e.tipo.endsWith(` ${categoria}`))
+  if (rel.length === 0) return null
+  return rel.map(e => {
+    const corto = e.tipo.replace(` ${categoria}`, '')
+    if (e.unidades === 0 && e.unidadesPrev > 0) return `${corto} dejó de venderse`
+    const p = variacion(e.unidades, e.unidadesPrev)
+    if (p === null) return `${corto} nuevo`
+    return `${corto} ${p >= 0 ? '+' : ''}${Math.round(p)}%`
+  }).join(' · ')
+}
+
 /** Fila clickeable de "Mix de productos" dentro del hero —
  *  mismo patrón (ícono, barra, litros, % y flecha) pero con los tokens de
  *  color del hero en vez de los de tarjeta clara. Reemplaza a la extinta
  *  tarjeta blanca "PRODUCT MIX", que quedaba duplicando esta misma info. */
-function FilaMixHero({ nombre, litros, total, pct, color, colorSoft, emoji, onClick }: {
+function FilaMixHero({ nombre, litros, total, pct, color, colorSoft, emoji, desglose, onClick }: {
   nombre: string; litros: number; total: number; pct: number | null
-  color: string; colorSoft: string; emoji: string; onClick: () => void
+  color: string; colorSoft: string; emoji: string; desglose?: string | null; onClick: () => void
 }) {
   const share = total > 0 ? (litros / total) * 100 : 0
   return (
@@ -607,6 +629,9 @@ function FilaMixHero({ nombre, litros, total, pct, color, colorSoft, emoji, onCl
         <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,.12)', overflow: 'hidden' }}>
           <div style={{ width: `${share}%`, height: '100%', background: color, borderRadius: 3, transition: 'width .4s' }} />
         </div>
+        {desglose && (
+          <p style={{ fontSize: 10, color: '#94A3B8', marginTop: 4 }}>{desglose}</p>
+        )}
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 92 }}>
         <p style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{fL(litros)}</p>
@@ -1367,9 +1392,11 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <FilaMixHero nombre="Cerveza" emoji="🍺" litros={actual.litrosCerveza} total={actual.litros}
                 pct={variacion(actual.litrosCerveza, previo.litrosCerveza)} color="#F59E0B" colorSoft="rgba(245,158,11,.18)"
+                desglose={desgloseFormatos(d.envases, 'Cerveza')}
                 onClick={() => abrirDetalle('productos', { categoria: 'Cerveza' })} />
               <FilaMixHero nombre="Kombucha" emoji="🧃" litros={actual.litrosKombucha} total={actual.litros}
                 pct={variacion(actual.litrosKombucha, previo.litrosKombucha)} color="#34D399" colorSoft="rgba(52,211,153,.18)"
+                desglose={desgloseFormatos(d.envases, 'Kombucha')}
                 onClick={() => abrirDetalle('productos', { categoria: 'Kombucha' })} />
               {actual.litrosOtros > 0 && (
                 <FilaMixHero nombre="Otros" emoji="📦" litros={actual.litrosOtros} total={actual.litros}
