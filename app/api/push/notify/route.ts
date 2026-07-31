@@ -6,7 +6,6 @@
  * Body: { event: string, data?: Record<string, unknown> }
  *
  * Eventos soportados:
- *   venta_cargada       → admins
  *   visita_completada   → todos
  *   visita_sin_venta    → todos
  *   camion_salida       → todos
@@ -36,7 +35,6 @@ const EVENT_CONFIG: Record<string, {
   icon?: string
   defaultUrl: string
 }> = {
-  venta_cargada:      { audience: 'admins', defaultUrl: '/ventas' },
   visita_completada:  { audience: 'all',    defaultUrl: '/terreno/historial' },
   visita_sin_venta:   { audience: 'all',    defaultUrl: '/terreno/historial' },
   camion_salida:      { audience: 'all',    defaultUrl: '/flota' },
