@@ -92,6 +92,11 @@ export default function NotificationsBell({ inline = false, variant = 'dark' }: 
     return () => { if (channel) supabase.removeChannel(channel) }
   }, [cargarNoLeidas])
 
+  // Abrir la campana SOLO carga la lista — ya no marca nada como leído acá.
+  // Antes marcaba TODO leído apenas se abría (antes de que hubiera chance de
+  // ver el contenido), así que el contador de no leídas volvía a 0 sin que el
+  // usuario alcanzara a enterarse de nada — parecía que "no llegaba" ninguna
+  // notificación aunque sí estaban guardadas.
   async function abrir() {
     setOpen(true)
     setLoading(true)
@@ -99,16 +104,27 @@ export default function NotificationsBell({ inline = false, variant = 'dark' }: 
       const res = await fetch('/api/notificaciones')
       const data = await res.json()
       setItems(Array.isArray(data) ? data : [])
-      if (Array.isArray(data) && data.some((n: Notificacion) => !n.leida)) {
-        setUnread(0)
-        fetch('/api/notificaciones/marcar-leidas', { method: 'PATCH' }).catch(() => {})
-      }
     } finally {
       setLoading(false)
     }
   }
 
+  function marcarUnaLeida(id: string) {
+    setItems(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n))
+    setUnread(prev => Math.max(0, prev - 1))
+    fetch('/api/notificaciones/marcar-leidas', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+    }).catch(() => {})
+  }
+
+  function marcarTodasLeidas() {
+    setItems(prev => prev.map(n => ({ ...n, leida: true })))
+    setUnread(0)
+    fetch('/api/notificaciones/marcar-leidas', { method: 'PATCH' }).catch(() => {})
+  }
+
   function irA(n: Notificacion) {
+    if (!n.leida) marcarUnaLeida(n.id)
     setOpen(false)
     if (n.url) router.push(n.url)
   }
@@ -159,7 +175,14 @@ export default function NotificationsBell({ inline = false, variant = 'dark' }: 
 
             <div style={{ padding: '4px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(128,128,128,0.1)' }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--cream)' }}>🔔 Notificaciones</div>
-              <button onClick={() => setOpen(false)} style={{ background: 'rgba(128,128,128,0.1)', border: 'none', color: 'var(--cream)', cursor: 'pointer', fontSize: 16, padding: 8, borderRadius: '50%' }}>✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {items.some(n => !n.leida) && (
+                  <button onClick={marcarTodasLeidas} style={{ background: 'none', border: 'none', color: '#D4AF37', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, padding: '6px 4px' }}>
+                    Marcar todas
+                  </button>
+                )}
+                <button onClick={() => setOpen(false)} style={{ background: 'rgba(128,128,128,0.1)', border: 'none', color: 'var(--cream)', cursor: 'pointer', fontSize: 16, padding: 8, borderRadius: '50%' }}>✕</button>
+              </div>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 20px' }}>
@@ -173,10 +196,9 @@ export default function NotificationsBell({ inline = false, variant = 'dark' }: 
                     <button
                       key={n.id}
                       onClick={() => irA(n)}
-                      disabled={!n.url}
                       style={{
                         display: 'flex', alignItems: 'flex-start', gap: 10, textAlign: 'left', width: '100%',
-                        padding: '12px 12px', borderRadius: 14, cursor: n.url ? 'pointer' : 'default',
+                        padding: '12px 12px', borderRadius: 14, cursor: 'pointer',
                         background: n.leida ? 'rgba(255,255,255,0.02)' : 'rgba(212,175,55,0.08)',
                         border: `1px solid ${n.leida ? 'rgba(255,255,255,0.06)' : 'rgba(212,175,55,0.25)'}`,
                       }}

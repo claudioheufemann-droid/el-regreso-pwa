@@ -13,17 +13,22 @@ async function getSupabase() {
   })
 }
 
-// PATCH /api/notificaciones/marcar-leidas — se llama al abrir la campanita:
-// marca como leídas todas las notificaciones pendientes del usuario (RLS: solo las propias).
-export async function PATCH() {
+// PATCH /api/notificaciones/marcar-leidas
+// Body opcional { id }: marca solo esa notificación (al tocarla en la lista).
+// Sin body / body vacío: marca todas las pendientes (botón "Marcar todas").
+// Antes se llamaba SIEMPRE completo apenas se abría la campanita, así que el
+// contador de no leídas volvía a 0 sin que el usuario alcanzara a ver nada —
+// eso hacía parecer que las notificaciones "no habían llegado".
+export async function PATCH(req: Request) {
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { error } = await supabase
-    .from('notificaciones')
-    .update({ leida: true })
-    .eq('leida', false)
+  const body = await req.json().catch(() => null) as { id?: string } | null
+
+  let query = supabase.from('notificaciones').update({ leida: true }).eq('leida', false)
+  if (body?.id) query = query.eq('id', body.id)
+  const { error } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
