@@ -1497,6 +1497,15 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                 const esKombucha = e.tipo.includes('Kombucha')
                 const tint = esCerveza ? C.hero : esKombucha ? C.green : C.amber
                 const soft = esCerveza ? '#E2E8F0' : esKombucha ? C.greenSoft : C.amberSoft
+                // Foto real representativa por bucket (no hay una foto "genérica
+                // de cerveza en lata" o "de kombucha en lata" en sí, así que se usa
+                // un producto real de cada categoría) — pedido de Claudio en vez
+                // de los emoji 🥫/🛢️ genéricos de antes.
+                const foto = esBarril
+                  ? '/productos/cerveza/barril.webp'
+                  : esCerveza ? '/productos/cerveza/mocho.webp'
+                  : esKombucha ? '/productos/kombucha/berry-menta.webp'
+                  : null
                 return (
                   <button
                     key={e.tipo}
@@ -1504,7 +1513,12 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                     style={{ background: soft, borderRadius: 12, padding: '12px 13px', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-                      <span style={{ fontSize: 17 }}>{esBarril ? '🛢️' : '🥫'}</span>
+                      {foto ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={foto} alt="" width={22} height={22} style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'contain', background: '#fff', flexShrink: 0 }} />
+                      ) : (
+                        <span style={{ fontSize: 17 }}>🥫</span>
+                      )}
                       <span style={{ fontSize: 12, fontWeight: 600, color: C.text, minWidth: 0, wordBreak: 'break-word' }}>{e.tipo}</span>
                       <ChevronRight size={14} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0 }} />
                     </div>
