@@ -40,6 +40,8 @@ function iconoParaTipo(tipo: string | null): string {
   return match?.[1] ?? '🔔'
 }
 
+const LIGHT_LINE = '#E2E8F0'
+
 function tiempoRelativo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime()
   const min = Math.floor(diffMs / 60000)
@@ -51,8 +53,16 @@ function tiempoRelativo(iso: string): string {
   return `hace ${d}d`
 }
 
-export default function NotificationsBell() {
+interface NotificationsBellProps {
+  /** true = botón normal dentro de un flex row (headers de módulo). false (default) = posicionado absoluto, como en el Hub principal. */
+  inline?: boolean
+  /** 'dark' (default) = look dorado/oscuro del resto de la app. 'light' = para headers claros (Ventas, Stock). */
+  variant?: 'dark' | 'light'
+}
+
+export default function NotificationsBell({ inline = false, variant = 'dark' }: NotificationsBellProps = {}) {
   const router = useRouter()
+  const isDark = variant === 'dark'
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<Notificacion[]>([])
   const [loading, setLoading] = useState(false)
@@ -109,22 +119,24 @@ export default function NotificationsBell() {
         onClick={abrir}
         aria-label="Notificaciones"
         style={{
-          position: 'absolute', top: 0, right: 48, zIndex: 5,
+          ...(inline ? { position: 'relative' } : { position: 'absolute', top: 0, right: 48 }),
+          zIndex: 5,
           width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-          border: '1.5px solid rgba(212,175,55,0.4)', cursor: 'pointer', padding: 0,
-          background: '#14141A',
+          border: isDark ? '1.5px solid rgba(212,175,55,0.4)' : `1px solid ${LIGHT_LINE}`,
+          cursor: 'pointer', padding: 0,
+          background: isDark ? '#14141A' : '#FFFFFF',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 2px 12px rgba(212,175,55,0.2)',
+          boxShadow: isDark ? '0 2px 12px rgba(212,175,55,0.2)' : 'none',
         }}
       >
-        <Bell size={17} color="#D4AF37" />
+        <Bell size={17} color={isDark ? '#D4AF37' : '#0F172A'} />
         {unread > 0 && (
           <span style={{
             position: 'absolute', top: -3, right: -3,
             minWidth: 17, height: 17, padding: '0 4px', borderRadius: 99,
             background: '#E23E3E', color: '#fff', fontSize: 10, fontWeight: 800,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '2px solid #07070D',
+            border: `2px solid ${isDark ? '#07070D' : '#FFFFFF'}`,
           }}>
             {unread > 9 ? '9+' : unread}
           </span>

@@ -1,7 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Package, Search, Beer, Layers, Copy, Check, AlertTriangle, CircleAlert, ChevronDown, Boxes } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Package, Search, Beer, Layers, Copy, Check, AlertTriangle, CircleAlert, ChevronDown, ChevronLeft, Boxes } from 'lucide-react'
+import { useUser } from '@/lib/userContext'
+import SettingsPanel from '@/components/ui/SettingsPanel'
+import NotificationsBell from '@/components/ui/NotificationsBell'
 import type { StockProductoRow } from './page'
 
 const C = {
@@ -207,6 +211,9 @@ function DetalleLotes({ f }: { f: StockProductoRow }) {
 }
 
 export default function StockClient({ filas, fechaInforme }: { filas: StockProductoRow[]; fechaInforme: string | null }) {
+  const router = useRouter()
+  const { user } = useUser()
+  const [showSettings, setShowSettings] = useState(false)
   const [tab, setTab] = useState<'barril' | 'envase'>('barril')
   const [busca, setBusca] = useState('')
   const [copiado, setCopiado] = useState(false)
@@ -248,28 +255,56 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 120px))' }}>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
+        <button
+          onClick={() => router.push('/ventas')}
+          aria-label="Volver"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            background: C.card, border: `1px solid ${C.line}`,
+            borderRadius: 100, padding: '7px 14px 7px 10px', marginBottom: 14,
+            color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            minHeight: 36,
+          }}
+        >
+          <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
+          Volver
+        </button>
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>CÁMARA GENERAL BARRIOS BAJOS</p>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Stock de productos</h1>
             <p style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
               {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Sin datos cargados todavía'}
             </p>
           </div>
-          {filas.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
+            {filas.length > 0 && (
+              <button
+                onClick={copiarResumen}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '9px 14px', borderRadius: 12, border: `1px solid ${copiado ? C.green : C.line}`,
+                  background: copiado ? C.greenSoft : C.card, color: copiado ? C.green : C.text,
+                  fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                {copiado ? <Check size={14} /> : <Copy size={14} />}
+                {copiado ? 'Copiado' : 'Copiar stock'}
+              </button>
+            )}
+            <NotificationsBell inline variant="light" />
             <button
-              onClick={copiarResumen}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 2,
-                padding: '9px 14px', borderRadius: 12, border: `1px solid ${copiado ? C.green : C.line}`,
-                background: copiado ? C.greenSoft : C.card, color: copiado ? C.green : C.text,
-                fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
-              }}
+              onClick={() => setShowSettings(true)}
+              aria-label="Cuenta"
+              style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', border: `1px solid ${C.line}`, background: C.hero, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0, padding: 0 }}
             >
-              {copiado ? <Check size={14} /> : <Copy size={14} />}
-              {copiado ? 'Copiado' : 'Copiar stock'}
+              {user?.avatarUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={user.avatarUrl} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (user?.iniciales || '··')}
             </button>
-          )}
+          </div>
         </div>
 
         {filas.length === 0 ? (
@@ -427,6 +462,15 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
           </>
         )}
       </div>
+
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          userName={user?.nombre ?? ''}
+          userEmail={user?.email ?? ''}
+          avatarUrl={user?.avatarUrl ?? undefined}
+        />
+      )}
     </div>
   )
 }

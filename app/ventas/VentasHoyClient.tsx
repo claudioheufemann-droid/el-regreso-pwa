@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft, Bell, ChevronDown, ChevronRight, ArrowRight, Droplet, Users, ShoppingBag,
+  ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Droplet, Users, ShoppingBag,
   DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar, CheckCircle2, Truck, RefreshCw,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
+import NotificationsBell from '@/components/ui/NotificationsBell'
 import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango } from './hoyTypes'
 
 /**
@@ -1032,16 +1033,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             )}
           </div>
 
-          <button
-            onClick={() => router.push('/ventas/misiones')}
-            aria-label="Alertas"
-            style={{ position: 'relative', width: 40, height: 40, borderRadius: 12, background: C.card, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
-          >
-            <Bell size={18} color={C.text} />
-            {data.alertas.some(a => a.tipo === 'alerta') && (
-              <span style={{ position: 'absolute', top: 9, right: 9, width: 8, height: 8, borderRadius: '50%', background: C.blue, border: `2px solid ${C.card}` }} />
-            )}
-          </button>
+          <NotificationsBell inline variant="light" />
           <button
             onClick={() => setShowSettings(true)}
             aria-label="Cuenta"

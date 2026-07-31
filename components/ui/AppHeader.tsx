@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import SettingsPanel from '@/components/ui/SettingsPanel'
+import NotificationsBell from '@/components/ui/NotificationsBell'
 
 /**
  * Header estándar de El Regreso Control — mismo en todos los módulos y submenús.
  * Arriba del todo: botón "Volver" que lleva directo al menú principal de la app.
- * Debajo: eyebrow (fecha/módulo) + título a la izquierda, avatar a la derecha.
- * Tocar el avatar abre la configuración.
+ * Debajo: eyebrow (fecha/módulo) + título a la izquierda, campana de
+ * notificaciones + avatar a la derecha. Tocar el avatar abre la configuración.
  * El saludo "Hola, X" NO va aquí: solo en el home tras iniciar sesión.
  */
 interface AppHeaderProps {
@@ -67,6 +68,7 @@ export default function AppHeader({ eyebrow, title, extraAction, hideBack, backH
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {extraAction}
+          <NotificationsBell inline variant="dark" />
           {/* Avatar → configuración */}
           <button
             onClick={() => setShowSettings(true)}
