@@ -12,6 +12,7 @@ interface UserContextType {
   user: AppUser | null
   isAdmin: boolean
   region: string | null      // scope geográfico del vendedor (null = sin scope)
+  puedeVerMargenes: boolean  // acceso a Rentabilidad (costos/márgenes internos)
   logout: () => Promise<void>
 }
 
@@ -19,6 +20,7 @@ const UserContext = createContext<UserContextType>({
   user: null,
   isAdmin: false,
   region: null,
+  puedeVerMargenes: false,
   logout: async () => {},
 })
 
@@ -44,6 +46,7 @@ export function UserProvider({
         user: initialUser,
         isAdmin: initialUser?.isAdmin ?? false,
         region: initialUser?.region ?? null,
+        puedeVerMargenes: initialUser?.puedeVerMargenes ?? false,
         logout,
       }}
     >
