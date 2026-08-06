@@ -1,15 +1,15 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { MapPin, CheckCircle, XCircle, Filter, ChevronDown, ChevronUp, Package, TrendingUp, AlertTriangle, Clock, Camera, Trash2 } from 'lucide-react'
+import { MapPin, CheckCircle, XCircle, Filter, ChevronDown, ChevronUp, ChevronLeft, Package, TrendingUp, AlertTriangle, Clock, Camera, Trash2 } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 import { useIsDesktop } from '@/lib/useIsDesktop'
-import AppHeader from '@/components/ui/AppHeader'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
-const T        = '#D4AF37'
-const T_DIM    = 'rgba(212,175,55,0.10)'
-const T_BORDER = 'rgba(212,175,55,0.22)'
+const T        = '#0F172A'   // acento del tema claro (antes dorado)
+const T_DIM    = '#EFF6FF'
+const T_BORDER = '#E2E8F0'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Visita {
@@ -23,7 +23,17 @@ interface Visita {
   fotos_status: 'PENDIENTE' | 'COMPLETO'
 }
 interface Item { id: string; visita_id: string; producto: string; categoria: string; envase: string; cantidad: number; precio_unit: number; subtotal: number }
-interface Deudor { nombre_fantasia: string; saldo_total: number; deuda_vencida: number; ultimo_pago: string | null; fecha_ultima_compra: string | null; limite_cta_cte: number | null }
+interface Deudor {
+  nombre_fantasia: string; saldo_total: number; deuda_vencida: number
+  ultimo_pago: string | null; fecha_ultima_compra: string | null; limite_cta_cte: number | null
+  /** Tramos de antigüedad de la deuda — opcionales: no todas las consultas los traen. */
+  deuda_menor_14_dias?: number | null
+  deuda_entre_15_29_dias?: number | null
+  deuda_entre_30_44_dias?: number | null
+  deuda_entre_45_59_dias?: number | null
+  deuda_entre_60_89_dias?: number | null
+  deuda_mas_90_dias?: number | null
+}
 interface VentaHist { nombre_fantasia: string; producto: string; litros: number | null; total_sin_impuesto: number | null; fecha_pedido: string | null }
 interface Props {
   user: AppUser; visitas: Visita[]; items: Item[]
@@ -67,11 +77,11 @@ function StatusBadge({ tieneVenta, montoTotal, deudor, cancelada }: { tieneVenta
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
         fontSize: 10, fontWeight: 700, letterSpacing: '0.2px',
-        color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.12)',
+        color: '#64748B', background: '#F1F5F9',
+        border: '1px solid #E2E8F0',
         padding: '3px 8px', borderRadius: 20,
       }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#64748B', flexShrink: 0 }} />
         Cancelada
       </span>
     )
@@ -85,11 +95,11 @@ function StatusBadge({ tieneVenta, montoTotal, deudor, cancelada }: { tieneVenta
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
         fontSize: 10, fontWeight: 700, letterSpacing: '0.2px',
-        color: '#4ADE80', background: 'rgba(74,222,128,0.1)',
-        border: '1px solid rgba(74,222,128,0.2)',
+        color: '#059669', background: '#ECFDF5',
+        border: '1px solid #ECFDF5',
         padding: '3px 8px', borderRadius: 20,
       }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#4ADE80', flexShrink: 0 }} />
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#059669', flexShrink: 0 }} />
         Con venta
       </span>
     )
@@ -99,11 +109,11 @@ function StatusBadge({ tieneVenta, montoTotal, deudor, cancelada }: { tieneVenta
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
         fontSize: 10, fontWeight: 700, letterSpacing: '0.2px',
-        color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.06)',
-        border: '1px solid rgba(255,255,255,0.14)',
+        color: '#0F172A', background: '#F1F5F9',
+        border: '1px solid #E2E8F0',
         padding: '3px 8px', borderRadius: 20,
       }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#0F172A', flexShrink: 0 }} />
         Visita
       </span>
     )
@@ -112,11 +122,11 @@ function StatusBadge({ tieneVenta, montoTotal, deudor, cancelada }: { tieneVenta
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
       fontSize: 10, fontWeight: 700, letterSpacing: '0.2px',
-      color: '#F87171', background: 'rgba(248,113,113,0.1)',
-      border: '1px solid rgba(248,113,113,0.2)',
+      color: '#DC2626', background: '#FEF2F2',
+      border: '1px solid #FEF2F2',
       padding: '3px 8px', borderRadius: 20,
     }}>
-      <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#F87171', flexShrink: 0 }} />
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#DC2626', flexShrink: 0 }} />
       Sin venta
     </span>
   )
@@ -124,10 +134,10 @@ function StatusBadge({ tieneVenta, montoTotal, deudor, cancelada }: { tieneVenta
 
 function DeudaBadge({ deudor }: { deudor: Deudor | undefined }) {
   if (!deudor || deudor.saldo_total <= 0) return (
-    <span style={{ fontSize: 9, fontWeight: 700, color: '#4ADE80', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.15)', padding: '2px 7px', borderRadius: 20 }}>Al día</span>
+    <span style={{ fontSize: 9, fontWeight: 700, color: '#059669', background: '#ECFDF5', border: '1px solid #ECFDF5', padding: '2px 7px', borderRadius: 20 }}>Al día</span>
   )
   if (deudor.deuda_vencida > 0) return (
-    <span style={{ fontSize: 9, fontWeight: 700, color: '#FB923C', background: 'rgba(251,146,60,0.1)', border: '1px solid rgba(251,146,60,0.2)', padding: '2px 7px', borderRadius: 20 }}>
+    <span style={{ fontSize: 9, fontWeight: 700, color: '#D97706', background: '#FFFBEB', border: '1px solid #FFFBEB', padding: '2px 7px', borderRadius: 20 }}>
       ⚠ {fmtCompact(deudor.deuda_vencida)}
     </span>
   )
@@ -141,15 +151,15 @@ function DeudaBadge({ deudor }: { deudor: Deudor | undefined }) {
 // ── Panel deuda ───────────────────────────────────────────────────────────────
 function PanelDeuda({ deudor }: { deudor: Deudor }) {
   const esVencida = deudor.deuda_vencida > 0
-  const color = esVencida ? '#FB923C' : deudor.saldo_total > 0 ? T : '#4ADE80'
-  const rgb   = esVencida ? '251,146,60' : deudor.saldo_total > 0 ? '212,175,55' : '74,222,128'
+  const color = esVencida ? '#D97706' : deudor.saldo_total > 0 ? T : '#059669'
+  const rgb   = esVencida ? '220,38,38' : deudor.saldo_total > 0 ? '217,119,6' : '5,150,105'
   const tramos = [
-    { label: '< 14 días',  val: (deudor as any).deuda_menor_14_dias       ?? 0 },
-    { label: '15–29 días', val: (deudor as any).deuda_entre_15_29_dias    ?? 0 },
-    { label: '30–44 días', val: (deudor as any).deuda_entre_30_44_dias    ?? 0 },
-    { label: '45–59 días', val: (deudor as any).deuda_entre_45_59_dias    ?? 0 },
-    { label: '60–89 días', val: (deudor as any).deuda_entre_60_89_dias    ?? 0 },
-    { label: '≥ 90 días',  val: (deudor as any).deuda_mas_90_dias         ?? 0 },
+    { label: '< 14 días',  val: deudor.deuda_menor_14_dias       ?? 0 },
+    { label: '15–29 días', val: deudor.deuda_entre_15_29_dias    ?? 0 },
+    { label: '30–44 días', val: deudor.deuda_entre_30_44_dias    ?? 0 },
+    { label: '45–59 días', val: deudor.deuda_entre_45_59_dias    ?? 0 },
+    { label: '60–89 días', val: deudor.deuda_entre_60_89_dias    ?? 0 },
+    { label: '≥ 90 días',  val: deudor.deuda_mas_90_dias         ?? 0 },
   ].filter(t => t.val > 0)
 
   return (
@@ -162,35 +172,35 @@ function PanelDeuda({ deudor }: { deudor: Deudor }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: tramos.length ? 12 : 0 }}>
         <div>
-          <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Saldo total</p>
+          <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Saldo total</p>
           <p style={{ fontSize: 18, fontWeight: 900, color, letterSpacing: '-0.5px' }}>{fmtPeso(deudor.saldo_total)}</p>
         </div>
         <div>
-          <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Deuda vencida</p>
-          <p style={{ fontSize: 18, fontWeight: 900, color: deudor.deuda_vencida > 0 ? '#FB923C' : '#4ADE80', letterSpacing: '-0.5px' }}>
+          <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Deuda vencida</p>
+          <p style={{ fontSize: 18, fontWeight: 900, color: deudor.deuda_vencida > 0 ? '#D97706' : '#059669', letterSpacing: '-0.5px' }}>
             {deudor.deuda_vencida > 0 ? fmtPeso(deudor.deuda_vencida) : 'Sin vencer'}
           </p>
         </div>
         {deudor.ultimo_pago && (
           <div>
-            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Último pago</p>
-            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{fmtFecha(deudor.ultimo_pago)}</p>
+            <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Último pago</p>
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{fmtFecha(deudor.ultimo_pago)}</p>
           </div>
         )}
         {deudor.limite_cta_cte && deudor.limite_cta_cte > 0 && (
           <div>
-            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Límite</p>
-            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{fmtPeso(deudor.limite_cta_cte)}</p>
+            <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Límite</p>
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{fmtPeso(deudor.limite_cta_cte)}</p>
           </div>
         )}
       </div>
       {tramos.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 2 }}>Antigüedad de deuda</p>
+          <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 2 }}>Antigüedad de deuda</p>
           {tramos.map(t => (
             <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{t.label}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{fmtPeso(t.val)}</span>
+              <span style={{ fontSize: 11, color: '#64748B' }}>{t.label}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#0F172A' }}>{fmtPeso(t.val)}</span>
             </div>
           ))}
         </div>
@@ -228,19 +238,19 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
           { label: 'Facturado', val: totalFacturadoVisitas > 0 ? fmtCompact(totalFacturadoVisitas) : '—' },
           { label: 'Historial', val: totalFacturadoVentas > 0 ? fmtCompact(totalFacturadoVentas) : '—' },
         ].map(s => (
-          <div key={s.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.055)', borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
+          <div key={s.label} style={{ background: '#F1F5F9', border: '1px solid #F1F5F9', borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
             <p style={{ fontSize: 15, fontWeight: 900, color: T, letterSpacing: '-0.3px' }}>{s.val}</p>
-            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 3 }}>{s.label}</p>
+            <p style={{ fontSize: 9, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 3 }}>{s.label}</p>
           </div>
         ))}
       </div>
       {topSorted.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Top productos</p>
+          <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Top productos</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {topSorted.map(([prod, cant]) => (
-              <div key={prod} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'rgba(255,255,255,0.025)', borderRadius: 8 }}>
-                <span style={{ fontSize: 12, color: 'var(--cream)' }}>{prod}</span>
+              <div key={prod} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: '#F1F5F9', borderRadius: 8 }}>
+                <span style={{ fontSize: 12, color: '#0F172A' }}>{prod}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: T }}>{cant} ud.</span>
               </div>
             ))}
@@ -249,7 +259,7 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
       )}
       <div style={{ display: 'flex', gap: 3, background: 'rgba(0,0,0,0.3)', borderRadius: 12, padding: 3, marginBottom: 12 }}>
         {(['visitas', 'ventas'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '8px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, background: tab === t ? T : 'transparent', color: tab === t ? '#080808' : 'rgba(255,255,255,0.35)', transition: 'all 0.15s' }}>
+          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '8px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, background: tab === t ? T : 'transparent', color: tab === t ? '#FFFFFF' : '#94A3B8', transition: 'all 0.15s' }}>
             {t === 'visitas' ? `Visitas (${totalVisitas})` : `Ventas (${ventasHist.length})`}
           </button>
         ))}
@@ -257,10 +267,10 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
       {tab === 'visitas' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 260, overflowY: 'auto' }}>
           {visitasCliente.slice(0, 20).map(v => (
-            <div key={v.id} style={{ background: 'rgba(255,255,255,0.025)', borderRadius: 10, padding: '9px 12px' }}>
+            <div key={v.id} style={{ background: '#F1F5F9', borderRadius: 10, padding: '9px 12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{fmtFecha(v.iniciada_at)}</span>
-                <span style={{ fontSize: 11, fontWeight: 800, color: v.tiene_venta ? T : '#F87171' }}>{v.tiene_venta ? fmtPeso(v.total_pedido ?? 0) : 'Sin venta'}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#0F172A' }}>{fmtFecha(v.iniciada_at)}</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: v.tiene_venta ? T : '#DC2626' }}>{v.tiene_venta ? fmtPeso(v.total_pedido ?? 0) : 'Sin venta'}</span>
               </div>
               {(itemsPorVisita[v.id] ?? []).length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -271,19 +281,19 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
                   ))}
                 </div>
               )}
-              {v.motivo_sin_venta && <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{v.motivo_sin_venta}</p>}
+              {v.motivo_sin_venta && <p style={{ fontSize: 10, color: '#94A3B8', marginTop: 3 }}>{v.motivo_sin_venta}</p>}
             </div>
           ))}
         </div>
       )}
       {tab === 'ventas' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 260, overflowY: 'auto' }}>
-          {ventasHist.length === 0 && <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '12px 0' }}>Sin ventas históricas</p>}
+          {ventasHist.length === 0 && <p style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', padding: '12px 0' }}>Sin ventas históricas</p>}
           {ventasHist.slice(0, 30).map((v, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: 'rgba(255,255,255,0.025)', borderRadius: 9 }}>
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: '#F1F5F9', borderRadius: 9 }}>
               <div>
-                <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{v.producto}</p>
-                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{v.fecha_pedido ? fmtFecha(v.fecha_pedido) : '—'}{v.litros ? ` · ${v.litros}L` : ''}</p>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{v.producto}</p>
+                <p style={{ fontSize: 10, color: '#94A3B8' }}>{v.fecha_pedido ? fmtFecha(v.fecha_pedido) : '—'}{v.litros ? ` · ${v.litros}L` : ''}</p>
               </div>
               <p style={{ fontSize: 12, fontWeight: 700, color: T }}>{v.total_sin_impuesto ? fmtCompact(v.total_sin_impuesto) : '—'}</p>
             </div>
@@ -309,22 +319,22 @@ function FotoLightbox({ fotos, startIdx, onClose }: { fotos: FotoEntry[]; startI
   const foto = fotos[idx]
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.96)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <button onClick={onClose} style={{ position: 'absolute', top: 'max(16px,env(safe-area-inset-top,16px))', right: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-      <div style={{ position: 'absolute', top: 'max(16px,env(safe-area-inset-top,16px))', left: 16, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', background: 'rgba(0,0,0,0.5)', padding: '4px 10px', borderRadius: 20 }}>{idx + 1} / {fotos.length}</div>
+      <button onClick={onClose} style={{ position: 'absolute', top: 'max(16px,env(safe-area-inset-top,16px))', right: 16, width: 36, height: 36, borderRadius: '50%', background: '#E2E8F0', border: '1px solid #E2E8F0', color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+      <div style={{ position: 'absolute', top: 'max(16px,env(safe-area-inset-top,16px))', left: 16, fontSize: 11, fontWeight: 700, color: '#64748B', background: 'rgba(0,0,0,0.5)', padding: '4px 10px', borderRadius: 20 }}>{idx + 1} / {fotos.length}</div>
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, padding: '0 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={foto.src} alt={foto.label} style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }} />
-        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)' }}>{foto.label}</p>
+        <img src={foto.src} alt={foto.label} style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 14, border: '1px solid #E2E8F0' }} />
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{foto.label}</p>
         {fotos.length > 1 && (
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={prev} style={{ padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>← Anterior</button>
-            <button onClick={next} style={{ padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Siguiente →</button>
+            <button onClick={prev} style={{ padding: '10px 24px', borderRadius: 10, border: '1px solid #E2E8F0', background: '#F1F5F9', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>← Anterior</button>
+            <button onClick={next} style={{ padding: '10px 24px', borderRadius: 10, border: '1px solid #E2E8F0', background: '#F1F5F9', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Siguiente →</button>
           </div>
         )}
         {fotos.length > 1 && (
           <div style={{ display: 'flex', gap: 6 }}>
             {fotos.map((_, i) => (
-              <div key={i} onClick={() => setIdx(i)} style={{ width: i === idx ? 20 : 6, height: 6, borderRadius: 3, cursor: 'pointer', background: i === idx ? T : 'rgba(255,255,255,0.2)', transition: 'all 0.2s' }} />
+              <div key={i} onClick={() => setIdx(i)} style={{ width: i === idx ? 20 : 6, height: 6, borderRadius: 3, cursor: 'pointer', background: i === idx ? T : '#94A3B8', transition: 'all 0.2s' }} />
             ))}
           </div>
         )}
@@ -332,7 +342,7 @@ function FotoLightbox({ fotos, startIdx, onClose }: { fotos: FotoEntry[]; startI
       {fotos.length > 1 && (
         <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', bottom: 'max(24px,env(safe-area-inset-bottom,24px))', display: 'flex', gap: 8 }}>
           {fotos.map((f, i) => (
-            <div key={f.label} onClick={() => setIdx(i)} style={{ width: 52, height: 52, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', border: `2px solid ${i === idx ? T : 'rgba(255,255,255,0.15)'}`, transition: 'border-color 0.2s' }}>
+            <div key={f.label} onClick={() => setIdx(i)} style={{ width: 52, height: 52, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', border: `2px solid ${i === idx ? T : '#E2E8F0'}`, transition: 'border-color 0.2s' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={f.src} alt={f.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
@@ -410,8 +420,8 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
   ].filter(f => f.src)
 
   const tieneVenta     = visita.tiene_venta === true
-  const borderColor    = tieneVenta ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.055)'
-  const bgCard         = tieneVenta ? 'rgba(212,175,55,0.03)' : 'rgba(255,255,255,0.018)'
+  const borderColor    = tieneVenta ? '#E2E8F0' : '#F1F5F9'
+  const bgCard         = tieneVenta ? '#E2E8F0' : '#F1F5F9'
   const accentLeft     = tieneVenta ? T : 'transparent'
 
   return (
@@ -433,11 +443,11 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
             {/* Avatar inicial */}
             <div style={{
               width: 44, height: 44, borderRadius: 14, flexShrink: 0,
-              background: tieneVenta ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.06)',
-              border: `1px solid ${tieneVenta ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.09)'}`,
+              background: tieneVenta ? '#E2E8F0' : '#F1F5F9',
+              border: `1px solid ${tieneVenta ? '#CBD5E1' : '#E2E8F0'}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ fontSize: 14, fontWeight: 900, color: tieneVenta ? T : 'rgba(255,255,255,0.4)', letterSpacing: '-0.5px' }}>
+              <span style={{ fontSize: 14, fontWeight: 900, color: tieneVenta ? T : '#64748B', letterSpacing: '-0.5px' }}>
                 {iniciales(visita.cliente_nombre)}
               </span>
             </div>
@@ -450,25 +460,25 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                   {visita.cliente_nombre}
                 </span>
                 {visita.es_cliente_nuevo && (
-                  <span style={{ fontSize: 8, fontWeight: 800, color: '#60A5FA', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>NUEVO</span>
+                  <span style={{ fontSize: 8, fontWeight: 800, color: '#2563EB', background: '#EFF6FF', border: '1px solid #EFF6FF', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>NUEVO</span>
                 )}
                 <DeudaBadge deudor={deudor} />
                 {visita.fotos_status === 'PENDIENTE' && (
-                  <span style={{ fontSize: 8, fontWeight: 800, color: '#D4AF37', background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Fotos pendientes</span>
+                  <span style={{ fontSize: 8, fontWeight: 800, color: '#D4AF37', background: '#E2E8F0', border: '1px solid #CBD5E1', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Fotos pendientes</span>
                 )}
               </div>
               {/* Meta secundaria */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                <span style={{ fontSize: 11, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 3 }}>
                   <Clock size={10} />
                   {fmtHora(visita.iniciada_at)}
                   {visita.completada_at ? ` → ${fmtHora(visita.completada_at)}` : ''}
                 </span>
                 {vendedorNombre && (
-                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)' }}>· {vendedorNombre.split(' ')[0]}</span>
+                  <span style={{ fontSize: 11, color: '#94A3B8' }}>· {vendedorNombre.split(' ')[0]}</span>
                 )}
                 {fotoEntries.length > 0 && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'rgba(212,175,55,0.5)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#E2E8F0' }}>
                     <Camera size={9} /> {fotoEntries.length}
                   </span>
                 )}
@@ -498,8 +508,8 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                   title="Eliminar del historial"
                   style={{
                     width: 28, height: 28, borderRadius: 9, flexShrink: 0,
-                    background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.18)',
-                    color: '#F87171', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: '#FEF2F2', border: '1px solid #FEF2F2',
+                    color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: borrando ? 'default' : 'pointer', opacity: borrando ? 0.4 : 1,
                   }}
                 >
@@ -507,7 +517,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 </button>
               )}
 
-              <div style={{ color: 'rgba(255,255,255,0.2)', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>
+              <div style={{ color: '#94A3B8', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>
                 <ChevronDown size={16} />
               </div>
             </div>
@@ -516,7 +526,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
           {/* Footer de la card: items resumen */}
           {items.length > 0 && (
             <div style={{ marginTop: 12, marginLeft: 58, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>
+              <span style={{ fontSize: 10, color: '#94A3B8' }}>
                 {totalItems} ud. · {items.length} producto{items.length !== 1 ? 's' : ''}
               </span>
               {items.slice(0, 3).map(item => (
@@ -525,7 +535,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 </span>
               ))}
               {items.length > 3 && (
-                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>+{items.length - 3}</span>
+                <span style={{ fontSize: 9, color: '#94A3B8' }}>+{items.length - 3}</span>
               )}
             </div>
           )}
@@ -533,7 +543,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
 
         {/* ── Detalle expandible ── */}
         {open && (
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '14px 18px' }}>
+          <div style={{ borderTop: '1px solid #F1F5F9', padding: '14px 18px' }}>
 
             {/* Tabs */}
             <div style={{ display: 'flex', gap: 3, background: 'rgba(0,0,0,0.35)', borderRadius: 12, padding: 3, marginBottom: 14 }}>
@@ -542,7 +552,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                   flex: 1, padding: '8px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
                   fontSize: 11, fontWeight: 700,
                   background: tabDetalle === key ? T : 'transparent',
-                  color: tabDetalle === key ? '#080808' : 'rgba(255,255,255,0.35)',
+                  color: tabDetalle === key ? '#FFFFFF' : '#94A3B8',
                   transition: 'all 0.15s',
                 }}>
                   {label}
@@ -557,41 +567,41 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 {/* Items pedido */}
                 {items.length > 0 ? (
                   <div style={{ marginBottom: 12 }}>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
                       Detalle · {items.length} productos · {totalItems} unidades
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                       {items.map(item => (
-                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 12 }}>
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#F1F5F9', border: '1px solid #F1F5F9', borderRadius: 12 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={{ fontSize: 13, fontWeight: 700, color: '#F0EDE8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{item.producto}</p>
-                            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)' }}>{item.categoria}{item.envase ? ` · ${item.envase}` : ''} · {fmtPeso(item.precio_unit)} c/u</p>
+                            <p style={{ fontSize: 10, color: '#94A3B8' }}>{item.categoria}{item.envase ? ` · ${item.envase}` : ''} · {fmtPeso(item.precio_unit)} c/u</p>
                           </div>
                           <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 14 }}>
                             <p style={{ fontSize: 14, fontWeight: 900, color: T, letterSpacing: '-0.3px' }}>×{item.cantidad}</p>
-                            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>{fmtPeso(item.subtotal)}</p>
+                            <p style={{ fontSize: 11, color: '#94A3B8' }}>{fmtPeso(item.subtotal)}</p>
                           </div>
                         </div>
                       ))}
                     </div>
                     {visita.total_pedido && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 12px 0', marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total pedido</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 12px 0', marginTop: 8, borderTop: '1px solid #F1F5F9' }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total pedido</span>
                         <span style={{ fontSize: 18, fontWeight: 900, color: T, letterSpacing: '-0.5px' }}>{fmtPeso(visita.total_pedido)}</span>
                       </div>
                     )}
                   </div>
                 ) : visita.tiene_venta === false ? (
-                  <div style={{ marginBottom: 12, padding: '12px 14px', background: 'rgba(248,113,113,0.05)', borderRadius: 12, border: '1px solid rgba(248,113,113,0.15)' }}>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: '#F87171', marginBottom: 4 }}>Sin venta</p>
-                    {visita.motivo_sin_venta && <p style={{ fontSize: 12, color: 'var(--cream)' }}>{visita.motivo_sin_venta}</p>}
+                  <div style={{ marginBottom: 12, padding: '12px 14px', background: '#FEF2F2', borderRadius: 12, border: '1px solid #FEF2F2' }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: '#DC2626', marginBottom: 4 }}>Sin venta</p>
+                    {visita.motivo_sin_venta && <p style={{ fontSize: 12, color: '#0F172A' }}>{visita.motivo_sin_venta}</p>}
                   </div>
                 ) : null}
 
                 {/* Observaciones */}
                 {visita.observaciones && (
-                  <div style={{ marginBottom: 12, padding: '12px 14px', background: 'rgba(255,255,255,0.025)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 5 }}>Observaciones</p>
+                  <div style={{ marginBottom: 12, padding: '12px 14px', background: '#F1F5F9', borderRadius: 12, border: '1px solid #F1F5F9' }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 5 }}>Observaciones</p>
                     <p style={{ fontSize: 12, color: '#F0EDE8', lineHeight: 1.5 }}>{visita.observaciones}</p>
                   </div>
                 )}
@@ -599,7 +609,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 {/* Fotos */}
                 {fotoEntries.length > 0 && (
                   <div style={{ marginBottom: 12 }}>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
                       Fotos del local
                     </p>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -609,7 +619,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={f.src} alt={f.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           </div>
-                          <p style={{ fontSize: 9, color: 'rgba(212,175,55,0.6)', textAlign: 'center', marginTop: 5, fontWeight: 600 }}>{f.label}</p>
+                          <p style={{ fontSize: 9, color: '#E2E8F0', textAlign: 'center', marginTop: 5, fontWeight: 600 }}>{f.label}</p>
                         </button>
                       ))}
                     </div>
@@ -618,7 +628,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
 
                 {/* Adjuntar fotos pendientes — solo si falta evidencia y es tu visita (o eres admin) */}
                 {puedeAdjuntarFotos && (
-                  <div style={{ marginBottom: 12, padding: '12px 14px', background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.2)', borderRadius: 12 }}>
+                  <div style={{ marginBottom: 12, padding: '12px 14px', background: '#E2E8F0', border: '1px solid #E2E8F0', borderRadius: 12 }}>
                     <p style={{ fontSize: 9, fontWeight: 700, color: T, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
                       Adjuntar fotos pendientes
                     </p>
@@ -632,18 +642,18 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                           />
                           <div
                             onClick={() => fileRefs.current[slot.key]?.click()}
-                            style={{ height: 64, borderRadius: 10, cursor: 'pointer', background: '#131313', border: '1.5px dashed rgba(212,175,55,0.3)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+                            style={{ height: 64, borderRadius: 10, cursor: 'pointer', background: '#F1F5F9', border: '1.5px dashed #CBD5E1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
                           >
                             {subiendo[slot.key] ? (
                               <div style={{ width: 16, height: 16, border: `2px solid ${T_BORDER}`, borderTopColor: T, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                             ) : (
                               <>
                                 <span style={{ fontSize: 16 }}>{slot.emoji}</span>
-                                <Camera size={11} color="var(--muted)" />
+                                <Camera size={11} color="#64748B" />
                               </>
                             )}
                           </div>
-                          <p style={{ fontSize: 8, textAlign: 'center', color: 'var(--muted)', marginTop: 4, fontWeight: 600 }}>{slot.label}</p>
+                          <p style={{ fontSize: 8, textAlign: 'center', color: '#64748B', marginTop: 4, fontWeight: 600 }}>{slot.label}</p>
                         </div>
                       ))}
                     </div>
@@ -653,8 +663,8 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 {/* GPS */}
                 {visita.lat && visita.lng && (
                   <a href={`https://www.google.com/maps?q=${visita.lat},${visita.lng}`} target="_blank" rel="noopener noreferrer"
-                    style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px', background: 'rgba(66,133,244,0.07)', border: '1px solid rgba(66,133,244,0.18)', borderRadius: 12, textDecoration: 'none', color: 'var(--cream)', fontSize: 12, fontWeight: 600 }}>
-                    <MapPin size={13} color="#60A5FA" />
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px', background: '#EFF6FF', border: '1px solid #EFF6FF', borderRadius: 12, textDecoration: 'none', color: '#0F172A', fontSize: 12, fontWeight: 600 }}>
+                    <MapPin size={13} color="#2563EB" />
                     {visita.direccion_gps ?? 'Ver ubicación en Google Maps'}
                   </a>
                 )}
@@ -740,30 +750,41 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
   const conversionRate = kpis.total > 0 ? Math.round((kpis.conVenta / kpis.total) * 100) : 0
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100 }}>
+    <div style={{ minHeight: '100vh', background: '#F1F5F9', paddingBottom: 100 }}>
 
       {/* ── Header ── */}
-      <div style={{ padding: isDesktop ? '20px 28px 0' : '16px 20px 0' }}>
-        <AppHeader
-          eyebrow="Ventas en terreno"
-          title="Historial"
-          extraAction={
-            <button
-              onClick={() => setShowFiltros(f => !f)}
-              style={{
-                background: hayFiltros ? T_DIM : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${hayFiltros ? T_BORDER : 'rgba(255,255,255,0.08)'}`,
-                borderRadius: 12, padding: '7px 12px', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 6,
-                color: hayFiltros ? T : 'rgba(255,255,255,0.4)',
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              <Filter size={13} />
-              <span style={{ fontSize: 12, fontWeight: 600 }}>Filtros{hayFiltros ? ' ·' : ''}</span>
-            </button>
-          }
-        />
+      <div style={{ padding: isDesktop ? '20px 28px 0' : '20px 20px 0' }}>
+        <Link
+          href="/terreno"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 36, textDecoration: 'none',
+            background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 100,
+            padding: '7px 14px 7px 10px', color: '#2563EB', fontSize: 13, fontWeight: 700, marginBottom: 14,
+          }}
+        >
+          <ChevronLeft size={17} strokeWidth={2.5} color="#2563EB" />
+          Volver
+        </Link>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#64748B', letterSpacing: '0.04em' }}>VENTAS EN TERRENO</p>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.5px' }}>Historial</h1>
+          </div>
+          <button
+            onClick={() => setShowFiltros(f => !f)}
+            style={{
+              background: hayFiltros ? T_DIM : '#FFFFFF',
+              border: `1px solid ${hayFiltros ? '#2563EB' : '#E2E8F0'}`,
+              borderRadius: 12, padding: '9px 13px', cursor: 'pointer', flexShrink: 0, minHeight: 40,
+              display: 'flex', alignItems: 'center', gap: 6,
+              color: hayFiltros ? '#2563EB' : '#64748B',
+            }}
+          >
+            <Filter size={14} />
+            <span style={{ fontSize: 12.5, fontWeight: 700 }}>Filtros{hayFiltros ? ' ·' : ''}</span>
+          </button>
+        </div>
       </div>
 
       {/* ── Filtros expandibles ── */}
@@ -771,40 +792,40 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
         <div style={{
           margin: isDesktop ? '12px 28px' : '10px 20px',
           padding: '16px 18px',
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.07)',
+          background: '#F1F5F9',
+          border: '1px solid #E2E8F0',
           borderRadius: 16,
           backdropFilter: 'blur(12px)',
           display: 'flex', flexDirection: 'column', gap: 14,
         }}>
           {user.isAdmin && (
             <div>
-              <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>Vendedor</p>
+              <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>Vendedor</p>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {[{ id: 'todos', nombre: 'Todos' }, ...vendedores].map(v => (
                   <button key={v.id} onClick={() => setFiltroVendedor(v.id)} style={{
                     padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    border: `1px solid ${filtroVendedor === v.id ? T_BORDER : 'rgba(255,255,255,0.09)'}`,
+                    border: `1px solid ${filtroVendedor === v.id ? T_BORDER : '#E2E8F0'}`,
                     background: filtroVendedor === v.id ? T_DIM : 'transparent',
-                    color: filtroVendedor === v.id ? T : 'rgba(255,255,255,0.4)',
+                    color: filtroVendedor === v.id ? T : '#64748B',
                   }}>{v.nombre.split(' ')[0]}</button>
                 ))}
               </div>
             </div>
           )}
           <div>
-            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>Resultado</p>
+            <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>Resultado</p>
             <div style={{ display: 'flex', gap: 6 }}>
-              {[
-                { key: 'todos', label: 'Todos', color: 'rgba(255,255,255,0.4)', accent: T },
-                { key: 'con_venta', label: 'Con venta', color: '#4ADE80', accent: '#4ADE80' },
-                { key: 'sin_venta', label: 'Sin venta', color: '#F87171', accent: '#F87171' },
-              ].map(opt => (
-                <button key={opt.key} onClick={() => setFiltroResultado(opt.key as any)} style={{
+              {([
+                { key: 'todos', label: 'Todos', color: '#64748B', accent: T },
+                { key: 'con_venta', label: 'Con venta', color: '#059669', accent: '#059669' },
+                { key: 'sin_venta', label: 'Sin venta', color: '#DC2626', accent: '#DC2626' },
+              ] as const).map(opt => (
+                <button key={opt.key} onClick={() => setFiltroResultado(opt.key)} style={{
                   padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  border: `1px solid ${filtroResultado === opt.key ? `${opt.accent}40` : 'rgba(255,255,255,0.09)'}`,
+                  border: `1px solid ${filtroResultado === opt.key ? `${opt.accent}40` : '#E2E8F0'}`,
                   background: filtroResultado === opt.key ? `${opt.accent}12` : 'transparent',
-                  color: filtroResultado === opt.key ? opt.accent : 'rgba(255,255,255,0.4)',
+                  color: filtroResultado === opt.key ? opt.accent : '#64748B',
                 }}>{opt.label}</button>
               ))}
             </div>
@@ -816,7 +837,7 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
 
         {/* ── KPI Hero ── */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.05) 60%, rgba(0,0,0,0) 100%)',
+          background: 'linear-gradient(135deg, #E2E8F0 0%, #E2E8F0 60%, rgba(0,0,0,0) 100%)',
           border: `1px solid ${T_BORDER}`,
           borderRadius: 22,
           padding: '20px 22px',
@@ -824,13 +845,13 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
           position: 'relative', overflow: 'hidden',
         }}>
           {/* Glow decoration */}
-          <div style={{ position: 'absolute', top: -40, right: -40, width: 120, height: 120, borderRadius: '50%', background: 'rgba(212,175,55,0.08)', filter: 'blur(30px)', pointerEvents: 'none' }} />
-          <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.55)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 8 }}>Total facturado</p>
+          <div style={{ position: 'absolute', top: -40, right: -40, width: 120, height: 120, borderRadius: '50%', background: '#E2E8F0', filter: 'blur(30px)', pointerEvents: 'none' }} />
+          <p style={{ fontSize: 9, fontWeight: 700, color: '#E2E8F0', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 8 }}>Total facturado</p>
           <p style={{ fontSize: 36, fontWeight: 900, color: T, letterSpacing: '-1.5px', lineHeight: 1 }}>
             {kpis.totalFacturado > 0 ? fmtPeso(kpis.totalFacturado) : '—'}
           </p>
           {kpis.total > 0 && (
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 8, fontWeight: 500 }}>
+            <p style={{ fontSize: 12, color: '#94A3B8', marginTop: 8, fontWeight: 500 }}>
               {conversionRate}% conversión · {kpis.total} visitas registradas
             </p>
           )}
@@ -839,18 +860,18 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
         {/* ── KPI chips ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 24 }}>
           {[
-            { label: 'Visitas',    val: kpis.total,          icon: '👁', color: 'rgba(255,255,255,0.7)' },
-            { label: 'Con venta',  val: kpis.conVenta,       icon: '↗', color: '#4ADE80' },
-            { label: 'Sin venta',  val: kpis.sinVenta,       icon: '✕', color: '#F87171' },
+            { label: 'Visitas',    val: kpis.total,          icon: '👁', color: '#0F172A' },
+            { label: 'Con venta',  val: kpis.conVenta,       icon: '↗', color: '#059669' },
+            { label: 'Sin venta',  val: kpis.sinVenta,       icon: '✕', color: '#DC2626' },
             { label: 'Unidades',   val: kpis.totalUnidades,  icon: '◉', color: T },
           ].map(k => (
             <div key={k.label} style={{
-              background: 'rgba(255,255,255,0.025)',
-              border: '1px solid rgba(255,255,255,0.055)',
+              background: '#F1F5F9',
+              border: '1px solid #F1F5F9',
               borderRadius: 16, padding: '12px 10px', textAlign: 'center',
             }}>
               <p style={{ fontSize: 18, fontWeight: 900, color: k.color, letterSpacing: '-0.5px', lineHeight: 1, marginBottom: 5 }}>{k.val}</p>
-              <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.28)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</p>
+              <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</p>
             </div>
           ))}
         </div>
@@ -858,9 +879,9 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
         {/* ── Lista ── */}
         {grupos.length === 0 ? (
           <div style={{ textAlign: 'center', paddingTop: 56 }}>
-            <Package size={40} color="rgba(255,255,255,0.1)" style={{ margin: '0 auto 16px', display: 'block' }} />
-            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.25)', fontWeight: 500 }}>Sin visitas registradas</p>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)', marginTop: 6 }}>Ajusta los filtros o registra una nueva visita</p>
+            <Package size={40} color="#E2E8F0" style={{ margin: '0 auto 16px', display: 'block' }} />
+            <p style={{ fontSize: 15, color: '#94A3B8', fontWeight: 500 }}>Sin visitas registradas</p>
+            <p style={{ fontSize: 12, color: '#E2E8F0', marginTop: 6 }}>Ajusta los filtros o registra una nueva visita</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -871,12 +892,12 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
                 <div key={fecha}>
                   {/* ── Separador de día ── */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.055)' }} />
+                    <div style={{ flex: 1, height: 1, background: '#F1F5F9' }} />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'capitalize', letterSpacing: '0.1px' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'capitalize', letterSpacing: '0.1px' }}>
                         {labelFecha(fecha + 'T12:00:00')}
                       </span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', padding: '2px 7px', borderRadius: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', background: '#F1F5F9', padding: '2px 7px', borderRadius: 10 }}>
                         {grupo.length}
                       </span>
                       {facturadoDia > 0 && (
@@ -885,7 +906,7 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
                         </span>
                       )}
                     </div>
-                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.055)' }} />
+                    <div style={{ flex: 1, height: 1, background: '#F1F5F9' }} />
                   </div>
 
                   {/* Cards del día */}
