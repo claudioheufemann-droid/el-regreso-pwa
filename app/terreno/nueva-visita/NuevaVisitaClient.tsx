@@ -1,602 +1,47 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { ChevronLeft, Camera, Check, CloudOff, MessageCircle, Image as ImageIcon } from 'lucide-react'
 import { notificar } from '@/lib/notificar'
 import { upsertOrQueue } from '@/lib/offlineQueue'
 import { uploadConTimeout } from '@/lib/offlinePhotoQueue'
 import { hapticExito } from '@/lib/haptics'
-import { useRouter } from 'next/navigation'
-import { type CatalogoInfo, CATALOGO_INFO_DEFAULT, catalogoParaVendedor, fmtPrecioCLP } from '@/lib/catalogo-productos'
-import {
-  MapPin, Camera, CheckCircle, XCircle, ChevronLeft, ChevronDown,
-  Search, Plus, ShoppingCart, Minus, Package, AlertTriangle, MessageCircle, Share2,
-  Banknote, Landmark, CreditCard, CalendarClock, Loader2,
-} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { AppUser } from '@/lib/auth'
-import { addDays, format } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { catalogoParaVendedor, fmtPrecioCLP } from '@/lib/catalogo-productos'
 import { dentroDeGeofence } from '@/lib/geo'
-
-type MetodoPago = 'efectivo' | 'transferencia' | 'credito'
-const DIAS_CREDITO_PRESETS = [7, 15, 30, 45, 60]
-
-const T = '#D4AF37'
-const T_DIM = 'rgba(212,175,55,0.12)'
-const T_BORDER = 'rgba(212,175,55,0.25)'
-const C = '#D4AF37'
-const C_DIM = 'rgba(212,175,55,0.12)'
-const C_BORDER = 'rgba(212,175,55,0.28)'
-const WA = '#25D366'
-
-// ─── Types ────────────────────────────────────────────────────
-
-interface ClienteExistente {
-  nombre_fantasia: string
-  categoria_negocio: string | null
-  localidad: string | null
-  lat?: number | null
-  lng?: number | null
-}
-
-interface Producto {
-  producto: string
-  categoria_producto: string | null
-  envase: string | null
-}
-
-interface GeoResult { lat: string; lon: string; display_name: string }
-
-interface NuevoClienteDetalle {
-  direccion: string
-  lat: number | null
-  lng: number | null
-  contacto: string
-  rut: string
-}
-
-interface FotoSlot { label: string; key: 'exterior' | 'exhibicion' | 'competencia'; emoji: string }
-const FOTO_SLOTS: FotoSlot[] = [
-  { label: 'Exterior',   key: 'exterior',   emoji: '🏪' },
-  { label: 'Exhibición', key: 'exhibicion', emoji: '🍺' },
-  { label: 'Competencia',key: 'competencia',emoji: '🔍' },
-]
-
-// ─── Imágenes de producto ─────────────────────────────────────
-
-const PRODUCTO_IMAGENES: Record<string, string> = {
-  'Kombucha Berry Menta':        '/productos/kombucha/berry-menta.webp',
-  'Kombucha Detox':              '/productos/kombucha/detox.webp',
-  'Kombucha Lemon':              '/productos/kombucha/lemon-fresh.webp',
-  'Kombucha Mango':              '/productos/kombucha/mango-merken.webp',
-  'Kombucha Maqui':              '/productos/kombucha/maqui-hops.webp',
-  'Kombucha Maracuyá Cardamomo': '/productos/kombucha/maracuya-cardamomo.webp',
-  'Kombucha Natural':            '/productos/kombucha/natural.webp',
-  'Arboretum':                   '/productos/cerveza/arboretum.webp',
-  'Mocho English':               '/productos/cerveza/mocho.webp',
-  'La Barra APA':                '/productos/cerveza/la-barra.webp',
-  'Fisura':                      '/productos/cerveza/fisura.webp',
-  'Descenso West Coast IPA':     '/productos/cerveza/descenso.webp',
-  'Aguas Blancas':               '/productos/cerveza/aguas-blancas.webp',
-}
-
-// Foto genérica de barril — se usa para todos los barriles sin importar el sabor.
-const IMAGEN_BARRIL = '/productos/cerveza/barril.webp'
-
-function ProductoThumb({ nombre, categoria, esBarril = false, size = 44 }: { nombre: string; categoria: string; esBarril?: boolean; size?: number }) {
-  const src = esBarril ? IMAGEN_BARRIL : PRODUCTO_IMAGENES[nombre]
-  const [imgOk, setImgOk] = useState(!!src)
-  const esKombucha = (categoria ?? '').toLowerCase().includes('kombucha')
-  const emoji = esKombucha ? '🫧' : '🍺'
-
-  if (src && imgOk) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src} alt={nombre} width={size} height={size}
-        onError={() => setImgOk(false)}
-        style={{ width: size, height: size, borderRadius: 10, objectFit: 'contain', background: 'rgba(255,255,255,0.03)', flexShrink: 0 }}
-      />
-    )
-  }
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: 10, flexShrink: 0,
-      background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.5,
-    }}>
-      {emoji}
-    </div>
-  )
-}
-
-// ─── Catálogo estático ────────────────────────────────────────
-// Fuente única en lib/catalogo-productos.ts (compartida con Cotizaciones).
-
-// Catálogo activo del vendedor logueado — se fija en NuevaVisitaClient() en cada render,
-// antes de que se rendericen sus componentes hijos (Paso3Vista360, Paso4Catalogo, WhatsAppModal, etc.)
-let CATALOGO_INFO: Record<string, CatalogoInfo> = CATALOGO_INFO_DEFAULT
-
-// ─── WhatsApp helpers ─────────────────────────────────────────
-
-function generarMensajeCatalogo(): string {
-  const cervezas = Object.entries(CATALOGO_INFO).filter(([, i]) => !i.estilo.toLowerCase().includes('kombucha'))
-  const kombuchas = Object.entries(CATALOGO_INFO).filter(([, i]) => i.estilo.toLowerCase().includes('kombucha'))
-
-  let m = '🍺 *CATÁLOGO EL REGRESO BEER CO*\n_www.elregresobeer.com_\n\n'
-  m += '*━━━ CERVEZAS ━━━*\n\n'
-  for (const [nombre, info] of cervezas) {
-    m += `🍺 *${nombre}* — ${info.estilo}\n`
-    m += `$${info.precio_lata.toLocaleString('es-CL')} la lata · Caja 24: $${(info.precio_lata * 24).toLocaleString('es-CL')}\n\n`
-  }
-  m += '*━━━ KOMBUCHA LA IDA ━━━*\n\n'
-  for (const [nombre, info] of kombuchas) {
-    m += `🫧 *${nombre}*\n`
-    m += `$${info.precio_lata.toLocaleString('es-CL')} la lata · Caja 24: $${(info.precio_lata * 24).toLocaleString('es-CL')}\n\n`
-  }
-  m += '📦 _Pedido mínimo: 1 caja de 24 latas (puede ser mixta)_\n'
-  m += '💰 _Descuento +3 cajas: $100/lata cerveza · $50/lata kombucha_\n'
-  m += '💳 _Pago: Transferencia o tarjeta vía Flow_'
-  return m
-}
-
-function generarMensajePedido(items: ItemCarrito[], clienteNombre: string, vendedorNombre: string): string {
-  const fecha = new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
-  const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0)
-  let m = `🍺 *COTIZACIÓN EL REGRESO BEER*\n_${fecha}_\n\n`
-  m += `*Cliente:* ${clienteNombre}\n`
-  m += `*Vendedor:* ${vendedorNombre}\n\n`
-  m += '*Detalle del pedido:*\n'
-  for (const item of items) {
-    m += `• ${item.producto} ×${item.cantidad}`
-    if (item.precio > 0) m += ` = $${(item.precio * item.cantidad).toLocaleString('es-CL')}`
-    m += '\n'
-  }
-  if (total > 0) m += `\n*Total: $${total.toLocaleString('es-CL')}*\n`
-  m += '\n_Precios brutos sin IVA · Sujeto a disponibilidad_'
-  return m
-}
-
-function abrirWhatsApp(phone: string, mensaje: string) {
-  const num = phone.replace(/[\s\-\(\)]/g, '').replace(/^\+?56/, '56').replace(/^(?!56)/, '56')
-  const url = `https://wa.me/${num}?text=${encodeURIComponent(mensaje)}`
-  window.open(url, '_blank')
-}
-
-// ─── Modal WhatsApp ───────────────────────────────────────────
-
-interface WhatsAppModalProps {
-  tipo: 'catalogo'
-  clienteNombre: string
-  vendedorNombre: string
-  onClose: () => void
-}
-
-function WhatsAppModal({ onClose }: WhatsAppModalProps) {
-  const [phone, setPhone] = useState('')
-
-  function enviar() {
-    const t = phone.trim()
-    if (!t) return
-    abrirWhatsApp(t, generarMensajeCatalogo())
-    onClose()
-  }
-
-  return (
-    <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300 }}
-      onClick={onClose}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{ background: '#1C1C1C', borderRadius: '20px 20px 0 0', padding: '24px 20px 32px', width: '100%', maxWidth: 480 }}
-      >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(37,211,102,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <MessageCircle size={20} color={WA} />
-          </div>
-          <div>
-            <p style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF' }}>Enviar Catálogo</p>
-            <p style={{ fontSize: 11, color: 'var(--muted)' }}>vía WhatsApp</p>
-          </div>
-        </div>
-        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20, paddingLeft: 52 }}>
-          Se enviará el catálogo completo con todos los productos y precios.
-        </p>
-
-        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 6 }}>
-          Número de WhatsApp del cliente
-        </label>
-        <input
-          value={phone} onChange={e => setPhone(e.target.value)}
-          placeholder="+56 9 12345678"
-          type="tel"
-          autoFocus
-          style={{
-            width: '100%', padding: '14px', borderRadius: 12,
-            background: '#131313', border: '1px solid rgba(255,255,255,0.1)',
-            color: '#F4EEDF', fontSize: 16, outline: 'none', marginBottom: 16,
-          }}
-        />
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{
-            flex: 1, padding: '14px', borderRadius: 12,
-            border: '1px solid rgba(255,255,255,0.08)', background: 'transparent',
-            color: 'var(--muted)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-          }}>Cancelar</button>
-          <button onClick={enviar} disabled={!phone.trim()} style={{
-            flex: 2, padding: '14px', borderRadius: 12, border: 'none',
-            background: phone.trim() ? WA : 'rgba(37,211,102,0.12)',
-            color: phone.trim() ? '#fff' : 'rgba(37,211,102,0.35)',
-            fontSize: 14, fontWeight: 800, cursor: phone.trim() ? 'pointer' : 'not-allowed',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          }}>
-            <MessageCircle size={16} />
-            Abrir WhatsApp
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Imagen de venta (Canvas) ────────────────────────────────
-
-function loadImg(src: string): Promise<HTMLImageElement> {
-  return new Promise((res, rej) => {
-    const i = new Image()
-    i.onload = () => res(i)
-    i.onerror = rej
-    i.src = src
-  })
-}
-
-async function generarImagenVenta(
-  items: ItemCarrito[],
-  clienteNombre: string,
-  vendedorNombre: string,
-): Promise<Blob> {
-  const W = 600; const PAD = 28; const ROW = 76
-  const HEADER = 172; const TOTAL_ROW = 62; const FOOTER = 56
-  const H = HEADER + items.length * ROW + TOTAL_ROW + FOOTER
-  const DPR = 2
-  const canvas = document.createElement('canvas')
-  canvas.width = W * DPR; canvas.height = H * DPR
-  const ctx = canvas.getContext('2d')!
-  ctx.scale(DPR, DPR)
-
-  // pre-cargar imágenes de productos
-  const imgs: Record<string, HTMLImageElement | null> = {}
-  await Promise.all(items.map(async it => {
-    const src = PRODUCTO_IMAGENES[it.producto]
-    imgs[it.producto] = src ? await loadImg(src).catch(() => null) : null
-  }))
-
-  // fondo general
-  ctx.fillStyle = '#0D0D0D'; ctx.fillRect(0, 0, W, H)
-
-  // barra dorada superior
-  ctx.fillStyle = '#D4AF37'; ctx.fillRect(0, 0, W, 5)
-
-  // zona header
-  ctx.fillStyle = '#131313'; ctx.fillRect(0, 5, W, HEADER - 5)
-
-  // logo / marca
-  ctx.font = `900 20px system-ui, sans-serif`
-  ctx.fillStyle = '#D4AF37'
-  ctx.fillText('EL REGRESO BEER CO.', PAD, 44)
-  ctx.font = `400 11px system-ui, sans-serif`
-  ctx.fillStyle = 'rgba(255,255,255,0.35)'
-  ctx.fillText('Valdivia, Chile  ·  www.elregresobeer.com', PAD, 62)
-
-  // línea separadora interna
-  ctx.fillStyle = 'rgba(212,175,55,0.18)'; ctx.fillRect(PAD, 76, W - PAD * 2, 1)
-
-  // datos cliente / fecha
-  const fecha = new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
-  const cols = [
-    { label: 'FECHA',    value: fecha },
-    { label: 'CLIENTE',  value: clienteNombre },
-    { label: 'VENDEDOR', value: vendedorNombre.split(' ')[0] },
-  ]
-  cols.forEach((col, ci) => {
-    const x = PAD + ci * 186
-    ctx.font = '700 9px system-ui, sans-serif'
-    ctx.fillStyle = 'rgba(255,255,255,0.38)'
-    ctx.fillText(col.label, x, 100)
-    ctx.font = '700 13px system-ui, sans-serif'
-    ctx.fillStyle = '#F4EEDF'
-    ctx.fillText(col.value.slice(0, 22), x, 120)
-  })
-
-  // línea de cierre de header
-  ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(0, HEADER - 1, W, 1)
-
-  // filas de productos
-  items.forEach((item, idx) => {
-    const y = HEADER + idx * ROW
-    ctx.fillStyle = idx % 2 === 0 ? '#0F0F0F' : '#111111'
-    ctx.fillRect(0, y, W, ROW)
-
-    // foto producto
-    const IMG = 48; const imgX = PAD; const imgY = y + (ROW - IMG) / 2
-    if (imgs[item.producto]) {
-      ctx.save()
-      ctx.beginPath()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(ctx as any).roundRect?.(imgX, imgY, IMG, IMG, 8) ?? ctx.rect(imgX, imgY, IMG, IMG)
-      ctx.clip()
-      ctx.drawImage(imgs[item.producto]!, imgX, imgY, IMG, IMG)
-      ctx.restore()
-    } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.06)'
-      ctx.beginPath()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(ctx as any).roundRect?.(imgX, imgY, IMG, IMG, 8) ?? ctx.rect(imgX, imgY, IMG, IMG)
-      ctx.fill()
-    }
-
-    // nombre
-    ctx.font = '700 14px system-ui, sans-serif'
-    ctx.fillStyle = '#F4EEDF'
-    ctx.fillText(item.producto.slice(0, 34), PAD + IMG + 12, y + 28)
-    // detalle
-    ctx.font = '400 11px system-ui, sans-serif'
-    ctx.fillStyle = 'rgba(255,255,255,0.38)'
-    ctx.fillText(`${item.cantidad} ud. × ${fmtPrecioCLP(item.precio)}`, PAD + IMG + 12, y + 48)
-
-    // subtotal (derecha)
-    const sub = fmtPrecioCLP(item.cantidad * item.precio)
-    ctx.font = '800 16px system-ui, sans-serif'
-    ctx.fillStyle = '#D4AF37'
-    ctx.textAlign = 'right'
-    ctx.fillText(sub, W - PAD, y + ROW / 2 + 6)
-    ctx.textAlign = 'left'
-
-    ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(0, y + ROW - 1, W, 1)
-  })
-
-  // fila total
-  const yT = HEADER + items.length * ROW
-  ctx.fillStyle = '#161616'; ctx.fillRect(0, yT, W, TOTAL_ROW)
-  ctx.fillStyle = 'rgba(212,175,55,0.2)'; ctx.fillRect(0, yT, W, 1)
-  ctx.font = '700 10px system-ui, sans-serif'
-  ctx.fillStyle = 'rgba(255,255,255,0.4)'
-  ctx.fillText('TOTAL PEDIDO', PAD, yT + 38)
-  const total = items.reduce((s, i) => s + i.cantidad * i.precio, 0)
-  ctx.font = '900 22px system-ui, sans-serif'
-  ctx.fillStyle = '#F4EEDF'
-  ctx.textAlign = 'right'
-  ctx.fillText(fmtPrecioCLP(total), W - PAD, yT + 42)
-  ctx.textAlign = 'left'
-
-  // footer
-  const yF = yT + TOTAL_ROW
-  ctx.fillStyle = '#0A0A0A'; ctx.fillRect(0, yF, W, FOOTER)
-  ctx.fillStyle = '#D4AF37'; ctx.fillRect(0, yF, W, 3)
-  ctx.font = '400 11px system-ui, sans-serif'
-  ctx.fillStyle = 'rgba(255,255,255,0.28)'
-  ctx.textAlign = 'center'
-  ctx.fillText('El Regreso Beer Co. · Valdivia, Chile · www.elregresobeer.com', W / 2, yF + 34)
-  ctx.textAlign = 'left'
-
-  return new Promise(resolve => canvas.toBlob(b => resolve(b!), 'image/png'))
-}
-
-async function compartirImagen(blob: Blob) {
-  const file = new File([blob], 'pedido-el-regreso.png', { type: 'image/png' })
-  if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file], title: 'Pedido El Regreso Beer' })
-  } else {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'pedido-el-regreso.png'; a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-  }
-}
-
-// ─── Modal imagen de venta ────────────────────────────────────
-
-function VentaImageModal({ items, clienteNombre, vendedorNombre, onClose }: {
-  items: ItemCarrito[]; clienteNombre: string; vendedorNombre: string; onClose: () => void
-}) {
-  const [estado, setEstado] = useState<'generando' | 'listo' | 'error'>('generando')
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const blobRef = useRef<Blob | null>(null)
-
-  useEffect(() => {
-    generarImagenVenta(items, clienteNombre, vendedorNombre)
-      .then(blob => {
-        blobRef.current = blob
-        setPreviewUrl(URL.createObjectURL(blob))
-        setEstado('listo')
-      })
-      .catch(() => setEstado('error'))
-    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  async function compartir() {
-    if (blobRef.current) await compartirImagen(blobRef.current)
-    onClose()
-  }
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1C1C1C', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px', width: '100%', maxWidth: 520 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: T_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <MessageCircle size={20} color={T} />
-          </div>
-          <div>
-            <p style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF' }}>Imagen del pedido</p>
-            <p style={{ fontSize: 11, color: 'var(--muted)' }}>Lista para compartir por WhatsApp</p>
-          </div>
-        </div>
-
-        {/* Preview */}
-        <div style={{ borderRadius: 12, overflow: 'hidden', marginBottom: 16, background: '#0D0D0D', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {estado === 'generando' && (
-            <div style={{ textAlign: 'center', padding: 24 }}>
-              <div style={{ width: 32, height: 32, border: `3px solid ${T_BORDER}`, borderTopColor: T, borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 10px' }} />
-              <p style={{ fontSize: 13, color: 'var(--muted)' }}>Generando imagen…</p>
-            </div>
-          )}
-          {estado === 'error' && <p style={{ fontSize: 13, color: '#B5543E', padding: 24 }}>Error al generar la imagen</p>}
-          {estado === 'listo' && previewUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewUrl} alt="Pedido" style={{ width: '100%', display: 'block' }} />
-          )}
-        </div>
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '14px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', background: 'transparent', color: 'var(--muted)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-            Cancelar
-          </button>
-          <button onClick={compartir} disabled={estado !== 'listo'} style={{
-            flex: 2, padding: '14px', borderRadius: 12, border: 'none',
-            background: estado === 'listo' ? WA : 'rgba(37,211,102,0.12)',
-            color: estado === 'listo' ? '#fff' : 'rgba(37,211,102,0.35)',
-            fontSize: 14, fontWeight: 800, cursor: estado === 'listo' ? 'pointer' : 'not-allowed',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          }}>
-            <MessageCircle size={16} />
-            Compartir imagen
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Sección Deuda/Crédito ────────────────────────────────────
-
-interface Factura {
-  numero: string
-  fecha_emision: string
-  fecha_vencimiento: string
-  dias_atraso: number
-  monto: number
-  productos?: string
-}
-
-interface SaldoCliente {
-  monto_deuda: number
-  dias_credito: number
-  facturas_vencidas: Factura[]
-}
-
-function DeudaSection({ clienteNombre }: { clienteNombre: string }) {
-  const [saldo, setSaldo] = useState<SaldoCliente | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState(false)
-
-  useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from('saldos_clientes')
-      .select('monto_deuda, dias_credito, facturas_vencidas')
-      .eq('nombre_fantasia', clienteNombre)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data && data.monto_deuda > 0) setSaldo(data as SaldoCliente)
-        setLoading(false)
-      })
-  }, [clienteNombre])
-
-  if (loading) return <div style={{ height: 44, marginBottom: 16 }} />
-
-  // Sin deuda
-  if (!saldo) {
-    return (
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
-        borderRadius: 12, marginBottom: 16,
-        background: 'rgba(90,138,74,0.06)', border: '1px solid rgba(90,138,74,0.2)',
-      }}>
-        <CheckCircle size={16} color="#5A8A4A" />
-        <p style={{ fontSize: 13, color: '#5A8A4A', fontWeight: 600 }}>Cliente al día — sin deuda pendiente</p>
-      </div>
-    )
-  }
-
-  // Con deuda
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div
-        onClick={() => setExpanded(e => !e)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', cursor: 'pointer',
-          background: 'rgba(181,84,62,0.08)', border: '1px solid rgba(181,84,62,0.3)',
-          borderRadius: expanded ? '12px 12px 0 0' : 12,
-        }}
-      >
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(181,84,62,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <AlertTriangle size={18} color="#B5543E" />
-        </div>
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: '#B5543E', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 2 }}>
-            Saldo pendiente · {saldo.dias_credito} días de crédito
-          </p>
-          <p style={{ fontSize: 20, fontWeight: 900, color: '#F4EEDF', letterSpacing: '-0.5px' }}>
-            {fmtPrecioCLP(saldo.monto_deuda)}
-          </p>
-        </div>
-        <ChevronDown size={16} color="#B5543E" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
-      </div>
-
-      {expanded && (
-        <div style={{ background: 'rgba(181,84,62,0.04)', border: '1px solid rgba(181,84,62,0.2)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '12px 16px' }}>
-          {saldo.facturas_vencidas.length === 0 ? (
-            <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '12px 0' }}>
-              Sin detalle de facturas disponible
-            </p>
-          ) : saldo.facturas_vencidas.map((f, i) => (
-            <div key={i} style={{ padding: '10px 12px', borderRadius: 10, marginBottom: 6, background: 'rgba(0,0,0,0.25)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF' }}>Doc #{f.numero}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#B5543E', background: 'rgba(181,84,62,0.12)', padding: '2px 8px', borderRadius: 6 }}>
-                  {f.dias_atraso}d atraso
-                </span>
-              </div>
-              <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
-                Emisión: {f.fecha_emision} · Vence: {f.fecha_vencimiento}
-              </p>
-              {f.productos && <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 4 }}>{f.productos}</p>}
-              <p style={{ fontSize: 13, fontWeight: 800, color: '#F4EEDF' }}>{fmtPrecioCLP(f.monto)}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Motivos sin venta ────────────────────────────────────────
-
-const MOTIVOS_SIN_VENTA = [
-  'Cliente con stock',
-  'Cliente no estaba',
-  'Precio alto',
-  'Competencia',
-  'Solo presentación',
-  'Local cerrado',
-  'Otro motivo',
-]
-
-// ─── Paso de seguimiento (CRM) ─────────────────────────────────
-type TipoSeguimiento = 'llamar' | 'email' | 'whatsapp' | 'visita' | 'ninguna'
-interface AccionSeguimiento { tipo: TipoSeguimiento; fechaHora: string; nota: string }
-const TIPOS_SEGUIMIENTO: { key: TipoSeguimiento; label: string; emoji: string }[] = [
-  { key: 'llamar',   label: 'Llamar por teléfono',      emoji: '📞' },
-  { key: 'email',    label: 'Enviar correo',            emoji: '✉️' },
-  { key: 'whatsapp', label: 'Enviar WhatsApp',          emoji: '💬' },
-  { key: 'visita',   label: 'Nueva visita presencial',  emoji: '🚗' },
-  { key: 'ninguna',  label: 'No requiere seguimiento',  emoji: '🚫' },
-]
-
-interface ItemCarrito { producto: string; categoria: string; envase: string; cantidad: number; precio: number }
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+import type { AppUser } from '@/lib/auth'
+import { C, TAP } from '../theme'
+import PasoCliente, { type ClienteExistente, type NuevoClienteDetalle } from './PasoCliente'
+import PasoVenta, { type CierrePayload } from './PasoVenta'
+import {
+  setCatalogo, WhatsAppCatalogoModal, VentaImageModal, ModalFotoRequerida,
+  type ItemCarrito,
+} from './piezas'
+
+/**
+ * Venta en terreno — flujo de DOS pasos.
+ *
+ * Antes eran cuatro pantallas (cliente → check-in GPS → "Vista 360°" →
+ * catálogo/cierre). Se redujo por pedido de Claudio: el vendedor está en la
+ * calle, con una mano, y cada pantalla intermedia era una oportunidad de
+ * abandonar el pedido.
+ *
+ * Qué se eliminó y por qué NO se perdió información:
+ *  - Check-in GPS: era una pantalla sólo para apretar "estoy acá". Ahora la
+ *    ubicación se pide automáticamente al elegir el cliente, en segundo
+ *    plano. Se sigue guardando lat/lng/dirección y el geofencing igual.
+ *  - "Vista 360°": mostraba deuda e historial antes de dejar vender. La
+ *    deuda ahora es un aviso plegable arriba de la venta, que es donde
+ *    realmente sirve — al decidir si se le vende y cómo cobra.
+ *  - Fotos de evidencia: eran tres slots fijos (exterior/exhibición/
+ *    competencia) en su propio paso. Ahora es un botón de cámara en el
+ *    encabezado, disponible en todo momento.
+ */
+
+interface Producto { producto: string; categoria_producto: string | null; envase: string | null }
 
 interface VisitaRetomada {
   id: string
@@ -626,1351 +71,31 @@ interface Props {
   clientePre?: string | null
 }
 
-// ─── Selector de cantidad editable ───────────────────────────
-
-function CantidadInput({
-  value, onchange, accent, size = 'md',
-}: {
-  value: number
-  onchange: (n: number) => void
-  accent: string
-  size?: 'sm' | 'md'
-}) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const btnW = size === 'sm' ? 34 : 36
-  const numW = size === 'sm' ? 30 : 34
-  const fontSize = size === 'sm' ? 15 : 16
-  const iconSize = size === 'sm' ? 14 : 15
-
-  const confirm = useCallback((raw: string) => {
-    const n = parseInt(raw, 10)
-    if (!isNaN(n) && n >= 0) onchange(n)
-    setEditing(false)
-  }, [onchange])
-
-  function startEdit() {
-    setDraft(value > 0 ? String(value) : '')
-    setEditing(true)
-    setTimeout(() => { inputRef.current?.select() }, 0)
-  }
-
-  const accentDim = accent === T ? T_DIM : 'rgba(212,175,55,0.12)'
-  const accentBorder = accent === T ? T_BORDER : 'rgba(212,175,55,0.25)'
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-      <button
-        onClick={() => onchange(Math.max(0, value - 1))}
-        style={{ width: btnW, height: btnW, borderRadius: 9, border: 'none', cursor: 'pointer', background: value > 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)', color: '#F4EEDF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      >
-        <Minus size={iconSize} />
-      </button>
-
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={draft}
-          onChange={e => setDraft(e.target.value.replace(/\D/g, ''))}
-          onBlur={() => confirm(draft)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') confirm(draft)
-            if (e.key === 'Escape') setEditing(false)
-          }}
-          type="text"
-          inputMode="numeric"
-          style={{
-            width: numW + 12, height: btnW, textAlign: 'center', fontSize, fontWeight: 900,
-            background: accentDim, border: `1px solid ${accent}`, borderRadius: 9,
-            color: accent, outline: 'none', margin: '0 4px',
-          }}
-        />
-      ) : (
-        <span
-          onClick={startEdit}
-          style={{ width: numW + 8, height: btnW, textAlign: 'center', fontSize, fontWeight: 900, color: value > 0 ? accent : 'var(--muted)', cursor: 'text', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 9, border: `1px dashed ${value > 0 ? accent : 'rgba(255,255,255,0.18)'}`, margin: '0 3px', flexShrink: 0 }}
-          title="Toca para escribir cantidad"
-        >
-          {value}
-        </span>
-      )}
-
-      <button
-        onClick={() => onchange(value + 1)}
-        style={{ width: btnW, height: btnW, borderRadius: 9, cursor: 'pointer', background: accentDim, border: `1px solid ${accentBorder}`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      >
-        <Plus size={iconSize} />
-      </button>
-    </div>
-  )
-}
-
-// ─── Step indicator ───────────────────────────────────────────
-
-function StepBar({ paso, total }: { paso: number; total: number }) {
-  const pct = Math.round((paso / total) * 100)
-  return (
-    <div style={{ padding: '0 20px' }}>
-      <div style={{ height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{
-          height: '100%', width: `${pct}%`, borderRadius: 2,
-          background: 'linear-gradient(90deg, #B8962E 0%, #D4AF37 60%, #F0D060 100%)',
-          boxShadow: '0 0 10px rgba(212,175,55,0.7)',
-          transition: 'width 0.5s cubic-bezier(0.16,1,0.3,1)',
-        }} />
-      </div>
-    </div>
-  )
-}
-
-// ─── Paso 1: Selección de cliente ────────────────────────────
-
-function Paso1Cliente({ clientes, deudores, onConfirmar }: {
-  clientes: ClienteExistente[]
-  deudores: DeudorInfo[]
-  onConfirmar: (nombre: string, esNuevo: boolean, canal: string, nuevoDetalle?: NuevoClienteDetalle) => void
-}) {
-  const [tab, setTab] = useState<'existente' | 'nuevo'>('existente')
-  const [query, setQuery] = useState('')
-  const [seleccionado, setSeleccionado] = useState<ClienteExistente | null>(null)
-  const [nombre, setNombre] = useState('')
-  const [canal, setCanal] = useState('')
-  const [direccion, setDireccion] = useState('')
-  const [direccionCoords, setDireccionCoords] = useState<{ lat: number; lng: number } | null>(null)
-  const [contacto, setContacto] = useState('')
-  const [rut, setRut] = useState('')
-
-  // Autocompletado de dirección (Nominatim) — igual patrón que RutaClient.tsx
-  const [geoResults, setGeoResults] = useState<GeoResult[]>([])
-  const [buscandoGeo, setBuscandoGeo] = useState(false)
-  const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    const q = direccion.trim()
-    if (!mostrarSugerencias || q.length < 3) { setGeoResults([]); return }
-    debounceRef.current = setTimeout(async () => {
-      setBuscandoGeo(true)
-      try {
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`)
-        const data: GeoResult[] = await res.json()
-        setGeoResults(Array.isArray(data) ? data.slice(0, 5) : [])
-      } catch {
-        setGeoResults([])
-      } finally {
-        setBuscandoGeo(false)
-      }
-    }, 450)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [direccion, mostrarSugerencias])
-
-  function elegirDireccion(r: GeoResult) {
-    setDireccion(r.display_name.split(',').slice(0, 3).join(',').trim())
-    setDireccionCoords({ lat: parseFloat(r.lat), lng: parseFloat(r.lon) })
-    setGeoResults([])
-    setMostrarSugerencias(false)
-  }
-
-  const filtrados = query.length > 1
-    ? clientes.filter(c => c.nombre_fantasia.toLowerCase().includes(query.toLowerCase())).slice(0, 12)
-    : clientes.slice(0, 8)
-
-  const canalesNegocio = ['Bar', 'Minimarket', 'Cafetería', 'Botillería', 'Almacén', 'Restaurante', 'Supermercado', 'Distribuidor', 'Actividades Turísticas', 'Gimnasio', 'Panadería', 'Cliente Directo', 'Otros']
-
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', margin: '16px 16px 0', borderRadius: 12, background: '#1C1C1C', padding: 4, gap: 4 }}>
-        {(['existente', 'nuevo'] as const).map(t => (
-          <button key={t} onClick={() => { setTab(t); setSeleccionado(null) }} style={{
-            flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
-            background: tab === t ? T : 'transparent',
-            color: tab === t ? '#080808' : 'var(--muted)',
-            transition: 'all 0.15s',
-          }}>
-            {t === 'existente' ? '🔍 Cliente Existente' : '➕ Cliente Nuevo'}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 16px 0' }}>
-        {tab === 'existente' ? (
-          <>
-            <div style={{ position: 'relative', marginBottom: 12 }}>
-              <Search size={16} color="var(--muted)" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-              <input
-                value={query} onChange={e => { setQuery(e.target.value); setSeleccionado(null) }}
-                placeholder="Buscar cliente..."
-                style={{ width: '100%', padding: '13px 14px 13px 40px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${seleccionado ? T_BORDER : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 15, outline: 'none' }}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {filtrados.map(c => (
-                <div key={c.nombre_fantasia} onClick={() => setSeleccionado(c)} style={{
-                  padding: '13px 14px', borderRadius: 12, cursor: 'pointer',
-                  background: seleccionado?.nombre_fantasia === c.nombre_fantasia ? T_DIM : '#1C1C1C',
-                  border: `1px solid ${seleccionado?.nombre_fantasia === c.nombre_fantasia ? T_BORDER : 'rgba(255,255,255,0.06)'}`,
-                  display: 'flex', alignItems: 'center', gap: 10, transition: 'all 0.1s',
-                }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 9, background: T_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: 16 }}>🏪</span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre_fantasia}</p>
-                    <p style={{ fontSize: 11, color: 'var(--muted)' }}>{[c.categoria_negocio, c.localidad].filter(Boolean).join(' · ')}</p>
-                  </div>
-                  {seleccionado?.nombre_fantasia === c.nombre_fantasia && <CheckCircle size={18} color={T} />}
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (<>
-          {/* Badge de deuda si hay cliente seleccionado */}
-          {(() => {
-            const d = seleccionado ? deudores.find(x => x.nombre_fantasia === seleccionado.nombre_fantasia) : null
-            if (!d) return null
-            const tieneDeuda = d.saldo_total > 0
-            const color = d.deuda_vencida > 0 ? '#B5543E' : '#D4AF37'
-            const rgb   = d.deuda_vencida > 0 ? '239,68,68' : '245,158,11'
-            if (!tieneDeuda) return (
-              <div style={{ margin: '8px 0 4px', padding: '10px 14px', background: 'rgba(90,138,74,0.07)', border: '1px solid rgba(90,138,74,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <CheckCircle size={14} color="#5A8A4A" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#5A8A4A' }}>Cliente al día — sin deuda pendiente</span>
-              </div>
-            )
-            return (
-              <div style={{ margin: '8px 0 4px', padding: '12px 14px', background: `rgba(${rgb},0.07)`, border: `1px solid rgba(${rgb},0.25)`, borderRadius: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 14 }}>{d.deuda_vencida > 0 ? '⚠️' : '💰'}</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    {d.deuda_vencida > 0 ? 'Deuda vencida' : 'Saldo pendiente'}
-                  </span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div>
-                    <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Saldo total</p>
-                    <p style={{ fontSize: 16, fontWeight: 900, color, letterSpacing: '-0.5px' }}>
-                      {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(d.saldo_total)}
-                    </p>
-                  </div>
-                  {d.deuda_vencida > 0 && (
-                    <div>
-                      <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Vencida</p>
-                      <p style={{ fontSize: 16, fontWeight: 900, color: '#B5543E', letterSpacing: '-0.5px' }}>
-                        {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(d.deuda_vencida)}
-                      </p>
-                    </div>
-                  )}
-                  {d.ultimo_pago && (
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Último pago</p>
-                      <p style={{ fontSize: 11, color: '#F4EEDF' }}>{new Date(d.ultimo_pago).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })()}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre de fantasía *</label>
-              <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Bar El Cóndor"
-                style={{ width: '100%', padding: '13px 14px', borderRadius: 12, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 15, outline: 'none' }} />
-            </div>
-
-            {/* Dirección con autocompletado (Nominatim) — al elegir una sugerencia
-                queda la dirección normalizada + lat/lng, sin escribir a mano. */}
-            <div style={{ position: 'relative' }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Dirección *</label>
-              <div style={{ position: 'relative' }}>
-                <MapPin size={16} style={{ position: 'absolute', left: 14, top: 15, color: direccionCoords ? '#5A8A4A' : 'rgba(255,255,255,0.3)' }} />
-                <input
-                  value={direccion}
-                  onChange={e => { setDireccion(e.target.value); setDireccionCoords(null); setMostrarSugerencias(true) }}
-                  onFocus={() => setMostrarSugerencias(true)}
-                  placeholder="Calle, número"
-                  style={{ width: '100%', padding: '13px 14px 13px 38px', borderRadius: 12, background: '#1C1C1C', border: `1px solid ${direccionCoords ? 'rgba(90,138,74,0.4)' : 'rgba(255,255,255,0.08)'}`, color: '#F4EEDF', fontSize: 15, outline: 'none' }}
-                />
-                {buscandoGeo && (
-                  <Loader2 size={15} style={{ position: 'absolute', right: 13, top: 15, color: 'rgba(255,255,255,0.4)', animation: 'spin 0.8s linear infinite' }} />
-                )}
-              </div>
-              {direccionCoords && (
-                <p style={{ fontSize: 10, color: '#5A8A4A', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <CheckCircle size={11} /> Ubicación confirmada en el mapa
-                </p>
-              )}
-              {mostrarSugerencias && geoResults.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-                  {geoResults.map((r, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => elegirDireccion(r)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
-                        minHeight: 40, padding: '8px 10px', borderRadius: 10,
-                        background: '#1C1C1C', border: '1px solid rgba(212,175,55,0.2)',
-                        color: 'var(--cream)', cursor: 'pointer', width: '100%',
-                      }}
-                    >
-                      <MapPin size={13} color={T} style={{ flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {r.display_name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {mostrarSugerencias && direccion.trim().length >= 3 && !buscandoGeo && geoResults.length === 0 && (
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
-                  Sin resultados. Sigue escribiendo o ajusta calle + número.
-                </p>
-              )}
-            </div>
-
-            {[
-              { label: 'Contacto / Teléfono',  value: contacto, onChange: setContacto, placeholder: '+56 9 ...' },
-              { label: 'RUT (opcional)',        value: rut, onChange: setRut, placeholder: '12.345.678-9' },
-            ].map(f => (
-              <div key={f.label}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{f.label}</label>
-                <input value={f.value} onChange={e => f.onChange(e.target.value)} placeholder={f.placeholder}
-                  style={{ width: '100%', padding: '13px 14px', borderRadius: 12, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 15, outline: 'none' }} />
-              </div>
-            ))}
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Canal de venta *</label>
-              <select value={canal} onChange={e => setCanal(e.target.value)}
-                style={{ width: '100%', padding: '13px 14px', borderRadius: 12, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: canal ? '#F4EEDF' : 'var(--muted)', fontSize: 15, outline: 'none' }}>
-                <option value="">Seleccionar canal...</option>
-                {canalesNegocio.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-        </>)}
-      </div>
-
-      <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
-        <button
-          onClick={() => {
-            if (tab === 'existente' && seleccionado) onConfirmar(seleccionado.nombre_fantasia, false, seleccionado.categoria_negocio ?? '')
-            else if (tab === 'nuevo' && nombre && canal && direccion) {
-              onConfirmar(nombre, true, canal, {
-                direccion, lat: direccionCoords?.lat ?? null, lng: direccionCoords?.lng ?? null, contacto, rut,
-              })
-            }
-          }}
-          disabled={tab === 'existente' ? !seleccionado : !nombre || !canal || !direccion}
-          style={{
-            width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
-            background: (tab === 'existente' ? !!seleccionado : !!nombre && !!canal) ? T : 'rgba(255,255,255,0.06)',
-            color: (tab === 'existente' ? !!seleccionado : !!nombre && !!canal) ? '#080808' : 'var(--muted)',
-            fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px', transition: 'all 0.2s',
-          }}
-        >
-          Confirmar cliente →
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Paso 2: Check-in GPS + Fotos ────────────────────────────
-
-function Paso2Checkin({ fotos, onAdjuntarFoto, onConfirmar, onCancelar }: {
-  fotos: Record<string, string>
-  onAdjuntarFoto: (key: string, file: File) => void
-  onConfirmar: (coords: { lat: number; lng: number; addr: string }) => void
-  onCancelar: () => void
-}) {
-  const [gps, setGps] = useState<{ lat: number; lng: number; addr: string } | null>(null)
-  const [gpsError, setGpsError] = useState(false)
-  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
-
-  useEffect(() => {
-    navigator.geolocation?.getCurrentPosition(
-      pos => setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, addr: `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}` }),
-      () => setGpsError(true),
-      { enableHighAccuracy: true, timeout: 10000 }
-    )
-  }, [])
-
-  function handleFoto(key: string, e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    onAdjuntarFoto(key, file)
-    e.target.value = ''
-  }
-
-  const fotosListas = FOTO_SLOTS.filter(s => fotos[s.key]).length
-  // Las fotos ya no son obligatorias para avanzar — solo se requiere el GPS.
-  // Se pueden adjuntar en cualquier momento (acá o desde el botón flotante
-  // "Adjuntar evidencia" en los pasos siguientes); si al Finalizar la visita
-  // no hay ninguna, se avisa con un modal en vez de bloquear el flujo.
-  const listo = !!gps
-
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px' }}>
-        {/* GPS */}
-        <div style={{ background: '#1C1C1C', borderRadius: 14, padding: '14px 16px', marginBottom: 20, border: `1px solid ${gps ? T_BORDER : gpsError ? 'rgba(181,84,62,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: gps ? T_DIM : gpsError ? 'rgba(181,84,62,0.1)' : 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <MapPin size={18} color={gps ? T : gpsError ? '#B5543E' : 'var(--muted)'} />
-            </div>
-            <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: gps ? T : gpsError ? '#B5543E' : 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                {gps ? 'Ubicación capturada' : gpsError ? 'GPS no disponible' : 'Capturando ubicación…'}
-              </p>
-              {gps && <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{gps.addr}</p>}
-              {!gps && !gpsError && (
-                <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
-                  {[0, 1, 2].map(i => (
-                    <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: T, animation: `pulse-opacity 1.2s ${i * 0.2}s ease-in-out infinite` }} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Fotos — opcionales acá, se pueden adjuntar en cualquier momento */}
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10 }}>
-          Fotos (opcional) — {fotosListas} / 3
-        </p>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
-          {FOTO_SLOTS.map(slot => (
-            <div key={slot.key} style={{ flex: 1 }}>
-              {/* Sin "capture" — así el picker nativo ofrece cámara Y galería */}
-              <input ref={el => { fileRefs.current[slot.key] = el }} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleFoto(slot.key, e)} />
-              <div onClick={() => fileRefs.current[slot.key]?.click()} style={{ height: 80, borderRadius: 12, overflow: 'hidden', cursor: 'pointer', background: fotos[slot.key] ? 'transparent' : '#1C1C1C', border: `2px solid ${fotos[slot.key] ? T : 'rgba(255,255,255,0.08)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                {fotos[slot.key] ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={fotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <div style={{ position: 'absolute', bottom: 3, right: 3, width: 18, height: 18, background: T, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <CheckCircle size={11} color="#080808" />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span style={{ fontSize: 22, marginBottom: 4 }}>{slot.emoji}</span>
-                    <Camera size={14} color="var(--muted)" />
-                  </>
-                )}
-              </div>
-              <p style={{ fontSize: 10, textAlign: 'center', color: fotos[slot.key] ? T : 'var(--muted)', marginTop: 5, fontWeight: 600 }}>{slot.label}</p>
-            </div>
-          ))}
-        </div>
-        {!listo && <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 8 }}>Esperando GPS…</p>}
-      </div>
-
-      <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
-        <button onClick={() => gps && onConfirmar(gps)} disabled={!listo} style={{
-          width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: listo ? 'pointer' : 'not-allowed',
-          background: listo ? T : 'rgba(255,255,255,0.06)', color: listo ? '#080808' : 'var(--muted)',
-          fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px', transition: 'all 0.2s',
-        }}>
-          {listo ? 'Iniciar visita →' : 'Esperando GPS…'}
-        </button>
-        <button onClick={onCancelar} style={{
-          width: '100%', padding: '13px 0', marginTop: 10, borderRadius: 12, border: '1px solid rgba(248,113,113,0.25)',
-          background: 'transparent', color: '#F87171', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-        }}>
-          Cancelar visita
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Paso 3: Vista 360° del cliente ──────────────────────────
-
-interface ClienteStats {
-  totalPedidos: number
-  totalLitros: number
-  totalFacturado: number
-  ultimaCompra: string | null
-  sugeridos: { nombre: string; categoria: string; veces: number }[]
-}
-
-const EXCLUIR_SUGERIDOS = ['empaque', 'distribuci']
-
-function Paso3Vista360({ clienteNombre, esNuevo, onContinuar }: {
-  clienteNombre: string; esNuevo: boolean; onContinuar: (items: ItemCarrito[]) => void
-}) {
-  const [stats, setStats] = useState<ClienteStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [carritoSug, setCarritoSug] = useState<Map<string, ItemCarrito>>(new Map())
-
-  function ajustarSug(nombre: string, categoria: string, delta: number) {
-    setSugCant(nombre, categoria, (carritoSug.get(nombre)?.cantidad ?? 0) + delta)
-  }
-
-  function setSugCant(nombre: string, categoria: string, nueva: number) {
-    setCarritoSug(prev => {
-      const next = new Map(prev)
-      if (nueva <= 0) { next.delete(nombre); return next }
-      next.set(nombre, { producto: nombre, categoria, envase: 'Lata', cantidad: nueva, precio: CATALOGO_INFO[nombre]?.precio_lata ?? 0 })
-      return next
-    })
-  }
-
-  useEffect(() => {
-    if (esNuevo) { onContinuar([]); return }
-    const supabase = createClient()
-    supabase
-      .from('ventas')
-      .select('producto, categoria_producto, total_sin_impuesto, litros, fecha_pedido')
-      .eq('nombre_fantasia', clienteNombre)
-      .order('fecha_pedido', { ascending: false })
-      .then(({ data }) => {
-        if (!data || data.length === 0) {
-          setStats({ totalPedidos: 0, totalLitros: 0, totalFacturado: 0, ultimaCompra: null, sugeridos: [] })
-          setLoading(false)
-          return
-        }
-        const totalFacturado = data.reduce((s, r) => s + (r.total_sin_impuesto ?? 0), 0)
-        const totalLitros    = data.reduce((s, r) => s + (r.litros ?? 0), 0)
-        const ultimaCompra   = data[0].fecha_pedido ?? null
-        const totalPedidos   = data.length
-        const prodCount: Record<string, { count: number; categoria: string }> = {}
-        for (const r of data) {
-          if (!r.producto) continue
-          const nl = r.producto.toLowerCase()
-          if (EXCLUIR_SUGERIDOS.some(ex => nl.includes(ex))) continue
-          if (!prodCount[r.producto]) prodCount[r.producto] = { count: 0, categoria: r.categoria_producto ?? '' }
-          prodCount[r.producto].count++
-        }
-        const sugeridos = Object.entries(prodCount)
-          .sort((a, b) => b[1].count - a[1].count)
-          .slice(0, 3)
-          .map(([nombre, v]) => ({ nombre, categoria: v.categoria, veces: v.count }))
-        setStats({ totalPedidos, totalLitros, totalFacturado, ultimaCompra, sugeridos })
-        setLoading(false)
-      })
-  }, [clienteNombre, esNuevo, onContinuar])
-
-  if (esNuevo) return null
-
-  const fmtFecha = (iso: string) => new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
-
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px' }}>
-
-        {/* Sección deuda */}
-        <DeudaSection clienteNombre={clienteNombre} />
-
-        {/* Historial */}
-        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10 }}>
-          Historial de compras
-        </p>
-
-        {loading ? (
-          <div style={{ background: '#131313', borderRadius: 14, padding: '16px', marginBottom: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {[1, 2, 3, 4].map(i => <div key={i} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: '10px 12px', height: 52 }} />)}
-          </div>
-        ) : stats && stats.totalPedidos > 0 ? (
-          <div style={{ borderRadius: 14, padding: '16px', background: T_DIM, border: `1px solid ${T_BORDER}`, marginBottom: 20 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              {[
-                { label: 'Última compra',  value: stats.ultimaCompra ? fmtFecha(stats.ultimaCompra) : '—' },
-                { label: 'Total pedidos',  value: `${stats.totalPedidos}` },
-                { label: 'Litros totales', value: `${stats.totalLitros.toLocaleString('es-CL')} L` },
-                { label: 'Total facturado',value: fmtPrecioCLP(stats.totalFacturado) },
-              ].map(d => (
-                <div key={d.label} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '10px 12px' }}>
-                  <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 3 }}>{d.label}</p>
-                  <p style={{ fontSize: 13, fontWeight: 800, color: '#F4EEDF' }}>{d.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div style={{ borderRadius: 14, padding: '16px', marginBottom: 20, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
-            <p style={{ fontSize: 13, color: 'var(--muted)' }}>Sin historial de compras registrado</p>
-          </div>
-        )}
-
-        {/* Productos frecuentes — interactivo */}
-        {!loading && stats && stats.sugeridos.length > 0 && (
-          <>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10 }}>
-              Compra recomendada
-            </p>
-            <div style={{ background: '#1C1C1C', border: `1px solid ${T_BORDER}`, borderRadius: 14, overflow: 'hidden', marginBottom: 16 }}>
-              <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <p style={{ fontSize: 12, color: T, fontWeight: 600 }}>Lo que más compra {clienteNombre.split(' ')[0]}</p>
-                {carritoSug.size > 0 && (
-                  <p style={{ fontSize: 11, fontWeight: 700, color: T }}>
-                    {Array.from(carritoSug.values()).reduce((s, i) => s + i.cantidad, 0)} ud. · {fmtPrecioCLP(Array.from(carritoSug.values()).reduce((s, i) => s + i.precio * i.cantidad, 0))}
-                  </p>
-                )}
-              </div>
-              {stats.sugeridos.map((p, i) => {
-                const cant = carritoSug.get(p.nombre)?.cantidad ?? 0
-                const precio = CATALOGO_INFO[p.nombre]?.precio_lata ?? 0
-                return (
-                  <div key={p.nombre} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px', borderBottom: i < stats.sugeridos.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', background: cant > 0 ? T_DIM : 'transparent', transition: 'background 0.15s' }}>
-                    <ProductoThumb nombre={p.nombre} categoria={p.categoria} size={64} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 14, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{p.nombre}</p>
-                      <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6 }}>Comprado {p.veces}x</p>
-                      {precio > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                          <p style={{ fontSize: 17, fontWeight: 900, color: T, letterSpacing: '-0.5px', lineHeight: 1 }}>
-                            {fmtPrecioCLP(precio)}
-                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginLeft: 3 }}>/ lata</span>
-                          </p>
-                          {cant > 0 && (
-                            <p style={{ fontSize: 17, fontWeight: 900, color: T, letterSpacing: '-0.5px', lineHeight: 1, opacity: 0.65 }}>
-                              = {fmtPrecioCLP(cant * precio)}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ flexShrink: 0 }}>
-                      <CantidadInput
-                        value={cant}
-                        accent={T}
-                        onchange={n => setSugCant(p.nombre, p.categoria, n)}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </>
-        )}
-      </div>
-
-      <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
-        <button onClick={() => onContinuar(Array.from(carritoSug.values()))} style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: 'pointer', background: T, color: '#080808', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}>
-          {carritoSug.size > 0 ? `Ir a la Venta · ${Array.from(carritoSug.values()).reduce((s, i) => s + i.cantidad, 0)} ud. →` : 'Ir a la Venta →'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Paso 4: Catálogo + Carrito ───────────────────────────────
-
-function Paso4Catalogo({ productos, clienteNombre, vendedorNombre, carritoInicial, onCerrar }: {
-  productos: Producto[]
-  clienteNombre: string
-  vendedorNombre: string
-  carritoInicial?: ItemCarrito[]
-  onCerrar: (carrito: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null, seguimiento: AccionSeguimiento | null) => void
-}) {
-  const [tabCat, setTabCat]     = useState<'Cerveza' | 'Kombucha'>('Cerveza')
-  const [tabEnvase, setTabEnvase] = useState<'lata' | 'barril'>('lata')
-  // Seguimiento (CRM) — obligatorio elegir un tipo antes de poder guardar,
-  // aunque sea "No requiere seguimiento".
-  const [tipoSeg, setTipoSeg]   = useState<TipoSeguimiento | null>(null)
-  const [fechaSeg, setFechaSeg] = useState('')
-  const [horaSeg, setHoraSeg]   = useState('')
-  const [notaSeg, setNotaSeg]   = useState('')
-  const requiereDatosSeg = tipoSeg !== null && tipoSeg !== 'ninguna'
-  const seguimientoListo = tipoSeg !== null && (!requiereDatosSeg || (fechaSeg && horaSeg && notaSeg.trim()))
-  const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(() => {
-    const m = new Map<string, ItemCarrito>()
-    // Key: "producto|envase" para permitir lata y barril del mismo producto
-    for (const i of carritoInicial ?? []) m.set(`${i.producto}|${i.envase}`, i)
-    return m
-  })
-  const [showCierre, setShowCierre] = useState(false)
-  const [showCartDetail, setShowCartDetail] = useState(false)
-  const [sinVenta, setSinVenta] = useState(false)
-  const [motivo, setMotivo] = useState('')
-  const [obs, setObs] = useState('')
-  const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo')
-  const [diasCredito, setDiasCredito] = useState(15)
-  const fechaVence = addDays(new Date(), diasCredito)
-  const [waModal, setWaModal] = useState<null | 'catalogo'>(null)
-  const [showImagenModal, setShowImagenModal] = useState(false)
-
-  // Siempre usa CATALOGO_INFO como fuente de verdad — evita depender de la BD
-  const esBarril = tabEnvase === 'barril'
-  const envaseName = esBarril ? 'Barril 30L' : 'Lata'
-
-  const prodsFiltrados: Producto[] = Object.entries(CATALOGO_INFO)
-    .filter(([, info]) => {
-      const esKom = info.estilo.toLowerCase().includes('kombucha')
-      if (tabCat === 'Kombucha' ? !esKom : esKom) return false
-      // En modo barril: solo mostrar los que tienen precio de barril
-      if (esBarril && info.precio_barril <= 0) return false
-      // En modo lata: solo mostrar los que tienen precio de lata
-      if (!esBarril && info.precio_lata <= 0) return false
-      return true
-    })
-    .map(([nombre, info]) => ({
-      producto: nombre,
-      categoria_producto: info.estilo.toLowerCase().includes('kombucha') ? 'Kombucha' : 'Cerveza',
-      envase: envaseName,
-    }))
-    .sort((a, b) => a.producto.localeCompare(b.producto))
-
-  function cartKey(producto: string, envase: string) { return `${producto}|${envase}` }
-
-  function ajustar(prod: Producto, delta: number) {
-    setCarrito(prev => {
-      const next = new Map(prev)
-      const key = cartKey(prod.producto, prod.envase ?? envaseName)
-      const actual = next.get(key)?.cantidad ?? 0
-      const nueva = actual + delta
-      if (nueva <= 0) { next.delete(key); return next }
-      const precio = esBarril
-        ? (CATALOGO_INFO[prod.producto]?.precio_barril ?? 0)
-        : (CATALOGO_INFO[prod.producto]?.precio_lata ?? 0)
-      next.set(key, { producto: prod.producto, categoria: prod.categoria_producto ?? '', envase: prod.envase ?? envaseName, cantidad: nueva, precio })
-      return next
-    })
-  }
-
-  const items = Array.from(carrito.values())
-  const totalItems = items.reduce((s, i) => s + i.cantidad, 0)
-  const totalPrecio = items.reduce((s, i) => s + i.precio * i.cantidad, 0)
-
-  // Pantalla cierre
-  if (showCierre) {
-    return (
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px' }}>
-          <p style={{ fontSize: 18, fontWeight: 900, color: '#F4EEDF', marginBottom: 16 }}>Cerrar visita</p>
-
-          {/* Resumen carrito */}
-          {items.length > 0 && (
-            <div style={{ background: '#131313', border: `1px solid ${C_BORDER}`, borderRadius: 14, overflow: 'hidden', marginBottom: 12 }}>
-              <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: C, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Pedido</p>
-                <p style={{ fontSize: 11, color: 'var(--muted)' }}>{totalItems} ud.</p>
-              </div>
-              {items.map((item, i) => (
-                <div key={item.producto} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-                  <ProductoThumb nombre={item.producto} categoria={item.categoria} esBarril={item.envase.toLowerCase().includes('barril')} size={36} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto}</p>
-                    {item.envase && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{item.envase}</p>}
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <p style={{ fontSize: 14, fontWeight: 900, color: C }}>×{item.cantidad}</p>
-                    {item.precio > 0 && <p style={{ fontSize: 11, color: 'var(--muted)' }}>{fmtPrecioCLP(item.precio * item.cantidad)}</p>}
-                  </div>
-                </div>
-              ))}
-              {totalPrecio > 0 && (
-                <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total pedido</p>
-                  <p style={{ fontSize: 16, fontWeight: 900, color: '#F4EEDF' }}>{fmtPrecioCLP(totalPrecio)}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Botón enviar venta como imagen */}
-          {items.length > 0 && (
-            <button
-              onClick={() => setShowImagenModal(true)}
-              style={{
-                width: '100%', padding: '12px 16px', borderRadius: 12, marginBottom: 16,
-                border: `1px solid rgba(37,211,102,0.3)`, background: 'rgba(37,211,102,0.07)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                cursor: 'pointer',
-              }}
-            >
-              <MessageCircle size={16} color={WA} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: WA }}>Enviar venta por WhatsApp</span>
-            </button>
-          )}
-
-          {/* Venta efectiva */}
-          {items.length > 0 && (
-            <div onClick={() => setSinVenta(false)} style={{ borderRadius: 14, padding: '16px', marginBottom: 10, cursor: 'pointer', background: !sinVenta ? T_DIM : '#1C1C1C', border: `2px solid ${!sinVenta ? T : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-              <CheckCircle size={22} color={!sinVenta ? T : 'var(--muted)'} />
-              <div>
-                <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>Venta efectiva</p>
-                <p style={{ fontSize: 12, color: 'var(--muted)' }}>Confirmar los {totalItems} productos del carrito</p>
-              </div>
-            </div>
-          )}
-
-          {/* Forma de pago — solo si hay venta efectiva */}
-          {items.length > 0 && !sinVenta && (
-            <div style={{ marginBottom: 16 }}>
-              <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: '1.4px', textTransform: 'uppercase', marginBottom: 8 }}>Forma de pago</p>
-              <div style={{ display: 'flex', gap: 6, marginBottom: metodoPago === 'credito' ? 10 : 0 }}>
-                {([
-                  { key: 'efectivo' as const,      label: 'Efectivo',      Icon: Banknote },
-                  { key: 'transferencia' as const, label: 'Transferencia', Icon: Landmark },
-                  { key: 'credito' as const,       label: 'Crédito',       Icon: CreditCard },
-                ]).map(({ key, label, Icon }) => {
-                  const active = metodoPago === key
-                  return (
-                    <button key={key} onClick={() => setMetodoPago(key)} style={{
-                      flex: 1, padding: '12px 4px', borderRadius: 12, cursor: 'pointer',
-                      border: `1.5px solid ${active ? T : 'rgba(255,255,255,0.08)'}`,
-                      background: active ? T_DIM : '#1C1C1C',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-                      transition: 'all 0.15s',
-                    }}>
-                      <Icon size={18} color={active ? T : 'var(--muted)'} />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: active ? T : 'var(--muted)' }}>{label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {metodoPago === 'credito' && (
-                <div style={{ background: '#1C1C1C', border: `1px solid ${T_BORDER}`, borderRadius: 14, padding: 14 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>¿En cuántos días paga?</p>
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                    {DIAS_CREDITO_PRESETS.map(d => {
-                      const active = diasCredito === d
-                      return (
-                        <button key={d} onClick={() => setDiasCredito(d)} style={{
-                          flex: 1, padding: '8px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
-                          background: active ? T : 'rgba(255,255,255,0.05)',
-                          color: active ? '#080808' : 'var(--muted)',
-                          fontSize: 12, fontWeight: 700, transition: 'all 0.15s',
-                        }}>
-                          {d}d
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                    <input
-                      type="number" min={1} value={diasCredito}
-                      onChange={e => setDiasCredito(Math.max(1, parseInt(e.target.value) || 1))}
-                      style={{ width: 64, padding: '8px 10px', borderRadius: 8, background: '#111', border: '1px solid rgba(255,255,255,0.1)', color: '#F4EEDF', fontSize: 14, textAlign: 'center', outline: 'none' }}
-                    />
-                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>días personalizados</span>
-                  </div>
-                  <div style={{ padding: '9px 12px', background: 'rgba(212,175,55,0.08)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <CalendarClock size={15} color={T} />
-                    <span style={{ fontSize: 12, color: T, fontWeight: 700 }}>
-                      Vence el {format(fechaVence, "d 'de' MMMM", { locale: es })}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Sin venta */}
-          <div onClick={() => setSinVenta(true)} style={{ borderRadius: 14, padding: '16px', marginBottom: 16, cursor: 'pointer', background: sinVenta ? 'rgba(181,84,62,0.06)' : '#1C1C1C', border: `2px solid ${sinVenta ? 'rgba(181,84,62,0.4)' : 'rgba(255,255,255,0.06)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <XCircle size={22} color={sinVenta ? '#B5543E' : 'var(--muted)'} />
-            <div>
-              <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>Visita sin venta</p>
-              <p style={{ fontSize: 12, color: 'var(--muted)' }}>Registrar motivo de no cierre</p>
-            </div>
-          </div>
-
-          {sinVenta && (
-            <div style={{ marginBottom: 16 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 8 }}>Motivo</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {MOTIVOS_SIN_VENTA.map(m => (
-                  <div key={m} onClick={() => setMotivo(m)} style={{ padding: '12px 14px', borderRadius: 10, cursor: 'pointer', background: motivo === m ? 'rgba(181,84,62,0.08)' : '#1C1C1C', border: `1px solid ${motivo === m ? 'rgba(181,84,62,0.4)' : 'rgba(255,255,255,0.06)'}`, fontSize: 14, color: motivo === m ? '#B5543E' : '#F4EEDF', fontWeight: motivo === m ? 700 : 400 }}>
-                    {m}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginBottom: 16 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 8 }}>Observaciones (opcional)</p>
-            <textarea value={obs} onChange={e => setObs(e.target.value)} placeholder="Notas adicionales..." rows={3}
-              style={{ width: '100%', padding: '12px 14px', borderRadius: 12, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 14, resize: 'none', outline: 'none' }} />
-          </div>
-
-          {/* Seguimiento (CRM) — obligatorio elegir un tipo antes de guardar */}
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
-            <p style={{ fontSize: 13, fontWeight: 800, color: '#F4EEDF', marginBottom: 4 }}>¿Este cliente requiere seguimiento?</p>
-            <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>Elige una acción antes de finalizar la visita</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: tipoSeg && requiereDatosSeg ? 14 : 0 }}>
-              {TIPOS_SEGUIMIENTO.map(t => (
-                <div key={t.key} onClick={() => setTipoSeg(t.key)} style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
-                  background: tipoSeg === t.key ? T_DIM : '#1C1C1C',
-                  border: `1.5px solid ${tipoSeg === t.key ? T : 'rgba(255,255,255,0.06)'}`,
-                }}>
-                  <span style={{ fontSize: 16 }}>{t.emoji}</span>
-                  <span style={{ fontSize: 13, fontWeight: tipoSeg === t.key ? 700 : 500, color: tipoSeg === t.key ? T : '#F4EEDF' }}>{t.label}</span>
-                  {tipoSeg === t.key && <CheckCircle size={16} color={T} style={{ marginLeft: 'auto' }} />}
-                </div>
-              ))}
-            </div>
-
-            {requiereDatosSeg && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>Fecha</label>
-                    <input type="date" value={fechaSeg} onChange={e => setFechaSeg(e.target.value)} min={format(new Date(), 'yyyy-MM-dd')}
-                      style={{ width: '100%', padding: '11px 12px', borderRadius: 10, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 14, outline: 'none' }} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>Hora</label>
-                    <input type="time" value={horaSeg} onChange={e => setHoraSeg(e.target.value)}
-                      style={{ width: '100%', padding: '11px 12px', borderRadius: 10, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 14, outline: 'none' }} />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 5 }}>Nota de seguimiento</label>
-                  <textarea value={notaSeg} onChange={e => setNotaSeg(e.target.value)} placeholder="Ej: Llamar para confirmar si le queda stock de IPA" rows={2}
-                    style={{ width: '100%', padding: '11px 12px', borderRadius: 10, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.08)', color: '#F4EEDF', fontSize: 13, resize: 'none', outline: 'none' }} />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div style={{ padding: '16px', paddingBottom: 'max(80px, calc(64px + env(safe-area-inset-bottom)))' }}>
-          <button
-            onClick={() => {
-              if (sinVenta && !motivo) return
-              if (!seguimientoListo) return
-              const tienVenta = !sinVenta
-              const seguimiento: AccionSeguimiento | null = tipoSeg && tipoSeg !== 'ninguna'
-                ? { tipo: tipoSeg, fechaHora: `${fechaSeg}T${horaSeg}:00`, nota: notaSeg.trim() }
-                : null
-              onCerrar(
-                items, tienVenta, motivo, obs,
-                tienVenta ? metodoPago : null,
-                tienVenta && metodoPago === 'credito' ? diasCredito : null,
-                tienVenta && metodoPago === 'credito' ? format(fechaVence, 'yyyy-MM-dd') : null,
-                seguimiento,
-              )
-            }}
-            disabled={(sinVenta && !motivo) || !seguimientoListo}
-            style={{ width: '100%', padding: '17px 0', borderRadius: 14, border: 'none', cursor: (sinVenta && !motivo) || !seguimientoListo ? 'not-allowed' : 'pointer', background: (sinVenta && !motivo) || !seguimientoListo ? 'rgba(255,255,255,0.06)' : C, color: (sinVenta && !motivo) || !seguimientoListo ? 'var(--muted)' : '#080808', fontSize: 16, fontWeight: 900, letterSpacing: '-0.3px' }}
-          >
-            {!tipoSeg ? 'Elige una acción de seguimiento ↑' : 'Confirmar y finalizar ✓'}
-          </button>
-        </div>
-
-        {waModal && (
-          <WhatsAppModal
-            tipo={waModal} clienteNombre={clienteNombre} vendedorNombre={vendedorNombre}
-            onClose={() => setWaModal(null)}
-          />
-        )}
-        {showImagenModal && (
-          <VentaImageModal
-            items={items} clienteNombre={clienteNombre} vendedorNombre={vendedorNombre}
-            onClose={() => setShowImagenModal(false)}
-          />
-        )}
-      </div>
-    )
-  }
-
-  // Pantalla catálogo
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* ── Selectors premium ── */}
-      <div style={{ padding: '20px 18px 0' }}>
-
-        {/* Selector PRODUCTO */}
-        <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.22)', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 8 }}>PRODUCTO</p>
-        <div style={{
-          display: 'flex',
-          background: 'rgba(255,255,255,0.035)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: 12, padding: 3, gap: 2,
-        }}>
-          {(['Cerveza', 'Kombucha'] as const).map(opt => {
-            const active = tabCat === opt
-            return (
-              <button key={opt} onClick={() => setTabCat(opt)} style={{
-                flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
-                background: active ? '#D4AF37' : 'transparent',
-                color: active ? '#0A0A0A' : 'rgba(255,255,255,0.4)',
-                fontSize: 13, fontWeight: 700, letterSpacing: '-0.1px',
-                transition: 'all 0.15s',
-              }}>
-                {opt}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Selector FORMATO */}
-        <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.22)', letterSpacing: '2px', textTransform: 'uppercase', marginTop: 16, marginBottom: 8 }}>FORMATO</p>
-        <div style={{
-          display: 'flex',
-          background: 'rgba(255,255,255,0.035)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: 12, padding: 3, gap: 2,
-        }}>
-          {([
-            { key: 'lata',   label: 'Lata' },
-            { key: 'barril', label: 'Barril 30L' },
-          ] as const).map(opt => {
-            const active = tabEnvase === opt.key
-            return (
-              <button key={opt.key} onClick={() => setTabEnvase(opt.key)} style={{
-                flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
-                background: active ? '#D4AF37' : 'transparent',
-                color: active ? '#0A0A0A' : 'rgba(255,255,255,0.4)',
-                fontSize: 13, fontWeight: 700, letterSpacing: '-0.1px',
-                transition: 'all 0.15s',
-              }}>
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Info barril */}
-        {esBarril && (
-          <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 12, background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.12)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 14 }}>🛢️</span>
-            <span style={{ fontSize: 11, color: 'rgba(212,175,55,0.65)', fontWeight: 500 }}>
-              Barril de <strong style={{ color: '#D4AF37' }}>30 litros</strong> · Precio con IVA incluido
-            </span>
-          </div>
-        )}
-
-        {/* Botón enviar catálogo por WA */}
-        <button
-          onClick={() => setWaModal('catalogo')}
-          style={{
-            marginTop: 12, width: '100%', padding: '11px 0',
-            borderRadius: 14, border: '1px solid rgba(37,211,102,0.18)',
-            background: 'rgba(37,211,102,0.05)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-            cursor: 'pointer',
-          }}
-        >
-          <Share2 size={14} color={WA} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: WA }}>Enviar catálogo por WhatsApp</span>
-        </button>
-      </div>
-
-      {/* Lista productos */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 18px' }}>
-        {prodsFiltrados.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <Package size={32} color="var(--muted)" style={{ margin: '0 auto 10px' }} />
-            <p style={{ color: 'var(--muted)', fontSize: 14 }}>Sin productos en esta categoría</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {prodsFiltrados.map(p => {
-              const key = cartKey(p.producto, p.envase ?? envaseName)
-              const cant   = carrito.get(key)?.cantidad ?? 0
-              const info   = CATALOGO_INFO[p.producto]
-              const precio = esBarril ? (info?.precio_barril ?? 0) : (info?.precio_lata ?? 0)
-              const unidadLabel = esBarril ? '/ barril' : '/ lata'
-              return (
-                <div key={key} style={{
-                  background: cant > 0
-                    ? 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.04) 100%)'
-                    : 'rgba(255,255,255,0.025)',
-                  border: `1px solid ${cant > 0 ? 'rgba(212,175,55,0.18)' : 'rgba(255,255,255,0.055)'}`,
-                  borderRadius: 18,
-                  padding: '14px 16px',
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
-                  boxShadow: cant > 0 ? '0 0 20px rgba(212,175,55,0.07)' : 'none',
-                }}>
-                  <ProductoThumb nombre={p.producto} categoria={p.categoria_producto ?? ''} esBarril={esBarril} size={48} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14, fontWeight: 600, color: '#F0EDE8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2, letterSpacing: '-0.2px' }}>
-                      {p.producto}
-                    </p>
-                    <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 6, fontWeight: 500 }}>
-                      {info?.estilo}
-                      {esBarril && <span style={{ marginLeft: 6, color: 'rgba(212,175,55,0.6)', fontWeight: 600 }}>· 30 L</span>}
-                    </p>
-                    {precio > 0 && (
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        <span style={{ fontSize: 16, fontWeight: 700, color: '#D4AF37', letterSpacing: '-0.4px', lineHeight: 1 }}>
-                          {fmtPrecioCLP(precio)}
-                        </span>
-                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: 500 }}>{unidadLabel}</span>
-                        {cant > 0 && (
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(212,175,55,0.55)', letterSpacing: '-0.2px' }}>
-                            · {fmtPrecioCLP(cant * precio)}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ flexShrink: 0 }}>
-                    <CantidadInput
-                      value={cant}
-                      accent={C}
-                      onchange={n => {
-                        setCarrito(prev => {
-                          const next = new Map(prev)
-                          if (n <= 0) { next.delete(key); return next }
-                          next.set(key, { producto: p.producto, categoria: p.categoria_producto ?? '', envase: p.envase ?? envaseName, cantidad: n, precio })
-                          return next
-                        })
-                      }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Panel detalle carrito */}
-      <div style={{ padding: '0 16px', paddingBottom: showCartDetail && items.length > 0 ? 0 : 0 }}>
-        {showCartDetail && items.length > 0 && (
-          <div style={{ background: '#131313', border: `1px solid ${C_BORDER}`, borderRadius: '14px 14px 0 0', overflow: 'hidden', marginBottom: -1 }}>
-            {items.map((item, i) => (
-              <div key={`${item.producto}|${item.envase}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-                <ProductoThumb nombre={item.producto} categoria={item.categoria} esBarril={item.envase.toLowerCase().includes('barril')} size={30} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto}</p>
-                  {item.envase && <p style={{ fontSize: 10, color: 'var(--muted)' }}>{item.envase}</p>}
-                </div>
-                <span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>×{item.cantidad}</span>
-                {item.precio > 0 && (
-                  <span style={{ fontSize: 13, fontWeight: 800, color: C, flexShrink: 0, minWidth: 64, textAlign: 'right' }}>
-                    {fmtPrecioCLP(item.precio * item.cantidad)}
-                  </span>
-                )}
-              </div>
-            ))}
-            <div style={{ padding: '9px 14px', background: 'rgba(79,70,229,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total</span>
-              <span style={{ fontSize: 15, fontWeight: 900, color: '#F4EEDF' }}>{fmtPrecioCLP(totalPrecio)}</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Carrito flotante */}
-      <div style={{ padding: '12px 16px', paddingBottom: 'max(76px, calc(64px + env(safe-area-inset-bottom)))' }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {/* Botón ver detalle */}
-          {totalItems > 0 && (
-            <button
-              onClick={() => setShowCartDetail(s => !s)}
-              style={{
-                width: 52, borderRadius: 14, border: `1px solid ${C_BORDER}`, background: showCartDetail ? C_DIM : 'rgba(255,255,255,0.04)',
-                color: C, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
-              }}
-            >
-              <ChevronDown size={20} style={{ transform: showCartDetail ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-            </button>
-          )}
-          {/* Botón carrito/venta — solo se habilita con productos agregados */}
-          <button onClick={() => setShowCierre(true)} disabled={totalItems === 0} style={{
-            flex: 1, padding: '17px 20px', borderRadius: 14, border: 'none',
-            cursor: totalItems > 0 ? 'pointer' : 'not-allowed',
-            background: totalItems > 0 ? C : 'rgba(255,255,255,0.06)',
-            color: totalItems > 0 ? '#080808' : 'var(--muted)',
-            fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <ShoppingCart size={18} />
-              <span>{totalItems > 0 ? `${totalItems} producto${totalItems > 1 ? 's' : ''}` : 'Carrito vacío'}</span>
-            </div>
-            {totalItems > 0 && <span>{fmtPrecioCLP(totalPrecio)} →</span>}
-          </button>
-          {/* Botón dedicado — separado del carrito para que quede claro que es otra acción */}
-          <button onClick={() => { setSinVenta(true); setShowCierre(true) }} style={{
-            padding: '17px 18px', borderRadius: 14, border: '1.5px solid rgba(248,113,113,0.35)',
-            background: 'rgba(248,113,113,0.08)', color: '#F87171',
-            fontSize: 14, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-          }}>
-            Sin venta
-          </button>
-        </div>
-      </div>
-
-      {waModal && (
-        <WhatsAppModal
-          tipo={waModal} clienteNombre={clienteNombre} vendedorNombre={vendedorNombre}
-          onClose={() => setWaModal(null)}
-        />
-      )}
-    </div>
-  )
-}
-
-// ─── Botón flotante + hoja "Adjuntar evidencia" ──────────────
-// Disponible en cualquier paso posterior al check-in (una vez existe
-// visitaId), para que la carga de fotos no dependa de una sola pantalla.
-
-function EvidenciaFAB({ pendientes, onClick }: { pendientes: number; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        // Suficientemente arriba para no taparse con ninguna barra inferior de
-        // los distintos pasos (el carrito de Paso4, los 2 botones de Paso2, etc.)
-        position: 'fixed', right: 16, bottom: 'max(160px, calc(144px + env(safe-area-inset-bottom, 0px)))',
-        zIndex: 70, display: 'flex', alignItems: 'center', gap: 8,
-        padding: '12px 16px', borderRadius: 100, border: `1px solid ${pendientes > 0 ? T_BORDER : 'rgba(255,255,255,0.12)'}`,
-        background: pendientes > 0 ? 'rgba(212,175,55,0.14)' : 'rgba(20,20,20,0.9)',
-        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-        boxShadow: '0 8px 28px rgba(0,0,0,0.5)', cursor: 'pointer',
-      }}
-    >
-      <Camera size={16} color={pendientes > 0 ? T : '#F4EEDF'} />
-      <span style={{ fontSize: 13, fontWeight: 700, color: pendientes > 0 ? T : '#F4EEDF' }}>
-        Adjuntar evidencia{pendientes > 0 ? ` (${pendientes}/3)` : ''}
-      </span>
-    </button>
-  )
-}
-
-function EvidenciaSheet({ fotos, onAdjuntarFoto, onClose }: {
-  fotos: Record<string, string>
-  onAdjuntarFoto: (key: string, file: File) => void
-  onClose: () => void
-}) {
-  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
-
-  function handleFoto(key: string, e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    onAdjuntarFoto(key, file)
-    e.target.value = ''
-  }
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#1C1C1C', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px', width: '100%', maxWidth: 520 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: T_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Camera size={20} color={T} />
-          </div>
-          <div>
-            <p style={{ fontSize: 16, fontWeight: 800, color: '#F4EEDF' }}>Adjuntar evidencia</p>
-            <p style={{ fontSize: 11, color: 'var(--muted)' }}>Cámara o galería — cuando quieras</p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-          {FOTO_SLOTS.map(slot => (
-            <div key={slot.key} style={{ flex: 1 }}>
-              <input ref={el => { fileRefs.current[slot.key] = el }} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleFoto(slot.key, e)} />
-              <div onClick={() => fileRefs.current[slot.key]?.click()} style={{ height: 90, borderRadius: 12, overflow: 'hidden', cursor: 'pointer', background: fotos[slot.key] ? 'transparent' : '#131313', border: `2px solid ${fotos[slot.key] ? T : 'rgba(255,255,255,0.08)'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                {fotos[slot.key] ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={fotos[slot.key]} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <div style={{ position: 'absolute', bottom: 3, right: 3, width: 18, height: 18, background: T, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <CheckCircle size={11} color="#080808" />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span style={{ fontSize: 22, marginBottom: 4 }}>{slot.emoji}</span>
-                    <Camera size={14} color="var(--muted)" />
-                  </>
-                )}
-              </div>
-              <p style={{ fontSize: 10, textAlign: 'center', color: fotos[slot.key] ? T : 'var(--muted)', marginTop: 5, fontWeight: 600 }}>{slot.label}</p>
-            </div>
-          ))}
-        </div>
-        <button onClick={onClose} style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: T, color: '#080808', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
-          Listo
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Modal "Fotos pendientes de registro" ─────────────────────
-// Aparece al tocar "Finalizar" si no se adjuntó ninguna foto — ya no bloquea
-// el cierre, solo avisa y deja elegir.
-
-function FotosPendientesModal({ onCargarAhora, onFinalizarIgual }: {
-  onCargarAhora: () => void
-  onFinalizarIgual: () => void
-}) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 20 }}>
-      <div style={{ background: '#1C1C1C', borderRadius: 20, padding: 24, width: '100%', maxWidth: 380, border: '1px solid rgba(212,175,55,0.2)' }}>
-        <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(212,175,55,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-          <AlertTriangle size={24} color={T} />
-        </div>
-        <p style={{ fontSize: 17, fontWeight: 900, color: '#F4EEDF', marginBottom: 8 }}>Fotos pendientes de registro</p>
-        <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 22 }}>
-          No has adjuntado fotos a esta visita. ¿Deseas subirlas ahora antes de finalizar?
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button onClick={onCargarAhora} style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: T, color: '#080808', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
-            Cargar fotos ahora
-          </button>
-          <button onClick={onFinalizarIgual} style={{ width: '100%', padding: '14px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-            Finalizar de todos modos
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Wizard principal ─────────────────────────────────────────
-
-export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalogoProductos, visitaRetomada, deudores = [], clientePre = null }: Props) {
+export default function NuevaVisitaClient({
+  vendedor, clientesExistentes, visitaRetomada, clientePre = null,
+}: Props) {
   const router = useRouter()
   const supabase = createClient()
 
-  // Lista de precios distinta para Santiago (ver EMAIL_LISTA_PRECIOS_SANTIAGO) — se fija
-  // antes del return para que todos los sub-componentes (Paso3, Paso4, WhatsApp) la usen.
-  CATALOGO_INFO = catalogoParaVendedor(vendedor.email)
+  // Lista de precios: Santiago tiene la suya (ver EMAIL_LISTA_PRECIOS_SANTIAGO).
+  const catalogo = catalogoParaVendedor(vendedor.email)
+  setCatalogo(catalogo)
 
-  // Si retomamos visita, inicializar estado directamente en el paso correcto
-  const pasoInicial = visitaRetomada
-    ? (visitaRetomada.lat ? (visitaRetomada.es_cliente_nuevo ? 3 : 3) : 2)
-    : 1
-
-  const [paso, setPaso] = useState(pasoInicial)
-  const [guardando, setGuardando] = useState(false)
-  const [cliente, setCliente] = useState<{ nombre: string; esNuevo: boolean; canal: string } | null>(
-    visitaRetomada ? { nombre: visitaRetomada.cliente_nombre, esNuevo: visitaRetomada.es_cliente_nuevo, canal: '' } : null
+  const [cliente, setCliente] = useState<{ nombre: string; esNuevo: boolean } | null>(
+    visitaRetomada ? { nombre: visitaRetomada.cliente_nombre, esNuevo: visitaRetomada.es_cliente_nuevo } : null
   )
   const [visitaId, setVisitaId] = useState<string | null>(visitaRetomada?.id ?? null)
-  const [gps, setGps] = useState<{ lat: number; lng: number; addr: string } | null>(
-    visitaRetomada?.lat ? { lat: visitaRetomada.lat, lng: visitaRetomada.lng!, addr: visitaRetomada.direccion_gps ?? '' } : null
-  )
-  const [carritoInicial, setCarritoInicial] = useState<ItemCarrito[]>([])
+  const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(new Map())
+  const [guardando, setGuardando] = useState(false)
   const [syncPendiente, setSyncPendiente] = useState(false)
-
-  // Evidencia fotográfica — vive acá (no en Paso2Checkin) para que sea la
-  // misma data sin importar desde dónde se adjunte: el paso de check-in o el
-  // botón flotante "Adjuntar evidencia" disponible en los pasos siguientes.
   const [fotos, setFotos] = useState<Record<string, string>>({})
-  const [showEvidencia, setShowEvidencia] = useState(false)
-  const [pendingCierre, setPendingCierre] = useState<{
-    items: ItemCarrito[]; tienVenta: boolean; motivo: string; obs: string
-    metodoPago: MetodoPago | null; diasCredito: number | null; fechaPagoEstimada: string | null
-    seguimiento: AccionSeguimiento | null
-  } | null>(null)
+  const [showCatalogoWA, setShowCatalogoWA] = useState(false)
+  const [showImagen, setShowImagen] = useState(false)
+  const [pendingCierre, setPendingCierre] = useState<CierrePayload | null>(null)
 
-  // Jornada de ruta abierta (para vincular la visita y calcular el km GPS al cerrar)
+  const fileRef = useRef<HTMLInputElement>(null)
   const jornadaIdRef = useRef<string | null>(null)
-  useEffect(() => {
-    fetch('/api/terreno/jornada').then(r => r.json()).then(j => { jornadaIdRef.current = j?.id ?? null }).catch(() => {})
-  }, [])
-
-  // Coordenadas del cliente elegido (de la tabla maestra) — para validar geofencing al check-in
   const clienteCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
-
-  const totalPasos = cliente?.esNuevo ? 3 : 4
-
-  // Draft acumulativo de la visita: cada escritura es un upsert con TODOS los
-  // campos conocidos hasta el momento. Así, si se reintenta offline en
-  // cualquier orden, nunca se pisa un campo con null por accidente.
   const visitaDraft = useRef<Record<string, unknown>>(
     visitaRetomada ? {
       id: visitaRetomada.id, vendedor_id: vendedor.id,
@@ -1980,197 +105,170 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     } : {}
   )
 
-  async function onClienteConfirmado(nombre: string, esNuevo: boolean, canal: string, nuevoDetalle?: NuevoClienteDetalle) {
-    setCliente({ nombre, esNuevo, canal })
-    // ID generado en el cliente — no depende de la red para existir,
-    // así el resto del flujo (check-in, catálogo) puede avanzar sin conexión.
+  useEffect(() => {
+    fetch('/api/terreno/jornada')
+      .then(r => r.json())
+      .then(j => { jornadaIdRef.current = j?.id ?? null })
+      .catch(() => {})
+  }, [])
+
+  /** Guarda el draft completo: cada escritura lleva TODOS los campos conocidos,
+   *  así un reintento offline en cualquier orden nunca pisa un campo con null. */
+  function guardarDraft(extra: Record<string, unknown>) {
+    visitaDraft.current = { ...visitaDraft.current, ...extra }
+    setSyncPendiente(true)
+    upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
+  }
+
+  /**
+   * Ubicación en segundo plano — reemplaza al paso de check-in. Si el GPS
+   * falla o el usuario no da permiso, la visita sigue igual: perder la
+   * ubicación no puede impedir tomar un pedido.
+   */
+  function capturarUbicacion(id: string) {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const { latitude: lat, longitude: lng } = pos.coords
+        let addr = ''
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+          if (r.ok) addr = (await r.json())?.display_name ?? ''
+        } catch { /* sin dirección: se guardan igual las coordenadas */ }
+
+        let geofence: Record<string, unknown> = {}
+        if (clienteCoordsRef.current) {
+          const { dentro, distanciaM } = dentroDeGeofence(lat, lng, clienteCoordsRef.current.lat, clienteCoordsRef.current.lng)
+          geofence = { distancia_cliente_m: Math.round(distanciaM), dentro_geofence: dentro }
+        }
+        guardarDraft({ id, lat, lng, direccion_gps: addr, ...geofence })
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+    )
+  }
+
+  function onClienteConfirmado(nombre: string, esNuevo: boolean, canal: string, detalle?: NuevoClienteDetalle) {
+    setCliente({ nombre, esNuevo })
     const id = crypto.randomUUID()
     setVisitaId(id)
 
-    // Guarda las coordenadas registradas del cliente (si las tiene) para
-    // validar geofencing contra el GPS del check-in en el siguiente paso.
     const c = clientesExistentes.find(x => x.nombre_fantasia?.toLowerCase().trim() === nombre.toLowerCase().trim())
-    clienteCoordsRef.current = (c?.lat != null && c?.lng != null) ? { lat: c.lat, lng: c.lng } : (nuevoDetalle?.lat != null && nuevoDetalle?.lng != null) ? { lat: nuevoDetalle.lat, lng: nuevoDetalle.lng } : null
+    clienteCoordsRef.current = (c?.lat != null && c?.lng != null)
+      ? { lat: c.lat, lng: c.lng }
+      : (detalle?.lat != null && detalle?.lng != null) ? { lat: detalle.lat, lng: detalle.lng } : null
 
     let clienteTerrenoId: string | null = null
-    if (esNuevo && nuevoDetalle) {
-      // Antes se perdía todo lo tipeado acá (dirección/teléfono/RUT) — la visita
-      // solo guardaba el nombre. Ahora queda un cliente real en clientes_terreno,
-      // reutilizable en futuras visitas y visible en el mapa de cobertura.
+    if (esNuevo && detalle) {
       clienteTerrenoId = crypto.randomUUID()
       upsertOrQueue(supabase, 'clientes_terreno', {
         id: clienteTerrenoId,
         nombre_fantasia: nombre,
-        direccion: nuevoDetalle.direccion,
-        lat: nuevoDetalle.lat,
-        lng: nuevoDetalle.lng,
-        contacto: nuevoDetalle.contacto || null,
-        telefono: nuevoDetalle.contacto || null,
-        rut: nuevoDetalle.rut || null,
+        direccion: detalle.direccion || null,
+        lat: detalle.lat, lng: detalle.lng,
+        contacto: detalle.contacto || null,
+        telefono: detalle.contacto || null,
+        rut: detalle.rut || null,
         canal,
         creado_por: vendedor.id,
       })
     }
 
     visitaDraft.current = {
-      id, vendedor_id: vendedor.id, cliente_nombre: nombre, es_cliente_nuevo: esNuevo, estado: 'en_progreso',
-      jornada_id: jornadaIdRef.current,
+      id, vendedor_id: vendedor.id, cliente_nombre: nombre, es_cliente_nuevo: esNuevo,
+      estado: 'en_progreso', jornada_id: jornadaIdRef.current,
       ...(clienteTerrenoId ? { cliente_terreno_id: clienteTerrenoId } : {}),
     }
     setSyncPendiente(true)
     upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
-    setPaso(2)
+    capturarUbicacion(id)
   }
 
-  // Pedido rápido: si llegamos con ?cliente=Nombre (desde misiones / detalle de
-  // cliente), pre-seleccionamos ese cliente y arrancamos directo en el check-in.
+  // Pedido rápido: ?cliente=Nombre (desde misiones o detalle de cliente).
   const pedidoRapidoRef = useRef(false)
   useEffect(() => {
-    if (pedidoRapidoRef.current) return
-    if (!clientePre || visitaRetomada || cliente) return
+    if (pedidoRapidoRef.current || !clientePre || visitaRetomada || cliente) return
     pedidoRapidoRef.current = true
     const c = clientesExistentes.find(x => x.nombre_fantasia?.toLowerCase().trim() === clientePre.toLowerCase().trim())
     onClienteConfirmado(clientePre, !c, c?.categoria_negocio ?? '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientePre])
 
-  const keyMap: Record<string, string> = {
-    exterior: 'foto_exterior',
-    exhibicion: 'foto_exhibicion',
-    competencia: 'foto_competencia',
-  }
-
-  // Adjuntar una foto de evidencia — se puede llamar desde Paso2Checkin o
-  // desde el botón flotante "Adjuntar evidencia" en cualquier paso posterior,
-  // siempre que ya exista visitaId. Sube en segundo plano (con cola offline)
-  // y no bloquea nada de la UI.
-  function subirFoto(key: string, file: File) {
+  function subirFoto(file: File) {
     if (!visitaId) return
+    const key = `f${Object.keys(fotos).length}`
     setFotos(prev => ({ ...prev, [key]: URL.createObjectURL(file) }))
+    // Sólo hay tres columnas de foto en la tabla; se llenan en orden.
+    const campos = ['foto_exterior', 'foto_exhibicion', 'foto_competencia']
+    const campo = campos[Math.min(Object.keys(fotos).length, campos.length - 1)]
     const vId = visitaId
-    const campo = keyMap[key]
-    const spec = { bucket: 'terreno-fotos', path: `${vId}/${key}.jpg`, table: 'visitas_terreno', rowId: vId, campo }
-    uploadConTimeout(supabase, spec, file).then(publicUrl => {
-      if (!publicUrl) return
-      visitaDraft.current = { ...visitaDraft.current, [campo]: publicUrl }
-      upsertOrQueue(supabase, 'visitas_terreno', { id: vId, [campo]: publicUrl })
+    uploadConTimeout(
+      supabase,
+      { bucket: 'terreno-fotos', path: `${vId}/${key}.jpg`, table: 'visitas_terreno', rowId: vId, campo },
+      file,
+    ).then(url => {
+      if (!url) return
+      visitaDraft.current = { ...visitaDraft.current, [campo]: url }
+      upsertOrQueue(supabase, 'visitas_terreno', { id: vId, [campo]: url })
     })
   }
 
-  function onCheckinConfirmado(coords: { lat: number; lng: number; addr: string }) {
-    setGps(coords)
-    if (!visitaId) { setPaso(3); return }
-
-    // Geofencing: si el cliente tiene coordenadas registradas, valida que el
-    // check-in esté a ≤50m de esa ubicación. No bloquea el flujo (el GPS del
-    // celular puede fallar puntualmente) — solo queda registrado para
-    // auditoría y aparece marcado en el panel de admin si está fuera de rango.
-    let geofence: { distancia_cliente_m: number; dentro_geofence: boolean } | null = null
-    if (clienteCoordsRef.current) {
-      const { dentro, distanciaM } = dentroDeGeofence(
-        coords.lat, coords.lng, clienteCoordsRef.current.lat, clienteCoordsRef.current.lng,
-      )
-      geofence = { distancia_cliente_m: Math.round(distanciaM), dentro_geofence: dentro }
-    }
-
-    visitaDraft.current = {
-      ...visitaDraft.current,
-      id: visitaId,
-      lat: coords.lat, lng: coords.lng, direccion_gps: coords.addr,
-      ...geofence,
-    }
-    setSyncPendiente(true)
-    upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
-    setPaso(3)
+  function onCerrarIntentado(p: CierrePayload) {
+    if (Object.keys(fotos).length === 0) { setPendingCierre(p); return }
+    ejecutarCierre(p)
   }
 
-  function onVista360Continuar(items: ItemCarrito[]) { setCarritoInicial(items); setPaso(4) }
-
-  // Cancelar visita en curso: borra la fila si llegó a guardarse (best-effort,
-  // si está offline no importa: nunca habrá quedado registrada como completada)
-  // y vuelve al Hub de Terreno sin dejar rastro.
-  async function cancelarVisita() {
-    if (!window.confirm('¿Cancelar esta visita? Quedará registrada como cancelada.')) return
-    if (visitaId) {
-      // No se borra: queda en el historial como 'cancelada' para mantener
-      // registro completo de todo lo que pasa en terreno (auditoría).
-      visitaDraft.current = { ...visitaDraft.current, id: visitaId, estado: 'cancelada', completada_at: new Date().toISOString() }
-      await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
-    }
-    router.push('/terreno')
-  }
-
-  // Botón "Confirmar y finalizar" de Paso4 llega hasta acá primero. Si no hay
-  // ninguna foto de evidencia adjuntada, no cierra de inmediato — guarda los
-  // datos pendientes y muestra el modal de aviso en vez de bloquear como
-  // antes exigía el check-in. El vendedor decide si carga fotos ahora o
-  // finaliza igual (quedando fotos_status = 'PENDIENTE').
-  function onCerrarIntentado(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null, seguimiento: AccionSeguimiento | null) {
-    if (Object.keys(fotos).length === 0) {
-      setPendingCierre({ items, tienVenta, motivo, obs, metodoPago, diasCredito, fechaPagoEstimada, seguimiento })
-      return
-    }
-    ejecutarCierre(items, tienVenta, motivo, obs, metodoPago, diasCredito, fechaPagoEstimada, seguimiento)
-  }
-
-  async function ejecutarCierre(items: ItemCarrito[], tienVenta: boolean, motivo: string, obs: string, metodoPago: MetodoPago | null, diasCredito: number | null, fechaPagoEstimada: string | null, seguimiento: AccionSeguimiento | null) {
+  async function ejecutarCierre(p: CierrePayload) {
     if (!visitaId) return
     setPendingCierre(null)
     setGuardando(true)
     try {
-      const total = items.reduce((s, i) => s + i.cantidad * (i.precio || CATALOGO_INFO[i.producto]?.precio_lata || 0), 0)
+      const total = p.items.reduce((s, i) => s + i.cantidad * i.precio, 0)
 
       visitaDraft.current = {
         ...visitaDraft.current,
         id: visitaId,
-        tiene_venta: tienVenta, motivo_sin_venta: tienVenta ? null : motivo,
-        observaciones: obs || null, total_pedido: total, estado: 'completada', completada_at: new Date().toISOString(),
-        metodo_pago: metodoPago, dias_credito: diasCredito, fecha_pago_estimada: fechaPagoEstimada,
+        tiene_venta: p.tienVenta,
+        motivo_sin_venta: p.tienVenta ? null : p.motivo,
+        observaciones: p.observaciones || null,
+        total_pedido: total,
+        estado: 'completada',
+        completada_at: new Date().toISOString(),
+        metodo_pago: p.metodoPago,
+        dias_credito: p.diasCredito,
+        fecha_pago_estimada: p.fechaPagoEstimada,
         fotos_status: Object.keys(fotos).length > 0 ? 'COMPLETO' : 'PENDIENTE',
       }
       const rVisita = await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
 
-      let itemsQuedaronPendientes = false
-      if (items.length > 0) {
-        const resultados = await Promise.all(
-          items.map(i => upsertOrQueue(supabase, 'visitas_terreno_items', {
-            id: crypto.randomUUID(), visita_id: visitaId, producto: i.producto, categoria: i.categoria,
-            envase: i.envase, cantidad: i.cantidad, precio_unit: i.precio, subtotal: i.cantidad * i.precio,
-          }))
-        )
-        itemsQuedaronPendientes = resultados.some(r => r.queued)
+      let itemsPendientes = false
+      if (p.items.length > 0) {
+        const res = await Promise.all(p.items.map(i => upsertOrQueue(supabase, 'visitas_terreno_items', {
+          id: crypto.randomUUID(), visita_id: visitaId,
+          producto: i.producto, categoria: i.categoria, envase: i.envase,
+          cantidad: i.cantidad, precio_unit: i.precio, subtotal: i.cantidad * i.precio,
+        })))
+        itemsPendientes = res.some(r => r.queued)
       }
 
-      // CRM: registra el compromiso de seguimiento (llamar/email/whatsapp/visita)
-      // para que aparezca en la Agenda del vendedor y dispare el recordatorio.
-      if (seguimiento) {
-        await upsertOrQueue(supabase, 'seguimientos', {
-          id: crypto.randomUUID(), visita_id: visitaId, vendedor_id: vendedor.id,
-          cliente_nombre: cliente?.nombre ?? '', tipo_accion: seguimiento.tipo,
-          fecha_hora_compromiso: seguimiento.fechaHora, nota: seguimiento.nota, estado: 'pendiente',
-        })
-      }
+      setSyncPendiente(!rVisita.ok || itemsPendientes)
 
-      setSyncPendiente(!rVisita.ok || itemsQuedaronPendientes)
-
-      // 🔔 Notificar según resultado
-      if (tienVenta) {
+      if (p.tienVenta) {
         hapticExito()
-        const fmtCLP = (n: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
-        const bodyPago = metodoPago === 'credito' && fechaPagoEstimada
-          ? ` · Crédito, cobrar el ${format(new Date(fechaPagoEstimada + 'T12:00:00'), "d 'de' MMMM", { locale: es })}`
+        const bodyPago = p.metodoPago === 'credito' && p.fechaPagoEstimada
+          ? ` · Crédito, cobrar el ${format(new Date(p.fechaPagoEstimada + 'T12:00:00'), "d 'de' MMMM", { locale: es })}`
           : ''
         notificar({
           event: 'visita_completada',
           title: `✅ Venta en ${cliente?.nombre ?? 'local'}`,
-          body: `${fmtCLP(total)} · ${items.length} producto${items.length !== 1 ? 's' : ''}${bodyPago}`,
+          body: `${fmtPrecioCLP(total)} · ${p.items.length} producto${p.items.length !== 1 ? 's' : ''}${bodyPago}`,
           url: '/terreno/historial',
         })
-      } else if (motivo) {
+      } else if (p.motivo) {
         notificar({
           event: 'visita_sin_venta',
           title: `📍 Visita sin venta — ${cliente?.nombre ?? 'local'}`,
-          body: motivo,
+          body: p.motivo,
           url: '/terreno/historial',
         })
       }
@@ -2181,93 +279,142 @@ export default function NuevaVisitaClient({ vendedor, clientesExistentes, catalo
     }
   }
 
-  const pasoLabel = ['', 'Cliente', 'Check-In', cliente?.esNuevo ? 'Catálogo' : 'Vista 360°', 'Catálogo'][paso]
+  async function cancelar() {
+    if (!cliente) { router.push('/terreno'); return }
+    if (!window.confirm('¿Cancelar esta visita?')) return
+    if (visitaId) {
+      visitaDraft.current = { ...visitaDraft.current, id: visitaId, estado: 'cancelada', completada_at: new Date().toISOString() }
+      await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
+    }
+    router.push('/terreno')
+  }
+
+  const items = Array.from(carrito.values())
+  const nFotos = Object.keys(fotos).length
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 60, height: '100dvh', background: 'linear-gradient(160deg, #07060F 0%, #0A0810 40%, #070612 100%)', display: 'flex', flexDirection: 'column' }}>
-      {/* Header premium glass */}
-      <div style={{
-        background: 'rgba(10,8,20,0.85)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
-        paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
-        paddingBottom: 14,
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', marginBottom: 16 }}>
-          {/* Back button: mismo botón "Volver" que el resto de la app */}
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(170px, calc(env(safe-area-inset-bottom, 0px) + 150px))' }}>
+      <input
+        ref={fileRef} type="file" accept="image/*" capture="environment" hidden
+        onChange={e => { const f = e.target.files?.[0]; if (f) subirFoto(f); e.target.value = '' }}
+      />
+
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
+        {/* Encabezado */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
           <button
-            onClick={() => paso > 1 ? setPaso(paso - 1) : router.push('/terreno')}
+            onClick={() => cliente ? cancelar() : router.push('/terreno')}
             aria-label="Volver"
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 100, padding: '7px 14px 7px 10px',
-              color: '#F4EEDF', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              minHeight: 36, flexShrink: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 38, cursor: 'pointer',
+              background: C.card, border: `1px solid ${C.line}`, borderRadius: 100,
+              padding: '7px 14px 7px 10px', color: C.blue, fontSize: 13, fontWeight: 700,
             }}
           >
-            <ChevronLeft size={17} strokeWidth={2.5} color="#D4AF37" />
+            <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
             Volver
           </button>
 
-          {/* Title center */}
-          <div style={{ textAlign: 'center', flex: 1, padding: '0 12px' }}>
-            <p style={{ fontSize: 16, fontWeight: 700, color: '#F8F6F0', letterSpacing: '-0.4px', lineHeight: 1.2 }}>
-              {cliente ? cliente.nombre : 'Nueva Visita'}
-            </p>
-            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 500, marginTop: 3, letterSpacing: '0.1px' }}>
-              Paso {paso}/{totalPasos} · {pasoLabel}
-            </p>
-          </div>
+          <div style={{ flex: 1 }} />
 
-          {/* Share placeholder (mismo tamaño que el back para centrar) */}
-          <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Share2 size={15} color="rgba(255,255,255,0.4)" />
-          </div>
+          {cliente && (
+            <>
+              <button
+                onClick={() => fileRef.current?.click()}
+                aria-label="Tomar foto"
+                style={{
+                  position: 'relative', width: TAP, height: TAP, borderRadius: 12, cursor: 'pointer',
+                  border: `1px solid ${nFotos > 0 ? C.green : C.line}`,
+                  background: nFotos > 0 ? C.greenSoft : C.card,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Camera size={18} color={nFotos > 0 ? C.green : C.muted} />
+                {nFotos > 0 && (
+                  <span style={{
+                    position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17, borderRadius: 99,
+                    background: C.green, color: '#fff', fontSize: 10, fontWeight: 800,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${C.bg}`,
+                  }}>{nFotos}</span>
+                )}
+              </button>
+              <button
+                onClick={() => setShowCatalogoWA(true)}
+                aria-label="Enviar catálogo por WhatsApp"
+                style={{
+                  width: TAP, height: TAP, borderRadius: 12, cursor: 'pointer',
+                  border: `1px solid ${C.line}`, background: C.card,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <MessageCircle size={18} color="#25D366" />
+              </button>
+              {items.length > 0 && (
+                <button
+                  onClick={() => setShowImagen(true)}
+                  aria-label="Imagen del pedido"
+                  style={{
+                    width: TAP, height: TAP, borderRadius: 12, cursor: 'pointer',
+                    border: `1px solid ${C.line}`, background: C.card,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <ImageIcon size={18} color={C.muted} />
+                </button>
+              )}
+            </>
+          )}
         </div>
-        <StepBar paso={paso} total={totalPasos} />
+
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>
+            {cliente ? 'VENTA EN TERRENO' : 'PASO 1 DE 2'}
+          </p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.2 }}>
+            {cliente ? cliente.nombre : '¿A quién le vendes?'}
+          </h1>
+          {cliente && (
+            <p style={{ fontSize: 12.5, color: C.muted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {cliente.esNuevo && (
+                <span style={{ background: C.blueSoft, color: C.blue, fontWeight: 700, borderRadius: 6, padding: '1px 6px', fontSize: 11 }}>
+                  Cliente nuevo
+                </span>
+              )}
+              {syncPendiente
+                ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: C.amber, fontWeight: 600 }}><CloudOff size={12} /> Guardando…</span>
+                : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: C.green, fontWeight: 600 }}><Check size={12} /> Guardado</span>}
+            </p>
+          )}
+        </div>
+
+        {!cliente ? (
+          <PasoCliente clientes={clientesExistentes} onConfirmar={onClienteConfirmado} />
+        ) : (
+          <PasoVenta
+            clienteNombre={cliente.nombre}
+            catalogo={catalogo}
+            carrito={carrito}
+            setCarrito={setCarrito}
+            onCerrar={onCerrarIntentado}
+            guardando={guardando}
+          />
+        )}
       </div>
 
-      {paso === 1 && <Paso1Cliente clientes={clientesExistentes} deudores={deudores} onConfirmar={onClienteConfirmado} />}
-      {paso === 2 && <Paso2Checkin fotos={fotos} onAdjuntarFoto={subirFoto} onConfirmar={onCheckinConfirmado} onCancelar={cancelarVisita} />}
-      {paso === 3 && !cliente?.esNuevo && <Paso3Vista360 clienteNombre={cliente?.nombre ?? ''} esNuevo={false} onContinuar={onVista360Continuar} />}
-      {(paso === 4 || (paso === 3 && cliente?.esNuevo)) && (
-        <Paso4Catalogo
-          productos={catalogoProductos}
+      {showCatalogoWA && <WhatsAppCatalogoModal onClose={() => setShowCatalogoWA(false)} />}
+      {showImagen && (
+        <VentaImageModal
+          items={items}
           clienteNombre={cliente?.nombre ?? ''}
-          vendedorNombre={vendedor.nombre ?? ''}
-          carritoInicial={carritoInicial}
-          onCerrar={onCerrarIntentado}
+          vendedorNombre={vendedor.nombre}
+          onClose={() => setShowImagen(false)}
         />
       )}
-
-      {/* Botón flotante de evidencia — visible desde el check-in en adelante */}
-      {paso >= 2 && visitaId && !guardando && (
-        <EvidenciaFAB pendientes={FOTO_SLOTS.filter(s => fotos[s.key]).length} onClick={() => setShowEvidencia(true)} />
-      )}
-      {showEvidencia && (
-        <EvidenciaSheet fotos={fotos} onAdjuntarFoto={subirFoto} onClose={() => setShowEvidencia(false)} />
-      )}
-
       {pendingCierre && (
-        <FotosPendientesModal
-          onCargarAhora={() => { setPendingCierre(null); setShowEvidencia(true) }}
-          onFinalizarIgual={() => ejecutarCierre(
-            pendingCierre.items, pendingCierre.tienVenta, pendingCierre.motivo, pendingCierre.obs,
-            pendingCierre.metodoPago, pendingCierre.diasCredito, pendingCierre.fechaPagoEstimada,
-            pendingCierre.seguimiento,
-          )}
+        <ModalFotoRequerida
+          onCargar={() => { setPendingCierre(null); fileRef.current?.click() }}
+          onCerrar={() => setPendingCierre(null)}
         />
-      )}
-
-      {guardando && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#1C1C1C', borderRadius: 16, padding: '24px 32px', textAlign: 'center' }}>
-            <p style={{ fontSize: 15, fontWeight: 700, color: '#F4EEDF' }}>Guardando visita…</p>
-          </div>
-        </div>
       )}
     </div>
   )
