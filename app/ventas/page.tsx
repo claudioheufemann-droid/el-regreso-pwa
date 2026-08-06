@@ -33,5 +33,7 @@ export default async function VentasHoyPage({
     custom,
   )
 
-  return <VentasHoyClient data={data} />
+  // Remuneración variable propia: sólo la ve quien tenga el permiso, no los
+  // admins en general (ver app/api/ventas/comision/route.ts).
+  return <VentasHoyClient data={data} veComision={!!appUser?.veComisionGerente} />
 }

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import NotificationsBell from '@/components/ui/NotificationsBell'
+import MiComision from './MiComision'
 import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango } from './hoyTypes'
 
 /**
@@ -1031,7 +1032,7 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega }: {
 }
 
 // ── Vista ────────────────────────────────────────────────────────────────────
-export default function VentasHoyClient({ data }: { data: HoyData }) {
+export default function VentasHoyClient({ data, veComision = false }: { data: HoyData; veComision?: boolean }) {
   const router = useRouter()
   // Si la URL trae un rango a mano, se entra directo en esa vista
   const [rango, setRango] = useState<RangoKey>(data.custom ? 'custom' : 'periodo')
@@ -1421,6 +1422,23 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             })}
           </div>
         </div>
+
+        {/* Remuneración variable propia (cláusula NOVENA del contrato). Va
+            arriba de todo, antes del hero, por pedido de Claudio: es lo que
+            quiere ver primero al abrir. Sólo se monta con el permiso
+            ve_comision_gerente — no lo ven los demás admins. */}
+        {veComision && (
+          <MiComision
+            key={`${d.desde}_${d.hasta}`}
+            desde={d.desde}
+            hasta={d.hasta}
+            nombrePeriodo={
+              rango === 'periodo' && periodoSel ? periodoSel.nombre
+                : rango === 'custom' ? (customPeriodoNombre ?? 'Rango elegido')
+                : (RANGOS.find(r => r.key === rango)?.label ?? 'Período')
+            }
+          />
+        )}
 
         {/* Hero — rediseño pedido por Claudio: "por entregar" y "total" pasan
             a ser tan grandes como litros entregado (antes iban en una línea
