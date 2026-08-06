@@ -1612,59 +1612,59 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             <button
               onClick={() => abrirDetalle('clientes', { conSelector: true, titulo: 'Venta área comercial' })}
               style={{
-                background: C.hero, borderRadius: 18, padding: 18, width: '100%',
-                border: 'none', textAlign: 'left', cursor: 'pointer', font: 'inherit', color: '#fff',
+                background: C.card, borderRadius: 18, padding: 18, width: '100%',
+                border: `1px solid ${C.line}`, textAlign: 'left', cursor: 'pointer', font: 'inherit', color: C.text,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <span style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Building2 size={18} color="#F59E0B" />
+                <span style={{ width: 36, height: 36, borderRadius: 11, background: C.amberSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Building2 size={18} color={C.amber} />
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>VENTA ÁREA COMERCIAL</p>
-                  <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>VENTA ÁREA COMERCIAL</p>
+                  <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
                     Todos los vendedores · {fNum(actual.clientes)} {actual.clientes === 1 ? 'cliente' : 'clientes'}
                   </p>
                 </div>
-                <span style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ width: 34, height: 34, borderRadius: '50%', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <ArrowRight size={16} color="#F59E0B" />
                 </span>
               </div>
 
-              <p style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1 }}>
+              <p style={{ fontSize: 30, fontWeight: 800, color: C.text, letterSpacing: '-1px', lineHeight: 1 }}>
                 {fPesoFull(revenueTotal)}
               </p>
-              <p style={{ fontSize: 12.5, color: '#CBD5E1', marginTop: 4 }}>
+              <p style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>
                 {fL(litrosTotal)} · entregado + por entregar
               </p>
 
               {litrosTotal > 0 && (
-                <div style={{ display: 'flex', height: 7, borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,.12)', marginTop: 14 }}>
-                  <div style={{ width: `${pctEntregado}%`, background: '#34D399' }} />
-                  <div style={{ width: `${100 - pctEntregado}%`, background: '#F59E0B' }} />
+                <div style={{ display: 'flex', height: 7, borderRadius: 4, overflow: 'hidden', background: C.line, marginTop: 14 }}>
+                  <div style={{ width: `${pctEntregado}%`, background: C.green }} />
+                  <div style={{ width: `${100 - pctEntregado}%`, background: C.amber }} />
                 </div>
               )}
 
               <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 130px', minWidth: 0 }}>
-                  <p style={{ fontSize: 11, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34D399', flexShrink: 0 }} />
+                  <p style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.green, flexShrink: 0 }} />
                     Entregado
                   </p>
-                  <p style={{ fontSize: 17, fontWeight: 800, color: '#34D399', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+                  <p style={{ fontSize: 17, fontWeight: 800, color: C.green, letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
                     {fL(actual.litros)}
                   </p>
-                  <p style={{ fontSize: 12, color: '#CBD5E1', whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenue)}</p>
+                  <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenue)}</p>
                 </div>
                 <div style={{ flex: '1 1 130px', minWidth: 0 }}>
-                  <p style={{ fontSize: 11, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#F59E0B', flexShrink: 0 }} />
+                  <p style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.amber, flexShrink: 0 }} />
                     Por entregar
                   </p>
-                  <p style={{ fontSize: 17, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+                  <p style={{ fontSize: 17, fontWeight: 800, color: C.amber, letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
                     {fL(d.entregas.litrosPorEntregar)}
                   </p>
-                  <p style={{ fontSize: 12, color: '#CBD5E1', whiteSpace: 'nowrap' }}>{fPesoFull(d.entregas.revenuePorEntregar)}</p>
+                  <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(d.entregas.revenuePorEntregar)}</p>
                 </div>
               </div>
             </button>
