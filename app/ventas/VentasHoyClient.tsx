@@ -1667,6 +1667,44 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                   <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(d.entregas.revenuePorEntregar)}</p>
                 </div>
               </div>
+
+              {/* Cerveza vs kombucha. Va rotulado "del entregado" a propósito:
+                  estas cifras salen de los KPIs de lo ENTREGADO y no incluyen
+                  lo por entregar, así que no suman el total grande de arriba.
+                  Sin el rótulo parecería que los números no calzan. */}
+              {actual.litros > 0 && (
+                <>
+                  <div style={{ height: 1, background: C.line, margin: '14px 0 12px' }} />
+                  <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: '0.04em', marginBottom: 9 }}>
+                    MIX DEL ENTREGADO
+                  </p>
+                  {([
+                    { nombre: 'Cerveza',  emoji: '🍺', litros: actual.litrosCerveza,  revenue: actual.revenueCerveza,  color: C.amber },
+                    { nombre: 'Kombucha', emoji: '🧃', litros: actual.litrosKombucha, revenue: actual.revenueKombucha, color: C.green },
+                    { nombre: 'Otros',    emoji: '📦', litros: actual.litrosOtros,    revenue: actual.revenueOtros,    color: C.purple },
+                  ] as const).filter(cat => cat.litros > 0 || cat.revenue !== 0).map(cat => {
+                    const pct = (cat.litros / actual.litros) * 100
+                    return (
+                      <div key={cat.nombre} style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9 }}>
+                        <span style={{ fontSize: 15, flexShrink: 0 }}>{cat.emoji}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{cat.nombre}</span>
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: cat.color }}>{Math.round(pct)}%</span>
+                          </div>
+                          <div style={{ height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: cat.color, borderRadius: 3 }} />
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(cat.litros)}</p>
+                          <p style={{ fontSize: 11.5, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(cat.revenue)}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </>
+              )}
             </button>
           )
         })()}
