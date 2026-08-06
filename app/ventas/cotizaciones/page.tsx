@@ -22,6 +22,10 @@ export default async function CotizacionesPage() {
   const user = await getServerUser()
   if (!user) redirect('/login')
 
+  // Sin filtro por vendedor a propósito: lo resuelve RLS en la base
+  // (ver supabase/migrations/cotizaciones_rls_por_vendedor.sql). Un admin
+  // recibe las de todo el equipo; un vendedor, sólo las suyas. Filtrar
+  // también acá sería una segunda fuente de verdad que se puede desincronizar.
   const supabase = await createClient()
   const { data } = await supabase
     .from('cotizaciones')
@@ -29,5 +33,5 @@ export default async function CotizacionesPage() {
     .order('created_at', { ascending: false })
     .limit(300)
 
-  return <CotizacionesClient filas={(data ?? []) as CotizacionRow[]} />
+  return <CotizacionesClient filas={(data ?? []) as CotizacionRow[]} esAdmin={user.isAdmin} />
 }

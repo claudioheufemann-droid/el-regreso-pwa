@@ -27,7 +27,7 @@ function fFecha(iso: string) {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function CotizacionesClient({ filas }: { filas: CotizacionRow[] }) {
+export default function CotizacionesClient({ filas, esAdmin = false }: { filas: CotizacionRow[]; esAdmin?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
   const [busqueda, setBusqueda] = useState('')
@@ -41,9 +41,12 @@ export default function CotizacionesClient({ filas }: { filas: CotizacionRow[] }
     return filas2.filter(f =>
       f.cliente_nombre.toLowerCase().includes(q) ||
       (f.cliente_empresa ?? '').toLowerCase().includes(q) ||
-      String(f.numero).includes(q),
+      String(f.numero).includes(q) ||
+      // El admin ve las de todo el equipo, así que buscar por vendedor le
+      // sirve; a un vendedor le daría lo mismo (sólo salen las suyas).
+      (esAdmin && f.creado_por_nombre.toLowerCase().includes(q)),
     )
-  }, [busqueda, filas2])
+  }, [busqueda, filas2, esAdmin])
 
   async function cambiarEstado(id: string, estado: CotizacionRow['estado']) {
     setFilas2(prev => prev.map(f => f.id === id ? { ...f, estado } : f))
@@ -71,7 +74,12 @@ export default function CotizacionesClient({ filas }: { filas: CotizacionRow[] }
           <div>
             <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>VENTAS</p>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Cotizaciones</h1>
-            <p style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{filas2.length} en total</p>
+            {/* Deja explícito el alcance de la lista: sin esto, un vendedor
+                podría creer que el equipo no cotizó nada, y un admin no
+                sabría que está viendo también las de los demás. */}
+            <p style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
+              {filas2.length} en total · {esAdmin ? 'todo el equipo' : 'tus cotizaciones'}
+            </p>
           </div>
           <button
             onClick={() => router.push('/ventas/cotizaciones/nueva')}
@@ -89,7 +97,7 @@ export default function CotizacionesClient({ filas }: { filas: CotizacionRow[] }
           <Search size={15} color={C.faint} style={{ position: 'absolute', left: 12, top: 13 }} />
           <input
             value={busqueda} onChange={e => setBusqueda(e.target.value)}
-            placeholder="Buscar por cliente o N° de cotización…"
+            placeholder={esAdmin ? 'Buscar por cliente, vendedor o N°…' : 'Buscar por cliente o N° de cotización…'}
             style={{ width: '100%', padding: '12px 12px 12px 36px', borderRadius: 12, border: `1px solid ${C.line}`, background: C.card, color: C.text, fontSize: 14, outline: 'none' }}
           />
         </div>
