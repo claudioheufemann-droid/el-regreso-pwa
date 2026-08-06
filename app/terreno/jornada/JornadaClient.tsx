@@ -2,15 +2,21 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import AppHeader from '@/components/ui/AppHeader'
 import { createClient } from '@/lib/supabase/client'
 import { upsertOrQueue } from '@/lib/offlineQueue'
 import { uploadConTimeout, queuePhoto } from '@/lib/offlinePhotoQueue'
 import { compressImage } from '@/lib/compress-image'
 import { fetchConTimeout } from '@/lib/utils'
-import { Gauge, Fuel, CheckCircle2, AlertTriangle, Flag } from 'lucide-react'
+import { Fuel, CheckCircle2, AlertTriangle, Flag, ChevronLeft, Camera } from 'lucide-react'
+import { C, TAP, fPeso, fHora, cardStyle, btnPrimario } from '../theme'
 
-const ORANGE = '#F97316'
+/**
+ * Jornada y kilometraje — tema claro, misma lógica de siempre.
+ *
+ * Sólo cambia el aspecto: la mecánica (id generado en el cliente, foto en
+ * segundo plano con cola offline, lectura del odómetro con IA y cálculo de
+ * reembolso en el servidor) queda igual.
+ */
 
 interface Jornada {
   id: string
@@ -39,16 +45,17 @@ function FotoSlot({ label, onCaptura, capturada }: { label: string; onCaptura: (
     <button
       onClick={() => ref.current?.click()}
       style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', borderRadius: 12, cursor: 'pointer',
-        border: `1px solid ${capturada ? '#4ADE8055' : 'var(--border)'}`,
-        background: capturada ? 'rgba(74,222,128,0.08)' : 'rgba(255,255,255,0.03)',
-        color: capturada ? '#4ADE80' : 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 700, textAlign: 'left', marginBottom: 12,
+        width: '100%', display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer',
+        minHeight: 50, padding: '0 14px', borderRadius: 12, marginBottom: 12, textAlign: 'left',
+        border: `1px solid ${capturada ? C.green : C.line}`,
+        background: capturada ? C.greenSoft : C.card,
+        color: capturada ? C.green : C.muted, fontSize: 13.5, fontWeight: 700,
       }}
     >
       <input ref={ref} type="file" accept="image/*" capture="environment" hidden
-        onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(f) }} />
-      <Gauge size={16} />
-      {capturada ? `✓ ${label} cargada` : `Tomar foto: ${label}`}
+        onChange={e => { const f = e.target.files?.[0]; if (f) onCaptura(f); e.target.value = '' }} />
+      {capturada ? <CheckCircle2 size={17} /> : <Camera size={17} />}
+      {capturada ? `${label} lista` : `Tomar foto: ${label}`}
     </button>
   )
 }
@@ -62,6 +69,15 @@ async function fileToBase64(file: File): Promise<string> {
   })
 }
 
+const inputStyle: React.CSSProperties = {
+  width: '100%', minHeight: 48, padding: '0 12px', borderRadius: 11,
+  border: `1px solid ${C.line}`, background: C.bg, color: C.text, fontSize: 16, outline: 'none',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 11.5, fontWeight: 700, color: C.muted, marginBottom: 6,
+}
+
 export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
   const router = useRouter()
   const supabase = createClient()
@@ -70,13 +86,11 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
   const [cargas, setCargas] = useState<Carga[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Inicio de jornada
   const [kmInicio, setKmInicio] = useState('')
   const [fotoInicioFile, setFotoInicioFile] = useState<File | null>(null)
   const [analizandoInicio, setAnalizandoInicio] = useState(false)
   const [creando, setCreando] = useState(false)
 
-  // Cierre de jornada
   const [mostrarCierre, setMostrarCierre] = useState(false)
   const [kmFin, setKmFin] = useState('')
   const [fotoFinFile, setFotoFinFile] = useState<File | null>(null)
@@ -85,7 +99,6 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
   const [resultado, setResultado] = useState<Jornada | null>(null)
   const [cierrePendiente, setCierrePendiente] = useState(false)
 
-  // Combustible
   const [mostrarCombustible, setMostrarCombustible] = useState(false)
   const [monto, setMonto] = useState('')
   const [litros, setLitros] = useState('')
@@ -112,13 +125,13 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
       })
       const { km } = await res.json()
       if (km) setKm(String(km))
-    } catch { /* el vendedor puede corregir el km manualmente */ }
+    } catch { /* el vendedor puede corregir el km a mano */ }
     setAnalizando(false)
   }
 
-  // Inicia la jornada de inmediato con un id generado en el cliente — no
-  // depende de la red para existir. La foto se sube en segundo plano (con
-  // timeout corto) y si no hay señal queda en cola, se sube sola después.
+  // Arranca de inmediato con un id generado en el cliente — no depende de la
+  // red para existir. La foto sube en segundo plano y, sin señal, queda en
+  // cola y se sube sola después.
   function iniciarJornada() {
     if (!kmInicio || !fotoInicioFile) return
     setCreando(true)
@@ -141,8 +154,8 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
   }
 
   // El cierre calcula reembolso y km reales por GPS en el servidor — sí
-  // necesita señal. Si la foto no sube al toque, se encola (no se pierde)
-  // y se avisa para volver a intentar el cierre cuando haya conexión.
+  // necesita señal. Si la foto no sube al toque se encola (no se pierde) y se
+  // avisa para reintentar cuando haya conexión.
   async function cerrarJornada() {
     if (!jornada || !kmFin || !fotoFinFile) return
     setCerrando(true)
@@ -173,8 +186,6 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
     }
   }
 
-  // La carga de combustible es un insert simple (sin cálculos), se puede
-  // hacer sin señal igual que el resto de terreno.
   function registrarCarga() {
     if (!jornada || !monto) return
     setGuardandoCarga(true)
@@ -196,61 +207,81 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
     setFotoBoletaFile(null)
   }
 
-  if (loading) return <div style={{ background: 'var(--bg)', minHeight: '100vh' }} />
+  if (loading) return <div style={{ background: C.bg, minHeight: '100vh' }} />
+
+  const listoInicio = !!kmInicio && !!fotoInicioFile
+  const listoFin = !!kmFin && !!fotoFinFile
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      <AppHeader eyebrow="Terreno" title="Jornada y kilometraje" backHref="/terreno" />
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 120px))' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
+        <button
+          onClick={() => router.push('/terreno')}
+          aria-label="Volver"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 36, cursor: 'pointer',
+            background: C.card, border: `1px solid ${C.line}`, borderRadius: 100,
+            padding: '7px 14px 7px 10px', color: C.blue, fontSize: 13, fontWeight: 700, marginBottom: 14,
+          }}
+        >
+          <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
+          Volver
+        </button>
 
-      <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 16px 100px' }}>
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>TERRENO</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Jornada y kilometraje</h1>
+        </div>
 
-        {/* ── Resultado tras cerrar ── */}
+        {/* Resultado tras cerrar */}
         {resultado && (
           <div style={{
-            background: resultado.requiere_revision ? 'rgba(255,102,102,0.06)' : 'rgba(74,222,128,0.06)',
-            border: `1px solid ${resultado.requiere_revision ? 'rgba(255,102,102,0.3)' : 'rgba(74,222,128,0.3)'}`,
-            borderRadius: 16, padding: 16, marginBottom: 18,
+            background: resultado.requiere_revision ? C.redSoft : C.greenSoft,
+            border: `1px solid ${resultado.requiere_revision ? '#FECACA' : '#A7F3D0'}`,
+            borderRadius: 16, padding: 16, marginBottom: 16,
           }}>
-            <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 900, color: resultado.requiere_revision ? '#FF6666' : '#4ADE80', marginBottom: 10 }}>
-              {resultado.requiere_revision ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
-              Jornada cerrada {resultado.requiere_revision ? '— requiere revisión' : ''}
+            <p style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 800, marginBottom: 12, color: resultado.requiere_revision ? C.red : C.green }}>
+              {resultado.requiere_revision ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}
+              Jornada cerrada{resultado.requiere_revision ? ' — requiere revisión' : ''}
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.65)' }}>
-              <span>Km declarados (tablero): <strong style={{ color: 'var(--cream)' }}>{resultado.km_declarados}</strong></span>
-              <span>Km calculados por GPS: <strong style={{ color: 'var(--cream)' }}>{resultado.km_gps?.toFixed(1)}</strong></span>
-              <span>Diferencia: <strong style={{ color: resultado.requiere_revision ? '#FF6666' : 'var(--cream)' }}>{resultado.diferencia_pct?.toFixed(1)}%</strong></span>
-              <span>Reembolso calculado: <strong style={{ color: ORANGE }}>${resultado.monto_reembolso?.toLocaleString('es-CL')}</strong></span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, fontSize: 13, color: C.muted }}>
+              <Dato label="Km declarados (tablero)" valor={String(resultado.km_declarados ?? '—')} />
+              <Dato label="Km calculados por GPS" valor={resultado.km_gps?.toFixed(1) ?? '—'} />
+              <Dato label="Diferencia" valor={`${resultado.diferencia_pct?.toFixed(1) ?? '—'}%`} destacado={!!resultado.requiere_revision} />
+              <Dato label="Reembolso calculado" valor={resultado.monto_reembolso != null ? fPeso(resultado.monto_reembolso) : '—'} />
             </div>
-            <button onClick={() => router.push('/terreno')} style={{ marginTop: 14, width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', cursor: 'pointer', background: ORANGE, color: '#080808', fontSize: 13, fontWeight: 900 }}>
+            <button onClick={() => router.push('/terreno')} style={{ ...btnPrimario, marginTop: 14 }}>
               Volver al panel
             </button>
           </div>
         )}
 
-        {/* ── Sin jornada abierta: iniciar ── */}
+        {/* Sin jornada abierta */}
         {!jornada && !resultado && (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, padding: 18 }}>
-            <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>Inicio de jornada</p>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>
-              Ingresa el kilometraje actual y toma una foto del odómetro antes de salir a terreno.
+          <div style={{ ...cardStyle, padding: 16 }}>
+            <p style={{ fontSize: 15.5, fontWeight: 800, color: C.text, marginBottom: 4 }}>Inicio de jornada</p>
+            <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.45 }}>
+              Ingresa el kilometraje actual y toma una foto del odómetro antes de salir.
             </p>
 
-            <label style={{ display: 'block', fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase' }}>Kilometraje inicial</label>
+            <label style={labelStyle}>Kilometraje inicial</label>
             <input
-              type="number" min={0} value={kmInicio} onChange={e => setKmInicio(e.target.value)} placeholder="Ej: 45230"
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--cream)', fontSize: 14, outline: 'none', marginBottom: 12 }}
+              type="number" inputMode="numeric" min={0} value={kmInicio}
+              onChange={e => setKmInicio(e.target.value)} placeholder="Ej: 45230"
+              style={{ ...inputStyle, marginBottom: 12 }}
             />
 
             <FotoSlot label="odómetro" capturada={!!fotoInicioFile} onCaptura={f => { setFotoInicioFile(f); analizar(f, 'inicio') }} />
-            {analizandoInicio && <p style={{ fontSize: 11, color: ORANGE, marginTop: -6, marginBottom: 12 }}>Leyendo odómetro con IA…</p>}
+            {analizandoInicio && <p style={{ fontSize: 12, color: C.blue, marginTop: -6, marginBottom: 12, fontWeight: 600 }}>Leyendo el odómetro…</p>}
 
             <button
               onClick={iniciarJornada}
-              disabled={!kmInicio || !fotoInicioFile || creando}
+              disabled={!listoInicio || creando}
               style={{
-                width: '100%', padding: '13px 0', borderRadius: 12, border: 'none', cursor: 'pointer',
-                background: kmInicio && fotoInicioFile ? `linear-gradient(135deg, ${ORANGE}, #C2410C)` : 'rgba(255,255,255,0.06)',
-                color: kmInicio && fotoInicioFile ? '#080808' : 'rgba(255,255,255,0.35)', fontSize: 14, fontWeight: 900,
+                ...btnPrimario,
+                background: listoInicio ? C.hero : C.line,
+                color: listoInicio ? '#fff' : C.faint,
+                cursor: listoInicio ? 'pointer' : 'not-allowed',
                 opacity: creando ? 0.7 : 1,
               }}
             >
@@ -259,52 +290,65 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
           </div>
         )}
 
-        {/* ── Jornada abierta ── */}
+        {/* Jornada abierta */}
         {jornada && (
           <>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, padding: 18, marginBottom: 14 }}>
-              <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, color: '#4ADE80', marginBottom: 10 }}>
-                <CheckCircle2 size={14} /> Jornada en curso
+            <div style={{ ...cardStyle, padding: 15, marginBottom: 12, background: C.greenSoft, border: '1px solid #A7F3D0' }}>
+              <p style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 800, color: C.green, marginBottom: 5 }}>
+                <CheckCircle2 size={16} /> Jornada en curso
               </p>
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-                Km inicial: <strong style={{ color: 'var(--cream)' }}>{jornada.km_inicio}</strong> · Desde las {new Date(jornada.iniciada_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+              <p style={{ fontSize: 13, color: C.text }}>
+                Km inicial: <strong>{jornada.km_inicio}</strong> · desde las {fHora(jornada.iniciada_at)}
               </p>
             </div>
 
-            {/* ── Combustible ── */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, padding: 18, marginBottom: 14 }}>
-              <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: cargas.length || mostrarCombustible ? 12 : 0 }}>
-                <Fuel size={15} color={ORANGE} /> Combustible
+            {/* Combustible */}
+            <div style={{ ...cardStyle, padding: 15, marginBottom: 12 }}>
+              <p style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13.5, fontWeight: 800, color: C.text, marginBottom: cargas.length || mostrarCombustible ? 11 : 0 }}>
+                <Fuel size={16} color={C.amber} /> Combustible
               </p>
 
               {cargas.map(c => (
-                <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 6 }}>
-                  <span>{new Date(c.registrado_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}{c.litros ? ` · ${c.litros}L` : ''}</span>
-                  <strong style={{ color: ORANGE }}>${c.monto.toLocaleString('es-CL')}</strong>
+                <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: C.muted, marginBottom: 6 }}>
+                  <span>{fHora(c.registrado_at)}{c.litros ? ` · ${c.litros} L` : ''}</span>
+                  <strong style={{ color: C.amber }}>{fPeso(c.monto)}</strong>
                 </div>
               ))}
 
               {!mostrarCombustible ? (
-                <button onClick={() => setMostrarCombustible(true)}
-                  style={{ width: '100%', marginTop: cargas.length ? 8 : 0, padding: '10px 0', borderRadius: 10, border: `1px solid ${ORANGE}55`, background: `${ORANGE}15`, color: ORANGE, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                  + Registrar carga de combustible
+                <button
+                  onClick={() => setMostrarCombustible(true)}
+                  style={{
+                    width: '100%', minHeight: TAP, marginTop: cargas.length ? 8 : 0, borderRadius: 11, cursor: 'pointer',
+                    border: `1px solid ${C.line}`, background: C.amberSoft, color: C.amber, fontSize: 13.5, fontWeight: 700,
+                  }}
+                >
+                  + Registrar carga
                 </button>
               ) : (
                 <div style={{ marginTop: 12 }}>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <input type="number" min={0} value={monto} onChange={e => setMonto(e.target.value)} placeholder="Monto $"
-                      style={{ flex: 1, padding: '9px 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--cream)', fontSize: 13, outline: 'none' }} />
-                    <input type="number" min={0} step={0.1} value={litros} onChange={e => setLitros(e.target.value)} placeholder="Litros (opcional)"
-                      style={{ flex: 1, padding: '9px 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--cream)', fontSize: 13, outline: 'none' }} />
+                    <input type="number" inputMode="numeric" min={0} value={monto} onChange={e => setMonto(e.target.value)} placeholder="Monto $" style={inputStyle} />
+                    <input type="number" inputMode="decimal" min={0} step={0.1} value={litros} onChange={e => setLitros(e.target.value)} placeholder="Litros" style={inputStyle} />
                   </div>
                   <FotoSlot label="boleta (opcional)" capturada={!!fotoBoletaFile} onCaptura={setFotoBoletaFile} />
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={registrarCarga} disabled={!monto || guardandoCarga}
-                      style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer', background: monto ? ORANGE : 'rgba(255,255,255,0.06)', color: monto ? '#080808' : 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: 900, opacity: guardandoCarga ? 0.7 : 1 }}>
+                    <button
+                      onClick={registrarCarga}
+                      disabled={!monto || guardandoCarga}
+                      style={{
+                        flex: 1, minHeight: TAP, borderRadius: 11, border: 'none',
+                        cursor: monto ? 'pointer' : 'not-allowed',
+                        background: monto ? C.hero : C.line, color: monto ? '#fff' : C.faint,
+                        fontSize: 13.5, fontWeight: 800, opacity: guardandoCarga ? 0.7 : 1,
+                      }}
+                    >
                       {guardandoCarga ? 'Guardando…' : 'Guardar'}
                     </button>
-                    <button onClick={() => setMostrarCombustible(false)}
-                      style={{ padding: '10px 14px', borderRadius: 9, border: '1px solid var(--border)', background: 'transparent', color: 'rgba(255,255,255,0.4)', fontSize: 12, cursor: 'pointer' }}>
+                    <button
+                      onClick={() => setMostrarCombustible(false)}
+                      style={{ minHeight: TAP, padding: '0 16px', borderRadius: 11, border: `1px solid ${C.line}`, background: C.card, color: C.muted, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}
+                    >
                       Cancelar
                     </button>
                   </div>
@@ -312,49 +356,53 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
               )}
             </div>
 
-            {/* ── Cierre de jornada ── */}
+            {/* Cierre */}
             {!mostrarCierre ? (
-              <button onClick={() => setMostrarCierre(true)}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 0', borderRadius: 12, border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${ORANGE}, #C2410C)`, color: '#080808', fontSize: 14, fontWeight: 900 }}>
-                <Flag size={16} /> Cerrar jornada
+              <button onClick={() => setMostrarCierre(true)} style={btnPrimario}>
+                <Flag size={17} /> Cerrar jornada
               </button>
             ) : (
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, padding: 18 }}>
-                <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>Fin de jornada</p>
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>
+              <div style={{ ...cardStyle, padding: 16 }}>
+                <p style={{ fontSize: 15.5, fontWeight: 800, color: C.text, marginBottom: 4 }}>Fin de jornada</p>
+                <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.45 }}>
                   Ingresa el kilometraje final y toma la foto del odómetro para cerrar el día.
                 </p>
 
-                <label style={{ display: 'block', fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase' }}>Kilometraje final</label>
+                <label style={labelStyle}>Kilometraje final</label>
                 <input
-                  type="number" min={jornada.km_inicio ?? 0} value={kmFin} onChange={e => setKmFin(e.target.value)} placeholder="Ej: 45310"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--cream)', fontSize: 14, outline: 'none', marginBottom: 12 }}
+                  type="number" inputMode="numeric" min={jornada.km_inicio ?? 0} value={kmFin}
+                  onChange={e => setKmFin(e.target.value)} placeholder="Ej: 45310"
+                  style={{ ...inputStyle, marginBottom: 12 }}
                 />
 
                 <FotoSlot label="odómetro final" capturada={!!fotoFinFile} onCaptura={f => { setFotoFinFile(f); analizar(f, 'fin') }} />
-                {analizandoFin && <p style={{ fontSize: 11, color: ORANGE, marginTop: -6, marginBottom: 12 }}>Leyendo odómetro con IA…</p>}
+                {analizandoFin && <p style={{ fontSize: 12, color: C.blue, marginTop: -6, marginBottom: 12, fontWeight: 600 }}>Leyendo el odómetro…</p>}
+
                 {cierrePendiente && (
-                  <p style={{ fontSize: 11, color: '#FBBF24', marginBottom: 12, lineHeight: 1.5 }}>
-                    ⚠ Sin señal ahora mismo — la foto quedó guardada en el teléfono y se sube sola apenas
-                    tengas conexión. Vuelve a esta pantalla y toca &quot;Confirmar cierre&quot; de nuevo cuando tengas señal.
+                  <p style={{ fontSize: 12.5, color: C.amber, marginBottom: 12, lineHeight: 1.5, background: C.amberSoft, border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 12px' }}>
+                    Sin señal ahora mismo. La foto quedó guardada en el teléfono y se sube sola apenas
+                    tengas conexión — vuelve a esta pantalla y toca &quot;Confirmar cierre&quot; de nuevo.
                   </p>
                 )}
 
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     onClick={cerrarJornada}
-                    disabled={!kmFin || !fotoFinFile || cerrando}
+                    disabled={!listoFin || cerrando}
                     style={{
-                      flex: 1, padding: '13px 0', borderRadius: 12, border: 'none', cursor: 'pointer',
-                      background: kmFin && fotoFinFile ? `linear-gradient(135deg, ${ORANGE}, #C2410C)` : 'rgba(255,255,255,0.06)',
-                      color: kmFin && fotoFinFile ? '#080808' : 'rgba(255,255,255,0.35)', fontSize: 14, fontWeight: 900,
+                      ...btnPrimario, flex: 1, width: 'auto',
+                      background: listoFin ? C.hero : C.line,
+                      color: listoFin ? '#fff' : C.faint,
+                      cursor: listoFin ? 'pointer' : 'not-allowed',
                       opacity: cerrando ? 0.7 : 1,
                     }}
                   >
                     {cerrando ? 'Cerrando…' : 'Confirmar cierre'}
                   </button>
-                  <button onClick={() => setMostrarCierre(false)}
-                    style={{ padding: '13px 16px', borderRadius: 12, border: '1px solid var(--border)', background: 'transparent', color: 'rgba(255,255,255,0.4)', fontSize: 12, cursor: 'pointer' }}>
+                  <button
+                    onClick={() => setMostrarCierre(false)}
+                    style={{ minHeight: 52, padding: '0 16px', borderRadius: 14, border: `1px solid ${C.line}`, background: C.card, color: C.muted, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                  >
                     Cancelar
                   </button>
                 </div>
@@ -363,6 +411,15 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+function Dato({ label, valor, destacado = false }: { label: string; valor: string; destacado?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+      <span>{label}</span>
+      <strong style={{ color: destacado ? C.red : C.text, whiteSpace: 'nowrap' }}>{valor}</strong>
     </div>
   )
 }
