@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Camera, Check, CloudOff, MessageCircle, Image as ImageIcon } from 'lucide-react'
+import { ChevronLeft, Check, CloudOff, MessageCircle, Image as ImageIcon } from 'lucide-react'
 import { notificar } from '@/lib/notificar'
 import { upsertOrQueue } from '@/lib/offlineQueue'
 import { uploadConTimeout } from '@/lib/offlinePhotoQueue'
@@ -15,30 +15,31 @@ import { es } from 'date-fns/locale'
 import type { AppUser } from '@/lib/auth'
 import { C, TAP } from '../theme'
 import PasoCliente, { type ClienteExistente, type NuevoClienteDetalle } from './PasoCliente'
+import PasoCheckin, { ModalFotosPendientes, SLOTS_FOTO, type SlotFoto } from './PasoCheckin'
 import PasoVenta, { type CierrePayload } from './PasoVenta'
 import {
-  setCatalogo, WhatsAppCatalogoModal, VentaImageModal, ModalFotoRequerida,
+  setCatalogo, WhatsAppCatalogoModal, VentaImageModal,
   type ItemCarrito,
 } from './piezas'
 
 /**
- * Venta en terreno — flujo de DOS pasos.
+ * Venta en terreno — flujo de TRES pasos: cliente → check-in → venta.
  *
  * Antes eran cuatro pantallas (cliente → check-in GPS → "Vista 360°" →
  * catálogo/cierre). Se redujo por pedido de Claudio: el vendedor está en la
  * calle, con una mano, y cada pantalla intermedia era una oportunidad de
  * abandonar el pedido.
  *
- * Qué se eliminó y por qué NO se perdió información:
- *  - Check-in GPS: era una pantalla sólo para apretar "estoy acá". Ahora la
- *    ubicación se pide automáticamente al elegir el cliente, en segundo
- *    plano. Se sigue guardando lat/lng/dirección y el geofencing igual.
+ * El check-in quedó, pero achicado a lo esencial: ubicación automática (no
+ * hay botón, se toma sola) y UNA foto obligatoria de la fachada — pedido
+ * explícito de Claudio, es el respaldo de que el vendedor estuvo ahí. Las
+ * fotos de exhibición y competencia son opcionales y ya no se piden en el
+ * momento: se recuerdan recién al cerrar la visita, para no frenar la venta.
+ *
+ * Qué más se eliminó y por qué NO se perdió información:
  *  - "Vista 360°": mostraba deuda e historial antes de dejar vender. La
  *    deuda ahora es un aviso plegable arriba de la venta, que es donde
  *    realmente sirve — al decidir si se le vende y cómo cobra.
- *  - Fotos de evidencia: eran tres slots fijos (exterior/exhibición/
- *    competencia) en su propio paso. Ahora es un botón de cámara en el
- *    encabezado, disponible en todo momento.
  */
 
 interface Producto { producto: string; categoria_producto: string | null; envase: string | null }
@@ -51,6 +52,9 @@ interface VisitaRetomada {
   lng: number | null
   direccion_gps: string | null
   estado?: string
+  foto_exterior?: string | null
+  foto_exhibicion?: string | null
+  foto_competencia?: string | null
 }
 
 interface DeudorInfo {
@@ -88,12 +92,19 @@ export default function NuevaVisitaClient({
   const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(new Map())
   const [guardando, setGuardando] = useState(false)
   const [syncPendiente, setSyncPendiente] = useState(false)
-  const [fotos, setFotos] = useState<Record<string, string>>({})
+  // Fotos por slot fijo — 'exterior' es obligatoria para pasar a vender.
+  const [fotos, setFotos] = useState<Partial<Record<SlotFoto, string>>>({
+    ...(visitaRetomada?.foto_exterior ? { exterior: visitaRetomada.foto_exterior } : {}),
+    ...(visitaRetomada?.foto_exhibicion ? { exhibicion: visitaRetomada.foto_exhibicion } : {}),
+    ...(visitaRetomada?.foto_competencia ? { competencia: visitaRetomada.foto_competencia } : {}),
+  })
+  const [gpsEstado, setGpsEstado] = useState<'buscando' | 'ok' | 'error'>(visitaRetomada?.lat ? 'ok' : 'buscando')
   const [showCatalogoWA, setShowCatalogoWA] = useState(false)
   const [showImagen, setShowImagen] = useState(false)
   const [pendingCierre, setPendingCierre] = useState<CierrePayload | null>(null)
 
   const fileRef = useRef<HTMLInputElement>(null)
+  const slotPendienteRef = useRef<SlotFoto>('exterior')
   const jornadaIdRef = useRef<string | null>(null)
   const clienteCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
   const visitaDraft = useRef<Record<string, unknown>>(
@@ -126,7 +137,8 @@ export default function NuevaVisitaClient({
    * ubicación no puede impedir tomar un pedido.
    */
   function capturarUbicacion(id: string) {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) return
+    setGpsEstado('buscando')
+    if (typeof navigator === 'undefined' || !navigator.geolocation) { setGpsEstado('error'); return }
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const { latitude: lat, longitude: lng } = pos.coords
@@ -142,8 +154,9 @@ export default function NuevaVisitaClient({
           geofence = { distancia_cliente_m: Math.round(distanciaM), dentro_geofence: dentro }
         }
         guardarDraft({ id, lat, lng, direccion_gps: addr, ...geofence })
+        setGpsEstado('ok')
       },
-      () => {},
+      () => setGpsEstado('error'),
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
     )
   }
@@ -194,17 +207,18 @@ export default function NuevaVisitaClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientePre])
 
-  function subirFoto(file: File) {
+  const CAMPO_DE_SLOT: Record<SlotFoto, string> = {
+    exterior: 'foto_exterior', exhibicion: 'foto_exhibicion', competencia: 'foto_competencia',
+  }
+
+  function subirFoto(file: File, slot: SlotFoto) {
     if (!visitaId) return
-    const key = `f${Object.keys(fotos).length}`
-    setFotos(prev => ({ ...prev, [key]: URL.createObjectURL(file) }))
-    // Sólo hay tres columnas de foto en la tabla; se llenan en orden.
-    const campos = ['foto_exterior', 'foto_exhibicion', 'foto_competencia']
-    const campo = campos[Math.min(Object.keys(fotos).length, campos.length - 1)]
+    setFotos(prev => ({ ...prev, [slot]: URL.createObjectURL(file) }))
+    const campo = CAMPO_DE_SLOT[slot]
     const vId = visitaId
     uploadConTimeout(
       supabase,
-      { bucket: 'terreno-fotos', path: `${vId}/${key}.jpg`, table: 'visitas_terreno', rowId: vId, campo },
+      { bucket: 'terreno-fotos', path: `${vId}/${slot}.jpg`, table: 'visitas_terreno', rowId: vId, campo },
       file,
     ).then(url => {
       if (!url) return
@@ -213,8 +227,17 @@ export default function NuevaVisitaClient({
     })
   }
 
+  function abrirCamaraPara(slot: SlotFoto) {
+    slotPendienteRef.current = slot
+    fileRef.current?.click()
+  }
+
+  // Fotos opcionales (exhibición/competencia) aún sin tomar — la fachada no
+  // entra acá porque ya es obligatoria antes de llegar a vender.
+  const faltantesOpcionales = SLOTS_FOTO.filter(s => !s.obligatoria && !fotos[s.key]).map(s => s.key)
+
   function onCerrarIntentado(p: CierrePayload) {
-    if (Object.keys(fotos).length === 0) { setPendingCierre(p); return }
+    if (faltantesOpcionales.length > 0) { setPendingCierre(p); return }
     ejecutarCierre(p)
   }
 
@@ -237,7 +260,7 @@ export default function NuevaVisitaClient({
         metodo_pago: p.metodoPago,
         dias_credito: p.diasCredito,
         fecha_pago_estimada: p.fechaPagoEstimada,
-        fotos_status: Object.keys(fotos).length > 0 ? 'COMPLETO' : 'PENDIENTE',
+        fotos_status: SLOTS_FOTO.every(s => fotos[s.key]) ? 'COMPLETO' : 'PENDIENTE',
       }
       const rVisita = await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
 
@@ -301,13 +324,18 @@ export default function NuevaVisitaClient({
   }
 
   const items = Array.from(carrito.values())
-  const nFotos = Object.keys(fotos).length
+  const fachadaLista = !!fotos.exterior
+  const etapa = !cliente ? 'cliente' : !fachadaLista ? 'checkin' : 'venta'
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(170px, calc(env(safe-area-inset-bottom, 0px) + 150px))' }}>
       <input
         ref={fileRef} type="file" accept="image/*" capture="environment" hidden
-        onChange={e => { const f = e.target.files?.[0]; if (f) subirFoto(f); e.target.value = '' }}
+        onChange={e => {
+          const f = e.target.files?.[0]
+          if (f) subirFoto(f, slotPendienteRef.current)
+          e.target.value = ''
+        }}
       />
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
@@ -328,27 +356,8 @@ export default function NuevaVisitaClient({
 
           <div style={{ flex: 1 }} />
 
-          {cliente && (
+          {etapa === 'venta' && (
             <>
-              <button
-                onClick={() => fileRef.current?.click()}
-                aria-label="Tomar foto"
-                style={{
-                  position: 'relative', width: TAP, height: TAP, borderRadius: 12, cursor: 'pointer',
-                  border: `1px solid ${nFotos > 0 ? C.green : C.line}`,
-                  background: nFotos > 0 ? C.greenSoft : C.card,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >
-                <Camera size={18} color={nFotos > 0 ? C.green : C.muted} />
-                {nFotos > 0 && (
-                  <span style={{
-                    position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17, borderRadius: 99,
-                    background: C.green, color: '#fff', fontSize: 10, fontWeight: 800,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${C.bg}`,
-                  }}>{nFotos}</span>
-                )}
-              </button>
               <button
                 onClick={() => setShowCatalogoWA(true)}
                 aria-label="Enviar catálogo por WhatsApp"
@@ -379,7 +388,7 @@ export default function NuevaVisitaClient({
 
         <div style={{ marginBottom: 16 }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>
-            {cliente ? 'VENTA EN TERRENO' : 'PASO 1 DE 2'}
+            {etapa === 'cliente' ? 'PASO 1 DE 3' : etapa === 'checkin' ? 'PASO 2 DE 3 · LLEGADA' : 'PASO 3 DE 3 · VENTA'}
           </p>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.2 }}>
             {cliente ? cliente.nombre : '¿A quién le vendes?'}
@@ -398,11 +407,19 @@ export default function NuevaVisitaClient({
           )}
         </div>
 
-        {!cliente ? (
+        {etapa === 'cliente' && (
           <PasoCliente clientes={clientesExistentes} onConfirmar={onClienteConfirmado} />
-        ) : (
+        )}
+        {etapa === 'checkin' && (
+          <PasoCheckin
+            clienteNombre={cliente!.nombre}
+            gpsEstado={gpsEstado}
+            onTomarFoto={() => abrirCamaraPara('exterior')}
+          />
+        )}
+        {etapa === 'venta' && (
           <PasoVenta
-            clienteNombre={cliente.nombre}
+            clienteNombre={cliente!.nombre}
             catalogo={catalogo}
             carrito={carrito}
             setCarrito={setCarrito}
@@ -422,9 +439,11 @@ export default function NuevaVisitaClient({
         />
       )}
       {pendingCierre && (
-        <ModalFotoRequerida
-          onCargar={() => { setPendingCierre(null); fileRef.current?.click() }}
-          onCerrar={() => setPendingCierre(null)}
+        <ModalFotosPendientes
+          faltantes={faltantesOpcionales}
+          onTomar={slot => abrirCamaraPara(slot)}
+          onContinuar={() => ejecutarCierre(pendingCierre)}
+          onCancelar={() => setPendingCierre(null)}
         />
       )}
     </div>

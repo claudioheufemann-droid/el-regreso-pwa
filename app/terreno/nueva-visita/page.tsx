@@ -37,7 +37,7 @@ export default async function NuevaVisitaPage({
   if (retomar) {
     let query = supabase
       .from('visitas_terreno')
-      .select('id, cliente_nombre, es_cliente_nuevo, lat, lng, direccion_gps, estado')
+      .select('id, cliente_nombre, es_cliente_nuevo, lat, lng, direccion_gps, estado, foto_exterior, foto_exhibicion, foto_competencia')
       .eq('id', retomar)
       .eq('estado', 'en_progreso')
     if (!user.isAdmin) query = query.eq('vendedor_id', user.id)

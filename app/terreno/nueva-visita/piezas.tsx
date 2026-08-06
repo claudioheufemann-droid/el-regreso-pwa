@@ -510,36 +510,3 @@ export function AvisoDeuda({ clienteNombre }: { clienteNombre: string }) {
   )
 }
 
-// ─── Confirmación de foto obligatoria ───────────────────────────────────────
-
-export function ModalFotoRequerida({ onCargar, onCerrar }: { onCargar: () => void; onCerrar: () => void }) {
-  return (
-    <div
-      onClick={e => { if (e.target === e.currentTarget) onCerrar() }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 20 }}
-    >
-      <div style={{ background: C.card, borderRadius: 18, padding: 22, width: '100%', maxWidth: 360, border: `1px solid ${C.line}` }}>
-        <span style={{ width: 44, height: 44, borderRadius: 13, background: C.amberSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-          <AlertTriangle size={22} color={C.amber} />
-        </span>
-        <p style={{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 6 }}>Falta la foto de la visita</p>
-        <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, marginBottom: 18 }}>
-          Para cerrar la visita hay que dejar al menos una foto como respaldo.
-        </p>
-        <button onClick={onCargar} style={{
-          width: '100%', minHeight: 50, borderRadius: 12, border: 'none', marginBottom: 8,
-          background: C.hero, color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer',
-        }}>
-          Tomar foto ahora
-        </button>
-        <button onClick={onCerrar} style={{
-          width: '100%', minHeight: 44, borderRadius: 12, border: `1px solid ${C.line}`,
-          background: C.card, color: C.muted, fontSize: 14, fontWeight: 700, cursor: 'pointer',
-        }}>
-          Volver
-        </button>
-      </div>
-    </div>
-  )
-}
-
