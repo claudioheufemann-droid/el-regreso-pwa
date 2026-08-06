@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Search, ShoppingCart, Check, X, Banknote, Landmark, CreditCard } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { Search, ShoppingCart, Check, X, Banknote, Landmark, CreditCard, ArrowUp } from 'lucide-react'
 import { fmtPrecioCLP, esKombucha, type CatalogoInfo } from '@/lib/catalogo-productos'
 import { C, TAP, btnPrimario, cardStyle } from '../theme'
 import { ProductoThumb, CantidadInput, AvisoDeuda, type ItemCarrito } from './piezas'
@@ -59,6 +59,16 @@ export default function PasoVenta({
   const [busca, setBusca] = useState('')
   const [esBarril, setEsBarril] = useState(false)
   const [hoja, setHoja] = useState<null | 'venta' | 'sin-venta'>(null)
+
+  // Catálogo largo (cervezas + kombuchas) sin forma de volver arriba una vez
+  // que se scrollea buscando un producto — pedido de Claudio. El botón
+  // aparece recién pasado un scroll razonable, para no estorbar arriba.
+  const [mostrarSubir, setMostrarSubir] = useState(false)
+  useEffect(() => {
+    function onScroll() { setMostrarSubir(window.scrollY > 320) }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const envaseName = esBarril ? 'Barril 30L' : 'Lata'
   const key = (producto: string) => `${producto}|${envaseName}`
@@ -186,6 +196,24 @@ export default function PasoVenta({
             </button>
           </div>
         </div>
+      )}
+
+      {mostrarSubir && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="Volver arriba"
+          style={{
+            position: 'fixed', right: 16, zIndex: 51, cursor: 'pointer',
+            bottom: totalUnidades > 0
+              ? 'max(164px, calc(env(safe-area-inset-bottom, 0px) + 152px))'
+              : 'max(28px, calc(env(safe-area-inset-bottom, 0px) + 16px))',
+            width: 46, height: 46, borderRadius: '50%', border: `1px solid ${C.line}`,
+            background: C.card, boxShadow: '0 4px 14px rgba(15,23,42,.18)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <ArrowUp size={20} color={C.text} />
+        </button>
       )}
 
       {hoja && (
