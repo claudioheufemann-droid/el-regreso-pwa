@@ -18,6 +18,14 @@ const MOTIVOS_SIN_VENTA = [
   'Otro',
 ]
 
+export type TipoSeguimiento = 'llamar' | 'whatsapp' | 'email' | 'visita'
+const TIPOS_SEGUIMIENTO: { k: TipoSeguimiento; l: string }[] = [
+  { k: 'llamar',   l: '📞 Llamar' },
+  { k: 'whatsapp', l: '💬 WhatsApp' },
+  { k: 'email',    l: '✉️ Correo' },
+  { k: 'visita',   l: '🚗 Volver' },
+]
+
 export interface CierrePayload {
   items: ItemCarrito[]
   tienVenta: boolean
@@ -26,6 +34,8 @@ export interface CierrePayload {
   metodoPago: MetodoPago | null
   diasCredito: number | null
   fechaPagoEstimada: string | null
+  /** null = no se agendó nada. Va a la Agenda del vendedor. */
+  seguimiento: { tipo: TipoSeguimiento; fecha: string } | null
 }
 
 /**
@@ -252,6 +262,15 @@ function HojaCierre({ modo, items, total, guardando, onCancelar, onConfirmar }: 
   const [diasCredito, setDiasCredito] = useState<number>(30)
   const [motivo, setMotivo] = useState('')
   const [obs, setObs] = useState('')
+  // Seguimiento: plegado por defecto a propósito. Antes era un paso
+  // obligatorio del cierre; ahora no cuesta ni un toque si no se usa, pero
+  // sigue alimentando la Agenda del vendedor cuando sí hace falta.
+  const [segTipo, setSegTipo] = useState<TipoSeguimiento | null>(null)
+  const [segFecha, setSegFecha] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().split('T')[0]
+  })
 
   const fechaPago = useMemo(() => {
     if (metodoPago !== 'credito') return null
@@ -376,6 +395,48 @@ function HojaCierre({ modo, items, total, guardando, onCancelar, onConfirmar }: 
             </>
           )}
 
+          {/* Seguimiento opcional */}
+          <div style={{ marginBottom: 14 }}>
+            <p style={{ fontSize: 12, fontWeight: 800, color: C.muted, marginBottom: 8 }}>
+              ¿AGENDAR SEGUIMIENTO? <span style={{ fontWeight: 600, textTransform: 'none' }}>(opcional)</span>
+            </p>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {TIPOS_SEGUIMIENTO.map(({ k, l }) => {
+                const on = segTipo === k
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setSegTipo(on ? null : k)}
+                    style={{
+                      flex: '1 1 84px', minHeight: TAP, borderRadius: 11, cursor: 'pointer',
+                      border: `1.5px solid ${on ? C.purple : C.line}`,
+                      background: on ? C.purpleSoft : C.card, color: on ? C.purple : C.muted,
+                      fontSize: 12.5, fontWeight: on ? 800 : 600,
+                    }}
+                  >
+                    {l}
+                  </button>
+                )
+              })}
+            </div>
+            {segTipo && (
+              <label style={{ display: 'block', marginTop: 9 }}>
+                <span style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: C.muted, marginBottom: 5 }}>
+                  ¿Cuándo?
+                </span>
+                <input
+                  type="date"
+                  value={segFecha}
+                  onChange={e => setSegFecha(e.target.value)}
+                  style={{
+                    width: '100%', minHeight: TAP, padding: '0 12px', borderRadius: 11,
+                    border: `1px solid ${C.line}`, background: C.card, fontSize: 15, color: C.text, outline: 'none',
+                  }}
+                />
+              </label>
+            )}
+          </div>
+
           <label style={{ display: 'block' }}>
             <span style={{ display: 'block', fontSize: 12, fontWeight: 800, color: C.muted, marginBottom: 7 }}>
               NOTAS {esVenta ? '(opcional)' : ''}
@@ -403,6 +464,7 @@ function HojaCierre({ modo, items, total, guardando, onCancelar, onConfirmar }: 
               metodoPago: esVenta ? metodoPago : null,
               diasCredito: esVenta && metodoPago === 'credito' ? diasCredito : null,
               fechaPagoEstimada: esVenta ? fechaPago : null,
+              seguimiento: segTipo ? { tipo: segTipo, fecha: segFecha } : null,
             })}
             disabled={!puedeGuardar || guardando}
             style={{

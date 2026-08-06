@@ -251,6 +251,17 @@ export default function NuevaVisitaClient({
         itemsPendientes = res.some(r => r.queued)
       }
 
+      // CRM: alimenta la Agenda del vendedor. Sólo existe si lo agendó a
+      // mano — ya no es un paso obligatorio del cierre.
+      if (p.seguimiento) {
+        await upsertOrQueue(supabase, 'seguimientos', {
+          id: crypto.randomUUID(), visita_id: visitaId, vendedor_id: vendedor.id,
+          cliente_nombre: cliente?.nombre ?? '', tipo_accion: p.seguimiento.tipo,
+          fecha_hora_compromiso: `${p.seguimiento.fecha}T09:00:00`,
+          nota: p.observaciones || null, estado: 'pendiente',
+        })
+      }
+
       setSyncPendiente(!rVisita.ok || itemsPendientes)
 
       if (p.tienVenta) {
