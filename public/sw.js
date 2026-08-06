@@ -23,6 +23,7 @@ const TERRENO_ASSETS = [
   '/terreno/historial',
   '/terreno/jornada',
   '/terreno/cercanos',
+  '/terreno/ruta',
 ]
 
 // ── Install ────────────────────────────────────────────────────────────
