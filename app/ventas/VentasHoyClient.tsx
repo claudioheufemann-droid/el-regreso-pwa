@@ -10,6 +10,7 @@ import {
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import MiComision from './MiComision'
+import MiComisionVendedor from '@/app/terreno/MiComisionVendedor'
 import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango } from './hoyTypes'
 
 /**
@@ -1032,7 +1033,9 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega }: {
 }
 
 // ── Vista ────────────────────────────────────────────────────────────────────
-export default function VentasHoyClient({ data, veComision = false }: { data: HoyData; veComision?: boolean }) {
+export default function VentasHoyClient({ data, veComision = false, veComisionVendedor = false }: {
+  data: HoyData; veComision?: boolean; veComisionVendedor?: boolean
+}) {
   const router = useRouter()
   // Si la URL trae un rango a mano, se entra directo en esa vista
   const [rango, setRango] = useState<RangoKey>(data.custom ? 'custom' : 'periodo')
@@ -1430,6 +1433,22 @@ export default function VentasHoyClient({ data, veComision = false }: { data: Ho
         {veComision && (
           <MiComision
             key={`${d.desde}_${d.hasta}`}
+            desde={d.desde}
+            hasta={d.hasta}
+            nombrePeriodo={
+              rango === 'periodo' && periodoSel ? periodoSel.nombre
+                : rango === 'custom' ? (customPeriodoNombre ?? 'Rango elegido')
+                : (RANGOS.find(r => r.key === rango)?.label ?? 'Período')
+            }
+          />
+        )}
+
+        {/* Remuneración variable propia (cláusula TERCERA del contrato) para
+            Yadro y Marcelo — pedido de Claudio: debe vivir en Ventas, en el
+            mismo lugar que la suya, no en Terreno. */}
+        {veComisionVendedor && (
+          <MiComisionVendedor
+            key={`vendedor_${d.desde}_${d.hasta}`}
             desde={d.desde}
             hasta={d.hasta}
             nombrePeriodo={
