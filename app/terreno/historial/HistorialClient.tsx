@@ -6,6 +6,7 @@ import type { AppUser } from '@/lib/auth'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { SLOTS_FOTO, fotosCompletas } from '@/lib/fotosVisita'
 
 const T        = '#0F172A'   // acento del tema claro (antes dorado)
 const T_DIM    = '#EFF6FF'
@@ -19,7 +20,8 @@ interface Visita {
   vendedor_id: string; es_cliente_nuevo: boolean
   observaciones: string | null; direccion_gps: string | null
   lat: number | null; lng: number | null
-  foto_exterior: string | null; foto_exhibicion: string | null; foto_competencia: string | null
+  foto_exterior: string | null; foto_interior: string | null
+  foto_exhibicion: string | null; foto_competencia: string | null
   fotos_status: 'PENDIENTE' | 'COMPLETO'
 }
 interface Item { id: string; visita_id: string; producto: string; categoria: string; envase: string; cantidad: number; precio_unit: number; subtotal: number }
@@ -354,18 +356,12 @@ function FotoLightbox({ fotos, startIdx, onClose }: { fotos: FotoEntry[]; startI
 }
 
 // ── VisitaCard premium ────────────────────────────────────────────────────────
-const SLOTS_FOTO_HISTORIAL: { key: 'foto_exterior' | 'foto_exhibicion' | 'foto_competencia'; label: string; emoji: string }[] = [
-  { key: 'foto_exterior',    label: 'Exterior',    emoji: '🏪' },
-  { key: 'foto_exhibicion',  label: 'Exhibición',  emoji: '🍺' },
-  { key: 'foto_competencia', label: 'Competencia', emoji: '🔍' },
-]
-
 function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPorVisita, vendedorNombre, isAdmin, currentUserId, onEliminar, onFotoActualizada }: {
   visita: Visita; items: Item[]; deudor: Deudor | undefined
   ventasHist: VentaHist[]; visitasCliente: Visita[]
   itemsPorVisita: Record<string, Item[]>; vendedorNombre: string
   isAdmin: boolean; currentUserId: string; onEliminar: (id: string) => void
-  onFotoActualizada: (visitaId: string, campo: string, url: string) => void
+  onFotoActualizada: (visitaId: string, campo: string, url: string, completo: boolean) => void
 }) {
   const [open, setOpen]             = useState(false)
   const [tabDetalle, setTabDetalle] = useState<'pedido' | 'cliente'>('pedido')
@@ -374,7 +370,9 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
   const [subiendo, setSubiendo]     = useState<Record<string, boolean>>({})
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
-  const puedeAdjuntarFotos = visita.fotos_status === 'PENDIENTE' && (isAdmin || visita.vendedor_id === currentUserId)
+  // No confiar solo en fotos_status (columna resumen que puede quedar
+  // desactualizada) — se recalcula directo contra las 4 columnas reales.
+  const puedeAdjuntarFotos = !fotosCompletas(visita) && (isAdmin || visita.vendedor_id === currentUserId)
 
   async function adjuntarFotoTardia(campo: string, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -387,9 +385,15 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
       const { error: upErr } = await supabase.storage.from('terreno-fotos').upload(path, file, { upsert: true })
       if (upErr) throw upErr
       const { data: pub } = supabase.storage.from('terreno-fotos').getPublicUrl(path)
-      const { error: updErr } = await supabase.from('visitas_terreno').update({ [campo]: pub.publicUrl, fotos_status: 'COMPLETO' }).eq('id', visita.id)
+      // Completo solo si, CON esta foto recién subida, las 4 columnas quedan
+      // llenas — antes se marcaba COMPLETO con solo subir una, aunque
+      // faltaran las demás (bug: silenciaba los recordatorios de las otras).
+      const completo = fotosCompletas({ ...visita, [campo]: pub.publicUrl })
+      const { error: updErr } = await supabase.from('visitas_terreno')
+        .update({ [campo]: pub.publicUrl, fotos_status: completo ? 'COMPLETO' : 'PENDIENTE' })
+        .eq('id', visita.id)
       if (updErr) throw updErr
-      onFotoActualizada(visita.id, campo, pub.publicUrl)
+      onFotoActualizada(visita.id, campo, pub.publicUrl, completo)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'No se pudo subir la foto')
     } finally {
@@ -414,7 +418,8 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
 
   const totalItems = items.reduce((s, i) => s + i.cantidad, 0)
   const fotoEntries: FotoEntry[] = [
-    { src: visita.foto_exterior    ?? '', label: 'Exterior'    },
+    { src: visita.foto_exterior    ?? '', label: 'Frontis'     },
+    { src: visita.foto_interior    ?? '', label: 'Interior'    },
     { src: visita.foto_exhibicion  ?? '', label: 'Exhibición'  },
     { src: visita.foto_competencia ?? '', label: 'Competencia' },
   ].filter(f => f.src)
@@ -463,7 +468,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                   <span style={{ fontSize: 8, fontWeight: 800, color: '#2563EB', background: '#EFF6FF', border: '1px solid #EFF6FF', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>NUEVO</span>
                 )}
                 <DeudaBadge deudor={deudor} />
-                {visita.fotos_status === 'PENDIENTE' && (
+                {!fotosCompletas(visita) && (
                   <span style={{ fontSize: 8, fontWeight: 800, color: '#D4AF37', background: '#E2E8F0', border: '1px solid #CBD5E1', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Fotos pendientes</span>
                 )}
               </div>
@@ -612,9 +617,9 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                     <p style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
                       Fotos del local
                     </p>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(64px, 1fr))', gap: 8 }}>
                       {fotoEntries.map((f, i) => (
-                        <button key={f.label} onClick={() => setLightbox({ idx: i })} style={{ flex: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                        <button key={f.label} onClick={() => setLightbox({ idx: i })} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
                           <div style={{ borderRadius: 12, overflow: 'hidden', border: `1px solid ${T_BORDER}`, aspectRatio: '1', position: 'relative' }}>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={f.src} alt={f.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -632,19 +637,19 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                     <p style={{ fontSize: 9, fontWeight: 700, color: T, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
                       Adjuntar fotos pendientes
                     </p>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {SLOTS_FOTO_HISTORIAL.filter(s => !visita[s.key]).map(slot => (
-                        <div key={slot.key} style={{ flex: 1 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(64px, 1fr))', gap: 8 }}>
+                      {SLOTS_FOTO.filter(s => !visita[s.campo as keyof Visita]).map(slot => (
+                        <div key={slot.campo}>
                           <input
-                            ref={el => { fileRefs.current[slot.key] = el }}
+                            ref={el => { fileRefs.current[slot.campo] = el }}
                             type="file" accept="image/*" style={{ display: 'none' }}
-                            onChange={e => adjuntarFotoTardia(slot.key, e)}
+                            onChange={e => adjuntarFotoTardia(slot.campo, e)}
                           />
                           <div
-                            onClick={() => fileRefs.current[slot.key]?.click()}
+                            onClick={() => fileRefs.current[slot.campo]?.click()}
                             style={{ height: 64, borderRadius: 10, cursor: 'pointer', background: '#F1F5F9', border: '1.5px dashed #CBD5E1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
                           >
-                            {subiendo[slot.key] ? (
+                            {subiendo[slot.campo] ? (
                               <div style={{ width: 16, height: 16, border: `2px solid ${T_BORDER}`, borderTopColor: T, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                             ) : (
                               <>
@@ -698,8 +703,8 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
     setVisitas(vs => vs.filter(v => v.id !== id))
   }
 
-  function actualizarFotoVisita(visitaId: string, campo: string, url: string) {
-    setVisitas(vs => vs.map(v => v.id === visitaId ? { ...v, [campo]: url, fotos_status: 'COMPLETO' } : v))
+  function actualizarFotoVisita(visitaId: string, campo: string, url: string, completo: boolean) {
+    setVisitas(vs => vs.map(v => v.id === visitaId ? { ...v, [campo]: url, fotos_status: completo ? 'COMPLETO' : 'PENDIENTE' } : v))
   }
 
   const deudorMap     = useMemo(() => Object.fromEntries(deudores.map(d => [d.nombre_fantasia, d])), [deudores])

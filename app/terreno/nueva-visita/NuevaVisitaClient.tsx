@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Check, CloudOff, MessageCircle, Image as ImageIcon } from 'lucide-react'
+import { ChevronLeft, Check, CloudOff, MessageCircle, Image as ImageIcon, MapPin, Loader2 } from 'lucide-react'
 import { notificar } from '@/lib/notificar'
 import { upsertOrQueue } from '@/lib/offlineQueue'
 import { uploadConTimeout } from '@/lib/offlinePhotoQueue'
@@ -15,26 +15,30 @@ import { es } from 'date-fns/locale'
 import type { AppUser } from '@/lib/auth'
 import { C, TAP } from '../theme'
 import PasoCliente, { type ClienteExistente, type NuevoClienteDetalle } from './PasoCliente'
-import PasoCheckin, { ModalFotosPendientes, SLOTS_FOTO, type SlotFoto } from './PasoCheckin'
 import PasoVenta, { type CierrePayload } from './PasoVenta'
+import HojaFotosVisita from './HojaFotosVisita'
+import { SLOTS_FOTO, CAMPO_DE_SLOT, type SlotFoto } from '@/lib/fotosVisita'
 import {
   setCatalogo, WhatsAppCatalogoModal, VentaImageModal,
   type ItemCarrito,
 } from './piezas'
 
 /**
- * Venta en terreno — flujo de TRES pasos: cliente → check-in → venta.
+ * Venta en terreno — flujo de DOS pasos: cliente → venta.
  *
  * Antes eran cuatro pantallas (cliente → check-in GPS → "Vista 360°" →
- * catálogo/cierre). Se redujo por pedido de Claudio: el vendedor está en la
- * calle, con una mano, y cada pantalla intermedia era una oportunidad de
- * abandonar el pedido.
+ * catálogo/cierre), y hasta el 2026-08-06 hubo una versión de TRES con un
+ * check-in intermedio que exigía la foto de la fachada para poder vender.
+ * Se revirtió el 2026-08-07 (pedido de Claudio): ahora NINGUNA foto frena
+ * la venta — las 4 (frontis, interior, exhibición, competencia) se piden
+ * recién al cerrar la visita, y son opcionales incluso ahí. Si el
+ * vendedor cierra sin subirlas, puede completarlas después desde el
+ * Historial; mientras falte alguna, un cron le recuerda cada hora
+ * (app/api/cron/fotos-pendientes).
  *
- * El check-in quedó, pero achicado a lo esencial: ubicación automática (no
- * hay botón, se toma sola) y UNA foto obligatoria de la fachada — pedido
- * explícito de Claudio, es el respaldo de que el vendedor estuvo ahí. Las
- * fotos de exhibición y competencia son opcionales y ya no se piden en el
- * momento: se recuerdan recién al cerrar la visita, para no frenar la venta.
+ * La ubicación sigue siendo automática — no hay botón, se toma sola en
+ * cuanto se confirma el cliente (capturarUbicacion) — así que sacar el
+ * check-in como pantalla no le quita nada al GPS.
  *
  * Qué más se eliminó y por qué NO se perdió información:
  *  - "Vista 360°": mostraba deuda e historial antes de dejar vender. La
@@ -53,6 +57,7 @@ interface VisitaRetomada {
   direccion_gps: string | null
   estado?: string
   foto_exterior?: string | null
+  foto_interior?: string | null
   foto_exhibicion?: string | null
   foto_competencia?: string | null
 }
@@ -92,18 +97,21 @@ export default function NuevaVisitaClient({
   const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(new Map())
   const [guardando, setGuardando] = useState(false)
   const [syncPendiente, setSyncPendiente] = useState(false)
-  // Fotos por slot fijo — 'exterior' es obligatoria para pasar a vender.
+  // Fotos por slot fijo — ninguna bloquea el paso a vender; se piden recién al cerrar.
   const [fotos, setFotos] = useState<Partial<Record<SlotFoto, string>>>({
     ...(visitaRetomada?.foto_exterior ? { exterior: visitaRetomada.foto_exterior } : {}),
+    ...(visitaRetomada?.foto_interior ? { interior: visitaRetomada.foto_interior } : {}),
     ...(visitaRetomada?.foto_exhibicion ? { exhibicion: visitaRetomada.foto_exhibicion } : {}),
     ...(visitaRetomada?.foto_competencia ? { competencia: visitaRetomada.foto_competencia } : {}),
   })
+  const [subiendoFoto, setSubiendoFoto] = useState<Partial<Record<SlotFoto, boolean>>>({})
   const [gpsEstado, setGpsEstado] = useState<'buscando' | 'ok' | 'error'>(visitaRetomada?.lat ? 'ok' : 'buscando')
   const [showCatalogoWA, setShowCatalogoWA] = useState(false)
   const [showImagen, setShowImagen] = useState(false)
   const [pendingCierre, setPendingCierre] = useState<CierrePayload | null>(null)
 
-  const fileRef = useRef<HTMLInputElement>(null)
+  const fileCameraRef = useRef<HTMLInputElement>(null)
+  const fileGaleriaRef = useRef<HTMLInputElement>(null)
   const slotPendienteRef = useRef<SlotFoto>('exterior')
   const jornadaIdRef = useRef<string | null>(null)
   const clienteCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
@@ -207,12 +215,9 @@ export default function NuevaVisitaClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientePre])
 
-  const CAMPO_DE_SLOT: Record<SlotFoto, string> = {
-    exterior: 'foto_exterior', exhibicion: 'foto_exhibicion', competencia: 'foto_competencia',
-  }
-
   function subirFoto(file: File, slot: SlotFoto) {
     if (!visitaId) return
+    setSubiendoFoto(prev => ({ ...prev, [slot]: true }))
     setFotos(prev => ({ ...prev, [slot]: URL.createObjectURL(file) }))
     const campo = CAMPO_DE_SLOT[slot]
     const vId = visitaId
@@ -221,6 +226,7 @@ export default function NuevaVisitaClient({
       { bucket: 'terreno-fotos', path: `${vId}/${slot}.jpg`, table: 'visitas_terreno', rowId: vId, campo },
       file,
     ).then(url => {
+      setSubiendoFoto(prev => ({ ...prev, [slot]: false }))
       if (!url) return
       visitaDraft.current = { ...visitaDraft.current, [campo]: url }
       upsertOrQueue(supabase, 'visitas_terreno', { id: vId, [campo]: url })
@@ -229,15 +235,20 @@ export default function NuevaVisitaClient({
 
   function abrirCamaraPara(slot: SlotFoto) {
     slotPendienteRef.current = slot
-    fileRef.current?.click()
+    fileCameraRef.current?.click()
   }
 
-  // Fotos opcionales (exhibición/competencia) aún sin tomar — la fachada no
-  // entra acá porque ya es obligatoria antes de llegar a vender.
-  const faltantesOpcionales = SLOTS_FOTO.filter(s => !s.obligatoria && !fotos[s.key]).map(s => s.key)
+  function abrirGaleriaPara(slot: SlotFoto) {
+    slotPendienteRef.current = slot
+    fileGaleriaRef.current?.click()
+  }
+
+  // Las 4 fotos son opcionales — ninguna bloquea el cierre, pero si falta
+  // alguna se le ofrece tomarla antes de cerrar (ver HojaFotosVisita).
+  const fotosFaltantes = SLOTS_FOTO.filter(s => !fotos[s.key]).map(s => s.key)
 
   function onCerrarIntentado(p: CierrePayload) {
-    if (faltantesOpcionales.length > 0) { setPendingCierre(p); return }
+    if (fotosFaltantes.length > 0) { setPendingCierre(p); return }
     ejecutarCierre(p)
   }
 
@@ -324,19 +335,22 @@ export default function NuevaVisitaClient({
   }
 
   const items = Array.from(carrito.values())
-  const fachadaLista = !!fotos.exterior
-  const etapa = !cliente ? 'cliente' : !fachadaLista ? 'checkin' : 'venta'
+  const etapa = !cliente ? 'cliente' : 'venta'
+
+  function onFileElegido(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (f) subirFoto(f, slotPendienteRef.current)
+    e.target.value = ''
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(170px, calc(env(safe-area-inset-bottom, 0px) + 150px))' }}>
-      <input
-        ref={fileRef} type="file" accept="image/*" capture="environment" hidden
-        onChange={e => {
-          const f = e.target.files?.[0]
-          if (f) subirFoto(f, slotPendienteRef.current)
-          e.target.value = ''
-        }}
-      />
+      {/* Dos inputs — uno fuerza la cámara trasera, el otro abre el selector
+          normal del teléfono (galería). No hay atributo HTML que signifique
+          "solo galería", así que esto es lo más cerca que se puede llegar
+          a las dos opciones explícitas que pidió Claudio. */}
+      <input ref={fileCameraRef} type="file" accept="image/*" capture="environment" hidden onChange={onFileElegido} />
+      <input ref={fileGaleriaRef} type="file" accept="image/*" hidden onChange={onFileElegido} />
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
         {/* Encabezado */}
@@ -388,7 +402,7 @@ export default function NuevaVisitaClient({
 
         <div style={{ marginBottom: 16 }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>
-            {etapa === 'cliente' ? 'PASO 1 DE 3' : etapa === 'checkin' ? 'PASO 2 DE 3 · LLEGADA' : 'PASO 3 DE 3 · VENTA'}
+            {etapa === 'cliente' ? 'PASO 1 DE 2' : 'PASO 2 DE 2 · VENTA'}
           </p>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.2 }}>
             {cliente ? cliente.nombre : '¿A quién le vendes?'}
@@ -403,19 +417,18 @@ export default function NuevaVisitaClient({
               {syncPendiente
                 ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: C.amber, fontWeight: 600 }}><CloudOff size={12} /> Guardando…</span>
                 : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: C.green, fontWeight: 600 }}><Check size={12} /> Guardado</span>}
+              {gpsEstado === 'buscando' && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: C.muted, fontWeight: 600 }}><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Ubicando…</span>
+              )}
+              {gpsEstado === 'ok' && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: C.green, fontWeight: 600 }}><MapPin size={12} /> Ubicación registrada</span>
+              )}
             </p>
           )}
         </div>
 
         {etapa === 'cliente' && (
           <PasoCliente clientes={clientesExistentes} onConfirmar={onClienteConfirmado} />
-        )}
-        {etapa === 'checkin' && (
-          <PasoCheckin
-            clienteNombre={cliente!.nombre}
-            gpsEstado={gpsEstado}
-            onTomarFoto={() => abrirCamaraPara('exterior')}
-          />
         )}
         {etapa === 'venta' && (
           <PasoVenta
@@ -439,9 +452,11 @@ export default function NuevaVisitaClient({
         />
       )}
       {pendingCierre && (
-        <ModalFotosPendientes
-          faltantes={faltantesOpcionales}
-          onTomar={slot => abrirCamaraPara(slot)}
+        <HojaFotosVisita
+          fotos={fotos}
+          subiendo={subiendoFoto}
+          onTomarCamara={abrirCamaraPara}
+          onSubirGaleria={abrirGaleriaPara}
           onContinuar={() => ejecutarCierre(pendingCierre)}
           onCancelar={() => setPendingCierre(null)}
         />
