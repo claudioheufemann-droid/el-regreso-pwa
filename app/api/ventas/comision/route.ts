@@ -4,7 +4,7 @@ import { SUPABASE_URL } from '@/lib/supabase/config'
 import { getServerUser } from '@/lib/auth'
 import {
   VENDEDORES_COMISIONABLES, calcularResumen,
-  type ClienteComision, type ProductoComision, type CarteraComision,
+  type ClienteComision, type ProductoComision, type CarteraComision, type PorEntregarComision,
 } from '@/lib/comisiones'
 
 export const dynamic = 'force-dynamic'
@@ -52,13 +52,14 @@ export async function GET(req: Request) {
   const supabase = createSbClient(SUPABASE_URL, serviceKey)
   const p_vendedores = [...VENDEDORES_COMISIONABLES]
 
-  const [rClientes, rProductos, rCartera] = await Promise.all([
-    supabase.rpc('comision_gerente_por_cliente',  { p_ini: desde, p_fin: hasta, p_vendedores }),
-    supabase.rpc('comision_gerente_por_producto', { p_ini: desde, p_fin: hasta, p_vendedores }),
-    supabase.rpc('comision_gerente_cartera',      { p_ini: desde, p_fin: hasta, p_vendedores }),
+  const [rClientes, rProductos, rCartera, rPorEntregar] = await Promise.all([
+    supabase.rpc('comision_gerente_por_cliente',    { p_ini: desde, p_fin: hasta, p_vendedores }),
+    supabase.rpc('comision_gerente_por_producto',   { p_ini: desde, p_fin: hasta, p_vendedores }),
+    supabase.rpc('comision_gerente_cartera',        { p_ini: desde, p_fin: hasta, p_vendedores }),
+    supabase.rpc('comision_gerente_por_entregar',   { p_ini: desde, p_fin: hasta, p_vendedores }),
   ])
 
-  const err = rClientes.error ?? rProductos.error ?? rCartera.error
+  const err = rClientes.error ?? rProductos.error ?? rCartera.error ?? rPorEntregar.error
   if (err) return NextResponse.json({ error: err.message }, { status: 500 })
 
   const clientes: ClienteComision[] = ((rClientes.data ?? []) as Record<string, unknown>[]).map(r => ({
@@ -92,10 +93,21 @@ export async function GET(req: Request) {
     interacciones: Number(filaCartera.interacciones ?? 0),
   }
 
+  // Sólo informativo — "lo que podrías tener" cuando se despache. La
+  // comisión NUNCA se calcula sobre esto (pedido explícito de Claudio: la
+  // base siempre es lo entregado, ver comisiona_gerente_por_entregar.sql).
+  const filaPorEntregar = ((rPorEntregar.data ?? []) as Record<string, unknown>[])[0] ?? {}
+  const porEntregar: PorEntregarComision = {
+    ventaNeta: Number(filaPorEntregar.venta_neta ?? 0),
+    litros: Number(filaPorEntregar.litros ?? 0),
+    pedidos: Number(filaPorEntregar.pedidos ?? 0),
+  }
+
   return NextResponse.json({
     resumen: calcularResumen(clientes, cartera),
     clientes,
     productos,
     cartera,
+    porEntregar,
   })
 }

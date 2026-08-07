@@ -6,6 +6,7 @@ import {
   TASA_COMISION, BONO_PAGO, ESCALAS_ACTIVACION,
   proyectarAlCierre, fComision,
   type ResumenComision, type ClienteComision, type ProductoComision, type CarteraComision,
+  type PorEntregarComision,
 } from '@/lib/comisiones'
 
 /**
@@ -37,6 +38,7 @@ interface Payload {
   clientes: ClienteComision[]
   productos: ProductoComision[]
   cartera: CarteraComision
+  porEntregar: PorEntregarComision
 }
 
 export default function MiComision({ desde, hasta, nombrePeriodo }: {
@@ -61,7 +63,7 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
   if (error) return null           // sin permiso o error: la tarjeta no existe
   if (!data) return <Esqueleto />
 
-  const { resumen } = data
+  const { resumen, porEntregar } = data
   const proyeccion = proyectarAlCierre(resumen.variableTotal, desde, hasta)
 
   return (
@@ -103,6 +105,28 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
         )}
 
         <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '14px 0 12px' }} />
+
+        {/* Entregado vs por entregar — pedido explícito de Claudio: la
+            comisión SIEMPRE se calcula sobre lo entregado, lo por entregar es
+            sólo "lo que podría tener" cuando se despache, no cuenta todavía. */}
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 120px', minWidth: 0 }}>
+            <p style={{ fontSize: 11, color: '#94A3B8' }}>Entregado</p>
+            <p style={{ fontSize: 17, fontWeight: 800, color: '#fff', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+              {fComision(resumen.ventaNeta)}
+            </p>
+            <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>base de tu comisión</p>
+          </div>
+          <div style={{ flex: '1 1 120px', minWidth: 0 }}>
+            <p style={{ fontSize: 11, color: '#94A3B8' }}>Por entregar</p>
+            <p style={{ fontSize: 17, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+              {fComision(porEntregar.ventaNeta)}
+            </p>
+            <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>aún no cuenta</p>
+          </div>
+        </div>
+
+        <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '12px 0' }} />
 
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 120px', minWidth: 0 }}>
@@ -153,7 +177,7 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
 }) {
   const [vista, setVista] = useState<Vista>('resumen')
   const [busca, setBusca] = useState('')
-  const { resumen, clientes, productos, cartera } = data
+  const { resumen, clientes, productos, cartera, porEntregar } = data
 
   const clientesVisibles = useMemo(() => {
     const q = busca.trim().toLowerCase()
@@ -209,6 +233,14 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
             <p style={{ fontSize: 11.5, color: '#CBD5E1', marginTop: 3 }}>
               comisión + bonos por venta y cobranza
             </p>
+            <div style={{ display: 'flex', gap: 14, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.1)' }}>
+              <span style={{ fontSize: 11.5, color: '#CBD5E1' }}>
+                Entregado <b style={{ color: '#fff' }}>{fComision(resumen.ventaNeta)}</b>
+              </span>
+              <span style={{ fontSize: 11.5, color: '#CBD5E1' }}>
+                Por entregar <b style={{ color: '#F59E0B' }}>{fComision(porEntregar.ventaNeta)}</b>
+              </span>
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: 4, background: '#E2E8F0', borderRadius: 11, padding: 3, marginTop: 12 }}>

@@ -104,6 +104,18 @@ export interface CarteraComision {
   interacciones: number
 }
 
+/**
+ * Pedidos tomados por el equipo aún sin despachar — SOLO informativo.
+ * "Lo que podría tener" cuando se entregue; la comisión nunca se calcula
+ * sobre esto (pedido explícito de Claudio: siempre se toma en cuenta lo
+ * que se entrega a los clientes, no lo pedido).
+ */
+export interface PorEntregarComision {
+  ventaNeta: number
+  litros: number
+  pedidos: number
+}
+
 export interface ResumenComision {
   /** Venta neta facturada del equipo en el período. */
   ventaNeta: number
