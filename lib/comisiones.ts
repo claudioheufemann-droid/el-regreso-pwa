@@ -120,12 +120,16 @@ export interface ResumenComision {
   /** Cuánto falta de venta neta para el próximo peldaño (null si está en el tope). */
   faltaParaProximaEscala: number | null
   proximaEscala: string | null
+  /** Lo que se ganaría al alcanzar proximaEscala (null si ya está en el tope). */
+  proximaEscalaBono: number | null
 
   pctAlDia: number
   bonoPago: number
 
   pctActivacion: number
   bonoActivacion: number
+  /** Próximo peldaño de activación aún no alcanzado (null si ya está en el tope). */
+  proximaActivacion: { minimoPct: number; bono: number } | null
 
   /** Comisión + bonos que hoy califican. Bruto, antes de imposiciones. */
   variableTotal: number
@@ -170,6 +174,10 @@ export function calcularResumen(
     ? (cartera.clientesActivos / cartera.clientesCartera) * 100
     : 0
   const bonoActivacion = bonoActivacionDe(pctActivacion)
+  // Próximo peldaño de activación aún no alcanzado — ESCALAS_ACTIVACION va de
+  // mayor a menor umbral, así que se recorre al revés para encontrar el más
+  // bajo que el % actual todavía no cumple.
+  const proximaActivacion = [...ESCALAS_ACTIVACION].reverse().find(e => pctActivacion < e.minimoPct) ?? null
 
   const bonoEscala = escala?.bono ?? 0
 
@@ -183,10 +191,12 @@ export function calcularResumen(
     bonoEscala,
     faltaParaProximaEscala: proxima ? proxima.piso - ventaNeta : null,
     proximaEscala: proxima?.nombre ?? null,
+    proximaEscalaBono: proxima?.bono ?? null,
     pctAlDia,
     bonoPago,
     pctActivacion,
     bonoActivacion,
+    proximaActivacion,
     variableTotal: comision + bonoEscala + bonoPago + bonoActivacion,
   }
 }

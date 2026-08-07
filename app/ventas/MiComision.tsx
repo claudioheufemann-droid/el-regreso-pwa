@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Wallet, ArrowRight, X, TrendingUp, AlertTriangle, Check } from 'lucide-react'
 import {
-  SUELDO_BASE_BRUTO, TASA_COMISION, BONO_PAGO, ESCALAS_ACTIVACION,
+  TASA_COMISION, BONO_PAGO, ESCALAS_ACTIVACION,
   proyectarAlCierre, fComision,
   type ResumenComision, type ClienteComision, type ProductoComision, type CarteraComision,
 } from '@/lib/comisiones'
@@ -199,13 +199,15 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
             </button>
           </div>
 
+          {/* Sólo el variable: el sueldo base y la gratificación quedan fuera
+              a propósito (pedido de Claudio, ya los tiene claros). */}
           <div style={{ background: C.hero, borderRadius: 14, padding: '12px 14px', marginTop: 12 }}>
             <p style={{ fontSize: 11, color: '#94A3B8' }}>Variable bruto del período</p>
             <p style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: '-0.8px', lineHeight: 1.1 }}>
               {fComision(resumen.variableTotal)}
             </p>
             <p style={{ fontSize: 11.5, color: '#CBD5E1', marginTop: 3 }}>
-              + sueldo base {fComision(SUELDO_BASE_BRUTO)} = <b style={{ color: '#fff' }}>{fComision(SUELDO_BASE_BRUTO + resumen.variableTotal)}</b> bruto
+              comisión + bonos por venta y cobranza
             </p>
           </div>
 
@@ -373,6 +375,14 @@ function Resumen({ resumen, cartera, porCategoria }: {
             color={C.amber}
           />
         )}
+        {resumen.proximaEscalaBono !== null && (
+          <Linea
+            label={`Si llegas a ${resumen.proximaEscala}, ganas`}
+            valor={fComision(resumen.proximaEscalaBono)}
+            destacado
+            color={C.green}
+          />
+        )}
         <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
           Los bonos de escala no se suman entre sí: el de un peldaño reemplaza al
           anterior. Además el contrato los condiciona a margen mínimo por canal y al
@@ -390,6 +400,9 @@ function Resumen({ resumen, cartera, porCategoria }: {
           color={resumen.pctAlDia > BONO_PAGO.minimoAlDiaPct ? C.green : C.amber}
         />
         <Linea label="Se paga sobre" valor={`${BONO_PAGO.minimoAlDiaPct}%`} />
+        {resumen.bonoPago === 0 && (
+          <Linea label="Si cumples, ganas" valor={fComision(BONO_PAGO.monto)} destacado color={C.green} />
+        )}
       </Bloque>
 
       {/* Bono activación */}
@@ -397,6 +410,14 @@ function Resumen({ resumen, cartera, porCategoria }: {
         <Linea label="Clientes activos" valor={`${cartera.clientesActivos} de ${cartera.clientesCartera}`} />
         <Linea label="Activación" valor={fPct(resumen.pctActivacion)} destacado color={resumen.bonoActivacion > 0 ? C.green : C.amber} />
         <Linea label="Interacciones registradas" valor={String(cartera.interacciones)} />
+        {resumen.proximaActivacion && (
+          <Linea
+            label={`Si llegas a ${resumen.proximaActivacion.minimoPct}%, ganas`}
+            valor={fComision(resumen.proximaActivacion.bono)}
+            destacado
+            color={C.green}
+          />
+        )}
         <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
           Activo = {ESCALAS_ACTIVACION[0].minimoPct}% o más de la cartera con al menos 2
           interacciones y 1 pedido en el período. Ojo: las interacciones salen de las
@@ -406,8 +427,7 @@ function Resumen({ resumen, cartera, porCategoria }: {
       </Bloque>
 
       <p style={{ fontSize: 11, color: C.faint, textAlign: 'center', lineHeight: 1.6, padding: '4px 8px 0' }}>
-        Montos brutos, antes de imposiciones. No incluye la gratificación legal del 25%
-        (tope 4,75 IMM) de la cláusula segunda.
+        Montos brutos, antes de imposiciones.
       </p>
     </div>
   )
