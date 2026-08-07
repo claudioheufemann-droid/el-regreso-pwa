@@ -65,6 +65,11 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
 
   const { resumen, porEntregar } = data
   const proyeccion = proyectarAlCierre(resumen.variableTotal, desde, hasta)
+  // Cuánto más ganarías si TODO el pipeline actual (pedidos ya tomados, aún
+  // sin despachar) se entregara — sólo la comisión, no recalcula bonos de
+  // escala/cartera porque a los volúmenes de hoy no cambian de peldaño.
+  const comisionPipeline = porEntregar.ventaNeta * TASA_COMISION
+  const totalConPipeline = resumen.variableTotal + comisionPipeline
 
   return (
     <>
@@ -94,13 +99,25 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
           {fComision(resumen.variableTotal)}
         </p>
         <p style={{ fontSize: 12.5, color: '#CBD5E1', marginTop: 4 }}>
-          variable bruto acumulado en el período
+          llevas ganado en el período
         </p>
 
-        {proyeccion !== null && proyeccion > resumen.variableTotal && (
-          <p style={{ fontSize: 12, color: '#34D399', fontWeight: 600, marginTop: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+        {/* Dos proyecciones DISTINTAS a propósito, cada una etiquetada para
+            que no parezcan números que se contradicen:
+            · Pipeline: lo que ya está tomado y sólo falta despachar.
+            · Ritmo: estimación lineal según cuánto llevas vendido por día,
+              proyectada a los días que quedan del período — puede ser mayor
+              o menor que el pipeline, porque asume que seguirás vendiendo. */}
+        {comisionPipeline > 0 && (
+          <p style={{ fontSize: 12, color: '#F59E0B', fontWeight: 600, marginTop: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
             <TrendingUp size={13} />
-            Al ritmo de hoy cerrarías en {fComision(proyeccion)}
+            +{fComision(comisionPipeline)} si se entrega el pipeline → {fComision(totalConPipeline)} en total
+          </p>
+        )}
+        {proyeccion !== null && proyeccion > resumen.variableTotal && (
+          <p style={{ fontSize: 12, color: '#34D399', fontWeight: 600, marginTop: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <TrendingUp size={13} />
+            Al ritmo de hoy, cerrarías el período en {fComision(proyeccion)}
           </p>
         )}
 
@@ -122,7 +139,9 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
             <p style={{ fontSize: 17, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
               {fComision(porEntregar.ventaNeta)}
             </p>
-            <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>aún no cuenta</p>
+            <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>
+              aún no cuenta · {fComision(comisionPipeline)} de comisión si se entrega
+            </p>
           </div>
         </div>
 
@@ -178,6 +197,8 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
   const [vista, setVista] = useState<Vista>('resumen')
   const [busca, setBusca] = useState('')
   const { resumen, clientes, productos, cartera, porEntregar } = data
+  const comisionPipeline = porEntregar.ventaNeta * TASA_COMISION
+  const totalConPipeline = resumen.variableTotal + comisionPipeline
 
   const clientesVisibles = useMemo(() => {
     const q = busca.trim().toLowerCase()
@@ -232,6 +253,9 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
             </p>
             <p style={{ fontSize: 11.5, color: '#CBD5E1', marginTop: 3 }}>
               comisión + bonos por venta y cobranza
+            </p>
+            <p style={{ fontSize: 12, color: '#F59E0B', fontWeight: 600, marginTop: 10 }}>
+              +{fComision(comisionPipeline)} si se entrega el pipeline → {fComision(totalConPipeline)} en total
             </p>
             <div style={{ display: 'flex', gap: 14, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.1)' }}>
               <span style={{ fontSize: 11.5, color: '#CBD5E1' }}>
