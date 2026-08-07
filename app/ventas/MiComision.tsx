@@ -147,8 +147,8 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
           <p style={{ fontSize: 11.5, color: '#F59E0B', marginTop: 12, display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.4 }}>
             <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
             <span>
-              {fComision(resumen.comisionPotencial - resumen.comision)} más si cobras los{' '}
-              {fComision(resumen.ventaEnRiesgo)} de clientes con deuda vencida
+              {fComision(resumen.ventaEnRiesgo)} de lo entregado es de clientes con deuda vencida
+              — ya está comisionando, pero vale la pena cobrarlo
             </span>
           </p>
         )}
@@ -187,18 +187,18 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
 
   const productosVisibles = useMemo(() => {
     const q = busca.trim().toLowerCase()
-    const base = [...productos].sort((a, b) => b.ventaComisionable - a.ventaComisionable)
+    const base = [...productos].sort((a, b) => b.ventaNeta - a.ventaNeta)
     return q ? base.filter(p => p.producto.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q)) : base
   }, [productos, busca])
 
   const porCategoria = useMemo(() => {
-    const m = new Map<string, { venta: number; comisionable: number; litros: number }>()
+    const m = new Map<string, { venta: number; litros: number }>()
     for (const p of productos) {
-      const a = m.get(p.categoria) ?? { venta: 0, comisionable: 0, litros: 0 }
-      a.venta += p.ventaNeta; a.comisionable += p.ventaComisionable; a.litros += p.litrosComisionable
+      const a = m.get(p.categoria) ?? { venta: 0, litros: 0 }
+      a.venta += p.ventaNeta; a.litros += p.litros
       m.set(p.categoria, a)
     }
-    return [...m.entries()].sort((a, b) => b[1].comisionable - a[1].comisionable)
+    return [...m.entries()].sort((a, b) => b[1].venta - a[1].venta)
   }, [productos])
 
   return (
@@ -297,7 +297,7 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
                   {!c.comisiona && (
                     <p style={{ fontSize: 11.5, color: C.amber, fontWeight: 600, marginTop: 7, display: 'flex', alignItems: 'center', gap: 5 }}>
                       <AlertTriangle size={12} />
-                      No comisiona todavía · debe {fComision(c.deudaVencida)} vencido
+                      Debe {fComision(c.deudaVencida)} vencido — igual comisiona, cóbraselo
                     </p>
                   )}
                 </div>
@@ -316,14 +316,14 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{p.producto}</p>
                       <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
-                        {[p.envase, p.categoria, `${fL(p.litrosComisionable)} comisionables`].filter(Boolean).join(' · ')}
+                        {[p.envase, p.categoria, `${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}`].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 15, fontWeight: 800, color: p.ventaComisionable >= 0 ? C.green : C.red, whiteSpace: 'nowrap' }}>
-                        {fComision(p.ventaComisionable * TASA_COMISION)}
+                      <p style={{ fontSize: 15, fontWeight: 800, color: p.ventaNeta >= 0 ? C.green : C.red, whiteSpace: 'nowrap' }}>
+                        {fComision(p.ventaNeta * TASA_COMISION)}
                       </p>
-                      <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>de {fComision(p.ventaComisionable)}</p>
+                      <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>de {fComision(p.ventaNeta)} · {fL(p.litros)}</p>
                     </div>
                   </div>
                 </div>
@@ -342,21 +342,20 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
 function Resumen({ resumen, cartera, porCategoria }: {
   resumen: ResumenComision
   cartera: CarteraComision
-  porCategoria: [string, { venta: number; comisionable: number; litros: number }][]
+  porCategoria: [string, { venta: number; litros: number }][]
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {/* Comisión */}
-      <Bloque titulo="COMISIÓN 1% SOBRE VENTA COBRADA" monto={resumen.comision} color={C.green}>
-        <Linea label="Venta neta del equipo" valor={fComision(resumen.ventaNeta)} />
-        <Linea label="De clientes al día (comisiona)" valor={fComision(resumen.ventaComisionable)} destacado />
+      <Bloque titulo="COMISIÓN 1% SOBRE VENTA ENTREGADA" monto={resumen.comision} color={C.green}>
+        <Linea label="Venta neta entregada del equipo" valor={fComision(resumen.ventaNeta)} destacado />
         {resumen.ventaEnRiesgo > 0 && (
-          <Linea label="De clientes con deuda vencida" valor={fComision(resumen.ventaEnRiesgo)} color={C.amber} />
+          <Linea label="De la cual, con deuda vencida" valor={fComision(resumen.ventaEnRiesgo)} color={C.amber} />
         )}
         <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
-          Tu contrato comisiona la venta que cumple las políticas de cobranza. Como el
-          sistema no guarda el pago de cada venta, se considera cobrada la de los
-          clientes que hoy no tienen deuda vencida.
+          El 1% se calcula sobre TODA la venta neta entregada a los clientes (cláusula
+          novena). La deuda vencida no descuenta de tu comisión — queda marcada arriba
+          sólo como alerta para que la gestiones con esos clientes.
         </p>
       </Bloque>
 
@@ -369,8 +368,8 @@ function Resumen({ resumen, cartera, porCategoria }: {
           {porCategoria.map(([cat, v]) => {
             const emoji = cat === 'Kombucha' ? '🧃' : cat === 'Cerveza' ? '🍺' : '📦'
             const color = cat === 'Kombucha' ? C.green : cat === 'Cerveza' ? C.amber : C.purple
-            const total = porCategoria.reduce((s, [, x]) => s + Math.max(0, x.comisionable), 0)
-            const pct = total > 0 ? (Math.max(0, v.comisionable) / total) * 100 : 0
+            const total = porCategoria.reduce((s, [, x]) => s + Math.max(0, x.venta), 0)
+            const pct = total > 0 ? (Math.max(0, v.venta) / total) * 100 : 0
             return (
               <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9 }}>
                 <span style={{ fontSize: 15, flexShrink: 0 }}>{emoji}</span>
@@ -385,7 +384,7 @@ function Resumen({ resumen, cartera, porCategoria }: {
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <p style={{ fontSize: 13.5, fontWeight: 800, color: C.text, whiteSpace: 'nowrap' }}>
-                    {fComision(v.comisionable * TASA_COMISION)}
+                    {fComision(v.venta * TASA_COMISION)}
                   </p>
                   <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fL(v.litros)}</p>
                 </div>

@@ -78,9 +78,7 @@ export async function GET(req: Request) {
     envase: String(r.envase ?? ''),
     categoria: String(r.categoria ?? ''),
     ventaNeta: Number(r.venta_neta ?? 0),
-    ventaComisionable: Number(r.venta_comisionable ?? 0),
     litros: Number(r.litros ?? 0),
-    litrosComisionable: Number(r.litros_comisionable ?? 0),
     clientes: Number(r.clientes ?? 0),
   }))
 

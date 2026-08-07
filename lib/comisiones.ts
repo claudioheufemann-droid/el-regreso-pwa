@@ -90,9 +90,7 @@ export interface ProductoComision {
   envase: string
   categoria: string
   ventaNeta: number
-  ventaComisionable: number
   litros: number
-  litrosComisionable: number
   clientes: number
 }
 
@@ -117,15 +115,17 @@ export interface PorEntregarComision {
 }
 
 export interface ResumenComision {
-  /** Venta neta facturada del equipo en el período. */
+  /** Venta neta ENTREGADA del equipo en el período — base del 1% (cláusula
+   *  novena: "venta neta"), sin descontar por deuda vencida del cliente.
+   *  Corrección 2026-08-06: la primera versión sólo comisionaba la venta de
+   *  clientes sin deuda vencida ($50.168 sobre $10,86M en vez de $109.103);
+   *  Claudio la corrigió — el 1% es sobre TODO lo entregado, la deuda
+   *  vencida queda como alerta aparte, no como descuento de la comisión. */
   ventaNeta: number
-  /** Parte de esa venta que comisiona (clientes sin deuda vencida). */
-  ventaComisionable: number
-  /** Venta que NO comisiona por deuda vencida del cliente. */
+  /** Venta entregada de clientes CON deuda vencida — sólo alerta de riesgo,
+   *  ya no resta de `comision`. */
   ventaEnRiesgo: number
   comision: number
-  /** Lo que se ganaría si TODOS los clientes se pusieran al día. */
-  comisionPotencial: number
 
   escalaAlcanzada: string | null
   bonoEscala: number
@@ -168,11 +168,12 @@ export function calcularResumen(
   cartera: CarteraComision,
 ): ResumenComision {
   const ventaNeta = clientes.reduce((s, c) => s + c.ventaNeta, 0)
-  const ventaComisionable = clientes.filter(c => c.comisiona).reduce((s, c) => s + c.ventaNeta, 0)
-  const ventaEnRiesgo = ventaNeta - ventaComisionable
+  // El 1% (cláusula novena) es sobre TODA la venta neta entregada — la deuda
+  // vencida de un cliente ya no descuenta de la comisión, queda sólo como
+  // alerta (ver comentario en ResumenComision).
+  const ventaEnRiesgo = clientes.filter(c => !c.comisiona).reduce((s, c) => s + c.ventaNeta, 0)
 
-  const comision = ventaComisionable * TASA_COMISION
-  const comisionPotencial = ventaNeta * TASA_COMISION
+  const comision = ventaNeta * TASA_COMISION
 
   const escala = escalaDe(ventaNeta)
   const proxima = proximaEscalaDe(ventaNeta)
@@ -195,10 +196,8 @@ export function calcularResumen(
 
   return {
     ventaNeta,
-    ventaComisionable,
     ventaEnRiesgo,
     comision,
-    comisionPotencial,
     escalaAlcanzada: escala?.nombre ?? null,
     bonoEscala,
     faltaParaProximaEscala: proxima ? proxima.piso - ventaNeta : null,
