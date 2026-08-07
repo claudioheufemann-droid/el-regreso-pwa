@@ -17,34 +17,48 @@ import { C } from './theme'
  * con las reglas de SU contrato: comisión escalonada por canal, Bono
  * Apertura, Bono Recompra, Bono Cobranza y Bono Retención de cartera.
  *
- * Sólo se monta si el vendedor logueado tiene este contrato (ver
- * app/api/ventas/comision-vendedor/route.ts): el endpoint deriva el
- * vendedor de la sesión, nunca de un parámetro, así que no hay forma de
- * pedir la comisión de otro vendedor.
+ * Dos modos:
+ *  · Sin prop `vendedor` (uso en /terreno): sólo se monta si el vendedor
+ *    logueado tiene este contrato — el endpoint deriva el vendedor de la
+ *    sesión, nunca de un parámetro, así que no hay forma de pedir la
+ *    comisión de otro vendedor.
+ *  · Con prop `vendedor` (uso en /ventas/comisiones, sólo admins con
+ *    puede_ver_margenes): pide explícitamente la comisión de ESE
+ *    vendedor. El control de acceso real vive en el endpoint (ver
+ *    app/api/ventas/comision-vendedor/route.ts) — acá sólo cambia el
+ *    texto de "yo" a su nombre.
  */
 
 interface Payload {
+  vendedor: string
   resumen: ResumenComisionVendedor
   canales: CanalVenta[]
   cartera: CarteraVendedor
   porEntregar: { ventaNeta: number; litros: number; pedidos: number }
 }
 
-export default function MiComisionVendedor({ desde, hasta, nombrePeriodo }: {
+export default function MiComisionVendedor({ desde, hasta, nombrePeriodo, vendedor, nombreMostrar }: {
   desde: string; hasta: string; nombrePeriodo: string
+  /** Nombre canónico (ej. "Marcelo Diaz") — sólo para la vista de admin. Omitir para la vista propia. */
+  vendedor?: string
+  /** Primer nombre para los textos ("gana Marcelo", "lleva ganado") — requerido junto con `vendedor`. */
+  nombreMostrar?: string
 }) {
+  const esPropio = !vendedor
   const [data, setData] = useState<Payload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [abierto, setAbierto] = useState(false)
 
   useEffect(() => {
     let vivo = true
-    fetch(`/api/ventas/comision-vendedor?desde=${desde}&hasta=${hasta}`)
+    const qs = new URLSearchParams({ desde, hasta })
+    if (vendedor) qs.set('vendedor', vendedor)
+    fetch(`/api/ventas/comision-vendedor?${qs.toString()}`)
       .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
       .then(d => { if (vivo) setData(d) })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
-  }, [desde, hasta])
+  }, [desde, hasta, vendedor])
 
   if (error) return null           // sin este contrato o error: la tarjeta no existe
   if (!data) return <Esqueleto />
@@ -74,7 +88,9 @@ export default function MiComisionVendedor({ desde, hasta, nombrePeriodo }: {
             <Wallet size={18} color="#F59E0B" />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>LO QUE GANO YO</p>
+            <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>
+              {esPropio ? 'LO QUE GANO YO' : `LO QUE GANA ${nombreMostrar?.toUpperCase()}`}
+            </p>
             <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>
               Comisión y bonos · {nombrePeriodo}
             </p>
@@ -88,7 +104,7 @@ export default function MiComisionVendedor({ desde, hasta, nombrePeriodo }: {
           {fComision(resumen.variableTotal)}
         </p>
         <p style={{ fontSize: 12.5, color: '#CBD5E1', marginTop: 4 }}>
-          llevas ganado en el período
+          {esPropio ? 'llevas ganado en el período' : `${nombreMostrar} lleva ganado en el período`}
         </p>
 
         {comisionPipeline > 0 && (
@@ -124,7 +140,13 @@ export default function MiComisionVendedor({ desde, hasta, nombrePeriodo }: {
         </div>
       </button>
 
-      {abierto && <HojaDetalle data={data} desde={desde} hasta={hasta} nombrePeriodo={nombrePeriodo} onClose={() => setAbierto(false)} />}
+      {abierto && (
+        <HojaDetalle
+          data={data} desde={desde} hasta={hasta} nombrePeriodo={nombrePeriodo}
+          titulo={esPropio ? 'Lo que gano yo' : `Lo que gana ${nombreMostrar}`}
+          onClose={() => setAbierto(false)}
+        />
+      )}
     </>
   )
 }
@@ -140,8 +162,8 @@ function Esqueleto() {
 
 // ─── Detalle ────────────────────────────────────────────────────────────────
 
-function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
-  data: Payload; desde: string; hasta: string; nombrePeriodo: string; onClose: () => void
+function HojaDetalle({ data, desde, hasta, nombrePeriodo, titulo, onClose }: {
+  data: Payload; desde: string; hasta: string; nombrePeriodo: string; titulo: string; onClose: () => void
 }) {
   const { resumen } = data
 
@@ -158,7 +180,7 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
         <div style={{ padding: '4px 16px 12px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 17, fontWeight: 800, color: C.text }}>Lo que gano yo</p>
+              <p style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{titulo}</p>
               <p style={{ fontSize: 12, color: C.muted }}>{nombrePeriodo} · {desde} a {hasta}</p>
             </div>
             <button onClick={onClose} aria-label="Cerrar"
@@ -196,7 +218,7 @@ function Resumen({ resumen, cartera }: { resumen: ResumenComisionVendedor; carte
         <Linea label="Venta Retail + Distribuidor" valor={fComision(resumen.ventaRetailDistribuidor)} />
         <Linea label="Tasa Retail + Distribuidor" valor={`${(resumen.tasaRetailDistribuidor * 100).toLocaleString('es-CL', { minimumFractionDigits: 2 })}%`} />
         <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
-          El tramo lo determina tu venta neta total del período (ambos canales
+          El tramo lo determina la venta neta total del período (ambos canales
           sumados); dentro del tramo, cada canal comisiona a su propia tasa.
         </p>
       </Bloque>
@@ -234,7 +256,7 @@ function Resumen({ resumen, cartera }: { resumen: ResumenComisionVendedor; carte
         <Linea label="Cumplimiento" valor={fPct(resumen.pctAlDia)} destacado color={resumen.bonoCobranza > 0 ? C.green : C.amber} />
         {resumen.proximaCobranza && (
           <Linea
-            label={`Si llegas a ${resumen.proximaCobranza.minimoPct}%, ganas`}
+            label={`Al llegar a ${resumen.proximaCobranza.minimoPct}%`}
             valor={fComision(resumen.proximaCobranza.bono)}
             destacado color={C.green}
           />
@@ -250,9 +272,9 @@ function Resumen({ resumen, cartera }: { resumen: ResumenComisionVendedor; carte
         <Linea label="Activación" valor={fPct(resumen.pctActivacion)} destacado color={resumen.bonoRetencion > 0 ? C.green : C.amber} />
         <Linea label="Interacciones registradas" valor={String(cartera.interacciones)} />
         <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
-          {fComision(BONO_RETENCION.monto)} si al menos el {BONO_RETENCION.minimoPct}% de tu
-          cartera activa (≥2 interacciones + ≥1 pedido en el período, entregado
-          dentro del mes). Las interacciones salen de las visitas en Terreno.
+          {fComision(BONO_RETENCION.monto)} si al menos el {BONO_RETENCION.minimoPct}% de la
+          cartera está activa (≥2 interacciones + ≥1 pedido en el período,
+          entregado dentro del mes). Las interacciones salen de las visitas en Terreno.
         </p>
       </Bloque>
 
@@ -261,7 +283,7 @@ function Resumen({ resumen, cartera }: { resumen: ResumenComisionVendedor; carte
           <AlertTriangle size={13} /> BONO APERTURA CADENA RETAIL
         </p>
         <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>
-          Si abres una cadena retail de 6 o más salas, el contrato contempla un
+          Al abrir una cadena retail de 6 o más salas, el contrato contempla un
           bono único de $1.000.000 a $2.000.000, sujeto a evaluación y
           aprobación de la Gerencia Comercial. No es una regla automática — se
           define caso a caso, así que no está incluido en el cálculo de arriba.

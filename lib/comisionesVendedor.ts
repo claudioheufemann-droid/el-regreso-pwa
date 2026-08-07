@@ -34,6 +34,21 @@
 /** Vendedores bajo la cláusula TERCERA — hoy Yadro y Marcelo. */
 export const VENDEDORES_CONTRATO_TERCERA = ['Yadro Fabijancic', 'Marcelo Diaz'] as const
 
+/**
+ * Variantes con que cada vendedor aparece en `ventas.vendedor_actual` /
+ * `clientes.vendedor` — mismo dato que `users.vendedores_erp`, pero acá
+ * hace falta hardcodeado: cuando un ADMIN pide la comisión de otro
+ * vendedor (módulo /ventas/comisiones) no hay sesión de ese vendedor de
+ * la cual leer su `vendedoresErp`, así que no hay otra fuente posible.
+ * Yadro tiene dos por un typo histórico en el ERP ("Fabijancic" vs
+ * "Favijancic"); si a futuro aparece una variante nueva, agregarla acá
+ * Y al arreglo `vendedores_erp` de su fila en `users`.
+ */
+export const VENDEDOR_ERP_VARIANTES: Record<string, string[]> = {
+  'Yadro Fabijancic': ['Yadro Fabijancic', 'Yadro Favijancic'],
+  'Marcelo Diaz': ['Marcelo Diaz'],
+}
+
 /** Cláusula SEGUNDA — remuneración fija bruta mensual (igual en ambos contratos). */
 export const SUELDO_BASE_BRUTO = 592_885
 

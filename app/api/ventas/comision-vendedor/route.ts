@@ -3,33 +3,55 @@ import { createClient as createSbClient } from '@supabase/supabase-js'
 import { SUPABASE_URL } from '@/lib/supabase/config'
 import { getServerUser } from '@/lib/auth'
 import {
-  VENDEDORES_CONTRATO_TERCERA, calcularResumenVendedor,
+  VENDEDORES_CONTRATO_TERCERA, VENDEDOR_ERP_VARIANTES, calcularResumenVendedor,
   type CanalVenta, type EventoApertura, type CarteraVendedor, type PorEntregarVendedor,
 } from '@/lib/comisionesVendedor'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/ventas/comision-vendedor?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+ * GET /api/ventas/comision-vendedor?desde=YYYY-MM-DD&hasta=YYYY-MM-DD[&vendedor=Nombre]
  *
  * Remuneración variable de un vendedor bajo la cláusula TERCERA de su
  * contrato (Yadro Fabijancic, Marcelo Diaz). Devuelve el resumen + el
  * detalle de aperturas/recompras del período.
  *
- * A propósito NO recibe el vendedor por parámetro: se deriva siempre de
- * `vendedoresErp` de la sesión. Así un vendedor no puede pedir la
- * comisión de otro cambiando la URL — ni con el nombre exacto, porque
- * el endpoint nunca confía en un nombre que venga del cliente.
+ * Dos formas de uso, con controles de acceso separados:
+ *  · Sin `vendedor` (uso normal, /terreno): el vendedor se deriva SIEMPRE
+ *    de `vendedoresErp` de la sesión. Así un vendedor no puede pedir la
+ *    comisión de otro cambiando la URL — ni con el nombre exacto, porque
+ *    en este modo el endpoint nunca confía en un nombre que venga del
+ *    cliente.
+ *  · Con `vendedor=Nombre` (uso admin, /ventas/comisiones): sólo lo puede
+ *    pedir quien tenga `puede_ver_margenes` (Claudio/Benja/Douglas) — el
+ *    mismo permiso de Rentabilidad. Un vendedor sin ese permiso que
+ *    intente usar este parámetro (para ver la comisión de un compañero)
+ *    recibe 403 igual, se ignora el hecho de que sea o no vendedor de
+ *    cláusula tercera.
  */
 export async function GET(req: Request) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const contratoTercera = (VENDEDORES_CONTRATO_TERCERA as readonly string[])
-  const esVendedorContratoTercera = user.vendedoresErp.some(v => contratoTercera.includes(v))
-  if (!esVendedorContratoTercera) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
-
   const { searchParams } = new URL(req.url)
+  const vendedorParam = searchParams.get('vendedor')
+
+  let p_vendedores: string[]
+  if (vendedorParam) {
+    if (!user.puedeVerMargenes) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
+    const variantes = VENDEDOR_ERP_VARIANTES[vendedorParam]
+    if (!variantes) return NextResponse.json({ error: 'Vendedor inválido' }, { status: 400 })
+    p_vendedores = variantes
+  } else {
+    const contratoTercera = (VENDEDORES_CONTRATO_TERCERA as readonly string[])
+    const esVendedorContratoTercera = user.vendedoresErp.some(v => contratoTercera.includes(v))
+    if (!esVendedorContratoTercera) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
+    // Todas las variantes con que este vendedor aparece en el ERP (ej. Yadro
+    // tiene "Yadro Fabijancic" y "Yadro Favijancic" por un typo histórico),
+    // para no perder ventas registradas bajo la otra ortografía.
+    p_vendedores = user.vendedoresErp
+  }
+
   const desde = searchParams.get('desde') ?? ''
   const hasta = searchParams.get('hasta') ?? ''
   const esFecha = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
@@ -40,15 +62,10 @@ export async function GET(req: Request) {
 
   // Cliente service-role, mismo motivo que /api/ventas/comision: el cálculo
   // cruza tablas con RLS por dueño/región y el control de acceso ya se hizo
-  // arriba, explícito, contra vendedoresErp.
+  // arriba, explícito, contra vendedoresErp o puedeVerMargenes.
   const serviceKey = process.env.SUPABASE_SERVICE_KEY
   if (!serviceKey) return NextResponse.json({ error: 'Falta SUPABASE_SERVICE_KEY' }, { status: 500 })
   const supabase = createSbClient(SUPABASE_URL, serviceKey)
-
-  // Todas las variantes con que este vendedor aparece en el ERP (ej. Yadro
-  // tiene "Yadro Fabijancic" y "Yadro Favijancic" por un typo histórico),
-  // para no perder ventas registradas bajo la otra ortografía.
-  const p_vendedores = user.vendedoresErp
 
   const [rCanal, rEventos, rCartera, rPorEntregar] = await Promise.all([
     supabase.rpc('comision_vendedor_por_canal', { p_ini: desde, p_fin: hasta, p_vendedores }),
@@ -91,6 +108,7 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json({
+    vendedor: vendedorParam ?? user.nombre,
     resumen: calcularResumenVendedor(canales, eventos, cartera),
     canales,
     cartera,

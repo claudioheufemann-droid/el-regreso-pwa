@@ -39,6 +39,25 @@ export const VENDEDORES_COMISIONABLES = [
   'Transición 2',
 ] as const
 
+/**
+ * Quién más, además de Claudio, puede ver la tarjeta de Claudio dentro del
+ * módulo /ventas/comisiones (decisión de Claudio 2026-08-07: "solo Douglas
+ * y Claudio pueden ver las tarjetas de todos" — Benjamín ve el módulo, pero
+ * no esta tarjeta).
+ *
+ * A propósito NO se reutiliza/amplía `ve_comision_gerente`: ese flag
+ * también decide si la tarjeta se MONTA en el dashboard normal de /ventas
+ * (VentasHoyClient → veComision), y ese dashboard debe seguir mostrándosela
+ * sólo a Claudio. Ampliar el flag le habría dado a Douglas la tarjeta ahí
+ * también, que no es lo que se pidió — el acceso extra es sólo dentro de
+ * Comisiones, un lugar explícitamente para los 3 administradores.
+ */
+const EMAILS_VEN_COMISION_GERENTE_EQUIPO = ['douglas@elregresobeer.com']
+
+export function puedeVerComisionGerenteEquipo(user: { veComisionGerente: boolean; email: string }): boolean {
+  return user.veComisionGerente || EMAILS_VEN_COMISION_GERENTE_EQUIPO.includes(user.email)
+}
+
 /** Cláusula SEGUNDA — remuneración fija bruta mensual. */
 export const SUELDO_BASE_BRUTO = 2_311_375
 
