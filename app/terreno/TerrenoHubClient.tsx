@@ -13,6 +13,7 @@ import NotificationsBell from '@/components/ui/NotificationsBell'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import { createClient } from '@/lib/supabase/client'
 import { C, TAP, fPeso, fHora, cardStyle } from './theme'
+import MiComisionVendedor from './MiComisionVendedor'
 
 /**
  * Hub de Terreno — tema claro, igual que Ventas.
@@ -48,9 +49,13 @@ interface Props {
   kpis: { totalHoy: number; conVenta: number; sinVenta: number; canceladas?: number }
   visitaEnProgreso: Visita | null
   cobrosPendientes: CobroPendiente[]
+  veComisionVendedor: boolean
+  periodo: { desde: string; hasta: string; nombre: string }
 }
 
-export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProgreso, cobrosPendientes }: Props) {
+export default function TerrenoHubClient({
+  vendedor, visitas, kpis, visitaEnProgreso, cobrosPendientes, veComisionVendedor, periodo,
+}: Props) {
   const router = useRouter()
   const [cobros, setCobros] = useState(cobrosPendientes)
   const [marcandoId, setMarcandoId] = useState<string | null>(null)
@@ -137,6 +142,15 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
             </button>
           </div>
         </div>
+
+        {/* Remuneración variable propia (cláusula TERCERA del contrato).
+            Sólo se monta para quien tiene ese contrato — ver terreno/page.tsx.
+            Va arriba de todo, mismo criterio que "Lo que gano yo" en Ventas. */}
+        {veComisionVendedor && (
+          <div style={{ marginBottom: 12 }}>
+            <MiComisionVendedor desde={periodo.desde} hasta={periodo.hasta} nombrePeriodo={periodo.nombre} />
+          </div>
+        )}
 
         {/* Visita a medias — lo primero, es lo que hay que terminar */}
         {visitaEnProgreso && (

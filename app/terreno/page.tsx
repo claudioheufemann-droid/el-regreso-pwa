@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
+import { VENDEDORES_CONTRATO_TERCERA } from '@/lib/comisionesVendedor'
+import { periodoActual } from '@/lib/periodos'
 import TerrenoHubClient from './TerrenoHubClient'
 
 export const dynamic = 'force-dynamic'
@@ -39,6 +41,14 @@ export default async function TerrenoPage() {
   const sinVenta   = lista.filter(v => v.tiene_venta === false).length
   const enProgreso = lista.find(v => v.estado === 'en_progreso') ?? null
 
+  // Remuneración variable propia (cláusula TERCERA del contrato) — sólo se
+  // monta si este vendedor tiene ese contrato, igual que ve_comision_gerente
+  // en Ventas. Se calcula en el server para no montar el fetch de comisión
+  // en el cliente cuando ni siquiera aplica.
+  const contratoTercera = (VENDEDORES_CONTRATO_TERCERA as readonly string[])
+  const veComisionVendedor = user.vendedoresErp.some(v => contratoTercera.includes(v))
+  const periodo = periodoActual()
+
   return (
     <TerrenoHubClient
       vendedor={user}
@@ -46,6 +56,8 @@ export default async function TerrenoPage() {
       kpis={{ totalHoy, conVenta, sinVenta, canceladas }}
       visitaEnProgreso={enProgreso}
       cobrosPendientes={cobrosPendientes ?? []}
+      veComisionVendedor={veComisionVendedor}
+      periodo={{ desde: periodo.inicio, hasta: periodo.fin, nombre: periodo.nombre }}
     />
   )
 }
