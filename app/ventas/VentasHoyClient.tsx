@@ -1183,7 +1183,7 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
   return (
     <div style={{ background: C.bg, minHeight: '100%', margin: -1, padding: '1px 0 0' }}>
       <div style={{
-        maxWidth: isDesktop ? 1600 : 760, margin: '0 auto',
+        maxWidth: isDesktop ? 2200 : 760, margin: '0 auto',
         padding: isDesktop ? '28px 32px 48px' : '14px 16px 32px',
         display: 'flex', flexDirection: 'column', gap: isDesktop ? 20 : 14,
       }}>
@@ -1470,6 +1470,17 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
         }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? 20 : 14, minWidth: 0 }}>
 
+        {/* "Lo que gano yo" + hero de ventas, uno al lado del otro cuando el
+            ancho alcanza (auto-fit: si no entran los 480px mínimos, caen a
+            una sola columna solos, igual que en mobile) — antes cada uno
+            ocupaba TODO el ancho de la columna principal por separado, dos
+            tarjetas navy angostas de contenido apiladas una arriba de la
+            otra con montones de aire a los costados. */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isDesktop ? 'repeat(auto-fit, minmax(480px, 1fr))' : '1fr',
+          gap: isDesktop ? 20 : 14, alignItems: 'start',
+        }}>
         {/* Remuneración variable propia (cláusula NOVENA del contrato). Va
             arriba de todo, antes del hero, por pedido de Claudio: es lo que
             quiere ver primero al abrir. Sólo se monta con el permiso
@@ -1672,12 +1683,13 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
           )}
         </div>
         </div>
+        </div>
 
-        {/* KPIs — en desktop, grid 2×2 en vez de apiladas: antes cada
-            tarjeta se estiraba a los 760px de ancho con casi todo vacío a
-            la derecha del ícono; en un grid usan el espacio real. */}
+        {/* KPIs — en desktop, grid con más columnas a medida que hay ancho
+            disponible: antes cada tarjeta se estiraba a los 760px con casi
+            todo vacío a la derecha del ícono; en un grid usan el espacio real. */}
         <div style={isDesktop
-          ? { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }
+          ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }
           : { display: 'flex', flexDirection: 'column', gap: 10 }}>
           <KpiCard big={isDesktop} icon={Droplet} tint={C.blue} tintSoft={C.blueSoft} label="Litros vendidos"
             valor={fL(actual.litros)} pct={variacion(actual.litros, previo.litros)}
