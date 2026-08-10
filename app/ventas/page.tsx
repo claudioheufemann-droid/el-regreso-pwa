@@ -1,5 +1,6 @@
 import { getServerUser } from '@/lib/auth'
 import { provinciasDeRegion } from '@/lib/regiones'
+import { VENDEDORES_CONTRATO_TERCERA } from '@/lib/comisionesVendedor'
 import { getHoyData } from './hoyData'
 import VentasHoyClient from './VentasHoyClient'
 
@@ -33,5 +34,16 @@ export default async function VentasHoyPage({
     custom,
   )
 
-  return <VentasHoyClient data={data} />
+  // Remuneración variable propia: sólo la ve quien tenga el permiso, no los
+  // admins en general (ver app/api/ventas/comision/route.ts).
+  const contratoTercera = (VENDEDORES_CONTRATO_TERCERA as readonly string[])
+  const veComisionVendedor = !!appUser?.vendedoresErp.some(v => contratoTercera.includes(v))
+
+  return (
+    <VentasHoyClient
+      data={data}
+      veComision={!!appUser?.veComisionGerente}
+      veComisionVendedor={veComisionVendedor}
+    />
+  )
 }

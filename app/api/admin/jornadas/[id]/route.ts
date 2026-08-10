@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: visitas } = await supabase
     .from('visitas_terreno')
-    .select('id, cliente_nombre, es_cliente_nuevo, lat, lng, direccion_gps, foto_exterior, foto_exhibicion, foto_competencia, distancia_cliente_m, dentro_geofence, total_pedido, tiene_venta, iniciada_at')
+    .select('id, cliente_nombre, es_cliente_nuevo, lat, lng, direccion_gps, foto_exterior, foto_interior, foto_exhibicion, foto_competencia, distancia_cliente_m, dentro_geofence, total_pedido, tiene_venta, iniciada_at')
     .eq('jornada_id', id)
     .order('iniciada_at', { ascending: true })
 

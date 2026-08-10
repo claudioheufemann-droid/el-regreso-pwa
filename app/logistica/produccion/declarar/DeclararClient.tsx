@@ -48,6 +48,9 @@ const PRODUCTO_IMAGENES: Record<string, string> = {
   'Kombucha Natural':            '/productos/kombucha/natural.webp',
 }
 
+// Foto genérica de barril — se usa para todos los barriles sin importar el sabor.
+const IMAGEN_BARRIL = '/productos/cerveza/barril.webp'
+
 function envaseDe(categoria: Categoria, tab: FormatoTab): string {
   if (tab === 'barril') return 'Barril 30L'
   return categoria === 'Cerveza' ? 'Lata 500cc' : 'Lata 355cc'
@@ -79,8 +82,8 @@ const ORANGE = '#F97316'
 const ORANGE_DIM = 'rgba(249,115,22,0.12)'
 const ORANGE_BORDER = 'rgba(249,115,22,0.28)'
 
-function ProductoThumb({ nombre, categoria, size = 44 }: { nombre: string; categoria: Categoria; size?: number }) {
-  const src = PRODUCTO_IMAGENES[nombre]
+function ProductoThumb({ nombre, categoria, esBarril = false, size = 44 }: { nombre: string; categoria: Categoria; esBarril?: boolean; size?: number }) {
+  const src = esBarril ? IMAGEN_BARRIL : PRODUCTO_IMAGENES[nombre]
   const [imgOk, setImgOk] = useState(!!src)
   const emoji = categoria === 'Kombucha' ? '🫧' : '🍺'
 
@@ -424,7 +427,7 @@ export default function DeclararClient() {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <ProductoThumb nombre={v.nombre} categoria={v.categoria} size={44} />
+                    <ProductoThumb nombre={v.nombre} categoria={v.categoria} esBarril={formatoTab === 'barril'} size={44} />
                     {pendientes.length > 0 && (
                       <span style={{
                         position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8,

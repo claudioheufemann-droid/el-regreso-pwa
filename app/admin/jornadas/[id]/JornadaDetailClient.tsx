@@ -42,6 +42,7 @@ interface Visita {
   lng: number | null
   direccion_gps: string | null
   foto_exterior: string | null
+  foto_interior: string | null
   foto_exhibicion: string | null
   foto_competencia: string | null
   distancia_cliente_m: number | null
@@ -203,7 +204,7 @@ export default function JornadaDetailClient({ jornadaId }: { jornadaId: string }
                   <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Sin cliente registrado para validar ubicación</span>
                 )}
                 {v.total_pedido > 0 && <span style={{ fontSize: 10, color: '#D4AF37' }}>· ${v.total_pedido.toLocaleString('es-CL')}</span>}
-                {[v.foto_exterior, v.foto_exhibicion, v.foto_competencia].filter(Boolean).map((url, j) => (
+                {[v.foto_exterior, v.foto_interior, v.foto_exhibicion, v.foto_competencia].filter(Boolean).map((url, j) => (
                   <a key={j} href={url!} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: '#5B8AA8', textDecoration: 'underline' }}>Foto {j + 1}</a>
                 ))}
               </div>

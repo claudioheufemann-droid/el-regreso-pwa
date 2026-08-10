@@ -28,6 +28,8 @@ function claseEnvase(envase: string, categoria: string): string {
  * tipo=productos admite &categoria=Cerveza|Kombucha|Otros (opcional, filtra el mix)
  * tipo=pedidos-origen requiere &origen=backlog|mismo-periodo — de lo entregado
  *   en el rango, pedidos tomados antes del período vs dentro de él
+ * tipo=pedidos-periodo — TODOS los pedidos del rango (entregados + pendientes),
+ *   más reciente primero. Es la vista "Pedidos" de "Venta área comercial"
  * tipo=cliente-productos requiere &cliente=<nombre_fantasia> — qué se le vendió
  * tipo=clientes-vendedor requiere &vendedor=<nombre vigente, ej "Los Ríos"> — qué locales le compraron
  * tipo=pedido-productos requiere &pedido=<número> — qué contiene ese pedido (no usa desde/hasta)
@@ -35,6 +37,9 @@ function claseEnvase(envase: string, categoria: string): string {
  * tipo=clientes-por-entregar — clientes con pedidos tomados en el rango aún sin despachar
  * tipo=pedidos-pendientes-cliente requiere &cliente= — sus pedidos pendientes de ese cliente
  * tipo=pedidos-entregados-cliente requiere &cliente= — sus pedidos ya entregados, con hora de entrega
+ * tipo=pedidos-sin-informar-cliente requiere &cliente= — pedidos que el ERP aún no informó con
+ *   estado de entrega (sin fecha_entrega). Sólo se piden con porEntrega=false: con porEntrega=true
+ *   estos pedidos nunca cuentan (no tienen fecha_entrega para caer en el rango)
  *
  * Drill-down de las tarjetas del dashboard de Ventas. Va aparte de la carga de
  * la página porque son listas largas que sólo se piden al tocar la tarjeta.
@@ -66,14 +71,15 @@ export async function GET(req: Request) {
 
   const tiposValidos = ['productos', 'clientes', 'envase', 'pedidos-origen', 'cliente-productos',
     'clientes-vendedor', 'pedido-productos', 'clientes-producto', 'clientes-por-entregar',
-    'pedidos-pendientes-cliente', 'pedidos-entregados-cliente']
+    'pedidos-pendientes-cliente', 'pedidos-entregados-cliente', 'pedidos-sin-informar-cliente',
+    'pedidos-periodo']
   if (!tipo || !tiposValidos.includes(tipo))
     return NextResponse.json({ error: `tipo debe ser uno de: ${tiposValidos.join(', ')}` }, { status: 400 })
   if (tipo === 'envase' && !bucket)
     return NextResponse.json({ error: 'envase requiere bucket' }, { status: 400 })
   if (tipo === 'pedidos-origen' && origen !== 'backlog' && origen !== 'mismo-periodo')
     return NextResponse.json({ error: 'pedidos-origen requiere origen=backlog|mismo-periodo' }, { status: 400 })
-  if ((tipo === 'cliente-productos' || tipo === 'pedidos-pendientes-cliente' || tipo === 'pedidos-entregados-cliente') && !cliente)
+  if ((tipo === 'cliente-productos' || tipo === 'pedidos-pendientes-cliente' || tipo === 'pedidos-entregados-cliente' || tipo === 'pedidos-sin-informar-cliente') && !cliente)
     return NextResponse.json({ error: `${tipo} requiere cliente` }, { status: 400 })
   if (tipo === 'clientes-vendedor' && !vendedor)
     return NextResponse.json({ error: 'clientes-vendedor requiere vendedor' }, { status: 400 })
@@ -127,6 +133,25 @@ export async function GET(req: Request) {
     })))
   }
 
+  if (tipo === 'pedidos-periodo') {
+    const { data, error } = await supabase.rpc('ventas_pedidos_periodo', {
+      p_ini: desde, p_fin: hasta, p_provincias, p_por_entrega: porEntrega,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
+      pedido: String(r.pedido ?? ''),
+      cliente: String(r.cliente ?? ''),
+      vendedor: vendedorCanonico(String(r.vendedor ?? '')),
+      localidad: r.localidad ? String(r.localidad) : null,
+      fechaPedido: r.fecha_pedido ? String(r.fecha_pedido) : null,
+      fechaEntrega: r.fecha_entrega ? String(r.fecha_entrega) : null,
+      fechaEntregaHora: r.fecha_entrega_hora ? String(r.fecha_entrega_hora) : null,
+      litros: Number(r.litros ?? 0),
+      revenue: Number(r.revenue ?? 0),
+      entregado: r.entregado === true,
+    })))
+  }
+
   if (tipo === 'cliente-productos') {
     const { data, error } = await supabase.rpc('ventas_detalle_cliente_productos', {
       p_cliente: cliente, p_ini: desde, p_fin: hasta, p_provincias, p_por_entrega: porEntrega,
@@ -177,6 +202,19 @@ export async function GET(req: Request) {
 
   if (tipo === 'pedidos-pendientes-cliente') {
     const { data, error } = await supabase.rpc('ventas_pedidos_pendientes_cliente', {
+      p_cliente: cliente, p_ini: desde, p_fin: hasta, p_provincias,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
+      pedido: String(r.pedido ?? ''),
+      fechaPedido: r.fecha_pedido ? String(r.fecha_pedido) : null,
+      litros: Number(r.litros ?? 0),
+      revenue: Number(r.revenue ?? 0),
+    })))
+  }
+
+  if (tipo === 'pedidos-sin-informar-cliente') {
+    const { data, error } = await supabase.rpc('ventas_pedidos_sin_informar_cliente', {
       p_cliente: cliente, p_ini: desde, p_fin: hasta, p_provincias,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

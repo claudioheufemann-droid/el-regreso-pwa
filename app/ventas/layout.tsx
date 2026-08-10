@@ -8,6 +8,7 @@ import type { PageTab } from '@/components/PageTabs'
 const TABS: PageTab[] = [
   { href: '/ventas',                      label: 'Ventas',   exact: true  },
   { href: '/ventas/stock',                label: 'Stock'                  },
+  { href: '/ventas/cotizaciones',         label: 'Cotizaciones'           },
   { href: '/ventas/misiones',             label: 'Misiones'               },
   { href: '/ventas/clientes',             label: 'Clientes'               },
   { href: '/ventas/agenda',               label: 'Agenda'                 },

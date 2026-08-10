@@ -6,6 +6,8 @@ export const dynamic = 'force-dynamic'
 export interface LoteRow {
   codigo: string
   cantidad: number
+  /** Fecha de embarrilado (ISO yyyy-mm-dd), o null si no se encontró el lote en el informe. */
+  fechaEmbarrilado: string | null
 }
 
 export interface StockProductoRow {

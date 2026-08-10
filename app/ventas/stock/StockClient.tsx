@@ -1,7 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Package, Search, Beer, Layers, Copy, Check, AlertTriangle, CircleAlert, ChevronDown, Boxes } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Package, Search, Beer, Layers, Copy, Check, AlertTriangle, CircleAlert, ChevronDown, ChevronLeft, Boxes } from 'lucide-react'
+import { useUser } from '@/lib/userContext'
+import SettingsPanel from '@/components/ui/SettingsPanel'
+import NotificationsBell from '@/components/ui/NotificationsBell'
 import type { StockProductoRow } from './page'
 
 const C = {
@@ -63,8 +67,11 @@ const CODIGO_IMAGENES: Record<string, string> = {
   'K-22': '/productos/kombucha/detox.webp',
 }
 
-function ProductoThumb({ codigo, categoria, size = 44 }: { codigo: string | null; categoria: string | null; size?: number }) {
-  const src = codigo ? CODIGO_IMAGENES[codigo] : undefined
+// Foto genérica de barril — se usa para todos los barriles sin importar el sabor.
+const IMAGEN_BARRIL = '/productos/cerveza/barril.webp'
+
+function ProductoThumb({ codigo, categoria, tipo, size = 44 }: { codigo: string | null; categoria: string | null; tipo?: 'barril' | 'envase'; size?: number }) {
+  const src = tipo === 'barril' ? IMAGEN_BARRIL : (codigo ? CODIGO_IMAGENES[codigo] : undefined)
   const [imgOk, setImgOk] = useState(!!src)
   const emoji = categoria === 'Kombucha' ? '🫧' : '🍺'
   if (src && imgOk) {
@@ -95,34 +102,39 @@ function fFecha(iso: string) {
   return `${d} ${meses[m - 1]} ${y}`
 }
 
-// Texto para compartir: cantidades reales (unidades + equivalencia en cajas
-// para latas), agrupado por categoría (Cerveza/Kombucha) y tipo (Barriles/Latas).
+// Texto para compartir por WhatsApp: usa el formato que WhatsApp sí renderiza
+// (*negrita*, _cursiva_, líneas divisorias) para que se vea prolijo y de marca
+// sin agregar pasos — sigue siendo copiar → pegar, sin fotos ni adjuntos.
+const DIVISOR = '━━━━━━━━━━━━━━━━'
+
 function buildResumenCopiable(filas: StockProductoRow[], fechaInforme: string | null): string {
   const categorias = ['Cerveza', 'Kombucha'] as const
-  const tipos = [{ key: 'barril' as const, label: 'Barriles' }, { key: 'envase' as const, label: 'Latas' }]
-  let out = `📦 STOCK CÁMARA GENERAL BARRIOS BAJOS`
-  if (fechaInforme) out += ` — ${fFecha(fechaInforme)}`
-  out += '\n'
+  const tipos = [{ key: 'barril' as const, label: 'Barriles (30L)', emoji: '🛢️' }, { key: 'envase' as const, label: 'Latas', emoji: '🥫' }]
+
+  let out = `🍺 *EL REGRESO BEER* — Stock disponible\n📍 Cámara General Barrios Bajos`
+  if (fechaInforme) out += ` · ${fFecha(fechaInforme)}`
+  out += `\n${DIVISOR}`
 
   for (const cat of categorias) {
     const deCategoria = filas.filter(f => (f.categoria ?? 'Otros') === cat)
     if (!deCategoria.length) continue
-    out += `\n${cat === 'Kombucha' ? '🫧' : '🍺'} ${cat.toUpperCase()}\n`
+    out += `\n*${cat === 'Kombucha' ? 'KOMBUCHAS' : 'CERVEZAS'}*\n`
     for (const t of tipos) {
       const items = deCategoria.filter(f => f.tipo === t.key).sort((a, b) => a.producto.localeCompare(b.producto))
       if (!items.length) continue
-      out += `\n${t.label}:\n`
+      out += `\n${t.emoji} ${t.label}\n`
       for (const f of items) {
-        const n = nivelDe(f)
-        const icon = n === 'critico' ? '🔴' : n === 'bajo' ? '🟡' : '🟢'
-        const etiqueta = n === 'critico' ? ' — revisar stock' : n === 'bajo' ? ' — poco stock' : ''
+        // Solo verde/rojo — sin texto de alerta: esto lo lee el cliente,
+        // no debe ver "poco stock" ni "revisar stock".
+        const icon = nivelDe(f) === 'ok' ? '🟢' : '🔴'
         const detalle = f.tipo === 'envase'
-          ? `${fNum(f.cantidad)} un. (${fCajas(f.cantidad)})`
-          : `${fNum(f.cantidad)} barr.`
-        out += `${icon} ${f.producto}: ${detalle}${etiqueta}\n`
+          ? `${fNum(f.cantidad)} latas (${fCajas(f.cantidad)})`
+          : `${fNum(f.cantidad)} Barril${f.cantidad === 1 ? '' : 'es'}`
+        out += `${icon} *${f.producto}*: ${detalle}\n`
       }
     }
   }
+  out += `\n${DIVISOR}\n_Cervecería Artesanal · Valdivia_`
   return out.trim()
 }
 
@@ -141,9 +153,18 @@ function AlertaBadge({ nivel }: { nivel: Nivel }) {
   )
 }
 
-// Detalle de lotes al expandir un producto — el informe de bodega no trae
-// fecha de vencimiento, solo código de lote y cantidad. Se ordena de mayor a
-// menor cantidad (no hay fecha con la cual ordenar por próximo a vencer).
+// Días en bodega = hoy - fecha de embarrilado. La fecha se cruza por código
+// de lote contra el listado plano del informe (ver lib/stockParser.ts) — no
+// todos los lotes tienen match, en ese caso no se muestra el dato.
+function diasEnBodega(fechaISO: string): number {
+  const [y, m, d] = fechaISO.split('-').map(Number)
+  const fecha = new Date(y, m - 1, d)
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+  return Math.round((hoy.getTime() - fecha.getTime()) / 86400000)
+}
+
+// Detalle de lotes al expandir un producto. Se ordena de mayor a menor
+// cantidad (no hay fecha de vencimiento con la cual ordenar por próximo a vencer).
 function DetalleLotes({ f }: { f: StockProductoRow }) {
   const lotes = [...(f.lotes ?? [])].sort((a, b) => b.cantidad - a.cantidad)
   if (lotes.length === 0) {
@@ -155,24 +176,44 @@ function DetalleLotes({ f }: { f: StockProductoRow }) {
         {lotes.length} LOTE{lotes.length === 1 ? '' : 'S'}
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {lotes.map((l, i) => (
+        {lotes.map((l, i) => {
+          const dias = l.fechaEmbarrilado ? diasEnBodega(l.fechaEmbarrilado) : null
+          return (
           <div key={`${l.codigo}-${i}`} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             background: C.bg, borderRadius: 9, padding: '7px 10px',
           }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>Lote {l.codigo}</span>
-            <span style={{ fontSize: 12, color: C.muted, textAlign: 'right' }}>
+            <div style={{ minWidth: 0 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>Lote {l.codigo}</span>
+              {dias != null ? (() => {
+                const [bg, fg] = dias > 90 ? [C.redSoft, C.red] : dias > 30 ? [C.amberSoft, C.amber] : [C.greenSoft, C.green]
+                return (
+                  <p style={{ marginTop: 3 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: fg, background: bg, borderRadius: 7, padding: '2px 7px', letterSpacing: '-0.2px' }}>
+                      {dias} día{dias === 1 ? '' : 's'} en bodega
+                    </span>
+                  </p>
+                )
+              })() : (
+                <p style={{ fontSize: 11, color: C.faint, marginTop: 1 }}>Sin fecha de embarrilado</p>
+              )}
+            </div>
+            <span style={{ fontSize: 12, color: C.muted, textAlign: 'right', flexShrink: 0 }}>
               {fNum(l.cantidad)} {f.tipo === 'barril' ? 'barr.' : 'un.'}
               {f.tipo === 'envase' && <span style={{ color: C.faint }}> · {fCajas(l.cantidad)}</span>}
             </span>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
 }
 
 export default function StockClient({ filas, fechaInforme }: { filas: StockProductoRow[]; fechaInforme: string | null }) {
+  const router = useRouter()
+  const { user } = useUser()
+  const [showSettings, setShowSettings] = useState(false)
   const [tab, setTab] = useState<'barril' | 'envase'>('barril')
   const [busca, setBusca] = useState('')
   const [copiado, setCopiado] = useState(false)
@@ -214,28 +255,56 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 120px))' }}>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
+        <button
+          onClick={() => router.push('/ventas')}
+          aria-label="Volver"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            background: C.card, border: `1px solid ${C.line}`,
+            borderRadius: 100, padding: '7px 14px 7px 10px', marginBottom: 14,
+            color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            minHeight: 36,
+          }}
+        >
+          <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
+          Volver
+        </button>
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>CÁMARA GENERAL BARRIOS BAJOS</p>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Stock de productos</h1>
             <p style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
               {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Sin datos cargados todavía'}
             </p>
           </div>
-          {filas.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
+            {filas.length > 0 && (
+              <button
+                onClick={copiarResumen}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '9px 14px', borderRadius: 12, border: `1px solid ${copiado ? C.green : C.line}`,
+                  background: copiado ? C.greenSoft : C.card, color: copiado ? C.green : C.text,
+                  fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                {copiado ? <Check size={14} /> : <Copy size={14} />}
+                {copiado ? 'Copiado' : 'Copiar stock'}
+              </button>
+            )}
+            <NotificationsBell inline variant="light" />
             <button
-              onClick={copiarResumen}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 2,
-                padding: '9px 14px', borderRadius: 12, border: `1px solid ${copiado ? C.green : C.line}`,
-                background: copiado ? C.greenSoft : C.card, color: copiado ? C.green : C.text,
-                fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
-              }}
+              onClick={() => setShowSettings(true)}
+              aria-label="Cuenta"
+              style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', border: `1px solid ${C.line}`, background: C.hero, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0, padding: 0 }}
             >
-              {copiado ? <Check size={14} /> : <Copy size={14} />}
-              {copiado ? 'Copiado' : 'Copiar stock'}
+              {user?.avatarUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={user.avatarUrl} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (user?.iniciales || '··')}
             </button>
-          )}
+          </div>
         </div>
 
         {filas.length === 0 ? (
@@ -346,7 +415,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
                                 }}
                               >
                                 <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
-                                  <ProductoThumb codigo={f.codigo_producto} categoria={f.categoria} />
+                                  <ProductoThumb codigo={f.codigo_producto} categoria={f.categoria} tipo={f.tipo} />
                                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flex: 1, minWidth: 0 }}>
                                     <div style={{ minWidth: 0 }}>
                                       <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{f.producto}</p>
@@ -393,6 +462,15 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
           </>
         )}
       </div>
+
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          userName={user?.nombre ?? ''}
+          userEmail={user?.email ?? ''}
+          avatarUrl={user?.avatarUrl ?? undefined}
+        />
+      )}
     </div>
   )
 }

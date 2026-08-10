@@ -15,9 +15,7 @@ import {
   Search, MapPin, X, ChevronUp, ChevronDown, Navigation,
   Sparkles, Loader2, ChevronLeft, Plus, Building2, Pencil,
 } from 'lucide-react'
-import AppHeader from '@/components/ui/AppHeader'
-
-const G = '#D4AF37'
+import { C, TAP, cardStyle, btnPrimario } from '../theme'
 
 // ── Tipos ───────────────────────────────────────────────────────────────────
 interface ClienteRuta {
@@ -120,6 +118,10 @@ export default function RutaClient({ clientes }: Props) {
         detalle: [c.categoria, c.localidad].filter(Boolean).join(' · ') || null,
         lat: c.lat, lng: c.lng, tipo: 'cliente' as const,
       }))
+    // setState dentro del efecto a propósito: localStorage es un sistema
+    // externo que sólo existe en el cliente, así que no se puede leer en el
+    // inicializador del useState sin romper la hidratación.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (paradas.length > 0) setQueue(paradas)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -168,6 +170,7 @@ export default function RutaClient({ clientes }: Props) {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     const q = dirInput.trim()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (q.length < 3) { setGeoResults([]); return }
     debounceRef.current = setTimeout(async () => {
       setBuscandoGeo(true)
@@ -238,179 +241,190 @@ export default function RutaClient({ clientes }: Props) {
   const nClientes = queue.filter(p => p.tipo === 'cliente').length
   const nManual   = queue.filter(p => p.tipo === 'manual').length
 
-  return (
-    <div style={{ minHeight: '100vh', background: '#080808', paddingBottom: 110 }}>
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 16px' }}>
 
-        {/* Header */}
-        <div style={{ paddingTop: 16 }}>
-          <button
-            onClick={() => router.push('/terreno')}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 10, minHeight: 44 }}
-          >
-            <ChevronLeft size={15} /> Terreno
-          </button>
-          <AppHeader eyebrow="Optimización de ruta" title="Organiza tu Viaje" />
+  return (
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 120px))' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
+        <button
+          onClick={() => router.push('/terreno')}
+          aria-label="Volver"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 36, cursor: 'pointer',
+            background: C.card, border: `1px solid ${C.line}`, borderRadius: 100,
+            padding: '7px 14px 7px 10px', color: C.blue, fontSize: 13, fontWeight: 700, marginBottom: 14,
+          }}
+        >
+          <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
+          Volver
+        </button>
+
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>OPTIMIZACIÓN DE RUTA</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Organiza tu viaje</h1>
         </div>
 
-        {/* ── Cola de visita ── */}
+        {/* Cola de viaje */}
         {queue.length > 0 && (
-          <div className="card card-pad" style={{ borderTop: `2px solid ${G}`, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span className="section-head" style={{ marginBottom: 0 }}>
-                Cola de viaje · {queue.length} {queue.length === 1 ? 'parada' : 'paradas'}
-              </span>
+          <div style={{ ...cardStyle, padding: 15, marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
+              <p style={{ fontSize: 12, fontWeight: 800, color: C.text, letterSpacing: '0.04em' }}>
+                COLA DE VIAJE · {queue.length} {queue.length === 1 ? 'PARADA' : 'PARADAS'}
+              </p>
               {optimizado && totalKm > 0 && (
-                <span className="badge badge-gold">{totalKm.toFixed(1)} km</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.blue, background: C.blueSoft, borderRadius: 7, padding: '3px 8px' }}>
+                  {totalKm.toFixed(1)} km
+                </span>
               )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
               {queue.map((p, i) => (
                 <div key={p.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  background: 'var(--surface2)', borderRadius: 10, padding: '8px 10px', minHeight: 44,
+                  display: 'flex', alignItems: 'center', gap: 9, minHeight: 52,
+                  background: C.bg, border: `1px solid ${C.line}`, borderRadius: 11, padding: '8px 10px',
                 }}>
-                  {/* Número de orden */}
-                  <div style={{
-                    width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                    background: optimizado ? `${G}20` : 'rgba(255,255,255,0.06)',
-                    border: `1px solid ${optimizado ? G + '50' : 'rgba(255,255,255,0.1)'}`,
+                  <span style={{
+                    width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                    background: optimizado ? C.blue : C.line,
+                    color: optimizado ? '#fff' : C.muted,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, fontWeight: 800, color: optimizado ? G : 'rgba(255,255,255,0.4)',
+                    fontSize: 11, fontWeight: 800,
                   }}>
                     {i + 1}
-                  </div>
-                  {/* Ícono tipo parada */}
+                  </span>
                   {p.tipo === 'manual'
-                    ? <Pencil size={12} color="#60A5FA" style={{ flexShrink: 0 }} />
-                    : <Building2 size={12} color={G} style={{ flexShrink: 0 }} />}
+                    ? <Pencil size={13} color={C.purple} style={{ flexShrink: 0 }} />
+                    : <Building2 size={13} color={C.muted} style={{ flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {p.nombre}
                     </p>
                     {p.detalle && (
-                      <p style={{ fontSize: 10, color: p.tipo === 'manual' ? 'rgba(96,165,250,0.7)' : 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p style={{ fontSize: 11, color: p.tipo === 'manual' ? C.purple : C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {p.detalle}
                       </p>
                     )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-                    <button onClick={() => mover(i, -1)} disabled={i === 0} style={{ width: 26, height: 26, border: 'none', background: 'none', color: i === 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.4)', cursor: i === 0 ? 'default' : 'pointer' }}>
-                      <ChevronUp size={14} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                    <button onClick={() => mover(i, -1)} disabled={i === 0} aria-label="Subir"
+                      style={{ width: 30, height: 30, border: 'none', background: 'none', color: i === 0 ? C.line : C.muted, cursor: i === 0 ? 'default' : 'pointer' }}>
+                      <ChevronUp size={16} />
                     </button>
-                    <button onClick={() => mover(i, 1)} disabled={i === queue.length - 1} style={{ width: 26, height: 26, border: 'none', background: 'none', color: i === queue.length - 1 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.4)', cursor: i === queue.length - 1 ? 'default' : 'pointer' }}>
-                      <ChevronDown size={14} />
+                    <button onClick={() => mover(i, 1)} disabled={i === queue.length - 1} aria-label="Bajar"
+                      style={{ width: 30, height: 30, border: 'none', background: 'none', color: i === queue.length - 1 ? C.line : C.muted, cursor: i === queue.length - 1 ? 'default' : 'pointer' }}>
+                      <ChevronDown size={16} />
                     </button>
-                    <button onClick={() => quitar(p.id)} style={{ width: 30, height: 30, border: 'none', background: 'none', color: '#F87171', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <X size={14} />
+                    <button onClick={() => quitar(p.id)} aria-label="Quitar"
+                      style={{ width: 32, height: 32, border: 'none', background: 'none', color: C.red, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <X size={15} />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Resumen tipos */}
             {(nClientes > 0 && nManual > 0) && (
-              <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 10 }}>
+              <p style={{ fontSize: 11.5, color: C.muted, marginBottom: 10 }}>
                 {nClientes} cliente{nClientes !== 1 ? 's' : ''} · {nManual} dirección{nManual !== 1 ? 'es' : ''} nueva{nManual !== 1 ? 's' : ''}
               </p>
             )}
 
-            {/* Optimizar */}
             <button
               onClick={optimizar}
               disabled={queue.length < 2 || optimizando}
-              className="btn-cta"
-              style={{ width: '100%', marginBottom: 8, opacity: queue.length < 2 ? 0.4 : 1 }}
+              style={{
+                ...btnPrimario, marginBottom: 8,
+                background: queue.length < 2 ? C.line : C.hero,
+                color: queue.length < 2 ? C.faint : '#fff',
+                cursor: queue.length < 2 ? 'not-allowed' : 'pointer',
+              }}
             >
               {optimizando
-                ? <><Loader2 size={15} style={{ animation: 'spin 0.8s linear infinite' }} /> Calculando ruta…</>
-                : <><Sparkles size={15} /> Optimizar orden por cercanía</>}
+                ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Calculando ruta…</>
+                : <><Sparkles size={16} /> Ordenar por cercanía</>}
             </button>
             {gpsError && (
-              <p style={{ fontSize: 10, color: 'rgba(212,175,55,0.7)', textAlign: 'center', marginBottom: 8 }}>{gpsError}</p>
+              <p style={{ fontSize: 11.5, color: C.amber, textAlign: 'center', marginBottom: 8 }}>{gpsError}</p>
             )}
 
-            {/* Deep links */}
             <div style={{ display: 'flex', gap: 8 }}>
               <a href={urlWaze(queue[0])} target="_blank" rel="noopener noreferrer"
-                style={{ flex: 1, minHeight: 44, borderRadius: 12, background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.25)', color: '#60A5FA', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none' }}>
-                <Navigation size={14} /> Abrir en Waze
+                style={{ flex: 1, minHeight: 48, borderRadius: 12, background: C.blueSoft, border: `1px solid ${C.line}`, color: C.blue, fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none' }}>
+                <Navigation size={15} /> Waze
               </a>
               <a href={urlGoogleMapsRuta(queue)} target="_blank" rel="noopener noreferrer"
-                style={{ flex: 1, minHeight: 44, borderRadius: 12, background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)', color: '#4ADE80', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none' }}>
-                <MapPin size={14} /> Google Maps
+                style={{ flex: 1, minHeight: 48, borderRadius: 12, background: C.greenSoft, border: `1px solid ${C.line}`, color: C.green, fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none' }}>
+                <MapPin size={15} /> Google Maps
               </a>
             </div>
-            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 8 }}>
-              Waze abre la ruta a la primera parada · Google Maps incluye toda la ruta completa
+            <p style={{ fontSize: 11, color: C.faint, textAlign: 'center', marginTop: 8, lineHeight: 1.4 }}>
+              Waze abre hasta la primera parada · Google Maps lleva la ruta completa
             </p>
           </div>
         )}
 
-        {/* ── Agregar dirección manual ── */}
-        <div className="card" style={{ marginBottom: 14, overflow: 'visible' }}>
+        {/* Dirección nueva */}
+        <div style={{ ...cardStyle, marginBottom: 14, overflow: 'visible' }}>
           {!modoManual ? (
             <button
               onClick={() => setModoManual(true)}
               style={{
-                width: '100%', minHeight: 48, background: 'transparent', border: 'none',
+                width: '100%', minHeight: 52, background: 'transparent', border: 'none', borderRadius: 16,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                color: '#60A5FA', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: '12px',
+                color: C.blue, fontSize: 14, fontWeight: 700, cursor: 'pointer',
               }}
             >
-              <Plus size={16} /> Agregar dirección de cliente nuevo
+              <Plus size={17} /> Agregar dirección de cliente nuevo
             </button>
           ) : (
-            <div style={{ padding: '12px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span className="section-head" style={{ marginBottom: 0 }}>Dirección nueva</span>
-                <button onClick={() => { setModoManual(false); setDirInput(''); setGeoResults([]) }}
-                  style={{ width: 28, height: 28, border: 'none', background: 'rgba(255,255,255,0.05)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                  <X size={14} color="rgba(255,255,255,0.5)" />
+            <div style={{ padding: '13px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+                <p style={{ fontSize: 12, fontWeight: 800, color: C.text, letterSpacing: '0.04em' }}>DIRECCIÓN NUEVA</p>
+                <button onClick={() => { setModoManual(false); setDirInput(''); setGeoResults([]) }} aria-label="Cerrar"
+                  style={{ width: 30, height: 30, border: 'none', background: '#E2E8F0', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  <X size={15} color={C.muted} />
                 </button>
               </div>
               <div style={{ position: 'relative' }}>
-                <MapPin size={15} style={{ position: 'absolute', left: 13, top: 15, color: 'rgba(96,165,250,0.6)' }} />
+                <MapPin size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: C.faint }} />
                 <input
                   type="text"
                   autoFocus
                   value={dirInput}
                   onChange={e => setDirInput(e.target.value)}
                   placeholder="Calle y número, sector…"
-                  className="input-sm"
-                  style={{ height: 44, paddingLeft: 38, fontSize: 14 }}
+                  style={{
+                    width: '100%', minHeight: 48, paddingLeft: 38, paddingRight: 38, borderRadius: 11,
+                    border: `1px solid ${C.line}`, background: C.bg, fontSize: 15, color: C.text, outline: 'none',
+                  }}
                 />
                 {buscandoGeo && (
-                  <Loader2 size={15} style={{ position: 'absolute', right: 13, top: 15, color: 'rgba(255,255,255,0.4)', animation: 'spin 0.8s linear infinite' }} />
+                  <Loader2 size={16} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: C.faint, animation: 'spin 0.8s linear infinite' }} />
                 )}
               </div>
-              {/* Sugerencias geocodificadas */}
               {geoResults.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 9 }}>
                   {geoResults.map((r, idx) => (
                     <button
                       key={idx}
                       onClick={() => agregarManual(r)}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
-                        minHeight: 44, padding: '8px 10px', borderRadius: 10,
-                        background: 'var(--surface2)', border: '1px solid rgba(96,165,250,0.15)',
-                        color: 'var(--cream)', cursor: 'pointer', width: '100%',
+                        display: 'flex', alignItems: 'center', gap: 9, textAlign: 'left', width: '100%',
+                        minHeight: TAP + 6, padding: '9px 11px', borderRadius: 11,
+                        background: C.bg, border: `1px solid ${C.line}`, color: C.text, cursor: 'pointer',
                       }}
                     >
-                      <MapPin size={13} color="#60A5FA" style={{ flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <MapPin size={14} color={C.blue} style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: 12.5, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {r.display_name}
                       </span>
-                      <Plus size={14} color="#60A5FA" style={{ marginLeft: 'auto', flexShrink: 0 }} />
+                      <Plus size={15} color={C.blue} style={{ flexShrink: 0 }} />
                     </button>
                   ))}
                 </div>
               )}
               {dirInput.trim().length >= 3 && !buscandoGeo && geoResults.length === 0 && (
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 8, textAlign: 'center' }}>
+                <p style={{ fontSize: 12, color: C.muted, marginTop: 9, textAlign: 'center' }}>
                   Sin resultados. Prueba con calle + número + ciudad.
                 </p>
               )}
@@ -418,32 +432,33 @@ export default function RutaClient({ clientes }: Props) {
           )}
         </div>
 
-        {/* Buscador de clientes existentes */}
-        <div style={{ position: 'relative', marginBottom: 10 }}>
-          <Search size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)' }} />
+        {/* Buscador de clientes */}
+        <div style={{ position: 'relative', marginBottom: 11 }}>
+          <Search size={16} color={C.faint} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
           <input
             type="text"
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
             placeholder="Buscar cliente, zona o categoría…"
-            className="input-sm"
-            style={{ height: 44, paddingLeft: 38, fontSize: 14 }}
+            style={{
+              width: '100%', minHeight: 48, paddingLeft: 38, paddingRight: 12, borderRadius: 12,
+              border: `1px solid ${C.line}`, background: C.card, fontSize: 15, color: C.text, outline: 'none',
+            }}
           />
         </div>
 
-        {/* Lista de clientes */}
-        <p className="section-head">
+        <p style={{ fontSize: 11.5, fontWeight: 800, color: C.muted, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 8 }}>
           {busqueda ? `Resultados (${filtrados.length})` : `Clientes con ubicación (${clientes.length})`}
         </p>
 
         {clientes.length === 0 ? (
-          <div className="card card-pad" style={{ textAlign: 'center', padding: '32px 16px' }}>
-            <MapPin size={28} color="rgba(255,255,255,0.15)" style={{ margin: '0 auto 10px' }} />
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>
-              No hay clientes con coordenadas GPS todavía
+          <div style={{ ...cardStyle, textAlign: 'center', padding: '32px 16px' }}>
+            <MapPin size={28} color={C.faint} style={{ margin: '0 auto 10px' }} />
+            <p style={{ fontSize: 13.5, color: C.text, fontWeight: 600 }}>
+              Todavía no hay clientes con ubicación
             </p>
-            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 6 }}>
-              Usa &quot;Agregar dirección&quot; arriba para armar tu ruta
+            <p style={{ fontSize: 12, color: C.muted, marginTop: 5 }}>
+              Usa &quot;Agregar dirección&quot; de arriba para armar tu ruta.
             </p>
           </div>
         ) : (
@@ -451,33 +466,34 @@ export default function RutaClient({ clientes }: Props) {
             {filtrados.map(c => {
               const seleccionado = enQueue.has(`cli-${c.nombre}`)
               return (
-                <div
+                <button
                   key={c.nombre}
                   onClick={() => toggleCliente(c)}
-                  className="row-dense"
                   style={{
-                    background: seleccionado ? 'rgba(212,175,55,0.06)' : 'var(--surface)',
-                    border: `1px solid ${seleccionado ? 'rgba(212,175,55,0.25)' : 'var(--border)'}`,
-                    borderRadius: 12, cursor: 'pointer', padding: '8px 12px',
+                    display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left',
+                    background: seleccionado ? C.blueSoft : C.card,
+                    border: `1px solid ${seleccionado ? C.blue : C.line}`,
+                    borderRadius: 12, cursor: 'pointer', padding: '11px 12px', minHeight: 58,
                   }}
                 >
-                  <div style={{
-                    width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                    border: `1.5px solid ${seleccionado ? G : 'rgba(255,255,255,0.2)'}`,
-                    background: seleccionado ? G : 'transparent',
+                  <span style={{
+                    width: 22, height: 22, borderRadius: 7, flexShrink: 0,
+                    border: `1.5px solid ${seleccionado ? C.blue : C.line}`,
+                    background: seleccionado ? C.blue : 'transparent',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontSize: 13, fontWeight: 900,
                   }}>
-                    {seleccionado && <span style={{ color: '#080808', fontSize: 12, fontWeight: 900 }}>✓</span>}
-                  </div>
+                    {seleccionado ? '✓' : ''}
+                  </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {c.nombre}
                     </p>
-                    <p style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <p style={{ fontSize: 11.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {[c.categoria, c.localidad].filter(Boolean).join(' · ') || 'Sin datos'}
                     </p>
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>

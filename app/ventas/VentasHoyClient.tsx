@@ -3,10 +3,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft, Bell, ChevronDown, ChevronRight, ArrowRight, Droplet, Users, ShoppingBag,
+  ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Droplet, Users, ShoppingBag,
   DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar, CheckCircle2, Truck, RefreshCw,
+  Building2,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
+import NotificationsBell from '@/components/ui/NotificationsBell'
+import MiComision from './MiComision'
+import MiComisionVendedor from '@/app/terreno/MiComisionVendedor'
 import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango } from './hoyTypes'
 
 /**
@@ -149,6 +153,10 @@ interface FilaPedido {
   pedido: string; cliente: string; vendedor: string
   fechaPedido: string | null; fechaEntrega: string | null
   litros: number; revenue: number
+  /** Sólo en pedidos-periodo: hora literal del ERP + estado de despacho. */
+  fechaEntregaHora?: string | null
+  entregado?: boolean
+  localidad?: string | null
 }
 /** "24 latas" / "2 barriles" — singular/plural según el envase. */
 function fUnidades(unidades: number, envase: string): string {
@@ -257,7 +265,8 @@ function DetallePedidoProductosInline({ pedido }: { pedido: string }) {
 
 interface FilaPedidoCliente {
   pedido: string; fechaPedido: string | null
-  entregado: boolean; fechaEntrega: string | null; fechaEntregaHora: string | null
+  estado: 'entregado' | 'pendiente' | 'sin_informar'
+  fechaEntrega: string | null; fechaEntregaHora: string | null
   litros: number; revenue: number
 }
 
@@ -272,6 +281,16 @@ interface FilaPedidoCliente {
  *  solo pedido. Ahora es siempre UNA lista por pedido: número (#0...),
  *  fecha del pedido, estado (pendiente o entregado con su hora), y el
  *  detalle de productos de ese pedido.
+ *
+ *  Hay un tercer estado, "sin_informar": pedidos que el ERP todavía no marcó
+ *  ni pendiente ni entregado (entrega_informada=false, sin fecha_entrega).
+ *  Bug real detectado el 2026-08-03: con porEntrega=false (rangos anchos tipo
+ *  "Año") el conteo del cliente los incluye -filtra sólo por fecha_pedido-
+ *  pero antes no aparecían en ninguna de las dos listas de acá, así que el
+ *  cliente mostraba "2 pedidos" y al tocarlo salía "Sin pedidos en este
+ *  rango". Se piden aparte y sólo cuando porEntrega=false: con
+ *  porEntrega=true jamás se cuentan (no tienen fecha_entrega para caer en el
+ *  rango), así que pedirlos ahí sería ruido.
  *
  *  NO se muestra hora de pedido (sólo fecha): se intentó usar
  *  `ventas.created_at` como aproximación, pero el sync borra e reinserta
@@ -289,25 +308,35 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
   useEffect(() => {
     let vivo = true
     const base = `cliente=${encodeURIComponent(cliente)}&desde=${desde}&hasta=${hasta}`
-    Promise.all([
+    const fetches = [
       fetch(`/api/ventas/detalle?tipo=pedidos-pendientes-cliente&${base}`)
         .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error'))),
       fetch(`/api/ventas/detalle?tipo=pedidos-entregados-cliente&${base}&porEntrega=${porEntrega}`)
         .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error'))),
-    ])
-      .then(([pend, ent]) => {
+      porEntrega
+        ? Promise.resolve([])
+        : fetch(`/api/ventas/detalle?tipo=pedidos-sin-informar-cliente&${base}`)
+            .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error'))),
+    ] as const
+    Promise.all(fetches)
+      .then(([pend, ent, sinInformar]) => {
         if (!vivo) return
         const pendientes: FilaPedidoCliente[] = (Array.isArray(pend) ? pend : []).map((p: Record<string, unknown>) => ({
           pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
-          entregado: false, fechaEntrega: null, fechaEntregaHora: null,
+          estado: 'pendiente', fechaEntrega: null, fechaEntregaHora: null,
           litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
         }))
         const entregados: FilaPedidoCliente[] = (Array.isArray(ent) ? ent : []).map((p: Record<string, unknown>) => ({
           pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
-          entregado: true, fechaEntrega: (p.fechaEntrega as string) ?? null, fechaEntregaHora: (p.fechaEntregaHora as string) ?? null,
+          estado: 'entregado', fechaEntrega: (p.fechaEntrega as string) ?? null, fechaEntregaHora: (p.fechaEntregaHora as string) ?? null,
           litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
         }))
-        setPedidos([...pendientes, ...entregados])
+        const sinInformarFilas: FilaPedidoCliente[] = (Array.isArray(sinInformar) ? sinInformar : []).map((p: Record<string, unknown>) => ({
+          pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
+          estado: 'sin_informar', fechaEntrega: null, fechaEntregaHora: null,
+          litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
+        }))
+        setPedidos([...pendientes, ...entregados, ...sinInformarFilas])
       })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
@@ -317,27 +346,30 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
   if (!pedidos) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
   if (pedidos.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin pedidos en este rango.</p>
 
-  const ordenados = [...pedidos].sort((a, b) =>
-    (b.entregado ? b.fechaEntrega ?? '' : b.fechaPedido ?? '').localeCompare(a.entregado ? a.fechaEntrega ?? '' : a.fechaPedido ?? ''))
+  const fechaOrden = (p: FilaPedidoCliente) => (p.estado === 'entregado' ? p.fechaEntrega : p.fechaPedido) ?? ''
+  const ordenados = [...pedidos].sort((a, b) => fechaOrden(b).localeCompare(fechaOrden(a)))
 
   return (
     <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>PEDIDOS · {ordenados.length}</p>
       {ordenados.map(ped => {
         const horaEntrega = ped.fechaEntregaHora ? fHoraLiteral(ped.fechaEntregaHora) : null
+        const colorEstado = ped.estado === 'entregado' ? C.green : ped.estado === 'pendiente' ? C.amber : C.faint
         return (
           <div key={ped.pedido}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: ped.entregado ? C.green : C.amber }} />
+              <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: colorEstado }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>#{ped.pedido}</p>
                 <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
                   {ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha de pedido'}
                 </p>
-                <p style={{ fontSize: 11, fontWeight: 600, marginTop: 1, color: ped.entregado ? C.green : C.amber }}>
-                  {ped.entregado
+                <p style={{ fontSize: 11, fontWeight: 600, marginTop: 1, color: colorEstado }}>
+                  {ped.estado === 'entregado'
                     ? `Entregado el ${ped.fechaEntrega ? fFechaCorta(ped.fechaEntrega) : '—'}${horaEntrega ? ` a las ${horaEntrega}` : ''}`
-                    : 'Pendiente de entrega'}
+                    : ped.estado === 'pendiente'
+                      ? 'Pendiente de entrega'
+                      : 'Sin información de entrega del ERP'}
                 </p>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -353,56 +385,114 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
   )
 }
 
-function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega = true, desde, hasta, onClose }: {
-  tipo: 'productos' | 'clientes' | 'envase' | 'pedidos-origen' | 'clientes-por-entregar'
+type TipoDetalle = 'productos' | 'clientes' | 'envase' | 'pedidos-origen' | 'clientes-por-entregar' | 'pedidos-periodo'
+/** Vistas intercambiables desde el selector de "Venta área comercial". */
+const VISTAS_SELECTOR: { key: TipoDetalle; label: string }[] = [
+  { key: 'clientes', label: 'Clientes' },
+  { key: 'pedidos-periodo', label: 'Pedidos' },
+  { key: 'productos', label: 'Productos' },
+]
+
+/** Totales del período tal como los muestra el dashboard. Se pasan ya
+ *  calculados a propósito (ver comentario en el encabezado del sheet). */
+interface TotalesDetalle {
+  litros: number; revenue: number
+  litrosPorEntregar: number; revenuePorEntregar: number
+  litrosCerveza: number; litrosKombucha: number
+  clientes: number; pedidos: number
+}
+
+function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega = true, conSelector = false, tituloBase, totales, desde, hasta, onClose }: {
+  tipo: TipoDetalle
   envaseBucket?: string; categoria?: string; origenPedidos?: 'backlog' | 'mismo-periodo'
   /** Debe coincidir con el criterio de la tarjeta que abrió esto (ver ventas_dashboard_kpis) */
   porEntrega?: boolean
+  /** Muestra el selector Clientes/Pedidos/Productos y deja cambiar de vista sin cerrar. */
+  conSelector?: boolean
+  /** Encabezado fijo cuando hay selector — el subtítulo cambia con la vista, el título no. */
+  tituloBase?: string
+  totales?: TotalesDetalle
   desde: string; hasta: string; onClose: () => void
 }) {
-  const [filas, setFilas] = useState<(FilaProducto | FilaCliente | FilaPedido)[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [vista, setVista] = useState<TipoDetalle>(tipo)
+  // Las filas se guardan junto a la vista de la que vinieron, y `filas` se
+  // DERIVA de eso. Así, al cambiar de vista, la lista pasa a "cargando" sola
+  // — sin resetear estado dentro del effect (cascada de renders) y sin el
+  // riesgo de mostrar un instante las filas de la vista anterior.
+  const [datos, setDatos] = useState<{ tipo: TipoDetalle; filas: (FilaProducto | FilaCliente | FilaPedido)[] } | null>(null)
+  const [errorDe, setErrorDe] = useState<{ tipo: TipoDetalle; msg: string } | null>(null)
   const [busca, setBusca] = useState('')
   const [abierto, setAbierto] = useState<string | null>(null)
+
+  // Con selector la vista la manda el estado interno; sin selector, la prop.
+  const tipoActivo = conSelector ? vista : tipo
+  const filas = datos && datos.tipo === tipoActivo ? datos.filas : null
+  const error = errorDe && errorDe.tipo === tipoActivo ? errorDe.msg : null
 
   useEffect(() => {
     let vivo = true
     const qs = [
-      tipo === 'envase' ? `bucket=${encodeURIComponent(envaseBucket ?? '')}` : '',
-      tipo === 'productos' && categoria ? `categoria=${encodeURIComponent(categoria)}` : '',
-      tipo === 'pedidos-origen' ? `origen=${origenPedidos}` : '',
+      tipoActivo === 'envase' ? `bucket=${encodeURIComponent(envaseBucket ?? '')}` : '',
+      tipoActivo === 'productos' && categoria ? `categoria=${encodeURIComponent(categoria)}` : '',
+      tipoActivo === 'pedidos-origen' ? `origen=${origenPedidos}` : '',
       `porEntrega=${porEntrega}`,
     ].filter(Boolean).join('&')
-    fetch(`/api/ventas/detalle?tipo=${tipo}&${qs}&desde=${desde}&hasta=${hasta}`)
+    fetch(`/api/ventas/detalle?tipo=${tipoActivo}&${qs}&desde=${desde}&hasta=${hasta}`)
       .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
-      .then(d => { if (vivo) setFilas(Array.isArray(d) ? d : []) })
-      .catch(e => { if (vivo) setError(String(e)) })
+      .then(d => { if (vivo) setDatos({ tipo: tipoActivo, filas: Array.isArray(d) ? d : [] }) })
+      .catch(e => { if (vivo) setErrorDe({ tipo: tipoActivo, msg: String(e) }) })
     return () => { vivo = false }
-  }, [tipo, envaseBucket, categoria, origenPedidos, porEntrega, desde, hasta])
+  }, [tipoActivo, envaseBucket, categoria, origenPedidos, porEntrega, desde, hasta])
 
-  const esProd = tipo === 'productos' || tipo === 'envase'
-  const esPedidos = tipo === 'pedidos-origen'
-  const titulo = tipo === 'envase' ? `Productos · ${envaseBucket}`
-    : tipo === 'productos' && categoria ? `Productos · ${categoria}`
-    : esPedidos ? (origenPedidos === 'backlog' ? 'Pedidos de backlog anterior' : 'Pedidos tomados este período')
+  const esProd = tipoActivo === 'productos' || tipoActivo === 'envase'
+  const esPedidos = tipoActivo === 'pedidos-origen' || tipoActivo === 'pedidos-periodo'
+  const titulo = tituloBase ? tituloBase
+    : tipoActivo === 'envase' ? `Productos · ${envaseBucket}`
+    : tipoActivo === 'productos' && categoria ? `Productos · ${categoria}`
+    : tipoActivo === 'pedidos-periodo' ? 'Pedidos del período'
+    : tipoActivo === 'pedidos-origen' ? (origenPedidos === 'backlog' ? 'Pedidos de backlog anterior' : 'Pedidos tomados este período')
     : esProd ? 'Productos vendidos'
-    : tipo === 'clientes-por-entregar' ? 'Clientes con venta por entregar' : 'Clientes que compraron'
+    : tipoActivo === 'clientes-por-entregar' ? 'Clientes con venta por entregar' : 'Clientes que compraron'
 
   const visibles = useMemo(() => {
     if (!filas) return []
     const q = busca.trim().toLowerCase()
     if (!q) return filas
     return filas.filter(f => {
-      if (esProd) return (f as FilaProducto).producto.toLowerCase().includes(q)
+      if (esProd) {
+        const p = f as FilaProducto
+        // También por envase y categoría: buscar "barril" o "kombucha" es
+        // tan natural como buscar el nombre del producto.
+        return p.producto.toLowerCase().includes(q) || p.envase.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q)
+      }
       if (esPedidos) {
         const p = f as FilaPedido
-        return p.pedido.toLowerCase().includes(q) || p.cliente.toLowerCase().includes(q) || (p.vendedor ?? '').toLowerCase().includes(q)
+        return p.pedido.toLowerCase().includes(q) || p.cliente.toLowerCase().includes(q)
+          || (p.vendedor ?? '').toLowerCase().includes(q) || (p.localidad ?? '').toLowerCase().includes(q)
       }
-      return (f as FilaCliente).cliente.toLowerCase().includes(q) || ((f as FilaCliente).vendedor ?? '').toLowerCase().includes(q)
+      const c = f as FilaCliente
+      return c.cliente.toLowerCase().includes(q) || (c.vendedor ?? '').toLowerCase().includes(q)
+        || (c.localidad ?? '').toLowerCase().includes(q)
     })
   }, [filas, busca, esProd, esPedidos])
 
   const totalLitros = visibles.reduce((s, f) => s + f.litros, 0)
+
+  /** Conteo del subtítulo. En Pedidos se desglosa entregados vs por entregar
+   *  a propósito: la lista trae ambos, pero la tarjeta "Pedidos" de arriba
+   *  cuenta sólo los entregados — mostrar el total pelado (ej. "133 pedidos"
+   *  contra "98" arriba) parecería un número que no calza. */
+  const resumenFilas = useMemo(() => {
+    if (!filas) return null
+    if (tipoActivo === 'pedidos-periodo') {
+      const entregados = filas.filter(f => (f as FilaPedido).entregado === true).length
+      const pendientes = filas.length - entregados
+      return pendientes > 0
+        ? `${fNum(entregados)} entregados · ${fNum(pendientes)} por entregar`
+        : `${fNum(entregados)} ${entregados === 1 ? 'pedido' : 'pedidos'}`
+    }
+    return `${fNum(filas.length)} ${esProd ? 'productos' : esPedidos ? 'pedidos' : 'clientes'}`
+  }, [filas, tipoActivo, esProd, esPedidos])
 
   return (
     <div
@@ -420,7 +510,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
               <p style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{titulo}</p>
               <p style={{ fontSize: 12, color: C.muted }}>
                 {fFechaCorta(desde)} – {fFechaCorta(hasta)}
-                {filas && ` · ${filas.length} ${esProd ? 'productos' : esPedidos ? 'pedidos' : 'clientes'}`}
+                {resumenFilas && ` · ${resumenFilas}`}
               </p>
             </div>
             <button onClick={onClose} aria-label="Cerrar"
@@ -428,16 +518,88 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
               ✕
             </button>
           </div>
-          {filas && filas.length > 6 && (
+
+          {/* Totales del período — vienen del dashboard, NO se recalculan de las
+              filas de cada vista: así Clientes, Pedidos y Productos muestran
+              exactamente los mismos números y es imposible que "no calcen".
+              (La vista Productos no puede desglosar lo pendiente por producto,
+              y recalcular por vista habría dado tres totales distintos.) */}
+          {totales && (
+            <div style={{ marginTop: 10, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 10.5, color: C.muted, fontWeight: 600 }}>Entregado</p>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: C.text, whiteSpace: 'nowrap' }}>{fL(totales.litros)}</p>
+                  <p style={{ fontSize: 11.5, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(totales.revenue)}</p>
+                </div>
+                {totales.litrosPorEntregar > 0 && (
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 10.5, color: C.amber, fontWeight: 600 }}>Por entregar</p>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: C.amber, whiteSpace: 'nowrap' }}>{fL(totales.litrosPorEntregar)}</p>
+                    <p style={{ fontSize: 11.5, color: C.amber, whiteSpace: 'nowrap' }}>{fPesoFull(totales.revenuePorEntregar)}</p>
+                  </div>
+                )}
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 10.5, color: C.muted, fontWeight: 600 }}>Total</p>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: C.blue, whiteSpace: 'nowrap' }}>{fL(totales.litros + totales.litrosPorEntregar)}</p>
+                  <p style={{ fontSize: 11.5, color: C.blue, whiteSpace: 'nowrap' }}>{fPesoFull(totales.revenue + totales.revenuePorEntregar)}</p>
+                </div>
+              </div>
+              {(totales.litrosCerveza > 0 || totales.litrosKombucha > 0) && (
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+                  🍺 Cerveza {fL(totales.litrosCerveza)} · 🧃 Kombucha {fL(totales.litrosKombucha)}
+                  {' · '}{fNum(totales.clientes)} {totales.clientes === 1 ? 'cliente' : 'clientes'}
+                  {/* "entregados" explícito: es el mismo número de la tarjeta
+                      "Pedidos" de arriba, que no cuenta los pendientes. */}
+                  {' · '}{fNum(totales.pedidos)} {totales.pedidos === 1 ? 'pedido entregado' : 'pedidos entregados'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {conSelector && (
+            <div style={{ display: 'flex', gap: 4, background: '#E2E8F0', borderRadius: 11, padding: 3, marginTop: 10 }}>
+              {VISTAS_SELECTOR.map(v => {
+                const on = v.key === vista
+                return (
+                  <button
+                    key={v.key}
+                    onClick={() => { setVista(v.key); setBusca(''); setAbierto(null) }}
+                    style={{
+                      flex: 1, padding: '8px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
+                      background: on ? C.card : 'transparent', color: on ? C.text : C.muted,
+                      fontSize: 13, fontWeight: on ? 700 : 600, minHeight: 36,
+                      boxShadow: on ? '0 1px 3px rgba(15,23,42,.12)' : 'none',
+                    }}
+                  >
+                    {v.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Con selector el buscador queda SIEMPRE montado (aunque las filas
+              estén cargando): si se desmontara al cambiar de vista, parpadearía
+              y se perdería el foco del teclado en el celular. */}
+          {(conSelector || (filas && filas.length > 6)) && (
             <input
               value={busca}
               onChange={e => setBusca(e.target.value)}
               placeholder={esProd ? 'Buscar producto…' : esPedidos ? 'Buscar pedido, cliente o vendedor…' : 'Buscar cliente o vendedor…'}
               style={{
-                marginTop: 10, width: '100%', padding: '9px 12px', borderRadius: 10,
+                marginTop: 10, width: '100%', padding: '10px 12px', borderRadius: 10,
                 border: `1px solid ${C.line}`, background: C.card, fontSize: 13, color: C.text, outline: 'none',
               }}
             />
+          )}
+          {/* Subtotal de la búsqueda — etiquetado aparte del total del período
+              para que no se confunda con él. */}
+          {busca.trim() && filas && (
+            <p style={{ fontSize: 11.5, color: C.muted, marginTop: 7 }}>
+              {visibles.length} {visibles.length === 1 ? 'resultado' : 'resultados'}
+              {visibles.length > 0 && <> · <b style={{ color: C.text }}>{fL(totalLitros)}</b> · <b style={{ color: C.text }}>{fPesoFull(visibles.reduce((s, f) => s + f.revenue, 0))}</b></>}
+            </p>
           )}
         </div>
 
@@ -461,6 +623,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                 const ped = esPedidos ? (f as FilaPedido) : null
                 const c = esProd || esPedidos ? null : (f as FilaCliente)
                 const soloPendiente = !!c && c.litros === 0 && !!c.litrosPorEntregar && c.litrosPorEntregar > 0
+                const pedPendiente = !!ped && ped.entregado === false
                 const tintCat = p?.categoria === 'Kombucha' ? C.green : p?.categoria === 'Cerveza' ? C.hero : C.purple
                 // Clave de expansión: cliente, pedido o producto+envase, según
                 // la vista. Las tres caben en el mismo estado `abierto` porque
@@ -491,12 +654,33 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                           {p
                             ? [p.envase, fUnidades(p.unidades, p.envase), p.categoria, `${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}`].filter(Boolean).join(' · ')
                             : ped
-                            ? [
-                                `#${ped.pedido}`, ped.vendedor,
-                                ped.fechaPedido && ped.fechaEntrega
-                                  ? `pedido ${fFechaCorta(ped.fechaPedido)} → entregado ${fFechaCorta(ped.fechaEntrega)}`
-                                  : null,
-                              ].filter(Boolean).join(' · ')
+                            ? (
+                              <>
+                                {[`#${ped.pedido}`, ped.vendedor, ped.localidad].filter(Boolean).join(' · ')}
+                                {ped.fechaPedido && (
+                                  <>
+                                    {' · '}
+                                    <span style={{ whiteSpace: 'nowrap' }}>pedido {fFechaCorta(ped.fechaPedido)}</span>
+                                  </>
+                                )}
+                                {/* La hora sólo existe cuando el ERP informó la entrega
+                                    (fecha_entrega_hora); el pedido en sí nunca trae hora. */}
+                                {ped.fechaEntrega ? (
+                                  <>
+                                    {' · '}
+                                    <span style={{ color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                      entregado {fFechaCorta(ped.fechaEntrega)}
+                                      {ped.fechaEntregaHora && ` a las ${fHoraLiteral(ped.fechaEntregaHora)}`}
+                                    </span>
+                                  </>
+                                ) : ped.entregado === false ? (
+                                  <>
+                                    {' · '}
+                                    <span style={{ color: C.amber, fontWeight: 600, whiteSpace: 'nowrap' }}>por entregar</span>
+                                  </>
+                                ) : null}
+                              </>
+                            )
                             : (
                               <>
                                 {[c!.vendedor, c!.localidad].filter(Boolean).join(' · ')}
@@ -534,8 +718,10 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                           </>
                         ) : (
                           <>
-                            <p style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(f.litros)}</p>
-                            <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(f.revenue)}</p>
+                            {/* Un pedido aún sin despachar se pinta ámbar, igual que
+                                el "por entregar" del resto de la pantalla. */}
+                            <p style={{ fontSize: 14, fontWeight: 700, color: pedPendiente ? C.amber : C.text, whiteSpace: 'nowrap' }}>{fL(f.litros)}</p>
+                            <p style={{ fontSize: 12, color: pedPendiente ? C.amber : C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(f.revenue)}</p>
                           </>
                         )}
                         {p && p.unidades > 0 && (
@@ -583,7 +769,14 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
 /** Fila clickeable de "Mix de productos" dentro del hero —
  *  mismo patrón (ícono, barra, litros, % y flecha) pero con los tokens de
  *  color del hero en vez de los de tarjeta clara. Reemplaza a la extinta
- *  tarjeta blanca "PRODUCT MIX", que quedaba duplicando esta misma info. */
+ *  tarjeta blanca "PRODUCT MIX", que quedaba duplicando esta misma info.
+ *
+ *  Único % de variación por categoría en toda la pantalla — "Latas y
+ *  barriles" (más abajo) ya NO muestra su propio %, a propósito: mostrar
+ *  dos números de crecimiento distintos para la misma categoría (uno
+ *  combinando lata+barril, otro por formato) generaba dudas constantes de
+ *  que algo estaba mal calculado, aunque ambos fueran matemáticamente
+ *  correctos. Se resolvió eliminando el segundo número, no explicándolo. */
 function FilaMixHero({ nombre, litros, total, pct, color, colorSoft, emoji, onClick }: {
   nombre: string; litros: number; total: number; pct: number | null
   color: string; colorSoft: string; emoji: string; onClick: () => void
@@ -840,22 +1033,29 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega }: {
 }
 
 // ── Vista ────────────────────────────────────────────────────────────────────
-export default function VentasHoyClient({ data }: { data: HoyData }) {
+export default function VentasHoyClient({ data, veComision = false, veComisionVendedor = false }: {
+  data: HoyData; veComision?: boolean; veComisionVendedor?: boolean
+}) {
   const router = useRouter()
   // Si la URL trae un rango a mano, se entra directo en esa vista
   const [rango, setRango] = useState<RangoKey>(data.custom ? 'custom' : 'periodo')
   const [periodoIdx, setPeriodoIdx] = useState(0)   // 0 = período activo
   const [showSettings, setShowSettings] = useState(false)
-  const [detalle, setDetalle] = useState<'productos' | 'clientes' | 'envase' | 'pedidos-origen' | 'clientes-por-entregar' | null>(null)
+  const [detalle, setDetalle] = useState<TipoDetalle | null>(null)
   const [detalleEnvaseBucket, setDetalleEnvaseBucket] = useState<string | undefined>(undefined)
   const [detalleCategoria, setDetalleCategoria] = useState<string | undefined>(undefined)
   const [detalleOrigenPedidos, setDetalleOrigenPedidos] = useState<'backlog' | 'mismo-periodo' | undefined>(undefined)
-  function abrirDetalle(tipo: 'productos' | 'clientes' | 'envase' | 'pedidos-origen' | 'clientes-por-entregar', extra?: {
+  const [detalleConSelector, setDetalleConSelector] = useState(false)
+  const [detalleTitulo, setDetalleTitulo] = useState<string | undefined>(undefined)
+  function abrirDetalle(tipo: TipoDetalle, extra?: {
     envaseBucket?: string; categoria?: string; origenPedidos?: 'backlog' | 'mismo-periodo'
+    conSelector?: boolean; titulo?: string
   }) {
     setDetalleEnvaseBucket(extra?.envaseBucket)
     setDetalleCategoria(extra?.categoria)
     setDetalleOrigenPedidos(extra?.origenPedidos)
+    setDetalleConSelector(extra?.conSelector ?? false)
+    setDetalleTitulo(extra?.titulo)
     setDetalle(tipo)
   }
   const [showPeriodos, setShowPeriodos] = useState(false)
@@ -974,14 +1174,14 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
         </button>
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.1 }}>Ventas</h1>
             <p style={{ fontSize: 12, color: C.muted, textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {hoyTxt}
             </p>
           </div>
-          <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div style={{ flexShrink: 0 }}>
             <button
               onClick={() => setShowActualizaciones(v => !v)}
               aria-label="Cargas de datos"
@@ -997,7 +1197,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
               <>
                 <div onClick={() => setShowActualizaciones(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
                 <div style={{
-                  position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 280, maxWidth: '80vw', zIndex: 41,
+                  position: 'absolute', top: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)', width: 280, maxWidth: '80vw', zIndex: 41,
                   background: C.card, border: `1px solid ${C.line}`, borderRadius: 12,
                   boxShadow: '0 8px 28px rgba(15,23,42,.14)', overflow: 'hidden',
                 }}>
@@ -1032,16 +1232,7 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             )}
           </div>
 
-          <button
-            onClick={() => router.push('/ventas/misiones')}
-            aria-label="Alertas"
-            style={{ position: 'relative', width: 40, height: 40, borderRadius: 12, background: C.card, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
-          >
-            <Bell size={18} color={C.text} />
-            {data.alertas.some(a => a.tipo === 'alerta') && (
-              <span style={{ position: 'absolute', top: 9, right: 9, width: 8, height: 8, borderRadius: '50%', background: C.blue, border: `2px solid ${C.card}` }} />
-            )}
-          </button>
+          <NotificationsBell inline variant="light" />
           <button
             onClick={() => setShowSettings(true)}
             aria-label="Cuenta"
@@ -1235,6 +1426,39 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           </div>
         </div>
 
+        {/* Remuneración variable propia (cláusula NOVENA del contrato). Va
+            arriba de todo, antes del hero, por pedido de Claudio: es lo que
+            quiere ver primero al abrir. Sólo se monta con el permiso
+            ve_comision_gerente — no lo ven los demás admins. */}
+        {veComision && (
+          <MiComision
+            key={`${d.desde}_${d.hasta}`}
+            desde={d.desde}
+            hasta={d.hasta}
+            nombrePeriodo={
+              rango === 'periodo' && periodoSel ? periodoSel.nombre
+                : rango === 'custom' ? (customPeriodoNombre ?? 'Rango elegido')
+                : (RANGOS.find(r => r.key === rango)?.label ?? 'Período')
+            }
+          />
+        )}
+
+        {/* Remuneración variable propia (cláusula TERCERA del contrato) para
+            Yadro y Marcelo — pedido de Claudio: debe vivir en Ventas, en el
+            mismo lugar que la suya, no en Terreno. */}
+        {veComisionVendedor && (
+          <MiComisionVendedor
+            key={`vendedor_${d.desde}_${d.hasta}`}
+            desde={d.desde}
+            hasta={d.hasta}
+            nombrePeriodo={
+              rango === 'periodo' && periodoSel ? periodoSel.nombre
+                : rango === 'custom' ? (customPeriodoNombre ?? 'Rango elegido')
+                : (RANGOS.find(r => r.key === rango)?.label ?? 'Período')
+            }
+          />
+        )}
+
         {/* Hero — rediseño pedido por Claudio: "por entregar" y "total" pasan
             a ser tan grandes como litros entregado (antes iban en una línea
             de 12px); se saca Clientes; se agrega el monto total de la venta
@@ -1357,8 +1581,16 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             fila "Total" de abajo. */}
         <div style={{ background: C.hero, padding: '0 20px 20px', color: '#fff' }}>
           <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '0 0 18px' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>MIX DE PRODUCTOS</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>MIX DE PRODUCTOS</p>
+              {/* Aclaración pedida por Claudio: el % de variación acá suma lata +
+                  barril de la categoría — puede no calzar con el % de la tarjeta
+                  "Latas y barriles" de más abajo, que mide cada formato aparte
+                  (ej. si el barril de algo cae mucho más fuerte que la lata, el
+                  combinado queda entre medio de los dos, no igual a ninguno). */}
+              <p style={{ fontSize: 10.5, color: '#64748B', marginTop: 1 }}>% incluye lata + barril combinados</p>
+            </div>
             <span style={{ fontSize: 12, color: '#94A3B8' }}>{fNum(actual.clientes)} clientes</span>
           </div>
           {actual.litros === 0 ? (
@@ -1402,6 +1634,117 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             valor={fPesoFull(d.entregas.revenuePorEntregar)} pct={null}
             onClick={() => abrirDetalle('clientes-por-entregar')} />
         </div>
+
+        {/* Venta área comercial — el "total" del equipo, justo antes del
+            ranking que lo desglosa por vendedor. Los números son los MISMOS
+            de las tarjetas de arriba (entregado = Litros vendidos, por
+            entregar = Venta por entregar): es la misma verdad agrupada, no
+            otro cálculo. Es la única puerta de entrada al detalle con
+            selector Clientes/Pedidos/Productos. */}
+        {(() => {
+          const litrosTotal = actual.litros + d.entregas.litrosPorEntregar
+          const revenueTotal = actual.revenue + d.entregas.revenuePorEntregar
+          const pctEntregado = litrosTotal > 0 ? (actual.litros / litrosTotal) * 100 : 0
+          return (
+            <button
+              onClick={() => abrirDetalle('clientes', { conSelector: true, titulo: 'Venta área comercial' })}
+              style={{
+                background: C.card, borderRadius: 18, padding: 18, width: '100%',
+                border: `1px solid ${C.line}`, textAlign: 'left', cursor: 'pointer', font: 'inherit', color: C.text,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <span style={{ width: 36, height: 36, borderRadius: 11, background: C.amberSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Building2 size={18} color={C.amber} />
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>VENTA ÁREA COMERCIAL</p>
+                  <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                    Todos los vendedores · {fNum(actual.clientes)} {actual.clientes === 1 ? 'cliente' : 'clientes'}
+                  </p>
+                </div>
+                <span style={{ width: 34, height: 34, borderRadius: '50%', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <ArrowRight size={16} color="#F59E0B" />
+                </span>
+              </div>
+
+              <p style={{ fontSize: 30, fontWeight: 800, color: C.text, letterSpacing: '-1px', lineHeight: 1 }}>
+                {fPesoFull(revenueTotal)}
+              </p>
+              <p style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>
+                {fL(litrosTotal)} · entregado + por entregar
+              </p>
+
+              {litrosTotal > 0 && (
+                <div style={{ display: 'flex', height: 7, borderRadius: 4, overflow: 'hidden', background: C.line, marginTop: 14 }}>
+                  <div style={{ width: `${pctEntregado}%`, background: C.green }} />
+                  <div style={{ width: `${100 - pctEntregado}%`, background: C.amber }} />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 130px', minWidth: 0 }}>
+                  <p style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.green, flexShrink: 0 }} />
+                    Entregado
+                  </p>
+                  <p style={{ fontSize: 17, fontWeight: 800, color: C.green, letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+                    {fL(actual.litros)}
+                  </p>
+                  <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenue)}</p>
+                </div>
+                <div style={{ flex: '1 1 130px', minWidth: 0 }}>
+                  <p style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.amber, flexShrink: 0 }} />
+                    Por entregar
+                  </p>
+                  <p style={{ fontSize: 17, fontWeight: 800, color: C.amber, letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+                    {fL(d.entregas.litrosPorEntregar)}
+                  </p>
+                  <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(d.entregas.revenuePorEntregar)}</p>
+                </div>
+              </div>
+
+              {/* Cerveza vs kombucha. Va rotulado "del entregado" a propósito:
+                  estas cifras salen de los KPIs de lo ENTREGADO y no incluyen
+                  lo por entregar, así que no suman el total grande de arriba.
+                  Sin el rótulo parecería que los números no calzan. */}
+              {actual.litros > 0 && (
+                <>
+                  <div style={{ height: 1, background: C.line, margin: '14px 0 12px' }} />
+                  <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: '0.04em', marginBottom: 9 }}>
+                    MIX DEL ENTREGADO
+                  </p>
+                  {([
+                    { nombre: 'Cerveza',  emoji: '🍺', litros: actual.litrosCerveza,  revenue: actual.revenueCerveza,  color: C.amber },
+                    { nombre: 'Kombucha', emoji: '🧃', litros: actual.litrosKombucha, revenue: actual.revenueKombucha, color: C.green },
+                    { nombre: 'Otros',    emoji: '📦', litros: actual.litrosOtros,    revenue: actual.revenueOtros,    color: C.purple },
+                  ] as const).filter(cat => cat.litros > 0 || cat.revenue !== 0).map(cat => {
+                    const pct = (cat.litros / actual.litros) * 100
+                    return (
+                      <div key={cat.nombre} style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9 }}>
+                        <span style={{ fontSize: 15, flexShrink: 0 }}>{cat.emoji}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{cat.nombre}</span>
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: cat.color }}>{Math.round(pct)}%</span>
+                          </div>
+                          <div style={{ height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: cat.color, borderRadius: 3 }} />
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(cat.litros)}</p>
+                          <p style={{ fontSize: 11.5, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(cat.revenue)}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </>
+              )}
+            </button>
+          )
+        })()}
 
         {/* Ranking */}
         <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: '16px 16px 6px' }}>
@@ -1497,6 +1840,15 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                 const esKombucha = e.tipo.includes('Kombucha')
                 const tint = esCerveza ? C.hero : esKombucha ? C.green : C.amber
                 const soft = esCerveza ? '#E2E8F0' : esKombucha ? C.greenSoft : C.amberSoft
+                // Foto real representativa por bucket (no hay una foto "genérica
+                // de cerveza en lata" o "de kombucha en lata" en sí, así que se usa
+                // un producto real de cada categoría) — pedido de Claudio en vez
+                // de los emoji 🥫/🛢️ genéricos de antes.
+                const foto = esBarril
+                  ? '/productos/cerveza/barril.webp'
+                  : esCerveza ? '/productos/cerveza/mocho.webp'
+                  : esKombucha ? '/productos/kombucha/berry-menta.webp'
+                  : null
                 return (
                   <button
                     key={e.tipo}
@@ -1504,7 +1856,12 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                     style={{ background: soft, borderRadius: 12, padding: '12px 13px', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-                      <span style={{ fontSize: 17 }}>{esBarril ? '🛢️' : '🥫'}</span>
+                      {foto ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={foto} alt="" width={22} height={22} style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'contain', background: '#fff', flexShrink: 0 }} />
+                      ) : (
+                        <span style={{ fontSize: 17 }}>🥫</span>
+                      )}
                       <span style={{ fontSize: 12, fontWeight: 600, color: C.text, minWidth: 0, wordBreak: 'break-word' }}>{e.tipo}</span>
                       <ChevronRight size={14} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0 }} />
                     </div>
@@ -1514,9 +1871,6 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
                     <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
                       {esBarril ? 'barriles' : 'latas'} · {fL(e.litros)}
                     </p>
-                    <div style={{ marginTop: 5 }}>
-                      <Delta pct={variacion(e.unidades, e.unidadesPrev)} size={11} />
-                    </div>
                   </button>
                 )
               })}
@@ -1604,6 +1958,18 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
           envaseBucket={detalleEnvaseBucket}
           categoria={detalleCategoria}
           origenPedidos={detalleOrigenPedidos}
+          conSelector={detalleConSelector}
+          tituloBase={detalleTitulo}
+          totales={detalleConSelector ? {
+            litros: actual.litros,
+            revenue: actual.revenue,
+            litrosPorEntregar: d.entregas.litrosPorEntregar,
+            revenuePorEntregar: d.entregas.revenuePorEntregar,
+            litrosCerveza: actual.litrosCerveza,
+            litrosKombucha: actual.litrosKombucha,
+            clientes: actual.clientes,
+            pedidos: actual.pedidos,
+          } : undefined}
           porEntrega={d.porEntrega}
           desde={d.desde}
           hasta={d.hasta}
@@ -1612,6 +1978,8 @@ export default function VentasHoyClient({ data }: { data: HoyData }) {
             setDetalleEnvaseBucket(undefined)
             setDetalleCategoria(undefined)
             setDetalleOrigenPedidos(undefined)
+            setDetalleConSelector(false)
+            setDetalleTitulo(undefined)
           }}
         />
       )}

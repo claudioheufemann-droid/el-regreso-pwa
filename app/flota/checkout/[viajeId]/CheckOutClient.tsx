@@ -6,6 +6,8 @@ import { Camera, CheckCircle, Fuel, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
+import { compressImage } from '@/lib/compress-image'
+import { fetchConTimeout } from '@/lib/utils'
 
 const F = '#D4AF37'
 const F_BORDER = 'rgba(212,175,55,0.28)'
@@ -154,11 +156,12 @@ export default function CheckOutClient({ user, viaje }: Props) {
     setAnalizandoOdo(true)
     setKmLeido(null)
     try {
-      const base64 = await fileToBase64(file)
-      const res = await fetch('/api/analizar-odometro', {
+      const comprimido = await compressImage(file)
+      const base64 = await fileToBase64(comprimido)
+      const res = await fetchConTimeout('/api/analizar-odometro', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagen: base64, tipo: file.type }),
+        body: JSON.stringify({ imagen: base64, tipo: comprimido.type }),
       })
       const { km } = await res.json()
       if (km && km > (viaje.km_inicio ?? 0)) { setKmFin(String(km)); setKmLeido(String(km)) }
@@ -174,11 +177,12 @@ export default function CheckOutClient({ user, viaje }: Props) {
     setIaFalloComb(false)
     setMostrarSelectorComb(false)
     try {
-      const base64 = await fileToBase64(file)
-      const res = await fetch('/api/analizar-combustible', {
+      const comprimido = await compressImage(file)
+      const base64 = await fileToBase64(comprimido)
+      const res = await fetchConTimeout('/api/analizar-combustible', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagen: base64, tipo: file.type }),
+        body: JSON.stringify({ imagen: base64, tipo: comprimido.type }),
       })
       const { nivel } = await res.json()
       if (nivel) {

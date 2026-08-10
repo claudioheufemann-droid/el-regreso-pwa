@@ -1,0 +1,34 @@
+name: Recordatorio de fotos pendientes — Terreno
+
+on:
+  schedule:
+    # Cada hora en punto. El plan Vercel del proyecto es Hobby (cron nativo
+    # limitado a 1 vez/día), así que el disparo horario vive acá — mismo
+    # patrón que misiones-semanal.yml. La ruta en sí ya filtra el horario
+    # de silencio (08:00-21:00 Chile) y quién realmente tiene fotos
+    # pendientes, así que no pasa nada si GitHub la dispara de más.
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  recordar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Llamar /api/cron/fotos-pendientes
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://el-regreso-pwa.vercel.app/api/cron/fotos-pendientes")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Error al pedir recordatorios de fotos (HTTP $HTTP_CODE)"
+            exit 1
+          fi

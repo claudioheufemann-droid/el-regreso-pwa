@@ -196,20 +196,34 @@ function mapConsumoInterno(rows: Record<string, unknown>[] | null): ConsumoInter
   }))
 }
 
-/** Unidades por envase del rango, con las del rango previo para comparar. */
+/**
+ * Unidades por envase del rango, con las del rango previo para comparar.
+ *
+ * Un formato que tenía volumen en el período previo y cae a CERO en el
+ * actual (ej. "Barril Kombucha" deja de venderse) antes desaparecía sin
+ * dejar rastro acá — solo se mapeaban las filas del período actual. Eso
+ * hacía parecer "roto" el % de "Mix de productos" (que sí suma ese
+ * volumen perdido en su categoría) contra esta tarjeta, que simplemente
+ * no mostraba nada de ese formato. Se agrega explícito en 0 con -100%
+ * para que la caída sea visible, no silenciosa.
+ */
 function armarEnvases(
   rows: Record<string, unknown>[] | null,
   prevRows: Record<string, unknown>[] | null,
 ): EnvaseRango[] {
   const prev = new Map<string, number>()
   for (const r of prevRows ?? []) prev.set(String(r.tipo), Number(r.unidades ?? 0))
-  return (rows ?? []).map(r => ({
+  const tiposActuales = new Set((rows ?? []).map(r => String(r.tipo)))
+  const desaparecidos: EnvaseRango[] = [...prev.entries()]
+    .filter(([tipo, unidadesPrev]) => unidadesPrev > 0 && !tiposActuales.has(tipo))
+    .map(([tipo, unidadesPrev]) => ({ tipo, unidades: 0, litros: 0, revenue: 0, unidadesPrev }))
+  return [...(rows ?? []).map(r => ({
     tipo: String(r.tipo),
     unidades: Number(r.unidades ?? 0),
     litros: Number(r.litros ?? 0),
     revenue: Number(r.revenue ?? 0),
     unidadesPrev: prev.get(String(r.tipo)) ?? 0,
-  }))
+  })), ...desaparecidos]
 }
 
 export async function getHoyData(

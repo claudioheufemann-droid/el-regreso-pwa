@@ -10,6 +10,10 @@ export interface AppUser {
   macroArea: string | null   // null = admin global (ve todo)
   avatarUrl: string | null
   region: string | null      // null = sin scope geográfico (admin); ej: 'Los Ríos'
+  /** Acceso al módulo Rentabilidad (costos/márgenes internos) — separado de isAdmin, solo Claudio/Benja/Douglas. */
+  puedeVerMargenes: boolean
+  /** Acceso a su propia remuneración variable (contrato). Ver lib/comisiones.ts. */
+  veComisionGerente: boolean
   /**
    * Nombres con que este usuario aparece en el ERP (ventas.vendedor_actual /
    * misiones.vendedor). Vacío = no es vendedor de terreno.
@@ -32,7 +36,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     // Primary lookup: by auth UUID
     let { data: profile } = await supabase
       .from('users')
-      .select('nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp')
+      .select('nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, ve_comision_gerente')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -40,7 +44,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     if (!profile && user.email) {
       const res = await supabase
         .from('users')
-        .select('nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp')
+        .select('nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, ve_comision_gerente')
         .eq('email', user.email)
         .maybeSingle()
       profile = res.data
@@ -58,6 +62,8 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
       avatarUrl: profile.avatar_url ?? null,
       region: profile.region ?? null,
       vendedoresErp: profile.vendedores_erp ?? [],
+      puedeVerMargenes: !!profile.puede_ver_margenes,
+      veComisionGerente: !!profile.ve_comision_gerente,
     }
   } catch {
     return null

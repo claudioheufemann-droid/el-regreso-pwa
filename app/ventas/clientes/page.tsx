@@ -98,6 +98,11 @@ export default async function ClientesPage() {
     })(),
   ])
 
+  // Servicios de enlatado/co-packing a terceros (EWU Ginger Beer, etc.) no son
+  // venta de cerveza propia — se excluyen antes de sumar litros/venta por
+  // cliente y por vendedor.
+  const ventasPeriodoFiltradas = ventasPeriodo.filter(v => !esClienteExcluido(v.nombre_fantasia))
+
   // ── Mapas de lookup ────────────────────────────────────────────────────────
   const contactoMap = new Map<string, { fecha: string; tipo: string; vendedor: string }>()
   for (const c of ultimosContactos ?? [])
@@ -105,7 +110,7 @@ export default async function ClientesPage() {
       contactoMap.set(c.cliente_nombre_fantasia, { fecha: c.fecha_hora, tipo: c.tipo, vendedor: c.vendedor })
 
   const periodoMap = new Map<string, { litrosPeriodo: number; ventaPeriodo: number }>()
-  for (const v of ventasPeriodo ?? []) {
+  for (const v of ventasPeriodoFiltradas) {
     if (!v.nombre_fantasia) continue
     const ex = periodoMap.get(v.nombre_fantasia)
     if (!ex) periodoMap.set(v.nombre_fantasia, { litrosPeriodo: v.litros ?? 0, ventaPeriodo: v.total_sin_impuesto ?? 0 })
@@ -140,7 +145,7 @@ export default async function ClientesPage() {
 
   // Totales por vendedor
   const totalesPorVendedor: Record<string, { litros: number; venta: number }> = {}
-  for (const v of ventasPeriodo ?? []) {
+  for (const v of ventasPeriodoFiltradas) {
     const vend = v.vendedor_actual; if (!vend) continue
     if (!totalesPorVendedor[vend]) totalesPorVendedor[vend] = { litros: 0, venta: 0 }
     totalesPorVendedor[vend].litros += v.litros ?? 0
