@@ -94,37 +94,40 @@ function Delta({ pct, size = 12 }: { pct: number | null; size?: number }) {
  *  nombre+valor al centro, flecha en círculo blanco a la derecha. Sin
  *  gráfico ni guión de "sin dato" — si no hay pct, esa fila simplemente no
  *  muestra nada ahí, en vez de un "—" vacío. */
-function KpiCard({ icon: Icon, tint, tintSoft, label, valor, pct, onClick }: {
+function KpiCard({ icon: Icon, tint, tintSoft, label, valor, pct, onClick, big = false }: {
   icon: typeof Droplet; tint: string; tintSoft: string
   label: string; valor: string; pct: number | null
   /** Si viene, la tarjeta abre el detalle correspondiente */
   onClick?: () => void
+  /** Desktop: la tarjeta ya no compite por un ancho de 760px completo —
+   *  con más aire alrededor, el número puede crecer sin apretarse. */
+  big?: boolean
 }) {
   const Contenedor = onClick ? 'button' : 'div'
   return (
     <Contenedor
       onClick={onClick}
       style={{
-        background: tintSoft, borderRadius: 18, padding: '14px 14px 14px 12px', maxHeight: 110,
-        display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, width: '100%',
+        background: tintSoft, borderRadius: 18, padding: big ? '18px 18px 18px 16px' : '14px 14px 14px 12px',
+        display: 'flex', alignItems: 'center', gap: big ? 14 : 12, minWidth: 0, width: '100%',
         border: 'none', textAlign: 'left', cursor: onClick ? 'pointer' : 'default', font: 'inherit', color: 'inherit',
       }}
     >
-      <div style={{ width: 44, height: 44, borderRadius: 14, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Icon size={20} color={tint} />
+      <div style={{ width: big ? 52 : 44, height: big ? 52 : 44, borderRadius: 14, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={big ? 24 : 20} color={tint} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 12, fontWeight: 700, color: tint, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</p>
+        <p style={{ fontSize: big ? 13 : 12, fontWeight: 700, color: tint, marginBottom: big ? 5 : 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</p>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 21, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.15, whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: big ? 28 : 21, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.15, whiteSpace: 'nowrap' }}>
             {valor}
           </span>
-          {pct !== null && <Delta pct={pct} size={11} />}
+          {pct !== null && <Delta pct={pct} size={big ? 13 : 11} />}
         </div>
       </div>
       {onClick && (
-        <span style={{ width: 34, height: 34, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <ArrowRight size={16} color="#F59E0B" />
+        <span style={{ width: big ? 38 : 34, height: big ? 38 : 34, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <ArrowRight size={big ? 18 : 16} color="#F59E0B" />
         </span>
       )}
     </Contenedor>
@@ -402,7 +405,7 @@ interface TotalesDetalle {
   clientes: number; pedidos: number
 }
 
-function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega = true, conSelector = false, tituloBase, totales, desde, hasta, onClose }: {
+function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega = true, conSelector = false, tituloBase, totales, desde, hasta, onClose, isDesktop = false }: {
   tipo: TipoDetalle
   envaseBucket?: string; categoria?: string; origenPedidos?: 'backlog' | 'mismo-periodo'
   /** Debe coincidir con el criterio de la tarjeta que abrió esto (ver ventas_dashboard_kpis) */
@@ -413,6 +416,9 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
   tituloBase?: string
   totales?: TotalesDetalle
   desde: string; hasta: string; onClose: () => void
+  /** Desktop: modal centrado en vez de hoja pegada abajo a todo el ancho —
+   *  una bottom sheet de 1600px de ancho se ve rota, no premium. */
+  isDesktop?: boolean
 }) {
   const [vista, setVista] = useState<TipoDetalle>(tipo)
   // Las filas se guardan junto a la vista de la que vinieron, y `filas` se
@@ -497,14 +503,25 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
   return (
     <div
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
-      style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(15,23,42,.45)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(15,23,42,.45)', display: 'flex',
+        flexDirection: 'column', justifyContent: isDesktop ? 'center' : 'flex-end',
+        alignItems: isDesktop ? 'center' : 'stretch',
+      }}
     >
-      <div style={{ background: C.bg, borderRadius: '20px 20px 0 0', maxHeight: '86vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{
+        background: C.bg, display: 'flex', flexDirection: 'column',
+        ...(isDesktop
+          ? { borderRadius: 20, maxHeight: '85vh', width: '640px', maxWidth: '92vw', boxShadow: '0 24px 60px rgba(15,23,42,.35)' }
+          : { borderRadius: '20px 20px 0 0', maxHeight: '86vh' }),
+      }}>
+        {!isDesktop && (
         <div style={{ padding: '10px 0 6px', display: 'flex', justifyContent: 'center' }}>
           <div style={{ width: 38, height: 4, borderRadius: 2, background: '#CBD5E1' }} />
         </div>
+        )}
 
-        <div style={{ padding: '4px 16px 12px', borderBottom: `1px solid ${C.line}` }}>
+        <div style={{ padding: isDesktop ? '16px 20px 12px' : '4px 16px 12px', borderBottom: `1px solid ${C.line}` }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{titulo}</p>
@@ -1037,6 +1054,16 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
   data: HoyData; veComision?: boolean; veComisionVendedor?: boolean
 }) {
   const router = useRouter()
+  // Desktop usa un layout de dos columnas (grid) para aprovechar el ancho de
+  // pantalla; mobile sigue siendo una sola columna apilada. Mismo patrón
+  // isDesktop que ya usan DashboardClient y MisionesClient — acá faltaba.
+  const [isDesktop, setIsDesktop] = useState(false)
+  useEffect(() => {
+    const check = () => setIsDesktop(window.innerWidth >= 1024)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
   // Si la URL trae un rango a mano, se entra directo en esa vista
   const [rango, setRango] = useState<RangoKey>(data.custom ? 'custom' : 'periodo')
   const [periodoIdx, setPeriodoIdx] = useState(0)   // 0 = período activo
@@ -1155,7 +1182,11 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
 
   return (
     <div style={{ background: C.bg, minHeight: '100%', margin: -1, padding: '1px 0 0' }}>
-      <div style={{ maxWidth: 760, margin: '0 auto', padding: '14px 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{
+        maxWidth: isDesktop ? 1600 : 760, margin: '0 auto',
+        padding: isDesktop ? '28px 32px 48px' : '14px 16px 32px',
+        display: 'flex', flexDirection: 'column', gap: isDesktop ? 20 : 14,
+      }}>
 
         {/* Volver — mismo botón que el resto de la app, lleva al hub principal */}
         <button
@@ -1426,6 +1457,19 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
           </div>
         </div>
 
+        {/* Desktop: grid de dos columnas para aprovechar el ancho — columna
+            principal (comisión, hero, KPIs, venta de equipo, ranking) y
+            columna lateral (desgloses secundarios). En mobile ambos <div>
+            quedan en una sola columna (gridTemplateColumns:1fr) y apilados
+            en el mismo orden de siempre, así el recorrido no cambia — sólo
+            cómo se agrupan visualmente en pantallas anchas. */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isDesktop ? 'minmax(0,1fr) 380px' : '1fr',
+          gap: isDesktop ? 20 : 14, alignItems: 'start',
+        }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? 20 : 14, minWidth: 0 }}>
+
         {/* Remuneración variable propia (cláusula NOVENA del contrato). Va
             arriba de todo, antes del hero, por pedido de Claudio: es lo que
             quiere ver primero al abrir. Sólo se monta con el permiso
@@ -1433,6 +1477,7 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
         {veComision && (
           <MiComision
             key={`${d.desde}_${d.hasta}`}
+            isDesktop={isDesktop}
             desde={d.desde}
             hasta={d.hasta}
             nombrePeriodo={
@@ -1449,6 +1494,7 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
         {veComisionVendedor && (
           <MiComisionVendedor
             key={`vendedor_${d.desde}_${d.hasta}`}
+            isDesktop={isDesktop}
             desde={d.desde}
             hasta={d.hasta}
             nombrePeriodo={
@@ -1480,10 +1526,10 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
               ? `VENTAS · ${periodoSel.nombre.toUpperCase()}`
               : rango === 'custom' ? `VENTAS · ${(customPeriodoNombre ?? 'RANGO ELEGIDO').toUpperCase()}` : 'VENTAS DEL RANGO'}
           </p>
-          <p style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-2px', lineHeight: 1 }}>
+          <p style={{ fontSize: isDesktop ? 56 : 42, fontWeight: 800, letterSpacing: '-2px', lineHeight: 1 }}>
             {actual.litros.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-            <span style={{ fontSize: 20, marginLeft: 4, color: '#CBD5E1' }}>L</span>
-            <span style={{ fontSize: 13, fontWeight: 500, color: '#94A3B8', marginLeft: 8 }}>{d.porEntrega ? 'entregado' : 'pedido'}</span>
+            <span style={{ fontSize: isDesktop ? 26 : 20, marginLeft: 4, color: '#CBD5E1' }}>L</span>
+            <span style={{ fontSize: isDesktop ? 15 : 13, fontWeight: 500, color: '#94A3B8', marginLeft: 8 }}>{d.porEntrega ? 'entregado' : 'pedido'}</span>
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             {(() => {
@@ -1530,13 +1576,13 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
                     partía en dos líneas y desalineaba el número. */}
                 <div style={{ flex: '1 1 130px', minWidth: 0 }}>
                   <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, whiteSpace: 'nowrap' }}>Por entregar</p>
-                  <p style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1, color: '#F59E0B' }}>
+                  <p style={{ fontSize: isDesktop ? 34 : 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1, color: '#F59E0B' }}>
                     {fL(d.entregas.litrosPorEntregar)}
                   </p>
                 </div>
                 <div style={{ flex: '1 1 130px', minWidth: 0 }}>
                   <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, whiteSpace: 'nowrap' }}>Total</p>
-                  <p style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1 }}>
+                  <p style={{ fontSize: isDesktop ? 34 : 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1 }}>
                     {fL(actual.litros + d.entregas.litrosPorEntregar)}
                   </p>
                 </div>
@@ -1551,7 +1597,7 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
             </span>
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 11, color: '#94A3B8', marginBottom: 1 }}>Total de la venta completa</p>
-              <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+              <p style={{ fontSize: isDesktop ? 32 : 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
                 {fPesoFull(actual.revenue)}
               </p>
               {d.entregas.revenuePorEntregar > 0 && (
@@ -1619,18 +1665,22 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
         </div>
         </div>
 
-        {/* KPIs */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <KpiCard icon={Droplet} tint={C.blue} tintSoft={C.blueSoft} label="Litros vendidos"
+        {/* KPIs — en desktop, grid 2×2 en vez de apiladas: antes cada
+            tarjeta se estiraba a los 760px de ancho con casi todo vacío a
+            la derecha del ícono; en un grid usan el espacio real. */}
+        <div style={isDesktop
+          ? { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }
+          : { display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <KpiCard big={isDesktop} icon={Droplet} tint={C.blue} tintSoft={C.blueSoft} label="Litros vendidos"
             valor={fL(actual.litros)} pct={variacion(actual.litros, previo.litros)}
             onClick={() => abrirDetalle('productos')} />
-          <KpiCard icon={Users} tint={C.green} tintSoft={C.greenSoft} label="Ventas por Clientes"
+          <KpiCard big={isDesktop} icon={Users} tint={C.green} tintSoft={C.greenSoft} label="Ventas por Clientes"
             valor={fNum(actual.clientes)} pct={variacion(actual.clientes, previo.clientes)}
             onClick={() => abrirDetalle('clientes')} />
-          <KpiCard icon={ShoppingBag} tint={C.purple} tintSoft={C.purpleSoft} label="Pedidos"
+          <KpiCard big={isDesktop} icon={ShoppingBag} tint={C.purple} tintSoft={C.purpleSoft} label="Pedidos"
             valor={fNum(actual.pedidos)} pct={variacion(actual.pedidos, previo.pedidos)}
             onClick={() => abrirDetalle('productos')} />
-          <KpiCard icon={Truck} tint={C.amber} tintSoft={C.amberSoft} label="Venta por entregar"
+          <KpiCard big={isDesktop} icon={Truck} tint={C.amber} tintSoft={C.amberSoft} label="Venta por entregar"
             valor={fPesoFull(d.entregas.revenuePorEntregar)} pct={null}
             onClick={() => abrirDetalle('clientes-por-entregar')} />
         </div>
@@ -1668,7 +1718,7 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
                 </span>
               </div>
 
-              <p style={{ fontSize: 30, fontWeight: 800, color: C.text, letterSpacing: '-1px', lineHeight: 1 }}>
+              <p style={{ fontSize: isDesktop ? 40 : 30, fontWeight: 800, color: C.text, letterSpacing: '-1px', lineHeight: 1 }}>
                 {fPesoFull(revenueTotal)}
               </p>
               <p style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>
@@ -1757,6 +1807,9 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
               desde={d.desde} hasta={d.hasta} porEntrega={d.porEntrega} />
           ))}
         </div>
+
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? 20 : 14, minWidth: 0 }}>
 
         {/* De dónde viene lo entregado este período (decisión de Claudio,
             27-jul): el período lo define la fecha de ENTREGA — sin importar
@@ -1950,10 +2003,13 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
             Datos actualizados: {new Date(data.ultimaSync).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })}
           </p>
         )}
+        </div>
+        </div>
       </div>
 
       {detalle && (
         <SheetDetalle
+          isDesktop={isDesktop}
           tipo={detalle}
           envaseBucket={detalleEnvaseBucket}
           categoria={detalleCategoria}

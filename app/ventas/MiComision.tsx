@@ -41,8 +41,11 @@ interface Payload {
   porEntregar: PorEntregarComision
 }
 
-export default function MiComision({ desde, hasta, nombrePeriodo }: {
+export default function MiComision({ desde, hasta, nombrePeriodo, isDesktop = false }: {
   desde: string; hasta: string; nombrePeriodo: string
+  /** Desktop: número principal más grande y hoja de detalle como modal
+   *  centrado — la tarjeta ya no compite por un ancho de 760px. */
+  isDesktop?: boolean
 }) {
   const [data, setData] = useState<Payload | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -76,7 +79,7 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
       <button
         onClick={() => setAbierto(true)}
         style={{
-          background: C.hero, borderRadius: 18, padding: 18, width: '100%',
+          background: C.hero, borderRadius: 18, padding: isDesktop ? 24 : 18, width: '100%',
           border: 'none', textAlign: 'left', cursor: 'pointer', font: 'inherit', color: '#fff',
         }}
       >
@@ -95,7 +98,7 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
           </span>
         </div>
 
-        <p style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1 }}>
+        <p style={{ fontSize: isDesktop ? 40 : 30, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1 }}>
           {fComision(resumen.variableTotal)}
         </p>
         <p style={{ fontSize: 12.5, color: '#CBD5E1', marginTop: 4 }}>
@@ -129,14 +132,14 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 120px', minWidth: 0 }}>
             <p style={{ fontSize: 11, color: '#94A3B8' }}>Entregado</p>
-            <p style={{ fontSize: 17, fontWeight: 800, color: '#fff', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+            <p style={{ fontSize: isDesktop ? 21 : 17, fontWeight: 800, color: '#fff', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
               {fComision(resumen.ventaNeta)}
             </p>
             <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>base de tu comisión</p>
           </div>
           <div style={{ flex: '1 1 120px', minWidth: 0 }}>
             <p style={{ fontSize: 11, color: '#94A3B8' }}>Por entregar</p>
-            <p style={{ fontSize: 17, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+            <p style={{ fontSize: isDesktop ? 21 : 17, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
               {fComision(porEntregar.ventaNeta)}
             </p>
             <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>
@@ -150,13 +153,13 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 120px', minWidth: 0 }}>
             <p style={{ fontSize: 11, color: '#94A3B8' }}>Comisión 1%</p>
-            <p style={{ fontSize: 17, fontWeight: 800, color: '#34D399', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+            <p style={{ fontSize: isDesktop ? 21 : 17, fontWeight: 800, color: '#34D399', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
               {fComision(resumen.comision)}
             </p>
           </div>
           <div style={{ flex: '1 1 120px', minWidth: 0 }}>
             <p style={{ fontSize: 11, color: '#94A3B8' }}>Bonos</p>
-            <p style={{ fontSize: 17, fontWeight: 800, color: resumen.variableTotal > resumen.comision ? '#F59E0B' : '#64748B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+            <p style={{ fontSize: isDesktop ? 21 : 17, fontWeight: 800, color: resumen.variableTotal > resumen.comision ? '#F59E0B' : '#64748B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
               {fComision(resumen.bonoEscala + resumen.bonoPago + resumen.bonoActivacion)}
             </p>
           </div>
@@ -173,7 +176,7 @@ export default function MiComision({ desde, hasta, nombrePeriodo }: {
         )}
       </button>
 
-      {abierto && <HojaDetalle data={data} desde={desde} hasta={hasta} nombrePeriodo={nombrePeriodo} onClose={() => setAbierto(false)} />}
+      {abierto && <HojaDetalle data={data} desde={desde} hasta={hasta} nombrePeriodo={nombrePeriodo} onClose={() => setAbierto(false)} isDesktop={isDesktop} />}
     </>
   )
 }
@@ -191,8 +194,9 @@ function Esqueleto() {
 
 type Vista = 'resumen' | 'clientes' | 'productos'
 
-function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
+function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose, isDesktop = false }: {
   data: Payload; desde: string; hasta: string; nombrePeriodo: string; onClose: () => void
+  isDesktop?: boolean
 }) {
   const [vista, setVista] = useState<Vista>('resumen')
   const [busca, setBusca] = useState('')
@@ -225,14 +229,25 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose }: {
   return (
     <div
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
-      style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(15,23,42,.45)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(15,23,42,.45)', display: 'flex',
+        flexDirection: 'column', justifyContent: isDesktop ? 'center' : 'flex-end',
+        alignItems: isDesktop ? 'center' : 'stretch',
+      }}
     >
-      <div style={{ background: C.bg, borderRadius: '20px 20px 0 0', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{
+        background: C.bg, display: 'flex', flexDirection: 'column',
+        ...(isDesktop
+          ? { borderRadius: 20, maxHeight: '85vh', width: '640px', maxWidth: '92vw', boxShadow: '0 24px 60px rgba(15,23,42,.35)' }
+          : { borderRadius: '20px 20px 0 0', maxHeight: '90vh' }),
+      }}>
+        {!isDesktop && (
         <div style={{ padding: '10px 0 6px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
           <div style={{ width: 38, height: 4, borderRadius: 2, background: '#CBD5E1' }} />
         </div>
+        )}
 
-        <div style={{ padding: '4px 16px 12px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
+        <div style={{ padding: isDesktop ? '16px 20px 12px' : '4px 16px 12px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 17, fontWeight: 800, color: C.text }}>Lo que gano yo</p>
