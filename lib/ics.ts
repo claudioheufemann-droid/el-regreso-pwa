@@ -5,7 +5,14 @@
  */
 export function buildIcs(task: { titulo: string; descripcion: string; plazo: string; area: string; horaLimite?: string | null }): string {
   const now = new Date()
-  const [year, month, day] = task.plazo.split('-').map(Number)
+  // task.plazo puede venir como "YYYY-MM-DD" o como timestamptz completo
+  // (ej. "2026-08-10 00:00:00+00", columna `plazo` es timestamp with time
+  // zone) — se extrae solo la parte de fecha en vez de hacer split('-') a
+  // ciegas, que rompía con el timestamp completo (día quedaba NaN).
+  const dateMatch = task.plazo.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!dateMatch) throw new Error(`buildIcs: formato de plazo inesperado: ${task.plazo}`)
+  const [, yearStr, monthStr, dayStr] = dateMatch
+  const [year, month, day] = [Number(yearStr), Number(monthStr), Number(dayStr)]
   // Si el usuario definió una hora límite opcional se usa esa; si no, 9:00 por defecto.
   const [hh, mm] = task.horaLimite ? task.horaLimite.split(':').map(Number) : [9, 0]
   const plazo = new Date(Date.UTC(year, month - 1, day, hh, mm, 0))
