@@ -123,22 +123,22 @@ export default function MiComisionVendedor({ desde, hasta, nombrePeriodo, vended
           </p>
         )}
 
-        <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '14px 0 12px' }} />
+        <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: isDesktop ? '18px 0 16px' : '14px 0 12px' }} />
 
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 120px', minWidth: 0 }}>
-            <p style={{ fontSize: 11, color: '#94A3B8' }}>Comisión ({resumen.tramo})</p>
-            <p style={{ fontSize: isDesktop ? 21 : 17, fontWeight: 800, color: '#34D399', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+        <div style={isDesktop ? { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20 } : { display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <div style={isDesktop ? { minWidth: 0 } : { flex: '1 1 120px', minWidth: 0 }}>
+            <p style={{ fontSize: isDesktop ? 12.5 : 11, color: '#94A3B8' }}>Comisión ({resumen.tramo})</p>
+            <p style={{ fontSize: isDesktop ? 25 : 17, fontWeight: 800, color: '#34D399', letterSpacing: '-0.4px', marginTop: isDesktop ? 4 : 3, whiteSpace: 'nowrap' }}>
               {fComision(resumen.comision)}
             </p>
-            <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>de {fComision(resumen.ventaNeta)} entregado</p>
+            <p style={{ fontSize: isDesktop ? 11.5 : 10.5, color: '#94A3B8', marginTop: isDesktop ? 2 : 1 }}>de {fComision(resumen.ventaNeta)} entregado</p>
           </div>
-          <div style={{ flex: '1 1 120px', minWidth: 0 }}>
-            <p style={{ fontSize: 11, color: '#94A3B8' }}>Bonos</p>
-            <p style={{ fontSize: isDesktop ? 21 : 17, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+          <div style={isDesktop ? { minWidth: 0 } : { flex: '1 1 120px', minWidth: 0 }}>
+            <p style={{ fontSize: isDesktop ? 12.5 : 11, color: '#94A3B8' }}>Bonos</p>
+            <p style={{ fontSize: isDesktop ? 25 : 17, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.4px', marginTop: isDesktop ? 4 : 3, whiteSpace: 'nowrap' }}>
               {fComision(resumen.bonoApertura + resumen.bonoRecompra + resumen.bonoCobranza + resumen.bonoRetencion)}
             </p>
-            <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>apertura + recompra + cartera</p>
+            <p style={{ fontSize: isDesktop ? 11.5 : 10.5, color: '#94A3B8', marginTop: isDesktop ? 2 : 1 }}>apertura + recompra + cartera</p>
           </div>
         </div>
       </button>

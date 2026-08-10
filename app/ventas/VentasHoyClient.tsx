@@ -1566,55 +1566,63 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
             </div>
           )}
 
-          {d.entregas.litrosPorEntregar > 0 && (
-            <>
-              <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '18px 0' }} />
-              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-                {/* Mismo texto ("Por entregar" y "Total") en las dos etiquetas
-                    para que midan lo mismo y los números de abajo queden
-                    parejos — antes "Total (entregado + por entregar)" se
-                    partía en dos líneas y desalineaba el número. */}
-                <div style={{ flex: '1 1 130px', minWidth: 0 }}>
-                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, whiteSpace: 'nowrap' }}>Por entregar</p>
-                  <p style={{ fontSize: isDesktop ? 34 : 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1, color: '#F59E0B' }}>
-                    {fL(d.entregas.litrosPorEntregar)}
-                  </p>
+          {/* Desktop: litros por entregar/total y el bloque de plata van uno
+              al lado del otro (antes, uno abajo del otro) — mismo contenido y
+              mismas etiquetas, sólo se usa el ancho en vez de apilar hacia
+              abajo. En mobile queda exactamente como antes. */}
+          <div style={isDesktop
+            ? { display: 'grid', gridTemplateColumns: d.entregas.litrosPorEntregar > 0 ? '1fr 1fr' : '1fr', gap: 28, marginTop: 20, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,.1)', alignItems: 'start' }
+            : undefined}>
+            {d.entregas.litrosPorEntregar > 0 && (
+              <>
+                {!isDesktop && <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '18px 0' }} />}
+                <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+                  {/* Mismo texto ("Por entregar" y "Total") en las dos etiquetas
+                      para que midan lo mismo y los números de abajo queden
+                      parejos — antes "Total (entregado + por entregar)" se
+                      partía en dos líneas y desalineaba el número. */}
+                  <div style={{ flex: '1 1 130px', minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, whiteSpace: 'nowrap' }}>Por entregar</p>
+                    <p style={{ fontSize: isDesktop ? 34 : 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1, color: '#F59E0B' }}>
+                      {fL(d.entregas.litrosPorEntregar)}
+                    </p>
+                  </div>
+                  <div style={{ flex: '1 1 130px', minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, whiteSpace: 'nowrap' }}>Total</p>
+                    <p style={{ fontSize: isDesktop ? 34 : 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1 }}>
+                      {fL(actual.litros + d.entregas.litrosPorEntregar)}
+                    </p>
+                  </div>
                 </div>
-                <div style={{ flex: '1 1 130px', minWidth: 0 }}>
-                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 4, whiteSpace: 'nowrap' }}>Total</p>
-                  <p style={{ fontSize: isDesktop ? 34 : 28, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1 }}>
-                    {fL(actual.litros + d.entregas.litrosPorEntregar)}
-                  </p>
-                </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
 
-          <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '18px 0' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-            <span style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(16,185,129,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <DollarSign size={20} color="#34D399" />
-            </span>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: 11, color: '#94A3B8', marginBottom: 1 }}>Total de la venta completa</p>
-              <p style={{ fontSize: isDesktop ? 32 : 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
-                {fPesoFull(actual.revenue)}
-              </p>
-              {d.entregas.revenuePorEntregar > 0 && (
-                <>
-                  <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
-                    Por entregar <span style={{ color: '#F59E0B', fontWeight: 600 }}>{fPesoFull(d.entregas.revenuePorEntregar)}</span>
-                  </p>
-                  <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
-                    Total (entregado + por entregar) <span style={{ color: '#CBD5E1', fontWeight: 600 }}>{fPesoFull(actual.revenue + d.entregas.revenuePorEntregar)}</span>
-                  </p>
-                </>
-              )}
-              {actual.pedidos > 0 && (
-                <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
-                  Ticket promedio <span style={{ color: '#CBD5E1', fontWeight: 600 }}>{fPesoFull(ticket)}</span>
+            {!isDesktop && <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '18px 0' }} />}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+              <span style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(16,185,129,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <DollarSign size={20} color="#34D399" />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 11, color: '#94A3B8', marginBottom: 1 }}>Total de la venta completa</p>
+                <p style={{ fontSize: isDesktop ? 32 : 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+                  {fPesoFull(actual.revenue)}
                 </p>
-              )}
+                {d.entregas.revenuePorEntregar > 0 && (
+                  <>
+                    <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
+                      Por entregar <span style={{ color: '#F59E0B', fontWeight: 600 }}>{fPesoFull(d.entregas.revenuePorEntregar)}</span>
+                    </p>
+                    <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
+                      Total (entregado + por entregar) <span style={{ color: '#CBD5E1', fontWeight: 600 }}>{fPesoFull(actual.revenue + d.entregas.revenuePorEntregar)}</span>
+                    </p>
+                  </>
+                )}
+                {actual.pedidos > 0 && (
+                  <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
+                    Ticket promedio <span style={{ color: '#CBD5E1', fontWeight: 600 }}>{fPesoFull(ticket)}</span>
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1699,7 +1707,7 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
             <button
               onClick={() => abrirDetalle('clientes', { conSelector: true, titulo: 'Venta área comercial' })}
               style={{
-                background: C.card, borderRadius: 18, padding: 18, width: '100%',
+                background: C.card, borderRadius: 18, padding: isDesktop ? 24 : 18, width: '100%',
                 border: `1px solid ${C.line}`, textAlign: 'left', cursor: 'pointer', font: 'inherit', color: C.text,
               }}
             >
@@ -1732,23 +1740,25 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 130px', minWidth: 0 }}>
+              <div style={isDesktop
+                ? { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 24, marginTop: 16 }
+                : { display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+                <div style={isDesktop ? { minWidth: 0 } : { flex: '1 1 130px', minWidth: 0 }}>
                   <p style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.green, flexShrink: 0 }} />
                     Entregado
                   </p>
-                  <p style={{ fontSize: 17, fontWeight: 800, color: C.green, letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+                  <p style={{ fontSize: isDesktop ? 24 : 17, fontWeight: 800, color: C.green, letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
                     {fL(actual.litros)}
                   </p>
                   <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(actual.revenue)}</p>
                 </div>
-                <div style={{ flex: '1 1 130px', minWidth: 0 }}>
+                <div style={isDesktop ? { minWidth: 0 } : { flex: '1 1 130px', minWidth: 0 }}>
                   <p style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.amber, flexShrink: 0 }} />
                     Por entregar
                   </p>
-                  <p style={{ fontSize: 17, fontWeight: 800, color: C.amber, letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+                  <p style={{ fontSize: isDesktop ? 24 : 17, fontWeight: 800, color: C.amber, letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
                     {fL(d.entregas.litrosPorEntregar)}
                   </p>
                   <p style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(d.entregas.revenuePorEntregar)}</p>

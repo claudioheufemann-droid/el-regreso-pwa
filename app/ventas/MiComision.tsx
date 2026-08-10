@@ -124,46 +124,84 @@ export default function MiComision({ desde, hasta, nombrePeriodo, isDesktop = fa
           </p>
         )}
 
-        <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '14px 0 12px' }} />
+        <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: isDesktop ? '18px 0 16px' : '14px 0 12px' }} />
 
         {/* Entregado vs por entregar — pedido explícito de Claudio: la
             comisión SIEMPRE se calcula sobre lo entregado, lo por entregar es
-            sólo "lo que podría tener" cuando se despache, no cuenta todavía. */}
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 120px', minWidth: 0 }}>
-            <p style={{ fontSize: 11, color: '#94A3B8' }}>Entregado</p>
-            <p style={{ fontSize: isDesktop ? 21 : 17, fontWeight: 800, color: '#fff', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
-              {fComision(resumen.ventaNeta)}
-            </p>
-            <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>base de tu comisión</p>
+            sólo "lo que podría tener" cuando se despache, no cuenta todavía.
+            En desktop las 4 cifras (entregado, por entregar, comisión, bonos)
+            van en UNA sola fila de 4 columnas — antes eran dos filas de 2,
+            cada una angosta en el medio de una tarjeta enorme, dejando la
+            mitad derecha en blanco. En mobile se mantienen las dos filas de
+            siempre. */}
+        {isDesktop ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 12.5, color: '#94A3B8' }}>Entregado</p>
+              <p style={{ fontSize: 25, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap' }}>
+                {fComision(resumen.ventaNeta)}
+              </p>
+              <p style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>base de tu comisión</p>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 12.5, color: '#94A3B8' }}>Por entregar</p>
+              <p style={{ fontSize: 25, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap' }}>
+                {fComision(porEntregar.ventaNeta)}
+              </p>
+              <p style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>aún no cuenta</p>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 12.5, color: '#94A3B8' }}>Comisión 1%</p>
+              <p style={{ fontSize: 25, fontWeight: 800, color: '#34D399', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap' }}>
+                {fComision(resumen.comision)}
+              </p>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 12.5, color: '#94A3B8' }}>Bonos</p>
+              <p style={{ fontSize: 25, fontWeight: 800, color: resumen.variableTotal > resumen.comision ? '#F59E0B' : '#64748B', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap' }}>
+                {fComision(resumen.bonoEscala + resumen.bonoPago + resumen.bonoActivacion)}
+              </p>
+            </div>
           </div>
-          <div style={{ flex: '1 1 120px', minWidth: 0 }}>
-            <p style={{ fontSize: 11, color: '#94A3B8' }}>Por entregar</p>
-            <p style={{ fontSize: isDesktop ? 21 : 17, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
-              {fComision(porEntregar.ventaNeta)}
-            </p>
-            <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>
-              aún no cuenta · {fComision(comisionPipeline)} de comisión si se entrega
-            </p>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 120px', minWidth: 0 }}>
+                <p style={{ fontSize: 11, color: '#94A3B8' }}>Entregado</p>
+                <p style={{ fontSize: 17, fontWeight: 800, color: '#fff', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+                  {fComision(resumen.ventaNeta)}
+                </p>
+                <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>base de tu comisión</p>
+              </div>
+              <div style={{ flex: '1 1 120px', minWidth: 0 }}>
+                <p style={{ fontSize: 11, color: '#94A3B8' }}>Por entregar</p>
+                <p style={{ fontSize: 17, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+                  {fComision(porEntregar.ventaNeta)}
+                </p>
+                <p style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 1 }}>
+                  aún no cuenta · {fComision(comisionPipeline)} de comisión si se entrega
+                </p>
+              </div>
+            </div>
 
-        <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '12px 0' }} />
+            <div style={{ height: 1, background: 'rgba(255,255,255,.1)', margin: '12px 0' }} />
 
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 120px', minWidth: 0 }}>
-            <p style={{ fontSize: 11, color: '#94A3B8' }}>Comisión 1%</p>
-            <p style={{ fontSize: isDesktop ? 21 : 17, fontWeight: 800, color: '#34D399', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
-              {fComision(resumen.comision)}
-            </p>
-          </div>
-          <div style={{ flex: '1 1 120px', minWidth: 0 }}>
-            <p style={{ fontSize: 11, color: '#94A3B8' }}>Bonos</p>
-            <p style={{ fontSize: isDesktop ? 21 : 17, fontWeight: 800, color: resumen.variableTotal > resumen.comision ? '#F59E0B' : '#64748B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
-              {fComision(resumen.bonoEscala + resumen.bonoPago + resumen.bonoActivacion)}
-            </p>
-          </div>
-        </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 120px', minWidth: 0 }}>
+                <p style={{ fontSize: 11, color: '#94A3B8' }}>Comisión 1%</p>
+                <p style={{ fontSize: 17, fontWeight: 800, color: '#34D399', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+                  {fComision(resumen.comision)}
+                </p>
+              </div>
+              <div style={{ flex: '1 1 120px', minWidth: 0 }}>
+                <p style={{ fontSize: 11, color: '#94A3B8' }}>Bonos</p>
+                <p style={{ fontSize: 17, fontWeight: 800, color: resumen.variableTotal > resumen.comision ? '#F59E0B' : '#64748B', letterSpacing: '-0.4px', marginTop: 3, whiteSpace: 'nowrap' }}>
+                  {fComision(resumen.bonoEscala + resumen.bonoPago + resumen.bonoActivacion)}
+                </p>
+              </div>
+            </div>
+          </>
+        )}
 
         {resumen.ventaEnRiesgo > 0 && (
           <p style={{ fontSize: 11.5, color: '#F59E0B', marginTop: 12, display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.4 }}>
