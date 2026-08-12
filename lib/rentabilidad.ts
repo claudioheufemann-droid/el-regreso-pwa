@@ -83,6 +83,22 @@ export function descuentoPuntoEquilibrioPct(costoNeto: number, precioNeto: numbe
   return descuentoMaximoPct(costoNeto, precioNeto, 0)
 }
 
+/**
+ * Inverso de `calcularMargen`: dado un costo fijo y un margen objetivo,
+ * el precio neto que hay que cobrar para lograrlo. Base del "menú de
+ * margen" del Catálogo — Claudio elige el % y ve a qué precio final
+ * cliente corresponde, en vez de mirar el margen que resulta de un precio
+ * ya fijado. Devuelve null si el costo es 0/desconocido o el margen es
+ * 100% o más (precio infinito).
+ */
+export function precioNetoParaMargen(costoNeto: number, margenPct: number): number | null {
+  if (costoNeto <= 0 || margenPct >= 1) return null
+  return costoNeto / (1 - margenPct)
+}
+
+/** Pasos del menú desplegable de margen objetivo, 10% a 70% cada 5 puntos. */
+export const MARGEN_PRESETS: number[] = Array.from({ length: 13 }, (_, i) => 0.10 + i * 0.05)
+
 export interface ItemSimulacion {
   costoPrecioId: string
   producto: string
@@ -137,6 +153,100 @@ export function fmtCLP(n: number): string {
 
 export function fmtPct(n: number): string {
   return `${(n * 100).toLocaleString('es-CL', { maximumFractionDigits: 1 })}%`
+}
+
+// ── Simulador de promociones (2x1, 3x2, "el segundo al 50%", etc.) ────────
+//
+// Modelo único que cubre todos los casos que pidió Claudio: un "tramo" que
+// se repite cada `cantidadGrupo` unidades, con un % de descuento propio por
+// posición dentro del tramo. Ej.: 2x1 → grupo de 2, descuentos [0%, 100%].
+// "El tercer barril al 50%" → grupo de 3, descuentos [0%, 0%, 50%].
+// `repetir: false` hace que el descuento aplique una sola vez (a las
+// primeras `cantidadGrupo` unidades) y el resto del pedido se cobre normal
+// — útil para bundles puntuales en vez de una promo que se repite en
+// pedidos grandes.
+export interface PromoTramo {
+  nombre: string
+  cantidadGrupo: number
+  descuentosPct: number[] // largo = cantidadGrupo, uno por posición (0-1)
+  repetir: boolean
+}
+
+export const PROMO_PRESETS: PromoTramo[] = [
+  { nombre: '2x1', cantidadGrupo: 2, descuentosPct: [0, 1], repetir: true },
+  { nombre: '3x2', cantidadGrupo: 3, descuentosPct: [0, 0, 1], repetir: true },
+  { nombre: '3x1', cantidadGrupo: 3, descuentosPct: [0, 1, 1], repetir: true },
+  { nombre: '2º al 50%', cantidadGrupo: 2, descuentosPct: [0, 0.5], repetir: false },
+  { nombre: '3º al 50%', cantidadGrupo: 3, descuentosPct: [0, 0, 0.5], repetir: false },
+]
+
+export interface UnidadPromo {
+  posicion: number
+  descuentoPct: number
+  precioNetoUnitario: number
+  costoNetoUnitario: number
+}
+
+export interface ResumenPromo {
+  cp: CostoPrecio
+  promo: PromoTramo
+  cantidadTotal: number
+  unidades: UnidadPromo[]
+  ventaNormalTotal: number // sin ningún descuento, de referencia
+  ventaNetaTotal: number
+  costoTotal: number
+  descuentoTotalClp: number
+  margenClpTotal: number
+  margenPctTotal: number
+  margenPctSinPromo: number
+  semaforo: Semaforo
+}
+
+/** % de descuento que le toca a la unidad en `posicion` (0-indexada) de un pedido de `cantidadTotal` unidades. */
+export function descuentoDePosicion(promo: PromoTramo, posicion: number): number {
+  if (promo.repetir) return promo.descuentosPct[posicion % promo.cantidadGrupo] ?? 0
+  return posicion < promo.cantidadGrupo ? (promo.descuentosPct[posicion] ?? 0) : 0
+}
+
+/** Simula aplicar una promoción por tramos a `cantidadTotal` unidades de un producto. */
+export function simularPromo(cp: CostoPrecio, cantidadTotal: number, promo: PromoTramo): ResumenPromo {
+  const unidades: UnidadPromo[] = Array.from({ length: cantidadTotal }, (_, i) => {
+    const descuentoPct = descuentoDePosicion(promo, i)
+    return {
+      posicion: i,
+      descuentoPct,
+      precioNetoUnitario: cp.precio_neto * (1 - descuentoPct),
+      costoNetoUnitario: cp.costo_neto,
+    }
+  })
+
+  const ventaNormalTotal = cp.precio_neto * cantidadTotal
+  const ventaNetaTotal = unidades.reduce((s, u) => s + u.precioNetoUnitario, 0)
+  const costoTotal = cp.costo_neto * cantidadTotal
+  const descuentoTotalClp = ventaNormalTotal - ventaNetaTotal
+  const margenClpTotal = ventaNetaTotal - costoTotal
+  const margenPctTotal = ventaNetaTotal > 0 ? margenClpTotal / ventaNetaTotal : 0
+  const margenSinPromo = calcularMargen(cp.precio_neto, cp.costo_neto)
+
+  return {
+    cp, promo, cantidadTotal, unidades,
+    ventaNormalTotal, ventaNetaTotal, costoTotal, descuentoTotalClp,
+    margenClpTotal, margenPctTotal,
+    margenPctSinPromo: margenSinPromo.margenPct,
+    semaforo: semaforoDeMargen(margenPctTotal),
+  }
+}
+
+/** Convierte una promoción simulada en una línea equivalente de % de descuento plano, para reusar el Simulador/Historial existente sin tocar su schema. */
+export function promoAItemSimulacion(r: ResumenPromo): ItemSimulacion {
+  const descuentoPctPromedio = r.ventaNormalTotal > 0 ? r.descuentoTotalClp / r.ventaNormalTotal : 0
+  return {
+    costoPrecioId: r.cp.id,
+    producto: `${r.cp.producto} (${r.promo.nombre})`,
+    formato: r.cp.formato,
+    cantidad: r.cantidadTotal,
+    descuentoPct: descuentoPctPromedio,
+  }
 }
 
 export const ZONA_LABEL: Record<Zona, string> = {

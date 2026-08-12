@@ -2,15 +2,6 @@ import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import GestionSidebar from '@/components/GestionSidebar'
 import GestionBottomNav from '@/components/GestionBottomNav'
-import PageTabs from '@/components/PageTabs'
-import type { PageTab } from '@/components/PageTabs'
-
-const TABS: PageTab[] = [
-  { href: '/gestion',                label: 'Hub',           exact: true },
-  { href: '/gestion/comercial',      label: 'Comercial'                  },
-  { href: '/gestion/administracion', label: 'Administración'              },
-  { href: '/gestion/produccion',     label: 'Producción'                  },
-]
 
 export default async function GestionLayout({ children }: { children: React.ReactNode }) {
   const user = await getServerUser()
@@ -31,9 +22,6 @@ export default async function GestionLayout({ children }: { children: React.Reac
           contenedor anidado — que era exactamente el problema acá, con
           los dos ejes puestos a mano. */}
       <main className="flex-1 min-w-0 flex flex-col overflow-x-clip pb-24 lg:pb-0 mobile-safe-top">
-        <div className="hidden lg:block">
-          <PageTabs tabs={TABS} />
-        </div>
         {children}
       </main>
       <div className="lg:hidden">

@@ -2,17 +2,6 @@ import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import BottomNav from '@/components/BottomNav'
-import PageTabs from '@/components/PageTabs'
-import type { PageTab } from '@/components/PageTabs'
-
-const TABS: PageTab[] = [
-  { href: '/ventas',                      label: 'Ventas',   exact: true  },
-  { href: '/ventas/stock',                label: 'Stock'                  },
-  { href: '/ventas/cotizaciones',         label: 'Cotizaciones'           },
-  { href: '/ventas/misiones',             label: 'Misiones'               },
-  { href: '/ventas/clientes',             label: 'Clientes'               },
-  { href: '/ventas/agenda',               label: 'Agenda'                 },
-]
 
 export default async function VentasLayout({ children }: { children: React.ReactNode }) {
   const user = await getServerUser()
@@ -41,9 +30,6 @@ export default async function VentasLayout({ children }: { children: React.React
           overflow-y-auto, reintroduciendo el mismo scroll anidado/ambiguo que
           se había sacado. 'clip' no dispara ese acoplamiento. */}
       <main className="flex-1 min-w-0 flex flex-col overflow-x-clip pb-36 lg:pb-0 mobile-safe-top">
-        <div className="hidden lg:block">
-          <PageTabs tabs={TABS} />
-        </div>
         {children}
       </main>
       <div className="lg:hidden">
