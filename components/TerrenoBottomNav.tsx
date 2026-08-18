@@ -1,53 +1,25 @@
 'use client'
 
-import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, MapPin, History, Plus } from 'lucide-react'
+import { LayoutDashboard, Route, Plus, Navigation, History } from 'lucide-react'
+import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
-const G = '#D4AF37'
+// 5 destinos = los 5 slots del NavPill, sin botón "Más".
+// Orden = flujo de trabajo del vendedor: reviso mi día → planifico a dónde voy
+// → registro la visita (acción central) → veo qué tengo cerca → reviso lo hecho.
+const ITEMS: NavItem[] = [
+  { href: '/terreno',              icon: LayoutDashboard, label: 'Panel',     exact: true },
+  { href: '/terreno/ruta',         icon: Route,           label: 'Viaje'                  },
+  { href: '/terreno/nueva-visita', icon: Plus,            label: 'Visita'                 },
+  { href: '/terreno/cercanos',     icon: Navigation,      label: 'Cercanos'               },
+  { href: '/terreno/historial',    icon: History,         label: 'Historial'              },
+]
 
 export default function TerrenoBottomNav() {
   const pathname = usePathname()
-
-  const items = [
-    { href: '/',                  icon: Home,    label: 'Inicio',    exact: true  },
-    { href: '/terreno',           icon: MapPin,  label: 'Hub',       exact: true  },
-    { href: '/terreno/historial', icon: History, label: 'Historial', exact: false },
-  ]
-
-  return (
-    <nav
-      className="lg:hidden fixed bottom-0 left-0 right-0 flex items-center justify-around px-2 z-50"
-      style={{
-        background: 'var(--surface)', borderTop: '1px solid var(--border)',
-        paddingTop: '0.5rem',
-        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
-      }}
-    >
-      {items.map(({ href, icon: Icon, label, exact }) => {
-        const active = exact ? pathname === href : pathname.startsWith(href)
-        return (
-          <Link
-            key={href}
-            href={href}
-            className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl"
-            style={{ color: active ? G : 'var(--muted)' }}
-          >
-            <Icon size={21} />
-            <span className="text-xs font-medium">{label}</span>
-          </Link>
-        )
-      })}
-
-      {/* CTA central */}
-      <Link
-        href="/terreno/nueva-visita"
-        className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl"
-        style={{ color: pathname.startsWith('/terreno/nueva-visita') ? G : 'var(--muted)' }}
-      >
-        <Plus size={21} />
-        <span className="text-xs font-medium">Visita</span>
-      </Link>
-    </nav>
-  )
+  // Nueva Visita es un flujo propio a pantalla completa (con su propio header
+  // y botón Volver) — el nav flotante le tapaba el botón de confirmar al
+  // final de cada paso.
+  if (pathname?.startsWith('/terreno/nueva-visita')) return null
+  return <NavPill items={ITEMS} pathname={pathname} />
 }

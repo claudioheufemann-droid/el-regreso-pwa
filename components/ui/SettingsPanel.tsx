@@ -1,18 +1,41 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 interface Props {
   onClose: () => void
   userName: string
   userEmail: string
+  avatarUrl?: string | null
 }
 
 type Section = 'main' | 'password'
 
-export default function SettingsPanel({ onClose, userName, userEmail }: Props) {
+export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl: initialAvatarUrl }: Props) {
   const [section, setSection] = useState<Section>('main')
+  const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl ?? null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [avatarMsg, setAvatarMsg] = useState('')
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleAvatarChange(file: File) {
+    setUploadingAvatar(true)
+    setAvatarMsg('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/user/avatar', { method: 'POST', body: form })
+      const data = await res.json()
+      if (res.ok) {
+        setAvatarUrl(data.avatar_url)
+        setAvatarMsg('✓ Foto actualizada')
+      } else {
+        setAvatarMsg('Error al subir la foto')
+      }
+    } catch { setAvatarMsg('Error de conexión') }
+    setUploadingAvatar(false)
+  }
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
 
   // Contraseña
@@ -126,8 +149,8 @@ export default function SettingsPanel({ onClose, userName, userEmail }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-end"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
+      className="fixed inset-0 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.7)', zIndex: 300 }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div className="sheet-up w-full safe-bottom" style={{
@@ -161,6 +184,32 @@ export default function SettingsPanel({ onClose, userName, userEmail }: Props) {
           {/* ── SECCIÓN PRINCIPAL ── */}
           {section === 'main' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+              {/* Foto de perfil */}
+              <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarChange(f) }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px', borderRadius: 14, background: 'var(--surface2)', border: '1px solid rgba(128,128,128,0.1)' }}>
+                {/* Avatar preview */}
+                <div onClick={() => avatarInputRef.current?.click()}
+                  style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, cursor: 'pointer', position: 'relative', border: '2px solid rgba(212,175,55,0.3)', background: 'rgba(128,128,128,0.15)' }}>
+                  {avatarUrl
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: 'var(--gold)' }}>{userName[0]}</div>
+                  }
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📷</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)' }}>Foto de Perfil</div>
+                  <div style={{ fontSize: 11, color: avatarMsg ? (avatarMsg.startsWith('✓') ? '#4A9A3A' : '#FF6B6B') : 'var(--muted)', marginTop: 2 }}>
+                    {uploadingAvatar ? 'Subiendo...' : avatarMsg || 'Toca tu foto para cambiarla'}
+                  </div>
+                </div>
+                <button onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}
+                  style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(212,175,55,0.3)', background: 'rgba(212,175,55,0.08)', color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                  {uploadingAvatar ? '...' : 'Cambiar'}
+                </button>
+              </div>
 
               {/* Cambiar contraseña */}
               <button

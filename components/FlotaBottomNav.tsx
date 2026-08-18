@@ -1,34 +1,26 @@
-﻿'use client'
+'use client'
 
-import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Truck, Plus, Map, BarChart3 } from 'lucide-react'
+import { Truck, Plus, History, BarChart3, Route, Gauge } from 'lucide-react'
+import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
-const F = '#F97316'
-
-const items = [
-  { href: '/flota',         icon: Truck,     label: 'Flota',    exact: true  },
-  { href: '/flota/checkin', icon: Plus,      label: 'Salida',   exact: false },
-  { href: '/flota/rutas',   icon: Map,       label: 'Rutas',    exact: false },
-  { href: '/flota/admin',   icon: BarChart3, label: 'Reportes', exact: false },
+// El regreso al inicio va en el botón "Volver" del header, no en el nav.
+const ITEMS: NavItem[] = [
+  { href: '/flota',           icon: Truck,     label: 'Flota',     exact: true  },
+  { href: '/flota/checkin',   icon: Plus,      label: 'Salida'                  },
+  { href: '/flota/despachos', icon: Route,     label: 'Despachos'               },
+  { href: '/flota/historial', icon: History,   label: 'Historial'               },
+  { href: '/flota/kpis',      icon: Gauge,     label: 'KPIs'                    },
+  { href: '/flota/admin',     icon: BarChart3, label: 'Reportes'                },
 ]
+
+const RUTAS_PANTALLA_COMPLETA = ['/flota/checkin', '/flota/checkout', '/flota/viaje', '/flota/vehiculo']
 
 export default function FlotaBottomNav() {
   const pathname = usePathname()
-  return (
-    <nav
-      className="lg:hidden fixed bottom-0 left-0 right-0 flex items-center justify-around px-2 z-50"
-      style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', paddingTop: '0.5rem', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
-    >
-      {items.map(({ href, icon: Icon, label, exact }) => {
-        const active = exact ? pathname === href : pathname.startsWith(href)
-        return (
-          <Link key={href} href={href} className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl" style={{ color: active ? F : 'var(--muted)' }}>
-            <Icon size={21} />
-            <span className="text-xs font-medium">{label}</span>
-          </Link>
-        )
-      })}
-    </nav>
-  )
+  // Checkin/Checkout/Viaje son flujos a pantalla completa con su propio header
+  // y footer con botones de acción (Iniciar/Terminar viaje) — el nav flotante
+  // les tapaba esos botones al quedar ambos fijos en la misma zona inferior.
+  if (RUTAS_PANTALLA_COMPLETA.some(r => pathname?.startsWith(r))) return null
+  return <NavPill items={ITEMS} pathname={pathname} />
 }

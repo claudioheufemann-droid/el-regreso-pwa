@@ -9,6 +9,7 @@ export interface RcUser {
   email: string
   is_admin?: boolean
   macro_area?: string | null   // 'comercial' | 'administracion' | null (global admin)
+  avatar_url?: string | null
 }
 
 export interface RcTask {
@@ -22,12 +23,14 @@ export interface RcTask {
   responsable_ids?: string[]
   responsables?: RcUser[]
   plazo: string
+  hora_limite?: string | null
   estado: TaskStatus
   prioridad_maxima: boolean
   evidencia_url?: string
   contador_retrasos: number
   created_at?: string
   creado_por?: string
+  creador?: RcUser
   nota_rechazo?: string
   nota_admin?: string
   foto_antes_url?: string
@@ -42,13 +45,25 @@ export const MACRO_AREAS = {
     label: 'Área Comercial',
     color: '#E67E22',
     code: 'AC',
-    areas: ['Ventas', 'Marketing', 'Logística', 'Control de Gestión'] as const,
+    areas: ['Ventas', 'Marketing', 'Control de Gestión'] as const,
   },
   administracion: {
     label: 'Administración',
     color: '#5B8AA8',
     code: 'AD',
     areas: ['R. Humanos', 'Contabilidad', 'Finanzas'] as const,
+  },
+  produccion: {
+    label: 'Área de Producción',
+    color: '#2ECC71',
+    code: 'PR',
+    areas: ['Producción', 'Calidad', 'Bodega', 'Mantenimiento'] as const,
+  },
+  logistica: {
+    label: 'Logística',
+    color: '#F97316',
+    code: 'LG',
+    areas: ['Logística'] as const,
   },
 } as const
 
@@ -57,18 +72,21 @@ export type MacroKey = keyof typeof MACRO_AREAS
 /** Devuelve la macro categoría a la que pertenece un área */
 export function getMacroKey(area: string): MacroKey {
   if ((MACRO_AREAS.administracion.areas as readonly string[]).includes(area)) return 'administracion'
+  if ((MACRO_AREAS.produccion.areas as readonly string[]).includes(area)) return 'produccion'
+  if ((MACRO_AREAS.logistica.areas as readonly string[]).includes(area)) return 'logistica'
   return 'comercial'
 }
 
-/** Usuarios elegibles para asignar en una tarea de cierta área */
-export function eligibleUsers(users: RcUser[], area: string): RcUser[] {
-  const macro = getMacroKey(area)
-  return users.filter(u => u.macro_area === macro || !u.macro_area)
+/** Usuarios elegibles para asignar en una tarea — todos, sin restricción por área */
+export function eligibleUsers(users: RcUser[]): RcUser[] {
+  return users
 }
 
 export const AREAS = [
   ...MACRO_AREAS.comercial.areas,
   ...MACRO_AREAS.administracion.areas,
+  ...MACRO_AREAS.produccion.areas,
+  ...MACRO_AREAS.logistica.areas,
 ] as const
 export const CEREBRO_AREA = 'Mi Cerebro'
 export const ALL_AREAS = [...AREAS, CEREBRO_AREA] as const
@@ -87,6 +105,11 @@ export const AREA_CFG: Record<string, { color: string; dim: string; code: string
   'R. Humanos':           { color: '#8E44AD', dim: '#120A16', code: 'RH' },
   'Contabilidad':         { color: '#16A085', dim: '#061210', code: 'CT' },
   'Finanzas':             { color: '#27AE60', dim: '#081409', code: 'FZ' },
+  // Producción
+  'Producción':           { color: '#2ECC71', dim: '#071A0E', code: 'PR' },
+  'Calidad':              { color: '#1ABC9C', dim: '#061512', code: 'CA' },
+  'Bodega':               { color: '#F39C12', dim: '#16100A', code: 'BD' },
+  'Mantenimiento':        { color: '#3498DB', dim: '#081018', code: 'MT' },
   // Personal
   'Mi Cerebro':           { color: '#9B59B6', dim: '#100A14', code: 'MC' },
 }

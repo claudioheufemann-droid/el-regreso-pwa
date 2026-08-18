@@ -1,0 +1,456 @@
+'use client'
+
+import { useState } from 'react'
+import { ChevronDown, ChevronUp, MapPin, Truck, Clock, Navigation2, User, Trash2 } from 'lucide-react'
+import type { AppUser } from '@/lib/auth'
+import AppHeader from '@/components/ui/AppHeader'
+
+const F = '#D4AF37'
+
+const TIPO_VIAJE_INFO: Record<string, { label: string; color: string; bg: string }> = {
+  reparto:             { label: '🚚 Reparto',            color: F,        bg: 'rgba(212,175,55,0.1)' },
+  tramite:             { label: '🔧 Trámite',            color: '#D4AF37', bg: 'rgba(245,158,11,0.1)' },
+  operador_logistico:  { label: '📦 Operador logístico', color: '#60A5FA', bg: 'rgba(96,165,250,0.1)' },
+}
+
+interface Parada {
+  n: string; d: string
+  fg?: string; fp?: string
+  en?: 'si' | 'no'; mn?: string
+  lat?: number; lng?: number
+  /** Hora exacta en que se marcó la entrega (pedido de Claudio: el
+   *  historial tiene que dejar registrado cuándo se hizo cada cosa). */
+  ea?: string
+}
+
+interface Viaje {
+  id: string
+  tipo: string
+  estado: string
+  motivo: string | null
+  km_inicio: number | null
+  km_fin: number | null
+  km_teoricos: number | null
+  iniciado_at: string
+  completado_at: string | null
+  destino_declarado: string | null
+  foto_odometro_inicio: string | null
+  foto_360_frente_inicio: string | null
+  foto_360_izquierdo_inicio: string | null
+  foto_360_derecho_inicio: string | null
+  foto_360_atras_inicio: string | null
+  foto_combustible_inicio: string | null
+  foto_odometro_fin: string | null
+  foto_360_frente_fin: string | null
+  foto_360_izquierdo_fin: string | null
+  foto_360_derecho_fin: string | null
+  foto_360_atras_fin: string | null
+  foto_combustible_fin: string | null
+  foto_boleta_combustible: string | null
+  repartos_terminados: boolean | null
+  operador_logistico: string | null
+  ciudad_destino: string | null
+  foto_guia_envio: string | null
+  vehiculo: { id?: string; nombre: string; patente: string | null } | null
+  conductor: { id?: string; nombre: string } | null
+}
+
+interface Props {
+  user: AppUser
+  viajes: Viaje[]
+}
+
+function parseParadas(dest: string | null): Parada[] {
+  if (!dest) return []
+  try {
+    const d = JSON.parse(dest)
+    if (Array.isArray(d)) return d.map(p => ({
+      n: p.n || p.nombre || '', d: p.d || p.direccion || '',
+      fg: p.fg ?? undefined, fp: p.fp ?? undefined,
+      en: p.en ?? undefined, mn: p.mn ?? undefined,
+      lat: p.lat ?? undefined, lng: p.lng ?? undefined,
+      ea: p.ea ?? undefined,
+    }))
+  } catch { /* plain text */ }
+  return dest.trim() ? [{ n: dest, d: dest }] : []
+}
+
+function fmtFecha(iso: string) {
+  const d = new Date(iso)
+  return d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function fmtHora(iso: string) {
+  return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+}
+
+function fmtDuracion(inicio: string, fin: string | null) {
+  if (!fin) return null
+  const mins = Math.round((new Date(fin).getTime() - new Date(inicio).getTime()) / 60000)
+  if (mins < 60) return `${mins} min`
+  return `${Math.floor(mins / 60)}h ${mins % 60 > 0 ? (mins % 60) + 'm' : ''}`
+}
+
+function EstadoBadge({ estado }: { estado: string }) {
+  const cfg: Record<string, { color: string; bg: string; label: string }> = {
+    completado: { color: '#5A8A4A', bg: 'rgba(90,138,74,0.12)', label: 'Completado' },
+    cerrado:    { color: '#5A8A4A', bg: 'rgba(90,138,74,0.12)', label: 'Completado' },
+    en_curso:   { color: '#D4AF37', bg: 'rgba(245,158,11,0.12)', label: 'En curso' },
+    cancelado:  { color: '#B5543E', bg: 'rgba(239,68,68,0.12)',  label: 'Cancelado' },
+  }
+  const c = cfg[estado] ?? { color: 'var(--muted)', bg: 'rgba(255,255,255,0.06)', label: estado }
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, color: c.color, background: c.bg, padding: '3px 8px', borderRadius: 20 }}>
+      {c.label}
+    </span>
+  )
+}
+
+function ViajeCard({ viaje, puedeBorrar, onEliminado }: { viaje: Viaje; puedeBorrar: boolean; onEliminado: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [borrando, setBorrando] = useState(false)
+  const paradas = parseParadas(viaje.destino_declarado)
+  const kmRecorridos = viaje.km_fin && viaje.km_inicio ? viaje.km_fin - viaje.km_inicio : viaje.km_teoricos
+  const duracion = fmtDuracion(viaje.iniciado_at, viaje.completado_at)
+
+  async function eliminar(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirm('¿Eliminar este viaje del historial? Esta acción no se puede deshacer.')) return
+    setBorrando(true)
+    try {
+      const res = await fetch(`/api/flota/viajes/${viaje.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error ?? 'Error al eliminar el viaje')
+        return
+      }
+      onEliminado(viaje.id)
+    } finally {
+      setBorrando(false)
+    }
+  }
+
+  return (
+    <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
+      {/* Header card — siempre visible */}
+      <div onClick={() => setOpen(!open)} style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Fila 1: fecha + estado */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>{fmtFecha(viaje.iniciado_at)}</p>
+            <p style={{ fontSize: 11, color: 'var(--muted)' }}>{fmtHora(viaje.iniciado_at)}{viaje.completado_at ? ` → ${fmtHora(viaje.completado_at)}` : ''}</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <EstadoBadge estado={viaje.estado} />
+            {puedeBorrar && (
+              <button onClick={eliminar} disabled={borrando} style={{ background: 'rgba(181,84,62,0.1)', border: 'none', borderRadius: 8, padding: 6, cursor: 'pointer', display: 'flex', opacity: borrando ? 0.5 : 1 }}>
+                <Trash2 size={13} color="#B5543E" />
+              </button>
+            )}
+            {open ? <ChevronUp size={14} color="var(--muted)" /> : <ChevronDown size={14} color="var(--muted)" />}
+          </div>
+        </div>
+
+        {/* Fila 2: vehículo + conductor + tipo */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Truck size={13} color={F} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{viaje.vehiculo?.nombre ?? '—'}</span>
+            {viaje.vehiculo?.patente && (
+              <span style={{ fontSize: 10, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', padding: '1px 6px', borderRadius: 4 }}>{viaje.vehiculo.patente}</span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <User size={13} color="var(--muted)" />
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{viaje.conductor?.nombre?.split(' ')[0] ?? '—'}</span>
+          </div>
+          <span style={{ fontSize: 11, color: (TIPO_VIAJE_INFO[viaje.tipo] ?? TIPO_VIAJE_INFO.tramite).color, fontWeight: 700, background: (TIPO_VIAJE_INFO[viaje.tipo] ?? TIPO_VIAJE_INFO.tramite).bg, padding: '2px 8px', borderRadius: 10 }}>
+            {(TIPO_VIAJE_INFO[viaje.tipo] ?? TIPO_VIAJE_INFO.tramite).label}
+          </span>
+        </div>
+
+        {/* Fila 3: métricas rápidas */}
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {kmRecorridos != null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Navigation2 size={12} color={F} />
+              <span style={{ fontSize: 12, fontWeight: 800, color: F }}>{kmRecorridos} km</span>
+            </div>
+          )}
+          {duracion && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Clock size={12} color="var(--muted)" />
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{duracion}</span>
+            </div>
+          )}
+          {paradas.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <MapPin size={12} color="var(--muted)" />
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{paradas.length} parada{paradas.length !== 1 ? 's' : ''}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Detalle expandible */}
+      {open && (
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* Métricas detalladas */}
+          <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {[
+              { label: 'KM inicio', value: viaje.km_inicio?.toLocaleString('es-CL') ?? '—' },
+              { label: 'KM llegada', value: viaje.km_fin?.toLocaleString('es-CL') ?? '—' },
+              { label: 'KM recorridos', value: kmRecorridos != null ? `${kmRecorridos} km` : '—' },
+            ].map(m => (
+              <div key={m.label} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: '10px 12px' }}>
+                <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>{m.label}</p>
+                <p style={{ fontSize: 15, fontWeight: 900, color: 'var(--cream)' }}>{m.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Paradas / Clientes */}
+          {paradas.length > 0 && (
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>
+                Paradas visitadas ({paradas.length})
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {paradas.map((p, i) => (
+                  <div key={i} style={{ padding: '10px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(212,175,55,0.5)', minWidth: 16, marginTop: 1 }}>{i + 1}</span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.n}</p>
+                          {p.en === 'si' && p.fg && (
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#4ADE80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', padding: '2px 7px', borderRadius: 20 }}>
+                              ✓ Entregado
+                            </span>
+                          )}
+                          {p.en === 'no' && p.fg && (
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#F87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', padding: '2px 7px', borderRadius: 20 }}>
+                              ✕ No entregado
+                            </span>
+                          )}
+                          {p.en && !p.fg && (
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#FBBF24', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.25)', padding: '2px 7px', borderRadius: 20 }}>
+                              ⚠ Sin foto de respaldo
+                            </span>
+                          )}
+                        </div>
+                        {p.d && p.d !== p.n && (
+                          <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.d}</p>
+                        )}
+                        {p.en === 'no' && p.mn && (
+                          <p style={{ fontSize: 11, color: '#F87171', marginTop: 2 }}>{p.mn}</p>
+                        )}
+                        {p.en && p.ea && (
+                          <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Marcado a las {fmtHora(p.ea)}</p>
+                        )}
+                      </div>
+                    </div>
+                    {(p.fg || p.fp) && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8, marginLeft: 26 }}>
+                        {p.fg && (
+                          <a href={p.fg} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: 64, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={p.fg} alt={p.en === 'no' ? 'Evidencia' : 'Guía'} style={{ width: '100%', height: 64, objectFit: 'cover', display: 'block' }} />
+                            <div style={{ padding: '3px 5px', fontSize: 8, fontWeight: 700, color: 'var(--muted)', textAlign: 'center' }}>{p.en === 'no' ? 'Evidencia' : 'Guía'}</div>
+                          </a>
+                        )}
+                        {p.fp && (
+                          <a href={p.fp} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: 64, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={p.fp} alt="Producto" style={{ width: '100%', height: 64, objectFit: 'cover', display: 'block' }} />
+                            <div style={{ padding: '3px 5px', fontSize: 8, fontWeight: 700, color: 'var(--muted)', textAlign: 'center' }}>Producto</div>
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Entrega a operador logístico (Cacem/Varmontt) */}
+          {viaje.tipo === 'operador_logistico' && (
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>
+                Entrega a operador logístico
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: (viaje.foto_guia_envio ? 8 : 0) }}>
+                <div style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 10, padding: '8px 12px' }}>
+                  <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Operador</p>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: '#60A5FA' }}>{viaje.operador_logistico ?? '—'}</p>
+                </div>
+                <div style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 10, padding: '8px 12px' }}>
+                  <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Ciudad destino</p>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)' }}>{viaje.ciudad_destino ?? '—'}</p>
+                </div>
+              </div>
+              {viaje.foto_guia_envio && (
+                <a href={viaje.foto_guia_envio} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: 100, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={viaje.foto_guia_envio} alt="Guía de envío" style={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} />
+                  <div style={{ padding: '3px 5px', fontSize: 8, fontWeight: 700, color: 'var(--muted)', textAlign: 'center' }}>Guía de envío</div>
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Motivo */}
+          {viaje.motivo && (
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 4 }}>Notas</p>
+              <p style={{ fontSize: 13, color: 'var(--cream)' }}>{viaje.motivo}</p>
+            </div>
+          )}
+
+          {/* Fotos — toda la evidencia capturada en check-in y checkout */}
+          {(() => {
+            const fotos: { url: string; label: string }[] = [
+              { url: viaje.foto_odometro_inicio ?? '', label: 'Odómetro (inicio)' },
+              { url: viaje.foto_combustible_inicio ?? '', label: 'Combustible (inicio)' },
+              { url: viaje.foto_360_frente_inicio ?? '', label: '360° Frente (inicio)' },
+              { url: viaje.foto_360_izquierdo_inicio ?? '', label: '360° Izq. (inicio)' },
+              { url: viaje.foto_360_derecho_inicio ?? '', label: '360° Der. (inicio)' },
+              { url: viaje.foto_360_atras_inicio ?? '', label: '360° Atrás (inicio)' },
+              { url: viaje.foto_odometro_fin ?? '', label: 'Odómetro (fin)' },
+              { url: viaje.foto_combustible_fin ?? '', label: 'Combustible (fin)' },
+              { url: viaje.foto_360_frente_fin ?? '', label: '360° Frente (fin)' },
+              { url: viaje.foto_360_izquierdo_fin ?? '', label: '360° Izq. (fin)' },
+              { url: viaje.foto_360_derecho_fin ?? '', label: '360° Der. (fin)' },
+              { url: viaje.foto_360_atras_fin ?? '', label: '360° Atrás (fin)' },
+              { url: viaje.foto_boleta_combustible ?? '', label: 'Boleta combustible' },
+            ].filter(f => f.url)
+
+            if (fotos.length === 0) return null
+            return (
+              <div>
+                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>
+                  📸 Evidencia fotográfica ({fotos.length})
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {fotos.map(f => (
+                    <div key={f.label} style={{ borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <a href={f.url} target="_blank" rel="noopener noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={f.url} alt={f.label} style={{ width: '100%', height: '90px', objectFit: 'cover', display: 'block' }} />
+                        <div style={{ padding: '5px 8px', fontSize: 9, fontWeight: 700, color: 'var(--muted)' }}>{f.label}</div>
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Abrir en Maps */}
+          {paradas.length > 0 && (
+            <a
+              href={(() => {
+                const base = encodeURIComponent('El Regreso Beer, Valdivia, Chile')
+                const stops = paradas.map(p => p.lat && p.lng ? `${p.lat},${p.lng}` : encodeURIComponent(p.d || p.n)).join('/')
+                return `https://www.google.com/maps/dir/${base}/${stops}/${base}`
+              })()}
+              target="_blank" rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', borderRadius: 10, background: 'rgba(66,133,244,0.1)', border: '1px solid rgba(66,133,244,0.25)', color: 'var(--cream)', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="var(--cream)"/>
+              </svg>
+              Ver ruta en Google Maps
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function HistorialClient({ user, viajes: viajesIniciales }: Props) {
+  const [viajes, setViajes] = useState(viajesIniciales)
+  const [filtroVehiculo, setFiltroVehiculo] = useState('todos')
+  const [filtroConductor, setFiltroConductor] = useState('todos')
+
+  const vehiculos = [...new Map(
+    viajes.filter(v => v.vehiculo).map(v => [v.vehiculo!.nombre, v.vehiculo!] as [string, typeof v.vehiculo & {}])
+  ).values()]
+  const conductores = [...new Map(
+    viajes.filter(v => v.conductor).map(v => [v.conductor!.nombre, v.conductor!] as [string, typeof v.conductor & {}])
+  ).values()]
+
+  const filtrados = viajes.filter(v =>
+    (filtroVehiculo === 'todos' || v.vehiculo?.nombre === filtroVehiculo) &&
+    (filtroConductor === 'todos' || v.conductor?.nombre === filtroConductor)
+  )
+
+  const totalKm = filtrados.reduce((sum, v) => {
+    const km = v.km_fin && v.km_inicio ? v.km_fin - v.km_inicio : (v.km_teoricos ?? 0)
+    return sum + km
+  }, 0)
+
+  const completados = filtrados.filter(v => v.estado === 'completado' || v.estado === 'cerrado').length
+
+  const selectStyle: React.CSSProperties = {
+    padding: '8px 12px', borderRadius: 10, background: '#161616',
+    border: '1px solid rgba(255,255,255,0.08)', color: 'var(--cream)',
+    fontSize: 13, outline: 'none', cursor: 'pointer',
+  }
+
+  return (
+    <div style={{ maxWidth: 1200, margin: '0 auto', width: '100%', padding: '20px 16px', paddingBottom: 100 }}>
+
+      {/* Header estándar */}
+      <AppHeader eyebrow="Módulo logística" title="Historial de viajes" />
+
+      {/* Stats globales */}
+      <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
+        {[
+          { label: 'Total viajes', value: filtrados.length, color: F, rgb: '212,175,55' },
+          { label: 'Completados', value: completados, color: '#5A8A4A', rgb: '90,138,74' },
+          { label: 'Km totales', value: `${totalKm} km`, color: '#D4AF37', rgb: '245,158,11' },
+        ].map(s => (
+          <div key={s.label} style={{ background: `linear-gradient(135deg, rgba(${s.rgb},0.09), rgba(${s.rgb},0.03))`, border: `1px solid rgba(${s.rgb},0.2)`, borderRadius: 12, padding: '12px 14px' }}>
+            <p style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>{s.label}</p>
+            <p style={{ fontSize: 22, fontWeight: 900, color: s.color, letterSpacing: '-0.5px' }}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <select value={filtroVehiculo} onChange={e => setFiltroVehiculo(e.target.value)} style={selectStyle}>
+          <option value="todos">Todos los vehículos</option>
+          {vehiculos.map(v => v && <option key={v.nombre} value={v.nombre}>{v.nombre}</option>)}
+        </select>
+        <select value={filtroConductor} onChange={e => setFiltroConductor(e.target.value)} style={selectStyle}>
+          <option value="todos">Todos los conductores</option>
+          {conductores.map(c => c && <option key={c.nombre} value={c.nombre}>{c.nombre}</option>)}
+        </select>
+      </div>
+
+      {/* Lista */}
+      {filtrados.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--muted)' }}>
+          <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Sin viajes registrados</p>
+          <p style={{ fontSize: 13 }}>Los viajes completados aparecerán aquí</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filtrados.map(v => (
+            <ViajeCard
+              key={v.id}
+              viaje={v}
+              puedeBorrar={user.isAdmin || v.conductor?.id === user.id}
+              onEliminado={id => setViajes(prev => prev.filter(x => x.id !== id))}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

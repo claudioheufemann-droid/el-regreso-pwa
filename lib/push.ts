@@ -12,6 +12,8 @@ function initVapid() {
       pub,
       priv
     )
+  } else {
+    console.error('Push: faltan variables VAPID en el entorno (NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY) — no se puede enviar ninguna notificación push')
   }
 }
 
@@ -20,11 +22,41 @@ export interface PushPayload {
   body: string
   url?: string
   tag?: string
+  taskId?: string   // ← deep link directo a la tarea
   requireInteraction?: boolean
+}
+
+// Misma resolución de URL destino que usa public/sw.js al hacer click en el
+// push — así la campanita del hub navega exactamente al mismo lugar.
+function resolverUrl(payload: PushPayload): string {
+  if (payload.taskId) return `/gestion?task=${payload.taskId}`
+  return payload.url || '/'
+}
+
+// Deja un registro persistente en `notificaciones` para cada destinatario,
+// sin importar si el push en sí llega a entregarse (dispositivo offline,
+// suscripción vencida, etc.) — la campanita del hub es la fuente de verdad
+// de "qué me llegó", el push es solo el aviso en caliente.
+async function registrarNotificaciones(userIds: string[], payload: PushPayload) {
+  if (userIds.length === 0) return
+  try {
+    const cookieStore = await cookies()
+    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
+    })
+    const url = resolverUrl(payload)
+    const unicos = Array.from(new Set(userIds))
+    await supabase.from('notificaciones').insert(
+      unicos.map(uid => ({ user_id: uid, titulo: payload.title, cuerpo: payload.body, url, tipo: payload.tag ?? null }))
+    )
+  } catch (e) {
+    console.error('registrarNotificaciones error:', e)
+  }
 }
 
 export async function sendPushToUser(userId: string, payload: PushPayload) {
   initVapid()
+  registrarNotificaciones([userId], payload)
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -47,6 +79,8 @@ export async function sendPushToUser(userId: string, payload: PushPayload) {
           // Si el endpoint ya no es válido (410/404), eliminarlo
           if (err.statusCode === 410 || err.statusCode === 404) {
             supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint).then(() => {})
+          } else {
+            console.error(`Push: fallo al enviar a user ${userId} (status ${err.statusCode ?? '?'}):`, err.body ?? err.message ?? err)
           }
         })
       )
@@ -71,7 +105,10 @@ export async function sendPushToEmail(email: string, payload: PushPayload) {
 
     if (!subs?.length) return
 
-    await Promise.allSettled(
+    const userIds = subs.map(s => s.user_id).filter((id): id is string => !!id)
+    registrarNotificaciones(userIds, payload)
+
+    const results = await Promise.allSettled(
       subs.map(sub =>
         webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
@@ -79,6 +116,7 @@ export async function sendPushToEmail(email: string, payload: PushPayload) {
         )
       )
     )
+    results.forEach(r => { if (r.status === 'rejected') console.error(`Push: fallo al enviar a ${email}:`, r.reason) })
   } catch (e) {
     console.error('Push to email error:', e)
   }
@@ -94,12 +132,45 @@ export async function sendPushToAllAdmins(payload: PushPayload) {
     const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
     })
-
     const { data: admins } = await supabase.from('users').select('id').eq('is_admin', true)
     if (!admins?.length) return
-
     await Promise.allSettled(admins.map(a => sendPushToUser(a.id, payload)))
   } catch (e) {
     console.error('Push to admins error:', e)
+  }
+}
+
+/** Envía a TODOS los usuarios con suscripción activa */
+export async function sendPushToAll(payload: PushPayload) {
+  initVapid()
+  try {
+    const cookieStore = await cookies()
+    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
+    })
+    const { data: subs } = await supabase.from('push_subscriptions').select('*')
+    if (!subs?.length) return
+
+    // Registro persistente por trabajador (no por suscripción — un mismo
+    // usuario puede tener varios dispositivos y no queremos duplicar filas).
+    const { data: todos } = await supabase.from('users').select('id')
+    registrarNotificaciones((todos ?? []).map(u => u.id), payload)
+
+    await Promise.allSettled(
+      subs.map(sub =>
+        webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          JSON.stringify(payload)
+        ).catch(err => {
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint).then(() => {})
+          } else {
+            console.error(`Push: fallo al enviar a ${sub.user_email ?? sub.user_id} (status ${err.statusCode ?? '?'}):`, err.body ?? err.message ?? err)
+          }
+        })
+      )
+    )
+  } catch (e) {
+    console.error('Push to all error:', e)
   }
 }

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import { VENDEDORES } from '@/lib/types'
+import { VENDEDORES, VENDEDORES_SCOPE, VENDEDOR_GRUPOS } from '@/lib/types'
+import { getVentasRango } from '@/lib/ventasCache'
 import MetasClient from './MetasClient'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +11,7 @@ export default async function MetasPage() {
   const { data: ultimaFecha } = await supabase
     .from('ventas')
     .select('fecha_pedido')
-    .in('vendedor_actual', VENDEDORES)
+    .in('vendedor_actual', VENDEDORES_SCOPE as unknown as string[])
     .order('fecha_pedido', { ascending: false })
     .limit(1)
     .single()
@@ -26,8 +27,8 @@ export default async function MetasPage() {
   ] = await Promise.all([
     supabase.from('metas').select('*').eq('tipo', 'semanal').lte('fecha_inicio', fechaRef).gte('fecha_fin', fechaRef),
     supabase.from('metas').select('*').eq('tipo', 'mensual').lte('fecha_inicio', fechaRef).gte('fecha_fin', fechaRef),
-    supabase.from('metas').select('semana_numero, fecha_inicio, fecha_fin').eq('tipo', 'semanal').gte('fecha_inicio', '2026-05-01').lte('fecha_fin', '2026-07-31').order('fecha_inicio'),
-    supabase.from('metas').select('fecha_inicio, fecha_fin').eq('tipo', 'mensual').gte('fecha_inicio', '2026-05-01').lte('fecha_fin', '2026-07-31').order('fecha_inicio'),
+    supabase.from('metas').select('semana_numero, fecha_inicio, fecha_fin').eq('tipo', 'semanal').order('fecha_inicio'),
+    supabase.from('metas').select('fecha_inicio, fecha_fin').eq('tipo', 'mensual').order('fecha_inicio'),
     supabase.from('periodos').select('*').eq('activo', true).single(),
   ])
 
@@ -51,26 +52,40 @@ export default async function MetasPage() {
   const semInicio = metasSemanales?.[0]?.fecha_inicio  ?? fechaRef
   const semFin    = metasSemanales?.[0]?.fecha_fin     ?? fechaRef
 
-  const [{ data: ventasMes }, { data: ventasSemana }] = await Promise.all([
-    supabase.from('ventas').select('vendedor_actual, litros, categoria_negocio, fecha_pedido, categoria_producto, producto').in('vendedor_actual', VENDEDORES).gte('fecha_pedido', mesInicio).lte('fecha_pedido', fechaRef),
-    supabase.from('ventas').select('vendedor_actual, litros, categoria_negocio, fecha_pedido, categoria_producto, producto').in('vendedor_actual', VENDEDORES).gte('fecha_pedido', semInicio).lte('fecha_pedido', fechaRef),
+  const SCOPE = VENDEDORES_SCOPE as unknown as string[]
+  const [ventasMesRaw, ventasSemanaRaw] = await Promise.all([
+    getVentasRango(mesInicio, fechaRef),
+    getVentasRango(semInicio, fechaRef),
   ])
+  const ventasMes    = ventasMesRaw
+    .filter(v => SCOPE.includes(v.vendedor_actual))
+    .map(v => ({ ...v, litros: v.litros ?? 0 }))
+  const ventasSemana = ventasSemanaRaw
+    .filter(v => SCOPE.includes(v.vendedor_actual))
+    .map(v => ({ ...v, litros: v.litros ?? 0 }))
+
+  // Sin avatar individual — consolidado bajo Vendedor 1 (token canónico)
+  const vendedorAvatars: Record<string, string | null> = {
+    'Vendedor 1': null,
+  }
 
   return (
     <MetasClient
       metasSemanales={metasSemanales ?? []}
       metasMensuales={metasMensuales ?? []}
-      ventasMes={ventasMes ?? []}
-      ventasSemana={ventasSemana ?? []}
+      ventasMes={ventasMes}
+      ventasSemana={ventasSemana}
       fechaRef={fechaRef}
       mesInicio={mesInicio}
       mesFin={mesFin}
       semanaInicio={semInicio}
       semanaFin={semFin}
       periodo={periodo}
-      vendedores={VENDEDORES as unknown as string[]}
+      vendedores={Object.keys(VENDEDOR_GRUPOS)}
+      vendedorGrupos={VENDEDOR_GRUPOS}
       periodosSemanas={periodosSemanas}
       periodosMeses={periodosMeses}
+      vendedorAvatars={vendedorAvatars}
     />
   )
 }

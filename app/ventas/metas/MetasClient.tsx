@@ -3,6 +3,7 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { Target, Calendar, CheckCircle, Clock, ChevronDown } from 'lucide-react'
 import { Periodo } from '@/lib/types'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
   getDiasHabiles,
   getDiasHabilesTranscurridos,
@@ -18,19 +19,41 @@ import {
   type AnalyticsCanal,
   type AnalyticsVendedor,
 } from '@/lib/metas-engine'
+import AppHeader from '@/components/ui/AppHeader'
 
 type Vista = 'diario' | 'semanal' | 'mensual'
+
+interface ClienteDetalle {
+  nombre: string
+  canal: string | null
+  litros: number
+  monto: number
+  pedidos: number
+  ultimoPedido: string
+  productos: {
+    producto: string
+    categoria: string
+    envase: string | null
+    litros: number
+    monto: number
+    unidades: number | null
+  }[]
+}
 
 interface VentaRow {
   vendedor_actual: string
   litros: number
+  total_sin_impuesto?: number | null
   categoria_negocio: string | null
-  fecha_pedido: string
+  nombre_fantasia?: string | null
   categoria_producto?: string | null
   producto?: string | null
+  envase?: string | null
+  fecha_pedido: string
 }
 
-interface ProductoItem { nombre: string; litros: number }
+interface ClienteProducto { nombre: string; litros: number; canal: string | null }
+interface ProductoItem { nombre: string; litros: number; clientes: ClienteProducto[] }
 interface ProductoCategoria { categoria: string; total: number; productos: ProductoItem[] }
 
 interface MetaRow {
@@ -101,11 +124,21 @@ interface Props {
   semanaFin: string
   periodo: Periodo | null
   vendedores: string[]
+  vendedorGrupos?: Record<string, string[]>
   periodosSemanas: PeriodoSemana[]
   periodosMeses: PeriodoMes[]
+  vendedorAvatars?: Record<string, string | null>
 }
 
 function fmt(n: number) { return n.toFixed(1) }
+/** Número compacto para chips en móvil: sin decimales cero, con separador de miles */
+function fmtL(n: number) {
+  const rounded = Math.round(n * 10) / 10
+  const str = rounded % 1 === 0
+    ? new Intl.NumberFormat('es-CL').format(Math.round(rounded))
+    : new Intl.NumberFormat('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(rounded)
+  return str
+}
 
 function fmtFecha(d: string) {
   const [, m, day] = d.split('-')
@@ -146,7 +179,8 @@ function GaugeChart({ pct, semaforo, meta, realizado }: {
       )}
       {/* % — centrado en el espacio interior del arco */}
       <text x={cx} y={cy - 26} textAnchor="middle" fill={color}
-        fontSize="36" fontWeight="900" fontFamily="inherit">
+        fontSize="36" fontWeight="900" fontFamily="inherit"
+        style={{ fontVariantNumeric: 'tabular-nums' }}>
         {pct.toFixed(0)}%
       </text>
       {/* Litros — debajo del % */}
@@ -290,7 +324,10 @@ function PacingLineChart({ data, meta, semaforo }: {
   const currentPct = meta > 0 && lastReal ? Math.round((lastReal.realAcum / meta) * 100) : 0
 
   return (
-    <svg width={W} height={H + 32} viewBox={`0 0 ${W} ${H + 32}`} style={{ display: 'block', margin: '0 auto' }}>
+    <svg width={W} height={H + 32} viewBox={`0 0 ${W} ${H + 32}`}
+      style={{ display: 'block', width: '100%', maxWidth: W, margin: '0 auto' }}
+      preserveAspectRatio="xMidYMid meet"
+    >
       <defs>
         <linearGradient id={`area-grad-${semaforo}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.35" />
@@ -410,41 +447,13 @@ function BarraDual({ meta, realizado, esperado, semaforo }: {
   )
 }
 
-function CanalRow({ c, vista, canalDiario }: { c: AnalyticsCanal; vista: Vista; canalDiario?: CanalDiario }) {
-  const color = CANAL_COLORS[c.canal] ?? '#6B7280'
-
-  if (vista === 'diario') {
-    if (!canalDiario || canalDiario.metaDiaria <= 0) return null
-    const pct = calcularCumplimiento(canalDiario.realHoy, canalDiario.metaDiaria)
-    return (
-      <div style={{
-        padding: '11px 14px', borderRadius: 12, background: 'var(--surface2)',
-        borderLeft: `3px solid ${SEMAFORO_COLORS[canalDiario.semaforo]}`,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: color }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cream)' }}>{c.canal}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fmt(canalDiario.realHoy)} / {fmt(canalDiario.metaDiaria)} L</span>
-            <span style={{
-              fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 100,
-              background: SEMAFORO_BG[canalDiario.semaforo], color: SEMAFORO_COLORS[canalDiario.semaforo],
-              border: `1px solid ${SEMAFORO_COLORS[canalDiario.semaforo]}40`,
-            }}>{pct.toFixed(0)}%</span>
-          </div>
-        </div>
-        <BarraDual meta={canalDiario.metaDiaria} realizado={canalDiario.realHoy} esperado={canalDiario.metaDiaria} semaforo={canalDiario.semaforo} />
-      </div>
-    )
-  }
-
-  const meta     = vista === 'mensual' ? c.metaMensual     : c.metaSemanal
-  const real     = vista === 'mensual' ? c.realizadoMes    : c.realizadoSemana
-  const esperado = vista === 'mensual' ? c.metaEsperadaMes : c.metaEsperadaSemana
-  const pct      = vista === 'mensual' ? c.pctMes          : c.pctSemana
-  const semaforo = vista === 'mensual' ? c.semaforoMes     : c.semaforoSemana
+function CanalRow({ c }: { c: AnalyticsCanal }) {
+  const color    = CANAL_COLORS[c.canal] ?? '#6B7280'
+  const meta     = c.metaMensual
+  const real     = c.realizadoMes
+  const esperado = c.metaEsperadaMes
+  const pct      = c.pctMes
+  const semaforo = c.semaforoMes
   if (meta <= 0) return null
 
   return (
@@ -473,25 +482,18 @@ function CanalRow({ c, vista, canalDiario }: { c: AnalyticsCanal; vista: Vista; 
 
 // ─── VendedorCard ─────────────────────────────────────────────────────────────
 
-function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vista: Vista }) {
-  const isDiario  = vista === 'diario'
-  const esMensual = vista === 'mensual'
-
-  const meta      = isDiario  ? analytics.metaDiaria
-                  : esMensual ? analytics.metaMensual           : analytics.metaSemanal
-  const real      = isDiario  ? analytics.realizadoHoy
-                  : esMensual ? analytics.realizadoMes          : analytics.realizadoSemana
-  const esperado  = isDiario  ? analytics.metaDiaria
-                  : esMensual ? analytics.metaEsperadaMes       : analytics.metaEsperadaSemana
-  const pct       = isDiario  ? calcularCumplimiento(analytics.realizadoHoy, analytics.metaDiaria)
-                  : esMensual ? analytics.pctCumplimientoMes    : analytics.pctCumplimientoSemana
-  const semaforo  = isDiario  ? analytics.semaforoDiario
-                  : esMensual ? analytics.semaforoMes           : analytics.semaforoSemana
-  const faltante  = esMensual ? analytics.faltanteMes           : analytics.faltanteSemana
-  const diasRest  = esMensual ? analytics.diasRestantesMes      : analytics.diasRestantesSemana
-  const diasTrans = esMensual ? analytics.diasTranscurridosMes  : analytics.diasTranscurridosSemana
-  const diasTotal = esMensual ? analytics.diasHabilesMes        : analytics.diasHabilesSemana
-  const promNec   = esMensual ? analytics.promedioNecesarioDiarioMes : analytics.promedioNecesarioDiarioSemana
+function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: AnalyticsExtended; rangeLabel: string; avatarUrl?: string | null }) {
+  const meta      = analytics.metaMensual
+  const real      = analytics.realizadoMes
+  const sinMeta   = meta === 0
+  const esperado  = analytics.metaEsperadaMes
+  const pct       = analytics.pctCumplimientoMes
+  const semaforo  = analytics.semaforoMes
+  const faltante  = analytics.faltanteMes
+  const diasRest  = analytics.diasRestantesMes
+  const diasTrans = analytics.diasTranscurridosMes
+  const diasTotal = analytics.diasHabilesMes
+  const promNec   = analytics.promedioNecesarioDiarioMes
   const metaCumplida = real >= meta && meta > 0
 
   return (
@@ -503,14 +505,28 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
       <div style={{ height: 4, background: SEMAFORO_COLORS[semaforo] }} />
 
       {/* Header */}
-      <div style={{ padding: '18px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '16px 18px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 42, height: 42, borderRadius: '50%',
-            background: SEMAFORO_COLORS[semaforo],
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 900, color: '#080808', flexShrink: 0,
-          }}>{getInitials(analytics.vendedor)}</div>
+          {avatarUrl ? (
+            <div style={{
+              width: 48, height: 48, borderRadius: '50%', overflow: 'hidden',
+              flexShrink: 0, border: `2px solid ${SEMAFORO_COLORS[semaforo]}`,
+              boxShadow: `0 0 12px ${SEMAFORO_COLORS[semaforo]}40`,
+              position: 'relative',
+            }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={avatarUrl} alt={analytics.vendedor}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
+            </div>
+          ) : (
+            <div style={{
+              width: 48, height: 48, borderRadius: '50%',
+              background: SEMAFORO_COLORS[semaforo],
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 15, fontWeight: 900, color: '#080808', flexShrink: 0,
+              border: `2px solid ${SEMAFORO_COLORS[semaforo]}`,
+            }}>{getInitials(analytics.vendedor)}</div>
+          )}
           <div>
             <h2 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 16, letterSpacing: '-0.3px' }}>
               {analytics.vendedor}
@@ -518,129 +534,112 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
             <SemaforoDot estado={semaforo} />
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ fontSize: 30, fontWeight: 900, color: SEMAFORO_COLORS[semaforo], letterSpacing: '-1px', lineHeight: 1 }}>
-            {pct.toFixed(0)}%
-          </p>
-          <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>cumplimiento</p>
-        </div>
-      </div>
-
-      {/* Chart — reactive según vista */}
-      <div style={{ padding: '0 20px 4px' }}>
-        {isDiario && (
-          <GaugeChart pct={pct} semaforo={semaforo} meta={meta} realizado={real} />
-        )}
-        {vista === 'semanal' && analytics.barDataSemana.length > 0 && (
-          <WeekBarChart
-            data={analytics.barDataSemana}
-            metaDiaria={analytics.metaDiaria}
-            semaforo={semaforo}
-          />
-        )}
-        {esMensual && analytics.pacingDataMes.length >= 2 && (
-          <PacingLineChart
-            data={analytics.pacingDataMes}
-            meta={analytics.metaMensual}
-            semaforo={semaforo}
-          />
+        {sinMeta ? (
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 22, fontWeight: 900, color: SEMAFORO_COLORS[semaforo], letterSpacing: '-1px', lineHeight: 1 }}>
+              {fmtL(real)}
+            </p>
+            <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>litros</p>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 26, fontWeight: 900, color: SEMAFORO_COLORS[semaforo], letterSpacing: '-1px', lineHeight: 1 }}>
+              {pct.toFixed(0)}%
+            </p>
+            <p style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>cumplimiento</p>
+          </div>
         )}
       </div>
 
-      {/* Leyenda del chart */}
-      {(vista === 'semanal' || esMensual) && (
-        <div style={{ padding: '0 20px 10px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-          {vista === 'semanal' ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 3, background: SEMAFORO_COLORS.verde }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>≥95% meta</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 3, background: SEMAFORO_COLORS.amarillo }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>75–95%</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 3, background: SEMAFORO_COLORS.rojo }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>&lt;75%</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 12, height: 6, borderRadius: 2, background: 'rgba(255,255,255,0.06)' }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>Fondo = meta diaria</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 16, height: 6, borderRadius: 3, background: SEMAFORO_COLORS[semaforo], opacity: 0.5 }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>Realizado acumulado</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 16, height: 1.5, borderTop: '1.5px dashed rgba(255,255,255,0.28)' }} />
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>Pacing ideal</span>
-              </div>
-            </>
-          )}
-        </div>
+      {/* Pacing chart del período seleccionado */}
+      {!sinMeta && analytics.pacingDataMes.length >= 2 && (
+        <>
+          <div style={{ padding: '0 14px 4px' }}>
+            <PacingLineChart
+              data={analytics.pacingDataMes}
+              meta={analytics.metaMensual}
+              semaforo={semaforo}
+            />
+          </div>
+          <div style={{ padding: '0 18px 10px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 16, height: 6, borderRadius: 3, background: SEMAFORO_COLORS[semaforo], opacity: 0.5 }} />
+              <span style={{ fontSize: 10, color: 'var(--muted)' }}>Realizado acumulado</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 16, height: 1.5, borderTop: '1.5px dashed rgba(255,255,255,0.28)' }} />
+              <span style={{ fontSize: 10, color: 'var(--muted)' }}>Pacing ideal</span>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Progress bar */}
-      <div style={{ padding: '0 20px 14px' }}>
-        <BarraDual meta={meta} realizado={real} esperado={esperado} semaforo={semaforo} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
-          <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-            Real: <strong style={{ color: 'var(--cream)' }}>{fmt(real)} L</strong>
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-            Meta: <strong style={{ color: 'var(--cream)' }}>{fmt(meta)} L</strong>
-          </span>
-          {!isDiario && (
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-              Esperado: <strong style={{ color: 'var(--cream)' }}>{fmt(esperado)} L</strong>
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* KPI chips */}
-      <div style={{ padding: '0 20px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-        {[
-          { label: 'Meta', value: `${fmt(meta)} L` },
-          { label: 'Realizado', value: `${fmt(real)} L` },
-          { label: metaCumplida ? '✓ Logrado' : 'Faltante', value: metaCumplida ? `+${fmt(real - meta)} L` : `${fmt(Math.max(0, meta - real))} L` },
-        ].map(({ label, value }) => (
-          <div key={label} style={{ background: 'var(--surface2)', borderRadius: 12, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 4 }}>
-              {label}
-            </p>
-            <p style={{ fontSize: 14, fontWeight: 800, color: metaCumplida && label.startsWith('✓') ? '#4A7A3A' : 'var(--cream)', letterSpacing: '-0.3px' }}>
-              {value}
-            </p>
+      {/* Progress bar + chips — solo para vendedores con meta */}
+      {!sinMeta && (
+        <>
+          <div style={{ padding: '0 18px 14px' }}>
+            <BarraDual meta={meta} realizado={real} esperado={esperado} semaforo={semaforo} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginTop: 12 }}>
+              {[
+                { label: 'Real',     value: fmtL(real),     color: SEMAFORO_COLORS[semaforo] },
+                { label: 'Meta',     value: fmtL(meta),     color: 'var(--cream)' },
+                { label: 'Esperado', value: fmtL(esperado), color: 'var(--muted)' },
+              ].map(({ label, value, color }) => (
+                <div key={label} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color, letterSpacing: '-0.3px' }}>{value}</span>
+                    <span style={{ fontSize: 8, color, opacity: 0.6 }}>L</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
-      </div>
+
+          <div style={{ padding: '0 18px 16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {[
+              { label: 'Meta',      num: meta,                         extra: '',   accent: false },
+              { label: 'Realizado', num: real,                         extra: '',   accent: false },
+              { label: metaCumplida ? '✓ OK' : 'Faltante',
+                num: metaCumplida ? real - meta : Math.max(0, meta - real),
+                extra: metaCumplida ? '+' : '',
+                accent: metaCumplida },
+            ].map(({ label, num, extra, accent }) => (
+              <div key={label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.6px', textTransform: 'uppercase', marginBottom: 5 }}>
+                  {label}
+                </p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'center', minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: accent ? '#4A7A3A' : 'var(--cream)', letterSpacing: '-0.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {extra}{fmtL(num)}
+                  </span>
+                  <span style={{ fontSize: 9, color: accent ? '#4A7A3A' : 'var(--muted)', flexShrink: 0 }}>L</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Días hábiles bar */}
-      {!isDiario && (
-        <div style={{ padding: '0 20px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>Días hábiles transcurridos</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{diasTrans} / {diasTotal}</span>
-          </div>
-          <div style={{ height: 4, borderRadius: 4, background: 'rgba(255,255,255,0.06)' }}>
-            <div style={{
-              height: '100%', borderRadius: 4,
-              width: diasTotal > 0 ? `${(diasTrans / diasTotal) * 100}%` : '0%',
-              background: 'rgba(255,255,255,0.18)',
-            }} />
-          </div>
+      <div style={{ padding: '0 18px 14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+          <span style={{ fontSize: 10, color: 'var(--muted)' }}>Días hábiles transcurridos</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{diasTrans} / {diasTotal}</span>
         </div>
-      )}
+        <div style={{ height: 4, borderRadius: 4, background: 'rgba(255,255,255,0.06)' }}>
+          <div style={{
+            height: '100%', borderRadius: 4,
+            width: diasTotal > 0 ? `${(diasTrans / diasTotal) * 100}%` : '0%',
+            background: 'rgba(255,255,255,0.18)',
+          }} />
+        </div>
+      </div>
 
       {/* Proyección */}
-      {!isDiario && !metaCumplida && diasRest > 0 && (
+      {!metaCumplida && diasRest > 0 && (
         <div style={{
-          margin: '0 20px 14px', padding: '10px 14px', borderRadius: 12,
+          margin: '0 18px 14px', padding: '10px 14px', borderRadius: 12,
           background: SEMAFORO_BG[semaforo], border: `1px solid ${SEMAFORO_COLORS[semaforo]}30`,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
@@ -660,7 +659,7 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
       {/* Meta cumplida */}
       {metaCumplida && (
         <div style={{
-          margin: '0 20px 14px', padding: '10px 14px', borderRadius: 12,
+          margin: '0 18px 14px', padding: '10px 14px', borderRadius: 12,
           background: 'rgba(74,122,58,0.1)', border: '1px solid rgba(74,122,58,0.3)',
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
@@ -671,110 +670,317 @@ function VendedorCard({ analytics, vista }: { analytics: AnalyticsExtended; vist
       )}
 
       {/* Canales */}
-      <div style={{ padding: '0 20px 20px' }}>
+      <div style={{ padding: '0 18px 20px' }}>
         <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 10 }}>
-          Por canal · {vista}
+          Por canal · {rangeLabel}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {isDiario
-            ? analytics.porCanalHoy.map(cd => (
-                <CanalRow
-                  key={cd.canal}
-                  c={analytics.porCanal.find(c => c.canal === cd.canal) ?? { canal: cd.canal } as AnalyticsCanal}
-                  vista={vista}
-                  canalDiario={cd}
-                />
-              ))
-            : analytics.porCanal.map(c => (
-                <CanalRow key={c.canal} c={c} vista={vista} />
-              ))
-          }
+          {analytics.porCanal.map(c => (
+            <CanalRow key={c.canal} c={c} />
+          ))}
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Dropdown de período ──────────────────────────────────────────────────────
+// ─── DateRangePicker ──────────────────────────────────────────────────────────
 
-interface DropOption { value: string; label: string; group?: string }
+const MESES_CAL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const DIAS_CAL  = ['L','M','X','J','V','S','D']
 
-function PeriodDropdown({ options, value, onChange, placeholder }: {
-  options: DropOption[]
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
+function fmtRangeBtn(ini: string, fin: string) {
+  const [,mi,di] = ini.split('-')
+  const [yf,mf,df] = fin.split('-')
+  const M = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+  return `${parseInt(di)} ${M[parseInt(mi)-1]} → ${parseInt(df)} ${M[parseInt(mf)-1]} ${yf}`
+}
+
+function DateRangePicker({ inicio, fin, presets, onChange }: {
+  inicio: string
+  fin: string
+  presets: { label: string; inicio: string; fin: string }[]
+  onChange: (ini: string, fin: string) => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen]           = useState(false)
+  // which field is active: 'inicio' or 'fin'
+  const [activeField, setActive]  = useState<'inicio' | 'fin'>('inicio')
+  const [draftIni, setDraftIni]   = useState(inicio)
+  const [draftFin, setDraftFin]   = useState(fin)
+  const [hover, setHover]         = useState<string | null>(null)
+  const [viewYear, setViewYear]   = useState(parseInt(inicio.split('-')[0]))
+  const [viewMonth, setViewMonth] = useState(parseInt(inicio.split('-')[1]) - 1)
   const ref = useRef<HTMLDivElement>(null)
-  const selected = options.find(o => o.value === value)
 
+  // Close on outside click
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
+    function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
 
-  const groups: { name: string; items: DropOption[] }[] = []
-  options.forEach(opt => {
-    const g = opt.group ?? ''
-    let grp = groups.find(x => x.name === g)
-    if (!grp) { grp = { name: g, items: [] }; groups.push(grp) }
-    grp.items.push(opt)
-  })
+  // Sync draft when picker opens
+  useEffect(() => {
+    if (open) {
+      setDraftIni(inicio); setDraftFin(fin)
+      setViewYear(parseInt(inicio.split('-')[0]))
+      setViewMonth(parseInt(inicio.split('-')[1]) - 1)
+      setActive('inicio')
+    }
+  }, [open, inicio, fin])
+
+  function goMonth(delta: number) {
+    let m = viewMonth + delta, y = viewYear
+    if (m < 0)  { m += 12; y-- }
+    if (m > 11) { m -= 12; y++ }
+    setViewMonth(m); setViewYear(y)
+  }
+
+  function handleDay(dateStr: string) {
+    if (activeField === 'inicio') {
+      setDraftIni(dateStr)
+      // auto-fix if ini > fin
+      if (dateStr > draftFin) setDraftFin(dateStr)
+      setActive('fin')
+    } else {
+      setDraftFin(dateStr)
+      // auto-fix if fin < ini
+      if (dateStr < draftIni) setDraftIni(dateStr)
+      setActive('inicio')
+    }
+  }
+
+  function handleApply() {
+    const [a, b] = draftIni <= draftFin ? [draftIni, draftFin] : [draftFin, draftIni]
+    onChange(a, b)
+    setOpen(false)
+  }
+
+  // Jump calendar to a specific month
+  function jumpTo(dateStr: string) {
+    const [y, m] = dateStr.split('-')
+    setViewYear(parseInt(y)); setViewMonth(parseInt(m) - 1)
+  }
+
+  const daysInMonth  = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const firstDow     = new Date(viewYear, viewMonth, 1).getDay()
+  const startOffset  = firstDow === 0 ? 6 : firstDow - 1
+
+  function dayStr(d: number) {
+    return `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+  }
+
+  // Range boundaries (considering hover preview)
+  const previewFin = activeField === 'fin' && hover ? hover : null
+  const lo = previewFin && previewFin < draftIni ? previewFin : draftIni
+  const hi = previewFin && previewFin > draftIni ? previewFin : draftFin
+
+  function isStart(s: string)  { return s === draftIni }
+  function isEnd(s: string)    { return s === draftFin }
+  function inRange(s: string)  { return s > lo && s < hi }
+
+  const canApply = draftIni.length === 10 && draftFin.length === 10 && draftIni <= draftFin
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+    <div ref={ref} style={{ position: 'relative' }}>
+      {/* Overlay oscuro en móvil cuando está abierto */}
+      {open && (
+        <div
+          onClick={() => setOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 299 }}
+        />
+      )}
+      {/* Trigger button */}
       <button
         onClick={() => setOpen(v => !v)}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 14px', borderRadius: 10,
-          background: 'var(--surface)', border: '1px solid var(--border)',
+          padding: '9px 16px', borderRadius: 10,
+          background: open ? 'rgba(212,175,55,0.1)' : 'var(--surface)',
+          border: `1px solid ${open ? 'var(--gold)' : 'var(--border)'}`,
           color: 'var(--cream)', fontSize: 13, fontWeight: 600,
-          cursor: 'pointer', whiteSpace: 'nowrap', transition: 'border-color 0.15s',
-          borderColor: open ? 'var(--gold)' : 'var(--border)',
+          cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s',
         }}
       >
-        <span>{selected?.label ?? placeholder ?? '—'}</span>
-        <ChevronDown size={14} color="var(--muted)" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+        <Calendar size={14} color={open ? 'var(--gold)' : 'var(--muted)'} />
+        <span style={{ color: open ? 'var(--gold)' : 'var(--cream)' }}>{fmtRangeBtn(inicio, fin)}</span>
+        <ChevronDown size={13} color="var(--muted)" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
       </button>
 
+      {/* Calendar dropdown */}
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200,
+          position: 'fixed', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 300,
           background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 12, minWidth: 200, maxHeight: 300, overflowY: 'auto',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          borderRadius: 16, padding: '0',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.9)',
+          width: 'min(340px, 95vw)', overflow: 'hidden',
         }}>
-          {groups.map(grp => (
-            <div key={grp.name}>
-              {grp.name && (
-                <p style={{ padding: '8px 14px 4px', fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase' }}>
-                  {grp.name}
-                </p>
-              )}
-              {grp.items.map(opt => (
+
+          {/* ── Campos Inicio / Fin ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid var(--border)' }}>
+            {(['inicio', 'fin'] as const).map(field => {
+              const val   = field === 'inicio' ? draftIni : draftFin
+              const label = field === 'inicio' ? 'Inicio' : 'Fin'
+              const active = activeField === field
+              return (
                 <button
-                  key={opt.value}
-                  onClick={() => { onChange(opt.value); setOpen(false) }}
-                  style={{
-                    display: 'block', width: '100%', textAlign: 'left',
-                    padding: '9px 14px', fontSize: 13, fontWeight: opt.value === value ? 700 : 400,
-                    color: opt.value === value ? 'var(--gold)' : 'var(--cream)',
-                    background: opt.value === value ? 'var(--gold-dim)' : 'transparent',
-                    border: 'none', cursor: 'pointer', transition: 'background 0.1s',
+                  key={field}
+                  onClick={() => {
+                    setActive(field)
+                    // jump calendar to the field's month
+                    if (val.length === 10) jumpTo(val)
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.background = opt.value === value ? 'var(--gold-dim)' : 'rgba(255,255,255,0.04)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = opt.value === value ? 'var(--gold-dim)' : 'transparent')}
+                  style={{
+                    padding: '12px 14px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                    background: active ? 'rgba(212,175,55,0.08)' : 'transparent',
+                    borderBottom: `2px solid ${active ? 'var(--gold)' : 'transparent'}`,
+                    borderRight: field === 'inicio' ? '1px solid var(--border)' : 'none',
+                    transition: 'all 0.15s',
+                  }}
                 >
-                  {opt.label}
+                  <div style={{ fontSize: 9, fontWeight: 700, color: active ? 'var(--gold)' : 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 4 }}>
+                    {label} {active && '←'}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: val ? 'var(--cream)' : 'rgba(255,255,255,0.2)' }}>
+                    {val ? fmtFecha(val) : '— —'}
+                  </div>
                 </button>
+              )
+            })}
+          </div>
+
+          <div style={{ padding: '14px 16px' }}>
+
+            {/* Presets */}
+            {presets.length > 0 && (
+              <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {presets.map(p => {
+                  const active = p.inicio === inicio && p.fin === fin
+                  return (
+                    <button
+                      key={p.label}
+                      onClick={() => {
+                        setDraftIni(p.inicio); setDraftFin(p.fin); setActive('inicio')
+                        jumpTo(p.inicio)
+                      }}
+                      style={{
+                        padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600,
+                        border: `1px solid ${active ? 'var(--gold)' : 'rgba(255,255,255,0.1)'}`,
+                        background: active ? 'rgba(212,175,55,0.12)' : 'transparent',
+                        color: active ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer',
+                      }}
+                    >{p.label}</button>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* ── Navegación de mes ── */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              {/* Prev buttons */}
+              <div style={{ display: 'flex', gap: 2 }}>
+                <button
+                  onClick={() => goMonth(-12)}
+                  title="Año anterior"
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}
+                >«</button>
+                <button
+                  onClick={() => goMonth(-1)}
+                  title="Mes anterior"
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--cream)', cursor: 'pointer', fontSize: 16, fontWeight: 700 }}
+                >‹</button>
+              </div>
+
+              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.3px' }}>
+                {MESES_CAL[viewMonth]} {viewYear}
+              </span>
+
+              {/* Next buttons */}
+              <div style={{ display: 'flex', gap: 2 }}>
+                <button
+                  onClick={() => goMonth(1)}
+                  title="Mes siguiente"
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--cream)', cursor: 'pointer', fontSize: 16, fontWeight: 700 }}
+                >›</button>
+                <button
+                  onClick={() => goMonth(12)}
+                  title="Año siguiente"
+                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}
+                >»</button>
+              </div>
+            </div>
+
+            {/* Day-of-week headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: 4 }}>
+              {DIAS_CAL.map(d => (
+                <div key={d} style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, color: 'var(--muted)', paddingBottom: 6, letterSpacing: '0.5px' }}>{d}</div>
               ))}
             </div>
-          ))}
+
+            {/* Days grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '1px 0' }}>
+              {Array.from({ length: startOffset }).map((_, i) => <div key={`e${i}`} />)}
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                const s       = dayStr(d)
+                const isIni   = isStart(s)
+                const isFin   = isEnd(s)
+                const inRng   = inRange(s)
+                const isToday = s === new Date().toISOString().split('T')[0]
+                const isSel   = isIni || isFin
+
+                return (
+                  <button
+                    key={d}
+                    onClick={() => handleDay(s)}
+                    onMouseEnter={() => setHover(s)}
+                    onMouseLeave={() => setHover(null)}
+                    style={{
+                      padding: '7px 0', textAlign: 'center', border: 'none', cursor: 'pointer',
+                      position: 'relative',
+                      borderRadius: isSel ? 8 : inRng ? 0 : 6,
+                      background: isSel
+                        ? 'var(--gold)'
+                        : inRng ? 'rgba(212,175,55,0.18)' : 'transparent',
+                      color: isSel ? '#080808' : isToday ? 'var(--gold)' : 'var(--cream)',
+                      fontSize: 13, fontWeight: isSel ? 900 : isToday ? 700 : 400,
+                      outline: isToday && !isSel ? '1px solid rgba(212,175,55,0.5)' : 'none',
+                      transition: 'background 0.1s',
+                    }}
+                  >
+                    {d}
+                    {/* indicator dot for inicio/fin */}
+                    {isIni && (
+                      <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', fontSize: 7, color: '#080808', fontWeight: 900, lineHeight: 1 }}>I</div>
+                    )}
+                    {isFin && !isIni && (
+                      <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', fontSize: 7, color: '#080808', fontWeight: 900, lineHeight: 1 }}>F</div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Apply */}
+            <button
+              onClick={handleApply}
+              disabled={!canApply}
+              style={{
+                marginTop: 14, width: '100%', padding: '12px 0',
+                borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 800,
+                background: canApply ? 'var(--gold)' : 'rgba(255,255,255,0.06)',
+                color: canApply ? '#080808' : 'var(--muted)',
+                cursor: canApply ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s',
+              }}
+            >
+              {canApply ? `Aplicar: ${fmtFecha(draftIni)} → ${fmtFecha(draftFin)} →` : 'Selecciona inicio y fin'}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -785,57 +991,175 @@ function PeriodDropdown({ options, value, onChange, placeholder }: {
 
 const CAT_PRODUCTO: Record<string, { emoji: string; color: string }> = {
   'Cerveza':        { emoji: '🍺', color: '#D4AF37' },
-  'Kombucha':       { emoji: '🫧', color: '#4ADE80' },
+  'Kombucha':       { emoji: '🫧', color: '#5A8A4A' },
   'Sin categoría':  { emoji: '📦', color: '#6B7280' },
 }
 
 function computeProductos(ventas: VentaRow[]): ProductoCategoria[] {
-  const map = new Map<string, Map<string, number>>()
+  type ProdEntry = { total: number; clientes: Map<string, { litros: number; canal: string | null }> }
+  const map = new Map<string, Map<string, ProdEntry>>()
   for (const v of ventas) {
     if (!v.litros) continue
     const cat  = v.categoria_producto?.trim() || 'Sin categoría'
     const prod = v.producto?.trim()           || 'Sin nombre'
+    const cli  = v.nombre_fantasia?.trim()    || 'Sin nombre'
+    const canal = v.categoria_negocio ?? null
     if (!map.has(cat)) map.set(cat, new Map())
     const pm = map.get(cat)!
-    pm.set(prod, (pm.get(prod) ?? 0) + v.litros)
+    if (!pm.has(prod)) pm.set(prod, { total: 0, clientes: new Map() })
+    const entry = pm.get(prod)!
+    entry.total += v.litros
+    if (!entry.clientes.has(cli)) entry.clientes.set(cli, { litros: 0, canal })
+    entry.clientes.get(cli)!.litros += v.litros
   }
   return [...map.entries()]
     .map(([categoria, pm]) => ({
       categoria,
-      total: [...pm.values()].reduce((s, l) => s + l, 0),
+      total: [...pm.values()].reduce((s, e) => s + e.total, 0),
       productos: [...pm.entries()]
-        .map(([nombre, litros]) => ({ nombre, litros }))
+        .map(([nombre, entry]) => ({
+          nombre,
+          litros: entry.total,
+          clientes: [...entry.clientes.entries()]
+            .map(([nombre, d]) => ({ nombre, litros: d.litros, canal: d.canal }))
+            .sort((a, b) => b.litros - a.litros),
+        }))
         .sort((a, b) => b.litros - a.litros),
     }))
     .filter(c => c.total > 0)
     .sort((a, b) => b.total - a.total)
 }
 
-function ProductoBar({ nombre, litros, total, color }: {
-  nombre: string; litros: number; total: number; color: string
+function ProductoBar({ nombre, litros, total, color, clientes = [] }: {
+  nombre: string; litros: number; total: number; color: string; clientes?: ClienteProducto[]
 }) {
-  const pct = total > 0 ? Math.min(100, (litros / total) * 100) : 0
+  const [open, setOpen] = useState(false)
+  const [verTodos, setVerTodos] = useState(false)
+  const pct = total > 0 ? Math.min(100, Math.max(0, (litros / total) * 100)) : 0
+  const MAX_CLI = 5
+  const visibles = verTodos ? clientes : clientes.slice(0, MAX_CLI)
+  const hasClientes = clientes.length > 0
+
   return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-        <span style={{
-          fontSize: 12, color: 'var(--cream)', flex: 1,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 10,
-        }}>{nombre}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{litros.toFixed(1)} L</span>
-          <span style={{
-            fontSize: 10, color, fontWeight: 700,
-            background: `${color}18`, border: `1px solid ${color}30`,
-            padding: '1px 6px', borderRadius: 8,
-          }}>{pct.toFixed(0)}%</span>
+    <div style={{ marginBottom: 8 }}>
+      {/* Fila principal — clickable si hay clientes */}
+      <div
+        onClick={() => hasClientes && setOpen(v => !v)}
+        style={{ cursor: hasClientes ? 'pointer' : 'default', userSelect: 'none' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
+            {hasClientes && (
+              <ChevronDown size={11} color={color} style={{
+                flexShrink: 0, opacity: 0.7,
+                transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+                transition: 'transform 0.18s',
+              }} />
+            )}
+            <span style={{
+              fontSize: 12, color: 'var(--cream)', flex: 1, minWidth: 0,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{nombre}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', fontVariantNumeric: 'tabular-nums' }}>{litros.toFixed(1)} L</span>
+            <span style={{
+              fontSize: 10, color, fontWeight: 700,
+              background: `${color}18`, border: `1px solid ${color}30`,
+              padding: '1px 6px', borderRadius: 8,
+            }}>{pct.toFixed(0)}%</span>
+          </div>
+        </div>
+        <div style={{ height: 5, borderRadius: 5, background: 'rgba(255,255,255,0.06)', marginLeft: hasClientes ? 16 : 0 }}>
+          <div className="animate-progress" style={{
+            ['--pct' as string]: `${pct}%`,
+            height: '100%', borderRadius: 5,
+            width: `${pct}%`, background: color, opacity: 0.75,
+          } as React.CSSProperties} />
         </div>
       </div>
-      <div style={{ height: 5, borderRadius: 5, background: 'rgba(255,255,255,0.06)' }}>
-        <div className="animate-progress" style={{
-          height: '100%', borderRadius: 5,
-          width: `${pct}%`, background: color, opacity: 0.75,
-        }} />
+
+      {/* Drill-down: lista de locales */}
+      <div style={{
+        display: 'grid',
+        gridTemplateRows: open ? '1fr' : '0fr',
+        transition: 'grid-template-rows 0.22s cubic-bezier(0.16,1,0.3,1)',
+        marginLeft: 16,
+      }}>
+        <div style={{ overflow: 'hidden' }}>
+          <div style={{
+            marginTop: 8, marginBottom: 4,
+            padding: '10px 12px',
+            background: 'rgba(255,255,255,0.025)',
+            border: `1px solid ${color}20`,
+            borderRadius: 10,
+          }}>
+            {/* Cabecera */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                {clientes.length} local{clientes.length !== 1 ? 'es' : ''}
+              </span>
+              <span style={{ fontSize: 9, color: 'var(--muted)' }}>
+                {litros.toFixed(1)} L total
+              </span>
+            </div>
+            {/* Filas de locales */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {visibles.map((c, i) => {
+                const cliPct = litros > 0 ? (c.litros / litros) * 100 : 0
+                const dotColor = CANAL_DOT[c.canal ?? ''] ?? '#6B7280'
+                return (
+                  <div key={c.nombre}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                      {/* Rank */}
+                      <div style={{
+                        width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                        background: i < 3 ? `${color}20` : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${i < 3 ? color + '35' : 'rgba(255,255,255,0.07)'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 8, fontWeight: 800, color: i < 3 ? color : 'var(--muted)',
+                      }}>{i + 1}</div>
+                      {/* Canal dot */}
+                      <div style={{ width: 5, height: 5, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                      {/* Nombre */}
+                      <span style={{
+                        flex: 1, minWidth: 0, fontSize: 11, color: 'var(--cream)', fontWeight: 600,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{c.nombre}</span>
+                      {/* Litros + % */}
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                        {c.litros.toFixed(1)} L
+                      </span>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, color, flexShrink: 0,
+                        background: `${color}15`, padding: '1px 5px', borderRadius: 6,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>{cliPct.toFixed(0)}%</span>
+                    </div>
+                    {/* Mini barra */}
+                    <div style={{ height: 3, borderRadius: 3, background: 'rgba(255,255,255,0.05)', marginLeft: 23 }}>
+                      <div style={{ height: '100%', borderRadius: 3, width: `${cliPct}%`, background: color, opacity: 0.5 }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Ver más / menos */}
+            {clientes.length > MAX_CLI && (
+              <button
+                onClick={e => { e.stopPropagation(); setVerTodos(v => !v) }}
+                style={{
+                  marginTop: 8, width: '100%', padding: '5px 0',
+                  background: 'transparent', border: `1px solid ${color}25`,
+                  borderRadius: 8, fontSize: 10, fontWeight: 600,
+                  color: 'var(--muted)', cursor: 'pointer',
+                }}
+              >
+                {verTodos ? 'Ver menos' : `Ver ${clientes.length - MAX_CLI} más`}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -874,7 +1198,7 @@ function CategoriaProductoCard({ cat }: { cat: ProductoCategoria }) {
 
         {/* Products list */}
         {cat.productos.slice(0, expanded ? undefined : MAX_VISIBLE).map(p => (
-          <ProductoBar key={p.nombre} nombre={p.nombre} litros={p.litros} total={cat.total} color={cfg.color} />
+          <ProductoBar key={p.nombre} nombre={p.nombre} litros={p.litros} total={cat.total} color={cfg.color} clientes={p.clientes} />
         ))}
 
         {cat.productos.length > MAX_VISIBLE && (
@@ -897,8 +1221,8 @@ function CategoriaProductoCard({ cat }: { cat: ProductoCategoria }) {
   )
 }
 
-function ProductosSection({ productos, vista, label }: {
-  productos: ProductoCategoria[]; vista: Vista; label: string
+function ProductosSection({ productos, label }: {
+  productos: ProductoCategoria[]; label: string
 }) {
   if (!productos.length) return null
   const totalLitros = productos.reduce((s, c) => s + c.total, 0)
@@ -936,7 +1260,7 @@ function ProductosSection({ productos, vista, label }: {
       </div>
 
       {/* Cards grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(340px, 100%), 1fr))', gap: 20 }}>
         {productos.map(cat => (
           <CategoriaProductoCard key={cat.categoria} cat={cat} />
         ))}
@@ -1010,34 +1334,392 @@ function buildPacingData(
   })
 }
 
+// ─── Locales Vendidos ─────────────────────────────────────────────────────────
+
+const CANAL_DOT: Record<string, string> = {
+  'Bar':           '#D4AF37',
+  'Supermercado':  '#60A5FA',
+  'Minimarket':    '#34D399',
+  'Restaurante':   '#F97316',
+  'Botillería':    '#A78BFA',
+  'Cafetería':     '#FB7185',
+  'Almacén':       '#94A3B8',
+  'Distribuidor':  '#38BDF8',
+}
+
+const fmtPeso = (n: number) =>
+  new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
+const fmtPesoCompact = fmtPeso
+const fmtPesoFull    = fmtPeso
+
+function LocalesSection({ clientes, rangeLabel }: { clientes: ClienteDetalle[]; rangeLabel: string }) {
+  const [busqueda, setBusqueda] = useState('')
+  const [orden, setOrden]       = useState<'monto' | 'litros' | 'nombre' | 'canal'>('monto')
+  const [expandido, setExpandido] = useState<string | null>(null)
+  const [verTodos, setVerTodos]   = useState(false)
+
+  if (!clientes.length) return null
+
+  const totalLitros = clientes.reduce((s, c) => s + c.litros, 0)
+  const totalMonto  = clientes.reduce((s, c) => s + c.monto, 0)
+  const hasMonto    = totalMonto > 0
+
+  const filtrados = clientes
+    .filter(c => c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+                 (c.canal ?? '').toLowerCase().includes(busqueda.toLowerCase()))
+    .sort((a, b) => {
+      if (orden === 'nombre')  return a.nombre.localeCompare(b.nombre)
+      if (orden === 'canal')   return (a.canal ?? '').localeCompare(b.canal ?? '')
+      if (orden === 'litros')  return b.litros - a.litros
+      return b.monto - a.monto
+    })
+
+  const visibles = verTodos ? filtrados : filtrados.slice(0, 10)
+
+  return (
+    <div style={{ marginTop: 40 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px', marginBottom: 3 }}>
+            Locales Vendidos
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--muted)' }}>
+            {rangeLabel} · <strong style={{ color: 'var(--cream)' }}>{clientes.length}</strong> locales
+            {' · '}<strong style={{ color: 'var(--gold)' }}>{totalLitros.toFixed(1)} L</strong>
+            {hasMonto && <> · <strong style={{ color: '#34D399' }}>{fmtPesoCompact(totalMonto)}</strong></>}
+          </p>
+        </div>
+        {/* Sort */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {([['monto','$Monto'],['litros','Litros'],['nombre','A-Z'],['canal','Canal']] as [typeof orden, string][]).map(([k, label]) => (
+            <button key={k} onClick={() => setOrden(k)} style={{
+              padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+              background: orden === k ? 'var(--gold)' : 'var(--surface)',
+              color: orden === k ? '#080808' : 'var(--muted)',
+            }}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Búsqueda */}
+      <div style={{ position: 'relative', marginBottom: 14 }}>
+        <input
+          type="text"
+          placeholder="Buscar local o canal…"
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          style={{
+            width: '100%', padding: '10px 14px 10px 36px', borderRadius: 10,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            color: 'var(--cream)', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+          }}
+          onFocus={e => (e.target.style.borderColor = 'var(--gold)')}
+          onBlur={e => (e.target.style.borderColor = 'var(--border)')}
+        />
+        <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}
+          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+      </div>
+
+      {/* Lista */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {visibles.map((c, idx) => {
+          const isOpen = expandido === c.nombre
+          const pct = totalLitros > 0 ? (c.litros / totalLitros) * 100 : 0
+          const dotColor = CANAL_DOT[c.canal ?? ''] ?? '#6B7280'
+
+          return (
+            <div key={c.nombre} style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 14, overflow: 'hidden',
+              borderLeft: `3px solid ${dotColor}`,
+            }}>
+              {/* Row principal */}
+              <div
+                onClick={() => setExpandido(isOpen ? null : c.nombre)}
+                style={{ padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+              >
+                {/* Rank */}
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                  background: idx < 3 ? `${dotColor}20` : 'rgba(128,128,128,0.08)',
+                  border: `1px solid ${idx < 3 ? dotColor + '40' : 'rgba(128,128,128,0.12)'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 800, color: idx < 3 ? dotColor : 'var(--muted)',
+                }}>{idx + 1}</div>
+
+                {/* Nombre + canal + fecha */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.nombre}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>{c.canal ?? 'Sin canal'}</span>
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>· {c.pedidos} pedido{c.pedidos !== 1 ? 's' : ''}</span>
+                  </div>
+                  {c.ultimoPedido && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ color: 'rgba(212,175,55,0.45)', flexShrink: 0 }}>
+                        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                      </svg>
+                      <span style={{ fontSize: 9, color: 'rgba(212,175,55,0.5)', fontWeight: 600 }}>
+                        Última compra: {fmtFecha(c.ultimoPedido)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Monto + Litros */}
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  {hasMonto && c.monto > 0 && (
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#34D399', letterSpacing: '-0.3px' }}>{fmtPesoCompact(c.monto)}</div>
+                  )}
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>{c.litros.toFixed(1)} L</div>
+                  <div style={{ fontSize: 9, color: 'rgba(128,128,128,0.5)' }}>{pct.toFixed(1)}% vol.</div>
+                </div>
+
+                {/* Expand arrow */}
+                <ChevronDown size={14} color="var(--muted)"
+                  style={{ flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+              </div>
+
+              {/* Barra de litros */}
+              <div style={{ height: 3, background: 'rgba(128,128,128,0.08)' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: dotColor, opacity: 0.6, transition: 'width 0.4s ease' }} />
+              </div>
+
+              {/* Productos expandidos */}
+              {isOpen && (
+                <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 8 }}>
+                    Productos vendidos
+                  </p>
+                  {/* Cabecera tabla */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px 60px 90px', gap: 6, padding: '0 0 6px', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 6 }}>
+                    {['Producto','Unidades','Litros','Monto'].map(h => (
+                      <div key={h} style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase', textAlign: h !== 'Producto' ? 'right' : 'left' }}>{h}</div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {c.productos.map(p => {
+                      const catColor = p.categoria === 'Cerveza' ? '#D4AF37' : p.categoria === 'Kombucha' ? '#34D399' : '#6B7280'
+                      const key = `${p.producto}||${p.envase ?? ''}`
+                      return (
+                        <div key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 72px 60px 90px', gap: 6, alignItems: 'center' }}>
+                          {/* Nombre + envase */}
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <div style={{ width: 5, height: 5, borderRadius: '50%', background: catColor, flexShrink: 0 }} />
+                              <span style={{ fontSize: 11, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {p.producto}
+                              </span>
+                            </div>
+                            {p.envase && (
+                              <div style={{ fontSize: 9, color: 'var(--gold)', marginTop: 1, paddingLeft: 10, opacity: 0.7 }}>{p.envase}</div>
+                            )}
+                          </div>
+                          {/* Unidades — calculadas desde litros + ml del envase si no vienen de BD */}
+                          <div style={{ textAlign: 'right' }}>
+                            {(() => {
+                              const mlMatch = p.envase?.match(/\((\d+)\s*ml\)/i)
+                              const mlPorUnidad = mlMatch ? parseInt(mlMatch[1]) : null
+                              const unidades = p.unidades ?? (mlPorUnidad && p.litros > 0
+                                ? Math.round((p.litros * 1000) / mlPorUnidad)
+                                : null)
+                              const labelUnidad = /lata/i.test(p.envase ?? '') ? 'latas'
+                                : /botella/i.test(p.envase ?? '') ? 'botellas'
+                                : 'unidades'
+                              return unidades != null && unidades > 0
+                                ? <>
+                                    <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', fontVariantNumeric: 'tabular-nums' }}>
+                                      {unidades.toLocaleString('es-CL')}
+                                    </span>
+                                    <div style={{ fontSize: 8, color: 'var(--muted)' }}>{labelUnidad}</div>
+                                  </>
+                                : <span style={{ fontSize: 11, color: 'rgba(128,128,128,0.3)' }}>—</span>
+                            })()}
+                          </div>
+                          {/* Litros */}
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>{p.litros.toFixed(1)}</span>
+                            <div style={{ fontSize: 8, color: 'var(--muted)' }}>L</div>
+                          </div>
+                          {/* Monto */}
+                          <div style={{ textAlign: 'right' }}>
+                            {p.monto > 0
+                              ? <span style={{ fontSize: 12, fontWeight: 700, color: '#34D399' }}>{fmtPeso(p.monto)}</span>
+                              : <span style={{ fontSize: 10, color: 'rgba(128,128,128,0.3)' }}>—</span>
+                            }
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      <div>
+                        <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>Total litros</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--cream)' }}>{c.litros.toFixed(1)} L</div>
+                      </div>
+                      {c.monto > 0 && (
+                        <div>
+                          <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>Total venta</div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: '#34D399' }}>{fmtPesoFull(c.monto)}</div>
+                        </div>
+                      )}
+                    </div>
+                    {c.ultimoPedido && (
+                      <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                        Último pedido: {fmtFecha(c.ultimoPedido)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Ver más / Ver menos */}
+      {filtrados.length > 10 && (
+        <button
+          onClick={() => setVerTodos(v => !v)}
+          style={{
+            marginTop: 12, width: '100%', padding: '10px 0',
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            borderRadius: 10, fontSize: 12, fontWeight: 700,
+            color: 'var(--muted)', cursor: 'pointer',
+          }}
+        >
+          {verTodos ? 'Ver menos ↑' : `Ver ${filtrados.length - 10} locales más ↓`}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function MetasClient({
   metasSemanales, metasMensuales, ventasMes, ventasSemana,
   fechaRef, mesInicio, mesFin, semanaInicio, semanaFin,
-  periodo, vendedores, periodosSemanas, periodosMeses,
+  periodo, vendedores, vendedorGrupos, periodosSemanas, periodosMeses, vendedorAvatars,
 }: Props) {
-  const [vista, setVista] = useState<Vista>('semanal')
-  const [navDate, setNavDate] = useState<string>(fechaRef)
-  const [navAnalytics, setNavAnalytics] = useState<AnalyticsExtended[] | null>(null)
-  const [navMeta, setNavMeta] = useState<{ semanaLabel: string; mesNombre: string; fecha: string } | null>(null)
-  const [navProductos, setNavProductos] = useState<{ mes: ProductoCategoria[]; semana: ProductoCategoria[]; dia: ProductoCategoria[] } | null>(null)
-  const [loading, setLoading] = useState(false)
+  const isDesktop = useIsDesktop()
 
-  // Re-fetch when switching vista while on a non-default date
+  // Persistir rango en localStorage para que sobreviva navegación y recarga
+  const STORAGE_KEY = 'metas-range'
+  const [rangeInicio, setRangeInicio] = useState<string>(() => {
+    if (typeof window === 'undefined') return mesInicio
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null')
+      if (saved?.inicio && saved?.fin) return saved.inicio
+    } catch {}
+    return mesInicio
+  })
+  const [rangeFin, setRangeFin] = useState<string>(() => {
+    if (typeof window === 'undefined') return mesFin
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null')
+      if (saved?.inicio && saved?.fin) return saved.fin
+    } catch {}
+    return mesFin
+  })
+  const [rangeAnalytics, setRangeAnalytics] = useState<AnalyticsExtended[] | null>(null)
+  const [rangeProductos, setRangeProductos] = useState<ProductoCategoria[] | null>(null)
+  const [rangeClientes, setRangeClientes]   = useState<ClienteDetalle[] | null>(null)
+  const [loading, setLoading]         = useState(false)
+
+  // Cargar datos si el rango guardado es diferente al default
   useEffect(() => {
-    if (navDate !== fechaRef && navAnalytics !== null) {
-      fetchForDate(navDate)
+    if (rangeInicio !== mesInicio || rangeFin !== mesFin) {
+      fetchForRange(rangeInicio, rangeFin)
     }
+  // Solo al montar
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vista])
+  }, [])
 
+  // Ciclos contables (24 del mes → 23 del mes siguiente) disponibles en la BD
+  const ciclosPreset = useMemo(() => {
+    const seen = new Set<string>()
+    return [...periodosMeses, ...periodosSemanas.reduce<{ fecha_inicio: string; fecha_fin: string }[]>((acc, s) => {
+      const key = `${s.fecha_inicio}|${s.fecha_fin}`
+      if (!seen.has(key)) { seen.add(key); acc.push(s) }
+      return acc
+    }, [])].filter(p => {
+      const key = `${p.fecha_inicio}|${p.fecha_fin}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }).map(p => {
+      const [,mi,di] = p.fecha_inicio.split('-')
+      const [,mf,df] = p.fecha_fin.split('-')
+      const M = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+      return {
+        label: `${parseInt(di)} ${M[parseInt(mi)-1]} – ${parseInt(df)} ${M[parseInt(mf)-1]}`,
+        inicio: p.fecha_inicio,
+        fin: p.fecha_fin,
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const fetchForRange = useCallback(async (ini: string, fin: string) => {
+    setLoading(true)
+    try {
+      const res  = await fetch(`/api/metas/analytics?inicio=${ini}&fin=${fin}`)
+      const data = await res.json()
+
+      if (data.sinMetas || !data.analytics?.length) {
+        setRangeAnalytics([])
+        setRangeProductos([])
+        return
+      }
+
+      const dhRange = getDiasHabiles(new Date(ini), new Date(fin + 'T23:59:59'))
+      const extendidos: AnalyticsExtended[] = (data.analytics as AnalyticsVendedor[]).map(a => {
+        const ventasCrudas: { fecha: string; litros: number }[] = a.ventasDiariasRaw ?? []
+        const pacingDataMes = buildPacingData(dhRange, a.metaMensual, ventasCrudas, fin)
+        return {
+          ...a,
+          realizadoHoy: 0,
+          metaDiaria: dhRange.length > 0 ? a.metaMensual / dhRange.length : 0,
+          semaforoDiario: a.semaforoMes,
+          porCanalHoy: [],
+          barDataSemana: [],
+          pacingDataMes,
+        }
+      })
+      setRangeAnalytics(extendidos)
+      setRangeProductos(data.productosPeriodo ?? [])
+      setRangeClientes(data.clientesDetalle ?? [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  function handleRangeChange(ini: string, fin: string) {
+    setRangeInicio(ini)
+    setRangeFin(fin)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ inicio: ini, fin })) } catch {}
+    if (ini === mesInicio && fin === mesFin) {
+      setRangeAnalytics(null)
+      setRangeProductos(null)
+      setRangeClientes(null)
+    } else {
+      fetchForRange(ini, fin)
+    }
+  }
+
+  // ── Legacy fetchForDate (kept for backward compat, currently unused) ──────────
   const fetchForDate = useCallback(async (fecha: string) => {
     if (fecha === fechaRef) {
-      setNavAnalytics(null)
-      setNavMeta(null)
-      setNavProductos(null)
-      setNavDate(fechaRef)
+      setRangeAnalytics(null)
+      setRangeProductos(null)
       return
     }
     setLoading(true)
@@ -1045,130 +1727,31 @@ export default function MetasClient({
       const res = await fetch(`/api/metas/analytics?fecha=${fecha}`)
       const data = await res.json()
       if (data.sinMetas || !data.analytics?.length) {
-        setNavAnalytics([])
-        setNavMeta({ semanaLabel: '', mesNombre: '', fecha })
-        setNavProductos({ mes: [], semana: [], dia: [] })
+        setRangeAnalytics([])
+        setRangeProductos([])
       } else {
-        const fechaD = new Date(fecha + 'T12:00:00')
-        const mesN = `${MESES_NOMBRE[fechaD.getMonth()]} ${fechaD.getFullYear()}`
-
-        const extendidos: AnalyticsExtended[] = data.analytics.map((a: AnalyticsVendedor) => {
-          const dhSemTotal = a.diasHabilesSemana
-          const metaDiaria = dhSemTotal > 0
-            ? a.metaSemanal / dhSemTotal
-            : a.diasHabilesMes > 0 ? a.metaMensual / a.diasHabilesMes : 0
-
-          const realizadoHoy = a.realizadoHoy ?? 0
-          const apiCanalesHoy: { canal: string; realHoy: number }[] = a.porCanalHoy ?? []
-          const ventasCrudas: { fecha: string; litros: number }[] = a.ventasDiariasRaw ?? []
-
-          const porCanalHoy: CanalDiario[] = a.porCanal
-            .filter(c => c.metaSemanal > 0)
-            .map(c => {
-              const mD = dhSemTotal > 0 ? c.metaSemanal / dhSemTotal : 0
-              const rH = apiCanalesHoy.find(p => p.canal === c.canal)?.realHoy ?? 0
-              return { canal: c.canal, realHoy: rH, metaDiaria: mD, semaforo: getEstadoSemaforo(rH, mD), color: CANAL_COLORS[c.canal] ?? '#6B7280' }
-            })
-            .sort((x, y) => y.metaDiaria - x.metaDiaria)
-
-          // Build chart data from API's ventasDiariasRaw
-          // We need dhSem and dhMes ranges — use semanaLabel + mesActivo from API response
-          // Fallback: use the date +/- context to find period boundaries
-          const semIni = a.semanaLabel?.match(/(\d{4}-\d{2}-\d{2})/)
-            ? a.semanaLabel.match(/(\d{4}-\d{2}-\d{2})/)![1]
-            : fecha
-          // Build dhSem from the period info we have
-          // Since we don't have exact dhSem from API, derive from API analytics fields
-          const dhSemCount = a.diasHabilesSemana
-          const dhMesCount = a.diasHabilesMes
-
-          // Approximate: build from meta proportional data
-          // We use ventasCrudas grouped by week/month for bar + pacing
-          const barDataSemana: BarDia[] = (() => {
-            // Find unique working days in ventasCrudas that fall in [semanaInicio, semanaFin]
-            // Since we don't have exact week boundaries, use dias from ventas
-            // Build 5-slot array based on day-of-week
-            const ventasPorDia = new Map<string, number>()
-            ventasCrudas.forEach(v => {
-              const existing = ventasPorDia.get(v.fecha) ?? 0
-              ventasPorDia.set(v.fecha, existing + v.litros)
-            })
-            // Get week of fechaRef: Mon-Fri
-            const fD = new Date(fecha + 'T12:00:00')
-            const dow = fD.getDay() // 0=Sun,1=Mon,...
-            const mondayOffset = dow === 0 ? -6 : 1 - dow
-            const monday = new Date(fD)
-            monday.setDate(fD.getDate() + mondayOffset)
-            return Array.from({ length: 5 }, (_, i) => {
-              const day = new Date(monday)
-              day.setDate(monday.getDate() + i)
-              const dia = day.toISOString().split('T')[0]
-              return {
-                dia, label: DIA_LABELS[i],
-                litros: ventasPorDia.get(dia) ?? 0,
-                isToday: dia === fecha,
-                isFuture: dia > fecha,
-              }
-            })
-          })()
-
-          const pacingDataMes: PacingDia[] = (() => {
-            if (dhMesCount === 0) return []
-            // Group all ventasCrudas acumulativamente
-            const ventasPorDia = new Map<string, number>()
-            ventasCrudas.forEach(v => {
-              const existing = ventasPorDia.get(v.fecha) ?? 0
-              ventasPorDia.set(v.fecha, existing + v.litros)
-            })
-            // Get all unique days sorted
-            const allDias = [...ventasPorDia.keys()].sort()
-            if (allDias.length === 0) return []
-            // Build pacing from mesInicio to mesFin using dhMesCount
-            // We approximate using the sorted venta days
-            let acum = 0
-            const totalMeta = a.metaMensual
-            return allDias.map((dia, idx) => {
-              acum += ventasPorDia.get(dia) ?? 0
-              return {
-                dia,
-                label: fmtFecha(dia),
-                realAcum: acum,
-                metaIdeal: dhMesCount > 0 ? totalMeta * (idx + 1) / dhMesCount : 0,
-                isFuture: dia > fecha,
-              }
-            })
-          })()
-
+        const ini = data.rangeInicio ?? mesInicio
+        const fin = data.rangeFin    ?? mesFin
+        const dhRange = getDiasHabiles(new Date(ini), new Date(fin + 'T23:59:59'))
+        const extendidos: AnalyticsExtended[] = (data.analytics as AnalyticsVendedor[]).map(a => {
+          const pacingDataMes = buildPacingData(dhRange, a.metaMensual, a.ventasDiariasRaw ?? [], fin)
           return {
             ...a,
-            realizadoHoy,
-            metaDiaria,
-            semaforoDiario: getEstadoSemaforo(realizadoHoy, metaDiaria),
-            porCanalHoy,
-            barDataSemana,
+            realizadoHoy: 0,
+            metaDiaria: dhRange.length > 0 ? a.metaMensual / dhRange.length : 0,
+            semaforoDiario: a.semaforoMes,
+            porCanalHoy: [],
+            barDataSemana: [],
             pacingDataMes,
           }
         })
-
-        setNavAnalytics(extendidos)
-        setNavMeta({ semanaLabel: data.analytics[0]?.semanaLabel ?? '', mesNombre: mesN, fecha })
-        setNavProductos({
-          mes:    data.productosMes    ?? [],
-          semana: data.productosSemana ?? [],
-          dia:    data.productosDia    ?? [],
-        })
+        setRangeAnalytics(extendidos)
+        setRangeProductos(data.productosPeriodo ?? [])
       }
     } finally {
       setLoading(false)
     }
-    setNavDate(fecha)
-  }, [fechaRef])
-
-  function navigate(dir: 1 | -1) {
-    const next = navStep(navDate, vista, dir)
-    fetchForDate(next)
-    setNavDate(next)
-  }
+  }, [fechaRef, mesInicio, mesFin])
 
   // ── Compute base analytics from props ────────────────────────────────────────
   const analytics = useMemo<AnalyticsExtended[]>(() => {
@@ -1177,11 +1760,16 @@ export default function MetasClient({
     const dhSem = getDiasHabiles(new Date(semanaInicio), new Date(semanaFin + 'T23:59:59'))
 
     return vendedores.map(vendedor => {
-      const mSem = metasSemanales.filter(m => m.vendedor === vendedor)
-      const mMes = metasMensuales.filter(m => m.vendedor === vendedor)
-      const vMes = ventasMes.filter(v => v.vendedor_actual === vendedor)
-      const vSem = ventasSemana.filter(v => v.vendedor_actual === vendedor)
+      // Filtrar ventas al grupo del vendedor (si hay grupos definidos)
+      const grupoNames = vendedorGrupos?.[vendedor]
+      const vMes = grupoNames ? ventasMes.filter(v => grupoNames.includes(v.vendedor_actual)) : ventasMes
+      const vSem = grupoNames ? ventasSemana.filter(v => grupoNames.includes(v.vendedor_actual)) : ventasSemana
       const vHoy = vMes.filter(v => v.fecha_pedido === fechaRef)
+
+      // Metas solo aplican a Vendedor Planta; los demás grupos no tienen meta propia aún
+      const esPlanta = vendedor === 'Vendedor Planta'
+      const mSem = esPlanta ? metasSemanales : []
+      const mMes = esPlanta ? metasMensuales : []
 
       const metaSemTotal = mSem.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
       const metaMesTotal = mMes.reduce((s, m) => s + (m.meta_litros ?? 0), 0)
@@ -1233,8 +1821,8 @@ export default function MetasClient({
           metaMensual: metaM, metaSemanal: metaS,
           realizadoMes: rM, realizadoSemana: rS,
           metaEsperadaMes: eM, metaEsperadaSemana: eS,
-          pctMes: calcularCumplimiento(rM, metaM),
-          pctSemana: calcularCumplimiento(rS, metaS),
+          pctMes: calcularCumplimiento(rM, eM),
+          pctSemana: calcularCumplimiento(rS, eS),
           semaforoMes: getEstadoSemaforo(rM, eM),
           semaforoSemana: getEstadoSemaforo(rS, eS),
         }
@@ -1251,7 +1839,7 @@ export default function MetasClient({
       return {
         vendedor, fecha: fechaRef,
         metaMensual: metaMesTotal, realizadoMes: realMes, metaEsperadaMes: espMes,
-        pctCumplimientoMes: calcularCumplimiento(realMes, metaMesTotal),
+        pctCumplimientoMes: calcularCumplimiento(realMes, espMes),
         semaforoMes: getEstadoSemaforo(realMes, espMes),
         diasHabilesMes: dhMesTotal, diasTranscurridosMes: dhMesTrans, diasRestantesMes: dhMesTotal - dhMesTrans,
         faltanteMes: faltMes,
@@ -1259,7 +1847,7 @@ export default function MetasClient({
         mensajeMes: getMensajePredictivo(faltMes, dhMesTotal - dhMesTrans),
         semanaLabel: semLabel,
         metaSemanal: metaSemTotal, realizadoSemana: realSem, metaEsperadaSemana: espSem,
-        pctCumplimientoSemana: calcularCumplimiento(realSem, metaSemTotal),
+        pctCumplimientoSemana: calcularCumplimiento(realSem, espSem),
         semaforoSemana: getEstadoSemaforo(realSem, espSem),
         diasHabilesSemana: dhSemTotal, diasTranscurridosSemana: dhSemTrans, diasRestantesSemana: dhSemTotal - dhSemTrans,
         faltanteSemana: faltSem,
@@ -1277,80 +1865,91 @@ export default function MetasClient({
   }, [metasSemanales, metasMensuales, ventasMes, ventasSemana, fechaRef, mesInicio, mesFin, semanaInicio, semanaFin, vendedores])
 
   // ── Compute base product breakdown from props ────────────────────────────────
-  const baseProductos = useMemo(() => ({
-    mes:    computeProductos(ventasMes),
-    semana: computeProductos(ventasSemana),
-    dia:    computeProductos(ventasSemana.filter(v => v.fecha_pedido === fechaRef)),
-  }), [ventasMes, ventasSemana, fechaRef])
+  const baseProductos = useMemo(() => computeProductos(ventasMes), [ventasMes])
+
+  // ── Compute base clientes from props ─────────────────────────────────────────
+  const baseClientes = useMemo<ClienteDetalle[]>(() => {
+    type PEntry = { categoria: string; envase: string | null; litros: number; monto: number }
+    type CEntry = { canal: string | null; litros: number; monto: number; fechas: Set<string>; prods: Map<string, PEntry> }
+    const map = new Map<string, CEntry>()
+
+    for (const v of ventasMes) {
+      const nombre = (v.nombre_fantasia ?? '').trim() || 'Sin nombre'
+      if (!map.has(nombre)) map.set(nombre, { canal: v.categoria_negocio ?? null, litros: 0, monto: 0, fechas: new Set(), prods: new Map() })
+      const e = map.get(nombre)!
+      const litros = v.litros ?? 0
+      const monto  = v.total_sin_impuesto ?? 0
+      e.litros += litros
+      e.monto  += monto
+      if (v.fecha_pedido) e.fechas.add(v.fecha_pedido)
+      const prod   = (v.producto ?? '').trim() || 'Sin nombre'
+      const cat    = (v.categoria_producto ?? '').trim() || 'Sin categoría'
+      const envase = (v.envase ?? '').trim() || null
+      const key    = `${prod}||${envase ?? ''}`
+      if (!e.prods.has(key)) e.prods.set(key, { categoria: cat, envase, litros: 0, monto: 0 })
+      const p = e.prods.get(key)!
+      p.litros += litros
+      p.monto  += monto
+    }
+
+    function litrosPorUnidad(envase: string | null): number | null {
+      if (!envase) return null
+      const s = envase.toLowerCase()
+      const cc = s.match(/(\d+(?:[.,]\d+)?)\s*cc/)
+      if (cc) return parseFloat(cc[1].replace(',', '.')) / 1000
+      const li = s.match(/(\d+(?:[.,]\d+)?)\s*l\b/)
+      if (li) return parseFloat(li[1].replace(',', '.'))
+      return null
+    }
+
+    return [...map.entries()]
+      .map(([nombre, e]) => ({
+        nombre, canal: e.canal,
+        litros: Math.round(e.litros * 10) / 10,
+        monto: Math.round(e.monto),
+        pedidos: e.fechas.size,
+        ultimoPedido: [...e.fechas].sort().at(-1) ?? '',
+        productos: [...e.prods.entries()]
+          .map(([key, { categoria, envase, litros, monto }]) => {
+            const lpu = litrosPorUnidad(envase)
+            return {
+              producto: key.split('||')[0],
+              categoria, envase,
+              litros: Math.round(litros * 10) / 10,
+              monto: Math.round(monto),
+              unidades: lpu && lpu > 0 ? Math.round(litros / lpu) : null,
+            }
+          })
+          .sort((a, b) => b.monto - a.monto),
+      }))
+      .filter(c => c.litros > 0)
+      .sort((a, b) => b.monto - a.monto)
+  }, [ventasMes])
 
   // ── Derived display values ────────────────────────────────────────────────────
-  const activeAnalytics = navAnalytics ?? analytics
-  const productosActivos = navProductos ?? baseProductos
-  const productosVista = vista === 'diario' ? productosActivos.dia
-    : vista === 'mensual' ? productosActivos.mes
-    : productosActivos.semana
-  const sinMetas = activeAnalytics.every(a => a.metaMensual === 0 && a.metaSemanal === 0)
+  const activeAnalytics = rangeAnalytics ?? analytics
+  const productosVista  = rangeProductos ?? baseProductos
+  const activeClientes  = rangeClientes  ?? baseClientes
+  const sinMetas = activeAnalytics.every(a => a.metaMensual === 0)
 
-  const totalReal = activeAnalytics.reduce((s, a) =>
-    s + (vista === 'mensual' ? a.realizadoMes : vista === 'diario' ? a.realizadoHoy : a.realizadoSemana), 0)
-  const totalMeta = activeAnalytics.reduce((s, a) =>
-    s + (vista === 'mensual' ? a.metaMensual : vista === 'diario' ? a.metaDiaria : a.metaSemanal), 0)
-  const totalEsp = activeAnalytics.reduce((s, a) =>
-    s + (vista === 'mensual' ? a.metaEsperadaMes : vista === 'diario' ? a.metaDiaria : a.metaEsperadaSemana), 0)
+  const totalReal = activeAnalytics.reduce((s, a) => s + a.realizadoMes, 0)
+  const totalMeta = activeAnalytics.reduce((s, a) => s + a.metaMensual, 0)
+  const totalEsp  = activeAnalytics.reduce((s, a) => s + a.metaEsperadaMes, 0)
   const pctEquipo = calcularCumplimiento(totalReal, totalMeta)
   const semEquipo = getEstadoSemaforo(totalReal, totalEsp)
 
-  const mesNombreBase = mesInicio
-    ? `${MESES_NOMBRE[parseInt(mesInicio.split('-')[1]) - 1]} ${mesInicio.split('-')[0]}`
-    : ''
-  const semanaLabelBase = analytics[0]?.semanaLabel ?? ''
-  const semanaLabel = navMeta?.semanaLabel ?? semanaLabelBase
-  const mesNombre   = navMeta?.mesNombre   ?? mesNombreBase
-  const diaLabel    = fmtFecha(navDate)
-
-  const equipoLabel = vista === 'diario' ? `Día · ${diaLabel}`
-    : vista === 'semanal' ? `Equipo · ${semanaLabel}`
-    : `Equipo · ${mesNombre}`
-
-  const tabs: { key: Vista; label: string }[] = [
-    { key: 'diario',  label: 'Día' },
-    { key: 'semanal', label: 'Semana' },
-    { key: 'mensual', label: 'Mes' },
-  ]
-
-  const opcionesSemanas: DropOption[] = periodosSemanas.map(s => {
-    const mesIdx = parseInt(s.fecha_inicio.split('-')[1]) - 1
-    const year   = s.fecha_inicio.split('-')[0]
-    const group  = `${MESES_FULL[mesIdx]} ${year}`
-    const label  = `S${s.semana_numero} · ${fmtFecha(s.fecha_inicio)} – ${fmtFecha(s.fecha_fin)}`
-    return { value: s.fecha_inicio, label, group }
-  })
-
-  const opcionesMeses: DropOption[] = periodosMeses.map(m => {
-    const mesIdx = parseInt(m.fecha_inicio.split('-')[1]) - 1
-    const year   = m.fecha_inicio.split('-')[0]
-    return { value: m.fecha_inicio, label: `${MESES_FULL[mesIdx]} ${year}` }
-  })
-
-  const activeSemanaValue = periodosSemanas.find(s =>
-    navDate >= s.fecha_inicio && navDate <= s.fecha_fin
-  )?.fecha_inicio ?? semanaInicio
-
-  const activeMesValue = periodosMeses.find(m =>
-    navDate >= m.fecha_inicio && navDate <= m.fecha_fin
-  )?.fecha_inicio ?? mesInicio
+  const rangeLabel = fmtRangeBtn(rangeInicio, rangeFin)
+  const equipoLabel = `Equipo · ${rangeLabel}`
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '40px 48px 60px' }} className="px-4 pt-8 lg:px-12 lg:pt-10">
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-1px', lineHeight: 1.1 }}>
-          Metas Comerciales
-        </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+    <div className="px-5 pt-6 pb-28 lg:px-12 lg:pt-10" style={{ maxWidth: 1500, margin: '0 auto', width: '100%' }}>
+      <div style={{ marginBottom: isDesktop ? 28 : 16 }}>
+        <AppHeader title="Metas Comerciales" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -10 }}>
           <Calendar size={13} color="var(--muted)" />
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-            Trimestre Mayo–Julio 2026 · Escenario optimista · Días hábiles L-V
+            {rangeLabel} · Días hábiles L-V
           </span>
         </div>
       </div>
@@ -1362,17 +1961,11 @@ export default function MetasClient({
         }}>
           <Target size={36} style={{ color: 'var(--muted)', margin: '0 auto 12px' }} />
           <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--cream)', marginBottom: 6 }}>
-            Sin metas cargadas para la fecha actual
+            Sin metas cargadas para el período seleccionado
           </p>
           <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
-            Ejecuta el script de importación desde la raíz del proyecto:
+            Intenta seleccionar un rango de fechas diferente o carga las metas en el panel de administración.
           </p>
-          <code style={{
-            display: 'inline-block', padding: '8px 16px', borderRadius: 8,
-            background: 'var(--surface2)', color: 'var(--gold)', fontSize: 13, fontFamily: 'monospace',
-          }}>
-            node scripts/import-metas-trimestre.mjs
-          </code>
         </div>
       ) : (
         <>
@@ -1380,130 +1973,132 @@ export default function MetasClient({
           <div style={{
             background: 'linear-gradient(135deg, #110D00 0%, #1C1500 100%)',
             border: `1px solid ${SEMAFORO_COLORS[semEquipo]}40`,
-            borderRadius: 20, padding: '20px 28px', marginBottom: 24,
-            display: 'flex', alignItems: 'center', gap: 40, flexWrap: 'wrap',
+            borderRadius: 20, padding: isDesktop ? '20px 28px' : '14px 16px',
+            marginBottom: isDesktop ? 24 : 14,
           }}>
-            <div>
-              <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.6)', letterSpacing: '1.8px', textTransform: 'uppercase', marginBottom: 6 }}>
-                {equipoLabel}
-              </p>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 40, fontWeight: 900, color: SEMAFORO_COLORS[semEquipo], letterSpacing: '-1.5px', lineHeight: 1 }}>
-                  {pctEquipo.toFixed(0)}%
-                </span>
-                <span style={{ fontSize: 14, color: 'var(--muted)' }}>cumplimiento</span>
+            {isDesktop ? (
+              /* Desktop: fila horizontal */
+              <div style={{ display: 'flex', alignItems: 'center', gap: 40 }}>
+                <div>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(212,175,55,0.6)', letterSpacing: '1.8px', textTransform: 'uppercase', marginBottom: 6 }}>{equipoLabel}</p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: 40, fontWeight: 900, color: SEMAFORO_COLORS[semEquipo], letterSpacing: '-1.5px', lineHeight: 1 }}>{pctEquipo.toFixed(0)}%</span>
+                    <span style={{ fontSize: 14, color: 'var(--muted)' }}>cumplimiento</span>
+                  </div>
+                </div>
+                <div style={{ width: 1, height: 48, background: 'var(--border)', flexShrink: 0 }} />
+                {[
+                  { label: 'Realizado', value: `${fmt(totalReal)} L` },
+                  { label: 'Meta',      value: `${fmt(totalMeta)} L` },
+                  { label: 'Esperado',  value: `${fmt(totalEsp)} L`  },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>{label}</p>
+                    <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.5px' }}>{value}</p>
+                  </div>
+                ))}
+                <div style={{ marginLeft: 'auto' }}><SemaforoDot estado={semEquipo} /></div>
               </div>
-            </div>
-            <div style={{ width: 1, height: 48, background: 'var(--border)', flexShrink: 0 }} />
-            {[
-              { label: 'Realizado', value: `${fmt(totalReal)} L` },
-              { label: 'Meta', value: `${fmt(totalMeta)} L` },
-              ...(vista !== 'diario' ? [{ label: 'Esperado', value: `${fmt(totalEsp)} L` }] : []),
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <p style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>{label}</p>
-                <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.5px' }}>{value}</p>
-              </div>
-            ))}
-            <div style={{ marginLeft: 'auto' }}>
-              <SemaforoDot estado={semEquipo} />
-            </div>
+            ) : (
+              /* Mobile: compacto */
+              <>
+                <p style={{ fontSize: 8, fontWeight: 700, color: 'rgba(212,175,55,0.5)', letterSpacing: '1.6px', textTransform: 'uppercase', marginBottom: 8 }}>
+                  {equipoLabel}
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 36, fontWeight: 900, color: SEMAFORO_COLORS[semEquipo], letterSpacing: '-1.5px', lineHeight: 1 }}>{pctEquipo.toFixed(0)}%</span>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>cumplimiento</span>
+                  </div>
+                  <SemaforoDot estado={semEquipo} />
+                </div>
+                {/* 3 KPIs en grid compacto */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                  {[
+                    { label: 'Realizado', value: fmtL(totalReal), color: SEMAFORO_COLORS[semEquipo] },
+                    { label: 'Meta',      value: fmtL(totalMeta), color: 'var(--cream)' },
+                    { label: 'Esperado',  value: fmtL(totalEsp),  color: 'var(--muted)' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} style={{ background: 'rgba(0,0,0,0.25)', borderRadius: 10, padding: '8px 8px' }}>
+                      <p style={{ fontSize: 8, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 3 }}>{label}</p>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, flexWrap: 'nowrap', minWidth: 0 }}>
+                        <span style={{ fontSize: 14, fontWeight: 900, color, letterSpacing: '-0.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>
+                        <span style={{ fontSize: 9, color, opacity: 0.7, flexShrink: 0 }}>L</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Tabs + selectores de período */}
+          {/* Selector de rango de fechas + leyenda */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {/* Tabs */}
-              <div style={{ display: 'flex', borderRadius: 12, padding: 4, background: 'var(--surface)', gap: 2 }}>
-                {tabs.map(tab => (
-                  <button key={tab.key}
-                    onClick={() => setVista(tab.key)}
-                    style={{
-                      padding: '8px 18px', borderRadius: 9, fontSize: 13, fontWeight: 600,
-                      border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                      background: vista === tab.key ? 'var(--gold)' : 'transparent',
-                      color: vista === tab.key ? '#080808' : 'var(--muted)',
-                      transition: 'all 0.15s',
-                    }}
-                  >{tab.label}</button>
-                ))}
-              </div>
-
-              {/* Selector de período */}
-              {vista === 'diario' && (
-                <input
-                  type="date"
-                  value={navDate}
-                  onChange={e => {
-                    const v = e.target.value
-                    if (v) { setNavDate(v); fetchForDate(v) }
-                  }}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10,
-                    background: 'var(--surface)', border: '1px solid var(--border)',
-                    color: 'var(--cream)', fontSize: 13, fontWeight: 600,
-                    cursor: 'pointer', colorScheme: 'dark', outline: 'none',
-                  }}
-                  onFocus={e => (e.target.style.borderColor = 'var(--gold)')}
-                  onBlur={e => (e.target.style.borderColor = 'var(--border)')}
-                />
-              )}
-
-              {vista === 'semanal' && opcionesSemanas.length > 0 && (
-                <PeriodDropdown
-                  options={opcionesSemanas}
-                  value={activeSemanaValue}
-                  onChange={v => { setNavDate(v); fetchForDate(v) }}
-                />
-              )}
-
-              {vista === 'mensual' && opcionesMeses.length > 0 && (
-                <PeriodDropdown
-                  options={opcionesMeses}
-                  value={activeMesValue}
-                  onChange={v => { setNavDate(v); fetchForDate(v) }}
-                />
-              )}
-
-              {navDate !== fechaRef && (
+              <DateRangePicker
+                inicio={rangeInicio}
+                fin={rangeFin}
+                presets={ciclosPreset}
+                onChange={handleRangeChange}
+              />
+              {(rangeInicio !== mesInicio || rangeFin !== mesFin) && (
                 <button
-                  onClick={() => { fetchForDate(fechaRef); setNavDate(fechaRef) }}
+                  onClick={() => handleRangeChange(mesInicio, mesFin)}
                   style={{
                     padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600,
                     border: '1px solid var(--gold)', background: 'transparent',
                     color: 'var(--gold)', cursor: 'pointer',
                   }}
                 >
-                  Hoy
+                  Período actual
                 </button>
               )}
               {loading && <span style={{ fontSize: 11, color: 'var(--muted)' }}>Cargando…</span>}
             </div>
 
-            {/* Leyenda semáforos */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              {(['verde', 'amarillo', 'rojo'] as EstadoSemaforo[]).map(e => (
-                <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEMAFORO_COLORS[e] }} />
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                    {SEMAFORO_LABELS[e]} ({e === 'verde' ? '≥95%' : e === 'amarillo' ? '75–95%' : '<75%'} vs esperado)
-                  </span>
-                </div>
-              ))}
-            </div>
+            {/* Leyenda semáforos — solo desktop */}
+            {isDesktop && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                {(['verde', 'amarillo', 'rojo'] as EstadoSemaforo[]).map(e => (
+                  <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEMAFORO_COLORS[e] }} />
+                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                      {SEMAFORO_LABELS[e]} ({e === 'verde' ? '≥95%' : e === 'amarillo' ? '75–95%' : '<75%'} vs esperado)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Leyenda compacta móvil */}
+            {!isDesktop && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                {(['verde', 'amarillo', 'rojo'] as EstadoSemaforo[]).map(e => (
+                  <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: SEMAFORO_COLORS[e] }} />
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>
+                      {e === 'verde' ? '≥95%' : e === 'amarillo' ? '75–95%' : '<75%'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Grid de vendedores */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
-            {activeAnalytics.map(a => (
-              <VendedorCard key={a.vendedor} analytics={a} vista={vista} />
-            ))}
+          {/* Grid de vendedores — ocultar regiones sin datos aún */}
+          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(auto-fit, minmax(400px, 1fr))' : '1fr', gap: isDesktop ? 24 : 14 }}>
+            {activeAnalytics
+              .filter(a => a.realizadoMes > 0 || a.metaMensual > 0)
+              .map(a => (
+                <VendedorCard key={a.vendedor} analytics={a} rangeLabel={rangeLabel} avatarUrl={vendedorAvatars?.[a.vendedor]} />
+              ))}
           </div>
+
+          {/* Locales vendidos */}
+          <LocalesSection clientes={activeClientes} rangeLabel={rangeLabel} />
 
           {/* Sección de productos */}
           <ProductosSection
             productos={productosVista}
-            vista={vista}
             label={equipoLabel}
           />
         </>

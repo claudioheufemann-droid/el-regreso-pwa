@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { VENDEDORES_SCOPE } from '@/lib/types'
 import ReportesClient from './ReportesClient'
 
 export default async function ReportesPage() {
@@ -8,7 +9,7 @@ export default async function ReportesPage() {
   const { data: clientes } = await supabase
     .from('clientes')
     .select('nombre_fantasia, vendedor, ruta_despacho, categoria, telefono')
-    .in('vendedor', ['Javier Badilla', 'Carlos Urrejola'])
+    .in('vendedor', VENDEDORES_SCOPE)
     .order('nombre_fantasia')
 
   // Todos los contactos (últimos 90 días)
@@ -21,17 +22,24 @@ export default async function ReportesPage() {
     .gte('fecha_hora', desde90.toISOString())
     .order('fecha_hora', { ascending: false })
 
-  // Último pedido por cliente
-  const { data: ultimosPedidos } = await supabase
-    .from('ventas')
-    .select('nombre_fantasia, fecha_pedido, litros')
-    .order('fecha_pedido', { ascending: false })
-    .limit(10000)
-
+  // Último pedido por cliente — paginado para no truncar a 1000 filas
   const pedidoMap = new Map<string, string>()
-  for (const v of (ultimosPedidos ?? [])) {
-    if (v.nombre_fantasia && !pedidoMap.has(v.nombre_fantasia)) {
-      pedidoMap.set(v.nombre_fantasia, v.fecha_pedido)
+  {
+    let offset = 0
+    while (true) {
+      const { data: page } = await supabase
+        .from('ventas')
+        .select('nombre_fantasia, fecha_pedido')
+        .order('fecha_pedido', { ascending: false })
+        .range(offset, offset + 999)
+      if (!page || page.length === 0) break
+      for (const v of page) {
+        if (v.nombre_fantasia && !pedidoMap.has(v.nombre_fantasia)) {
+          pedidoMap.set(v.nombre_fantasia, v.fecha_pedido)
+        }
+      }
+      if (page.length < 1000) break
+      offset += 1000
     }
   }
 

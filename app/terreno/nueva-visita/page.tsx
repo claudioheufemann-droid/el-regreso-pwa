@@ -22,39 +22,44 @@ function esProductoCatalogable(nombre: string): boolean {
 export default async function NuevaVisitaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ retomar?: string }>
+  searchParams: Promise<{ retomar?: string; cliente?: string }>
 }) {
   const user = await getServerUser()
   if (!user) redirect('/login')
 
   const supabase = await createClient()
-  const { retomar } = await searchParams
+  const { retomar, cliente: clientePre } = await searchParams
 
-  // Si hay visita a retomar, cargarla
+  // Si hay visita a retomar, cargarla — solo si es del vendedor actual (o admin).
+  // Terreno es un módulo personal: nadie más debe poder ver/retomar una visita
+  // en curso de otro vendedor, ni siquiera editando el id en la URL.
   let visitaRetomada = null
   if (retomar) {
-    const { data } = await supabase
+    let query = supabase
       .from('visitas_terreno')
       .select('id, cliente_nombre, es_cliente_nuevo, lat, lng, direccion_gps, estado')
       .eq('id', retomar)
       .eq('estado', 'en_progreso')
-      .maybeSingle()
+    if (!user.isAdmin) query = query.eq('vendedor_id', user.id)
+    const { data } = await query.maybeSingle()
     visitaRetomada = data ?? null
   }
 
-  // Clientes únicos de ventas para búsqueda
-  const { data: clientesVentas } = await supabase
-    .from('ventas')
-    .select('nombre_fantasia, categoria_negocio, localidad')
+  // Clientes desde tabla maestra (compartida entre módulos)
+  const { data: clientesMaestros } = await supabase
+    .from('clientes')
+    .select('nombre_fantasia, categoria, localidad, direccion, lat, lng')
     .not('nombre_fantasia', 'is', null)
     .order('nombre_fantasia')
 
-  const seen = new Set<string>()
-  const clientes = (clientesVentas ?? []).filter(c => {
-    if (!c.nombre_fantasia || seen.has(c.nombre_fantasia)) return false
-    seen.add(c.nombre_fantasia)
-    return true
-  })
+  const clientes = (clientesMaestros ?? []).map(c => ({
+    nombre_fantasia: c.nombre_fantasia,
+    categoria_negocio: c.categoria ?? null,
+    localidad: c.localidad ?? null,
+    direccion: c.direccion ?? null,
+    lat: c.lat ?? null,
+    lng: c.lng ?? null,
+  }))
 
   // Productos del catálogo — filtrados y normalizados
   const { data: productosRaw } = await supabase
@@ -73,12 +78,28 @@ export default async function NuevaVisitaPage({
       return true
     })
 
+  // Deudores para mostrar estado de cuenta al seleccionar cliente
+  const { data: deudoresRaw } = await supabase
+    .from('deudores')
+    .select('nombre_fantasia, saldo_total, deuda_vencida, ultimo_pago, fecha_ultima_compra, limite_cta_cte')
+
+  const deudores = (deudoresRaw ?? []).map(d => ({
+    nombre_fantasia: d.nombre_fantasia as string,
+    saldo_total: Number(d.saldo_total ?? 0),
+    deuda_vencida: Number(d.deuda_vencida ?? 0),
+    ultimo_pago: d.ultimo_pago as string | null,
+    fecha_ultima_compra: d.fecha_ultima_compra as string | null,
+    limite_cta_cte: d.limite_cta_cte ? Number(d.limite_cta_cte) : null,
+  }))
+
   return (
     <NuevaVisitaClient
       vendedor={user}
       clientesExistentes={clientes}
       catalogoProductos={productos}
       visitaRetomada={visitaRetomada}
+      deudores={deudores}
+      clientePre={clientePre ?? null}
     />
   )
 }

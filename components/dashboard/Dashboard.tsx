@@ -4,14 +4,18 @@ import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { RcTask, RcUser, CEREBRO_AREA, AREA_CFG, MACRO_AREAS, MacroKey, getMacroKey } from '@/lib/gestion-types'
 import { useIsDesktop } from '@/lib/useIsDesktop'
+import { createClient } from '@/lib/supabase/client'
+import { getSemaphore } from '@/lib/kpis'
 import AreaCard from './AreaCard'
 import TaskDetailModal from '@/components/modals/TaskDetailModal'
 import TaskCalendar from '@/components/calendar/TaskCalendar'
 import TaskRow from '@/components/area/TaskRow'
-import Logo from '@/components/ui/Logo'
-import SettingsPanel from '@/components/ui/SettingsPanel'
+import AppHeader from '@/components/ui/AppHeader'
+import Avatar from '@/components/ui/Avatar'
 import GestionPanel from '@/components/dashboard/GestionPanel'
-import { createClient } from '@/lib/supabase/client'
+import HomeDashboard from '@/components/dashboard/HomeDashboard'
+import NewTaskModal from '@/components/modals/NewTaskModal'
+import { LayoutGrid, User, Users, CalendarDays, BarChart3, History, RefreshCw, type LucideIcon } from 'lucide-react'
 
 interface Props {
   initialTasks: RcTask[]
@@ -21,6 +25,7 @@ interface Props {
   isAdmin: boolean
   currentUserId: string
   currentMacroArea: string | null   // null = admin global (ve todo)
+  backHref?: string                 // where "Cambiar módulo" navigates
 }
 
 function toLocalDateStr(d: Date): string {
@@ -131,7 +136,7 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
         const barColor = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : macro.color
 
         return (
-          <div key={key} style={{ background: 'var(--surface)', border: `1px solid ${macro.color}22`, borderRadius: 20, padding: '20px 22px' }}>
+          <div key={key} style={{ background: 'var(--surface)', border: `1px solid ${macro.color}22`, borderRadius: 16, padding: '14px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <div style={{ width: 22, height: 22, borderRadius: 7, background: `${macro.color}18`, border: `1px solid ${macro.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: macro.color, flexShrink: 0 }}>{macro.code}</div>
               <span style={{ fontSize: 10, fontWeight: 700, color: macro.color, letterSpacing: 1.2, flex: 1 }}>{macro.label.toUpperCase()}</span>
@@ -160,22 +165,39 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
   )
 }
 
-type View = 'home' | 'mis-tareas' | 'calendar' | 'filter' | 'analytics'
+type View = 'home' | 'mis-tareas' | 'equipo' | 'calendar' | 'filter' | 'analytics' | 'historial'
 type FilterKey = 'activas' | 'en-proceso' | 'aprobar' | 'atraso'
 
-export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId, currentMacroArea }: Props) {
+export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId, currentMacroArea, backHref = '/' }: Props) {
   const router = useRouter()
   const isDesktop = useIsDesktop()
   const [tasks, setTasks] = useState(initialTasks)
   const [selectedTask, setSelectedTask] = useState<RcTask | null>(null)
+  // Resumen es la puerta de entrada del módulo: KPIs de la sección + el CTA
+  // de Nueva Tarea (crear y asignar). Todos aterrizan ahí, admin o no.
   const [view, setView] = useState<View>('home')
+  // Cuando se navega desde Equipo hacia las tareas de otra persona (null = uno mismo)
+  const [viewedUserId, setViewedUserId] = useState<string | null>(null)
+  // Equipo necesita ver las 3 macro-áreas a la vez, no solo la del dashboard activo —
+  // se carga una vez, sin scope, y se reutiliza en "Mis Tareas" al ver a un compañero.
+  const [allTasks, setAllTasks] = useState<RcTask[] | null>(null)
   const [filterKey, setFilterKey] = useState<FilterKey>('activas')
-  const [showSettings, setShowSettings] = useState(false)
+  const [showNewTask, setShowNewTask] = useState(false)
+  // Áreas disponibles para crear tareas: SIEMPRE todas (cualquiera puede asignar a cualquier área),
+  // con las de la sección actual primero para que el default tenga sentido según el módulo activo.
+  const availableTaskAreas: string[] = (() => {
+    const current =
+      currentMacroArea === 'administracion' ? [...MACRO_AREAS.administracion.areas] :
+      currentMacroArea === 'comercial'      ? [...MACRO_AREAS.comercial.areas] :
+      currentMacroArea === 'produccion'     ? [...MACRO_AREAS.produccion.areas] :
+      currentMacroArea === 'logistica'      ? [...MACRO_AREAS.logistica.areas] :
+      []
+    const all = [...MACRO_AREAS.comercial.areas, ...MACRO_AREAS.administracion.areas, ...MACRO_AREAS.produccion.areas, ...MACRO_AREAS.logistica.areas]
+    return [...new Set([...current, ...all])]
+  })()
+  const defaultNewTaskArea = availableTaskAreas[0] ?? 'Ventas'
   // Collapsible macro sections — default: all expanded
   const [expandedMacros, setExpandedMacros] = useState<Set<MacroKey>>(
-    () => new Set(Object.keys(MACRO_AREAS) as MacroKey[])
-  )
-  const [expandedSidebarMacros, setExpandedSidebarMacros] = useState<Set<MacroKey>>(
     () => new Set(Object.keys(MACRO_AREAS) as MacroKey[])
   )
   function toggleMacro(key: MacroKey) {
@@ -185,15 +207,21 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
       return next
     })
   }
-  function toggleSidebarMacro(key: MacroKey) {
-    setExpandedSidebarMacros(prev => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
-  }
+  // Derivar nombres de áreas de forma explícita y segura (sin "as" casts)
+  const macroAreaNames: string[] | null = (() => {
+    if (!currentMacroArea) return null
+    if (currentMacroArea === 'comercial') return [...MACRO_AREAS.comercial.areas]
+    if (currentMacroArea === 'administracion') return [...MACRO_AREAS.administracion.areas]
+    if (currentMacroArea === 'produccion') return [...MACRO_AREAS.produccion.areas]
+    if (currentMacroArea === 'logistica') return [...MACRO_AREAS.logistica.areas]
+    return null
+  })()
 
-  const activeTasks = tasks.filter(t => t.area !== CEREBRO_AREA)
+  // activeTasks: excluye "Mi Cerebro" y restringe a la macro-área activa
+  const activeTasks = tasks.filter(t =>
+    t.area !== CEREBRO_AREA &&
+    (macroAreaNames === null || macroAreaNames.includes(t.area))
+  )
   const cerebroTasks = tasks.filter(t => t.area === CEREBRO_AREA)
   const atrasadas = activeTasks.filter(t => t.estado === 'Atrasada').length
   const porAprobar = activeTasks.filter(t => t.estado === 'Por Aprobar').length
@@ -203,18 +231,51 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
   const handleUpdate = useCallback((updated: RcTask) => {
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
+    setAllTasks(prev => prev ? prev.map(t => t.id === updated.id ? updated : t) : prev)
   }, [])
   const handleDelete = useCallback((id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id))
+    setAllTasks(prev => prev ? prev.filter(t => t.id !== id) : prev)
     setSelectedTask(null)
+  }, [])
+
+  // Carga perezosa: solo al entrar a Equipo/Historial por primera vez, todas las tareas de la empresa
+  useEffect(() => {
+    if ((view !== 'equipo' && view !== 'historial') || allTasks !== null) return
+    fetch('/api/tasks', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => setAllTasks(Array.isArray(data) ? data : []))
+      .catch(() => setAllTasks([]))
+  }, [view, allTasks])
+
+  // Sincronizar eliminaciones en tiempo real entre todas las ventanas/usuarios —
+  // sin esto, borrar una tarea solo la quitaba de la sesión que hizo la acción;
+  // el resto veía la tarea "fantasma" hasta refrescar o recuperar el foco.
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('tasks-delete-sync')
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tasks' }, (payload) => {
+        const deletedId = (payload.old as { id?: string })?.id
+        if (!deletedId) return
+        setTasks(prev => prev.filter(t => t.id !== deletedId))
+        setAllTasks(prev => prev ? prev.filter(t => t.id !== deletedId) : prev)
+        setSelectedTask(prev => (prev && prev.id === deletedId) ? null : prev)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   const refreshTasks = useCallback(async () => {
     try {
-      const res = await fetch('/api/tasks', { cache: 'no-store' })
+      // Incluir "Mi Cerebro" para tareas personales; pasar áreas para mantener el scope
+      const areasParam = macroAreaNames
+        ? `?areas=${[...macroAreaNames, 'Mi Cerebro'].map(encodeURIComponent).join(',')}`
+        : ''
+      const res = await fetch(`/api/tasks${areasParam}`, { cache: 'no-store' })
       if (res.ok) setTasks(await res.json())
     } catch { /* silencioso */ }
-  }, [])
+  }, [macroAreaNames])
 
   useEffect(() => {
     const onFocus = () => refreshTasks()
@@ -227,6 +288,45 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     }
   }, [refreshTasks])
 
+  // ── Deep link: abrir tarea desde notificación push (?task=<id>) ──
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const taskId = params.get('task')
+    if (!taskId) return
+
+    // Limpiar el badge del ícono
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_BADGE' })
+    }
+    if ('clearAppBadge' in navigator) {
+      (navigator as Navigator & { clearAppBadge: () => Promise<void> }).clearAppBadge().catch(() => {})
+    }
+
+    // Buscar la tarea en el estado local primero
+    const found = tasks.find(t => t.id === taskId)
+    if (found) {
+      setSelectedTask(found)
+      // Limpiar el param de la URL sin recargar
+      const url = new URL(window.location.href)
+      url.searchParams.delete('task')
+      window.history.replaceState({}, '', url.toString())
+      return
+    }
+
+    // Si no está en estado local, fetchearla
+    fetch(`/api/tasks?id=${taskId}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        const task = Array.isArray(data) ? data.find((t: { id: string }) => t.id === taskId) : data
+        if (task) setSelectedTask(task)
+      })
+      .catch(() => {})
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete('task')
+    window.history.replaceState({}, '', url.toString())
+  }, [tasks])
+
   // ── Filter view config ──
   const filterMap: Record<FilterKey, { label: string; color: string; items: RcTask[] }> = {
     activas:      { label: 'Tareas Activas', color: 'var(--cream)', items: activeTasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada') },
@@ -238,164 +338,105 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
   const dayName = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][today.getDay()]
   const monthName = ['enero','feb','marzo','abril','mayo','junio','julio','agosto','sep','octubre','nov','dic'][today.getMonth()]
-  const initials = userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    window.location.href = '/login'
-  }
 
   // ─────────────────────────────────────────────
   // CONTENIDO PRINCIPAL (compartido mobile/desktop)
   // ─────────────────────────────────────────────
-  const navItems: { key: View; icon: string; label: string; adminOnly?: boolean }[] = [
-    { key: 'home',       icon: '⊞', label: 'Inicio' },
-    { key: 'mis-tareas', icon: '👤', label: 'Mis Tareas' },
-    { key: 'calendar',   icon: '📅', label: 'Calendario' },
-    { key: 'analytics',  icon: '◈',  label: 'Gestión', adminOnly: true },
+  const navItems: { key: View; icon: LucideIcon; label: string; adminOnly?: boolean }[] = [
+    { key: 'home',       icon: LayoutGrid,   label: 'Gestión' },
+    { key: 'mis-tareas', icon: User,         label: 'Mis Tareas' },
+    { key: 'equipo',     icon: Users,        label: 'Equipo' },
+    { key: 'calendar',   icon: CalendarDays, label: 'Calendario' },
+    { key: 'historial',  icon: History,      label: 'Historial' },
+    { key: 'analytics',  icon: BarChart3,    label: 'Análisis', adminOnly: true },
   ]
   const visibleNavItems = navItems.filter(n => !n.adminOnly || isAdmin)
 
+  function isNavActive(key: View): boolean {
+    if (key === 'home')       return view === 'home' || view === 'filter'
+    if (key === 'mis-tareas') return view === 'mis-tareas' && viewedUserId === null
+    if (key === 'equipo')     return view === 'equipo' || (view === 'mis-tareas' && viewedUserId !== null)
+    return view === key
+  }
+  function goToNav(key: View) {
+    if (key === 'mis-tareas') setViewedUserId(null)
+    setView(key)
+  }
+
   function ContentArea() {
     return (
-      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* ── Tabs de vista — solo desktop ── */}
+        <div className="hidden lg:flex" style={{
+          borderBottom: '1px solid var(--border)',
+          padding: '0 24px',
+          flexShrink: 0,
+        }}>
+          <button
+            onClick={() => router.push(backHref ?? '/gestion')}
+            style={{ padding: '10px 14px', fontSize: 12, fontWeight: 500, color: 'var(--muted)', cursor: 'pointer', background: 'none', border: 'none', borderBottom: '2px solid transparent' }}
+          >
+            ← Hub
+          </button>
+          {visibleNavItems.map(item => {
+            const active = isNavActive(item.key)
+            return (
+              <button key={item.key} onClick={() => goToNav(item.key)} style={{
+                padding: '10px 14px', fontSize: 12,
+                fontWeight: active ? 700 : 500,
+                color: active ? 'var(--gold)' : 'var(--muted)',
+                cursor: 'pointer', background: 'none', border: 'none',
+                borderBottom: active ? '2px solid var(--gold)' : '2px solid transparent',
+                transition: 'color 0.15s',
+              }}>
+                {item.label}
+              </button>
+            )
+          })}
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
         <div style={{
-          padding: isDesktop ? '48px 56px 80px' : '32px 24px 100px',
-          maxWidth: isDesktop ? (view === 'calendar' ? 1200 : 860) : 600,
+          padding: isDesktop ? '24px 40px 80px' : '16px 14px 100px',
+          maxWidth: isDesktop ? (view === 'calendar' ? 1200 : view === 'home' ? 1300 : 860) : 600,
           margin: '0 auto',
           width: '100%',
         }}>
 
           {/* ── HOME VIEW ── */}
           {view === 'home' && (
-            <>
-              <div style={{ marginBottom: 40 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 2.5, marginBottom: 12, textTransform: 'uppercase' }}>
-                  {dayName} {today.getDate()} de {monthName}
-                </div>
-                <div style={{ fontSize: isDesktop ? 44 : 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: -1.5, lineHeight: 1, marginBottom: 12 }}>
-                  Hola,<br />{userName.split(' ')[0]}.
-                </div>
-                {isAdmin && (
-                  <span style={{ fontSize: 10, color: 'var(--gold)', letterSpacing: 1.5, opacity: 0.7 }}>★ Administrador</span>
-                )}
-              </div>
-
-              {/* KPI Semáforo */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: isDesktop ? 12 : 8, marginBottom: 40 }}>
-                {([
-                  { key: 'activas',    label: 'Activas',    value: activas,    color: '#4A7A9B', bg: 'rgba(74,122,155,0.10)',  border: 'rgba(74,122,155,0.25)'  },
-                  { key: 'en-proceso', label: 'En Proceso', value: enProceso,  color: '#D4821A', bg: 'rgba(212,130,26,0.10)',  border: 'rgba(212,130,26,0.30)'  },
-                  { key: 'aprobar',    label: 'Aprobar',    value: porAprobar, color: '#B8941F', bg: 'rgba(184,148,31,0.10)',  border: 'rgba(184,148,31,0.30)'  },
-                  { key: 'atraso',     label: 'Atraso',     value: atrasadas,  color: '#C0392B', bg: 'rgba(192,57,43,0.10)',   border: 'rgba(192,57,43,0.30)'   },
-                ] as { key: FilterKey; label: string; value: number; color: string; bg: string; border: string }[]).map(s => {
-                  const active = s.value > 0
-                  return (
-                    <button key={s.key} onClick={() => { setFilterKey(s.key); setView('filter') }}
-                      className="touch-active"
-                      style={{
-                        background: active ? s.bg : 'var(--surface)',
-                        border: `1px solid ${active ? s.border : 'rgba(128,128,128,0.12)'}`,
-                        borderTop: `3px solid ${active ? s.color : 'rgba(128,128,128,0.15)'}`,
-                        borderRadius: 16,
-                        padding: isDesktop ? '20px 12px 16px' : '16px 8px 14px',
-                        cursor: 'pointer', textAlign: 'center',
-                        boxShadow: active ? `0 2px 12px ${s.color}18` : 'none',
-                        transition: 'all 0.15s',
-                      }}>
-                      <div style={{
-                        fontSize: isDesktop ? 38 : 30, fontWeight: 900, lineHeight: 1,
-                        letterSpacing: -1.5,
-                        color: active ? s.color : 'rgba(128,128,128,0.22)',
-                      }}>{s.value}</div>
-                      <div style={{
-                        fontSize: 9, letterSpacing: 1.5, marginTop: 7,
-                        textTransform: 'uppercase', fontWeight: 700,
-                        color: active ? s.color : 'rgba(128,128,128,0.35)',
-                        opacity: active ? 0.8 : 1,
-                      }}>{s.label}</div>
-                    </button>
-                  )
-                })}
-              </div>
-
-              <TodayFocus tasks={tasks} onTaskClick={setSelectedTask} />
-
-              <MacroProgressBars tasks={tasks} macroFilter={currentMacroArea} />
-
-              {/* ── Macro categorías ── */}
-              {(Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][])
-                .filter(([key]) => currentMacroArea === null || currentMacroArea === key)
-                .map(([key, macro]) => {
-                  const macroTasks = tasks.filter(t => (macro.areas as readonly string[]).includes(t.area))
-                  const macroActivas = macroTasks.filter(t => t.estado !== 'Completada').length
-                  const macroAtraso = macroTasks.filter(t => t.estado === 'Atrasada').length
-                  const macroCompleted = macroTasks.filter(t => t.estado === 'Completada').length
-                  const macroTotal = macroTasks.length
-                  const macroPct = macroTotal > 0 ? Math.round((macroCompleted / macroTotal) * 100) : 0
-                  const isExpanded = expandedMacros.has(key)
-                  const isAdminView = currentMacroArea === null
-                  return (
-                    <div key={key} style={{ marginBottom: 28 }}>
-                      {/* Header macro — solo visible para admins, clickable toggle */}
-                      {isAdminView && (
-                        <div
-                          onClick={() => toggleMacro(key)}
-                          className="touch-active cursor-pointer"
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isExpanded ? 14 : 0, padding: '8px 12px', borderRadius: 10, background: `${macro.color}08`, border: `1px solid ${macro.color}20`, transition: 'all 0.15s' }}
-                        >
-                          {/* Código + label */}
-                          <div style={{ width: 24, height: 24, borderRadius: 8, background: `${macro.color}20`, border: `1px solid ${macro.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: macro.color, flexShrink: 0 }}>{macro.code}</div>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: macro.color, letterSpacing: 1.5, flex: 1 }}>{macro.label.toUpperCase()}</span>
-                          {/* Badges */}
-                          {macroAtraso > 0 && <span style={{ fontSize: 9, color: '#FF6B6B', background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.25)', borderRadius: 8, padding: '2px 7px' }}>{macroAtraso} ⚠</span>}
-                          {macroActivas > 0 && <span style={{ fontSize: 9, color: macro.color, background: `${macro.color}12`, borderRadius: 8, padding: '2px 7px' }}>{macroActivas} activa{macroActivas > 1 ? 's' : ''}</span>}
-                          {/* Progress pct */}
-                          <span style={{ fontSize: 10, fontWeight: 700, color: macroPct >= 80 ? '#4A7A3A' : macroPct >= 50 ? '#D4AF37' : macro.color, minWidth: 30, textAlign: 'right' }}>{macroPct}%</span>
-                          {/* Chevron */}
-                          <span style={{ fontSize: 11, color: macro.color, transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▾</span>
-                        </div>
-                      )}
-                      {/* Áreas de esta macro — colapsable */}
-                      {(!isAdminView || isExpanded) && (
-                        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: isDesktop ? 12 : 10 }}>
-                          {macro.areas.map(area => (
-                            <AreaCard key={area} area={area} tasks={tasks.filter(t => t.area === area)} onClick={() => router.push(`/gestion/area/${encodeURIComponent(area)}`)} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
-              }
-
-              {cerebroTasks.length > 0 && (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: AREA_CFG[CEREBRO_AREA].color, letterSpacing: 2 }}>MI CEREBRO</span>
-                    <div style={{ flex: 1, height: 1, background: `${AREA_CFG[CEREBRO_AREA].color}18` }} />
-                  </div>
-                  <div style={{ border: `1px solid ${AREA_CFG[CEREBRO_AREA].color}18`, borderRadius: 12, overflow: 'hidden' }}>
-                    {cerebroTasks.map(t => (
-                      <div key={t.id} onClick={() => setSelectedTask(t)} className="touch-active cursor-pointer"
-                        style={{ padding: '14px 16px', borderBottom: '1px solid rgba(128,128,128,0.08)', display: 'flex', gap: 10, alignItems: 'center' }}>
-                        {t.sub_area && <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 10, background: 'rgba(155,89,182,0.15)', color: '#B07FD4', letterSpacing: 0.8 }}>{t.sub_area}</span>}
-                        <span style={{ flex: 1, fontSize: 14, color: 'var(--cream)' }}>{t.titulo}</span>
-                        {t.prioridad_maxima && <span>⚡</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+            <HomeDashboard
+              tasks={tasks}
+              users={users}
+              userName={userName}
+              isAdmin={isAdmin}
+              currentUserId={currentUserId}
+              currentMacroArea={currentMacroArea}
+              availableAreas={availableTaskAreas}
+              backHref={backHref}
+              onTaskUpdated={handleUpdate}
+              onTaskDeleted={handleDelete}
+              onTaskCreated={t => setTasks(prev => [t, ...prev])}
+              onNavigate={(v) => {
+                // Soporte para 'filter:atrasadas', 'filter:en-proceso', etc.
+                if (v.startsWith('filter:')) {
+                  const fk = v.replace('filter:', '') as FilterKey
+                  setFilterKey(fk)
+                  setView('filter')
+                } else {
+                  setView(v as View)
+                }
+              }}
+            />
           )}
 
-          {/* ── MIS TAREAS VIEW ── */}
+                    {/* ── MIS TAREAS VIEW (o tareas de un compañero, visto desde Equipo) ── */}
           {view === 'mis-tareas' && (() => {
-            const misTareas = tasks.filter(t =>
-              t.responsable_id === currentUserId ||
-              (t.responsable_ids ?? []).includes(currentUserId)
+            const targetUserId = viewedUserId ?? currentUserId
+            const targetUser = viewedUserId ? users.find(u => u.id === viewedUserId) : null
+            const misTareas = (allTasks ?? tasks).filter(t =>
+              t.responsable_id === targetUserId ||
+              (t.responsable_ids ?? []).includes(targetUserId)
             )
             const pendientes = misTareas.filter(t => !['Completada', 'Rechazada'].includes(t.estado))
             const completadas = misTareas.filter(t => t.estado === 'Completada')
@@ -410,13 +451,24 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             return (
               <>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)', marginBottom: 4 }}>Mis Tareas</div>
+                  {targetUser && (
+                    <button onClick={() => { setViewedUserId(null); setView('equipo') }} className="touch-active"
+                      style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      ← Equipo
+                    </button>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    {targetUser && <Avatar iniciales={targetUser.iniciales} userId={targetUser.id} size={isDesktop ? 32 : 28} avatarUrl={targetUser.avatar_url} />}
+                    <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)' }}>
+                      {targetUser ? `Tareas de ${targetUser.nombre.split(' ')[0]}` : 'Mis Tareas'}
+                    </div>
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>{pendientes.length} pendiente{pendientes.length !== 1 ? 's' : ''} · {completadas.length} completada{completadas.length !== 1 ? 's' : ''}</div>
                 </div>
                 {misTareas.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '48px 20px' }}>
                     <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
-                    <div style={{ fontSize: 14, color: 'var(--muted)' }}>No tienes tareas asignadas</div>
+                    <div style={{ fontSize: 14, color: 'var(--muted)' }}>{targetUser ? `${targetUser.nombre.split(' ')[0]} no tiene` : 'No tienes'} tareas asignadas</div>
                   </div>
                 )}
                 {grupos.map(grupo => (
@@ -427,11 +479,170 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {grupo.items.map(t => (
-                        <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta />
+                        <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta creadorNombre={users.find(u => u.id === t.creado_por)?.nombre} />
                       ))}
                     </div>
                   </div>
                 ))}
+              </>
+            )
+          })()}
+
+          {/* ── EQUIPO VIEW — las 3 áreas por separado, con sus responsables debajo ── */}
+          {view === 'equipo' && (() => {
+            const source = (allTasks ?? tasks).filter(t => t.area !== CEREBRO_AREA)
+            const macroEntries = Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][]
+
+            const sections = macroEntries.map(([macroKey, macro]) => {
+              const macroAreaList = macro.areas as readonly string[]
+              const macroTasks = source.filter(t => macroAreaList.includes(t.area))
+              const teamUserIds = [...new Set(
+                macroTasks.flatMap(t => [t.responsable_id, ...(t.responsable_ids ?? [])].filter(Boolean))
+              )]
+              const teamStats = users.filter(u => teamUserIds.includes(u.id)).map(u => {
+                const myTasks = macroTasks.filter(t => t.responsable_id === u.id || (t.responsable_ids ?? []).includes(u.id))
+                const comp = myTasks.filter(t => t.estado === 'Completada').length
+                const atr = myTasks.filter(t => t.estado === 'Atrasada').length
+                const enProceso = myTasks.filter(t => t.estado === 'En Proceso').length
+                const porApr = myTasks.filter(t => t.estado === 'Por Aprobar').length
+                const pct = myTasks.length > 0 ? Math.round((comp / myTasks.length) * 100) : 0
+                const color = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : atr > 0 ? '#FF6B6B' : '#5B8AA8'
+                // Próxima entrega: la tarea pendiente con el plazo más cercano
+                const pendientes = myTasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada')
+                const proxima = pendientes.length > 0
+                  ? [...pendientes].sort((a, b) => a.plazo.localeCompare(b.plazo))[0]
+                  : null
+                const proximaSem = proxima ? getSemaphore(proxima.plazo, proxima.estado) : null
+                return { user: u, total: myTasks.length, comp, atr, enProceso, porApr, pct, color, proxima, proximaSem }
+              }).filter(s => s.total > 0).sort((a, b) => b.pct - a.pct)
+              return { macroKey, macro, teamStats }
+            })
+
+            return (
+              <>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)', marginBottom: 4 }}>Equipo</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>Carga de tareas de toda la empresa, por área</div>
+                </div>
+
+                {allTasks === null ? (
+                  <div style={{ textAlign: 'center', padding: '48px 20px', fontSize: 12, color: 'var(--muted)' }}>Cargando equipo…</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                    {sections.map(({ macroKey, macro, teamStats }) => (
+                      <div key={macroKey}>
+                        {/* Título de la sección/área */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${macro.color}25` }}>
+                          <div style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: `${macro.color}18`, border: `1px solid ${macro.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, color: macro.color }}>{macro.code}</div>
+                          <div style={{ fontSize: isDesktop ? 17 : 15, fontWeight: 900, color: macro.color, letterSpacing: -0.3 }}>{macro.label}</div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                            {teamStats.length > 0 ? `${teamStats.length} responsable${teamStats.length !== 1 ? 's' : ''}` : 'sin tareas asignadas'}
+                          </div>
+                        </div>
+
+                        {/* Responsables de esta área */}
+                        {teamStats.length === 0 ? (
+                          <div style={{ fontSize: 12, color: 'var(--muted)', paddingLeft: 4 }}>Nadie tiene tareas asignadas en esta área todavía</div>
+                        ) : (
+                          <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(2, 1fr)' : '1fr', gap: 12 }}>
+                            {teamStats.map(({ user: u, total, comp, atr, enProceso, porApr, pct, color, proxima, proximaSem }) => (
+                              <div key={u.id}
+                                className="touch-active cursor-pointer"
+                                onClick={() => { setViewedUserId(u.id); setView('mis-tareas') }}
+                                style={{ background: 'var(--surface)', border: '1px solid rgba(128,128,128,0.1)', borderRadius: 16, padding: 16, borderLeft: `3px solid ${color}` }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                                  <Avatar iniciales={u.iniciales} userId={u.id} size={42} avatarUrl={u.avatar_url} />
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--cream)' }}>{u.nombre}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{u.rol}</div>
+                                  </div>
+                                  <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: 24, fontWeight: 900, color, lineHeight: 1 }}>{pct}%</div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>{comp}/{total}</div>
+                                  </div>
+                                </div>
+                                <div style={{ height: 6, background: 'rgba(128,128,128,0.15)', borderRadius: 6, overflow: 'hidden', marginBottom: 12 }}>
+                                  <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${color}80, ${color})`, borderRadius: 6, transition: 'width 0.6s ease' }} />
+                                </div>
+                                {proxima && proximaSem && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, padding: '6px 10px', borderRadius: 10, background: `${proximaSem.hex}12`, border: `1px solid ${proximaSem.hex}30` }}>
+                                    <span style={{ fontSize: 11 }}>⏳</span>
+                                    <span style={{ fontSize: 11, color: proximaSem.hex, fontWeight: 700 }}>
+                                      {proximaSem.label === 'Vencida' ? 'Vencida' : `Vence en ${proximaSem.label}`}
+                                    </span>
+                                    <span style={{ fontSize: 10, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>· {proxima.titulo}</span>
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                  {[
+                                    { label: 'Completadas', val: comp, color: '#4A7A3A' },
+                                    { label: 'En Proceso', val: enProceso, color: '#E67E22' },
+                                    { label: 'Por Aprobar', val: porApr, color: '#D4AF37' },
+                                    { label: 'Atrasadas', val: atr, color: '#FF6B6B' },
+                                  ].filter(s => s.val > 0).map(s => (
+                                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 10, background: `${s.color}12`, border: `1px solid ${s.color}25` }}>
+                                      <div style={{ width: 5, height: 5, borderRadius: '50%', background: s.color }} />
+                                      <span style={{ fontSize: 10, color: s.color, fontWeight: 600 }}>{s.val} {s.label}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div style={{ marginTop: 10, fontSize: 9, color: 'var(--muted)', letterSpacing: 1 }}>TOCA PARA VER SUS TAREAS →</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )
+          })()}
+
+          {/* ── HISTORIAL VIEW — todas las tareas completadas de la empresa ── */}
+          {view === 'historial' && (() => {
+            const source = (allTasks ?? tasks).filter(t => t.estado === 'Completada')
+            const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+            // No existe un timestamp de "completada el", se agrupa por la fecha de vencimiento (plazo)
+            const sorted = [...source].sort((a, b) => b.plazo.localeCompare(a.plazo))
+            const groups: { label: string; items: RcTask[] }[] = []
+            for (const t of sorted) {
+              const d = new Date(t.plazo + 'T12:00:00')
+              const label = `${MESES[d.getMonth()]} ${d.getFullYear()}`
+              const existing = groups.find(g => g.label === label)
+              if (existing) existing.items.push(t)
+              else groups.push({ label, items: [t] })
+            }
+
+            return (
+              <>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)', marginBottom: 4 }}>Historial</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{source.length} tarea{source.length !== 1 ? 's' : ''} completada{source.length !== 1 ? 's' : ''} en total</div>
+                </div>
+                {allTasks === null ? (
+                  <div style={{ textAlign: 'center', padding: '48px 20px', fontSize: 12, color: 'var(--muted)' }}>Cargando historial…</div>
+                ) : source.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>🗂️</div>
+                    <div style={{ fontSize: 14, color: 'var(--muted)' }}>Todavía no hay tareas completadas</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    {groups.map(g => (
+                      <div key={g.label}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>
+                          {g.label} · {g.items.length}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {g.items.map(t => (
+                            <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta creadorNombre={users.find(u => u.id === t.creado_por)?.nombre} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )
           })()}
@@ -464,7 +675,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                   {[...currentFilter.items]
                     .sort((a, b) => a.plazo.localeCompare(b.plazo))
                     .map(t => (
-                      <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta />
+                      <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta creadorNombre={users.find(u => u.id === t.creado_por)?.nombre} />
                     ))
                   }
                 </div>
@@ -474,7 +685,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
           {/* ── CALENDAR VIEW ── */}
           {view === 'calendar' && (
-            <TaskCalendar tasks={tasks} onTaskClick={setSelectedTask} />
+            <TaskCalendar tasks={tasks} onTaskClick={setSelectedTask} onNewTask={() => setShowNewTask(true)} />
           )}
 
           {/* ── ANALYTICS VIEW ── */}
@@ -483,192 +694,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           )}
 
         </div>
-      </div>
-    )
-  }
-
-  // ─────────────────────────────────────────────
-  // LAYOUT DESKTOP — sidebar + contenido
-  // ─────────────────────────────────────────────
-  if (isDesktop) {
-    return (
-      <div style={{ display: 'flex', height: '100vh', background: 'var(--bg)' }}>
-
-        {/* Sidebar */}
-        <aside style={{
-          width: 230, flexShrink: 0,
-          background: 'var(--surface)',
-          borderRight: '1px solid var(--border)',
-          display: 'flex', flexDirection: 'column',
-          overflowY: 'auto',
-        }}>
-          {/* Logo + título + back to hub */}
-          <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid rgba(128,128,128,0.08)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <Logo size={52} />
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.4 }}>El Regreso</div>
-                <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2 }}>GESTIÓN</div>
-              </div>
-            </div>
-            <a
-              href="/"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 7,
-                padding: '7px 10px', borderRadius: 9,
-                background: 'rgba(91,138,168,0.06)',
-                border: '1px solid rgba(91,138,168,0.15)',
-                color: '#5B8AA8', fontSize: 11, fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              ← Cambiar módulo
-            </a>
-          </div>
-
-          {/* Nav */}
-          <nav style={{ padding: '12px 10px', flex: 1 }}>
-            <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '4px 10px 8px', textTransform: 'uppercase' }}>Navegación</div>
-            {visibleNavItems.map(item => {
-              const isActive = view === item.key || (item.key === 'home' && view === 'filter')
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => setView(item.key)}
-                  className={`sidebar-nav-item${isActive ? ' active' : ''}`}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    width: '100%', padding: '11px 14px', borderRadius: 10,
-                    border: 'none', cursor: 'pointer', marginBottom: 2,
-                    background: isActive ? 'rgba(212,175,55,0.1)' : 'transparent',
-                    textAlign: 'left', transition: 'background 0.15s',
-                  }}
-                >
-                  <span style={{ fontSize: 16, lineHeight: 1 }}>{item.icon}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? 'var(--gold)' : 'var(--muted)' }}>
-                    {item.label}
-                  </span>
-                  {/* Badge alertas */}
-                  {item.key === 'home' && (atrasadas + porAprobar) > 0 && (
-                    <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, color: '#FF7070', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 10, padding: '2px 6px' }}>
-                      {atrasadas + porAprobar}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-
-            {/* Filtros rápidos */}
-            <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '14px 10px 8px', textTransform: 'uppercase' }}>Filtros Rápidos</div>
-            {([
-              { key: 'activas',     label: 'Activas',    value: activas,    color: 'var(--cream)' },
-              { key: 'en-proceso',  label: 'En Proceso', value: enProceso,  color: '#E67E22' },
-              { key: 'aprobar',     label: 'Por Aprobar',value: porAprobar, color: '#D4AF37' },
-              { key: 'atraso',      label: 'En Atraso',  value: atrasadas,  color: '#FF6B6B' },
-            ] as { key: FilterKey; label: string; value: number; color: string }[]).map(s => (
-              <button
-                key={s.key}
-                onClick={() => { setFilterKey(s.key); setView('filter') }}
-                className="sidebar-nav-item touch-active"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  width: '100%', padding: '9px 14px', borderRadius: 10,
-                  border: 'none', cursor: 'pointer', marginBottom: 2,
-                  background: view === 'filter' && filterKey === s.key ? `${s.color}15` : 'transparent',
-                  textAlign: 'left', transition: 'background 0.15s',
-                }}
-              >
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{s.label}</span>
-                {s.value > 0 && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: s.color }}>{s.value}</span>
-                )}
-              </button>
-            ))}
-
-            {/* Áreas agrupadas por macro */}
-            {(Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][])
-              .filter(([key]) => currentMacroArea === null || currentMacroArea === key)
-              .map(([key, macro]) => {
-                const isSidebarExpanded = expandedSidebarMacros.has(key)
-                const isAdminView = currentMacroArea === null
-                return (
-                  <div key={key}>
-                    {/* Macro label — clickable for admins */}
-                    {isAdminView ? (
-                      <button
-                        onClick={() => toggleSidebarMacro(key)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 6,
-                          width: '100%', padding: '14px 10px 6px', border: 'none',
-                          background: 'transparent', cursor: 'pointer', textAlign: 'left',
-                        }}
-                      >
-                        <span style={{ fontSize: 8, color: macro.color, letterSpacing: 1.8, textTransform: 'uppercase', fontWeight: 700, flex: 1 }}>{macro.label}</span>
-                        <span style={{ fontSize: 10, color: macro.color, transition: 'transform 0.2s', display: 'inline-block', transform: isSidebarExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▾</span>
-                      </button>
-                    ) : (
-                      <div style={{ fontSize: 8, color: macro.color, letterSpacing: 1.8, padding: '14px 10px 6px', textTransform: 'uppercase', fontWeight: 700 }}>Áreas</div>
-                    )}
-                    {/* Area buttons — collapsible for admins */}
-                    {(!isAdminView || isSidebarExpanded) && macro.areas.map(area => {
-                      const areaCfg = AREA_CFG[area]
-                      const count = tasks.filter(t => t.area === area && t.estado !== 'Completada').length
-                      return (
-                        <button key={area} onClick={() => router.push(`/gestion/area/${encodeURIComponent(area)}`)} className="sidebar-nav-item touch-active"
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', marginBottom: 2, background: 'transparent', textAlign: 'left', transition: 'background 0.15s' }}>
-                          <div style={{ width: 22, height: 22, borderRadius: 7, background: `${areaCfg.color}18`, border: `1px solid ${areaCfg.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: areaCfg.color, flexShrink: 0 }}>
-                            {areaCfg.code}
-                          </div>
-                          <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{area}</span>
-                          {count > 0 && <span style={{ fontSize: 10, color: areaCfg.color, fontWeight: 700 }}>{count}</span>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )
-              })
-            }
-          </nav>
-
-          {/* Footer sidebar: usuario + acciones */}
-          <div style={{ borderTop: '1px solid rgba(128,128,128,0.1)', padding: '14px 16px' }}>
-            {/* Usuario */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <div style={{ width: 34, height: 34, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#0A0A0A', flexShrink: 0 }}>
-                {initials}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
-                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{isAdmin ? '★ Admin' : 'Usuario'}</div>
-              </div>
-              <button onClick={refreshTasks} className="touch-active" title="Actualizar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 15, padding: 4 }}>↻</button>
-            </div>
-            {/* Botones */}
-            <button
-              onClick={() => setShowSettings(true)}
-              className="touch-active"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 10, border: 'none', background: 'rgba(128,128,128,0.07)', cursor: 'pointer', marginBottom: 6 }}
-            >
-              <span style={{ fontSize: 14 }}>⚙</span>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>Configuración</span>
-            </button>
-            <button
-              onClick={handleLogout}
-              className="touch-active"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 10, border: 'none', background: 'rgba(255,68,68,0.06)', cursor: 'pointer' }}
-            >
-              <span style={{ fontSize: 14 }}>🚪</span>
-              <span style={{ fontSize: 12, color: '#FF6B6B' }}>Cerrar Sesión</span>
-            </button>
-          </div>
-        </aside>
-
-        {/* Contenido principal */}
-        <ContentArea />
-
-        {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} />}
-        {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
+        </div>
       </div>
     )
   }
@@ -679,55 +705,90 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
 
-      {/* Topbar */}
-      <div className="safe-top" style={{ display: 'flex', alignItems: 'center', padding: '12px 20px', gap: 12, background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <Logo size={68} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.5 }}>El Regreso Gestión</div>
-          <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.4 }}>SISTEMA OPERATIVO EJECUTIVO</div>
-        </div>
-        <a href="/" title="Volver al Inicio"
-          style={{ background: 'rgba(91,138,168,0.1)', border: '1px solid rgba(91,138,168,0.2)', borderRadius: 8, padding: '5px 9px', color: '#5B8AA8', fontSize: 10, fontWeight: 700, textDecoration: 'none', flexShrink: 0, letterSpacing: 0.3 }}>
-          ⌂
-        </a>
-        <button onClick={refreshTasks} className="touch-active" title="Actualizar"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>
-          ↻
-        </button>
-        {(atrasadas + porAprobar) > 0 && (
-          <div className="pulse" style={{ flexShrink: 0, padding: '4px 10px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#FF4444' }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#FF7070' }}>{atrasadas + porAprobar}</span>
-          </div>
-        )}
-        <button onClick={() => setShowSettings(true)} className="touch-active" title="Configuración"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', fontSize: 18, lineHeight: 1, flexShrink: 0 }}>
-          ⚙
-        </button>
-        <div style={{ width: 34, height: 34, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#0A0A0A', flexShrink: 0, position: 'relative' }}>
-          {initials}
-          {isAdmin && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 12, height: 12, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7 }}>★</div>}
-        </div>
-      </div>
-
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} />}
-
-      {/* Nav tabs */}
-      <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid rgba(128,128,128,0.08)', flexShrink: 0 }}>
-        {visibleNavItems.map(({ key, label }) => {
-          const isActive = view === key || (key === 'home' && view === 'filter')
-          return (
-            <button key={key} onClick={() => setView(key)} style={{ flex: 1, padding: '10px 4px 8px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--gold)' : 'var(--muted)', letterSpacing: 0.3, transition: 'color 0.15s' }}>
-              <div>{label}</div>
-              <div className={`nav-pill${isActive ? '' : ' inactive'}`} />
+      {/* ── Header estándar — igual que todos los módulos ── */}
+      <div style={{ padding: '0 18px', flexShrink: 0 }}>
+        <AppHeader
+          eyebrow={new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
+          title={currentMacroArea
+            ? (Object.entries(MACRO_AREAS).find(([k]) => k === currentMacroArea)?.[1]?.label ?? 'Gestión')
+            : 'Gestión'
+          }
+          backHref={backHref}
+          extraAction={
+            <button
+              onClick={refreshTasks}
+              title="Actualizar"
+              style={{
+                width: 38, height: 38,
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: 'var(--muted)',
+              }}
+            >
+              <RefreshCw size={17} />
             </button>
-          )
-        })}
+          }
+        />
       </div>
 
       <ContentArea />
 
-      {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
+      {/* ── Bottom nav flotante — solo mobile, desktop usa tabs ──
+          Ancho acotado al viewport y botones a flex:1 para que, con hasta 6
+          pestañas (admin ve "Análisis" además de las 5 normales), nunca se
+          corten fuera de pantalla en un iPhone angosto — antes tenían ancho
+          fijo por contenido y "Análisis" quedaba literalmente cortado por el
+          borde de la pantalla. */}
+      <nav className="lg:hidden" style={{
+        position: 'fixed',
+        display: showNewTask ? 'none' : 'flex',
+        bottom: 'max(16px, env(safe-area-inset-bottom))',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 'calc(100vw - 24px)',
+        maxWidth: 460,
+        alignItems: 'center',
+        gap: 2,
+        background: 'rgba(10,10,10,0.88)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 100,
+        padding: '8px 8px',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
+        zIndex: showNewTask ? -1 : 50,
+      } as React.CSSProperties}>
+        {visibleNavItems.map(({ key, icon: Icon, label }) => {
+          const active = isNavActive(key)
+          return (
+            <button key={key} onClick={() => goToNav(key)} style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              flex: '1 1 0', minWidth: 0,
+              padding: '6px 4px', borderRadius: 80, border: 'none', cursor: 'pointer',
+              background: active ? 'rgba(212,175,55,0.12)' : 'transparent',
+              outline: active ? '1px solid rgba(212,175,55,0.2)' : '1px solid transparent',
+              transition: 'all 0.2s ease',
+              color: active ? '#D4AF37' : 'rgba(255,255,255,0.35)',
+            }}>
+              <div style={{ position: 'relative' }}>
+                <Icon size={19} strokeWidth={active ? 2.5 : 1.8} />
+                {active && (
+                  <div style={{ position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: '50%', background: '#D4AF37', boxShadow: '0 0 6px #D4AF37' }} />
+                )}
+              </div>
+              <span style={{
+                fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: '0.1px',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+              }}>{label}</span>
+            </button>
+          )
+        })}
+      </nav>
+
+      {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} users={users} />}
+      {showNewTask && <NewTaskModal defaultArea={defaultNewTaskArea} availableAreas={availableTaskAreas} users={users} onClose={() => setShowNewTask(false)} onCreated={(t) => { setTasks(prev => [t, ...prev]); setShowNewTask(false) }} />}
     </div>
   )
 }

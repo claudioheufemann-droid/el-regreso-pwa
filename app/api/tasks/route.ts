@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { Resend } from 'resend'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 import { sendPushToAllAdmins, sendPushToUser } from '@/lib/push'
+import { emailTaskAprobada, emailTaskRechazada, emailTaskPorAprobar, emailTaskEnProceso } from '@/lib/email'
 
 const ADMIN_REVIEW_EMAIL = process.env.ADMIN_REVIEW_EMAIL ?? ''
 
@@ -15,6 +17,17 @@ async function getSupabase() {
       setAll: (list) => { try { list.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {} },
     },
   })
+}
+
+// Cliente con service key — usado SOLO para el borrado en sí, una vez que ya
+// verificamos permisos con el usuario autenticado. La policy RLS de delete en
+// 'tasks' históricamente solo contempla admins; con el cliente anon, borrar
+// como dueño-no-admin fallaba en silencio (0 filas afectadas, sin error) y la
+// tarea "revivía" en el próximo refetch.
+function getAdminSupabase() {
+  const key = process.env.SUPABASE_SERVICE_KEY
+  if (!key) return null
+  return createSupabaseClient(SUPABASE_URL, key)
 }
 
 function buildReviewEmailHtml(task: {
@@ -129,16 +142,27 @@ async function notifyClaudio(task: {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { data, error } = await supabase
+  // Soporte para filtrar por áreas: ?areas=Ventas,Marketing
+  const areasParam = req.nextUrl.searchParams.get('areas')
+
+  let query = supabase
     .from('tasks')
     .select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids')
     .order('created_at', { ascending: false })
 
+  if (areasParam) {
+    const areasList = areasParam.split(',').map(a => a.trim()).filter(Boolean)
+    if (areasList.length > 0) {
+      query = query.in('area', areasList) as typeof query
+    }
+  }
+
+  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
@@ -151,7 +175,8 @@ export async function PATCH(req: NextRequest) {
   const { data: before } = await supabase.from('tasks').select('estado, started_at').eq('id', id).single()
 
   // Capturar timestamp de inicio cuando pasa a 'En Proceso' por primera vez
-  if (updates.estado === 'En Proceso' && before?.estado === 'Asignada' && !before?.started_at) {
+  const recienIniciada = updates.estado === 'En Proceso' && before?.estado === 'Asignada' && !before?.started_at
+  if (recienIniciada) {
     updates.started_at = new Date().toISOString()
   }
 
@@ -164,28 +189,91 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Email con adjunto .ics a TODOS los asignados cuando la tarea arranca —
+  // así queda agendado el plazo en su calendario (Google Calendar, Outlook…)
+  // apenas empiezan a trabajarla, no solo cuando se les asignó.
+  if (recienIniciada) {
+    const destinatarioIds: string[] = Array.from(new Set(
+      (data.responsable_ids?.length ? data.responsable_ids : [data.responsable_id]).filter(Boolean)
+    ))
+    if (destinatarioIds.length > 0) {
+      const { data: destinatarios } = await supabase
+        .from('users')
+        .select('id, nombre, email')
+        .in('id', destinatarioIds)
+
+      await Promise.allSettled((destinatarios ?? []).map(dest =>
+        dest.email
+          ? emailTaskEnProceso({
+              toEmail: dest.email,
+              toNombre: dest.nombre,
+              taskTitulo: data.titulo,
+              taskArea: data.area,
+              taskPlazo: data.plazo,
+              taskDescripcion: data.descripcion,
+              horaLimite: data.hora_limite,
+            }).catch(err => console.error(`tasks PATCH: email en-proceso a ${dest.email} falló:`, err))
+          : Promise.resolve()
+      ))
+    }
+  }
+
   // Notificar a admins si la tarea acaba de pasar a "Por Aprobar"
   if (updates.estado === 'Por Aprobar' && before?.estado !== 'Por Aprobar') {
-    notifyClaudio(data).catch(() => {})
+    // Email a admins (push + email bonito)
+    const { data: admins } = await supabase.from('users').select('email').eq('is_admin', true)
+    const adminEmails = (admins ?? []).map(a => a.email).filter(Boolean)
+
+    notifyClaudio(data).catch(() => {}) // legado — mantener por compatibilidad
+    emailTaskPorAprobar({
+      toEmails: adminEmails,
+      taskTitulo: data.titulo,
+      taskArea: data.area,
+      responsableNombre: data.responsable?.nombre ?? 'Sin responsable',
+      taskPlazo: data.plazo,
+      resumen: data.resumen_cierre,
+      fotoAntesUrl: data.foto_antes_url,
+      fotoDespuesUrl: data.foto_despues_url,
+    }).catch(() => {})
     sendPushToAllAdmins({
       title: '⭐ Tarea lista para aprobar',
       body: data.titulo,
-      url: '/',
+      taskId: data.id,
       tag: `review-${data.id}`,
       requireInteraction: true,
     }).catch(() => {})
   }
 
-  // Notificar al responsable si su tarea fue aprobada o rechazada
+  // Notificar a TODOS los asignados (no solo al responsable principal) si la
+  // tarea fue aprobada o rechazada.
   if ((updates.estado === 'Completada' || updates.estado === 'Rechazada') &&
-      before?.estado === 'Por Aprobar' && data.responsable_id) {
+      before?.estado === 'Por Aprobar') {
     const isApproved = updates.estado === 'Completada'
-    sendPushToUser(data.responsable_id, {
-      title: isApproved ? '✅ Tarea aprobada' : '❌ Tarea rechazada',
-      body: data.titulo,
-      url: '/',
-      tag: `status-${data.id}`,
-    }).catch(() => {})
+    const destinatarioIds: string[] = Array.from(new Set(
+      (data.responsable_ids?.length ? data.responsable_ids : [data.responsable_id]).filter(Boolean)
+    ))
+
+    if (destinatarioIds.length > 0) {
+      const { data: destinatarios } = await supabase
+        .from('users')
+        .select('id, nombre, email')
+        .in('id', destinatarioIds)
+
+      await Promise.allSettled((destinatarios ?? []).flatMap(dest => [
+        sendPushToUser(dest.id, {
+          title: isApproved ? '✅ Tarea aprobada' : '❌ Tarea rechazada',
+          body: data.titulo,
+          taskId: data.id,
+          tag: `status-${data.id}`,
+        }).catch(err => console.error(`tasks PATCH: push a ${dest.id} falló:`, err)),
+        dest.email
+          ? (isApproved
+              ? emailTaskAprobada({ toEmail: dest.email, toNombre: dest.nombre, taskTitulo: data.titulo, taskArea: data.area })
+              : emailTaskRechazada({ toEmail: dest.email, toNombre: dest.nombre, taskTitulo: data.titulo, taskArea: data.area, motivo: updates.nota_rechazo })
+            ).catch(err => console.error(`tasks PATCH: email a ${dest.email} falló:`, err))
+          : Promise.resolve(),
+      ]))
+    }
   }
 
   return NextResponse.json(data)
@@ -198,11 +286,20 @@ export async function DELETE(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
   const { data: profile } = await supabase.from('users').select('is_admin').eq('email', user.email!).single()
-  if (!profile?.is_admin) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
   const { id } = await req.json()
-  const { error } = await supabase.from('tasks').delete().eq('id', id)
+  const { data: task } = await supabase.from('tasks').select('creado_por').eq('id', id).single()
+
+  const isOwner = task?.creado_por === user.id
+  if (!profile?.is_admin && !isOwner) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+
+  const adminSupabase = getAdminSupabase()
+  const deleteClient = adminSupabase ?? supabase
+  const { data: deleted, error } = await deleteClient.from('tasks').delete().eq('id', id).select('id')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!deleted || deleted.length === 0) {
+    return NextResponse.json({ error: 'La tarea no se pudo eliminar (permisos de base de datos)' }, { status: 403 })
+  }
   return NextResponse.json({ ok: true })
 }

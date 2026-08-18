@@ -4,14 +4,10 @@ import MapaClient from './MapaClient'
 export default async function MapaPage() {
   const supabase = await createClient()
 
-  // Obtener fechas disponibles
-  const { data: fechas } = await supabase
-    .from('ventas')
-    .select('fecha_pedido')
-    .order('fecha_pedido', { ascending: false })
-    .limit(200)
-
-  const fechasUnicas = [...new Set((fechas ?? []).map(f => f.fecha_pedido))].sort().reverse()
+  // Fechas únicas con ventas — vía RPC con DISTINCT (1 round-trip en vez de
+  // paginar manualmente sobre toda la tabla solo para deduplicar fechas).
+  const { data: fechasRows } = await supabase.rpc('fechas_ventas_disponibles')
+  const fechasUnicas = (fechasRows ?? []).map((r: { fecha_pedido: string }) => r.fecha_pedido)
   const fechaDefault = fechasUnicas[0] ?? new Date().toISOString().split('T')[0]
 
   return (

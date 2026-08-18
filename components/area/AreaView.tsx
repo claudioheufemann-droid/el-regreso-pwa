@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { RcTask, RcUser, TaskStatus, AREA_CFG, STATUS_LIST, STATUS_CFG } from '@/lib/gestion-types'
+import { RcTask, RcUser, TaskStatus, AREA_CFG, STATUS_LIST, STATUS_CFG, AREAS } from '@/lib/gestion-types'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import TaskRow from './TaskRow'
 import NewTaskModal from '@/components/modals/NewTaskModal'
@@ -192,8 +192,8 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
               </button>
             </div>
           ) : (
-            <button onClick={() => router.push('/')} className="touch-active" style={{ width: '100%', padding: '10px 14px', borderRadius: 12, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, fontWeight: 600, color: 'var(--muted)', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 15 }}>←</span> Cambiar módulo
+            <button onClick={() => router.push('/gestion')} className="touch-active" style={{ width: '100%', padding: '10px 14px', borderRadius: 12, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, fontWeight: 600, color: 'var(--muted)', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 15 }}>←</span> Volver a Gestión
             </button>
           )}
         </div>
@@ -247,7 +247,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
               const myCount = tasks.filter(t => t.responsable_id === u.id && (filter === 'Todas' || t.estado === filter)).length
               return (
                 <button key={u.id} onClick={() => setFilterUserId(isActive ? null : u.id)} className="touch-active" style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', borderRadius: 10, border: 'none', background: isActive ? `${cfg.color}15` : 'transparent', cursor: 'pointer', marginBottom: 2 }}>
-                  <Avatar iniciales={u.iniciales} userId={u.id} size={26} />
+                  <Avatar iniciales={u.iniciales} userId={u.id} size={26} avatarUrl={u.avatar_url} />
                   <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? cfg.color : 'var(--muted)', flex: 1, textAlign: 'left' }}>{u.nombre.split(' ')[0]}</span>
                   {myCount > 0 && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: isActive ? `${cfg.color}25` : 'rgba(128,128,128,0.12)', color: isActive ? cfg.color : 'var(--muted)', fontWeight: 700 }}>{myCount}</span>}
                 </button>
@@ -256,8 +256,8 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
           </div>
         )}
 
-        {/* Nueva tarea */}
-        {isAdmin && !selectMode && (
+        {/* Nueva tarea — cualquier usuario puede crear y asignar tareas */}
+        {!selectMode && (
           <div style={{ padding: '12px 16px', marginTop: 'auto', borderTop: '1px solid rgba(128,128,128,0.08)' }}>
             <button onClick={() => setShowNew(true)} className="touch-active" style={{ width: '100%', padding: '13px', borderRadius: 12, cursor: 'pointer', background: `${cfg.color}18`, border: `1px solid ${cfg.color}40`, fontSize: 14, fontWeight: 700, color: cfg.color }}>
               + Nueva Tarea
@@ -283,7 +283,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
                   <span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 1.5 }}>SIN TAREAS EN ESTE ESTADO</span>
                 </div>
               ) : filtered.map(t => (
-                <TaskRow key={t.id} task={t} onClick={() => { if (!selectMode) setSelectedTask(t) }} selectable={selectMode} selected={selectedIds.has(t.id)} onToggle={toggleId} showMeta />
+                <TaskRow key={t.id} task={t} onClick={() => { if (!selectMode) setSelectedTask(t) }} selectable={selectMode} selected={selectedIds.has(t.id)} onToggle={toggleId} showMeta creadorNombre={users.find(u => u.id === t.creado_por)?.nombre} />
               ))}
             </div>
           </>
@@ -307,7 +307,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
             >
               {/* Header persona */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                <Avatar iniciales={u.iniciales} userId={u.id} size={42} />
+                <Avatar iniciales={u.iniciales} userId={u.id} size={42} avatarUrl={u.avatar_url} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--cream)' }}>{u.nombre}</div>
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{u.rol}</div>
@@ -351,6 +351,178 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
     )
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // MOBILE layout — todo en pantalla, sin panel lateral
+  // ─────────────────────────────────────────────────────────────
+  if (!isDesktop) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', overflow: 'hidden' }}>
+
+        {/* ── Topbar compacto ── */}
+        <div style={{ flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '10px 14px' }}>
+          {/* Fila 1: área + acciones */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            {selectMode ? (
+              <button onClick={toggleSelectMode} style={{ background: 'none', border: 'none', color: '#FF7070', cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: 0, flexShrink: 0 }}>✕ Cancelar</button>
+            ) : (
+              <button onClick={() => router.push('/gestion')} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, padding: 0, flexShrink: 0, lineHeight: 1 }}>←</button>
+            )}
+            <div style={{ width: 30, height: 30, borderRadius: 9, background: cfg.dim, border: `1px solid ${cfg.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, color: cfg.color, flexShrink: 0 }}>{cfg.code}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.2, lineHeight: 1.1 }}>
+                {selectMode ? `${nSelected} seleccionada${nSelected !== 1 ? 's' : ''}` : area}
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 1 }}>{tasks.length} tareas · {pct}% completo</div>
+            </div>
+            {/* Acciones derecha */}
+            {!selectMode && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setViewMode(v => v === 'lista' ? 'equipo' : 'lista')} style={{ width: 32, height: 32, borderRadius: 9, cursor: 'pointer', background: viewMode === 'equipo' ? `${cfg.color}18` : 'rgba(255,255,255,0.05)', border: `1px solid ${viewMode === 'equipo' ? cfg.color+'40' : 'rgba(255,255,255,0.1)'}`, fontSize: 13, color: viewMode === 'equipo' ? cfg.color : '#8A8076', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {viewMode === 'lista' ? '👥' : '≡'}
+                </button>
+                {isAdmin && <button onClick={toggleSelectMode} style={{ width: 32, height: 32, borderRadius: 9, cursor: 'pointer', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)', fontSize: 13, color: '#D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>☑</button>}
+              </div>
+            )}
+            {selectMode && (
+              <button onClick={allSelected ? clearAll : selectAll} style={{ padding: '5px 10px', borderRadius: 8, cursor: 'pointer', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)', fontSize: 11, fontWeight: 700, color: '#D4AF37' }}>
+                {allSelected ? '☐ Quitar' : '☑ Todos'}
+              </button>
+            )}
+          </div>
+
+          {/* Fila 2: progress bar */}
+          {tasks.length > 0 && viewMode === 'lista' && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ height: 4, background: 'rgba(128,128,128,0.12)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: cfg.color, borderRadius: 4, transition: 'width 0.5s ease' }} />
+              </div>
+            </div>
+          )}
+
+          {/* Fila 3: filtros horizontales scrolleables */}
+          {viewMode === 'lista' && (
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' } as React.CSSProperties}>
+              {visibleTabs.map(f => {
+                const active = f === filter
+                return (
+                  <button key={f} onClick={() => { setFilter(f); setSelectedIds(new Set()) }} style={{
+                    display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                    padding: '5px 10px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                    background: active ? `${cfg.color}22` : 'rgba(255,255,255,0.05)',
+                    transition: 'all 0.15s',
+                  }}>
+                    <span style={{ fontSize: 11, fontWeight: active ? 700 : 500, color: active ? cfg.color : 'var(--muted)', whiteSpace: 'nowrap' }}>{f}</span>
+                    {counts[f] > 0 && <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 10, background: active ? `${cfg.color}30` : 'rgba(128,128,128,0.15)', color: active ? cfg.color : 'var(--muted)' }}>{counts[f]}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Lista de tareas ── */}
+        <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 80 } as React.CSSProperties}>
+          {viewMode === 'lista' && (
+            filtered.length === 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, gap: 8 }}>
+                <span style={{ fontSize: 28 }}>✓</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 1.5 }}>SIN TAREAS EN ESTE ESTADO</span>
+              </div>
+            ) : filtered.map(t => (
+              <TaskRow key={t.id} task={t} onClick={() => { if (!selectMode) setSelectedTask(t) }} selectable={selectMode} selected={selectedIds.has(t.id)} onToggle={toggleId} showMeta creadorNombre={users.find(u => u.id === t.creado_por)?.nombre} />
+            ))
+          )}
+          {viewMode === 'equipo' && (
+            <div style={{ padding: '12px 14px 80px' }}>
+              {teamStats.length === 0 ? (
+                <div style={{ textAlign: 'center', paddingTop: 60, color: 'var(--muted)', fontSize: 13 }}>Sin tareas asignadas</div>
+              ) : teamStats.map(({ user: u, total, comp, atr, enProceso, porApr, pct: uPct, color }) => (
+                <div key={u.id} onClick={() => { setViewMode('lista'); setFilterUserId(u.id) }} style={{ background: 'var(--surface)', border: '1px solid rgba(128,128,128,0.1)', borderRadius: 14, padding: '14px', marginBottom: 10, borderLeft: `3px solid ${color}`, cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <Avatar iniciales={u.iniciales} userId={u.id} size={36} avatarUrl={u.avatar_url} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{u.nombre}</div>
+                      <div style={{ fontSize: 10, color: 'var(--muted)' }}>{u.rol}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color, lineHeight: 1 }}>{uPct}%</div>
+                      <div style={{ fontSize: 9, color: 'var(--muted)' }}>{comp}/{total}</div>
+                    </div>
+                  </div>
+                  <div style={{ height: 4, background: 'rgba(128,128,128,0.15)', borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
+                    <div style={{ height: '100%', width: `${uPct}%`, background: `linear-gradient(90deg, ${color}80, ${color})`, borderRadius: 4 }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {[{ label: 'Comp.', val: comp, color: '#4A7A3A' }, { label: 'En Proc.', val: enProceso, color: '#E67E22' }, { label: 'X Aprobar', val: porApr, color: '#D4AF37' }, { label: 'Atras.', val: atr, color: '#FF6B6B' }]
+                      .filter(s => s.val > 0).map(s => (
+                        <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 8, background: `${s.color}12`, border: `1px solid ${s.color}25` }}>
+                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: s.color }} />
+                          <span style={{ fontSize: 9, color: s.color, fontWeight: 700 }}>{s.val} {s.label}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* FAB — cualquier usuario puede crear y asignar tareas */}
+        {!selectMode && (
+          <div style={{ position: 'fixed', bottom: 24, right: 16, zIndex: 40 }}>
+            <button onClick={() => setShowNew(true)} style={{ width: 52, height: 52, borderRadius: '50%', cursor: 'pointer', background: cfg.color, border: 'none', fontSize: 22, color: '#0A0A0A', fontWeight: 900, boxShadow: `0 4px 20px ${cfg.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+          </div>
+        )}
+
+        {/* Barra acciones masivas */}
+        {selectMode && (
+          <div className="safe-bottom" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '10px 14px 16px' }}>
+            {showStatusPicker && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: 1, marginBottom: 8 }}>CAMBIAR ESTADO A:</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {STATUS_LIST.map(s => {
+                    const sc = STATUS_CFG[s]
+                    return <button key={s} onClick={() => bulkChangeStatus(s)} disabled={bulkLoading !== null} style={{ padding: '7px 12px', borderRadius: 9, cursor: 'pointer', background: sc.bg, border: `1px solid ${sc.color}40`, fontSize: 11, fontWeight: 600, color: sc.color }}>{s}</button>
+                  })}
+                </div>
+                <button onClick={() => setShowStatusPicker(false)} style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>Cancelar</button>
+              </div>
+            )}
+            {!bulkConfirmDelete && !showStatusPicker && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={bulkApprove} disabled={approvable.length === 0 || bulkLoading !== null} style={{ flex: 1, padding: '12px 6px', borderRadius: 11, cursor: approvable.length > 0 ? 'pointer' : 'not-allowed', background: approvable.length > 0 ? 'rgba(74,122,58,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${approvable.length > 0 ? 'rgba(74,122,58,0.4)' : 'rgba(255,255,255,0.06)'}`, fontSize: 11, fontWeight: 700, color: approvable.length > 0 ? '#4A9A3A' : '#3A3530' }}>
+                  {bulkLoading === 'approve' ? '...' : `✓ Aprobar${approvable.length > 0 ? ` (${approvable.length})` : ''}`}
+                </button>
+                <button onClick={() => { if (nSelected > 0) setShowStatusPicker(true) }} disabled={nSelected === 0 || bulkLoading !== null} style={{ flex: 1, padding: '12px 6px', borderRadius: 11, cursor: nSelected > 0 ? 'pointer' : 'not-allowed', background: nSelected > 0 ? 'rgba(91,138,168,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${nSelected > 0 ? 'rgba(91,138,168,0.35)' : 'rgba(255,255,255,0.06)'}`, fontSize: 11, fontWeight: 700, color: nSelected > 0 ? '#7BA8C4' : '#3A3530' }}>
+                  {bulkLoading === 'status' ? '...' : `↕ Estado${nSelected > 0 ? ` (${nSelected})` : ''}`}
+                </button>
+                <button onClick={() => { if (nSelected > 0) setBulkConfirmDelete(true) }} disabled={nSelected === 0 || bulkLoading !== null} style={{ flex: 1, padding: '12px 6px', borderRadius: 11, cursor: nSelected > 0 ? 'pointer' : 'not-allowed', background: nSelected > 0 ? 'rgba(255,68,68,0.1)' : 'rgba(255,255,255,0.03)', border: `1px solid ${nSelected > 0 ? 'rgba(255,68,68,0.3)' : 'rgba(255,255,255,0.06)'}`, fontSize: 11, fontWeight: 700, color: nSelected > 0 ? '#FF6B6B' : '#3A3530' }}>
+                  🗑 Borrar{nSelected > 0 ? ` (${nSelected})` : ''}
+                </button>
+              </div>
+            )}
+            {bulkConfirmDelete && (
+              <div>
+                <div style={{ fontSize: 12, color: '#FF6B6B', fontWeight: 700, textAlign: 'center', marginBottom: 8 }}>¿Eliminar {nSelected} tarea{nSelected !== 1 ? 's' : ''}? No se puede deshacer.</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setBulkConfirmDelete(false)} style={{ flex: 1, padding: '13px', borderRadius: 11, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', fontSize: 12, color: 'var(--muted)' }}>Cancelar</button>
+                  <button onClick={bulkDelete} disabled={bulkLoading !== null} style={{ flex: 1, padding: '13px', borderRadius: 11, cursor: 'pointer', background: 'rgba(255,68,68,0.15)', border: '1px solid rgba(255,68,68,0.4)', fontSize: 12, fontWeight: 700, color: '#FF4444' }}>
+                    {bulkLoading === 'delete' ? 'Eliminando...' : 'Confirmar'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {showNew && <NewTaskModal defaultArea={area} availableAreas={[...AREAS]} users={users} onClose={() => setShowNew(false)} onCreated={handleCreated} />}
+        {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} users={users} />}
+      </div>
+    )
+  }
+
+  // DESKTOP layout continúa abajo
   return (
     <div style={{ display: 'flex', flexDirection: isDesktop ? 'row' : 'column', height: '100vh', background: 'var(--bg)' }}>
 
@@ -487,7 +659,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
         </div>
       )}
 
-      {showNew && <NewTaskModal area={area} users={users} onClose={() => setShowNew(false)} onCreated={handleCreated} />}
+      {showNew && <NewTaskModal defaultArea={area} availableAreas={[...AREAS]} users={users} onClose={() => setShowNew(false)} onCreated={handleCreated} />}
       {selectedTask && !selectMode && (
         <TaskDetailModal
           task={selectedTask}
@@ -496,6 +668,7 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
           onDelete={handleDelete}
           isAdmin={isAdmin}
           currentUserId={currentUserId}
+          users={users}
         />
       )}
     </div>

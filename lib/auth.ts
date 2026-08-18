@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createClient } from './supabase/server'
 
 export interface AppUser {
@@ -6,9 +7,23 @@ export interface AppUser {
   email: string
   isAdmin: boolean
   iniciales: string
+  macroArea: string | null   // null = admin global (ve todo)
+  avatarUrl: string | null
+  region: string | null      // null = sin scope geográfico (admin); ej: 'Los Ríos'
+  /**
+   * Nombres con que este usuario aparece en el ERP (ventas.vendedor_actual /
+   * misiones.vendedor). Vacío = no es vendedor de terreno.
+   *
+   * Existe porque el nombre de login y el del ERP casi nunca coinciden
+   * ('Claudio H.' vs 'Claudio Heufemann', 'Yadro Favijancic' vs
+   * '...Fabijancic'), y comparar por nombre hacía que las misiones nunca se
+   * cerraran ni se segmentaran por vendedor.
+   */
+  vendedoresErp: string[]
 }
 
-export async function getServerUser(): Promise<AppUser | null> {
+// Memoizado por request: layout + página comparten una sola validación de auth
+export const getServerUser = cache(async (): Promise<AppUser | null> => {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -17,7 +32,7 @@ export async function getServerUser(): Promise<AppUser | null> {
     // Primary lookup: by auth UUID
     let { data: profile } = await supabase
       .from('users')
-      .select('nombre, iniciales, is_admin, email')
+      .select('nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -25,7 +40,7 @@ export async function getServerUser(): Promise<AppUser | null> {
     if (!profile && user.email) {
       const res = await supabase
         .from('users')
-        .select('nombre, iniciales, is_admin, email')
+        .select('nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp')
         .eq('email', user.email)
         .maybeSingle()
       profile = res.data
@@ -39,8 +54,12 @@ export async function getServerUser(): Promise<AppUser | null> {
       email: profile.email ?? user.email ?? '',
       isAdmin: !!profile.is_admin,
       iniciales: profile.iniciales ?? '',
+      macroArea: profile.macro_area ?? null,
+      avatarUrl: profile.avatar_url ?? null,
+      region: profile.region ?? null,
+      vendedoresErp: profile.vendedores_erp ?? [],
     }
   } catch {
     return null
   }
-}
+})

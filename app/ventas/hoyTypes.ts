@@ -1,0 +1,182 @@
+/**
+ * Tipos y constantes de la vista principal de Ventas.
+ *
+ * Va aparte de hoyData.ts a propósito: ese módulo importa
+ * lib/supabase/server, y el componente cliente necesita RANGOS (un valor, no
+ * sólo tipos), así que importarlo desde allá arrastraría código de servidor al
+ * bundle del navegador y el build falla.
+ */
+
+/**
+ * Pestañas de rango. 'periodo' NO es el mes calendario: es el período de venta
+ * del negocio, que va del 24 de un mes al 23 del siguiente (tabla `periodos`).
+ * Cuál período concreto se muestra lo decide el selector de arriba.
+ */
+export type RangoKey = 'hoy' | '7d' | '30d' | 'periodo' | 'anio' | 'custom'
+
+/** Pestañas fijas. 'custom' no va acá: aparece sólo cuando hay rango elegido. */
+export const RANGOS: { key: RangoKey; label: string }[] = [
+  { key: 'hoy',     label: 'Hoy'     },
+  { key: '7d',      label: '7D'      },
+  { key: '30d',     label: '30D'     },
+  { key: 'periodo', label: 'Período' },
+  { key: 'anio',    label: 'Año'     },
+]
+
+export interface KpisRango {
+  litros: number
+  revenue: number
+  clientes: number
+  pedidos: number
+  litrosCerveza: number
+  litrosKombucha: number
+  litrosOtros: number
+  revenueCerveza: number
+  revenueKombucha: number
+  revenueOtros: number
+}
+
+export interface VendedorRango {
+  vendedor: string      // nombre tal cual viene del ERP (Transición 2, Yadro Fabijancic, ...)
+  litros: number
+  revenue: number
+  clientes: number
+  litrosPrev: number
+  /** Litros de pedidos del período aún sin despachar (por fecha de pedido, no de entrega) */
+  litrosPorEntregar: number
+  revenuePorEntregar: number
+}
+
+export interface PuntoSerie {
+  fecha: string
+  litros: number
+  revenue: number
+  clientes: number
+  pedidos: number
+}
+
+/**
+ * Desglose entregado / por entregar.
+ * "Por entregar" = venta ya tomada que el ERP aún no despachó (sin fecha de
+ * entrega). Es la razón por la que un pedido puede existir y no aparecer en un
+ * informe filtrado por fecha de entrega. Alimenta el "+ X por entregar" de la
+ * tarjeta principal (arriba del todo) — eso NO cambió.
+ */
+export interface EntregasRango {
+  litrosEntregados: number
+  litrosPorEntregar: number
+  /** Cargados antes de guardar el estado: no se puede afirmar si se entregaron */
+  litrosSinDato: number
+  revenueEntregado: number
+  revenuePorEntregar: number
+  pedidosEntregados: number
+  pedidosPorEntregar: number
+}
+
+/**
+ * De dónde viene lo entregado en el período: la MISMA población que
+ * `actual.litros` (litrosTotal tiene que calzar exacto con esa tarjeta — el
+ * período lo define la fecha de ENTREGA, no la de pedido), separada según si
+ * el pedido se tomó antes de este período (backlog que se puso al día) o
+ * dentro de él (se pidió y se entregó en el mismo ciclo). Alimenta la
+ * tarjeta "PEDIDOS DE ESTE PERÍODO" — distinto de EntregasRango de arriba,
+ * que mide el pipeline de lo pedido (independiente de si se entregó).
+ */
+export interface OrigenEntregadoRango {
+  litrosTotal: number
+  revenueTotal: number
+  pedidosTotal: number
+  litrosBacklog: number
+  revenueBacklog: number
+  pedidosBacklog: number
+  litrosMismoPeriodo: number
+  revenueMismoPeriodo: number
+  pedidosMismoPeriodo: number
+}
+
+/**
+ * Litros de PDV (degustaciones en punto de venta), Ferias y BaseCamp.
+ * No cuentan como "litros vendidos" (no son clientes reales), pero son
+ * volumen real que vale la pena visualizar aparte.
+ */
+export interface ConsumoInternoRango {
+  categoria: string   // 'PDV' | 'Ferias' | 'BaseCamp'
+  litros: number
+  revenue: number
+  pedidos: number
+}
+
+/** Unidades por tipo de envase (latas / barriles), derivadas de los litros. */
+export interface EnvaseRango {
+  tipo: string        // 'Lata 354 ml' | 'Lata 473 ml' | 'Barril 30L' | 'Otros'
+  unidades: number
+  litros: number
+  revenue: number
+  unidadesPrev: number
+}
+
+export interface DatosRango {
+  desde: string
+  hasta: string
+  /** Qué se compara contra qué, para poder explicarlo en la UI */
+  etiquetaComparacion: string
+  /** Criterio real usado para calcular `actual`/`previo`: true = fecha de
+   *  entrega, false = fecha de pedido (para rangos que caen antes del
+   *  25-may-2026, cuando fecha_entrega no existía todavía). El cliente lo
+   *  necesita para pedir el mismo criterio en los drill-downs y para
+   *  rotular "pedido" en vez de "entregado" cuando corresponde. */
+  porEntrega: boolean
+  actual: KpisRango
+  previo: KpisRango
+  vendedores: VendedorRango[]
+  envases: EnvaseRango[]
+  entregas: EntregasRango
+  origenEntregado: OrigenEntregadoRango
+  consumoInterno: ConsumoInternoRango[]
+  serie: PuntoSerie[]
+}
+
+/** Un período de venta 24→23 con sus datos ya calculados. */
+export interface PeriodoOpcion {
+  id: number
+  nombre: string        // "Agosto 2026"
+  inicio: string        // 2026-07-24
+  fin: string           // 2026-08-23
+  activo: boolean
+  datos: DatosRango
+  metaLitros: number
+}
+
+export interface AlertaInsight {
+  tipo: 'alerta' | 'insight'
+  titulo: string
+  detalle: string
+  href?: string
+}
+
+/** Un período 24→23 sin sus datos calculados — sólo para listar en el
+ *  selector. Los períodos fuera de la ventana visible (PERIODOS_VISIBLES) no
+ *  traen `datos`: calcularlo para TODO el historial en cada carga de la
+ *  página multiplicaría las consultas por cada período que exista. Elegir
+ *  uno de estos navega a `/ventas?desde=&hasta=` (mismo mecanismo que el
+ *  rango a mano), que sí calcula ese período completo en el servidor. */
+export interface PeriodoLigero {
+  id: number
+  nombre: string
+  inicio: string
+  fin: string
+}
+
+export interface HoyData {
+  /** Rangos relativos a hoy (no incluye 'periodo' ni 'custom') */
+  rangos: Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>
+  /** Período activo primero, luego los anteriores — con datos ya calculados */
+  periodos: PeriodoOpcion[]
+  /** TODOS los períodos que existen (para el selector) — sin datos calculados */
+  periodosDisponibles: PeriodoLigero[]
+  /** Rango elegido a mano (?desde=&hasta=). null si no hay ninguno. */
+  custom: DatosRango | null
+  alertas: AlertaInsight[]
+  ultimaSync: string | null
+  usuario: { nombre: string; iniciales: string; avatarUrl: string | null } | null
+}

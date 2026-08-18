@@ -1,0 +1,77 @@
+name: ERP Sync — Carga automática de ventas
+
+on:
+  schedule:
+    # Cada 15 minutos, horario comercial: 11:00-23:00 UTC (~07:00-19:00 Chile).
+    # GitHub Actions no garantiza el cron exacto (se retrasa/salta bajo carga,
+    # sobre todo con intervalos cortos como */10). 15 min es más estable: GitHub
+    # lo omite menos y sigue dando datos frescos. Para exactitud real haría falta
+    # un disparador externo (cron-job.org) llamando a workflow_dispatch.
+    - cron: '*/15 11-23 * * *'
+  workflow_dispatch:   # permite dispararlo a mano desde la pestaña Actions
+    inputs:
+      fecha_desde:
+        description: 'Sobrescribir fecha desde (dd/mm/aaaa). Vacío = período normal'
+        required: false
+      fecha_hasta:
+        description: 'Sobrescribir fecha hasta (dd/mm/aaaa). Vacío = hasta hoy'
+        required: false
+      solo_descargar:
+        description: 'true = descarga el Excel como artifact SIN subirlo a la app'
+        required: false
+        default: 'false'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        working-directory: scripts/erp-sync
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Ejecutar sync (login → descarga → upload a la PWA)
+        working-directory: scripts/erp-sync
+        env:
+          HEADLESS: '1'
+          ERP_URL: ${{ secrets.ERP_URL }}
+          ERP_USERNAME: ${{ secrets.ERP_USERNAME }}
+          ERP_PASSWORD: ${{ secrets.ERP_PASSWORD }}
+          UPLOAD_URL: ${{ secrets.UPLOAD_URL }}
+          UPLOAD_SECRET: ${{ secrets.CRON_SECRET }}
+          FECHA_DESDE: ${{ inputs.fecha_desde }}
+          FECHA_HASTA: ${{ inputs.fecha_hasta }}
+          SOLO_DESCARGAR: ${{ inputs.solo_descargar }}
+        run: python extractor.py
+
+      - name: Guardar Excel descargado + filtros del informe (diagnóstico)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ventas-detalladas-xlsx
+          path: |
+            scripts/erp-sync/downloads/*.xlsx
+            scripts/erp-sync/downloads/*.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Guardar capturas si algo falla (debug)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: erp-sync-debug
+          path: scripts/erp-sync/*.png
+          if-no-files-found: ignore
+          retention-days: 5
