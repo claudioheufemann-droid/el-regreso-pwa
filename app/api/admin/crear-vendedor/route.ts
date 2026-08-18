@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   const iniciales = nombre.split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() ?? '').join('')
   const { error: profErr } = await admin.from('users').insert({
     id, auth_id: id, nombre, iniciales,
-    rol: 'Vendedor', area: 'Marketing', email,
+    rol: 'Vendedor', area: 'Comercial', email,
     is_admin: false, macro_area: 'comercial',
     region, must_change_password: true,
   })
