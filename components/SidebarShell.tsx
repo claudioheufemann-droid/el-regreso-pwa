@@ -14,6 +14,8 @@ export interface SidebarNavItem {
   label: string
   exact?: boolean
   adminOnly?: boolean
+  /** Solo visible para usuarios con permiso puede_ver_margenes (Rentabilidad) — no confundir con adminOnly. */
+  margenesOnly?: boolean
 }
 
 interface SidebarShellProps {
@@ -25,9 +27,11 @@ interface SidebarShellProps {
 
 export default function SidebarShell({ moduleName, sectionLabel, navItems, cta }: SidebarShellProps) {
   const pathname = usePathname()
-  const { user, isAdmin, logout } = useUser()
+  const { user, isAdmin, puedeVerMargenes, logout } = useUser()
 
-  const visibleItems = navItems.filter(item => !item.adminOnly || isAdmin)
+  const visibleItems = navItems.filter(item =>
+    (!item.adminOnly || isAdmin) && (!item.margenesOnly || puedeVerMargenes)
+  )
 
   return (
     <aside style={{

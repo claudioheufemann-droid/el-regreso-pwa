@@ -25,7 +25,9 @@ function buildEmailHtml(
   responsableNombre: string,
   otrosNombres: string[]
 ): string {
-  const [y, m, d] = task.plazo.split('-').map(Number)
+  // task.plazo puede venir como "YYYY-MM-DD" o timestamptz completo — ver nota en lib/ics.ts
+  const dateMatch = task.plazo.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const [y, m, d] = dateMatch ? [Number(dateMatch[1]), Number(dateMatch[2]), Number(dateMatch[3])] : [0, 0, 0]
   const fechaStr = task.horaLimite ? `${d}/${m}/${y} · ${task.horaLimite.slice(0, 5)}` : `${d}/${m}/${y}`
 
   return `

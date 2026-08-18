@@ -3,14 +3,26 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { CheckCircle, XCircle, Clock, ChevronRight, Users, Tag, Ban, MapPin, Plus, Navigation, Trophy, X, Search, Clock3, CreditCard, Fuel } from 'lucide-react'
+import {
+  CheckCircle, XCircle, ChevronRight, Plus, Search, CreditCard,
+  Navigation, Clock3, History, MapPin, X, Fuel,
+} from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
-import AppHeader from '@/components/ui/AppHeader'
 import BuscarClienteSheet from '@/components/ui/BuscarClienteSheet'
+import NotificationsBell from '@/components/ui/NotificationsBell'
+import SettingsPanel from '@/components/ui/SettingsPanel'
 import { createClient } from '@/lib/supabase/client'
+import { C, TAP, fPeso, fHora, cardStyle } from './theme'
 
-const G = '#D4AF37'
-const G_RGB = '212,175,55'
+/**
+ * Hub de Terreno — tema claro, igual que Ventas.
+ *
+ * Rediseñado por pedido de Claudio: antes era oscuro, con un hero
+ * isométrico decorativo, tarjetas grandes y varios bloques que repetían el
+ * mismo dato. Ahora el orden sigue lo que el vendedor necesita en la calle,
+ * de arriba abajo: retomar lo que dejó a medias → registrar una visita
+ * nueva → cuánto lleva hoy → a quién tiene que cobrar → qué hizo hoy.
+ */
 
 interface Visita {
   id: string
@@ -38,165 +50,37 @@ interface Props {
   cobrosPendientes: CobroPendiente[]
 }
 
-function fmtHora(iso: string) {
-  return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
-}
-
-function fmtPeso(n: number) {
-  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
-}
-
-/* ── Hero isométrico premium ── */
-function IsometricHero() {
-  return (
-    <svg width="160" height="130" viewBox="0 0 160 130" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Grid isométrico */}
-      {[0,1,2,3,4].map(i => (
-        <line key={`h${i}`}
-          x1={20 + i * 20} y1={10} x2={20 + i * 20 - 40} y2={90}
-          stroke={G} strokeOpacity="0.08" strokeWidth="0.8"
-        />
-      ))}
-      {[0,1,2,3,4].map(i => (
-        <line key={`v${i}`}
-          x1={20} y1={10 + i * 20} x2={120} y2={10 + i * 20}
-          stroke={G} strokeOpacity="0.06" strokeWidth="0.8"
-        />
-      ))}
-      {/* Edificios */}
-      <rect x="30" y="55" width="18" height="30" rx="2" fill={G} fillOpacity="0.12" stroke={G} strokeOpacity="0.2" strokeWidth="0.8"/>
-      <rect x="30" y="50" width="18" height="8" rx="1" fill={G} fillOpacity="0.2"/>
-      <rect x="55" y="40" width="22" height="45" rx="2" fill={G} fillOpacity="0.1" stroke={G} strokeOpacity="0.18" strokeWidth="0.8"/>
-      <rect x="55" y="35" width="22" height="8" rx="1" fill={G} fillOpacity="0.22"/>
-      <rect x="85" y="60" width="16" height="25" rx="2" fill={G} fillOpacity="0.1" stroke={G} strokeOpacity="0.15" strokeWidth="0.8"/>
-      {/* Ruta punteada */}
-      <path d="M40 90 Q60 75 80 65 Q100 55 118 45" stroke={G} strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.5" strokeLinecap="round"/>
-      {/* Pin de ubicación */}
-      <ellipse cx="118" cy="52" rx="8" ry="3" fill={G} fillOpacity="0.15"/>
-      <path d="M118 20 C112 20 107 25 107 31 C107 40 118 52 118 52 C118 52 129 40 129 31 C129 25 124 20 118 20Z" fill={G} fillOpacity="0.9"/>
-      <circle cx="118" cy="31" r="4" fill="#050505"/>
-      {/* Glow pin */}
-      <ellipse cx="118" cy="52" rx="14" ry="5" fill={G} fillOpacity="0.08"/>
-      {/* Puntos de ruta */}
-      <circle cx="40" cy="90" r="3" fill={G} fillOpacity="0.6"/>
-      <circle cx="80" cy="65" r="2.5" fill={G} fillOpacity="0.5"/>
-      <circle cx="100" cy="55" r="2" fill={G} fillOpacity="0.4"/>
-    </svg>
-  )
-}
-
-/* ── KPI Panel ── (sin datos inventados: número + label + sub real) */
-function KPIPanel({ label, value, color, rgb, icon: Icon, sub }: {
-  label: string; value: number; color: string; rgb: string
-  icon: React.ElementType; sub?: string
-}) {
-  return (
-    <div style={{
-      background: `linear-gradient(145deg, rgba(${rgb},0.06) 0%, rgba(10,10,10,0.9) 100%)`,
-      border: `1px solid rgba(${rgb},0.18)`,
-      borderRadius: 16,
-      padding: '12px 10px 11px',
-      display: 'flex', flexDirection: 'column',
-      boxShadow: `0 4px 24px rgba(${rgb},0.08), inset 0 1px 0 rgba(255,255,255,0.04)`,
-      position: 'relative', overflow: 'hidden',
-    }}>
-      {/* Glow fondo */}
-      <div style={{ position: 'absolute', top: -20, right: -20, width: 60, height: 60, borderRadius: '50%', background: `rgba(${rgb},0.1)`, filter: 'blur(20px)' }} />
-      {/* Icono */}
-      <div style={{ width: 26, height: 26, borderRadius: 8, background: `rgba(${rgb},0.12)`, border: `1px solid rgba(${rgb},0.2)`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-        <Icon size={12} color={color} />
-      </div>
-      {/* Número */}
-      <p style={{ fontSize: 28, fontWeight: 900, color, lineHeight: 1, letterSpacing: '-1.5px', marginBottom: 4 }}>{value}</p>
-      {/* Label */}
-      <p style={{ fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>{label}</p>
-      {/* Sub real (opcional) */}
-      {sub && (
-        <p style={{ fontSize: 9, fontWeight: 600, color: `rgba(${rgb},0.7)`, marginTop: 4 }}>{sub}</p>
-      )}
-    </div>
-  )
-}
-
-/* ── Visita card timeline ── */
-function VisitaCard({ v, isLast }: { v: Visita; isLast: boolean }) {
-  const enProgreso = v.estado === 'en_progreso'
-  const conVenta = v.tiene_venta === true
-  const sinVenta = v.tiene_venta === false
-
-  const color = enProgreso ? G : conVenta ? '#5A8A4A' : '#B5543E'
-  const rgb = enProgreso ? G_RGB : conVenta ? '90,138,74' : '181,84,62'
-  const label = enProgreso ? 'En progreso' : conVenta ? 'Completada' : 'Sin venta'
-
-  return (
-    <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
-      {/* Timeline lateral */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0 }}>
-        <div style={{
-          width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-          background: `rgba(${rgb},0.15)`, border: `1.5px solid rgba(${rgb},0.5)`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: `0 0 8px rgba(${rgb},0.3)`,
-        }}>
-          {enProgreso
-            ? <Clock size={10} color={color} />
-            : conVenta
-              ? <CheckCircle size={10} color={color} />
-              : <XCircle size={10} color={color} />
-          }
-        </div>
-        {!isLast && <div style={{ flex: 1, width: 1.5, background: `linear-gradient(to bottom, rgba(${rgb},0.3), rgba(255,255,255,0.04))`, marginTop: 4 }} />}
-      </div>
-
-      {/* Card */}
-      <Link href={`/terreno/nueva-visita?retomar=${v.id}`} style={{ textDecoration: 'none', flex: 1, marginBottom: isLast ? 0 : 10 }}>
-        <div style={{
-          background: `linear-gradient(135deg, rgba(${rgb},0.05) 0%, rgba(10,10,10,0.95) 100%)`,
-          border: `1px solid rgba(${rgb},0.18)`,
-          borderRadius: 16, padding: '12px 14px',
-          display: 'flex', alignItems: 'center', gap: 12,
-          boxShadow: `0 2px 16px rgba(${rgb},0.06)`,
-        }}>
-          {/* Icono */}
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: `rgba(${rgb},0.1)`, border: `1px solid rgba(${rgb},0.2)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            {enProgreso ? <Clock size={17} color={color} /> : conVenta ? <CheckCircle size={17} color={color} /> : <XCircle size={17} color={color} />}
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {v.cliente_nombre}
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{fmtHora(v.iniciada_at)}</span>
-              {conVenta && v.total_pedido ? (
-                <span style={{ fontSize: 11, color: G, fontWeight: 600 }}>{fmtPeso(v.total_pedido)}</span>
-              ) : null}
-              <span style={{
-                fontSize: 9, fontWeight: 700, color,
-                background: `rgba(${rgb},0.1)`, border: `1px solid rgba(${rgb},0.2)`,
-                borderRadius: 6, padding: '2px 7px', letterSpacing: '0.5px',
-              }}>{label}</span>
-            </div>
-          </div>
-
-          <div style={{ width: 28, height: 28, borderRadius: 9, background: `rgba(${rgb},0.1)`, border: `1px solid rgba(${rgb},0.2)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <ChevronRight size={14} color={color} />
-          </div>
-        </div>
-      </Link>
-    </div>
-  )
-}
-
-/* ── Main ── */
-export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProgreso, cobrosPendientes }: Props) {
+export default function TerrenoHubClient({
+  vendedor, visitas, kpis, visitaEnProgreso, cobrosPendientes,
+}: Props) {
   const router = useRouter()
-  const nombre = vendedor.nombre?.split(' ')[0] ?? 'Vendedor'
-  const fecha = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
-  const fechaCapitalizada = fecha.charAt(0).toUpperCase() + fecha.slice(1)
-
   const [cobros, setCobros] = useState(cobrosPendientes)
   const [marcandoId, setMarcandoId] = useState<string | null>(null)
+  const [showBuscar, setShowBuscar] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showCierre, setShowCierre] = useState(false)
+  const [jornada, setJornada] = useState<{ id: string } | null | undefined>(undefined)
+
+  useEffect(() => {
+    fetch('/api/terreno/jornada').then(r => r.json()).then(j => setJornada(j ?? null)).catch(() => setJornada(null))
+  }, [])
+
+  // Resumen del día al volver de cerrar una visita (?cierre=1). Se lee de
+  // window.location en vez de useSearchParams para no exigir un Suspense
+  // boundary extra en esta pantalla.
+  //
+  // El setState va dentro del efecto a propósito: la URL es un sistema
+  // externo y sólo existe en el cliente. Leerla en el inicializador del
+  // useState daría un desajuste de hidratación (el servidor renderiza sin
+  // modal y el cliente con modal).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('cierre') === '1') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowCierre(true)
+      window.history.replaceState({}, '', '/terreno')
+    }
+  }, [])
 
   async function marcarPagado(id: string) {
     setMarcandoId(id)
@@ -206,319 +90,283 @@ export default function TerrenoHubClient({ vendedor, visitas, kpis, visitaEnProg
     setMarcandoId(null)
   }
 
+  const nombre = vendedor.nombre.split(' ')[0]
   const hoyStr = new Date().toISOString().split('T')[0]
-  const cobrosVencidos = cobros.filter(c => c.fecha_pago_estimada < hoyStr)
-
-  // Resumen del día al cerrar una visita (?cierre=1 desde nueva-visita).
-  // Lectura directa de window.location (sin useSearchParams) para no requerir
-  // un Suspense boundary adicional en esta pantalla.
-  const [showCierre, setShowCierre] = useState(false)
-  const [showBuscar, setShowBuscar] = useState(false)
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (new URLSearchParams(window.location.search).get('cierre') === '1') {
-      setShowCierre(true)
-      window.history.replaceState({}, '', '/terreno')
-    }
-  }, [])
-
-  const totalPedidoHoy = visitas
+  const totalVendidoHoy = visitas
     .filter(v => v.estado === 'completada')
     .reduce((s, v) => s + (v.total_pedido ?? 0), 0)
-
-  // Jornada de ruta (kilometraje + combustible) — para saber si ya se inició hoy
-  const [jornada, setJornada] = useState<{ id: string; km_inicio: number; iniciada_at: string } | null | undefined>(undefined)
-  useEffect(() => {
-    fetch('/api/terreno/jornada').then(r => r.json()).then(j => setJornada(j ?? null)).catch(() => setJornada(null))
-  }, [])
+  const fecha = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
 
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100vh', paddingBottom: 100 }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 120px))' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
 
-        {/* ── HEADER ESTÁNDAR ── */}
-        <div style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))' }}>
-          <AppHeader
-            eyebrow={fechaCapitalizada}
-            title="Terreno"
-            extraAction={
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => router.push('/ventas/actividad')}
-                  aria-label="Actividad"
-                  style={{
-                    width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                    background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                  }}
-                >
-                  <Clock3 size={16} color="#60A5FA" />
-                </button>
-                <button
-                  onClick={() => setShowBuscar(true)}
-                  aria-label="Buscar cliente"
-                  style={{
-                    width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                    background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                  }}
-                >
-                  <Search size={16} color="#D4AF37" />
-                </button>
-              </div>
-            }
-          />
+        {/* Encabezado */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em', textTransform: 'capitalize' }}>
+              {fecha}
+            </p>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>
+              Hola, {nombre}
+            </h1>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
+            <button
+              onClick={() => setShowBuscar(true)}
+              aria-label="Buscar cliente"
+              style={{
+                width: 40, height: 40, borderRadius: '50%', cursor: 'pointer',
+                border: `1px solid ${C.line}`, background: C.card,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Search size={17} color={C.text} />
+            </button>
+            <NotificationsBell inline variant="light" />
+            <button
+              onClick={() => setShowSettings(true)}
+              aria-label="Cuenta"
+              style={{
+                width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', padding: 0, cursor: 'pointer',
+                border: `1px solid ${C.line}`, background: C.hero, color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0,
+              }}
+            >
+              {vendedor.avatarUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={vendedor.avatarUrl} alt={vendedor.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (vendedor.iniciales || '··')}
+            </button>
+          </div>
         </div>
 
-        {showBuscar && <BuscarClienteSheet onClose={() => setShowBuscar(false)} />}
-
-        {/* ── VISITA EN PROGRESO ── */}
+        {/* Visita a medias — lo primero, es lo que hay que terminar */}
         {visitaEnProgreso && (
-          <div
+          <button
             onClick={() => router.push(`/terreno/nueva-visita?retomar=${visitaEnProgreso.id}`)}
             style={{
-              background: `linear-gradient(135deg, rgba(${G_RGB},0.08) 0%, rgba(10,10,10,0.95) 100%)`,
-              border: `1px solid rgba(${G_RGB},0.35)`,
-              borderRadius: 22, padding: '18px 20px',
-              marginBottom: 20, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 16,
-              boxShadow: `0 0 0 1px rgba(${G_RGB},0.1), 0 8px 32px rgba(${G_RGB},0.12)`,
-              position: 'relative', overflow: 'hidden',
+              width: '100%', display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer',
+              background: C.amberSoft, border: '1px solid #FDE68A', borderRadius: 16,
+              padding: '14px 15px', marginBottom: 12, textAlign: 'left',
             }}
           >
-            {/* Glow fondo */}
-            <div style={{ position: 'absolute', top: -30, left: -30, width: 100, height: 100, borderRadius: '50%', background: `rgba(${G_RGB},0.1)`, filter: 'blur(30px)', pointerEvents: 'none' }} />
-
-            {/* Icono pulsante */}
-            <div style={{ position: 'relative', flexShrink: 0 }}>
-              <div style={{ width: 48, height: 48, borderRadius: 16, background: `rgba(${G_RGB},0.12)`, border: `1.5px solid rgba(${G_RGB},0.3)`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 20px rgba(${G_RGB},0.2)` }}>
-                <Clock size={22} color={G} />
-              </div>
+            <span style={{ width: 40, height: 40, borderRadius: 12, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Clock3 size={19} color={C.amber} />
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 11.5, fontWeight: 800, color: C.amber, letterSpacing: '0.03em' }}>VISITA SIN TERMINAR</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{visitaEnProgreso.cliente_nombre}</p>
+              <p style={{ fontSize: 11.5, color: C.muted }}>Desde las {fHora(visitaEnProgreso.iniciada_at)}</p>
             </div>
-
-            <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
-              <p style={{ fontSize: 9, fontWeight: 700, color: G, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 4 }}>
-                Visita en progreso
-              </p>
-              <p style={{ fontSize: 17, fontWeight: 800, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
-                {visitaEnProgreso.cliente_nombre}
-              </p>
-              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
-                {fmtHora(visitaEnProgreso.iniciada_at)} · En progreso
-              </p>
-            </div>
-
-            <div style={{ width: 38, height: 38, borderRadius: 12, background: G, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: `0 4px 16px rgba(${G_RGB},0.4)` }}>
-              <ChevronRight size={18} color="#050505" strokeWidth={2.5} />
-            </div>
-          </div>
+            <ChevronRight size={18} color={C.amber} style={{ flexShrink: 0 }} />
+          </button>
         )}
 
-        {/* ── COBROS PENDIENTES ── */}
-        {cobros.length > 0 && (
+        {/* Acción principal */}
+        <Link href="/terreno/nueva-visita" style={{ textDecoration: 'none', display: 'block', marginBottom: 14 }}>
           <div style={{
-            background: cobrosVencidos.length > 0 ? 'rgba(181,84,62,0.06)' : 'rgba(212,175,55,0.05)',
-            border: `1px solid ${cobrosVencidos.length > 0 ? 'rgba(181,84,62,0.25)' : `rgba(${G_RGB},0.2)`}`,
-            borderRadius: 20, padding: '14px 16px', marginBottom: 20,
+            background: C.hero, borderRadius: 18, padding: '18px 16px',
+            display: 'flex', alignItems: 'center', gap: 13,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <CreditCard size={16} color={cobrosVencidos.length > 0 ? '#B5543E' : G} />
-              <p style={{ fontSize: 12, fontWeight: 800, color: cobrosVencidos.length > 0 ? '#B5543E' : G }}>
-                {cobrosVencidos.length > 0
-                  ? `${cobrosVencidos.length} cobro${cobrosVencidos.length !== 1 ? 's' : ''} vencido${cobrosVencidos.length !== 1 ? 's' : ''}`
-                  : `${cobros.length} cobro${cobros.length !== 1 ? 's' : ''} pendiente${cobros.length !== 1 ? 's' : ''}`}
-              </p>
+            <span style={{ width: 44, height: 44, borderRadius: 14, background: 'rgba(255,255,255,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Plus size={22} color="#F59E0B" />
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 17, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px' }}>Nueva visita</p>
+              <p style={{ fontSize: 12.5, color: '#94A3B8' }}>Elige el cliente y toma el pedido</p>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {cobros.slice(0, 4).map(c => {
+            <ChevronRight size={19} color="#94A3B8" style={{ flexShrink: 0 }} />
+          </div>
+        </Link>
+
+        {/* Cómo va el día */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
+          <Kpi label="Visitas" valor={String(kpis.totalHoy)} color={C.text} />
+          <Kpi label="Con venta" valor={String(kpis.conVenta)} color={C.green} />
+          <Kpi label="Vendido" valor={totalVendidoHoy > 0 ? fPeso(totalVendidoHoy) : '$0'} color={C.blue} chico />
+        </div>
+
+        {/* Cobros pendientes */}
+        {cobros.length > 0 && (
+          <div style={{ ...cardStyle, padding: 14, marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <CreditCard size={16} color={C.amber} />
+              <p style={{ fontSize: 12, fontWeight: 800, color: C.text, letterSpacing: '0.04em' }}>POR COBRAR</p>
+              <span style={{ marginLeft: 'auto', fontSize: 11.5, color: C.muted }}>{cobros.length}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {cobros.map(c => {
                 const vencido = c.fecha_pago_estimada < hoyStr
-                const fechaFmt = new Date(c.fecha_pago_estimada + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
                 return (
-                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                  <div key={c.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 11px', borderRadius: 12,
+                    background: vencido ? C.redSoft : C.bg,
+                    border: `1px solid ${vencido ? '#FECACA' : C.line}`,
+                  }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: '#F4EEDF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.cliente_nombre}</p>
-                      <p style={{ fontSize: 11, color: vencido ? '#E0796A' : 'rgba(255,255,255,0.4)', fontWeight: vencido ? 700 : 400 }}>
-                        {vencido ? `Venció el ${fechaFmt}` : `Vence el ${fechaFmt}`}
-                        {c.total_pedido ? ` · ${new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(c.total_pedido)}` : ''}
+                      <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{c.cliente_nombre}</p>
+                      <p style={{ fontSize: 11.5, color: vencido ? C.red : C.muted, fontWeight: vencido ? 700 : 500 }}>
+                        {vencido ? 'Vencido · ' : 'Cobrar '}
+                        {new Date(c.fecha_pago_estimada + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
+                        {c.total_pedido ? ` · ${fPeso(c.total_pedido)}` : ''}
                       </p>
                     </div>
                     <button
                       onClick={() => marcarPagado(c.id)}
                       disabled={marcandoId === c.id}
-                      style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 9, border: `1px solid rgba(${G_RGB},0.3)`, background: `rgba(${G_RGB},0.1)`, color: G, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                      style={{
+                        minHeight: 36, padding: '0 12px', borderRadius: 10, flexShrink: 0, cursor: 'pointer',
+                        border: 'none', background: C.green, color: '#fff', fontSize: 12.5, fontWeight: 800,
+                        opacity: marcandoId === c.id ? 0.5 : 1,
+                      }}
                     >
-                      {marcandoId === c.id ? '...' : 'Ya pagó'}
+                      {marcandoId === c.id ? '…' : 'Pagado'}
                     </button>
                   </div>
                 )
               })}
-              {cobros.length > 4 && (
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 2 }}>+{cobros.length - 4} más</p>
-              )}
             </div>
           </div>
         )}
 
-        {/* ── KPIs ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 28 }}>
-          <KPIPanel label="Visitas hoy" value={kpis.totalHoy} color="var(--cream)" rgb="244,238,223" icon={Users}
-            sub={kpis.totalHoy > 0 ? `${Math.round((kpis.conVenta / kpis.totalHoy) * 100)}% efectividad` : undefined} />
-          <KPIPanel label="Con venta"   value={kpis.conVenta}  color="#5A8A4A" rgb="90,138,74"  icon={Tag} />
-          <KPIPanel label="Sin venta"   value={kpis.sinVenta}  color="#B5543E" rgb="181,84,62"  icon={Ban} />
+        {/* Accesos */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 14 }}>
+          <Acceso href="/terreno/jornada" Icon={Fuel} label="Jornada" nota={jornada === undefined ? '…' : jornada ? 'En curso' : 'Sin iniciar'} destacado={jornada === null} />
+          <Acceso href="/terreno/ruta" Icon={Navigation} label="Mi ruta" nota="Clientes del día" />
+          <Acceso href="/terreno/cercanos" Icon={MapPin} label="Cercanos" nota="Cerca de mí" />
+          <Acceso href="/terreno/historial" Icon={History} label="Historial" nota="Visitas anteriores" />
         </div>
 
-        {/* ── BENCINA Y KILOMETRAJE DEL VIAJE ── */}
-        <Link href="/terreno/jornada" style={{ textDecoration: 'none', display: 'block', marginBottom: 20 }}>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(10,10,10,0.95) 100%)',
-            border: '1px solid rgba(249,115,22,0.3)',
-            borderRadius: 22, padding: '18px 20px',
-            display: 'flex', alignItems: 'center', gap: 16,
-            boxShadow: '0 4px 24px rgba(249,115,22,0.1)',
-          }}>
-            <div style={{ width: 48, height: 48, borderRadius: 16, background: 'rgba(249,115,22,0.14)', border: '1.5px solid rgba(249,115,22,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Fuel size={22} color="#F97316" />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 15, fontWeight: 900, color: 'var(--cream)', marginBottom: 3 }}>
-                Bencina y kilometraje del viaje
-              </p>
-              {jornada === undefined ? (
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>Cargando…</p>
-              ) : jornada ? (
-                <p style={{ fontSize: 12, color: '#F97316', fontWeight: 700 }}>
-                  Jornada en curso desde las {new Date(jornada.iniciada_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} · Toca para cerrar o registrar combustible
-                </p>
-              ) : (
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-                  Registra tu odómetro antes de salir para declarar el reembolso de combustible
-                </p>
-              )}
-            </div>
-            <div style={{ width: 38, height: 38, borderRadius: 12, background: '#F97316', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <ChevronRight size={18} color="#080808" strokeWidth={2.5} />
-            </div>
-          </div>
-        </Link>
-
-        {/* ── VISITAS DEL DÍA ── */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: G, boxShadow: `0 0 8px ${G}` }} />
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', letterSpacing: '1.5px', textTransform: 'uppercase' }}>
-                Visitas de hoy
-              </p>
-            </div>
-            <Link href="/terreno/historial" style={{ textDecoration: 'none', fontSize: 12, fontWeight: 600, color: G, display: 'flex', alignItems: 'center', gap: 4 }}>
-              Ver todas <ChevronRight size={13} />
+        {/* Lo de hoy */}
+        <div style={{ ...cardStyle, padding: '14px 14px 6px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <p style={{ fontSize: 12, fontWeight: 800, color: C.text, letterSpacing: '0.04em' }}>VISITAS DE HOY</p>
+            <Link href="/terreno/historial" style={{ textDecoration: 'none', fontSize: 12, fontWeight: 700, color: C.blue }}>
+              Ver todas
             </Link>
           </div>
 
-          {visitas.length > 0 ? (
-            <div>
-              {visitas.map((v, i) => (
-                <VisitaCard key={v.id} v={v} isLast={i === visitas.length - 1} />
-              ))}
-            </div>
+          {visitas.length === 0 ? (
+            <p style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '20px 0 26px' }}>
+              Todavía no registras visitas hoy.
+            </p>
           ) : (
-            /* Estado vacío con CTA principal siempre visible above the fold */
-            <div style={{
-              background: `linear-gradient(135deg, rgba(${G_RGB},0.06) 0%, rgba(10,10,10,0.95) 100%)`,
-              border: `1px solid rgba(${G_RGB},0.18)`,
-              borderRadius: 22, padding: '28px 20px', textAlign: 'center',
-            }}>
-              <div style={{ width: 52, height: 52, borderRadius: 18, background: `rgba(${G_RGB},0.1)`, border: `1px solid rgba(${G_RGB},0.2)`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-                <MapPin size={24} color={G} />
-              </div>
-              <p style={{ fontSize: 16, fontWeight: 800, color: 'var(--cream)', marginBottom: 6, letterSpacing: '-0.3px' }}>Sin visitas hoy</p>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5, marginBottom: 20 }}>
-                Registra tu primera visita del día
-              </p>
-              <Link href="/terreno/nueva-visita" style={{ textDecoration: 'none', display: 'block' }}>
-                <div style={{
-                  background: `linear-gradient(135deg, #E5C45A, #B8962E)`,
-                  borderRadius: 14, padding: '14px 20px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  boxShadow: `0 4px 20px rgba(${G_RGB},0.3)`,
-                }}>
-                  <Plus size={18} color="#050505" strokeWidth={2.5} />
-                  <span style={{ fontSize: 15, fontWeight: 900, color: '#050505', letterSpacing: '-0.2px' }}>
-                    Nueva Visita
-                  </span>
-                </div>
-              </Link>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8 }}>
+              {visitas.map(v => {
+                const enCurso = v.estado === 'en_progreso'
+                const vendio = v.tiene_venta === true
+                return (
+                  <Link
+                    key={v.id}
+                    href={enCurso ? `/terreno/nueva-visita?retomar=${v.id}` : '/terreno/historial'}
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 11px',
+                      borderRadius: 12, background: C.bg, border: `1px solid ${C.line}`,
+                    }}>
+                      <span style={{
+                        width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: enCurso ? '#FEF3C7' : vendio ? C.greenSoft : '#F1F5F9',
+                      }}>
+                        {enCurso ? <Clock3 size={16} color={C.amber} />
+                          : vendio ? <CheckCircle size={16} color={C.green} />
+                          : <XCircle size={16} color={C.faint} />}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>
+                          {v.cliente_nombre}
+                        </p>
+                        <p style={{ fontSize: 11.5, color: C.muted }}>
+                          {fHora(v.iniciada_at)}
+                          {enCurso ? ' · sin terminar' : v.motivo_sin_venta ? ` · ${v.motivo_sin_venta}` : ''}
+                        </p>
+                      </div>
+                      {vendio && v.total_pedido ? (
+                        <span style={{ fontSize: 13.5, fontWeight: 800, color: C.green, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                          {fPeso(v.total_pedido)}
+                        </span>
+                      ) : null}
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           )}
         </div>
-
       </div>
 
-      {/* ── Resumen al cerrar visita ── */}
+      {showBuscar && <BuscarClienteSheet onClose={() => setShowBuscar(false)} />}
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          userName={vendedor.nombre}
+          userEmail={vendedor.email}
+          avatarUrl={vendedor.avatarUrl ?? undefined}
+        />
+      )}
+
       {showCierre && (
         <div
-          onClick={() => setShowCierre(false)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 200,
-            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(3px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-            animation: 'cierre-fade 0.2s ease',
-          }}
+          onClick={e => { if (e.target === e.currentTarget) setShowCierre(false) }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
         >
-          <style>{`
-            @keyframes cierre-fade { from { opacity: 0 } to { opacity: 1 } }
-            @keyframes cierre-pop { from { transform: scale(0.92) translateY(8px); opacity: 0 } to { transform: scale(1) translateY(0); opacity: 1 } }
-          `}</style>
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: '100%', maxWidth: 360,
-              background: 'linear-gradient(160deg, #14110A 0%, #0A0808 100%)',
-              border: `1px solid rgba(${G_RGB},0.3)`, borderRadius: 22,
-              padding: '24px 22px', textAlign: 'center', position: 'relative',
-              animation: 'cierre-pop 0.3s cubic-bezier(0.16,1,0.3,1)',
-            }}
-          >
+          <div style={{ background: C.card, borderRadius: 20, padding: 22, width: '100%', maxWidth: 360, position: 'relative' }}>
             <button
               onClick={() => setShowCierre(false)}
-              style={{ position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              aria-label="Cerrar"
+              style={{ position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: '50%', background: '#E2E8F0', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              <X size={14} color="rgba(255,255,255,0.5)" />
+              <X size={15} color={C.muted} />
             </button>
 
-            <div style={{ width: 56, height: 56, borderRadius: 16, background: `rgba(${G_RGB},0.15)`, border: `1px solid rgba(${G_RGB},0.3)`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-              <CheckCircle size={26} color={G} />
+            <span style={{ width: 52, height: 52, borderRadius: 16, background: C.greenSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+              <CheckCircle size={26} color={C.green} />
+            </span>
+            <p style={{ fontSize: 17, fontWeight: 800, color: C.text, textAlign: 'center' }}>Visita registrada</p>
+            <p style={{ fontSize: 12.5, color: C.muted, textAlign: 'center', marginBottom: 16 }}>Así va tu día, {nombre}</p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+              <Kpi label="Visitas" valor={String(kpis.totalHoy)} color={C.text} />
+              <Kpi label="Con venta" valor={String(kpis.conVenta)} color={C.green} />
+              <Kpi label="Vendido" valor={totalVendidoHoy > 0 ? fPeso(totalVendidoHoy) : '$0'} color={C.blue} chico />
             </div>
-
-            <p style={{ fontSize: 17, fontWeight: 900, color: '#F0EDE8', marginBottom: 4 }}>Visita registrada</p>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 18 }}>Así va tu día, {nombre}</p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 18 }}>
-              {[
-                { label: 'Visitas', value: kpis.totalHoy, color: '#F0EDE8' },
-                { label: 'Con venta', value: kpis.conVenta, color: '#4ADE80' },
-                { label: 'Total $', value: totalPedidoHoy > 0 ? fmtPeso(totalPedidoHoy).replace('$', '') : '0', color: G },
-              ].map(s => (
-                <div key={s.label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: '10px 6px' }}>
-                  <p style={{ fontSize: 18, fontWeight: 900, color: s.color, letterSpacing: '-0.5px' }}>{s.value}</p>
-                  <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 2 }}>{s.label}</p>
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={() => { setShowCierre(false); router.push('/ventas/ranking') }}
-              style={{
-                width: '100%', minHeight: 46, borderRadius: 13, border: 'none', cursor: 'pointer',
-                background: 'linear-gradient(135deg, #E5C45A, #B8962E)', color: '#080808',
-                fontSize: 13, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-              }}
-            >
-              <Trophy size={15} /> Ver mi posición en el ranking
-            </button>
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+function Kpi({ label, valor, color, chico = false }: { label: string; valor: string; color: string; chico?: boolean }) {
+  return (
+    <div style={{ ...cardStyle, padding: '11px 8px', textAlign: 'center' }}>
+      <p style={{ fontSize: chico ? 15 : 21, fontWeight: 800, color, letterSpacing: '-0.5px', lineHeight: 1.2, whiteSpace: 'nowrap' }}>
+        {valor}
+      </p>
+      <p style={{ fontSize: 10.5, color: C.muted, fontWeight: 600, marginTop: 2 }}>{label}</p>
+    </div>
+  )
+}
+
+function Acceso({ href, Icon, label, nota, destacado = false }: {
+  href: string; Icon: typeof Navigation; label: string; nota: string; destacado?: boolean
+}) {
+  return (
+    <Link href={href} style={{ textDecoration: 'none' }}>
+      <div style={{
+        ...cardStyle,
+        border: `1px solid ${destacado ? '#FDE68A' : C.line}`,
+        background: destacado ? C.amberSoft : C.card,
+        padding: '12px 13px', display: 'flex', alignItems: 'center', gap: 10, minHeight: TAP + 16,
+      }}>
+        <Icon size={18} color={destacado ? C.amber : C.muted} style={{ flexShrink: 0 }} />
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text, lineHeight: 1.25 }}>{label}</p>
+          <p style={{ fontSize: 11, color: destacado ? C.amber : C.muted, fontWeight: destacado ? 700 : 500 }}>{nota}</p>
+        </div>
+      </div>
+    </Link>
   )
 }

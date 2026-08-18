@@ -4,7 +4,6 @@ import { createClient as createSbClient } from '@supabase/supabase-js'
 import { SUPABASE_URL as SUPABASE_URL_CFG } from '@/lib/supabase/config'
 import * as XLSX from 'xlsx'
 import { esClienteNoGuardar } from '@/lib/types'
-import { sendPushToAllAdmins } from '@/lib/push'
 
 // Alias local para mantener compatibilidad con el nombre anterior. Usa
 // esClienteNoGuardar (no esClienteExcluido): PDV/Feria/BaseCamp ahora SÍ se
@@ -412,15 +411,10 @@ export async function POST(req: NextRequest) {
     insertadas += data?.length ?? batch.length
   }
 
-  // 🔔 Notificación a admins cuando se cargan ventas
-  if (insertadas > 0) {
-    sendPushToAllAdmins({
-      title: '📊 Ventas cargadas',
-      body: `Se insertaron ${insertadas} registros de ventas`,
-      url: '/ventas',
-      tag: 'venta_cargada',
-    }).catch(() => {})
-  }
+  // Sin notificación acá a propósito: la carga de ventas es un sync de
+  // datos del ERP (cron cada 10 min), no una acción de un trabajador — a
+  // diferencia de entregas/ventas de vendedor/tareas, Claudio pidió
+  // explícitamente que esta sea la única que NO dispare aviso.
 
   // Visibilidad del estado de entrega en el log del sync: si un día "faltan"
   // ventas, se ve de una si es que están cargadas pero sin entregar.

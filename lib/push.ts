@@ -1,7 +1,30 @@
 import webpush from 'web-push'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase/config'
+import { createClient } from '@supabase/supabase-js'
+import { SUPABASE_URL } from './supabase/config'
+
+/**
+ * Cliente service-role, NO el de sesión/cookies.
+ *
+ * Bug real (2026-07-30): las funciones de este archivo antes armaban su
+ * propio cliente con cookies() + SUPABASE_ANON_KEY en cada llamada. Eso
+ * funciona cuando quien dispara el evento es un usuario logueado en el
+ * navegador (ej. un chofer marcando una entrega), pero el sync de ventas
+ * (cron de GitHub Actions → /api/upload-ventas) llama a sendPushToAllAdmins()
+ * SIN sesión de usuario — sin cookies, el cliente queda con rol "anon", y la
+ * política RLS de `users` exige 'authenticated' para leer admins. El SELECT
+ * volvía vacío (sin lanzar error), así que "if (!admins?.length) return"
+ * cortaba en silencio: cero notificaciones de "venta cargada" se crearon
+ * NUNCA, sin ningún error en los logs que lo delatara.
+ *
+ * Estas funciones existen para avisarle a OTROS usuarios, no para actuar
+ * como el usuario que dispara el evento — por eso van con service role
+ * (bypass RLS) sin importar si quien las llama tiene sesión o no.
+ */
+function supabaseAdmin() {
+  const key = process.env.SUPABASE_SERVICE_KEY
+  if (!key) throw new Error('Push: falta SUPABASE_SERVICE_KEY en el entorno')
+  return createClient(SUPABASE_URL, key)
+}
 
 function initVapid() {
   const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
@@ -40,10 +63,7 @@ function resolverUrl(payload: PushPayload): string {
 async function registrarNotificaciones(userIds: string[], payload: PushPayload) {
   if (userIds.length === 0) return
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
-    })
+    const supabase = supabaseAdmin()
     const url = resolverUrl(payload)
     const unicos = Array.from(new Set(userIds))
     await supabase.from('notificaciones').insert(
@@ -58,10 +78,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload) {
   initVapid()
   registrarNotificaciones([userId], payload)
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
-    })
+    const supabase = supabaseAdmin()
 
     const { data: subs } = await supabase
       .from('push_subscriptions')
@@ -93,10 +110,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload) {
 export async function sendPushToEmail(email: string, payload: PushPayload) {
   initVapid()
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
-    })
+    const supabase = supabaseAdmin()
 
     const { data: subs } = await supabase
       .from('push_subscriptions')
@@ -128,10 +142,7 @@ export async function sendPushToUsers(userIds: string[], payload: PushPayload) {
 
 export async function sendPushToAllAdmins(payload: PushPayload) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
-    })
+    const supabase = supabaseAdmin()
     const { data: admins } = await supabase.from('users').select('id').eq('is_admin', true)
     if (!admins?.length) return
     await Promise.allSettled(admins.map(a => sendPushToUser(a.id, payload)))
@@ -144,10 +155,7 @@ export async function sendPushToAllAdmins(payload: PushPayload) {
 export async function sendPushToAll(payload: PushPayload) {
   initVapid()
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
-    })
+    const supabase = supabaseAdmin()
     const { data: subs } = await supabase.from('push_subscriptions').select('*')
     if (!subs?.length) return
 

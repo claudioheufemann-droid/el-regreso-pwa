@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
+import { esClienteExcluido } from '@/lib/types'
 
 // Cliente SIN cookies → para llamadas server-side sin auth
 function anonClient() {
@@ -46,5 +47,5 @@ export async function getVentasRango(ini: string, fin: string): Promise<VentaRan
     if (data.length < PAGE) break
     off += PAGE
   }
-  return rows
+  return rows.filter(r => !esClienteExcluido(r.nombre_fantasia))
 }

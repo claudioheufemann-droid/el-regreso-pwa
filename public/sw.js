@@ -1,7 +1,7 @@
 // El Regreso Control — Service Worker
 // Maneja push notifications + caché offline + badge de ícono con número
 
-const CACHE_NAME = 'el-regreso-v70'
+const CACHE_NAME = 'el-regreso-v91'
 const OFFLINE_URL = '/offline'
 
 const STATIC_ASSETS = [
@@ -23,6 +23,7 @@ const TERRENO_ASSETS = [
   '/terreno/historial',
   '/terreno/jornada',
   '/terreno/cercanos',
+  '/terreno/ruta',
 ]
 
 // ── Install ────────────────────────────────────────────────────────────

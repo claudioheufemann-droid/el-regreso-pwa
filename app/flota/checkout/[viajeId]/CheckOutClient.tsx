@@ -6,6 +6,8 @@ import { Camera, CheckCircle, Fuel, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AppUser } from '@/lib/auth'
 import FlotaPageHeader from '@/components/ui/FlotaPageHeader'
+import { compressImage } from '@/lib/compress-image'
+import { fetchConTimeout } from '@/lib/utils'
 
 const F = '#D4AF37'
 const F_BORDER = 'rgba(212,175,55,0.28)'
@@ -154,11 +156,12 @@ export default function CheckOutClient({ user, viaje }: Props) {
     setAnalizandoOdo(true)
     setKmLeido(null)
     try {
-      const base64 = await fileToBase64(file)
-      const res = await fetch('/api/analizar-odometro', {
+      const comprimido = await compressImage(file)
+      const base64 = await fileToBase64(comprimido)
+      const res = await fetchConTimeout('/api/analizar-odometro', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagen: base64, tipo: file.type }),
+        body: JSON.stringify({ imagen: base64, tipo: comprimido.type }),
       })
       const { km } = await res.json()
       if (km && km > (viaje.km_inicio ?? 0)) { setKmFin(String(km)); setKmLeido(String(km)) }
@@ -174,11 +177,12 @@ export default function CheckOutClient({ user, viaje }: Props) {
     setIaFalloComb(false)
     setMostrarSelectorComb(false)
     try {
-      const base64 = await fileToBase64(file)
-      const res = await fetch('/api/analizar-combustible', {
+      const comprimido = await compressImage(file)
+      const base64 = await fileToBase64(comprimido)
+      const res = await fetchConTimeout('/api/analizar-combustible', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagen: base64, tipo: file.type }),
+        body: JSON.stringify({ imagen: base64, tipo: comprimido.type }),
       })
       const { nivel } = await res.json()
       if (nivel) {
@@ -250,7 +254,10 @@ export default function CheckOutClient({ user, viaje }: Props) {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, background: '#080808', display: 'flex', flexDirection: 'column' }}>
+    /* minHeight, NO flex:1+minHeight:0 — ver comentario en ViajeDetailClient.tsx
+       y app/flota/layout.tsx: ese combo crea un scroll anidado que no
+       responde al mouse en desktop. */
+    <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
       <FlotaPageHeader
         title="Cerrar viaje"
         subtitle={`${viaje.vehiculos?.nombre ?? ''} · ${fmtDuracion(viaje.iniciado_at)}`}
@@ -258,7 +265,7 @@ export default function CheckOutClient({ user, viaje }: Props) {
         backLabel="Volver"
       />
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+      <div style={{ padding: '16px' }}>
 
         {/* Resumen */}
         <div style={{ background: '#131313', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>

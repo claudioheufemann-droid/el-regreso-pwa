@@ -45,6 +45,15 @@ SOLO_DESCARGAR = (os.getenv("SOLO_DESCARGAR") or "").strip().lower() == "true"
 # rezagadas (ver rango_periodo). 7 cubre una semana de atraso de despacho sin
 # agrandar tanto el rango como para que el ERP mande el informe por email.
 DIAS_SOLAPE = 7
+# Tope duro sobre el ancho del rango pedido. El rango "periodo 24->23 + solape"
+# crece con el volumen de ventas: cerca del dia 23 llega a ~32 dias, y el ERP
+# empezo a rechazar eso (responde "se enviara por email" en vez de descargar).
+# Con este tope, en la mayor parte del mes se pide solo lo mas reciente en vez
+# de todo el periodo — se pierde la re-sincronizacion de entregas MUY rezagadas
+# de días viejos del período (mas alla del tope), pero eso ya se habia
+# sincronizado en corridas anteriores del mismo período, cuando el rango
+# calculado aun entraba bajo el tope.
+MAX_DIAS_RANGO = 18
 DOWNLOAD_DIR  = Path(__file__).parent / "downloads"
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
@@ -75,6 +84,9 @@ def rango_periodo() -> tuple[date, date]:
         primero = hoy.replace(day=1)
         desde = (primero - timedelta(days=1)).replace(day=24)
     desde -= timedelta(days=DIAS_SOLAPE)
+    tope = date.today() - timedelta(days=MAX_DIAS_RANGO)
+    if desde < tope:
+        desde = tope
     if FECHA_DESDE:
         desde = _parse_ddmmyyyy(FECHA_DESDE)
     if FECHA_HASTA:

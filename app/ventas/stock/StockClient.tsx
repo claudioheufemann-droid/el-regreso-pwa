@@ -1,7 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Package, Search, Beer, Layers } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Package, Search, Beer, Layers, Copy, Check, AlertTriangle, CircleAlert, ChevronDown, ChevronLeft, Boxes } from 'lucide-react'
+import { useUser } from '@/lib/userContext'
+import SettingsPanel from '@/components/ui/SettingsPanel'
+import NotificationsBell from '@/components/ui/NotificationsBell'
 import type { StockProductoRow } from './page'
 
 const C = {
@@ -11,6 +15,83 @@ const C = {
   green: '#059669', greenSoft: '#ECFDF5',
   purple: '#7C3AED', purpleSoft: '#F5F3FF',
   amber: '#D97706', amberSoft: '#FFFBEB',
+  red: '#DC2626', redSoft: '#FEF2F2',
+}
+
+// Umbrales de alerta de stock bajo.
+// Latas: <100 un. = "poco stock", <24 un. = "revisar stock" (más urgente).
+// Barriles: <3 barriles = "revisar stock".
+const UMBRAL_LATA_BAJO = 100
+const UMBRAL_LATA_CRITICO = 24
+const UMBRAL_BARRIL_CRITICO = 3
+
+// Cada caja de latas trae 24 unidades.
+const UNIDADES_POR_CAJA = 24
+
+type Nivel = 'ok' | 'bajo' | 'critico'
+
+function nivelDe(f: StockProductoRow): Nivel {
+  if (f.tipo === 'barril') return f.cantidad < UMBRAL_BARRIL_CRITICO ? 'critico' : 'ok'
+  if (f.cantidad < UMBRAL_LATA_CRITICO) return 'critico'
+  if (f.cantidad < UMBRAL_LATA_BAJO) return 'bajo'
+  return 'ok'
+}
+
+function cajasDe(cantidad: number) {
+  return { cajas: Math.floor(cantidad / UNIDADES_POR_CAJA), resto: cantidad % UNIDADES_POR_CAJA }
+}
+
+function fCajas(cantidad: number): string {
+  const { cajas, resto } = cajasDe(cantidad)
+  if (cajas === 0) return `${resto} un.`
+  if (resto === 0) return `${fNum(cajas)} caja${cajas === 1 ? '' : 's'}`
+  return `${fNum(cajas)} caja${cajas === 1 ? '' : 's'} + ${resto} un.`
+}
+
+// Mapea codigo_producto (ej. "C-1", "K-4") a la misma imagen de lata usada
+// en Producción (app/logistica/produccion/declarar). Solo cubre los productos
+// que ya tienen foto subida — el resto cae al emoji de respaldo.
+const CODIGO_IMAGENES: Record<string, string> = {
+  'C-1':  '/productos/cerveza/arboretum.webp',
+  'C-2':  '/productos/cerveza/la-barra.webp',
+  'C-4':  '/productos/cerveza/descenso.webp',
+  'C-5':  '/productos/cerveza/aguas-blancas.webp',
+  'C-8':  '/productos/cerveza/mocho.webp',
+  'C-9':  '/productos/cerveza/fisura.webp',
+  'K-1':  '/productos/kombucha/natural.webp',
+  'K-2':  '/productos/kombucha/lemon-fresh.webp',
+  'K-4':  '/productos/kombucha/berry-menta.webp',
+  'K-6':  '/productos/kombucha/maqui-hops.webp',
+  'K-10': '/productos/kombucha/maracuya-cardamomo.webp',
+  'K-11': '/productos/kombucha/mango-merken.webp',
+  'K-22': '/productos/kombucha/detox.webp',
+}
+
+// Foto genérica de barril — se usa para todos los barriles sin importar el sabor.
+const IMAGEN_BARRIL = '/productos/cerveza/barril.webp'
+
+function ProductoThumb({ codigo, categoria, tipo, size = 44 }: { codigo: string | null; categoria: string | null; tipo?: 'barril' | 'envase'; size?: number }) {
+  const src = tipo === 'barril' ? IMAGEN_BARRIL : (codigo ? CODIGO_IMAGENES[codigo] : undefined)
+  const [imgOk, setImgOk] = useState(!!src)
+  const emoji = categoria === 'Kombucha' ? '🫧' : '🍺'
+  if (src && imgOk) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src} alt="" width={size} height={size}
+        onError={() => setImgOk(false)}
+        style={{ width: size, height: size, borderRadius: 10, objectFit: 'contain', background: C.bg, flexShrink: 0 }}
+      />
+    )
+  }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: 10, flexShrink: 0,
+      background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.5,
+    }}>
+      {emoji}
+    </div>
+  )
 }
 
 const fNum = (n: number) => n.toLocaleString('es-CL')
@@ -21,9 +102,122 @@ function fFecha(iso: string) {
   return `${d} ${meses[m - 1]} ${y}`
 }
 
+// Texto para compartir por WhatsApp: usa el formato que WhatsApp sí renderiza
+// (*negrita*, _cursiva_, líneas divisorias) para que se vea prolijo y de marca
+// sin agregar pasos — sigue siendo copiar → pegar, sin fotos ni adjuntos.
+const DIVISOR = '━━━━━━━━━━━━━━━━'
+
+function buildResumenCopiable(filas: StockProductoRow[], fechaInforme: string | null): string {
+  const categorias = ['Cerveza', 'Kombucha'] as const
+  const tipos = [{ key: 'barril' as const, label: 'Barriles (30L)', emoji: '🛢️' }, { key: 'envase' as const, label: 'Latas', emoji: '🥫' }]
+
+  let out = `🍺 *EL REGRESO BEER* — Stock disponible\n📍 Cámara General Barrios Bajos`
+  if (fechaInforme) out += ` · ${fFecha(fechaInforme)}`
+  out += `\n${DIVISOR}`
+
+  for (const cat of categorias) {
+    const deCategoria = filas.filter(f => (f.categoria ?? 'Otros') === cat)
+    if (!deCategoria.length) continue
+    out += `\n*${cat === 'Kombucha' ? 'KOMBUCHAS' : 'CERVEZAS'}*\n`
+    for (const t of tipos) {
+      const items = deCategoria.filter(f => f.tipo === t.key).sort((a, b) => a.producto.localeCompare(b.producto))
+      if (!items.length) continue
+      out += `\n${t.emoji} ${t.label}\n`
+      for (const f of items) {
+        // Solo verde/rojo — sin texto de alerta: esto lo lee el cliente,
+        // no debe ver "poco stock" ni "revisar stock".
+        const icon = nivelDe(f) === 'ok' ? '🟢' : '🔴'
+        const detalle = f.tipo === 'envase'
+          ? `${fNum(f.cantidad)} latas (${fCajas(f.cantidad)})`
+          : `${fNum(f.cantidad)} Barril${f.cantidad === 1 ? '' : 'es'}`
+        out += `${icon} *${f.producto}*: ${detalle}\n`
+      }
+    }
+  }
+  out += `\n${DIVISOR}\n_Cervecería Artesanal · Valdivia_`
+  return out.trim()
+}
+
+function AlertaBadge({ nivel }: { nivel: Nivel }) {
+  if (nivel === 'ok') return null
+  const critico = nivel === 'critico'
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 4,
+      fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999,
+      color: critico ? C.red : C.amber, background: critico ? C.redSoft : C.amberSoft,
+    }}>
+      {critico ? <CircleAlert size={11} /> : <AlertTriangle size={11} />}
+      {critico ? 'Revisar stock' : 'Poco stock'}
+    </span>
+  )
+}
+
+// Días en bodega = hoy - fecha de embarrilado. La fecha se cruza por código
+// de lote contra el listado plano del informe (ver lib/stockParser.ts) — no
+// todos los lotes tienen match, en ese caso no se muestra el dato.
+function diasEnBodega(fechaISO: string): number {
+  const [y, m, d] = fechaISO.split('-').map(Number)
+  const fecha = new Date(y, m - 1, d)
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+  return Math.round((hoy.getTime() - fecha.getTime()) / 86400000)
+}
+
+// Detalle de lotes al expandir un producto. Se ordena de mayor a menor
+// cantidad (no hay fecha de vencimiento con la cual ordenar por próximo a vencer).
+function DetalleLotes({ f }: { f: StockProductoRow }) {
+  const lotes = [...(f.lotes ?? [])].sort((a, b) => b.cantidad - a.cantidad)
+  if (lotes.length === 0) {
+    return <p style={{ fontSize: 12, color: C.muted, padding: '10px 16px 14px' }}>Sin detalle de lotes disponible.</p>
+  }
+  return (
+    <div style={{ padding: '2px 16px 14px' }}>
+      <p style={{ fontSize: 10.5, fontWeight: 700, color: C.faint, letterSpacing: '0.04em', marginBottom: 6 }}>
+        {lotes.length} LOTE{lotes.length === 1 ? '' : 'S'}
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {lotes.map((l, i) => {
+          const dias = l.fechaEmbarrilado ? diasEnBodega(l.fechaEmbarrilado) : null
+          return (
+          <div key={`${l.codigo}-${i}`} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: C.bg, borderRadius: 9, padding: '7px 10px',
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>Lote {l.codigo}</span>
+              {dias != null ? (() => {
+                const [bg, fg] = dias > 90 ? [C.redSoft, C.red] : dias > 30 ? [C.amberSoft, C.amber] : [C.greenSoft, C.green]
+                return (
+                  <p style={{ marginTop: 3 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: fg, background: bg, borderRadius: 7, padding: '2px 7px', letterSpacing: '-0.2px' }}>
+                      {dias} día{dias === 1 ? '' : 's'} en bodega
+                    </span>
+                  </p>
+                )
+              })() : (
+                <p style={{ fontSize: 11, color: C.faint, marginTop: 1 }}>Sin fecha de embarrilado</p>
+              )}
+            </div>
+            <span style={{ fontSize: 12, color: C.muted, textAlign: 'right', flexShrink: 0 }}>
+              {fNum(l.cantidad)} {f.tipo === 'barril' ? 'barr.' : 'un.'}
+              {f.tipo === 'envase' && <span style={{ color: C.faint }}> · {fCajas(l.cantidad)}</span>}
+            </span>
+          </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function StockClient({ filas, fechaInforme }: { filas: StockProductoRow[]; fechaInforme: string | null }) {
+  const router = useRouter()
+  const { user } = useUser()
+  const [showSettings, setShowSettings] = useState(false)
   const [tab, setTab] = useState<'barril' | 'envase'>('barril')
   const [busca, setBusca] = useState('')
+  const [copiado, setCopiado] = useState(false)
+  const [expandido, setExpandido] = useState<string | null>(null)
 
   const barriles = useMemo(() => filas.filter(f => f.tipo === 'barril'), [filas])
   const envases = useMemo(() => filas.filter(f => f.tipo === 'envase'), [filas])
@@ -31,6 +225,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
   const totBarrilesCant = barriles.reduce((s, f) => s + f.cantidad, 0)
   const totBarrilesLitros = barriles.reduce((s, f) => s + (f.litros ?? 0), 0)
   const totEnvasesCant = envases.reduce((s, f) => s + f.cantidad, 0)
+  const totAlertas = filas.filter(f => nivelDe(f) !== 'ok').length
 
   const listaActual = tab === 'barril' ? barriles : envases
   const visibles = useMemo(() => {
@@ -39,17 +234,77 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
     return listaActual.filter(f => f.producto.toLowerCase().includes(q) || (f.codigo_producto ?? '').toLowerCase().includes(q))
   }, [listaActual, busca])
 
+  // Agrupado por categoría dentro de la pestaña actual, para que sea más fácil
+  // de escanear visualmente que una lista plana larga.
+  const grupos = useMemo(() => {
+    const cats = ['Cerveza', 'Kombucha', 'Otros'] as const
+    return cats
+      .map(cat => ({ cat, items: visibles.filter(f => (f.categoria ?? 'Otros') === cat) }))
+      .filter(g => g.items.length > 0)
+  }, [visibles])
+
   const maxCant = Math.max(1, ...listaActual.map(f => f.cantidad))
 
+  async function copiarResumen() {
+    const texto = buildResumenCopiable(filas, fechaInforme)
+    await navigator.clipboard.writeText(texto)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }
+
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 32 }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 120px))' }}>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>CÁMARA GENERAL BARRIOS BAJOS</p>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Stock de productos</h1>
-          <p style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
-            {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Sin datos cargados todavía'}
-          </p>
+        <button
+          onClick={() => router.push('/ventas')}
+          aria-label="Volver"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            background: C.card, border: `1px solid ${C.line}`,
+            borderRadius: 100, padding: '7px 14px 7px 10px', marginBottom: 14,
+            color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            minHeight: 36,
+          }}
+        >
+          <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
+          Volver
+        </button>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>CÁMARA GENERAL BARRIOS BAJOS</p>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Stock de productos</h1>
+            <p style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
+              {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Sin datos cargados todavía'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
+            {filas.length > 0 && (
+              <button
+                onClick={copiarResumen}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '9px 14px', borderRadius: 12, border: `1px solid ${copiado ? C.green : C.line}`,
+                  background: copiado ? C.greenSoft : C.card, color: copiado ? C.green : C.text,
+                  fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                {copiado ? <Check size={14} /> : <Copy size={14} />}
+                {copiado ? 'Copiado' : 'Copiar stock'}
+              </button>
+            )}
+            <NotificationsBell inline variant="light" />
+            <button
+              onClick={() => setShowSettings(true)}
+              aria-label="Cuenta"
+              style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', border: `1px solid ${C.line}`, background: C.hero, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0, padding: 0 }}
+            >
+              {user?.avatarUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={user.avatarUrl} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (user?.iniciales || '··')}
+            </button>
+          </div>
         </div>
 
         {filas.length === 0 ? (
@@ -77,12 +332,24 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
                   <div style={{ width: 30, height: 30, borderRadius: 9, background: C.greenSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Beer size={15} color={C.green} />
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>Envases</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>Latas</span>
                 </div>
                 <p style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>{fNum(totEnvasesCant)}</p>
-                <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>unidades</p>
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>un. · ≈{fCajas(totEnvasesCant)}</p>
               </div>
             </div>
+
+            {totAlertas > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, background: C.redSoft,
+                border: `1px solid ${C.red}33`, borderRadius: 14, padding: '10px 14px', marginBottom: 16,
+              }}>
+                <CircleAlert size={16} color={C.red} style={{ flexShrink: 0 }} />
+                <p style={{ fontSize: 12.5, fontWeight: 600, color: C.red }}>
+                  {totAlertas} producto{totAlertas === 1 ? '' : 's'} con poco stock o para revisar
+                </p>
+              </div>
+            )}
 
             {/* Tabs */}
             <div style={{ display: 'flex', gap: 6, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 4, marginBottom: 12, width: 'fit-content' }}>
@@ -97,7 +364,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
                     color: tab === t ? '#fff' : C.muted,
                   }}
                 >
-                  {t === 'barril' ? `Barriles (${barriles.length})` : `Envases (${envases.length})`}
+                  {t === 'barril' ? `Barriles (${barriles.length})` : `Latas (${envases.length})`}
                 </button>
               ))}
             </div>
@@ -116,33 +383,76 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
               />
             </div>
 
-            {/* Lista */}
+            {/* Lista, agrupada por categoría */}
             {visibles.length === 0 ? (
               <p style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 28 }}>Sin coincidencias</p>
             ) : (
-              <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
-                {visibles.map((f, i) => {
-                  const share = (f.cantidad / maxCant) * 100
-                  const tintCat = f.categoria === 'Kombucha' ? C.green : C.purple
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {grupos.map(({ cat, items }) => {
+                  const tintCat = cat === 'Kombucha' ? C.green : C.purple
                   return (
-                    <div key={`${f.producto}-${i}`} style={{ padding: '12px 16px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{f.producto}</p>
-                          <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-                            {f.codigo_producto ?? '—'}
-                            {f.categoria && <span style={{ color: tintCat, fontWeight: 600 }}> · {f.categoria}</span>}
-                          </p>
-                        </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <p style={{ fontSize: 15, fontWeight: 800, color: C.text }}>
-                            {fNum(f.cantidad)} <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>{f.tipo === 'barril' ? 'barr.' : 'un.'}</span>
-                          </p>
-                          {f.litros != null && <p style={{ fontSize: 11, color: C.muted }}>{fL(f.litros)}</p>}
-                        </div>
+                    <div key={cat}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingLeft: 2 }}>
+                        <span style={{ fontSize: 15 }}>{cat === 'Kombucha' ? '🫧' : '🍺'}</span>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: tintCat, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                          {cat} <span style={{ color: C.faint, fontWeight: 600 }}>· {items.length}</span>
+                        </p>
                       </div>
-                      <div style={{ height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
-                        <div style={{ width: `${share}%`, height: '100%', background: tintCat, borderRadius: 3 }} />
+                      <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
+                        {items.map((f, i) => {
+                          const key = `${f.tipo}-${f.producto}`
+                          const abierto = expandido === key
+                          const share = (f.cantidad / maxCant) * 100
+                          const nivel = nivelDe(f)
+                          const barColor = nivel === 'critico' ? C.red : nivel === 'bajo' ? C.amber : tintCat
+                          return (
+                            <div key={key} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
+                              <button
+                                onClick={() => setExpandido(abierto ? null : key)}
+                                style={{
+                                  display: 'block', width: '100%', textAlign: 'left', background: 'transparent',
+                                  border: 'none', cursor: 'pointer', padding: '12px 16px', font: 'inherit',
+                                }}
+                              >
+                                <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
+                                  <ProductoThumb codigo={f.codigo_producto} categoria={f.categoria} tipo={f.tipo} />
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flex: 1, minWidth: 0 }}>
+                                    <div style={{ minWidth: 0 }}>
+                                      <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{f.producto}</p>
+                                      <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{f.codigo_producto ?? '—'}</p>
+                                      <AlertaBadge nivel={nivel} />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, flexShrink: 0 }}>
+                                      <div style={{ textAlign: 'right' }}>
+                                        <p style={{ fontSize: 15, fontWeight: 800, color: C.text }}>
+                                          {fNum(f.cantidad)} <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>{f.tipo === 'barril' ? 'barr.' : 'un.'}</span>
+                                        </p>
+                                        {f.litros != null && <p style={{ fontSize: 11, color: C.muted }}>{fL(f.litros)}</p>}
+                                        {f.tipo === 'envase' && (
+                                          <p style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+                                            <Boxes size={11} /> {fCajas(f.cantidad)}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <ChevronDown
+                                        size={16} color={C.faint}
+                                        style={{ marginTop: 2, transform: abierto ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                                <div style={{ height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
+                                  <div style={{ width: `${share}%`, height: '100%', background: barColor, borderRadius: 3 }} />
+                                </div>
+                              </button>
+                              {abierto && (
+                                <div style={{ borderTop: `1px solid ${C.line}` }}>
+                                  <DetalleLotes f={f} />
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )
@@ -152,6 +462,15 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
           </>
         )}
       </div>
+
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          userName={user?.nombre ?? ''}
+          userEmail={user?.email ?? ''}
+          avatarUrl={user?.avatarUrl ?? undefined}
+        />
+      )}
     </div>
   )
 }

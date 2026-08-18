@@ -62,6 +62,7 @@ export async function POST(req: Request) {
     categoria: p.categoria,
     cantidad: p.cantidad,
     litros: p.litros,
+    lotes: p.lotes,
   }))
 
   const { error: insError, data } = await supabase.from('stock_productos').insert(filas).select('id')

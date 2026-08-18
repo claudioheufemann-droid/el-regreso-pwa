@@ -21,6 +21,7 @@ const ICONO_TIPO: Record<string, string> = {
   visita_sin_venta: '📍',
   camion_salida: '🚚',
   camion_llegada: '🚚',
+  pedido_entregado: '📦',
   tarea_asignada: '✅',
   mision_pedido: '🎯',
   alerta_deuda: '⚠️',
@@ -39,6 +40,8 @@ function iconoParaTipo(tipo: string | null): string {
   return match?.[1] ?? '🔔'
 }
 
+const LIGHT_LINE = '#E2E8F0'
+
 function tiempoRelativo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime()
   const min = Math.floor(diffMs / 60000)
@@ -50,8 +53,16 @@ function tiempoRelativo(iso: string): string {
   return `hace ${d}d`
 }
 
-export default function NotificationsBell() {
+interface NotificationsBellProps {
+  /** true = botón normal dentro de un flex row (headers de módulo). false (default) = posicionado absoluto, como en el Hub principal. */
+  inline?: boolean
+  /** 'dark' (default) = look dorado/oscuro del resto de la app. 'light' = para headers claros (Ventas, Stock). */
+  variant?: 'dark' | 'light'
+}
+
+export default function NotificationsBell({ inline = false, variant = 'dark' }: NotificationsBellProps = {}) {
   const router = useRouter()
+  const isDark = variant === 'dark'
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<Notificacion[]>([])
   const [loading, setLoading] = useState(false)
@@ -81,6 +92,11 @@ export default function NotificationsBell() {
     return () => { if (channel) supabase.removeChannel(channel) }
   }, [cargarNoLeidas])
 
+  // Abrir la campana SOLO carga la lista — ya no marca nada como leído acá.
+  // Antes marcaba TODO leído apenas se abría (antes de que hubiera chance de
+  // ver el contenido), así que el contador de no leídas volvía a 0 sin que el
+  // usuario alcanzara a enterarse de nada — parecía que "no llegaba" ninguna
+  // notificación aunque sí estaban guardadas.
   async function abrir() {
     setOpen(true)
     setLoading(true)
@@ -88,16 +104,27 @@ export default function NotificationsBell() {
       const res = await fetch('/api/notificaciones')
       const data = await res.json()
       setItems(Array.isArray(data) ? data : [])
-      if (Array.isArray(data) && data.some((n: Notificacion) => !n.leida)) {
-        setUnread(0)
-        fetch('/api/notificaciones/marcar-leidas', { method: 'PATCH' }).catch(() => {})
-      }
     } finally {
       setLoading(false)
     }
   }
 
+  function marcarUnaLeida(id: string) {
+    setItems(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n))
+    setUnread(prev => Math.max(0, prev - 1))
+    fetch('/api/notificaciones/marcar-leidas', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+    }).catch(() => {})
+  }
+
+  function marcarTodasLeidas() {
+    setItems(prev => prev.map(n => ({ ...n, leida: true })))
+    setUnread(0)
+    fetch('/api/notificaciones/marcar-leidas', { method: 'PATCH' }).catch(() => {})
+  }
+
   function irA(n: Notificacion) {
+    if (!n.leida) marcarUnaLeida(n.id)
     setOpen(false)
     if (n.url) router.push(n.url)
   }
@@ -108,22 +135,24 @@ export default function NotificationsBell() {
         onClick={abrir}
         aria-label="Notificaciones"
         style={{
-          position: 'absolute', top: 0, right: 48, zIndex: 5,
+          ...(inline ? { position: 'relative' } : { position: 'absolute', top: 0, right: 48 }),
+          zIndex: 5,
           width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-          border: '1.5px solid rgba(212,175,55,0.4)', cursor: 'pointer', padding: 0,
-          background: '#14141A',
+          border: isDark ? '1.5px solid rgba(212,175,55,0.4)' : `1px solid ${LIGHT_LINE}`,
+          cursor: 'pointer', padding: 0,
+          background: isDark ? '#14141A' : '#FFFFFF',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 2px 12px rgba(212,175,55,0.2)',
+          boxShadow: isDark ? '0 2px 12px rgba(212,175,55,0.2)' : 'none',
         }}
       >
-        <Bell size={17} color="#D4AF37" />
+        <Bell size={17} color={isDark ? '#D4AF37' : '#0F172A'} />
         {unread > 0 && (
           <span style={{
             position: 'absolute', top: -3, right: -3,
             minWidth: 17, height: 17, padding: '0 4px', borderRadius: 99,
             background: '#E23E3E', color: '#fff', fontSize: 10, fontWeight: 800,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '2px solid #07070D',
+            border: `2px solid ${isDark ? '#07070D' : '#FFFFFF'}`,
           }}>
             {unread > 9 ? '9+' : unread}
           </span>
@@ -146,7 +175,14 @@ export default function NotificationsBell() {
 
             <div style={{ padding: '4px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(128,128,128,0.1)' }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--cream)' }}>🔔 Notificaciones</div>
-              <button onClick={() => setOpen(false)} style={{ background: 'rgba(128,128,128,0.1)', border: 'none', color: 'var(--cream)', cursor: 'pointer', fontSize: 16, padding: 8, borderRadius: '50%' }}>✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {items.some(n => !n.leida) && (
+                  <button onClick={marcarTodasLeidas} style={{ background: 'none', border: 'none', color: '#D4AF37', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, padding: '6px 4px' }}>
+                    Marcar todas
+                  </button>
+                )}
+                <button onClick={() => setOpen(false)} style={{ background: 'rgba(128,128,128,0.1)', border: 'none', color: 'var(--cream)', cursor: 'pointer', fontSize: 16, padding: 8, borderRadius: '50%' }}>✕</button>
+              </div>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 20px' }}>
@@ -160,10 +196,9 @@ export default function NotificationsBell() {
                     <button
                       key={n.id}
                       onClick={() => irA(n)}
-                      disabled={!n.url}
                       style={{
                         display: 'flex', alignItems: 'flex-start', gap: 10, textAlign: 'left', width: '100%',
-                        padding: '12px 12px', borderRadius: 14, cursor: n.url ? 'pointer' : 'default',
+                        padding: '12px 12px', borderRadius: 14, cursor: 'pointer',
                         background: n.leida ? 'rgba(255,255,255,0.02)' : 'rgba(212,175,55,0.08)',
                         border: `1px solid ${n.leida ? 'rgba(255,255,255,0.06)' : 'rgba(212,175,55,0.25)'}`,
                       }}
