@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
-  CheckCircle, XCircle, ChevronRight, Plus, Search, CreditCard,
+  CheckCircle, XCircle, ChevronRight, ChevronLeft, Plus, Search, CreditCard,
   Navigation, Clock3, History, MapPin, X, Fuel,
 } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
@@ -100,6 +100,22 @@ export default function TerrenoHubClient({
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(140px, calc(env(safe-area-inset-bottom, 0px) + 120px))' }}>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
+
+        {/* Volver — mismo botón que el resto de la app, lleva al hub principal */}
+        <button
+          onClick={() => router.push('/')}
+          aria-label="Volver"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 14,
+            background: C.card, border: `1px solid ${C.line}`,
+            borderRadius: 100, padding: '7px 14px 7px 10px',
+            color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            minHeight: 36,
+          }}
+        >
+          <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
+          Volver
+        </button>
 
         {/* Encabezado */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>

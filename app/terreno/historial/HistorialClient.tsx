@@ -469,7 +469,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 )}
                 <DeudaBadge deudor={deudor} />
                 {!fotosCompletas(visita) && (
-                  <span style={{ fontSize: 8, fontWeight: 800, color: '#D4AF37', background: '#E2E8F0', border: '1px solid #CBD5E1', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Fotos pendientes</span>
+                  <span style={{ fontSize: 8, fontWeight: 800, color: '#D97706', background: '#FFFBEB', border: '1px solid #FDE68A', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Fotos pendientes</span>
                 )}
               </div>
               {/* Meta secundaria */}
