@@ -425,8 +425,8 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
   ].filter(f => f.src)
 
   const tieneVenta     = visita.tiene_venta === true
-  const borderColor    = tieneVenta ? '#E2E8F0' : '#F1F5F9'
-  const bgCard         = tieneVenta ? '#E2E8F0' : '#F1F5F9'
+  const borderColor    = '#E2E8F0'
+  const bgCard         = '#FFFFFF'
   const accentLeft     = tieneVenta ? T : 'transparent'
 
   return (
@@ -461,7 +461,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
             <div style={{ flex: 1, minWidth: 0 }}>
               {/* Nombre + badges */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 5 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: '#F0EDE8', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
                   {visita.cliente_nombre}
                 </span>
                 {visita.es_cliente_nuevo && (
@@ -483,7 +483,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                   <span style={{ fontSize: 11, color: '#94A3B8' }}>· {vendedorNombre.split(' ')[0]}</span>
                 )}
                 {fotoEntries.length > 0 && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#E2E8F0' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#64748B' }}>
                     <Camera size={9} /> {fotoEntries.length}
                   </span>
                 )}
@@ -579,7 +579,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                       {items.map(item => (
                         <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#F1F5F9', border: '1px solid #F1F5F9', borderRadius: 12 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontSize: 13, fontWeight: 700, color: '#F0EDE8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{item.producto}</p>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{item.producto}</p>
                             <p style={{ fontSize: 10, color: '#94A3B8' }}>{item.categoria}{item.envase ? ` · ${item.envase}` : ''} · {fmtPeso(item.precio_unit)} c/u</p>
                           </div>
                           <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 14 }}>
@@ -607,7 +607,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 {visita.observaciones && (
                   <div style={{ marginBottom: 12, padding: '12px 14px', background: '#F1F5F9', borderRadius: 12, border: '1px solid #F1F5F9' }}>
                     <p style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 5 }}>Observaciones</p>
-                    <p style={{ fontSize: 12, color: '#F0EDE8', lineHeight: 1.5 }}>{visita.observaciones}</p>
+                    <p style={{ fontSize: 12, color: '#0F172A', lineHeight: 1.5 }}>{visita.observaciones}</p>
                   </div>
                 )}
 
@@ -624,7 +624,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={f.src} alt={f.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           </div>
-                          <p style={{ fontSize: 9, color: '#E2E8F0', textAlign: 'center', marginTop: 5, fontWeight: 600 }}>{f.label}</p>
+                          <p style={{ fontSize: 9, color: '#64748B', textAlign: 'center', marginTop: 5, fontWeight: 600 }}>{f.label}</p>
                         </button>
                       ))}
                     </div>
@@ -851,7 +851,7 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
         }}>
           {/* Glow decoration */}
           <div style={{ position: 'absolute', top: -40, right: -40, width: 120, height: 120, borderRadius: '50%', background: '#E2E8F0', filter: 'blur(30px)', pointerEvents: 'none' }} />
-          <p style={{ fontSize: 9, fontWeight: 700, color: '#E2E8F0', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 8 }}>Total facturado</p>
+          <p style={{ fontSize: 9, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 8 }}>Total facturado</p>
           <p style={{ fontSize: 36, fontWeight: 900, color: T, letterSpacing: '-1.5px', lineHeight: 1 }}>
             {kpis.totalFacturado > 0 ? fmtPeso(kpis.totalFacturado) : '—'}
           </p>
@@ -886,7 +886,7 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
           <div style={{ textAlign: 'center', paddingTop: 56 }}>
             <Package size={40} color="#E2E8F0" style={{ margin: '0 auto 16px', display: 'block' }} />
             <p style={{ fontSize: 15, color: '#94A3B8', fontWeight: 500 }}>Sin visitas registradas</p>
-            <p style={{ fontSize: 12, color: '#E2E8F0', marginTop: 6 }}>Ajusta los filtros o registra una nueva visita</p>
+            <p style={{ fontSize: 12, color: '#94A3B8', marginTop: 6 }}>Ajusta los filtros o registra una nueva visita</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
