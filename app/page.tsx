@@ -1,23 +1,16 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getServerUser } from '@/lib/auth'
 import HubClient from '@/components/ui/HubClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function HubPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // getServerUser() (no una consulta de auth propia acá): ya trae el
+  // reintento ante blips de red y el fallback por email para Google — antes
+  // esta página duplicaba la lógica sin ninguno de los dos, era otro punto
+  // donde un usuario real podía terminar rebotado a /login.
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('users')
-    .select('nombre, is_admin, email, macro_area')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  const isAdmin = profile?.is_admin ?? false
-  const nombre = profile?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
-  const macroArea = profile?.macro_area ?? null
-
-  return <HubClient isAdmin={isAdmin} nombre={nombre} macroArea={macroArea} />
+  return <HubClient isAdmin={user.isAdmin} nombre={user.nombre} macroArea={user.macroArea} />
 }
