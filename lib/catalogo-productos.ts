@@ -4,9 +4,15 @@
  * extrajo para que Cotizaciones (y cualquier otro módulo) use los mismos
  * precios sin repetir la lista.
  *
- * Solo cubre los productos que YA tienen precio de venta a público cargado —
- * el resto del catálogo (Doble IPA, Red IPA, Helles Colab, etc.) todavía no
- * tiene lista de precios y no debe aparecer aquí hasta que se cargue.
+ * Solo cubre los productos que YA tienen precio de venta a público cargado.
+ * Precios bruto (con IVA y, en cerveza, ILA incluidos) tomados de la
+ * planilla oficial "costos y precios.xlsx" (cargada 2026-08-12) — la misma
+ * fuente que alimenta costo_neto/precio_neto en el módulo Rentabilidad
+ * (lib/rentabilidad.ts, tabla costos_precios). Los 10 productos agregados
+ * ahí (Ámbar Lager, Barley Wine, Carrot Cake Stout, Cucumbeer Sour, Del
+ * Caribe Sour, Doble Hazy IPA, Doble IPA, Helles Colab, Imperial Stout, Red
+ * IPA) todavía no tienen copy de marketing oficial — las descripciones acá
+ * son genéricas por estilo, a revisar antes de tratarlas como definitivas.
  */
 
 export interface CatalogoInfo {
@@ -40,6 +46,20 @@ export const CATALOGO_INFO_DEFAULT: Record<string, CatalogoInfo> = {
   'Kombucha Detox':              { codigo: 'K-22', estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Bajo',  acidez: 'Media-alta', descripcion: 'Arándano, manzanilla e hinojo. Fresco, limpio y con propiedades diuréticas.' },
   'Kombucha Natural':            { codigo: 'K-1',  estilo: 'Kombucha · Té Verde',      precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, dulzor: 'Bajo',  acidez: 'Media-alta', descripcion: 'Esencia pura de fermentación. Notas a pera y florales. Para puristas.' },
   'Kombucha Mango':              { codigo: 'K-11', estilo: 'Kombucha',                  precio_lata: 1500, precio_barril: 75000,  envase_ml: 355, descripcion: 'Kombucha de mango con toque de merkén. Dulce y tropical.' },
+
+  // Agregadas 2026-08-12 desde "costos y precios.xlsx" — sin código de marca
+  // propio todavía, se identifican por estilo. precio_barril: 0 = no se
+  // vende en barril (planilla marca "-" para esos formatos).
+  'Ámbar Lager':                 { codigo: 'C-30', estilo: 'Vienna Lager',              precio_lata: 2250, precio_barril: 0,      envase_ml: 470, descripcion: 'Vienna Lager ámbar, cuerpo suave y maltoso con final limpio.' },
+  'Barley Wine':                 { codigo: 'C-13', estilo: 'Barley Wine',               precio_lata: 2700, precio_barril: 0,      envase_ml: 470, descripcion: 'Cuerpo denso y alta graduación, notas a caramelo y fruta madura. Estilo de guarda.' },
+  'Carrot Cake Stout':           { codigo: 'ROT-2',estilo: 'Stout',                     precio_lata: 2700, precio_barril: 115000, envase_ml: 470, descripcion: 'Stout oscura inspirada en el carrot cake: canela, nuez y caramelo especiado.' },
+  'Cucumbeer Sour':              { codigo: '',     estilo: 'Sour',                      precio_lata: 2500, precio_barril: 0,      envase_ml: 470, descripcion: 'Sour refrescante con pepino. Ácida, ligera y muy fácil de tomar.' },
+  'Del Caribe Sour':             { codigo: 'C-27', estilo: 'Sour',                      precio_lata: 2500, precio_barril: 0,      envase_ml: 470, descripcion: 'Sour tropical con frutas del Caribe. Ácida, jugosa y refrescante.' },
+  'Doble Hazy IPA':              { codigo: 'C-24', estilo: 'Double Hazy IPA',           precio_lata: 3200, precio_barril: 145000, envase_ml: 470, descripcion: 'Hazy IPA doble, turbia e intensa en lúpulo tropical. Cuerpo pleno y alto ABV.' },
+  'Doble IPA':                   { codigo: 'C-26', estilo: 'Double IPA',                precio_lata: 3100, precio_barril: 135000, envase_ml: 470, descripcion: 'Doble IPA de amargor y aroma potentes, cuerpo firme y alta graduación.' },
+  'Helles Colab':                { codigo: 'C-16', estilo: 'Doppelbock',                precio_lata: 2250, precio_barril: 0,      envase_ml: 470, descripcion: 'Doppelbock de colaboración, maltosa y de cuerpo firme.' },
+  'Imperial Stout':              { codigo: 'C-6',  estilo: 'Imperial Stout',            precio_lata: 2600, precio_barril: 125000, envase_ml: 470, descripcion: 'Imperial Stout oscura y densa, notas a café tostado y chocolate amargo.' },
+  'Red IPA':                     { codigo: 'C-11', estilo: 'Red IPA',                   precio_lata: 2750, precio_barril: 110000, envase_ml: 470, descripcion: 'Red IPA de cuerpo rojizo, equilibrio entre malta caramelo y lúpulo resinoso.' },
 }
 
 // Precios Santiago — solo sobreescribe precio_lata/precio_barril; el resto

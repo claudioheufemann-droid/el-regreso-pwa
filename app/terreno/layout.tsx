@@ -2,17 +2,6 @@ import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import TerrenoSidebar from '@/components/TerrenoSidebar'
 import TerrenoBottomNav from '@/components/TerrenoBottomNav'
-import PageTabs from '@/components/PageTabs'
-import type { PageTab } from '@/components/PageTabs'
-
-// Mismos destinos y nombres que el nav móvil — un solo modelo mental.
-const TABS: PageTab[] = [
-  { href: '/terreno',              label: 'Panel',     exact: true },
-  { href: '/terreno/ruta',         label: 'Viaje'                  },
-  { href: '/terreno/nueva-visita', label: 'Visita'                 },
-  { href: '/terreno/cercanos',     label: 'Cercanos'               },
-  { href: '/terreno/historial',    label: 'Historial'              },
-]
 
 export default async function TerrenoLayout({ children }: { children: React.ReactNode }) {
   const user = await getServerUser()
@@ -30,9 +19,6 @@ export default async function TerrenoLayout({ children }: { children: React.Reac
           overflow-x-hidden: 'hidden' fuerza el otro eje a 'auto' y
           reintroduce el mismo contenedor anidado. */}
       <main className="flex-1 min-w-0 flex flex-col overflow-x-clip pb-28 lg:pb-0 mobile-safe-top">
-        <div className="hidden lg:block">
-          <PageTabs tabs={TABS} />
-        </div>
         {children}
       </main>
       <div className="lg:hidden">

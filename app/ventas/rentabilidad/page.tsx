@@ -21,7 +21,16 @@ export default async function RentabilidadPage() {
     .order('categoria')
     .order('producto')
 
-  const filas = (data ?? []) as CostoPrecio[]
+  // costo_neto/precio_neto son `numeric` en Postgres — PostgREST los manda
+  // como string en el JSON para no perder precisión (ej. "1690.611729").
+  // Sin este Number(), cualquier suma con `+` en el cliente (ej. precio +
+  // iva) concatena texto en vez de sumar. Se convierten acá, una sola vez,
+  // para que el resto de la app trabaje con number de verdad.
+  const filas: CostoPrecio[] = (data ?? []).map(f => ({
+    ...f,
+    costo_neto: Number(f.costo_neto),
+    precio_neto: Number(f.precio_neto),
+  }))
 
   return <RentabilidadClient user={user} filasIniciales={filas} />
 }

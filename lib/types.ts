@@ -52,17 +52,22 @@ export const VENDEDOR_DISPLAY: Record<string, string> = Object.entries(VENDEDOR_
  */
 export const VENDEDOR_ALIAS: Record<string, string> = {
   // Cartera de Los Ríos / Los Lagos: el ERP la ha renombrado varias veces
-  // (Javier Badilla → 'Transición 2' → ahora 'Los Rios' tal cual, sin tilde;
-  // Carlos Urrejola → 'Transición 1' → 'Los Lagos'). Dato de Claudio,
-  // 2026-07-27: Transición 2 = Los Ríos, Transición 1 = Los Lagos — dejarlo
-  // así siempre. TODOS los nombres que el ERP haya usado para esta misma
-  // cartera se mapean al nombre limpio final, para que no vuelva a aparecer
-  // partida en el ranking la próxima vez que el ERP la vuelva a renombrar.
-  'Javier Badilla':  'Los Ríos',
-  'Transición 2':    'Los Ríos',
-  'Los Rios':        'Los Ríos', // el ERP lo reporta sin tilde
-  'Carlos Urrejola': 'Los Lagos',
-  'Transición 1':    'Los Lagos',
+  // (Javier Badilla → 'Transición 2' → 'Los Rios' sin tilde → ahora la
+  // atiende Nicole Delgado, que el ERP reporta con su email). Carlos
+  // Urrejola → 'Transición 1' → 'Los Lagos' → ahora la atiende Marion Meza.
+  // Dato de Claudio, 2026-08-21: unificar Los Ríos bajo "Nicole Delgado" y
+  // renombrar Los Lagos a "Marion Meza" (nuevas vendedoras a cargo).
+  // TODOS los nombres que el ERP haya usado para esta misma cartera se
+  // mapean al nombre limpio final, para que no vuelva a aparecer partida en
+  // el ranking la próxima vez que el ERP la vuelva a renombrar.
+  'Javier Badilla':              'Nicole Delgado',
+  'Transición 2':                'Nicole Delgado',
+  'Los Rios':                    'Nicole Delgado', // el ERP lo reporta sin tilde
+  'Los Ríos':                    'Nicole Delgado', // nombre anterior de esta cartera
+  'nicol.delgado@elregresobeer.com': 'Nicole Delgado',
+  'Carlos Urrejola':             'Marion Meza',
+  'Transición 1':                'Marion Meza',
+  'Los Lagos':                   'Marion Meza', // nombre anterior de esta cartera
   // Yadro: la BD tiene dos grafías del apellido; se unifica a la del ERP
   'Yadro Favijancic': 'Yadro Fabijancic',
 }
