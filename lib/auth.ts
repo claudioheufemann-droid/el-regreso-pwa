@@ -30,7 +30,18 @@ export interface AppUser {
 export const getServerUser = cache(async (): Promise<AppUser | null> => {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+
+    // getUser() valida el JWT contra el servidor de Auth de Supabase con una
+    // llamada de red — en cada carga de CADA layout de módulo (Ventas,
+    // Gestión, Flota, Terreno, Logística todos llaman getServerUser()). Si
+    // esa llamada falla o tarda por cualquier motivo transitorio, antes se
+    // trataba como "no hay sesión" y el layout redirigía a /login — que un
+    // instante después rebotaba de vuelta al inicio al releer la cookie (sí
+    // válida). Un reintento inmediato absorbe la enorme mayoría de esos
+    // blips sin debilitar la validación (sigue siendo getUser(), no
+    // getSession() — acá sí importa que el JWT quede revalidado).
+    let user = (await supabase.auth.getUser()).data.user
+    if (!user) user = (await supabase.auth.getUser()).data.user
     if (!user) return null
 
     // Primary lookup: by auth UUID
