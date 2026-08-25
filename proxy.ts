@@ -24,30 +24,29 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // getSession() en vez de getUser(): getUser() valida el JWT contra el
-  // servidor de Auth de Supabase con una llamada de red EN CADA navegación
-  // (desde el edge de Vercel). Cuando esa llamada falla o tarda por
-  // cualquier motivo transitorio, este gate trataba a un usuario con sesión
-  // válida como si no la tuviera y lo mandaba a /login — que un instante
-  // después lo rebotaba de vuelta a "/" al releer la cookie (sí válida),
-  // dando el "pestañea y vuelve a la selección de módulo" reportado.
-  // getSession() solo decodifica la cookie localmente, sin red: es la
-  // verificación correcta para este gate, que es un filtro grueso de UX
-  // (¿hay sesión o no?), no la autorización real — esa ya la revalida
-  // getServerUser() (que sí usa getUser()) en cada layout de módulo antes
-  // de mostrar cualquier dato.
-  const { data: { session } } = await supabase.auth.getSession()
+  // getUser() (no getSession()): a diferencia de getSession() — que solo
+  // decodifica la cookie local sin tocar red — getUser() es lo que dispara
+  // el REFRESCO del access token contra Supabase cuando ya venció, y ese
+  // refresco se persiste acá mismo vía el callback setAll() de arriba. Si
+  // el proxy usa solo getSession(), el token nunca se refresca en el punto
+  // correcto: la cookie queda "vieja pero con pinta de válida" para este
+  // gate, mientras que getServerUser() (en cada layout de módulo, que SÍ usa
+  // getUser()) la rechaza por vencida — resultado: el layout manda a
+  // /login, el proxy (con la cookie sin refrescar) te rebota de vuelta a
+  // "/", y así en loop infinito ("ERR_TOO_MANY_REDIRECTS"). Confirmado:
+  // pasó exactamente eso al cambiar esto a getSession() por error.
+  const { data: { user } } = await supabase.auth.getUser()
 
   // /auth/callback debe pasar sin sesión: recién ahí se intercambia el
   // "code" de Google por la cookie de sesión (exchangeCodeForSession). Si el
   // proxy lo bloquea aquí, redirige a /login ANTES de que eso ocurra y se
   // pierde el parámetro ?code= — el login con Google nunca terminaba de
   // completarse.
-  if (!session && pathname !== '/login' && pathname !== '/auth/callback') {
+  if (!user && pathname !== '/login' && pathname !== '/auth/callback') {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (session && pathname === '/login') {
+  if (user && pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
