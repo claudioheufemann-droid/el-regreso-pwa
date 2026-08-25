@@ -36,15 +36,19 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     // Primary lookup: by auth UUID
     let { data: profile } = await supabase
       .from('users')
-      .select('nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, ve_comision_gerente')
+      .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, ve_comision_gerente')
       .eq('id', user.id)
       .maybeSingle()
 
-    // Fallback: by email (handles any future UUID drift)
+    // Fallback: by email — cubre login con Google en una cuenta que ya
+    // existía por email/password. Supabase crea un auth.users nuevo con OTRO
+    // uuid (google e email/password son identidades separadas), así que acá
+    // NO matchea por id. El profile.id de abajo sigue siendo el id estable
+    // de siempre — es el que hay que devolver, no user.id (ver nota abajo).
     if (!profile && user.email) {
       const res = await supabase
         .from('users')
-        .select('nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, ve_comision_gerente')
+        .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, ve_comision_gerente')
         .eq('email', user.email)
         .maybeSingle()
       profile = res.data
@@ -53,7 +57,13 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     if (!profile) return null
 
     return {
-      id: user.id,
+      // profile.id (no user.id): en el caso de fallback por email, user.id
+      // es el uuid de la identidad de Google recién creada, DISTINTO del id
+      // real en public.users — usarlo acá rompería toda FK que dependa de
+      // este id (tasks.responsable_id, despachos.creado_por, etc.) para
+      // cualquiera de los usuarios ya existentes que inicie sesión con
+      // Google por primera vez.
+      id: profile.id,
       nombre: profile.nombre,
       email: profile.email ?? user.email ?? '',
       isAdmin: !!profile.is_admin,

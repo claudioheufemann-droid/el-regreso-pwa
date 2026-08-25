@@ -26,7 +26,12 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user && pathname !== '/login') {
+  // /auth/callback debe pasar sin sesión: recién ahí se intercambia el
+  // "code" de Google por la cookie de sesión (exchangeCodeForSession). Si el
+  // proxy lo bloquea aquí, redirige a /login ANTES de que eso ocurra y se
+  // pierde el parámetro ?code= — el login con Google nunca terminaba de
+  // completarse.
+  if (!user && pathname !== '/login' && pathname !== '/auth/callback') {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
