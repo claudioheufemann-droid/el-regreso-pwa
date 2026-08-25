@@ -411,6 +411,42 @@ export async function POST(req: NextRequest) {
     insertadas += data?.length ?? batch.length
   }
 
+  // ── Reconciliación: borrar pedidos huérfanos dentro del rango de este archivo ──
+  // El borrado de arriba solo elimina pedidos que SÍ vienen en este archivo
+  // (upsert por pedido). Si el ERP borra un pedido por completo, ese pedido
+  // nunca vuelve a aparecer en NINGÚN archivo futuro, así que nada lo borra
+  // de la BD — queda huérfano para siempre. Pasó real: 150 pedidos fantasma
+  // acumulados jul-ago 2026 (detectado y limpiado a mano 25-ago-2026).
+  // Fix: dentro del rango [fechaMin, fechaMax] que cubre ESTE archivo, borrar
+  // cualquier pedido numérico real que no venga en el archivo actual — el
+  // archivo es la fuente de verdad del ERP para ese rango. Sólo funciona si
+  // el sync efectivamente pide el rango completo del período (ver extractor.py
+  // periodo_actual()); si solo se pide "hoy", esto no detecta nada porque el
+  // rango es demasiado angosto para contener el pedido borrado.
+  const fechaMinArchivo = fechasOrdenadas[0]
+  const fechaMaxArchivo = fechasOrdenadas[fechasOrdenadas.length - 1]
+  let pedidosHuerfanosBorrados = 0
+  if (fechaMinArchivo && fechaMaxArchivo && pedidosEnArchivo.length > 0) {
+    const listaPedidos = `(${pedidosEnArchivo.join(',')})`
+    const { data: huerfanos, error: reconcileError } = await supabase
+      .from('ventas')
+      .delete()
+      .gte('fecha_pedido', fechaMinArchivo)
+      .lte('fecha_pedido', fechaMaxArchivo)
+      .not('pedido', 'is', null)
+      .filter('pedido', 'match', '^[0-9]+$')
+      .not('pedido', 'in', listaPedidos)
+      .select('pedido')
+
+    if (reconcileError) {
+      return NextResponse.json(
+        { error: `Error al reconciliar pedidos huérfanos: ${reconcileError.message}` },
+        { status: 500 }
+      )
+    }
+    pedidosHuerfanosBorrados = new Set((huerfanos ?? []).map(h => h.pedido)).size
+  }
+
   // Sin notificación acá a propósito: la carga de ventas es un sync de
   // datos del ERP (cron cada 10 min), no una acción de un trabajador — a
   // diferencia de entregas/ventas de vendedor/tareas, Claudio pidió
@@ -424,6 +460,7 @@ export async function POST(req: NextRequest) {
     insertadas,
     entregadas: insertadas - sinEntregar,
     pendientesDeEntrega: sinEntregar,
+    pedidosHuerfanosBorrados,
     duplicadosEnArchivo,
     clientesInternosExcluidos,
     litrosInternosExcluidos,

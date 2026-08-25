@@ -41,18 +41,10 @@ HEADLESS      = os.getenv("HEADLESS", "0") == "1"
 FECHA_DESDE   = (os.getenv("FECHA_DESDE") or "").strip()
 FECHA_HASTA   = (os.getenv("FECHA_HASTA") or "").strip()
 SOLO_DESCARGAR = (os.getenv("SOLO_DESCARGAR") or "").strip().lower() == "true"
-# Dias que se retrocede sobre el inicio del periodo para capturar entregas
-# rezagadas (ver rango_periodo). 7 cubre una semana de atraso de despacho sin
-# agrandar tanto el rango como para que el ERP mande el informe por email.
-DIAS_SOLAPE = 7
-# Tope duro sobre el ancho del rango pedido. El rango "periodo 24->23 + solape"
-# crece con el volumen de ventas: cerca del dia 23 llega a ~32 dias, y el ERP
-# empezo a rechazar eso (responde "se enviara por email" en vez de descargar).
-# Con este tope, en la mayor parte del mes se pide solo lo mas reciente en vez
-# de todo el periodo — se pierde la re-sincronizacion de entregas MUY rezagadas
-# de días viejos del período (mas alla del tope), pero eso ya se habia
-# sincronizado en corridas anteriores del mismo período, cuando el rango
-# calculado aun entraba bajo el tope.
+# Tope duro sobre el ancho de CADA tramo pedido al ERP: con rangos mas anchos
+# que esto el ERP deja de descargar y responde "se enviara por email". El
+# periodo completo (24->23, hasta ~32 dias) se parte en tramos de este ancho
+# via chunks_seguros() para poder pedirlo completo igual, en varias pasadas.
 MAX_DIAS_RANGO = 18
 DOWNLOAD_DIR  = Path(__file__).parent / "downloads"
 DOWNLOAD_DIR.mkdir(exist_ok=True)
@@ -63,35 +55,55 @@ def _parse_ddmmyyyy(s: str) -> date:
     return date(y, m, d)
 
 
-def rango_periodo() -> tuple[date, date]:
-    """Rango a consultar. OJO: el ERP filtra por FECHA DE ENTREGA, no por fecha
-    de pedido — el Excel trae pedidos con FechaPedido anterior al rango pedido.
+def periodo_actual() -> tuple[date, date]:
+    """Rango COMPLETO del periodo de venta vigente: desde el dia 23 (el ultimo
+    dia del periodo anterior, 24->23) hasta hoy.
 
-    Por defecto: período de venta 24->23 (desde el dia 24 vigente hasta hoy),
-    pero retrocediendo DIAS_SOLAPE dias mas.
+    Por que desde el 23 y no el 24: el ERP filtra el informe por FECHA DE
+    ENTREGA, no por fecha de pedido. Arrancar justo el dia 24 deja fuera para
+    siempre los pedidos entregados el 23 o antes del periodo anterior. Paso de
+    verdad: el pedido 00052061 de Zaatar (23-jul, entregado el 23-jul) nunca
+    se cargo hasta que se pidio ese rango a mano.
 
-    Por que el solape: como el filtro es por fecha de ENTREGA, arrancar justo
-    el dia 24 deja fuera para siempre los pedidos entregados el 23 o antes —
-    el periodo anterior ya no se vuelve a consultar. Paso de verdad: el pedido
-    00052061 de Zaatar (23-jul, entregado el 23-jul) nunca se cargo hasta que
-    se pidio ese rango a mano. Con el solape esas entregas rezagadas entran
-    solas. Recargar dias ya cargados no duplica: /api/upload-ventas borra por
-    (vendedor_actual, fecha_pedido) antes de insertar."""
+    Por que el periodo COMPLETO y no solo lo reciente (hasta 25-ago-2026): con
+    ventana corta, un pedido que el ERP borro por completo nunca vuelve a
+    aparecer en ningun archivo futuro y queda huerfano en la BD para siempre
+    — se detectaron 150 pedidos fantasma (5.284 L) acumulados asi en jul-ago
+    2026. Pidiendo el periodo completo en cada corrida, /api/upload-ventas
+    puede reconciliar (borrar) esos huerfanos dentro del rango que cubre cada
+    descarga. Recargar dias ya cargados no duplica: se borra por pedido antes
+    de insertar."""
     hoy = date.today()
     if hoy.day >= 24:
-        desde = hoy.replace(day=24)
+        inicio = hoy.replace(day=24)
     else:
         primero = hoy.replace(day=1)
-        desde = (primero - timedelta(days=1)).replace(day=24)
-    desde -= timedelta(days=DIAS_SOLAPE)
-    tope = date.today() - timedelta(days=MAX_DIAS_RANGO)
-    if desde < tope:
-        desde = tope
-    if FECHA_DESDE:
-        desde = _parse_ddmmyyyy(FECHA_DESDE)
-    if FECHA_HASTA:
-        hoy = _parse_ddmmyyyy(FECHA_HASTA)
-    return desde, hoy
+        inicio = (primero - timedelta(days=1)).replace(day=24)
+    return inicio - timedelta(days=1), hoy
+
+
+def chunks_seguros(desde: date, hasta: date) -> list[tuple[date, date]]:
+    """Parte [desde, hasta] en tramos de a lo mas MAX_DIAS_RANGO dias — el ERP
+    rechaza la descarga directa ("se enviara por email") con rangos mas
+    anchos. Cada tramo se pide y se sube por separado."""
+    tramos = []
+    cursor = desde
+    while cursor <= hasta:
+        fin = min(cursor + timedelta(days=MAX_DIAS_RANGO), hasta)
+        tramos.append((cursor, fin))
+        cursor = fin + timedelta(days=1)
+    return tramos
+
+
+def tramos_a_pedir() -> list[tuple[date, date]]:
+    """Tramos a descargar en esta corrida. FECHA_DESDE/FECHA_HASTA (solo via
+    workflow_dispatch, para diagnostico manual) piden un unico rango exacto
+    sin trocear. Por defecto: el periodo completo vigente, en tramos seguros."""
+    if FECHA_DESDE or FECHA_HASTA:
+        desde = _parse_ddmmyyyy(FECHA_DESDE) if FECHA_DESDE else periodo_actual()[0]
+        hasta = _parse_ddmmyyyy(FECHA_HASTA) if FECHA_HASTA else date.today()
+        return [(desde, hasta)]
+    return chunks_seguros(*periodo_actual())
 
 
 # =============================================================================
@@ -314,37 +326,50 @@ def main() -> int:
         print(f"ERROR: faltan variables de entorno: {', '.join(faltan)}")
         return 1
 
-    desde, hasta = rango_periodo()
-    print(f"=== ERP SYNC | periodo {desde} -> {hasta} ===")
+    tramos = tramos_a_pedir()
+    print(f"=== ERP SYNC | {len(tramos)} tramo(s) === {tramos}")
 
+    huerfanos_total = 0
+    con_error = 0
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=HEADLESS)
         context = browser.new_context(accept_downloads=True)
         page = context.new_page()
         login(page)
-        print("[3/4] Navegando al informe y descargando...")
-        archivo = navegar_y_descargar(page, desde, hasta)
+        for i, (desde, hasta) in enumerate(tramos, 1):
+            print(f"[3/4] Tramo {i}/{len(tramos)}: {desde} -> {hasta}")
+            try:
+                archivo = navegar_y_descargar(page, desde, hasta)
+            except Exception as e:
+                print(f"   ERROR descargando tramo {desde}->{hasta}: {e}")
+                con_error += 1
+                continue
+
+            if SOLO_DESCARGAR:
+                print("   SOLO_DESCARGAR=true: el Excel queda como artifact, NO se sube")
+                continue
+
+            try:
+                resultado = subir_a_pwa(archivo)
+            except SinDatosAun as e:
+                print(f"   sin datos todavia ({e}) — normal")
+                continue
+            except RuntimeError as e:
+                print(f"   ERROR subiendo tramo {desde}->{hasta}: {e}")
+                con_error += 1
+                continue
+
+            huerfanos = resultado.get("pedidosHuerfanosBorrados") or 0
+            huerfanos_total += huerfanos
+            print(f"   insertadas={resultado.get('insertadas')} "
+                  f"rango={resultado.get('fechaMin')}->{resultado.get('fechaMax')} "
+                  f"huerfanos_borrados={huerfanos}")
         browser.close()
 
-    if SOLO_DESCARGAR:
-        print("=== SOLO_DESCARGAR=true: el Excel queda como artifact, NO se sube ===")
-        return 0
-
-    try:
-        resultado = subir_a_pwa(archivo)
-    except SinDatosAun as e:
-        print(f"=== SIN DATOS TODAVIA ({e}) — normal, no es un error ===")
-        return 0
-
-    print("=== RESULTADO ===")
-    print(f"  Insertadas        : {resultado.get('insertadas')}")
-    print(f"    entregadas      : {resultado.get('entregadas')}")
-    print(f"    por entregar    : {resultado.get('pendientesDeEntrega')}")
-    print(f"  Rango cargado     : {resultado.get('fechaMin')} -> {resultado.get('fechaMax')}")
-    print(f"  Internos excluidos: {resultado.get('clientesInternosExcluidos')}")
-    for v in resultado.get("vendedores", []):
-        print(f"  {v.get('nombre')}: {v.get('filas')} filas | {v.get('litros')} L | {v.get('fechas')} dias")
-    return 0
+    print("=== RESUMEN ===")
+    print(f"  Tramos con error  : {con_error}/{len(tramos)}")
+    print(f"  Pedidos huerfanos borrados (reconciliacion): {huerfanos_total}")
+    return 1 if con_error == len(tramos) else 0
 
 
 if __name__ == "__main__":
