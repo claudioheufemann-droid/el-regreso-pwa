@@ -139,7 +139,7 @@ function DeudaBadge({ deudor }: { deudor: Deudor | undefined }) {
     <span style={{ fontSize: 9, fontWeight: 700, color: '#059669', background: '#ECFDF5', border: '1px solid #ECFDF5', padding: '2px 7px', borderRadius: 20 }}>Al día</span>
   )
   if (deudor.deuda_vencida > 0) return (
-    <span style={{ fontSize: 9, fontWeight: 700, color: '#D97706', background: '#FFFBEB', border: '1px solid #FFFBEB', padding: '2px 7px', borderRadius: 20 }}>
+    <span style={{ fontSize: 9, fontWeight: 700, color: '#92400E', background: '#FFFBEB', border: '1px solid #FFFBEB', padding: '2px 7px', borderRadius: 20 }}>
       ⚠ {fmtCompact(deudor.deuda_vencida)}
     </span>
   )
@@ -153,7 +153,7 @@ function DeudaBadge({ deudor }: { deudor: Deudor | undefined }) {
 // ── Panel deuda ───────────────────────────────────────────────────────────────
 function PanelDeuda({ deudor }: { deudor: Deudor }) {
   const esVencida = deudor.deuda_vencida > 0
-  const color = esVencida ? '#D97706' : deudor.saldo_total > 0 ? T : '#059669'
+  const color = esVencida ? '#92400E' : deudor.saldo_total > 0 ? T : '#059669'
   const rgb   = esVencida ? '220,38,38' : deudor.saldo_total > 0 ? '217,119,6' : '5,150,105'
   const tramos = [
     { label: '< 14 días',  val: deudor.deuda_menor_14_dias       ?? 0 },
@@ -174,31 +174,31 @@ function PanelDeuda({ deudor }: { deudor: Deudor }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: tramos.length ? 12 : 0 }}>
         <div>
-          <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Saldo total</p>
+          <p style={{ fontSize: 9, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Saldo total</p>
           <p style={{ fontSize: 18, fontWeight: 900, color, letterSpacing: '-0.5px' }}>{fmtPeso(deudor.saldo_total)}</p>
         </div>
         <div>
-          <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Deuda vencida</p>
-          <p style={{ fontSize: 18, fontWeight: 900, color: deudor.deuda_vencida > 0 ? '#D97706' : '#059669', letterSpacing: '-0.5px' }}>
+          <p style={{ fontSize: 9, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Deuda vencida</p>
+          <p style={{ fontSize: 18, fontWeight: 900, color: deudor.deuda_vencida > 0 ? '#92400E' : '#059669', letterSpacing: '-0.5px' }}>
             {deudor.deuda_vencida > 0 ? fmtPeso(deudor.deuda_vencida) : 'Sin vencer'}
           </p>
         </div>
         {deudor.ultimo_pago && (
           <div>
-            <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Último pago</p>
+            <p style={{ fontSize: 9, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Último pago</p>
             <p style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{fmtFecha(deudor.ultimo_pago)}</p>
           </div>
         )}
         {deudor.limite_cta_cte && deudor.limite_cta_cte > 0 && (
           <div>
-            <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Límite</p>
+            <p style={{ fontSize: 9, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Límite</p>
             <p style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{fmtPeso(deudor.limite_cta_cte)}</p>
           </div>
         )}
       </div>
       {tramos.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 2 }}>Antigüedad de deuda</p>
+          <p style={{ fontSize: 9, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 2 }}>Antigüedad de deuda</p>
           {tramos.map(t => (
             <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
               <span style={{ fontSize: 11, color: '#64748B' }}>{t.label}</span>
@@ -242,13 +242,13 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
         ].map(s => (
           <div key={s.label} style={{ background: '#F1F5F9', border: '1px solid #F1F5F9', borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
             <p style={{ fontSize: 15, fontWeight: 900, color: T, letterSpacing: '-0.3px' }}>{s.val}</p>
-            <p style={{ fontSize: 9, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 3 }}>{s.label}</p>
+            <p style={{ fontSize: 9, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 3 }}>{s.label}</p>
           </div>
         ))}
       </div>
       {topSorted.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Top productos</p>
+          <p style={{ fontSize: 9, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Top productos</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {topSorted.map(([prod, cant]) => (
               <div key={prod} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: '#F1F5F9', borderRadius: 8 }}>
@@ -283,19 +283,19 @@ function PanelHistorialCliente({ clienteNombre, ventasHist, visitasCliente, item
                   ))}
                 </div>
               )}
-              {v.motivo_sin_venta && <p style={{ fontSize: 10, color: '#94A3B8', marginTop: 3 }}>{v.motivo_sin_venta}</p>}
+              {v.motivo_sin_venta && <p style={{ fontSize: 10, color: '#64748B', marginTop: 3 }}>{v.motivo_sin_venta}</p>}
             </div>
           ))}
         </div>
       )}
       {tab === 'ventas' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 260, overflowY: 'auto' }}>
-          {ventasHist.length === 0 && <p style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', padding: '12px 0' }}>Sin ventas históricas</p>}
+          {ventasHist.length === 0 && <p style={{ fontSize: 12, color: '#64748B', textAlign: 'center', padding: '12px 0' }}>Sin ventas históricas</p>}
           {ventasHist.slice(0, 30).map((v, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: '#F1F5F9', borderRadius: 9 }}>
               <div>
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{v.producto}</p>
-                <p style={{ fontSize: 10, color: '#94A3B8' }}>{v.fecha_pedido ? fmtFecha(v.fecha_pedido) : '—'}{v.litros ? ` · ${v.litros}L` : ''}</p>
+                <p style={{ fontSize: 10, color: '#64748B' }}>{v.fecha_pedido ? fmtFecha(v.fecha_pedido) : '—'}{v.litros ? ` · ${v.litros}L` : ''}</p>
               </div>
               <p style={{ fontSize: 12, fontWeight: 700, color: T }}>{v.total_sin_impuesto ? fmtCompact(v.total_sin_impuesto) : '—'}</p>
             </div>
@@ -425,8 +425,8 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
   ].filter(f => f.src)
 
   const tieneVenta     = visita.tiene_venta === true
-  const borderColor    = tieneVenta ? '#E2E8F0' : '#F1F5F9'
-  const bgCard         = tieneVenta ? '#E2E8F0' : '#F1F5F9'
+  const borderColor    = '#E2E8F0'
+  const bgCard         = '#FFFFFF'
   const accentLeft     = tieneVenta ? T : 'transparent'
 
   return (
@@ -461,7 +461,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
             <div style={{ flex: 1, minWidth: 0 }}>
               {/* Nombre + badges */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 5 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: '#F0EDE8', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
                   {visita.cliente_nombre}
                 </span>
                 {visita.es_cliente_nuevo && (
@@ -469,21 +469,21 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 )}
                 <DeudaBadge deudor={deudor} />
                 {!fotosCompletas(visita) && (
-                  <span style={{ fontSize: 8, fontWeight: 800, color: '#D4AF37', background: '#E2E8F0', border: '1px solid #CBD5E1', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Fotos pendientes</span>
+                  <span style={{ fontSize: 8, fontWeight: 800, color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', padding: '2px 6px', borderRadius: 10, flexShrink: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Fotos pendientes</span>
                 )}
               </div>
               {/* Meta secundaria */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 3 }}>
+                <span style={{ fontSize: 11, color: '#64748B', display: 'flex', alignItems: 'center', gap: 3 }}>
                   <Clock size={10} />
                   {fmtHora(visita.iniciada_at)}
                   {visita.completada_at ? ` → ${fmtHora(visita.completada_at)}` : ''}
                 </span>
                 {vendedorNombre && (
-                  <span style={{ fontSize: 11, color: '#94A3B8' }}>· {vendedorNombre.split(' ')[0]}</span>
+                  <span style={{ fontSize: 11, color: '#64748B' }}>· {vendedorNombre.split(' ')[0]}</span>
                 )}
                 {fotoEntries.length > 0 && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#E2E8F0' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#64748B' }}>
                     <Camera size={9} /> {fotoEntries.length}
                   </span>
                 )}
@@ -522,7 +522,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 </button>
               )}
 
-              <div style={{ color: '#94A3B8', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>
+              <div style={{ color: '#64748B', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>
                 <ChevronDown size={16} />
               </div>
             </div>
@@ -531,7 +531,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
           {/* Footer de la card: items resumen */}
           {items.length > 0 && (
             <div style={{ marginTop: 12, marginLeft: 58, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 10, color: '#94A3B8' }}>
+              <span style={{ fontSize: 10, color: '#64748B' }}>
                 {totalItems} ud. · {items.length} producto{items.length !== 1 ? 's' : ''}
               </span>
               {items.slice(0, 3).map(item => (
@@ -540,7 +540,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 </span>
               ))}
               {items.length > 3 && (
-                <span style={{ fontSize: 9, color: '#94A3B8' }}>+{items.length - 3}</span>
+                <span style={{ fontSize: 9, color: '#64748B' }}>+{items.length - 3}</span>
               )}
             </div>
           )}
@@ -572,26 +572,26 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 {/* Items pedido */}
                 {items.length > 0 ? (
                   <div style={{ marginBottom: 12 }}>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
                       Detalle · {items.length} productos · {totalItems} unidades
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                       {items.map(item => (
                         <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#F1F5F9', border: '1px solid #F1F5F9', borderRadius: 12 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontSize: 13, fontWeight: 700, color: '#F0EDE8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{item.producto}</p>
-                            <p style={{ fontSize: 10, color: '#94A3B8' }}>{item.categoria}{item.envase ? ` · ${item.envase}` : ''} · {fmtPeso(item.precio_unit)} c/u</p>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{item.producto}</p>
+                            <p style={{ fontSize: 10, color: '#64748B' }}>{item.categoria}{item.envase ? ` · ${item.envase}` : ''} · {fmtPeso(item.precio_unit)} c/u</p>
                           </div>
                           <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 14 }}>
                             <p style={{ fontSize: 14, fontWeight: 900, color: T, letterSpacing: '-0.3px' }}>×{item.cantidad}</p>
-                            <p style={{ fontSize: 11, color: '#94A3B8' }}>{fmtPeso(item.subtotal)}</p>
+                            <p style={{ fontSize: 11, color: '#64748B' }}>{fmtPeso(item.subtotal)}</p>
                           </div>
                         </div>
                       ))}
                     </div>
                     {visita.total_pedido && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 12px 0', marginTop: 8, borderTop: '1px solid #F1F5F9' }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total pedido</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total pedido</span>
                         <span style={{ fontSize: 18, fontWeight: 900, color: T, letterSpacing: '-0.5px' }}>{fmtPeso(visita.total_pedido)}</span>
                       </div>
                     )}
@@ -606,15 +606,15 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                 {/* Observaciones */}
                 {visita.observaciones && (
                   <div style={{ marginBottom: 12, padding: '12px 14px', background: '#F1F5F9', borderRadius: 12, border: '1px solid #F1F5F9' }}>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 5 }}>Observaciones</p>
-                    <p style={{ fontSize: 12, color: '#F0EDE8', lineHeight: 1.5 }}>{visita.observaciones}</p>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 5 }}>Observaciones</p>
+                    <p style={{ fontSize: 12, color: '#0F172A', lineHeight: 1.5 }}>{visita.observaciones}</p>
                   </div>
                 )}
 
                 {/* Fotos */}
                 {fotoEntries.length > 0 && (
                   <div style={{ marginBottom: 12 }}>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>
                       Fotos del local
                     </p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(64px, 1fr))', gap: 8 }}>
@@ -624,7 +624,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={f.src} alt={f.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           </div>
-                          <p style={{ fontSize: 9, color: '#E2E8F0', textAlign: 'center', marginTop: 5, fontWeight: 600 }}>{f.label}</p>
+                          <p style={{ fontSize: 9, color: '#64748B', textAlign: 'center', marginTop: 5, fontWeight: 600 }}>{f.label}</p>
                         </button>
                       ))}
                     </div>
@@ -805,7 +805,7 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
         }}>
           {user.isAdmin && (
             <div>
-              <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>Vendedor</p>
+              <p style={{ fontSize: 9, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>Vendedor</p>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {[{ id: 'todos', nombre: 'Todos' }, ...vendedores].map(v => (
                   <button key={v.id} onClick={() => setFiltroVendedor(v.id)} style={{
@@ -819,7 +819,7 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
             </div>
           )}
           <div>
-            <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>Resultado</p>
+            <p style={{ fontSize: 9, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>Resultado</p>
             <div style={{ display: 'flex', gap: 6 }}>
               {([
                 { key: 'todos', label: 'Todos', color: '#64748B', accent: T },
@@ -851,12 +851,12 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
         }}>
           {/* Glow decoration */}
           <div style={{ position: 'absolute', top: -40, right: -40, width: 120, height: 120, borderRadius: '50%', background: '#E2E8F0', filter: 'blur(30px)', pointerEvents: 'none' }} />
-          <p style={{ fontSize: 9, fontWeight: 700, color: '#E2E8F0', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 8 }}>Total facturado</p>
+          <p style={{ fontSize: 9, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 8 }}>Total facturado</p>
           <p style={{ fontSize: 36, fontWeight: 900, color: T, letterSpacing: '-1.5px', lineHeight: 1 }}>
             {kpis.totalFacturado > 0 ? fmtPeso(kpis.totalFacturado) : '—'}
           </p>
           {kpis.total > 0 && (
-            <p style={{ fontSize: 12, color: '#94A3B8', marginTop: 8, fontWeight: 500 }}>
+            <p style={{ fontSize: 12, color: '#64748B', marginTop: 8, fontWeight: 500 }}>
               {conversionRate}% conversión · {kpis.total} visitas registradas
             </p>
           )}
@@ -876,7 +876,7 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
               borderRadius: 16, padding: '12px 10px', textAlign: 'center',
             }}>
               <p style={{ fontSize: 18, fontWeight: 900, color: k.color, letterSpacing: '-0.5px', lineHeight: 1, marginBottom: 5 }}>{k.val}</p>
-              <p style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</p>
+              <p style={{ fontSize: 9, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</p>
             </div>
           ))}
         </div>
@@ -885,8 +885,8 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
         {grupos.length === 0 ? (
           <div style={{ textAlign: 'center', paddingTop: 56 }}>
             <Package size={40} color="#E2E8F0" style={{ margin: '0 auto 16px', display: 'block' }} />
-            <p style={{ fontSize: 15, color: '#94A3B8', fontWeight: 500 }}>Sin visitas registradas</p>
-            <p style={{ fontSize: 12, color: '#E2E8F0', marginTop: 6 }}>Ajusta los filtros o registra una nueva visita</p>
+            <p style={{ fontSize: 15, color: '#64748B', fontWeight: 500 }}>Sin visitas registradas</p>
+            <p style={{ fontSize: 12, color: '#64748B', marginTop: 6 }}>Ajusta los filtros o registra una nueva visita</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -902,7 +902,7 @@ export default function HistorialClient({ user, visitas: visitasIniciales, items
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'capitalize', letterSpacing: '0.1px' }}>
                         {labelFecha(fecha + 'T12:00:00')}
                       </span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', background: '#F1F5F9', padding: '2px 7px', borderRadius: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', background: '#E2E8F0', padding: '2px 7px', borderRadius: 10 }}>
                         {grupo.length}
                       </span>
                       {facturadoDia > 0 && (

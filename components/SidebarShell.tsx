@@ -46,39 +46,44 @@ export default function SidebarShell({ moduleName, sectionLabel, navItems, cta }
       top: 0,
     }}>
       {/* Header */}
-      <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <Logo size={28} />
-          <div>
-            <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>
+      <div style={{ padding: '20px 18px 16px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <Logo size={34} />
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 17, fontWeight: 800, color: 'var(--cream)', letterSpacing: '-0.3px', lineHeight: 1.15 }}>
               El Regreso
             </p>
-            <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+            <span style={{
+              display: 'inline-block', marginTop: 3,
+              fontSize: 10, fontWeight: 800, color: 'var(--gold)',
+              letterSpacing: '0.6px', textTransform: 'uppercase',
+              background: 'var(--gold-dim)', borderRadius: 5, padding: '2px 7px',
+            }}>
               {moduleName}
-            </p>
+            </span>
           </div>
         </div>
         <Link
           href="/"
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            padding: '6px 10px', borderRadius: 9,
+            padding: '8px 10px', borderRadius: 9,
             background: 'rgba(212,175,55,0.06)',
             border: '1px solid rgba(212,175,55,0.12)',
-            color: '#A08830', fontSize: 11, fontWeight: 600,
+            color: '#A08830', fontSize: 13, fontWeight: 600,
             textDecoration: 'none', transition: 'background 0.12s',
           }}
           onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.12)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.06)')}
         >
-          <Home size={12} />
+          <Home size={14} />
           Cambiar módulo
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
-        <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.5px', textTransform: 'uppercase', padding: '3px 10px 6px' }}>
+      <nav style={{ padding: '12px 10px', flex: 1, overflowY: 'auto' }}>
+        <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '1.2px', textTransform: 'uppercase', padding: '4px 10px 8px' }}>
           {sectionLabel}
         </p>
         {visibleItems.map(({ href, icon: Icon, label, exact }) => {
@@ -90,17 +95,17 @@ export default function SidebarShell({ moduleName, sectionLabel, navItems, cta }
               key={href}
               href={href}
               style={{
-                display: 'flex', alignItems: 'center', gap: 9,
-                padding: '8px 12px', borderRadius: 10, marginBottom: 2,
-                color: active ? 'var(--gold)' : 'var(--muted)',
+                display: 'flex', alignItems: 'center', gap: 11,
+                padding: '11px 12px', borderRadius: 10, marginBottom: 3,
+                color: active ? 'var(--gold)' : 'var(--cream)',
                 background: active ? 'var(--gold-dim)' : 'transparent',
-                fontWeight: active ? 700 : 600, fontSize: 12,
+                fontWeight: active ? 700 : 600, fontSize: 14,
                 textDecoration: 'none', transition: 'background 0.12s, color 0.12s',
               }}
               onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--gold-hover)' }}
               onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
             >
-              <Icon size={16} />
+              <Icon size={18} />
               {label}
             </Link>
           )
@@ -109,22 +114,22 @@ export default function SidebarShell({ moduleName, sectionLabel, navItems, cta }
       </nav>
 
       {/* Footer */}
-      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)' }}>
+      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             {user && (
               <Avatar
                 iniciales={user.iniciales}
                 userId={user.id}
-                size={34}
+                size={38}
                 avatarUrl={user.avatarUrl}
               />
             )}
             <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', letterSpacing: '-0.2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', letterSpacing: '-0.2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user?.nombre}
               </p>
-              <p style={{ fontSize: 9, color: isAdmin ? '#A78BFA' : 'var(--muted)', fontWeight: 600, marginTop: 1 }}>
+              <p style={{ fontSize: 11, color: isAdmin ? '#A78BFA' : 'var(--muted)', fontWeight: 600, marginTop: 1 }}>
                 {isAdmin ? 'Administrador' : 'Vendedor'}
               </p>
             </div>
@@ -140,7 +145,7 @@ export default function SidebarShell({ moduleName, sectionLabel, navItems, cta }
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#F87171'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--muted)'}
           >
-            <LogOut size={15} />
+            <LogOut size={16} />
           </button>
         </div>
       </div>

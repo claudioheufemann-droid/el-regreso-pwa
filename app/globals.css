@@ -33,7 +33,7 @@
   --row-sep: rgba(255, 255, 255, 0.05);
   --row-separator: rgba(255, 255, 255, 0.05);
   --spring: cubic-bezier(0.16, 1, 0.3, 1);
-  --sidebar-w: 240px;
+  --sidebar-w: 264px;
   /* ── Escala tipográfica (5 pasos) ── */
   --text-xs:  10px;  /* labels uppercase, eyebrow, badges */
   --text-sm:  12px;  /* body secundario, chips, botones */

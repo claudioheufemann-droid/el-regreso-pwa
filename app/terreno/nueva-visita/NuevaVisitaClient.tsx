@@ -352,9 +352,15 @@ export default function NuevaVisitaClient({
       <input ref={fileCameraRef} type="file" accept="image/*" capture="environment" hidden onChange={onFileElegido} />
       <input ref={fileGaleriaRef} type="file" accept="image/*" hidden onChange={onFileElegido} />
 
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
-        {/* Encabezado */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 16px' }}>
+        {/* Encabezado — sticky: en el paso de venta el catálogo es largo y
+            sin esto "Volver" desaparecía apenas se hacía scroll buscando
+            un producto. */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 40,
+          background: C.bg, margin: '0 -16px', padding: '20px 16px 14px',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
           <button
             onClick={() => cliente ? cancelar() : router.push('/terreno')}
             aria-label="Volver"

@@ -34,17 +34,22 @@ export async function GET(req: NextRequest) {
   // Obtener perfil público del usuario
   const { data: profile } = await supabase
     .from('users')
-    .select('id, avatar_url')
+    .select('id, auth_id, avatar_url')
     .eq('email', user.email!)
     .maybeSingle()
 
   if (profile) {
+    const cambios: Record<string, string> = {}
     // Solo actualizar si no tiene foto propia ya o si cambió
-    if (googleAvatar && profile.avatar_url !== googleAvatar) {
-      await supabase
-        .from('users')
-        .update({ avatar_url: googleAvatar })
-        .eq('id', profile.id)
+    if (googleAvatar && profile.avatar_url !== googleAvatar) cambios.avatar_url = googleAvatar
+    // Vincula la identidad de Google (user.id, DISTINTA de profile.id cuando
+    // la cuenta ya existía por email/password) para que el panel de admin y
+    // cualquier consulta por auth_id la reconozcan. NO se toca profile.id —
+    // ese es el id estable del que dependen las FK de toda la app.
+    if (profile.auth_id !== user.id) cambios.auth_id = user.id
+
+    if (Object.keys(cambios).length > 0) {
+      await supabase.from('users').update(cambios).eq('id', profile.id)
     }
   }
 

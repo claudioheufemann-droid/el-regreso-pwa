@@ -2,17 +2,17 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, TrendingUp, Plus, Trash2, Save, Beer } from 'lucide-react'
+import { ChevronLeft, TrendingUp, Plus, Trash2, Save, Beer, Percent, ArrowRight, Lock, Pencil } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { createClient } from '@/lib/supabase/client'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import type { AppUser } from '@/lib/auth'
 import {
-  type CostoPrecio, type Zona, type Formato, type ItemSimulacion,
-  ZONA_LABEL, SEMAFORO_COLOR,
-  desglosePrecio, calcularMargen, semaforoDeMargen, descuentoMaximoPct,
-  simular, fmtCLP, fmtPct,
+  type CostoPrecio, type Zona, type Formato, type ItemSimulacion, type PromoTramo,
+  ZONA_LABEL, SEMAFORO_COLOR, PROMO_PRESETS, MARGEN_PRESETS,
+  desglosePrecio, calcularMargen, semaforoDeMargen, descuentoMaximoPct, precioNetoParaMargen,
+  simular, simularPromo, promoAItemSimulacion, fmtCLP, fmtPct,
 } from '@/lib/rentabilidad'
 
 const C = {
@@ -67,7 +67,7 @@ function SemaforoBadge({ pct }: { pct: number }) {
   )
 }
 
-type Tab = 'catalogo' | 'simulador' | 'historial'
+type Tab = 'catalogo' | 'simulador' | 'promociones' | 'historial'
 
 interface SimulacionGuardada {
   id: string
@@ -131,6 +131,15 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
     setItems(prev => prev.filter(i => i.costoPrecioId !== id))
   }
 
+  function usarPromoEnSimulador(item: ItemSimulacion) {
+    setItems(prev => {
+      const existe = prev.find(i => i.costoPrecioId === item.costoPrecioId)
+      if (existe) return prev.map(i => i.costoPrecioId === item.costoPrecioId ? item : i)
+      return [...prev, item]
+    })
+    setTab('simulador')
+  }
+
   async function guardarSimulacion() {
     if (items.length === 0) return
     setGuardandoSim(true)
@@ -159,7 +168,15 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
       .limit(50)
     setCargandoHistorial(false)
     if (error) { console.error('rentabilidad: error cargando historial', error); return }
-    setHistorial((data ?? []) as SimulacionGuardada[])
+    // Mismo caso que costo_neto/precio_neto: columnas numeric vuelven como
+    // string desde PostgREST — se convierten acá antes de formatear.
+    setHistorial((data ?? []).map(s => ({
+      ...s,
+      venta_neta_total: Number(s.venta_neta_total),
+      costo_total: Number(s.costo_total),
+      margen_clp: Number(s.margen_clp),
+      margen_pct: Number(s.margen_pct),
+    })) as SimulacionGuardada[])
   }
 
   function abrirTab(t: Tab) {
@@ -210,7 +227,7 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 6, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 4, marginBottom: 14 }}>
-          {([['catalogo', 'Catálogo'], ['simulador', 'Simulador'], ['historial', 'Historial']] as [Tab, string][]).map(([t, label]) => (
+          {([['catalogo', 'Catálogo'], ['simulador', 'Simulador'], ['promociones', 'Promos'], ['historial', 'Historial']] as [Tab, string][]).map(([t, label]) => (
             <button key={t} onClick={() => abrirTab(t)} style={{
               flex: 1, padding: '9px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
               background: tab === t ? C.hero : 'transparent', color: tab === t ? '#fff' : C.muted,
@@ -268,6 +285,10 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
           />
         )}
 
+        {tab === 'promociones' && (
+          <PromocionesTab filasZona={filasZona} onUsarEnSimulador={usarPromoEnSimulador} />
+        )}
+
         {tab === 'historial' && (
           <HistorialTab cargando={cargandoHistorial} historial={historial} />
         )}
@@ -285,26 +306,80 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
   )
 }
 
+function LineaDato({ label, valor, destacado, sub }: { label: string; valor: string; destacado?: boolean; sub?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: sub ? '3px 0 3px 10px' : '4px 0' }}>
+      <span style={{ fontSize: sub ? 11 : 12, color: destacado ? C.text : C.muted, fontWeight: destacado ? 700 : 500 }}>{label}</span>
+      <span style={{ fontSize: destacado ? 13.5 : 12, color: C.text, fontWeight: destacado ? 800 : 600 }}>{valor}</span>
+    </div>
+  )
+}
+
+function nearestMargenPreset(margenPct: number): number {
+  return MARGEN_PRESETS.reduce((prev, curr) => Math.abs(curr - margenPct) < Math.abs(prev - margenPct) ? curr : prev)
+}
+
+/** Inverso de precioNetoParaMargen: de un monto de utilidad fijo (sobre un costo fijo) al % de contribución que representa. */
+function utilidadAMargenPct(costoNeto: number, utilidadClp: number): number {
+  const total = costoNeto + utilidadClp
+  return total > 0 ? utilidadClp / total : 0
+}
+
 function FilaProducto({ cp, guardando, onGuardar }: { cp: CostoPrecio; guardando: boolean; onGuardar: (id: string, campo: 'costo_neto' | 'precio_neto', valor: number) => void }) {
+  const [editando, setEditando] = useState(false)
   const [costo, setCosto] = useState(String(cp.costo_neto || ''))
   const [precio, setPrecio] = useState(String(cp.precio_neto || ''))
+
   const desglose = desglosePrecio(cp.precio_neto, cp.aplica_ila)
-  const margen = calcularMargen(cp.precio_neto, cp.costo_neto)
+  const margenActual = calcularMargen(cp.precio_neto, cp.costo_neto)
+  const precioLista = cp.precio_neto + desglose.iva
+
+  // El simulador nunca toca precio_neto (fijo, es el dato real). Los dos
+  // controles que "juegan" son % de contribución y monto de utilidad —
+  // cambiar uno recalcula el otro sobre el costo fijo; de ahí se deriva
+  // solo el precio final para el cliente, como vista, no como edición.
+  const [margenSel, setMargenSel] = useState(() => nearestMargenPreset(margenActual.margenPct))
+  const costoValido = cp.costo_neto > 0
+  const utilidadClp = costoValido ? precioNetoParaMargen(cp.costo_neto, margenSel)! - cp.costo_neto : null
+  const precioClienteSimulado = costoValido && utilidadClp !== null
+    ? desglosePrecio(cp.costo_neto + utilidadClp, cp.aplica_ila).precioCliente
+    : null
+
+  function onCambiarMargen(pct: number) {
+    setMargenSel(Math.max(0, Math.min(0.99, pct)))
+  }
+  function onCambiarUtilidad(monto: number) {
+    setMargenSel(Math.max(0, Math.min(0.99, utilidadAMargenPct(cp.costo_neto, monto))))
+  }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: C.card, borderRadius: 12, border: `1px solid ${C.line}`, marginBottom: 6, opacity: guardando ? 0.6 : 1 }}>
-      <ProductoThumb codigo={cp.codigo} categoria={cp.categoria} formato={cp.formato} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+    <div style={{ padding: '12px 14px', background: C.card, borderRadius: 14, border: `1px solid ${C.line}`, marginBottom: 8, opacity: guardando ? 0.6 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <ProductoThumb codigo={cp.codigo} categoria={cp.categoria} formato={cp.formato} />
+        <p style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {cp.producto}
         </p>
-        <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => setEditando(v => !v)}
+          title={editando ? 'Bloquear costo y precio neto' : 'Editar costo y precio neto'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+            background: editando ? C.amberSoft : 'transparent', border: `1px solid ${editando ? C.amber : C.line}`,
+            borderRadius: 8, padding: '4px 8px', cursor: 'pointer', color: editando ? C.amber : C.faint, fontSize: 10.5, fontWeight: 700,
+          }}
+        >
+          {editando ? <><Pencil size={11} /> Editando</> : <><Lock size={11} /> Fijo</>}
+        </button>
+      </div>
+
+      {editando ? (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.muted }}>
             Costo
             <input
               type="number" value={costo} onChange={e => setCosto(e.target.value)}
               onBlur={() => onGuardar(cp.id, 'costo_neto', parseFloat(costo) || 0)}
-              style={{ width: 72, padding: '3px 6px', borderRadius: 6, border: `1px solid ${C.line}`, fontSize: 12, color: C.text }}
+              style={{ width: 80, padding: '4px 6px', borderRadius: 6, border: `1px solid ${C.line}`, fontSize: 12, color: C.text }}
             />
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.muted }}>
@@ -312,17 +387,55 @@ function FilaProducto({ cp, guardando, onGuardar }: { cp: CostoPrecio; guardando
             <input
               type="number" value={precio} onChange={e => setPrecio(e.target.value)}
               onBlur={() => onGuardar(cp.id, 'precio_neto', parseFloat(precio) || 0)}
-              style={{ width: 72, padding: '3px 6px', borderRadius: 6, border: `1px solid ${C.line}`, fontSize: 12, color: C.text }}
+              style={{ width: 80, padding: '4px 6px', borderRadius: 6, border: `1px solid ${C.line}`, fontSize: 12, color: C.text }}
             />
           </label>
         </div>
-        <p style={{ fontSize: 10.5, color: C.faint, marginTop: 3 }}>
-          Cliente: {fmtCLP(desglose.precioCliente)} (IVA {fmtCLP(desglose.iva)}{cp.aplica_ila ? ` + ILA ${fmtCLP(desglose.ila)}` : ''})
-        </p>
+      ) : (
+        <div style={{ marginBottom: 4 }}>
+          <LineaDato label="Costo" valor={fmtCLP(cp.costo_neto)} destacado />
+          <LineaDato label="Precio Neto" valor={fmtCLP(cp.precio_neto)} destacado />
+          <LineaDato label="IVA (19%)" valor={`+ ${fmtCLP(desglose.iva)}`} sub />
+          <LineaDato label="Precio Lista (Neto + IVA)" valor={fmtCLP(precioLista)} />
+          {cp.aplica_ila && <LineaDato label="ILA (20,5%)" valor={`+ ${fmtCLP(desglose.ila)}`} sub />}
+          <LineaDato label="Precio Final Cliente" valor={fmtCLP(desglose.precioCliente)} destacado />
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0 2px', borderTop: `1px dashed ${C.line}`, marginTop: 4 }}>
+        <span style={{ fontSize: 11, color: C.faint }}>Margen actual</span>
+        <SemaforoBadge pct={margenActual.margenPct} />
       </div>
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <p style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{fmtCLP(margen.margenClp)}</p>
-        <div style={{ marginTop: 3 }}><SemaforoBadge pct={margen.margenPct} /></div>
+
+      <div style={{ background: C.bg, borderRadius: 10, padding: 10, marginTop: 6 }}>
+        <p style={{ fontSize: 11.5, color: C.muted, fontWeight: 700, marginBottom: 8 }}>Jugar con el margen (costo fijo, no toca el precio neto)</p>
+        {!costoValido ? (
+          <p style={{ fontSize: 11, color: C.faint }}>Falta cargar el costo de este producto para simular un margen.</p>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: 10.5, color: C.faint }}>% de contribución</span>
+                <select
+                  value={margenSel}
+                  onChange={e => onCambiarMargen(parseFloat(e.target.value))}
+                  style={{ padding: '6px 8px', borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 12.5, fontWeight: 700, color: C.text, background: C.card }}
+                >
+                  {MARGEN_PRESETS.map(m => <option key={m} value={m}>{fmtPct(m)}</option>)}
+                </select>
+              </label>
+              <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: 10.5, color: C.faint }}>Monto de utilidad</span>
+                <input
+                  type="number" value={Math.round(utilidadClp ?? 0)}
+                  onChange={e => onCambiarUtilidad(parseFloat(e.target.value) || 0)}
+                  style={{ padding: '6px 8px', borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 12.5, fontWeight: 700, color: C.text, background: C.card }}
+                />
+              </label>
+            </div>
+            <LineaDato label="Precio final para el cliente" valor={precioClienteSimulado !== null ? fmtCLP(precioClienteSimulado) : '—'} destacado />
+          </>
+        )}
       </div>
     </div>
   )
@@ -465,6 +578,200 @@ function SimuladorTab({ filasZona, items, resumen, nota, guardando, onAgregar, o
             </button>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+function PromocionesTab({ filasZona, onUsarEnSimulador }: {
+  filasZona: CostoPrecio[]
+  onUsarEnSimulador: (item: ItemSimulacion) => void
+}) {
+  const [busca, setBusca] = useState('')
+  const [productoSel, setProductoSel] = useState<CostoPrecio | null>(null)
+  const [presetIdx, setPresetIdx] = useState<number | 'custom'>(0)
+  const [custom, setCustom] = useState<PromoTramo>({ nombre: 'Personalizada', cantidadGrupo: 2, descuentosPct: [0, 0.5], repetir: false })
+  const [cantidad, setCantidad] = useState(6)
+
+  const resultados = useMemo(
+    () => filasZona.filter(f => f.producto.toLowerCase().includes(busca.toLowerCase())),
+    [filasZona, busca]
+  )
+
+  const promo: PromoTramo = presetIdx === 'custom' ? custom : PROMO_PRESETS[presetIdx]
+  const resumen = productoSel ? simularPromo(productoSel, cantidad, promo) : null
+  const comparacion = useMemo(() => {
+    if (!productoSel) return []
+    return [1, 2, 3].map(f => promo.cantidadGrupo * f).map(cant => ({ cant, r: simularPromo(productoSel, cant, promo) }))
+  }, [productoSel, promo])
+
+  function cambiarGrupoCustom(n: number) {
+    const grupo = Math.max(1, Math.min(12, n || 1))
+    setCustom(prev => ({ ...prev, cantidadGrupo: grupo, descuentosPct: Array.from({ length: grupo }, (_, i) => prev.descuentosPct[i] ?? 0) }))
+  }
+
+  function actualizarDescuentoCustom(pos: number, pct: number) {
+    setCustom(prev => {
+      const next = [...prev.descuentosPct]
+      next[pos] = Math.min(1, Math.max(0, pct / 100))
+      return { ...prev, descuentosPct: next }
+    })
+  }
+
+  return (
+    <div>
+      {!productoSel ? (
+        <>
+          <input
+            placeholder="Buscar producto para simular una promo…" value={busca} onChange={e => setBusca(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 12, border: `1px solid ${C.line}`, background: C.card, fontSize: 13, marginBottom: 8, color: C.text }}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 320, overflowY: 'auto' }}>
+            {resultados.slice(0, 20).map(cp => (
+              <button key={cp.id} onClick={() => setProductoSel(cp)} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 10,
+                border: `1px solid ${C.line}`, background: C.card, cursor: 'pointer', textAlign: 'left',
+              }}>
+                <ProductoThumb codigo={cp.codigo} categoria={cp.categoria} formato={cp.formato} size={28} />
+                <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>{cp.producto} · {cp.formato === 'lata' ? 'Lata' : 'Barril'}</span>
+              </button>
+            ))}
+            {busca && resultados.length === 0 && <p style={{ fontSize: 12, color: C.faint, padding: '6px 4px' }}>Sin resultados.</p>}
+            {!busca && <p style={{ fontSize: 12, color: C.faint, padding: '10px 4px' }}>Busca un producto para armar una promoción y ver cuánto ganarías.</p>}
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: C.card, borderRadius: 12, border: `1px solid ${C.line}`, marginBottom: 12 }}>
+            <ProductoThumb codigo={productoSel.codigo} categoria={productoSel.categoria} formato={productoSel.formato} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{productoSel.producto} · {productoSel.formato === 'lata' ? 'Lata' : 'Barril'}</p>
+              <p style={{ fontSize: 11, color: C.faint }}>Precio neto {fmtCLP(productoSel.precio_neto)} · Costo {fmtCLP(productoSel.costo_neto)}</p>
+            </div>
+            <button onClick={() => { setProductoSel(null); setBusca('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.blue, fontSize: 12, fontWeight: 700 }}>
+              Cambiar
+            </button>
+          </div>
+
+          <p style={{ fontSize: 11.5, fontWeight: 800, color: C.muted, letterSpacing: '0.05em', margin: '4px 0 8px', textTransform: 'uppercase' }}>
+            <Percent size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: -1 }} /> Tipo de promo
+          </p>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            {PROMO_PRESETS.map((p, i) => (
+              <button key={p.nombre} onClick={() => setPresetIdx(i)} style={{
+                padding: '7px 12px', borderRadius: 100, border: `1.5px solid ${presetIdx === i ? C.blue : C.line}`,
+                background: presetIdx === i ? C.blueSoft : C.card, color: presetIdx === i ? C.blue : C.muted,
+                fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+              }}>
+                {p.nombre}
+              </button>
+            ))}
+            <button onClick={() => setPresetIdx('custom')} style={{
+              padding: '7px 12px', borderRadius: 100, border: `1.5px solid ${presetIdx === 'custom' ? C.blue : C.line}`,
+              background: presetIdx === 'custom' ? C.blueSoft : C.card, color: presetIdx === 'custom' ? C.blue : C.muted,
+              fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+            }}>
+              Personalizada
+            </button>
+          </div>
+
+          {presetIdx === 'custom' && (
+            <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.line}`, padding: 12, marginBottom: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: C.muted, marginBottom: 10 }}>
+                Cada
+                <input type="number" min={1} max={12} value={custom.cantidadGrupo}
+                  onChange={e => cambiarGrupoCustom(parseInt(e.target.value) || 1)}
+                  style={{ width: 56, padding: '4px 6px', borderRadius: 6, border: `1px solid ${C.line}`, fontSize: 12 }} />
+                unidades, descuento por posición:
+              </label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                {custom.descuentosPct.map((d, i) => (
+                  <label key={i} style={{ fontSize: 11, color: C.muted, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                    Unidad {i + 1}
+                    <input type="number" min={0} max={100} value={Math.round(d * 100)}
+                      onChange={e => actualizarDescuentoCustom(i, parseFloat(e.target.value) || 0)}
+                      style={{ width: 52, padding: '4px 6px', borderRadius: 6, border: `1px solid ${C.line}`, fontSize: 12, textAlign: 'center' }} />
+                  </label>
+                ))}
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.text }}>
+                <input type="checkbox" checked={custom.repetir} onChange={e => setCustom(prev => ({ ...prev, repetir: e.target.checked }))} />
+                Se repite en pedidos más grandes (si no, el descuento aplica una sola vez y el resto se cobra normal)
+              </label>
+            </div>
+          )}
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: C.muted, marginBottom: 14 }}>
+            Unidades a cotizar
+            <input type="number" min={1} value={cantidad}
+              onChange={e => setCantidad(Math.max(1, parseInt(e.target.value) || 1))}
+              style={{ width: 64, padding: '6px 8px', borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 13, fontWeight: 700 }} />
+          </label>
+
+          {resumen && (
+            <div style={{ padding: 14, borderRadius: 14, background: C.hero, border: `2px solid ${SEMAFORO_COLOR[resumen.semaforo]}55`, marginBottom: 14 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+                {resumen.unidades.slice(0, 24).map(u => (
+                  <span key={u.posicion} title={`Unidad ${u.posicion + 1}: ${fmtPct(u.descuentoPct)} dcto`} style={{
+                    width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, fontWeight: 800,
+                    background: u.descuentoPct === 0 ? 'rgba(255,255,255,0.1)' : u.descuentoPct >= 1 ? 'rgba(220,38,38,0.25)' : 'rgba(217,119,6,0.25)',
+                    color: u.descuentoPct === 0 ? 'rgba(255,255,255,0.5)' : u.descuentoPct >= 1 ? '#FCA5A5' : '#FCD34D',
+                  }}>
+                    {Math.round(u.descuentoPct * 100)}
+                  </span>
+                ))}
+                {resumen.unidades.length > 24 && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', alignSelf: 'center' }}>+{resumen.unidades.length - 24}</span>}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.6)' }}>Venta normal ({resumen.cantidadTotal} un.)</span>
+                <span style={{ fontSize: 13, color: '#fff' }}>{fmtCLP(resumen.ventaNormalTotal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.6)' }}>Descuento de la promo</span>
+                <span style={{ fontSize: 13, color: '#FCA5A5' }}>-{fmtCLP(resumen.descuentoTotalClp)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.6)' }}>Venta neta con promo</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmtCLP(resumen.ventaNetaTotal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.6)' }}>Costo total</span>
+                <span style={{ fontSize: 13, color: '#fff' }}>{fmtCLP(resumen.costoTotal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', display: 'block' }}>Margen con promo</span>
+                  <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)' }}>vs {fmtPct(resumen.margenPctSinPromo)} sin promo</span>
+                </div>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: SEMAFORO_COLOR[resumen.semaforo] }}>{fmtCLP(resumen.margenClpTotal)}</span>
+                  <SemaforoBadge pct={resumen.margenPctTotal} />
+                </span>
+              </div>
+              <button onClick={() => onUsarEnSimulador(promoAItemSimulacion(resumen))} style={{
+                width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: '#D4AF37', color: '#0F172A', fontSize: 13, fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
+                Usar esta promo en el Simulador <ArrowRight size={15} />
+              </button>
+            </div>
+          )}
+
+          <p style={{ fontSize: 11.5, fontWeight: 800, color: C.muted, letterSpacing: '0.05em', margin: '4px 0 8px', textTransform: 'uppercase' }}>
+            A distintas cantidades
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {comparacion.map(({ cant, r }) => (
+              <div key={cant} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: C.card, borderRadius: 12, border: `1px solid ${C.line}` }}>
+                <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>{cant} unidades</span>
+                <span style={{ fontSize: 11.5, color: C.faint }}>{fmtCLP(r.margenClpTotal)}</span>
+                <SemaforoBadge pct={r.margenPctTotal} />
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
