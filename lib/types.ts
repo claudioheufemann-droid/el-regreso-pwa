@@ -28,8 +28,11 @@ export const VENDEDOR_GRUPOS: Record<string, string[]> = {
   // Yadro va con las dos grafías a propósito: la BD las tiene inconsistentes
   // (users → 'Favijancic' con v, clientes.vendedor → 'Fabijancic' con b) y no
   // sabemos cuál usará el ERP cuando empiece a reportar sus ventas.
-  'R. Metropolitana':  ['Región Metropolitana', 'Yadro Fabijancic', 'Yadro Favijancic'],
-  'R. Araucanía':      ['Región de la Araucanía', 'Marcelo Diaz'],
+  // Claves con nombre de persona (no de región) — dato de Benjamín,
+  // 2026-08-25: Metropolitana y Araucanía se identifican por quién las
+  // atiende, mismo criterio ya usado en Los Ríos/Los Lagos vía VENDEDOR_ALIAS.
+  'Yadro Fabijancic':  ['Región Metropolitana', 'Yadro Fabijancic', 'Yadro Favijancic'],
+  'Marcelo Diaz':      ['Región de la Araucanía', 'Marcelo Diaz'],
   'R. de los Ríos':    ['Región de los Ríos'],
   'R. de los Lagos':   ['Región de los Lagos'],
 }
@@ -60,11 +63,11 @@ export const VENDEDOR_ALIAS: Record<string, string> = {
   // TODOS los nombres que el ERP haya usado para esta misma cartera se
   // mapean al nombre limpio final, para que no vuelva a aparecer partida en
   // el ranking la próxima vez que el ERP la vuelva a renombrar.
-  'Javier Badilla':              'Nicole Delgado',
-  'Transición 2':                'Nicole Delgado',
-  'Los Rios':                    'Nicole Delgado', // el ERP lo reporta sin tilde
-  'Los Ríos':                    'Nicole Delgado', // nombre anterior de esta cartera
-  'nicol.delgado@elregresobeer.com': 'Nicole Delgado',
+  'Javier Badilla':              'Nicol Delgado',
+  'Transición 2':                'Nicol Delgado',
+  'Los Rios':                    'Nicol Delgado', // el ERP lo reporta sin tilde
+  'Los Ríos':                    'Nicol Delgado', // nombre anterior de esta cartera
+  'nicol.delgado@elregresobeer.com': 'Nicol Delgado',
   'Carlos Urrejola':             'Marion Meza',
   'Transición 1':                'Marion Meza',
   'Los Lagos':                   'Marion Meza', // nombre anterior de esta cartera
