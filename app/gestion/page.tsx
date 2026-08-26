@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import GestionHubClient from '@/components/GestionHubClient'
 import { MACRO_AREAS } from '@/lib/gestion-types'
@@ -7,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function GestionPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
   const [{ data: tasks }, { data: users }] = await Promise.all([
@@ -16,7 +17,7 @@ export default async function GestionPage() {
   ])
 
   const userProfile = users?.find(u => u.email === user.email)
-  const userName = userProfile?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
+  const userName = userProfile?.nombre ?? user.nombre
   const isAdmin = userProfile?.is_admin === true
   const userMacroArea: string | null = userProfile?.macro_area ?? null
 
