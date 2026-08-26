@@ -94,6 +94,20 @@ export function nombresErpDe(vigente: string): string[] {
 // Scope completo: todos los nombres de BD aceptados en consultas y reportes
 export const VENDEDORES_SCOPE: string[] = Object.values(VENDEDOR_GRUPOS).flat()
 
+/**
+ * Vendedores regionales activos (tienen login propio y cartera de clientes
+ * asignada en `clientes.vendedor`) — fuente para los botones "macro" de
+ * filtro por vendedor en /ventas/clientes. Para activar uno nuevo: agregar
+ * su nombre canónico acá (y, si el ERP lo va a renombrar, su alias en
+ * VENDEDOR_ALIAS arriba).
+ */
+export const VENDEDORES_CARTERA_ACTIVAS = [
+  'Nicol Delgado',
+  'Marion Meza',
+  'Marcelo Diaz',
+  'Yadro Fabijancic',
+] as const
+
 export const CATEGORIAS_NEGOCIO = [
   'Bar',
   'Minimarket',
