@@ -469,6 +469,40 @@ export async function POST(req: NextRequest) {
   // diferencia de entregas/ventas de vendedor/tareas, Claudio pidió
   // explícitamente que esta sea la única que NO dispare aviso.
 
+  // ── Tracking del modelo de predicción de compra ──────────────────────────
+  // Registra la predicción vigente de hoy y cierra las predicciones anteriores
+  // cuyo cliente ya compró (guardando el error en días). Es lo que permite
+  // medir si el modelo mejora y recalibrarlo con datos reales — ver
+  // supabase/migrations/ciclo_estacional_v2.sql y calibracion_modelo.
+  // Idempotente (UNIQUE por cliente+día), así que correr en cada sync no
+  // duplica. No debe tumbar la carga de ventas si falla: es telemetría.
+  let prediccionesNuevas = 0
+  let prediccionesCerradas = 0
+  let recalibracion: string | null = null
+  try {
+    const { data: pred, error: predError } = await supabase.rpc('actualizar_predicciones')
+    if (predError) {
+      console.error('[upload-ventas] actualizar_predicciones falló:', predError.message)
+    } else if (pred?.[0]) {
+      prediccionesNuevas   = pred[0].nuevas   ?? 0
+      prediccionesCerradas = pred[0].cerradas ?? 0
+    }
+
+    // Recalibración del modelo. Trae su propio guard semanal, así que llamarla
+    // en cada sync (cada 15 min) es barato y no produce ruido: sólo reajusta
+    // el factor si pasaron 7 días Y hay >=100 predicciones cerradas nuevas.
+    const { data: recal, error: recalError } = await supabase.rpc('recalibrar_modelo')
+    if (recalError) {
+      console.error('[upload-ventas] recalibrar_modelo falló:', recalError.message)
+    } else if (recal?.[0]) {
+      recalibracion = recal[0].aplicado
+        ? `factor -> ${recal[0].factor_nuevo} (${recal[0].n} muestras, sesgo ${recal[0].sesgo}d)`
+        : recal[0].motivo ?? null
+    }
+  } catch (e) {
+    console.error('[upload-ventas] tracking del modelo, excepción:', e)
+  }
+
   // Visibilidad del estado de entrega en el log del sync: si un día "faltan"
   // ventas, se ve de una si es que están cargadas pero sin entregar.
   const sinEntregar = registros.filter(r => !r.fecha_entrega).length
@@ -479,6 +513,9 @@ export async function POST(req: NextRequest) {
     entregadas: insertadas - sinEntregar,
     pendientesDeEntrega: sinEntregar,
     pedidosHuerfanosBorrados,
+    prediccionesNuevas,
+    prediccionesCerradas,
+    recalibracion,
     duplicadosEnArchivo,
     clientesInternosExcluidos,
     litrosInternosExcluidos,

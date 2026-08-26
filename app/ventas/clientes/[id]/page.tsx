@@ -1,10 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
+import { getServerUser } from '@/lib/auth'
 import { notFound } from 'next/navigation'
+import { vendedorCanonico } from '@/lib/types'
 import ClienteDetalleClient from './ClienteDetalleClient'
 
 export default async function ClienteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
+  const appUser  = await getServerUser()
 
   const { data: cliente } = await supabase
     .from('clientes')
@@ -13,6 +16,15 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
     .single()
 
   if (!cliente) notFound()
+
+  // La lista de /ventas/clientes ya viene acotada a la cartera del vendedor,
+  // pero esta ficha se puede pedir directo por URL/id — sin este chequeo,
+  // cualquier vendedor podía ver el detalle completo (contactos, deuda,
+  // historial de ventas) de un cliente que no es suyo con solo cambiar el
+  // número en la URL.
+  if (!appUser?.isAdmin && vendedorCanonico(cliente.vendedor) !== vendedorCanonico(appUser?.nombre ?? '')) {
+    notFound()
+  }
 
   // Todas las queries en paralelo — antes scoreRow y estadoRow eran secuenciales (800ms perdidos)
   const [{ data: scoreRow }, { data: estadoRow }, { data: ventas }, { data: contactos }, { data: deudorData }] = await Promise.all([

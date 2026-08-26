@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, VENDEDORES_SCOPE, esClienteExcluido } from '@/lib/types'
+import { VENDEDORES_SCOPE, VENDEDORES_CARTERA_ACTIVAS, esClienteExcluido, vendedorCanonico, nombresErpDe } from '@/lib/types'
 import { getUltimaVentasCached } from '@/lib/misionesCache'
 import ClientesClient from './ClientesClient'
 
@@ -22,12 +22,37 @@ export default async function ClientesPage() {
   const supabase = await createClient()
   const appUser  = await getServerUser()
 
-  const vendedoresScope = appUser?.isAdmin ? VENDEDORES : VENDEDORES.filter(v => v === appUser?.nombre)
-  // El campo clientes.vendedor guarda nombres REALES (Marcelo Diaz, Yadro Fabijancic,
-  // Javier/Carlos históricos, etc.), no solo el display "Equipo Ventas". Usamos
-  // VENDEDORES_SCOPE (todos los nombres reales agrupados en lib/types.ts) para no
-  // dejar fuera clientes cuyo vendedor no sea el histórico consolidado.
-  const scopeDB: string[] = [...VENDEDORES_SCOPE]
+  // Vendedores con cartera propia para los botones "macro" del filtro — admin
+  // ve la lista completa, un vendedor ve solo su propio nombre (no se le
+  // ofrece ni siquiera la opción de mirar la cartera de otro).
+  const vendedoresScope = appUser?.isAdmin
+    ? [...VENDEDORES_CARTERA_ACTIVAS]
+    : [vendedorCanonico(appUser?.nombre ?? '')]
+
+  // El campo clientes.vendedor guarda nombres REALES (Marcelo Diaz, Yadro
+  // Fabijancic, Los Rios/Los Lagos, nicol.delgado@elregresobeer.com desde el
+  // 26-ago-2026, etc.) — NO son los mismos valores que VENDEDOR_GRUPOS agrupa
+  // (ese diccionario es para `ventas.vendedor_actual`, otra columna). Usarlo
+  // para filtrar `clientes` fue el bug real detectado hoy: "Los Rios" y "Los
+  // Lagos" (247 clientes — TODA la cartera de Nicol y Marion) nunca
+  // aparecían literalmente en VENDEDORES_SCOPE, así que la consulta los
+  // excluía de raíz para CUALQUIER rol, no solo para ellas dos.
+  //
+  // Fix: admin no filtra por vendedor en absoluto (trae todo — es la única
+  // forma robusta de no volver a perder un vendedor por un cambio de
+  // etiqueta del ERP); un vendedor no-admin sí se acota a nombresErpDe(), que
+  // syí resuelve bien contra `clientes.vendedor` (probado: 93 y 158 clientes
+  // para Marion y Nicol respectivamente con los datos de hoy).
+  //
+  // scopeVentasDB es aparte: alimenta getUltimaVentasCached(), que consulta
+  // `ventas.vendedor_actual` (esa sí es la columna que agrupa VENDEDOR_GRUPOS/
+  // VENDEDORES_SCOPE) — no se puede reusar el mismo scope para ambas tablas.
+  const scopeClientesDB: string[] | null = appUser?.isAdmin
+    ? null
+    : nombresErpDe(vendedorCanonico(appUser?.nombre ?? '__sin_vendedor__'))
+  const scopeVentasDB: string[] = appUser?.isAdmin
+    ? [...VENDEDORES_SCOPE]
+    : nombresErpDe(vendedorCanonico(appUser?.nombre ?? '__sin_vendedor__'))
 
   const { data: periodo } = await supabase
     .from('periodos').select('id, nombre, fecha_inicio, fecha_fin').eq('activo', true).single()
@@ -36,6 +61,11 @@ export default async function ClientesPage() {
   const fechaFin    = periodo?.fecha_fin    ?? new Date().toISOString().split('T')[0]
 
   // Queries en paralelo
+  let clientesQuery = supabase.from('clientes')
+    .select('id, nombre_fantasia, razon_social, categoria, vendedor, localidad, localidad_entrega, ruta_despacho, telefono, lat, lng')
+  if (scopeClientesDB) clientesQuery = clientesQuery.in('vendedor', scopeClientesDB)
+  clientesQuery = clientesQuery.order('nombre_fantasia')
+
   const [
     { data: clientes },
     { data: estadosData },
@@ -43,10 +73,7 @@ export default async function ClientesPage() {
     { data: deudoresData },
     ultimasVentasRaw,
   ] = await Promise.all([
-    supabase.from('clientes')
-      .select('id, nombre_fantasia, razon_social, categoria, vendedor, localidad, localidad_entrega, ruta_despacho, telefono, lat, lng')
-      .in('vendedor', scopeDB)
-      .order('nombre_fantasia'),
+    clientesQuery,
     supabase.from('clientes_estado').select('nombre_fantasia, estado, nota'),
     // ~3,7 s: client_raw_metrics es una vista sin materializar que reagrega
     // las 51.000 filas de `ventas` en cada carga (ver la migración
@@ -58,7 +85,7 @@ export default async function ClientesPage() {
     supabase.rpc('get_client_scores'),
     supabase.from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total'),
     // Fuente directa de último pedido — más fiable que client_scores.ultima_compra
-    getUltimaVentasCached(scopeDB),
+    getUltimaVentasCached(scopeVentasDB),
   ])
 
   // Mapa de último pedido real desde ventas (primera aparición = más reciente, pues viene ordenado desc)
@@ -132,6 +159,11 @@ export default async function ClientesPage() {
     alert_level: string; siguiente_compra_estimada: string | null
     score: number; segmento: string; confianza_score: string
     litros_totales: number; revenue_total: number; pedidos_por_mes: number
+    // Modelo de ciclo v2 (ver supabase/migrations/ciclo_estacional_v2.sql)
+    es_estacional: boolean; temporada_baja: boolean
+    factor_estacional: number; ciclo_base_dias: number | null
+    // Primera compra ALGUNA VEZ, no de la fila más reciente — para "Nuevo".
+    primera_compra: string | null
   }>()
   // get_client_scores trae UNA FILA POR (nombre_fantasia, vendedor_actual) —
   // un mismo cliente puede tener varias filas si el ERP le cambió el nombre al
@@ -168,6 +200,14 @@ export default async function ClientesPage() {
       litros_totales: filas.reduce((sum, f) => sum + (f.litros_totales ?? 0), 0),
       revenue_total:  filas.reduce((sum, f) => sum + (f.revenue_total  ?? 0), 0),
       pedidos_por_mes: masReciente.pedidos_por_mes ?? 0,
+      es_estacional:     masReciente.es_estacional ?? false,
+      temporada_baja:    masReciente.temporada_baja ?? false,
+      factor_estacional: masReciente.factor_estacional ?? 1,
+      ciclo_base_dias:   masReciente.ciclo_base_dias ?? null,
+      // Mínimo entre TODAS las filas: la primera compra real del cliente,
+      // sin importar bajo qué nombre de vendedor quedó archivada.
+      primera_compra: filas.reduce((min: string | null, f) =>
+        !f.primera_compra ? min : (!min || f.primera_compra < min) ? f.primera_compra : min, null),
     })
   }
 

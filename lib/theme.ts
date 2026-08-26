@@ -6,6 +6,11 @@
 export const VEND_COLOR: Record<string, string> = {
   'Equipo Ventas':   '#D4AF37',
   'Vendedor 1':      '#D4AF37',
+  // Vendedores regionales activos (ver VENDEDORES_CARTERA_ACTIVAS en lib/types.ts)
+  'Nicol Delgado':    '#60A5FA',
+  'Marion Meza':      '#34D399',
+  'Marcelo Diaz':     '#F59E0B',
+  'Yadro Fabijancic': '#F472B6',
 }
 
 /** Color del vendedor con fallback estable (no usar índices ni azar). */

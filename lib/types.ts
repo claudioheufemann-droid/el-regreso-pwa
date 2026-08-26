@@ -71,6 +71,7 @@ export const VENDEDOR_ALIAS: Record<string, string> = {
   'Carlos Urrejola':             'Marion Meza',
   'Transición 1':                'Marion Meza',
   'Los Lagos':                   'Marion Meza', // nombre anterior de esta cartera
+  'Marion':                      'Marion Meza', // 26-ago-2026: 1 cliente cargado así, sin apellido
   // Yadro: la BD tiene dos grafías del apellido; se unifica a la del ERP
   'Yadro Favijancic': 'Yadro Fabijancic',
 }
@@ -93,6 +94,20 @@ export function nombresErpDe(vigente: string): string[] {
 
 // Scope completo: todos los nombres de BD aceptados en consultas y reportes
 export const VENDEDORES_SCOPE: string[] = Object.values(VENDEDOR_GRUPOS).flat()
+
+/**
+ * Vendedores regionales activos (tienen login propio y cartera de clientes
+ * asignada en `clientes.vendedor`) — fuente para los botones "macro" de
+ * filtro por vendedor en /ventas/clientes. Para activar uno nuevo: agregar
+ * su nombre canónico acá (y, si el ERP lo va a renombrar, su alias en
+ * VENDEDOR_ALIAS arriba).
+ */
+export const VENDEDORES_CARTERA_ACTIVAS = [
+  'Nicol Delgado',
+  'Marion Meza',
+  'Marcelo Diaz',
+  'Yadro Fabijancic',
+] as const
 
 export const CATEGORIAS_NEGOCIO = [
   'Bar',
