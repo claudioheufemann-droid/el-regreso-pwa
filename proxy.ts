@@ -51,7 +51,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (user && pathname === '/login') {
+  // Con el login desactivado, /login manda directo al hub aunque NO haya
+  // sesión: si no, cualquiera que llegue por un marcador viejo, por la PWA ya
+  // instalada o por un link compartido antes sigue viendo el formulario y no
+  // puede entrar.
+  if ((user || LOGIN_DESACTIVADO_TEMPORAL) && pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
