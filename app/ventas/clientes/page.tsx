@@ -30,17 +30,27 @@ export default async function ClientesPage() {
     : [vendedorCanonico(appUser?.nombre ?? '')]
 
   // El campo clientes.vendedor guarda nombres REALES (Marcelo Diaz, Yadro
-  // Fabijancic, Los Rios/Los Lagos históricos, etc.), no un display unificado.
+  // Fabijancic, Los Rios/Los Lagos, nicol.delgado@elregresobeer.com desde el
+  // 26-ago-2026, etc.) — NO son los mismos valores que VENDEDOR_GRUPOS agrupa
+  // (ese diccionario es para `ventas.vendedor_actual`, otra columna). Usarlo
+  // para filtrar `clientes` fue el bug real detectado hoy: "Los Rios" y "Los
+  // Lagos" (247 clientes — TODA la cartera de Nicol y Marion) nunca
+  // aparecían literalmente en VENDEDORES_SCOPE, así que la consulta los
+  // excluía de raíz para CUALQUIER rol, no solo para ellas dos.
   //
-  // OJO — esto filtra la QUERY A LA BASE DE DATOS, no solo lo que se pinta en
-  // pantalla: antes `scopeDB` era SIEMPRE VENDEDORES_SCOPE completo sin
-  // importar el rol, así que el navegador de CUALQUIER vendedor recibía el
-  // roster completo de la empresa (nombres, teléfonos, deuda, revenue de
-  // TODOS los clientes) en el HTML/props de la página, aunque la UI después
-  // sólo mostrara su propia cartera filtrando en el cliente — cualquiera con
-  // las devtools abiertas podía ver la cartera de sus compañeros. Ahora un
-  // vendedor no-admin sólo trae SUS propios clientes desde la BD.
-  const scopeDB: string[] = appUser?.isAdmin
+  // Fix: admin no filtra por vendedor en absoluto (trae todo — es la única
+  // forma robusta de no volver a perder un vendedor por un cambio de
+  // etiqueta del ERP); un vendedor no-admin sí se acota a nombresErpDe(), que
+  // syí resuelve bien contra `clientes.vendedor` (probado: 93 y 158 clientes
+  // para Marion y Nicol respectivamente con los datos de hoy).
+  //
+  // scopeVentasDB es aparte: alimenta getUltimaVentasCached(), que consulta
+  // `ventas.vendedor_actual` (esa sí es la columna que agrupa VENDEDOR_GRUPOS/
+  // VENDEDORES_SCOPE) — no se puede reusar el mismo scope para ambas tablas.
+  const scopeClientesDB: string[] | null = appUser?.isAdmin
+    ? null
+    : nombresErpDe(vendedorCanonico(appUser?.nombre ?? '__sin_vendedor__'))
+  const scopeVentasDB: string[] = appUser?.isAdmin
     ? [...VENDEDORES_SCOPE]
     : nombresErpDe(vendedorCanonico(appUser?.nombre ?? '__sin_vendedor__'))
 
@@ -51,6 +61,11 @@ export default async function ClientesPage() {
   const fechaFin    = periodo?.fecha_fin    ?? new Date().toISOString().split('T')[0]
 
   // Queries en paralelo
+  let clientesQuery = supabase.from('clientes')
+    .select('id, nombre_fantasia, razon_social, categoria, vendedor, localidad, localidad_entrega, ruta_despacho, telefono, lat, lng')
+  if (scopeClientesDB) clientesQuery = clientesQuery.in('vendedor', scopeClientesDB)
+  clientesQuery = clientesQuery.order('nombre_fantasia')
+
   const [
     { data: clientes },
     { data: estadosData },
@@ -58,15 +73,12 @@ export default async function ClientesPage() {
     { data: deudoresData },
     ultimasVentasRaw,
   ] = await Promise.all([
-    supabase.from('clientes')
-      .select('id, nombre_fantasia, razon_social, categoria, vendedor, localidad, localidad_entrega, ruta_despacho, telefono, lat, lng')
-      .in('vendedor', scopeDB)
-      .order('nombre_fantasia'),
+    clientesQuery,
     supabase.from('clientes_estado').select('nombre_fantasia, estado, nota'),
     supabase.rpc('get_client_scores'),
     supabase.from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total'),
     // Fuente directa de último pedido — más fiable que client_scores.ultima_compra
-    getUltimaVentasCached(scopeDB),
+    getUltimaVentasCached(scopeVentasDB),
   ])
 
   // Mapa de último pedido real desde ventas (primera aparición = más reciente, pues viene ordenado desc)

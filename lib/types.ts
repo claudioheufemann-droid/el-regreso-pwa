@@ -71,6 +71,7 @@ export const VENDEDOR_ALIAS: Record<string, string> = {
   'Carlos Urrejola':             'Marion Meza',
   'Transición 1':                'Marion Meza',
   'Los Lagos':                   'Marion Meza', // nombre anterior de esta cartera
+  'Marion':                      'Marion Meza', // 26-ago-2026: 1 cliente cargado así, sin apellido
   // Yadro: la BD tiene dos grafías del apellido; se unifica a la del ERP
   'Yadro Favijancic': 'Yadro Fabijancic',
 }
