@@ -42,6 +42,26 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     // getSession() — acá sí importa que el JWT quede revalidado).
     let user = (await supabase.auth.getUser()).data.user
     if (!user) user = (await supabase.auth.getUser()).data.user
+
+    // 🔓 TEMPORAL (pedido de Claudio, 2026-08-26): login desactivado para
+    // dejar la app abierta durante una prueba. Poner en `false` cuando
+    // Claudio avise que hay que restaurar el login.
+    const LOGIN_DESACTIVADO_TEMPORAL = true
+    if (!user && LOGIN_DESACTIVADO_TEMPORAL) {
+      return {
+        id: 'demo',
+        nombre: 'Invitado',
+        email: '',
+        isAdmin: true,
+        iniciales: 'IN',
+        macroArea: null,
+        avatarUrl: null,
+        region: null,
+        vendedoresErp: [],
+        puedeVerMargenes: false,
+        veComisionGerente: false,
+      }
+    }
     if (!user) return null
 
     // Primary lookup: by auth UUID
