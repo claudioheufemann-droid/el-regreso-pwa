@@ -52,6 +52,79 @@ interface Props {
 // SEG_COLOR y VEND_COLOR vienen del import de arriba
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
+// ── Paleta CRM móvil (navy) — sólo para la vista móvil de esta pantalla ───────
+// Deliberadamente local (no toca las variables --bg/--surface globales, que
+// son casi-negras): mismo patrón ya usado en Ventas > Hoy para secciones que
+// necesitan una identidad propia sin migrar el resto de la app.
+const MC = {
+  bg:        '#0B1220',
+  card:      '#131C31',
+  cardHover: '#16213A',
+  border:    'rgba(255,255,255,0.07)',
+  text:      '#F1F5F9',
+  muted:     '#7C8AA8',
+  blue:      '#3B82F6',
+  blueBg:    'rgba(59,130,246,0.12)',
+  green:     '#22C55E',
+  greenBg:   'rgba(34,197,94,0.12)',
+  amber:     '#F5A524',
+  amberBg:   'rgba(245,165,36,0.12)',
+  orange:    '#FB923C',
+  orangeBg:  'rgba(251,146,60,0.12)',
+  red:       '#F43F5E',
+  redBg:     'rgba(244,63,94,0.12)',
+  whatsapp:  '#25D366',
+}
+
+// ── Stock proyectado del cliente ───────────────────────────────────────────────
+// No existe (todavía) un trackeo real de litros en el local del cliente — se
+// estima a partir del ciclo de compra ya calculado por client_scores:
+//   litros por pedido = litros_totales / total_pedidos  (tamaño típico de compra)
+//   consumo diario     = litros por pedido / ciclo_promedio_dias
+//   días restantes     = ciclo_promedio_dias - dias_sin_compra  (puede ser negativo = vencido)
+//   fecha de quiebre    = siguiente_compra_estimada (ya viene calculada)
+// "L disponibles" es entonces litros_por_pedido menos lo ya consumido —
+// una estimación, no un stock real, pero consistente con lo que ya se muestra
+// hoy como "Quiebre stock".
+type StockBand = 'verde' | 'amarillo' | 'naranja' | 'rojo' | null
+interface StockProyectado {
+  diasRestantes: number
+  litrosDisponibles: number
+  consumoSemanal: number
+  fechaQuiebre: string | null
+  agotado: boolean
+  band: StockBand
+}
+function calcularStock(f: FrequencyStat | null): StockProyectado | null {
+  if (!f || !f.ciclo_promedio_dias || f.total_pedidos <= 0) return null
+  const litrosPorPedido = f.litros_totales / f.total_pedidos
+  const consumoDiario = litrosPorPedido / f.ciclo_promedio_dias
+  const diasRestantes = Math.round(f.ciclo_promedio_dias - f.dias_sin_compra)
+  const litrosDisponibles = Math.max(0, consumoDiario * diasRestantes)
+  const agotado = diasRestantes <= 0
+  const band: StockBand = agotado ? 'rojo' : diasRestantes < 3 ? 'rojo' : diasRestantes <= 7 ? 'naranja' : diasRestantes <= 14 ? 'amarillo' : 'verde'
+  return {
+    diasRestantes,
+    litrosDisponibles,
+    consumoSemanal: consumoDiario * 7,
+    fechaQuiebre: f.siguiente_compra_estimada,
+    agotado,
+    band,
+  }
+}
+const BAND_COLOR: Record<Exclude<StockBand,null>, { fg:string; bg:string }> = {
+  verde:    { fg: MC.green,  bg: MC.greenBg  },
+  amarillo: { fg: MC.amber,  bg: MC.amberBg  },
+  naranja:  { fg: MC.orange, bg: MC.orangeBg },
+  rojo:     { fg: MC.red,    bg: MC.redBg    },
+}
+/** Riesgo alto = naranja o rojo; medio = amarillo; sin riesgo = verde o sin historial. */
+function riesgoDeBand(band: StockBand): 'alto' | 'medio' | 'bajo' {
+  if (band === 'rojo' || band === 'naranja') return 'alto'
+  if (band === 'amarillo') return 'medio'
+  return 'bajo'
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function diasDesde(f?: string | null): number | null {
   if (!f) return null
@@ -382,121 +455,141 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
   )
 }
 
-// ── Card móvil (rediseñada) ───────────────────────────────────────────────────
-function ClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onWA: (t:WATarget)=>void }) {
-  const estado   = getEstado(c)
+
+// ── Ficha comercial móvil (CRM navy) ──────────────────────────────────────────
+function fLitros(n: number): string {
+  return `${n.toLocaleString('es-CL', { maximumFractionDigits: 0 })} L`
+}
+
+function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onWA: (t:WATarget)=>void }) {
   const seg      = c.frecuencia?.segmento ?? 'E'
   const score    = c.frecuencia?.score ?? 0
   const segColor = SEG_COLOR[seg] ?? '#888'
-  const vendColor= VEND_COLOR[c.vendedor ?? ''] ?? '#888'
-  const dcont    = diasDesde(c.ultimoContacto?.fecha)
-  const al       = c.frecuencia?.alert_level ?? 'sin_historial'
+  const stock    = calcularStock(c.frecuencia)
   const diasSin  = c.frecuencia?.dias_sin_compra ?? 0
-  const ciclo    = c.frecuencia?.ciclo_promedio_dias ?? 0
   const deudaV   = c.deuda?.deuda_vencida ?? 0
-
-  // Barra de urgencia: % del ciclo consumido
-  const pctConsumed = ciclo > 0 ? Math.min(100, Math.round((diasSin / ciclo) * 100)) : 0
-  const barColor = al === 'critico' ? '#B5543E'
-    : al === 'vencido' ? '#B5543E'
-    : al === 'proximo'  ? '#D4AF37'
-    : '#5A8A4A'
+  const bandColor = stock ? BAND_COLOR[stock.band ?? 'verde'] : { fg: MC.muted, bg: 'rgba(124,138,168,0.1)' }
+  const riesgoLabel = !stock ? 'Sin historial' : riesgoDeBand(stock.band) === 'alto' ? 'Riesgo alto' : riesgoDeBand(stock.band) === 'medio' ? 'Riesgo medio' : 'Sin riesgo'
 
   const waTarget: WATarget = { nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'general', cicloPromedioDias:c.frecuencia?.ciclo_promedio_dias, siguienteCompra:c.frecuencia?.siguiente_compra_estimada, subtitulo:c.categoria??undefined }
 
+  // Barra: % de stock restante respecto al ciclo completo (100% = recién comprado)
+  const ciclo = c.frecuencia?.ciclo_promedio_dias ?? 0
+  const pct = stock && ciclo > 0 ? Math.max(0, Math.min(100, Math.round((stock.diasRestantes / ciclo) * 100))) : 0
+
   return (
     <div onClick={onClick} style={{
-      background:'var(--surface)', borderRadius:16, marginBottom:8, cursor:'pointer',
-      border:`1px solid var(--border)`, borderLeft:`3px solid ${barColor}`,
+      background:MC.card, borderRadius:18, marginBottom:12, cursor:'pointer',
+      border:`1px solid ${MC.border}`, borderLeft:`4px solid ${bandColor.fg}`,
       overflow:'hidden',
     }}>
-      {/* Barra de progreso del ciclo */}
-      {ciclo > 0 && (
-        <div style={{ height:3, background:'rgba(255,255,255,0.04)' }}>
-          <div style={{ height:'100%', width:`${pctConsumed}%`, background:barColor, transition:'width 0.4s' }} />
-        </div>
-      )}
-
-      <div style={{ padding:'12px 14px' }}>
-        {/* Fila superior: badge + nombre + estado */}
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-          {/* Badge segmento */}
+      <div style={{ padding:'14px 16px' }}>
+        {/* Cabecera: score + nombre + riesgo */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
           <ScoreBadge seg={seg} score={score} segColor={segColor} size={48}/>
-
           <div style={{ flex:1, minWidth:0 }}>
-            <p style={{ fontSize:14, fontWeight:800, color:'var(--cream)',
-              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:3 }}>
+            <p style={{ fontSize:16, fontWeight:800, color:MC.text,
+              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {c.nombre_fantasia}
             </p>
-            <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
-              <span style={{ fontSize:10, color:vendColor, fontWeight:700 }}>{(c.vendedor??'').split(' ')[0]}</span>
-              {c.ruta_despacho && <span style={{ fontSize:10, color:'#444' }}>· {c.ruta_despacho}</span>}
-              {dcont !== null && dcont <= 7
-                ? <span style={{ fontSize:10, color:'#5A8A4A', fontWeight:600 }}>· contactado {fDias(dcont)}</span>
-                : <span style={{ fontSize:10, color:'#555' }}>· {c.ultimoContacto ? `contactado ${fDias(dcont)}` : 'sin contacto'}</span>
-              }
-            </div>
+            <p style={{ fontSize:12, color:MC.muted, marginTop:1 }}>
+              {(c.vendedor??'').split(' ')[0]}{(c.localidad_entrega || c.localidad) ? ` · ${c.localidad_entrega || c.localidad}` : ''}
+            </p>
           </div>
-
-          <span style={{ fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:20, flexShrink:0,
-            color:estado.color, background:estado.bg, border:`1px solid ${estado.border}` }}>
-            {estado.label}
+          <span style={{ fontSize:11, fontWeight:700, padding:'5px 11px', borderRadius:20, flexShrink:0,
+            color:bandColor.fg, background:bandColor.bg }}>
+            {riesgoLabel}
           </span>
         </div>
 
-        {/* Fila info: pedidos + urgencia + deuda */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:10 }}>
-          <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'7px 10px' }}>
-            <p style={{ fontSize:9, color:'#555', fontWeight:700, letterSpacing:'0.06em', marginBottom:2 }}>ÚLTIMO PEDIDO</p>
-            <p style={{ fontSize:12, fontWeight:700, color: c.ultimoPedido ? 'var(--cream)' : '#444' }}>
+        {/* Stock proyectado */}
+        {stock ? (
+          <>
+            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+              {stock.agotado ? (
+                <div>
+                  <p style={{ fontSize:11, color:MC.muted, fontWeight:600, marginBottom:2 }}>Stock agotado</p>
+                  <p style={{ fontSize:12, color:bandColor.fg, fontWeight:700 }}>
+                    Debió terminar: {stock.fechaQuiebre ? fFecha(stock.fechaQuiebre) : '—'}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <p style={{ fontSize:11, color:MC.muted, fontWeight:600, marginBottom:2 }}>Stock posible</p>
+                    <p style={{ fontSize:20, fontWeight:900, color:bandColor.fg, letterSpacing:'-0.5px' }}>
+                      {stock.diasRestantes} días
+                    </p>
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <p style={{ fontSize:11, color:MC.muted, fontWeight:600, marginBottom:2 }}>Se termina</p>
+                    <p style={{ fontSize:14, fontWeight:800, color:MC.text }}>
+                      {stock.fechaQuiebre ? fFecha(stock.fechaQuiebre) : '—'}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{ height:6, borderRadius:3, background:'rgba(255,255,255,0.06)', overflow:'hidden', marginBottom:6 }}>
+              <div style={{ height:'100%', width:`${stock.agotado ? 100 : pct}%`, background:bandColor.fg, transition:'width 0.4s' }}/>
+            </div>
+
+            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
+              <span style={{ fontSize:11, color:MC.muted }}>{fLitros(stock.litrosDisponibles)} disponibles</span>
+              <span style={{ fontSize:11, color:MC.muted }}>Consumo prom.: {stock.consumoSemanal.toFixed(0)} L/sem</span>
+            </div>
+          </>
+        ) : (
+          <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:10, padding:'10px 12px', marginBottom:12 }}>
+            <p style={{ fontSize:12, color:MC.muted }}>Sin historial suficiente para proyectar stock</p>
+          </div>
+        )}
+
+        <div style={{ height:1, background:MC.border, marginBottom:12 }}/>
+
+        {/* KPIs comerciales */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
+          <div>
+            <p style={{ fontSize:9, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:3 }}>ÚLTIMO PEDIDO</p>
+            <p style={{ fontSize:12, fontWeight:700, color: c.ultimoPedido ? MC.text : MC.muted }}>
               {c.ultimoPedido ? fFecha(c.ultimoPedido.ultimaFecha) : '—'}
             </p>
-            {diasSin > 0 && <p style={{ fontSize:10, color:barColor, fontWeight:600, marginTop:1 }}>{diasSin}d sin comprar</p>}
+            {diasSin > 0 && <p style={{ fontSize:10, color:bandColor.fg, fontWeight:600, marginTop:1 }}>{diasSin}d sin comprar</p>}
           </div>
-
-          {c.frecuencia?.siguiente_compra_estimada ? (() => {
-            const past = esPasada(c.frecuencia.siguiente_compra_estimada)
-            const qColor = past ? '#EF4444' : barColor
-            return (
-              <div style={{ background: past ? 'rgba(239,68,68,0.06)' : `${barColor}08`, borderRadius:8, padding:'7px 10px', border:`1px solid ${past ? 'rgba(239,68,68,0.2)' : `${barColor}25`}` }}>
-                <p style={{ fontSize:9, color:qColor, fontWeight:700, letterSpacing:'0.06em', marginBottom:2 }}>QUIEBRE STOCK</p>
-                <p style={{ fontSize:12, fontWeight:700, color: past ? '#EF4444' : 'var(--cream)' }}>{fFecha(c.frecuencia.siguiente_compra_estimada)}</p>
-                {past
-                  ? <p style={{ fontSize:10, color:'#EF4444', fontWeight:600, marginTop:1 }}>⚠ ya vencido</p>
-                  : (c.ultimoPedido?.litrosPeriodo ?? 0) > 0 && <p style={{ fontSize:10, color:'#555', marginTop:1 }}>{(c.ultimoPedido?.litrosPeriodo ?? 0).toFixed(0)}L período</p>
-                }
-              </div>
-            )
-          })() : (
-            <div style={{ background:'rgba(255,255,255,0.02)', borderRadius:8, padding:'7px 10px' }}>
-              <p style={{ fontSize:9, color:'#444', fontWeight:700, letterSpacing:'0.06em', marginBottom:2 }}>QUIEBRE STOCK</p>
-              <p style={{ fontSize:12, color:'#444' }}>Sin historial</p>
-            </div>
-          )}
+          <div>
+            <p style={{ fontSize:9, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:3 }}>VENTAS PERÍODO</p>
+            <p style={{ fontSize:12, fontWeight:700, color:MC.text }}>{fLitros(c.ultimoPedido?.litrosPeriodo ?? 0)}</p>
+            <p style={{ fontSize:10, color:MC.muted, marginTop:1 }}>{fPeso(c.ultimoPedido?.ventaPeriodo ?? 0)}</p>
+          </div>
+          <div>
+            <p style={{ fontSize:9, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:3 }}>TOTAL COMPRADO</p>
+            <p style={{ fontSize:12, fontWeight:700, color:MC.text }}>{fLitros(c.frecuencia?.litros_totales ?? 0)}</p>
+            <p style={{ fontSize:10, color:MC.muted, marginTop:1 }}>{fPeso(c.frecuencia?.revenue_total ?? 0)}</p>
+          </div>
         </div>
 
-        {/* Deuda badge (solo si tiene) */}
+        {/* Deuda (si aplica) */}
         {deudaV > 0 && (
-          <div style={{ background:'rgba(181,84,62,0.07)', border:'1px solid rgba(181,84,62,0.2)',
-            borderRadius:8, padding:'5px 10px', marginBottom:10,
+          <div style={{ background:MC.redBg, borderRadius:8, padding:'6px 10px', marginBottom:10,
             display:'flex', alignItems:'center', gap:6 }}>
-            <AlertTriangle size={11} color="#B5543E"/>
-            <span style={{ fontSize:11, fontWeight:700, color:'#B5543E' }}>Deuda vencida: {fPeso(deudaV)}</span>
+            <AlertTriangle size={11} color={MC.red}/>
+            <span style={{ fontSize:11, fontWeight:700, color:MC.red }}>Deuda vencida: {fPeso(deudaV)}</span>
           </div>
         )}
 
         {/* Acciones */}
         <div style={{ display:'flex', gap:8 }}>
           <button onClick={e=>{e.stopPropagation();onWA(waTarget)}}
-            style={{ flex:1, minHeight:40, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-              background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.25)',
-              borderRadius:10, color:'#25D366', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-            <MessageCircle size={14}/> WhatsApp
+            style={{ flex:1, minHeight:42, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+              background:MC.greenBg, border:`1px solid rgba(34,197,94,0.3)`,
+              borderRadius:11, color:MC.whatsapp, fontSize:13, fontWeight:700, cursor:'pointer' }}>
+            <MessageCircle size={15}/> WhatsApp
           </button>
           <button onClick={e=>{e.stopPropagation();onClick()}}
-            style={{ minHeight:40, padding:'0 14px', display:'flex', alignItems:'center', gap:5,
-              background:'rgba(255,255,255,0.05)', border:'1px solid var(--border)',
-              borderRadius:10, color:'var(--muted)', fontSize:11, cursor:'pointer' }}>
+            style={{ minHeight:42, padding:'0 16px', display:'flex', alignItems:'center', gap:5,
+              background:MC.blueBg, border:`1px solid rgba(59,130,246,0.3)`,
+              borderRadius:11, color:MC.blue, fontSize:12, fontWeight:700, cursor:'pointer' }}>
             Ver ficha →
           </button>
         </div>
@@ -577,6 +670,15 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   const [showWA,      setShowWA]      = useState(false)
   const [showSort,    setShowSort]    = useState(false)
   const [waTarget,    setWaTarget]    = useState<WATarget | null>(null)
+  const [riesgoFiltro,setRiesgoFiltro]= useState<'todos'|'alto'|'medio'|'bajo'>('todos')
+  const [showFiltroSheet, setShowFiltroSheet] = useState(false)
+  // "Última actualización" — se calcula en el cliente para no desfasar el SSR
+  // (el server renderiza a la hora del build/revalidate, no la del visitante).
+  const [horaActualizado, setHoraActualizado] = useState('')
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHoraActualizado(new Date().toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit' }))
+  }, [])
 
   // Si llegamos con ?q=NombreExacto (ej. desde "Clientes en riesgo" o un lead
   // del mapa) y hay un único match exacto, saltar directo a su ficha.
@@ -633,6 +735,10 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
       })
     }
 
+    if (!isDesktop && riesgoFiltro !== 'todos') {
+      res = res.filter(c => riesgoDeBand(calcularStock(c.frecuencia)?.band ?? null) === riesgoFiltro)
+    }
+
     res = [...res].sort((a, b) => {
       switch (sortBy) {
         case 'score':    return (b.frecuencia?.score??0) - (a.frecuencia?.score??0)
@@ -647,7 +753,27 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
     })
 
     return res
-  }, [clientes, busqueda, vendFiltro, estadoFiltro, sortBy, isAdmin, user])
+  }, [clientes, busqueda, vendFiltro, estadoFiltro, riesgoFiltro, sortBy, isAdmin, isDesktop, user])
+
+  // Conteos de los chips de riesgo (móvil) — sobre búsqueda/vendedor aplicados,
+  // pero SIN el propio filtro de riesgo, para que los conteos no cambien al elegir uno.
+  const riesgoCounts = useMemo(() => {
+    const vendEfectivo = isAdmin ? vendFiltro : (VENDEDOR_DISPLAY[user?.nombre ?? ''] ?? user?.nombre ?? 'all')
+    let base = clientes.filter(c => c.estadoCliente !== 'inactivo')
+    if (vendEfectivo !== 'all') base = base.filter(c => (VENDEDOR_DISPLAY[c.vendedor ?? ''] ?? c.vendedor) === vendEfectivo)
+    if (busqueda.trim()) {
+      const b = busqueda.toLowerCase()
+      base = base.filter(c =>
+        c.nombre_fantasia?.toLowerCase().includes(b) ||
+        c.ruta_despacho?.toLowerCase().includes(b) ||
+        c.localidad?.toLowerCase().includes(b) ||
+        c.localidad_entrega?.toLowerCase().includes(b)
+      )
+    }
+    const counts = { todos: base.length, alto: 0, medio: 0, bajo: 0 }
+    for (const c of base) counts[riesgoDeBand(calcularStock(c.frecuencia)?.band ?? null)]++
+    return counts
+  }, [clientes, busqueda, vendFiltro, isAdmin, user])
 
   // Paginación
   const totalPaginas = Math.ceil(clientesFiltrados.length / ROWS_PER_PAGE)
@@ -666,43 +792,186 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
 
       {/* ── Encabezado estándar ────────────────────────────────────────── */}
       <AppHeader eyebrow={`Cartera${periodo ? ` · ${periodo.nombre}` : ''}`} title="Clientes" />
-      <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'flex-start', marginBottom:20, flexWrap:'wrap', gap:10 }}>
-        <div style={{ display:'flex', gap:10 }}>
-          <button onClick={()=>setShowWA(true)}
-            style={{ display:'flex', alignItems:'center', gap:6, padding:'9px 16px',
-              background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.25)',
-              borderRadius:10, color:'#25D366', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-            <Zap size={14}/> Campaña WA
-          </button>
-          {isAdmin && (
-            <button onClick={()=>router.push('/ventas/admin')}
-              style={{ display:'flex', alignItems:'center', gap:6, padding:'9px 16px',
-                background:'var(--gold)', border:'none',
-                borderRadius:10, color:'#080808', fontSize:12, fontWeight:800, cursor:'pointer' }}>
-              + Nuevo cliente
-            </button>
+
+      {isDesktop && (
+        <>
+          <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'flex-start', marginBottom:20, flexWrap:'wrap', gap:10 }}>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={()=>setShowWA(true)}
+                style={{ display:'flex', alignItems:'center', gap:6, padding:'9px 16px',
+                  background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.25)',
+                  borderRadius:10, color:'#25D366', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                <Zap size={14}/> Campaña WA
+              </button>
+              {isAdmin && (
+                <button onClick={()=>router.push('/ventas/admin')}
+                  style={{ display:'flex', alignItems:'center', gap:6, padding:'9px 16px',
+                    background:'var(--gold)', border:'none',
+                    borderRadius:10, color:'#080808', fontSize:12, fontWeight:800, cursor:'pointer' }}>
+                  + Nuevo cliente
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* ── KPI Cards ──────────────────────────────────────────────── */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
+            {[
+              { icon:Users,          label:'TOTAL CLIENTES',      val:stats.total,        sub:'100% cartera activa', color:'#D4AF37' },
+              { icon:CheckCircle2,   label:'CONTACTADOS (7d)',     val:stats.contactados7d, sub:`${Math.round((stats.contactados7d/Math.max(stats.total,1))*100)}% del total`, color:'#5A8A4A' },
+              { icon:Clock,          label:'PENDIENTES CONTACTO',  val:stats.pendientes,   sub:`${Math.round((stats.pendientes/Math.max(stats.total,1))*100)}% del total`, color:'#D4AF37' },
+              { icon:PhoneOff,       label:'SIN CONTACTO',         val:stats.sinContacto,  sub:`${Math.round((stats.sinContacto/Math.max(stats.total,1))*100)}% del total`, color:'#9CA3AF' },
+            ].map(k=>(
+              <div key={k.label} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:14, padding:'14px 16px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                  <k.icon size={13} color={k.color}/>
+                  <span style={{ fontSize:9, fontWeight:700, color:'var(--muted)', letterSpacing:'0.08em' }}>{k.label}</span>
+                </div>
+                <p style={{ fontSize:28, fontWeight:900, color:'var(--cream)', letterSpacing:'-1px', lineHeight:1, marginBottom:4 }}>{k.val}</p>
+                <p style={{ fontSize:11, color:'var(--muted)' }}>{k.sub}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── Cabecera CRM móvil (navy) ─────────────────────────────────────── */}
+      {!isDesktop && (
+        <div style={{ background:MC.bg, margin:'0 -16px', padding:'0 16px 4px' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2 }}>
+            <p style={{ fontSize:12, color:MC.muted }}>
+              Última actualización: {horaActualizado ? `Hoy ${horaActualizado}` : '—'}
+            </p>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={()=>setShowFiltroSheet(true)}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 12px',
+                  background:MC.card, border:`1px solid ${MC.border}`, borderRadius:10,
+                  color:MC.text, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                <Filter size={13}/> Filtrar
+              </button>
+              <button onClick={()=>setShowWA(true)} aria-label="Campaña WhatsApp"
+                style={{ display:'flex', alignItems:'center', justifyContent:'center', width:36, height:36,
+                  background:MC.card, border:`1px solid ${MC.border}`, borderRadius:10,
+                  color:MC.whatsapp, cursor:'pointer', flexShrink:0 }}>
+                <Zap size={15}/>
+              </button>
+              <div style={{ position:'relative' }}>
+                <button onClick={()=>setShowSort(s=>!s)}
+                  style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 12px',
+                    background:MC.card, border:`1px solid ${MC.border}`, borderRadius:10,
+                    color:MC.text, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                  <ChevronDown size={13}/> Ordenar
+                </button>
+                {showSort && (
+                  <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:50,
+                    background:MC.card, border:`1px solid ${MC.border}`, borderRadius:12, overflow:'hidden', minWidth:150 }}>
+                    {Object.entries(SORT_LABELS).map(([k,l])=>(
+                      <button key={k} onClick={()=>{setSortBy(k as typeof sortBy);setShowSort(false)}}
+                        style={{ display:'block', width:'100%', padding:'10px 14px', textAlign:'left',
+                          background:sortBy===k?MC.blueBg:'transparent', border:'none',
+                          color:sortBy===k?MC.blue:MC.text, fontSize:12, cursor:'pointer' }}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Buscador */}
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:12, marginBottom:12,
+            background:MC.card, border:`1px solid ${MC.border}`, borderRadius:12, padding:'11px 14px' }}>
+            <Search size={16} color={MC.muted}/>
+            <input value={busqueda} onChange={e=>handleBusqueda(e.target.value)}
+              placeholder="Buscar cliente…"
+              style={{ border:'none', background:'transparent', color:MC.text, fontSize:14,
+                outline:'none', flex:1, minWidth:0 }}/>
+            {busqueda && <button onClick={()=>handleBusqueda('')} style={{ background:'none', border:'none', cursor:'pointer', color:MC.muted, padding:0 }}><X size={14}/></button>}
+          </div>
+
+          {/* Chips de riesgo */}
+          <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:14, marginBottom:2 }}>
+            {[
+              { key:'todos' as const, label:'Todos', count:riesgoCounts.todos, color:MC.blue },
+              { key:'alto'  as const, label:'Riesgo alto',  count:riesgoCounts.alto,  color:MC.red },
+              { key:'medio' as const, label:'Riesgo medio', count:riesgoCounts.medio, color:MC.amber },
+              { key:'bajo'  as const, label:'Sin riesgo',   count:riesgoCounts.bajo,  color:MC.green },
+            ].map(f=>{
+              const active = riesgoFiltro===f.key
+              return (
+                <button key={f.key} onClick={()=>{setRiesgoFiltro(f.key);setPagina(1)}}
+                  style={{ flexShrink:0, display:'flex', alignItems:'center', gap:6, padding:'9px 14px', borderRadius:12,
+                    cursor:'pointer', border:`1px solid ${active?f.color:MC.border}`,
+                    background: active ? f.color : MC.card, color: active ? '#0B1220' : MC.text,
+                    fontSize:13, fontWeight:active?800:600 }}>
+                  {f.label}
+                  <span style={{ fontSize:12, fontWeight:800, padding:'0 6px', borderRadius:8,
+                    background: active ? 'rgba(11,18,32,0.2)' : 'rgba(255,255,255,0.06)',
+                    color: active ? '#0B1220' : MC.muted }}>
+                    {f.count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Sheet de filtros adicionales */}
+          {showFiltroSheet && (
+            <div onClick={()=>setShowFiltroSheet(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:1000, display:'flex', alignItems:'flex-end' }}>
+              <div onClick={e=>e.stopPropagation()} style={{ background:MC.card, borderRadius:'20px 20px 0 0', padding:'20px 16px calc(20px + env(safe-area-inset-bottom, 0px))', width:'100%', maxHeight:'70vh', overflow:'auto' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                  <p style={{ fontSize:15, fontWeight:800, color:MC.text }}>Filtros</p>
+                  <button onClick={()=>setShowFiltroSheet(false)} style={{ background:'none', border:'none', cursor:'pointer', color:MC.muted }}><X size={18}/></button>
+                </div>
+
+                {isAdmin && (
+                  <>
+                    <p style={{ fontSize:11, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:8 }}>VENDEDOR</p>
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:18 }}>
+                      {['all', ...vendedoresScope.map(s => VENDEDOR_DISPLAY[s] ?? s)].map(v=>{
+                        const label = v==='all' ? 'Todos' : v
+                        const active = vendFiltro===v
+                        return (
+                          <button key={v} onClick={()=>handleVend(v)}
+                            style={{ padding:'8px 14px', borderRadius:10, cursor:'pointer',
+                              border:`1px solid ${active?MC.blue:MC.border}`,
+                              background:active?MC.blueBg:'transparent', color:active?MC.blue:MC.text,
+                              fontSize:13, fontWeight:active?700:500 }}>
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+
+                <p style={{ fontSize:11, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:8 }}>ESTADO DE CONTACTO</p>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:18 }}>
+                  {FILTROS.map(f=>{
+                    const active = estadoFiltro===f.key
+                    return (
+                      <button key={f.key} onClick={()=>handleFiltro(f.key)}
+                        style={{ padding:'8px 14px', borderRadius:10, cursor:'pointer',
+                          border:`1px solid ${active?MC.blue:MC.border}`,
+                          background:active?MC.blueBg:'transparent', color:active?MC.blue:MC.text,
+                          fontSize:13, fontWeight:active?700:500 }}>
+                        {f.label} <span style={{ opacity:0.7 }}>{f.count}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <button onClick={()=>{setEstadoFiltro('todos');setVendFiltro('all');setRiesgoFiltro('todos');setPagina(1)}}
+                  style={{ width:'100%', padding:'12px', borderRadius:12, border:`1px solid ${MC.border}`,
+                    background:'transparent', color:MC.muted, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                  Limpiar todos los filtros
+                </button>
+              </div>
+            </div>
           )}
         </div>
-      </div>
-
-      {/* ── KPI Cards ──────────────────────────────────────────────────── */}
-      <div style={{ display:'grid', gridTemplateColumns:isDesktop?'repeat(4,1fr)':'repeat(2,1fr)', gap:10, marginBottom:20 }}>
-        {[
-          { icon:Users,          label:'TOTAL CLIENTES',      val:stats.total,        sub:'100% cartera activa', color:'#D4AF37' },
-          { icon:CheckCircle2,   label:'CONTACTADOS (7d)',     val:stats.contactados7d, sub:`${Math.round((stats.contactados7d/Math.max(stats.total,1))*100)}% del total`, color:'#5A8A4A' },
-          { icon:Clock,          label:'PENDIENTES CONTACTO',  val:stats.pendientes,   sub:`${Math.round((stats.pendientes/Math.max(stats.total,1))*100)}% del total`, color:'#D4AF37' },
-          { icon:PhoneOff,       label:'SIN CONTACTO',         val:stats.sinContacto,  sub:`${Math.round((stats.sinContacto/Math.max(stats.total,1))*100)}% del total`, color:'#9CA3AF' },
-        ].map(k=>(
-          <div key={k.label} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:14, padding:'14px 16px' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-              <k.icon size={13} color={k.color}/>
-              <span style={{ fontSize:9, fontWeight:700, color:'var(--muted)', letterSpacing:'0.08em' }}>{k.label}</span>
-            </div>
-            <p style={{ fontSize:28, fontWeight:900, color:'var(--cream)', letterSpacing:'-1px', lineHeight:1, marginBottom:4 }}>{k.val}</p>
-            <p style={{ fontSize:11, color:'var(--muted)' }}>{k.sub}</p>
-          </div>
-        ))}
-      </div>
+      )}
 
       {/* ── Layout desktop: tabla + sidebar ────────────────────────────── */}
       <div style={{ display:'flex', gap:16, alignItems:'flex-start' }}>
@@ -710,6 +979,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
         {/* ── Columna principal ─────────────────────────────────────────── */}
         <div style={{ flex:1, minWidth:0 }}>
 
+          {isDesktop && <>
           {/* Barra de filtros */}
           <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:14, padding:'12px 14px', marginBottom:12 }}>
             <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
@@ -795,6 +1065,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
               {clientesFiltrados.length} resultados
             </span>
           </div>
+          </>}
 
           {/* ── TABLA (desktop) ────────────────────────────────────────── */}
           {isDesktop ? (
@@ -867,24 +1138,25 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
               )}
             </div>
           ) : (
-            /* ── CARDS (móvil) ──────────────────────────────────────── */
-            <div>
+            /* ── CARDS (móvil, CRM navy) ──────────────────────────────── */
+            <div style={{ background:MC.bg, margin:'0 -16px', padding:'0 16px' }}>
+              <p style={{ fontSize:11, color:MC.muted, marginBottom:10 }}>{clientesFiltrados.length} clientes</p>
               {clientesPagina.length === 0 ? (
-                <div style={{ textAlign:'center', padding:'40px 20px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:16 }}>
-                  <p style={{ fontSize:13, color:'var(--muted)' }}>Sin resultados</p>
+                <div style={{ textAlign:'center', padding:'40px 20px', background:MC.card, border:`1px solid ${MC.border}`, borderRadius:16 }}>
+                  <p style={{ fontSize:13, color:MC.muted }}>Sin resultados para este filtro</p>
                 </div>
               ) : clientesPagina.map(c=>(
-                <ClienteCard key={c.id} c={c} onClick={()=>router.push(`/ventas/clientes/${c.id}`)} onWA={setWaTarget}/>
+                <StockClienteCard key={c.id} c={c} onClick={()=>router.push(`/ventas/clientes/${c.id}`)} onWA={setWaTarget}/>
               ))}
               {totalPaginas > 1 && (
-                <div style={{ display:'flex', justifyContent:'center', gap:6, marginTop:12 }}>
+                <div style={{ display:'flex', justifyContent:'center', gap:6, marginTop:4, marginBottom:8 }}>
                   <button onClick={()=>irPagina(pagina-1)} disabled={pagina===1}
-                    style={{ padding:'8px 14px', borderRadius:10, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--cream)', cursor:pagina===1?'not-allowed':'pointer' }}>
+                    style={{ padding:'8px 14px', borderRadius:10, border:`1px solid ${MC.border}`, background:MC.card, color:MC.text, cursor:pagina===1?'not-allowed':'pointer' }}>
                     ← Anterior
                   </button>
-                  <span style={{ padding:'8px 14px', fontSize:12, color:'var(--muted)' }}>{pagina}/{totalPaginas}</span>
+                  <span style={{ padding:'8px 14px', fontSize:12, color:MC.muted }}>{pagina}/{totalPaginas}</span>
                   <button onClick={()=>irPagina(pagina+1)} disabled={pagina===totalPaginas}
-                    style={{ padding:'8px 14px', borderRadius:10, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--cream)', cursor:pagina===totalPaginas?'not-allowed':'pointer' }}>
+                    style={{ padding:'8px 14px', borderRadius:10, border:`1px solid ${MC.border}`, background:MC.card, color:MC.text, cursor:pagina===totalPaginas?'not-allowed':'pointer' }}>
                     Siguiente →
                   </button>
                 </div>
@@ -912,26 +1184,30 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
         )}
       </div>
 
-      {/* Banner Campaña WA activa */}
-      <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:40,
-        background:'linear-gradient(90deg, #0a1a0a, #0d2010)', borderTop:'1px solid rgba(37,211,102,0.2)',
-        padding:'12px 24px', display:'flex', justifyContent:'space-between', alignItems:'center',
-        backdropFilter:'blur(10px)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:36, height:36, background:'rgba(37,211,102,0.15)', border:'1px solid rgba(37,211,102,0.3)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <MessageCircle size={18} color="#25D366"/>
+      {/* Banner Campaña WA activa — solo desktop: en móvil tapaba el bottom nav
+          (quedaba fixed sin condicionar a isDesktop). La acción "Campaña WA"
+          en móvil vive dentro del sheet de Filtros/config, no como banner fijo. */}
+      {isDesktop && (
+        <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:40,
+          background:'linear-gradient(90deg, #0a1a0a, #0d2010)', borderTop:'1px solid rgba(37,211,102,0.2)',
+          padding:'12px 24px', display:'flex', justifyContent:'space-between', alignItems:'center',
+          backdropFilter:'blur(10px)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ width:36, height:36, background:'rgba(37,211,102,0.15)', border:'1px solid rgba(37,211,102,0.3)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <MessageCircle size={18} color="#25D366"/>
+            </div>
+            <div>
+              <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)' }}>Campaña WhatsApp activa</p>
+              <p style={{ fontSize:10, color:'var(--muted)' }}>Envía mensajes masivos a tu cartera de clientes</p>
+            </div>
           </div>
-          <div>
-            <p style={{ fontSize:12, fontWeight:700, color:'var(--cream)' }}>Campaña WhatsApp activa</p>
-            <p style={{ fontSize:10, color:'var(--muted)' }}>Envía mensajes masivos a tu cartera de clientes</p>
-          </div>
+          <button onClick={()=>setShowWA(true)}
+            style={{ padding:'9px 18px', background:'rgba(37,211,102,0.15)', border:'1px solid rgba(37,211,102,0.3)',
+              borderRadius:10, color:'#25D366', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+            Nueva campaña
+          </button>
         </div>
-        <button onClick={()=>setShowWA(true)}
-          style={{ padding:'9px 18px', background:'rgba(37,211,102,0.15)', border:'1px solid rgba(37,211,102,0.3)',
-            borderRadius:10, color:'#25D366', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-          Nueva campaña
-        </button>
-      </div>
+      )}
 
       {/* Modal Campaña WA */}
       {showWA && <CampanaWAModal clientes={clientesFiltrados} onClose={()=>setShowWA(false)}/>}
