@@ -126,18 +126,43 @@ export default async function ClientesPage() {
     score: number; segmento: string; confianza_score: string
     litros_totales: number; revenue_total: number; pedidos_por_mes: number
   }>()
-  for (const s of scoreData ?? [])
-    if (s.nombre_fantasia) frecuenciaMap.set(s.nombre_fantasia, {
-      ultima_compra: s.ultima_compra ?? null,
-      dias_sin_compra: s.dias_sin_compra ?? 0,
-      ciclo_promedio_dias: s.ciclo_promedio_dias ?? null,
-      total_pedidos: s.total_pedidos ?? 0,
-      alert_level: s.alert_level ?? 'sin_historial',
-      siguiente_compra_estimada: s.siguiente_compra_estimada ?? null,
-      score: s.score ?? 0, segmento: s.segmento ?? 'E',
-      confianza_score: s.confianza_score ?? 'baja',
-      litros_totales: s.litros_totales ?? 0, revenue_total: s.revenue_total ?? 0, pedidos_por_mes: s.pedidos_por_mes ?? 0,
+  // get_client_scores trae UNA FILA POR (nombre_fantasia, vendedor_actual) —
+  // un mismo cliente puede tener varias filas si el ERP le cambió el nombre al
+  // vendedor a lo largo del tiempo (pasó con las carteras Metropolitana/
+  // Araucanía/Ríos/Lagos, 21-25 ago 2026: ej. "Oculto Beer Garden" quedó con
+  // una fila reciente bajo "Yadro Fabijancic" — 13 pedidos, 150L, ayer — y
+  // otra vieja bajo "Equipo Ventas" — 2 pedidos, 30L, hace 840 días).
+  // Quedarnos con una sola fila (la que llegara última del RPC, sin orden
+  // garantizado) mostraba "91d/840d sin comprar" al lado de un pedido de
+  // ayer, y además subestimaba el historial real del cliente. Solución:
+  // sumar pedidos/litros/revenue de TODAS las filas del cliente (historial
+  // completo, sin importar bajo qué nombre de vendedor haya quedado cada
+  // venta), y quedarnos con el ciclo/estado/score de la fila MÁS RECIENTE
+  // (refleja mejor su ritmo de compra actual que promediar con filas viejas).
+  type ScoreRow = NonNullable<typeof scoreData>[number]
+  const filasPorCliente = new Map<string, ScoreRow[]>()
+  for (const s of scoreData ?? []) {
+    if (!s.nombre_fantasia) continue
+    const arr = filasPorCliente.get(s.nombre_fantasia) ?? []
+    arr.push(s)
+    filasPorCliente.set(s.nombre_fantasia, arr)
+  }
+  for (const [nombre, filas] of filasPorCliente) {
+    const masReciente = filas.reduce((a, b) => (b.ultima_compra ?? '') > (a.ultima_compra ?? '') ? b : a)
+    frecuenciaMap.set(nombre, {
+      ultima_compra: masReciente.ultima_compra ?? null,
+      dias_sin_compra: masReciente.dias_sin_compra ?? 0,
+      ciclo_promedio_dias: masReciente.ciclo_promedio_dias ?? null,
+      total_pedidos: filas.reduce((sum, f) => sum + (f.total_pedidos ?? 0), 0),
+      alert_level: masReciente.alert_level ?? 'sin_historial',
+      siguiente_compra_estimada: masReciente.siguiente_compra_estimada ?? null,
+      score: masReciente.score ?? 0, segmento: masReciente.segmento ?? 'E',
+      confianza_score: masReciente.confianza_score ?? 'baja',
+      litros_totales: filas.reduce((sum, f) => sum + (f.litros_totales ?? 0), 0),
+      revenue_total:  filas.reduce((sum, f) => sum + (f.revenue_total  ?? 0), 0),
+      pedidos_por_mes: masReciente.pedidos_por_mes ?? 0,
     })
+  }
 
   const deudaMap = new Map<string, { deuda_vencida: number; saldo_total: number }>()
   for (const d of deudoresData ?? [])
@@ -158,9 +183,16 @@ export default async function ClientesPage() {
   // ── Enriquecer clientes (sin internos) ────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clientesEnriquecidos = (clientes ?? []).filter((c: any) => !esInterno(c.nombre_fantasia)).map((c: any) => {
-    const freq = frecuenciaMap.get(c.nombre_fantasia ?? '') ?? null
-    // Preferir fuente directa de ventas; client_scores como fallback
-    const ultimaFechaCompra = ultimaVentaMap.get(c.nombre_fantasia ?? '') ?? freq?.ultima_compra ?? null
+    const freqRaw = frecuenciaMap.get(c.nombre_fantasia ?? '') ?? null
+    // Preferir fuente directa de ventas (scan de `ventas`, todos los vendedor_actual
+    // del cliente); client_scores como fallback si no hay ninguna venta directa.
+    const ultimaFechaCompra = ultimaVentaMap.get(c.nombre_fantasia ?? '') ?? freqRaw?.ultima_compra ?? null
+    // "Xd sin comprar" SIEMPRE se deriva de ultimaFechaCompra (la fuente que
+    // se muestra como "Último pedido"), nunca del dias_sin_compra que trae
+    // client_scores — así los dos números de la tarjeta nunca pueden
+    // contradecirse aunque client_scores quede desalineado por un cambio de
+    // nombre de vendedor en el ERP.
+    const freq = freqRaw && ultimaFechaCompra ? { ...freqRaw, dias_sin_compra: diasDesde(ultimaFechaCompra) ?? freqRaw.dias_sin_compra } : freqRaw
     const periodo = periodoMap.get(c.nombre_fantasia ?? '') ?? null
     return {
       ...c,
