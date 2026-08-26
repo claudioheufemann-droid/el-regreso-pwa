@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDORES, VENDEDORES_SCOPE, esClienteExcluido } from '@/lib/types'
+import { VENDEDORES_SCOPE, VENDEDORES_CARTERA_ACTIVAS, esClienteExcluido, vendedorCanonico, nombresErpDe } from '@/lib/types'
 import { getUltimaVentasCached } from '@/lib/misionesCache'
 import ClientesClient from './ClientesClient'
 
@@ -22,12 +22,27 @@ export default async function ClientesPage() {
   const supabase = await createClient()
   const appUser  = await getServerUser()
 
-  const vendedoresScope = appUser?.isAdmin ? VENDEDORES : VENDEDORES.filter(v => v === appUser?.nombre)
-  // El campo clientes.vendedor guarda nombres REALES (Marcelo Diaz, Yadro Fabijancic,
-  // Javier/Carlos históricos, etc.), no solo el display "Equipo Ventas". Usamos
-  // VENDEDORES_SCOPE (todos los nombres reales agrupados en lib/types.ts) para no
-  // dejar fuera clientes cuyo vendedor no sea el histórico consolidado.
-  const scopeDB: string[] = [...VENDEDORES_SCOPE]
+  // Vendedores con cartera propia para los botones "macro" del filtro — admin
+  // ve la lista completa, un vendedor ve solo su propio nombre (no se le
+  // ofrece ni siquiera la opción de mirar la cartera de otro).
+  const vendedoresScope = appUser?.isAdmin
+    ? [...VENDEDORES_CARTERA_ACTIVAS]
+    : [vendedorCanonico(appUser?.nombre ?? '')]
+
+  // El campo clientes.vendedor guarda nombres REALES (Marcelo Diaz, Yadro
+  // Fabijancic, Los Rios/Los Lagos históricos, etc.), no un display unificado.
+  //
+  // OJO — esto filtra la QUERY A LA BASE DE DATOS, no solo lo que se pinta en
+  // pantalla: antes `scopeDB` era SIEMPRE VENDEDORES_SCOPE completo sin
+  // importar el rol, así que el navegador de CUALQUIER vendedor recibía el
+  // roster completo de la empresa (nombres, teléfonos, deuda, revenue de
+  // TODOS los clientes) en el HTML/props de la página, aunque la UI después
+  // sólo mostrara su propia cartera filtrando en el cliente — cualquiera con
+  // las devtools abiertas podía ver la cartera de sus compañeros. Ahora un
+  // vendedor no-admin sólo trae SUS propios clientes desde la BD.
+  const scopeDB: string[] = appUser?.isAdmin
+    ? [...VENDEDORES_SCOPE]
+    : nombresErpDe(vendedorCanonico(appUser?.nombre ?? '__sin_vendedor__'))
 
   const { data: periodo } = await supabase
     .from('periodos').select('id, nombre, fecha_inicio, fecha_fin').eq('activo', true).single()
@@ -128,6 +143,8 @@ export default async function ClientesPage() {
     // Modelo de ciclo v2 (ver supabase/migrations/ciclo_estacional_v2.sql)
     es_estacional: boolean; temporada_baja: boolean
     factor_estacional: number; ciclo_base_dias: number | null
+    // Primera compra ALGUNA VEZ, no de la fila más reciente — para "Nuevo".
+    primera_compra: string | null
   }>()
   // get_client_scores trae UNA FILA POR (nombre_fantasia, vendedor_actual) —
   // un mismo cliente puede tener varias filas si el ERP le cambió el nombre al
@@ -168,6 +185,10 @@ export default async function ClientesPage() {
       temporada_baja:    masReciente.temporada_baja ?? false,
       factor_estacional: masReciente.factor_estacional ?? 1,
       ciclo_base_dias:   masReciente.ciclo_base_dias ?? null,
+      // Mínimo entre TODAS las filas: la primera compra real del cliente,
+      // sin importar bajo qué nombre de vendedor quedó archivada.
+      primera_compra: filas.reduce((min: string | null, f) =>
+        !f.primera_compra ? min : (!min || f.primera_compra < min) ? f.primera_compra : min, null),
     })
   }
 

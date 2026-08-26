@@ -13,7 +13,7 @@ import type { ActividadItem } from './page'
 import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { VEND_COLOR, SEG_COLOR } from '@/lib/theme'
-import { VENDEDOR_DISPLAY } from '@/lib/types'
+import { vendedorCanonico, VENDEDORES_CARTERA_ACTIVAS } from '@/lib/types'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface FrequencyStat {
@@ -28,6 +28,8 @@ interface FrequencyStat {
   factor_estacional?: number
   /** Ciclo sin ajuste estacional ni calibración (para explicar el cálculo). */
   ciclo_base_dias?: number | null
+  /** Fecha de la primera compra ALGUNA VEZ (para clasificar "Nuevo"). */
+  primera_compra?: string | null
 }
 interface Cliente {
   id: number; nombre_fantasia: string | null; razon_social: string | null
@@ -163,6 +165,18 @@ function fPeso(n: number): string {
 function esPasada(f: string | null | undefined): boolean {
   if (!f) return false
   return new Date(f) < new Date()
+}
+
+// Cliente "Nuevo": su primera compra ALGUNA VEZ fue hace <=30 días. Se usa
+// `primera_compra` (ventas reales) y no `clientes.created_at` porque esta
+// última es cuándo se cargó la fila en la app (hubo una importación masiva
+// de 723 clientes de golpe el 28-may-2026), no cuándo el cliente empezó a
+// comprar de verdad.
+const DIAS_CLIENTE_NUEVO = 30
+function esClienteNuevo(f: FrequencyStat | null): boolean {
+  if (!f?.primera_compra) return false
+  const dias = diasDesde(f.primera_compra)
+  return dias !== null && dias >= 0 && dias <= DIAS_CLIENTE_NUEVO
 }
 
 // ── Score badge con anillo SVG de progreso ─────────────────────────────────────
@@ -351,7 +365,7 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
   const seg       = c.frecuencia?.segmento ?? 'E'
   const score     = c.frecuencia?.score ?? 0
   const segColor  = SEG_COLOR[seg] ?? '#888'
-  const vendColor = VEND_COLOR[c.vendedor ?? ''] ?? '#888'
+  const vendColor = VEND_COLOR[vendedorCanonico(c.vendedor)] ?? '#888'
   const dcont     = diasDesde(c.ultimoContacto?.fecha)
   const siguComp  = c.frecuencia?.siguiente_compra_estimada
   const deuda     = c.deuda?.deuda_vencida ?? 0
@@ -378,7 +392,7 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
               {c.nombre_fantasia}
             </p>
             <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2 }}>
-              <span style={{ fontSize:10, color:vendColor, fontWeight:700 }}>{(c.vendedor??'').split(' ')[0]}</span>
+              <span style={{ fontSize:10, color:vendColor, fontWeight:700 }}>{vendedorCanonico(c.vendedor).split(' ')[0]}</span>
               {(c.localidad_entrega || c.localidad) && (
                 <span style={{ fontSize:10, color:'#555' }}>· {c.localidad_entrega || c.localidad}</span>
               )}
@@ -485,22 +499,30 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
   const stock    = calcularStock(c.frecuencia)
   const diasSin  = c.frecuencia?.dias_sin_compra ?? 0
   const deudaV   = c.deuda?.deuda_vencida ?? 0
+  const nuevo    = esClienteNuevo(c.frecuencia)
   // Cliente de temporada fuera de su temporada: se pinta neutro (gris) y se
   // rotula "Temporada baja". Que no compre ahora es su patrón normal — pintarlo
   // en rojo llenaba la lista del vendedor de falsas urgencias cada invierno.
   const enTemporadaBaja = !!stock?.temporadaBaja
-  const bandColor = !stock
-    ? { fg: MC.muted, bg: 'rgba(124,138,168,0.1)' }
-    : enTemporadaBaja
-      ? { fg: MC.muted, bg: 'rgba(124,138,168,0.12)' }
-      : BAND_COLOR[stock.band ?? 'verde']
-  const riesgoLabel = !stock
-    ? 'Sin historial'
-    : enTemporadaBaja
-      ? 'Temporada baja'
-      : riesgoDeBand(stock.band) === 'alto' ? 'Riesgo alto'
-      : riesgoDeBand(stock.band) === 'medio' ? 'Riesgo medio'
-      : 'Sin riesgo'
+  // "Nuevo" pisa cualquier otra clasificación: con 1-2 pedidos casi nunca hay
+  // ciclo calculado todavía, así que sin esto la tarjeta decía "Sin historial"
+  // — cierto, pero mucho menos útil para el vendedor que saber que es nuevo.
+  const bandColor = nuevo
+    ? { fg: MC.blue, bg: MC.blueBg }
+    : !stock
+      ? { fg: MC.muted, bg: 'rgba(124,138,168,0.1)' }
+      : enTemporadaBaja
+        ? { fg: MC.muted, bg: 'rgba(124,138,168,0.12)' }
+        : BAND_COLOR[stock.band ?? 'verde']
+  const riesgoLabel = nuevo
+    ? 'Nuevo'
+    : !stock
+      ? 'Sin historial'
+      : enTemporadaBaja
+        ? 'Temporada baja'
+        : riesgoDeBand(stock.band) === 'alto' ? 'Riesgo alto'
+        : riesgoDeBand(stock.band) === 'medio' ? 'Riesgo medio'
+        : 'Sin riesgo'
 
   const waTarget: WATarget = { nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'general', cicloPromedioDias:c.frecuencia?.ciclo_promedio_dias, siguienteCompra:c.frecuencia?.siguiente_compra_estimada, subtitulo:c.categoria??undefined }
 
@@ -524,7 +546,7 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
               {c.nombre_fantasia}
             </p>
             <p style={{ fontSize:12, color:MC.muted, marginTop:1 }}>
-              {(c.vendedor??'').split(' ')[0]}{(c.localidad_entrega || c.localidad) ? ` · ${c.localidad_entrega || c.localidad}` : ''}
+              {vendedorCanonico(c.vendedor).split(' ')[0]}{(c.localidad_entrega || c.localidad) ? ` · ${c.localidad_entrega || c.localidad}` : ''}
             </p>
           </div>
           <span style={{ fontSize:11, fontWeight:700, padding:'5px 11px', borderRadius:20, flexShrink:0,
@@ -701,7 +723,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   const [showWA,      setShowWA]      = useState(false)
   const [showSort,    setShowSort]    = useState(false)
   const [waTarget,    setWaTarget]    = useState<WATarget | null>(null)
-  const [riesgoFiltro,setRiesgoFiltro]= useState<'todos'|'alto'|'medio'|'bajo'>('todos')
+  const [riesgoFiltro,setRiesgoFiltro]= useState<'todos'|'alto'|'medio'|'bajo'|'nuevo'>('todos')
   const [showFiltroSheet, setShowFiltroSheet] = useState(false)
   // "Última actualización" — se calcula en el cliente para no desfasar el SSR
   // (el server renderiza a la hora del build/revalidate, no la del visitante).
@@ -733,12 +755,15 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
 
   // Filtrar y ordenar
   const clientesFiltrados = useMemo(() => {
-    const vendEfectivo = isAdmin ? vendFiltro : (VENDEDOR_DISPLAY[user?.nombre ?? ''] ?? user?.nombre ?? 'all')
+    // vendedorCanonico (no VENDEDOR_DISPLAY/VENDEDOR_GRUPOS, que son para
+    // ventas.vendedor_actual y no reconocen "Nicol Delgado"/"Marion Meza" como
+    // claves): unifica clientes.vendedor ("Los Rios", "Los Lagos", nombres
+    // viejos del ERP) con el nombre vigente de quien atiende esa cartera hoy.
+    const vendEfectivo = isAdmin ? vendFiltro : vendedorCanonico(user?.nombre ?? '')
     let res = clientes.filter(c => c.estadoCliente !== 'inactivo')
 
     if (vendEfectivo !== 'all')
-      // clientes.vendedor tiene nombres reales; el filtro usa el display ("Vendedor 1")
-      res = res.filter(c => (VENDEDOR_DISPLAY[c.vendedor ?? ''] ?? c.vendedor) === vendEfectivo)
+      res = res.filter(c => vendedorCanonico(c.vendedor ?? '') === vendEfectivo)
 
     if (busqueda.trim()) {
       const b = busqueda.toLowerCase()
@@ -766,7 +791,9 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
       })
     }
 
-    if (!isDesktop && riesgoFiltro !== 'todos') {
+    if (!isDesktop && riesgoFiltro === 'nuevo') {
+      res = res.filter(c => esClienteNuevo(c.frecuencia))
+    } else if (!isDesktop && riesgoFiltro !== 'todos') {
       res = res.filter(c => {
         const s = calcularStock(c.frecuencia)
         return riesgoDeBand(s?.band ?? null, s?.temporadaBaja) === riesgoFiltro
@@ -792,9 +819,9 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   // Conteos de los chips de riesgo (móvil) — sobre búsqueda/vendedor aplicados,
   // pero SIN el propio filtro de riesgo, para que los conteos no cambien al elegir uno.
   const riesgoCounts = useMemo(() => {
-    const vendEfectivo = isAdmin ? vendFiltro : (VENDEDOR_DISPLAY[user?.nombre ?? ''] ?? user?.nombre ?? 'all')
+    const vendEfectivo = isAdmin ? vendFiltro : vendedorCanonico(user?.nombre ?? '')
     let base = clientes.filter(c => c.estadoCliente !== 'inactivo')
-    if (vendEfectivo !== 'all') base = base.filter(c => (VENDEDOR_DISPLAY[c.vendedor ?? ''] ?? c.vendedor) === vendEfectivo)
+    if (vendEfectivo !== 'all') base = base.filter(c => vendedorCanonico(c.vendedor ?? '') === vendEfectivo)
     if (busqueda.trim()) {
       const b = busqueda.toLowerCase()
       base = base.filter(c =>
@@ -804,8 +831,9 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
         c.localidad_entrega?.toLowerCase().includes(b)
       )
     }
-    const counts = { todos: base.length, alto: 0, medio: 0, bajo: 0 }
+    const counts = { todos: base.length, alto: 0, medio: 0, bajo: 0, nuevo: 0 }
     for (const c of base) {
+      if (esClienteNuevo(c.frecuencia)) counts.nuevo++
       const s = calcularStock(c.frecuencia)
       counts[riesgoDeBand(s?.band ?? null, s?.temporadaBaja)]++
     }
@@ -927,10 +955,31 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
             {busqueda && <button onClick={()=>handleBusqueda('')} style={{ background:'none', border:'none', cursor:'pointer', color:MC.muted, padding:0 }}><X size={14}/></button>}
           </div>
 
+          {/* Macros por vendedor (solo admin) — filtro rápido de cartera */}
+          {isAdmin && (
+            <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:10 }}>
+              {[{ key:'all', label:'Todos los vendedores' }, ...VENDEDORES_CARTERA_ACTIVAS.map(v => ({ key:v, label:v.split(' ')[0] }))].map(v=>{
+                const active = vendFiltro===v.key
+                const vendColor = v.key==='all' ? MC.text : (VEND_COLOR[v.key] ?? MC.blue)
+                return (
+                  <button key={v.key} onClick={()=>handleVend(v.key)}
+                    style={{ flexShrink:0, padding:'7px 13px', borderRadius:20, cursor:'pointer',
+                      border:`1px solid ${active?vendColor:MC.border}`,
+                      background: active ? `${vendColor}22` : MC.card,
+                      color: active ? vendColor : MC.muted,
+                      fontSize:12, fontWeight:active?800:600 }}>
+                    {v.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           {/* Chips de riesgo */}
           <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:14, marginBottom:2 }}>
             {[
               { key:'todos' as const, label:'Todos', count:riesgoCounts.todos, color:MC.blue },
+              { key:'nuevo' as const, label:'Nuevos', count:riesgoCounts.nuevo, color:MC.blue },
               { key:'alto'  as const, label:'Riesgo alto',  count:riesgoCounts.alto,  color:MC.red },
               { key:'medio' as const, label:'Riesgo medio', count:riesgoCounts.medio, color:MC.amber },
               { key:'bajo'  as const, label:'Sin riesgo',   count:riesgoCounts.bajo,  color:MC.green },
@@ -962,26 +1011,8 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
                   <button onClick={()=>setShowFiltroSheet(false)} style={{ background:'none', border:'none', cursor:'pointer', color:MC.muted }}><X size={18}/></button>
                 </div>
 
-                {isAdmin && (
-                  <>
-                    <p style={{ fontSize:11, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:8 }}>VENDEDOR</p>
-                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:18 }}>
-                      {['all', ...vendedoresScope.map(s => VENDEDOR_DISPLAY[s] ?? s)].map(v=>{
-                        const label = v==='all' ? 'Todos' : v
-                        const active = vendFiltro===v
-                        return (
-                          <button key={v} onClick={()=>handleVend(v)}
-                            style={{ padding:'8px 14px', borderRadius:10, cursor:'pointer',
-                              border:`1px solid ${active?MC.blue:MC.border}`,
-                              background:active?MC.blueBg:'transparent', color:active?MC.blue:MC.text,
-                              fontSize:13, fontWeight:active?700:500 }}>
-                            {label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </>
-                )}
+                {/* El filtro por vendedor vive como macro siempre visible arriba
+                    de los chips de riesgo, no acá — no duplicar el selector. */}
 
                 <p style={{ fontSize:11, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:8 }}>ESTADO DE CONTACTO</p>
                 <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:18 }}>
@@ -1034,7 +1065,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
               {/* Vendedor tabs (solo admin) */}
               {isAdmin && (
                 <div style={{ display:'flex', gap:4, background:'rgba(255,255,255,0.04)', border:'1px solid var(--border)', borderRadius:10, padding:'3px' }}>
-                  {['all', ...vendedoresScope.map(s => VENDEDOR_DISPLAY[s] ?? s)].map(v=>{
+                  {['all', ...vendedoresScope].map(v=>{
                     const label = v==='all' ? 'Todos' : v
                     const active = vendFiltro===v
                     return (
