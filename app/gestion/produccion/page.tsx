@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Dashboard from '@/components/dashboard/Dashboard'
 import { MACRO_AREAS } from '@/lib/gestion-types'
@@ -9,7 +10,7 @@ const PRODUCCION_AREAS = [...MACRO_AREAS.produccion.areas, 'Mi Cerebro']
 
 export default async function ProduccionPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
   const [{ data: users }] = await Promise.all([
@@ -17,7 +18,7 @@ export default async function ProduccionPage() {
   ])
 
   const userProfile = users?.find(u => u.email === user.email)
-  const userName = userProfile?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
+  const userName = userProfile?.nombre ?? user.nombre
   const isAdmin = userProfile?.is_admin === true
   const currentUserId = userProfile?.id ?? ''
 

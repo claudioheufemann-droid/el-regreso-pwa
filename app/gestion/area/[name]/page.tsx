@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import AreaView from '@/components/area/AreaView'
 
@@ -9,7 +10,7 @@ export default async function AreaPage({ params }: { params: Promise<{ name: str
   const area = decodeURIComponent(name)
 
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
   const [{ data: tasks }, { data: users }] = await Promise.all([
