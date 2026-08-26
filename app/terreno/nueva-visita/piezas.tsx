@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { MessageCircle, Minus, Plus, AlertTriangle, ChevronDown, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { CATALOGO_INFO_DEFAULT, type CatalogoInfo, fmtPrecioCLP } from '@/lib/catalogo-productos'
+import { imagenProducto } from '@/lib/producto-imagenes'
+import ProductImage from '@/components/ui/ProductImage'
 import { C } from '../theme'
 
 /**
@@ -32,49 +34,13 @@ export function setCatalogo(c: Record<string, CatalogoInfo>) { CATALOGO = c }
 export function getCatalogo() { return CATALOGO }
 
 // ─── Fotos de producto ──────────────────────────────────────────────────────
-
-const PRODUCTO_IMAGENES: Record<string, string> = {
-  'Kombucha Berry Menta':        '/productos/kombucha/berry-menta.webp',
-  'Kombucha Detox':              '/productos/kombucha/detox.webp',
-  'Kombucha Lemon':              '/productos/kombucha/lemon-fresh.webp',
-  'Kombucha Mango':              '/productos/kombucha/mango-merken.webp',
-  'Kombucha Maqui':              '/productos/kombucha/maqui-hops.webp',
-  'Kombucha Maracuyá Cardamomo': '/productos/kombucha/maracuya-cardamomo.webp',
-  'Kombucha Natural':            '/productos/kombucha/natural.webp',
-  'Arboretum':                   '/productos/cerveza/arboretum.webp',
-  'Mocho English':               '/productos/cerveza/mocho.webp',
-  'La Barra APA':                '/productos/cerveza/la-barra.webp',
-  'Fisura':                      '/productos/cerveza/fisura.webp',
-  'Descenso West Coast IPA':     '/productos/cerveza/descenso.webp',
-  'Aguas Blancas':               '/productos/cerveza/aguas-blancas.webp',
-}
-const IMAGEN_BARRIL = '/productos/cerveza/barril.webp'
+// El mapa nombre→foto vive en lib/producto-imagenes.ts (fuente única). Antes
+// estaba copiado acá y en otros cuatro archivos, y el respaldo era un emoji.
 
 export function ProductoThumb({ nombre, categoria, esBarril = false, size = 48 }: {
   nombre: string; categoria: string; esBarril?: boolean; size?: number
 }) {
-  const src = esBarril ? IMAGEN_BARRIL : PRODUCTO_IMAGENES[nombre]
-  const [imgOk, setImgOk] = useState(!!src)
-  const emoji = (categoria ?? '').toLowerCase().includes('kombucha') ? '🫧' : '🍺'
-
-  if (src && imgOk) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src} alt="" width={size} height={size}
-        onError={() => setImgOk(false)}
-        style={{ width: size, height: size, borderRadius: 10, objectFit: 'contain', background: C.bg, flexShrink: 0 }}
-      />
-    )
-  }
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: 10, flexShrink: 0, background: C.bg,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.5,
-    }}>
-      {emoji}
-    </div>
-  )
+  return <ProductImage nombre={nombre} categoria={categoria} esBarril={esBarril} size={size} />
 }
 
 // ─── Selector de cantidad ───────────────────────────────────────────────────
@@ -260,7 +226,7 @@ async function generarImagenVenta(items: ItemCarrito[], clienteNombre: string, v
 
   const imgs: Record<string, HTMLImageElement | null> = {}
   await Promise.all(items.map(async it => {
-    const src = PRODUCTO_IMAGENES[it.producto]
+    const src = imagenProducto({ nombre: it.producto })
     imgs[it.producto] = src ? await loadImg(src).catch(() => null) : null
   }))
 

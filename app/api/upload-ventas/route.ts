@@ -447,6 +447,23 @@ export async function POST(req: NextRequest) {
     pedidosHuerfanosBorrados = new Set((huerfanos ?? []).map(h => h.pedido)).size
   }
 
+  // ── Refrescar el caché de métricas de cliente ───────────────────────────
+  // `client_metrics_cache` (ver supabase/migrations/client_metrics_cache_
+  // materializado.sql) guarda ya calculados el ciclo de compra, el score y
+  // la segmentación de cada cliente, porque recalcularlos en vivo cuesta
+  // ~3,7 s por carga de pantalla. Ese caché sólo queda viejo cuando entran
+  // ventas nuevas — o sea, exactamente acá.
+  //
+  // Tolerante a que la migración todavía no esté aplicada: si la función no
+  // existe, se ignora. Y nunca hace fallar el sync: las ventas ya están
+  // guardadas, y un caché un rato viejo es infinitamente mejor que perder
+  // la carga del ERP por un refresco.
+  let cacheRefrescado = false
+  {
+    const { error: refreshError } = await supabase.rpc('refrescar_client_metrics')
+    cacheRefrescado = !refreshError
+  }
+
   // Sin notificación acá a propósito: la carga de ventas es un sync de
   // datos del ERP (cron cada 10 min), no una acción de un trabajador — a
   // diferencia de entregas/ventas de vendedor/tareas, Claudio pidió
@@ -458,6 +475,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     insertadas,
+    cacheRefrescado,
     entregadas: insertadas - sinEntregar,
     pendientesDeEntrega: sinEntregar,
     pedidosHuerfanosBorrados,

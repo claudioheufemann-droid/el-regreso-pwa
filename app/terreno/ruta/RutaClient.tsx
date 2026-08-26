@@ -15,6 +15,9 @@ import {
   Search, MapPin, X, ChevronUp, ChevronDown, Navigation,
   Sparkles, Loader2, ChevronLeft, Plus, Building2, Pencil,
 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
+import { formatLocalidad } from '@/lib/format'
 import { C, TAP, cardStyle, btnPrimario } from '../theme'
 
 // ── Tipos ───────────────────────────────────────────────────────────────────
@@ -40,7 +43,23 @@ interface Parada {
 
 interface GeoResult { lat: string; lon: string; display_name: string }
 
-interface Props { clientes: ClienteRuta[] }
+/**
+ * `clientesIniciales`: sólo la primera página (60), la que se ve sin
+ * escribir nada en el buscador — no la cartera completa.
+ * `totalConUbicacion`: el conteo real, para el rótulo de la lista.
+ */
+interface ClienteRecomendado extends ClienteRuta {
+  diasSinComprar: number | null
+  ultimaCompra: string | null
+}
+
+interface Props {
+  clientesIniciales: ClienteRuta[]
+  totalConUbicacion: number
+  /** "Recomendados para hoy" — clientes con ciclo de compra vencido, ya
+   *  priorizados por el servidor (máx. 10). Ver cargarRecomendados en page.tsx. */
+  recomendados: ClienteRecomendado[]
+}
 
 // ── Distancia haversine en km ───────────────────────────────────────────────
 function distanciaKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -82,9 +101,14 @@ function urlGoogleMapsRuta(queue: Parada[]) {
   return waypoints ? `${base}&waypoints=${waypoints}` : base
 }
 
-export default function RutaClient({ clientes }: Props) {
+export default function RutaClient({ clientesIniciales, totalConUbicacion, recomendados }: Props) {
   const router = useRouter()
   const [busqueda, setBusqueda] = useState('')
+  // Antes lo primero que se veía al abrir Ruta era la cartera completa,
+  // paginada alfabéticamente — ningún criterio de prioridad. Ahora lo
+  // primero es "Recomendados para hoy" (ciclo de compra vencido); explorar
+  // el resto de la cartera es una acción explícita ("Ver todos los clientes").
+  const [verTodos, setVerTodos] = useState(false)
   const [queue, setQueue]       = useState<Parada[]>([])
   const [optimizando, setOptimizando] = useState(false)
   const [gpsError, setGpsError]       = useState<string | null>(null)
@@ -99,6 +123,71 @@ export default function RutaClient({ clientes }: Props) {
 
   const enQueue = useMemo(() => new Set(queue.map(p => p.id)), [queue])
 
+  // ── Búsqueda de clientes ──────────────────────────────────────────────
+  // `resultadosBusqueda === null` = no hay búsqueda activa, se muestra
+  // `clientesIniciales` (la página que ya trajo el servidor). Con texto,
+  // se consulta Supabase directo desde el navegador — mismo patrón que ya
+  // usa BuscarClienteSheet — en vez de filtrar un arreglo que ya no llega
+  // completo.
+  const [resultadosBusqueda, setResultadosBusqueda] = useState<ClienteRuta[] | null>(null)
+  const [buscandoClientes, setBuscandoClientes] = useState(false)
+  const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null)
+  const busquedaDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Separado del efecto de debounce para que "Reintentar" pueda llamarlo
+  // directo — reintentar reescribiendo `busqueda` con el mismo valor no
+  // sirve: React descarta un setState con un primitivo idéntico y el efecto
+  // nunca vuelve a correr.
+  const ejecutarBusqueda = useCallback(async (q: string) => {
+    setBuscandoClientes(true)
+    const supabase = createClient()
+    // Comas y paréntesis rompen la sintaxis de .or() de PostgREST — se
+    // limpian antes de armar el filtro, no se rechaza la búsqueda.
+    const termino = q.replace(/[,()]/g, ' ').trim()
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('nombre_fantasia, categoria, localidad, direccion, telefono, lat, lng')
+      .not('nombre_fantasia', 'is', null)
+      .not('lat', 'is', null)
+      .not('lng', 'is', null)
+      .or(`nombre_fantasia.ilike.%${termino}%,localidad.ilike.%${termino}%,categoria.ilike.%${termino}%`)
+      .order('nombre_fantasia')
+      .limit(60)
+
+    if (error) {
+      setErrorBusqueda(error.message)
+      setResultadosBusqueda([])
+    } else {
+      setErrorBusqueda(null)
+      setResultadosBusqueda((data ?? []).map(c => ({
+        nombre: c.nombre_fantasia as string,
+        categoria: c.categoria as string | null,
+        localidad: c.localidad as string | null,
+        direccion: c.direccion as string | null,
+        telefono: c.telefono as string | null,
+        lat: Number(c.lat),
+        lng: Number(c.lng),
+      })))
+    }
+    setBuscandoClientes(false)
+  }, [])
+
+  useEffect(() => {
+    if (busquedaDebounceRef.current) clearTimeout(busquedaDebounceRef.current)
+    const q = busqueda.trim()
+    if (q.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setResultadosBusqueda(null)
+      setErrorBusqueda(null)
+      setBuscandoClientes(false)
+      return
+    }
+    busquedaDebounceRef.current = setTimeout(() => { ejecutarBusqueda(q) }, 400)
+    return () => { if (busquedaDebounceRef.current) clearTimeout(busquedaDebounceRef.current) }
+  }, [busqueda, ejecutarBusqueda])
+
+  const resultados = resultadosBusqueda ?? clientesIniciales
+
   // Pre-carga desde Misiones: si venimos de "Armar mi ruta del día", la lista
   // de clientes llega por localStorage. Hacemos match con los clientes con GPS
   // y armamos la cola automáticamente.
@@ -110,31 +199,28 @@ export default function RutaClient({ clientes }: Props) {
     let nombres: string[]
     try { nombres = JSON.parse(raw) } catch { return }
     if (!Array.isArray(nombres) || nombres.length === 0) return
-    const set = new Set(nombres.map(n => n.toLowerCase().trim()))
-    const paradas: Parada[] = clientes
-      .filter(c => set.has(c.nombre.toLowerCase().trim()))
-      .map(c => ({
-        id: `cli-${c.nombre}`, nombre: c.nombre,
-        detalle: [c.categoria, c.localidad].filter(Boolean).join(' · ') || null,
-        lat: c.lat, lng: c.lng, tipo: 'cliente' as const,
+
+    // Antes esto hacía match contra el arreglo completo de clientes que
+    // llegaba del servidor. Ahora sólo llega la primera página, así que se
+    // resuelve con una consulta puntual por nombre — más liviana que la
+    // versión anterior, no menos correcta.
+    ;(async () => {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('clientes')
+        .select('nombre_fantasia, categoria, localidad, lat, lng')
+        .in('nombre_fantasia', nombres)
+        .not('lat', 'is', null)
+        .not('lng', 'is', null)
+      const paradas: Parada[] = (data ?? []).map(c => ({
+        id: `cli-${c.nombre_fantasia}`, nombre: c.nombre_fantasia as string,
+        detalle: [c.categoria, formatLocalidad(c.localidad as string | null)].filter(Boolean).join(' · ') || null,
+        lat: Number(c.lat), lng: Number(c.lng), tipo: 'cliente' as const,
       }))
-    // setState dentro del efecto a propósito: localStorage es un sistema
-    // externo que sólo existe en el cliente, así que no se puede leer en el
-    // inicializador del useState sin romper la hidratación.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (paradas.length > 0) setQueue(paradas)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      if (paradas.length > 0) setQueue(paradas)
+    })()
   }, [])
 
-  const filtrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
-    if (!q) return clientes.slice(0, 60)
-    return clientes.filter(c =>
-      c.nombre.toLowerCase().includes(q) ||
-      (c.localidad ?? '').toLowerCase().includes(q) ||
-      (c.categoria ?? '').toLowerCase().includes(q)
-    ).slice(0, 60)
-  }, [clientes, busqueda])
 
   // ── Toggle cliente existente ──
   function toggleCliente(c: ClienteRuta) {
@@ -145,7 +231,7 @@ export default function RutaClient({ clientes }: Props) {
         ? prev.filter(p => p.id !== id)
         : [...prev, {
             id, nombre: c.nombre,
-            detalle: [c.categoria, c.localidad].filter(Boolean).join(' · ') || null,
+            detalle: [c.categoria, formatLocalidad(c.localidad)].filter(Boolean).join(' · ') || null,
             lat: c.lat, lng: c.lng, tipo: 'cliente',
           }]
     )
@@ -341,7 +427,7 @@ export default function RutaClient({ clientes }: Props) {
             >
               {optimizando
                 ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Calculando ruta…</>
-                : <><Sparkles size={16} /> Ordenar por cercanía</>}
+                : <><Sparkles size={16} /> Optimizar ruta</>}
             </button>
             {gpsError && (
               <p style={{ fontSize: 11.5, color: C.amber, textAlign: 'center', marginBottom: 8 }}>{gpsError}</p>
@@ -432,71 +518,165 @@ export default function RutaClient({ clientes }: Props) {
           )}
         </div>
 
-        {/* Buscador de clientes */}
-        <div style={{ position: 'relative', marginBottom: 11 }}>
-          <Search size={16} color={C.faint} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
-          <input
-            type="text"
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-            placeholder="Buscar cliente, zona o categoría…"
-            style={{
-              width: '100%', minHeight: 48, paddingLeft: 38, paddingRight: 12, borderRadius: 12,
-              border: `1px solid ${C.line}`, background: C.card, fontSize: 15, color: C.text, outline: 'none',
-            }}
-          />
-        </div>
-
-        <p style={{ fontSize: 11.5, fontWeight: 800, color: C.muted, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 8 }}>
-          {busqueda ? `Resultados (${filtrados.length})` : `Clientes con ubicación (${clientes.length})`}
-        </p>
-
-        {clientes.length === 0 ? (
-          <div style={{ ...cardStyle, textAlign: 'center', padding: '32px 16px' }}>
-            <MapPin size={28} color={C.faint} style={{ margin: '0 auto 10px' }} />
-            <p style={{ fontSize: 13.5, color: C.text, fontWeight: 600 }}>
-              Todavía no hay clientes con ubicación
+        {/* ── Recomendados para hoy: lo primero que se ve, sin buscar nada ── */}
+        {!verTodos && !busqueda && (
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 11.5, fontWeight: 800, color: C.muted, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 8 }}>
+              Recomendados para hoy
             </p>
-            <p style={{ fontSize: 12, color: C.muted, marginTop: 5 }}>
-              Usa &quot;Agregar dirección&quot; de arriba para armar tu ruta.
-            </p>
+            {recomendados.length === 0 ? (
+              <div style={{ ...cardStyle, padding: '16px 14px', textAlign: 'center' }}>
+                <p style={{ fontSize: 12.5, color: C.muted }}>Ningún cliente tiene el ciclo de compra vencido hoy.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {recomendados.map(c => {
+                  const seleccionado = enQueue.has(`cli-${c.nombre}`)
+                  return (
+                    <button
+                      key={c.nombre}
+                      onClick={() => toggleCliente(c)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left',
+                        background: seleccionado ? C.blueSoft : C.card,
+                        border: `1px solid ${seleccionado ? C.blue : C.line}`,
+                        borderRadius: 12, cursor: 'pointer', padding: '11px 12px', minHeight: 58,
+                      }}
+                    >
+                      <span style={{
+                        width: 22, height: 22, borderRadius: 7, flexShrink: 0,
+                        border: `1.5px solid ${seleccionado ? C.blue : C.line}`,
+                        background: seleccionado ? C.blue : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#fff', fontSize: 13, fontWeight: 900,
+                      }}>
+                        {seleccionado ? '✓' : ''}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.nombre}
+                        </p>
+                        <p style={{ fontSize: 11.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {[c.categoria, formatLocalidad(c.localidad)].filter(Boolean).join(' · ') || 'No informado'}
+                        </p>
+                      </div>
+                      {c.diasSinComprar != null && (
+                        <span style={{ fontSize: 10.5, fontWeight: 700, color: C.amber, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                          {c.diasSinComprar}d sin comprar
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <button
+              onClick={() => setVerTodos(true)}
+              style={{
+                width: '100%', minHeight: 44, marginTop: 10, borderRadius: 12, cursor: 'pointer',
+                border: `1px solid ${C.line}`, background: 'transparent', color: C.blue,
+                fontSize: 13, fontWeight: 700,
+              }}
+            >
+              Ver todos los clientes ({totalConUbicacion})
+            </button>
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {filtrados.map(c => {
-              const seleccionado = enQueue.has(`cli-${c.nombre}`)
-              return (
+        )}
+
+        {/* ── Buscador + cartera completa: sólo al pedirlo explícitamente ── */}
+        {(verTodos || busqueda) && (
+          <>
+            <div style={{ position: 'relative', marginBottom: 11 }}>
+              <Search size={16} color={C.faint} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                type="text"
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar cliente, zona o categoría…"
+                autoFocus={verTodos}
+                style={{
+                  width: '100%', minHeight: 48, paddingLeft: 38, paddingRight: 12, borderRadius: 12,
+                  border: `1px solid ${C.line}`, background: C.card, fontSize: 15, color: C.text, outline: 'none',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <p style={{ fontSize: 11.5, fontWeight: 800, color: C.muted, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                {busqueda ? `Resultados (${resultados.length})` : `Clientes con ubicación (${totalConUbicacion})`}
+              </p>
+              {!busqueda && (
                 <button
-                  key={c.nombre}
-                  onClick={() => toggleCliente(c)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left',
-                    background: seleccionado ? C.blueSoft : C.card,
-                    border: `1px solid ${seleccionado ? C.blue : C.line}`,
-                    borderRadius: 12, cursor: 'pointer', padding: '11px 12px', minHeight: 58,
-                  }}
+                  onClick={() => setVerTodos(false)}
+                  style={{ fontSize: 11.5, fontWeight: 700, color: C.blue, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                 >
-                  <span style={{
-                    width: 22, height: 22, borderRadius: 7, flexShrink: 0,
-                    border: `1.5px solid ${seleccionado ? C.blue : C.line}`,
-                    background: seleccionado ? C.blue : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#fff', fontSize: 13, fontWeight: 900,
-                  }}>
-                    {seleccionado ? '✓' : ''}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {c.nombre}
-                    </p>
-                    <p style={{ fontSize: 11.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {[c.categoria, c.localidad].filter(Boolean).join(' · ') || 'Sin datos'}
-                    </p>
-                  </div>
+                  Volver a recomendados
                 </button>
-              )
-            })}
-          </div>
+              )}
+            </div>
+
+            {buscandoClientes ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[0, 1, 2, 3].map(i => <Skeleton key={i} height={58} radius={12} />)}
+              </div>
+            ) : errorBusqueda ? (
+              <ErrorState
+                compact
+                title="No pudimos buscar clientes"
+                hint="Revisa tu conexión e intenta de nuevo."
+                detail={errorBusqueda}
+                onRetry={() => ejecutarBusqueda(busqueda.trim())}
+              />
+            ) : totalConUbicacion === 0 && !busqueda ? (
+              <EmptyState
+                icon={MapPin}
+                title="Todavía no hay clientes con ubicación"
+                hint='Usa "Agregar dirección" de arriba para armar tu ruta.'
+              />
+            ) : resultados.length === 0 ? (
+              <EmptyState
+                icon={Search}
+                title="Sin resultados"
+                hint="Prueba con otro nombre, zona o categoría."
+              />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {resultados.map(c => {
+                  const seleccionado = enQueue.has(`cli-${c.nombre}`)
+                  return (
+                    <button
+                      key={c.nombre}
+                      onClick={() => toggleCliente(c)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left',
+                        background: seleccionado ? C.blueSoft : C.card,
+                        border: `1px solid ${seleccionado ? C.blue : C.line}`,
+                        borderRadius: 12, cursor: 'pointer', padding: '11px 12px', minHeight: 58,
+                      }}
+                    >
+                      <span style={{
+                        width: 22, height: 22, borderRadius: 7, flexShrink: 0,
+                        border: `1.5px solid ${seleccionado ? C.blue : C.line}`,
+                        background: seleccionado ? C.blue : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#fff', fontSize: 13, fontWeight: 900,
+                      }}>
+                        {seleccionado ? '✓' : ''}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.nombre}
+                        </p>
+                        <p style={{ fontSize: 11.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {[c.categoria, formatLocalidad(c.localidad)].filter(Boolean).join(' · ') || 'No informado'}
+                        </p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
       <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>

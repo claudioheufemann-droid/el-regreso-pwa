@@ -28,11 +28,16 @@ export default async function ComercialPage() {
 
   // Siempre filtrar a esta macro-área (incluso para admin)
   // La vista global está disponible en el Panel KPIs dentro del módulo
-  const { data: tasks } = await supabase
-    .from('tasks')
-    .select('*, responsable:users(id, nombre, iniciales, rol, area, email, avatar_url), responsable_ids')
-    .in('area', COMERCIAL_AREAS)
-    .order('created_at', { ascending: false })
+  const [{ data: tasks }, { count: clientesEnRiesgo }] = await Promise.all([
+    supabase
+      .from('tasks')
+      .select('*, responsable:users(id, nombre, iniciales, rol, area, email, avatar_url), responsable_ids')
+      .in('area', COMERCIAL_AREAS)
+      .order('created_at', { ascending: false }),
+    // Antes Comercial mostraba exactamente la misma pantalla de tareas que
+    // Administración y Producción, sin nada propio del área comercial.
+    supabase.from('client_scores').select('nombre_fantasia', { count: 'exact', head: true }).in('alert_level', ['critico', 'vencido']),
+  ])
 
   return (
     <div className="h-screen flex flex-col">
@@ -45,6 +50,7 @@ export default async function ComercialPage() {
         currentUserId={currentUserId}
         currentMacroArea="comercial"
         backHref="/gestion"
+        areaStat={{ label: 'Clientes en riesgo', value: String(clientesEnRiesgo ?? 0), href: '/ventas/clientes' }}
       />
     </div>
   )

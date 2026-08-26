@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/ui/AppHeader'
+import ProductImage from '@/components/ui/ProductImage'
+import { ErrorState, Skeleton } from '@/components/ui/States'
 import { Plus, Minus, Send, Trash2, FileText, Calendar, Clock, ChevronDown, ShoppingCart } from 'lucide-react'
 
 // Catálogo real: sin botellas, un solo tamaño de barril (30L).
@@ -31,25 +33,6 @@ const VARIEDADES: ProductoCatalogo[] = [
   { nombre: 'Kombucha Natural',            categoria: 'Kombucha' },
   { nombre: 'Kombucha Mango',              categoria: 'Kombucha' },
 ]
-
-const PRODUCTO_IMAGENES: Record<string, string> = {
-  'Arboretum':                   '/productos/cerveza/arboretum.webp',
-  'Mocho English':               '/productos/cerveza/mocho.webp',
-  'La Barra APA':                '/productos/cerveza/la-barra.webp',
-  'Fisura':                      '/productos/cerveza/fisura.webp',
-  'Descenso West Coast IPA':     '/productos/cerveza/descenso.webp',
-  'Aguas Blancas':               '/productos/cerveza/aguas-blancas.webp',
-  'Kombucha Berry Menta':        '/productos/kombucha/berry-menta.webp',
-  'Kombucha Detox':              '/productos/kombucha/detox.webp',
-  'Kombucha Lemon':              '/productos/kombucha/lemon-fresh.webp',
-  'Kombucha Mango':              '/productos/kombucha/mango-merken.webp',
-  'Kombucha Maqui':              '/productos/kombucha/maqui-hops.webp',
-  'Kombucha Maracuyá Cardamomo': '/productos/kombucha/maracuya-cardamomo.webp',
-  'Kombucha Natural':            '/productos/kombucha/natural.webp',
-}
-
-// Foto genérica de barril — se usa para todos los barriles sin importar el sabor.
-const IMAGEN_BARRIL = '/productos/cerveza/barril.webp'
 
 function envaseDe(categoria: Categoria, tab: FormatoTab): string {
   if (tab === 'barril') return 'Barril 30L'
@@ -82,30 +65,9 @@ const ORANGE = '#F97316'
 const ORANGE_DIM = 'rgba(249,115,22,0.12)'
 const ORANGE_BORDER = 'rgba(249,115,22,0.28)'
 
+// La foto la resuelve ProductImage (fuente única en lib/producto-imagenes.ts).
 function ProductoThumb({ nombre, categoria, esBarril = false, size = 44 }: { nombre: string; categoria: Categoria; esBarril?: boolean; size?: number }) {
-  const src = esBarril ? IMAGEN_BARRIL : PRODUCTO_IMAGENES[nombre]
-  const [imgOk, setImgOk] = useState(!!src)
-  const emoji = categoria === 'Kombucha' ? '🫧' : '🍺'
-
-  if (src && imgOk) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src} alt={nombre} width={size} height={size}
-        onError={() => setImgOk(false)}
-        style={{ width: size, height: size, borderRadius: 10, objectFit: 'contain', background: 'rgba(255,255,255,0.03)', flexShrink: 0 }}
-      />
-    )
-  }
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: 10, flexShrink: 0,
-      background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.5,
-    }}>
-      {emoji}
-    </div>
-  )
+  return <ProductImage nombre={nombre} categoria={categoria} esBarril={esBarril} size={size} />
 }
 
 function CantidadInput({ value, onchange }: { value: number; onchange: (n: number) => void }) {
@@ -187,6 +149,7 @@ export default function DeclararClient() {
   const router = useRouter()
   const [lotes, setLotes] = useState<LoteRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [errorLotes, setErrorLotes] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const [fecha, setFecha] = useState('')
@@ -208,9 +171,14 @@ export default function DeclararClient() {
 
   const load = useCallback(() => {
     setLoading(true)
+    setErrorLotes(null)
     fetch('/api/logistica/lotes?estado=declarado')
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => setLotes(Array.isArray(data) ? data : []))
+      .catch(err => setErrorLotes(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -602,7 +570,22 @@ export default function DeclararClient() {
         )}
 
         {loading && (
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, textAlign: 'center' }}>Cargando lotes pendientes…</p>
+          <div style={{ maxWidth: 280, margin: '0 auto' }}>
+            <Skeleton height={16} width="70%" style={{ margin: '0 auto' }} />
+          </div>
+        )}
+
+        {!loading && errorLotes && (
+          <div style={{ marginTop: 8 }}>
+            <ErrorState
+              compact
+              title="No pudimos cargar los lotes pendientes"
+              hint="El formulario de arriba sigue funcionando igual; esto sólo afecta el orden sugerido de productos."
+              detail={errorLotes}
+              showDetail
+              onRetry={load}
+            />
+          </div>
         )}
       </div>
     </div>

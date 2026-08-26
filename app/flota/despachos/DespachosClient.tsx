@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/ui/AppHeader'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 import { REGIONES_OPERATIVAS } from '@/lib/regiones'
 import { Plus, ArrowUp, ArrowDown, Truck, Camera, Share2 } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
@@ -116,6 +117,7 @@ export default function DespachosClient({ user, vehiculos }: { user: AppUser; ve
   const [despachos, setDespachos] = useState<Despacho[]>([])
   const [pendientes, setPendientes] = useState<PedidoPendiente[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10))
   const [region, setRegion] = useState<string>(REGIONES_OPERATIVAS[0])
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set())
@@ -186,15 +188,27 @@ export default function DespachosClient({ user, vehiculos }: { user: AppUser; ve
     setParadasManuales(prev => prev.filter(p => p.key !== key))
   }
 
+  // Sin `.catch`, un fallo de red dejaba `loading` en true para siempre
+  // (spinner infinito) o, peor, `pendientes`/`despachos` en su valor previo
+  // mientras la sección de abajo ya asumía que la carga había terminado
+  // bien y mostraba "Sin despachos armados" — un vacío falso.
   const load = useCallback(() => {
     setLoading(true)
+    setError(null)
     Promise.all([
-      fetch(`/api/logistica/despachos?fecha=${fecha}`).then(r => r.json()),
-      fetch('/api/logistica/pedidos-pendientes').then(r => r.json()),
+      fetch(`/api/logistica/despachos?fecha=${fecha}`).then(async r => {
+        if (!r.ok) throw new Error(`despachos: la API respondió ${r.status}`)
+        return r.json()
+      }),
+      fetch('/api/logistica/pedidos-pendientes').then(async r => {
+        if (!r.ok) throw new Error(`pedidos-pendientes: la API respondió ${r.status}`)
+        return r.json()
+      }),
     ]).then(([d, p]) => {
       setDespachos(Array.isArray(d) ? d : [])
       setPendientes(Array.isArray(p) ? p : [])
-    }).finally(() => setLoading(false))
+    }).catch(err => setError(err instanceof Error ? err.message : 'Error desconocido'))
+      .finally(() => setLoading(false))
   }, [fecha])
 
   useEffect(() => { load() }, [load])
@@ -286,9 +300,24 @@ export default function DespachosClient({ user, vehiculos }: { user: AppUser; ve
           </p>
 
           {loading ? (
-            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>Cargando…</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {[0, 1, 2].map(i => <Skeleton key={i} height={40} radius={10} />)}
+            </div>
+          ) : error ? (
+            <ErrorState
+              compact
+              title="No pudimos cargar los pedidos"
+              hint="Revisa tu conexión y vuelve a intentar."
+              detail={error}
+              showDetail
+              onRetry={load}
+            />
           ) : pendientes.length === 0 ? (
-            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>No hay pedidos pendientes de despacho.</p>
+            <EmptyState
+              compact
+              title="No hay pedidos pendientes de despacho"
+              hint="Los pedidos de terreno completados aparecerán aquí listos para armar la ruta."
+            />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
               {pendientes.map(p => (
@@ -438,22 +467,47 @@ export default function DespachosClient({ user, vehiculos }: { user: AppUser; ve
             </div>
           )}
           {(seleccionados.size > 0 || paradasManuales.length > 0) && vehiculosDisponibles.length === 0 && (
-            <p style={{ fontSize: 11, color: '#FF6666', marginBottom: 12 }}>No hay vehículos disponibles ahora mismo.</p>
+            <p style={{ fontSize: 11, color: '#FF6666', marginBottom: 12 }}>
+              {vehiculos.length === 0
+                ? 'No hay vehículos registrados en el sistema.'
+                : 'Todos los vehículos están actualmente en uso o en mantenimiento.'}
+            </p>
           )}
 
-          <button
-            onClick={crearDespacho}
-            disabled={!(seleccionados.size + paradasManuales.length) || !vehiculoId || !kmInicio || creando}
-            style={{
-              width: '100%', padding: '12px 0', borderRadius: 12, border: 'none',
-              cursor: (seleccionados.size + paradasManuales.length) && vehiculoId && kmInicio ? 'pointer' : 'default',
-              background: `linear-gradient(135deg, ${ORANGE}, #C2410C)`, color: '#080808', fontSize: 13, fontWeight: 900,
-              opacity: (seleccionados.size + paradasManuales.length) && vehiculoId && kmInicio && !creando ? 1 : 0.4,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
-          >
-            <Truck size={14} /> {creando ? 'Iniciando salida…' : `Iniciar salida con ${seleccionados.size + paradasManuales.length} pedido${seleccionados.size + paradasManuales.length === 1 ? '' : 's'}`}
-          </button>
+          {/* El botón nunca anuncia una acción imposible. Antes decía
+              "Iniciar salida con 0 pedidos" (deshabilitado, pero leyéndose
+              como una acción real y sin explicar qué faltaba). Ahora el
+              propio botón dice cuál es el siguiente paso pendiente. */}
+          {(() => {
+            const nParadas = seleccionados.size + paradasManuales.length
+            const falta = nParadas === 0
+              ? 'Selecciona al menos un pedido'
+              : !vehiculoId ? 'Elige un vehículo'
+              : !kmInicio ? 'Ingresa el kilometraje inicial'
+              : null
+            const listo = !falta && !creando
+            return (
+              <button
+                onClick={crearDespacho}
+                disabled={!!falta || creando}
+                aria-disabled={!!falta || creando}
+                style={{
+                  width: '100%', padding: '12px 0', borderRadius: 12, border: 'none',
+                  cursor: listo ? 'pointer' : 'not-allowed',
+                  background: listo
+                    ? `linear-gradient(135deg, ${ORANGE}, #C2410C)`
+                    : 'rgba(255,255,255,0.06)',
+                  color: listo ? '#080808' : 'rgba(255,255,255,0.45)',
+                  fontSize: 13, fontWeight: 900,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  transition: 'background 0.2s, color 0.2s',
+                }}
+              >
+                <Truck size={14} />
+                {creando ? 'Iniciando salida…' : falta ?? `Iniciar salida · ${nParadas} pedido${nParadas === 1 ? '' : 's'}`}
+              </button>
+            )
+          })()}
         </div>
 
         {/* ── Despachos del día ── */}
@@ -461,11 +515,24 @@ export default function DespachosClient({ user, vehiculos }: { user: AppUser; ve
           Ruta del {new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })}
         </p>
 
-        {despachos.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'rgba(255,255,255,0.3)' }}>
-            <Truck size={28} style={{ marginBottom: 8, opacity: 0.4 }} />
-            <p style={{ fontSize: 13 }}>Sin despachos armados para esta fecha.</p>
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {[0, 1].map(i => <Skeleton key={i} height={110} radius={16} />)}
           </div>
+        ) : error ? (
+          <ErrorState
+            title="No pudimos cargar los despachos"
+            hint="Revisa tu conexión y vuelve a intentar."
+            detail={error}
+            showDetail
+            onRetry={load}
+          />
+        ) : despachos.length === 0 ? (
+          <EmptyState
+            icon={Truck}
+            title="Sin despachos armados para esta fecha"
+            hint="Arma uno arriba seleccionando pedidos, vehículo y kilometraje."
+          />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {despachos.map(d => (

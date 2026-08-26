@@ -23,19 +23,16 @@ export default async function CheckInPage() {
     .eq('fecha', hoy)
     .eq('estado', 'pendiente')
 
-  // Clientes desde tabla maestra para autocompletar destinos
-  const { data: clientes } = await supabase
-    .from('clientes')
-    .select('nombre_fantasia, direccion, localidad, ruta_despacho, lat, lng')
-    .not('nombre_fantasia', 'is', null)
-    .order('nombre_fantasia')
+  // Antes acá se traía TODA la tabla `clientes` (~600 filas) sólo para
+  // autocompletar destinos al armar una ruta de despacho — la búsqueda de
+  // cliente ahora es en vivo contra Supabase (ver CheckinClient), mismo
+  // patrón que ya usa Nueva Visita/Ruta/Cotizaciones.
 
   return (
     <CheckInClient
       user={user}
       vehiculos={vehiculos ?? []}
       rutasHoy={rutas ?? []}
-      clientes={clientes ?? []}
     />
   )
 }

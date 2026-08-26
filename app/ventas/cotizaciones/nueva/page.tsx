@@ -19,25 +19,15 @@ export default async function NuevaCotizacionPage() {
   if (!user) redirect('/login')
 
   const supabase = await createClient()
-  const [{ data: clientesRaw }, { data: stockRaw }] = await Promise.all([
-    supabase
-      .from('clientes')
-      .select('id, nombre_fantasia, razon_social, email, telefono')
-      .not('nombre_fantasia', 'is', null)
-      .order('nombre_fantasia'),
-    supabase
-      .from('stock_productos')
-      .select('codigo_producto, tipo, cantidad')
-      .not('codigo_producto', 'is', null),
-  ])
-
-  const clientes: ClienteParaCotizacion[] = (clientesRaw ?? []).map(c => ({
-    id: c.id,
-    nombre_fantasia: c.nombre_fantasia,
-    razon_social: c.razon_social ?? null,
-    email: c.email ?? null,
-    telefono: c.telefono ?? null,
-  }))
+  // Antes esta página traía TODOS los clientes (~600, sin límite) sólo para
+  // que el buscador de "Cliente existente" filtrara 8 en memoria — la base
+  // completa viajaba igual aunque nunca se mostrara de golpe. Ahora sólo se
+  // trae el stock; la búsqueda de cliente es en vivo contra Supabase (ver
+  // NuevaCotizacionClient), mismo patrón que ya usa Nueva Visita/Ruta.
+  const { data: stockRaw } = await supabase
+    .from('stock_productos')
+    .select('codigo_producto, tipo, cantidad')
+    .not('codigo_producto', 'is', null)
 
   // Cotizaciones solo debe ofrecer lo que realmente hay en bodega — se cruza
   // por código de producto (no por nombre, que varía entre catálogo y stock).
@@ -49,5 +39,5 @@ export default async function NuevaCotizacionPage() {
     else stockPorCodigo[cod].envase += s.cantidad
   }
 
-  return <NuevaCotizacionClient user={user} clientes={clientes} stockPorCodigo={stockPorCodigo} />
+  return <NuevaCotizacionClient user={user} stockPorCodigo={stockPorCodigo} />
 }

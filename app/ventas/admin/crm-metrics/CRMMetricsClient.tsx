@@ -169,7 +169,7 @@ export default function CRMMetricsClient({
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
             {(['A', 'B', 'C', 'D', 'E'] as const).map(seg => {
               const count = metrics.segmentCounts[seg]
-              const pct = (count / metrics.totalClientes) * 100
+              const pct = metrics.totalClientes > 0 ? (count / metrics.totalClientes) * 100 : 0
               const colors: Record<string, string> = { A: '#D4AF37', B: '#5A8A4A', C: '#D4AF37', D: '#D4AF37', E: '#B5543E' }
               return (
                 <div key={seg} style={{ flex: 1, textAlign: 'center' }}>

@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { CalendarClock } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 
 interface Jornada {
   id: string
@@ -28,14 +30,26 @@ const ESTADO_INFO: Record<string, { label: string; color: string }> = {
 export default function JornadasAdminPage() {
   const [jornadas, setJornadas] = useState<Jornada[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filtro, setFiltro] = useState<'todas' | 'revision' | 'pendientes'>('revision')
 
-  useEffect(() => {
+  // Antes un fallo de red se veía idéntico a "no hay jornadas": la lista
+  // quedaba vacía y el mensaje decía "Sin jornadas en este filtro", que es
+  // mentira y hace tomar decisiones sobre datos que nunca llegaron.
+  const cargar = useCallback(() => {
+    setLoading(true)
+    setError(null)
     fetch('/api/admin/jornadas')
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => setJornadas(Array.isArray(data) ? data : []))
+      .catch(err => setError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => { cargar() }, [cargar])
 
   const filtradas = jornadas.filter(j => {
     if (filtro === 'revision') return j.requiere_revision && j.estado === 'cerrada'
@@ -98,9 +112,26 @@ export default function JornadasAdminPage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {loading && <p style={{ textAlign: 'center', padding: 40, color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Cargando…</p>}
-          {!loading && filtradas.length === 0 && (
-            <p style={{ textAlign: 'center', padding: 40, color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Sin jornadas en este filtro.</p>
+          {loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[0, 1, 2, 3].map(i => <Skeleton key={i} height={62} radius={14} />)}
+            </div>
+          )}
+          {!loading && error && (
+            <ErrorState
+              title="No pudimos cargar las jornadas"
+              hint="Revisa tu conexión y vuelve a intentar."
+              detail={error}
+              showDetail
+              onRetry={cargar}
+            />
+          )}
+          {!loading && !error && filtradas.length === 0 && (
+            <EmptyState
+              icon={CalendarClock}
+              title="Sin jornadas en este filtro"
+              hint="Cambia el filtro de arriba o espera a que un vendedor cierre su jornada."
+            />
           )}
           {filtradas.map(j => {
             const info = ESTADO_INFO[j.estado] ?? { label: j.estado, color: 'rgba(255,255,255,0.4)' }

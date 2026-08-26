@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 import { AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react'
 
 interface AlertaRow {
@@ -21,14 +22,23 @@ interface AlertaRow {
 export default function AlertasClient() {
   const [alertas, setAlertas] = useState<AlertaRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [resolviendo, setResolviendo] = useState<string | null>(null)
   const [nota, setNota] = useState('')
 
+  // Crítico: sin `.catch`, un fallo de red dejaba la lista vacía y la
+  // pantalla anunciaba "Todo cuadra 🎉" — le decía a bodega que no hay
+  // descuadres cuando en realidad nunca llegó a preguntarlo.
   const load = useCallback(() => {
     setLoading(true)
+    setError(null)
     fetch('/api/logistica/alertas?resuelta=false')
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => setAlertas(Array.isArray(data) ? data : []))
+      .catch(err => setError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -51,12 +61,23 @@ export default function AlertasClient() {
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 100px' }}>
         {loading ? (
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Cargando…</p>
-        ) : alertas.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 0', color: 'rgba(255,255,255,0.3)' }}>
-            <ShieldCheck size={30} style={{ marginBottom: 10, opacity: 0.4 }} />
-            <p style={{ fontSize: 13 }}>Sin descuadres pendientes. Todo cuadra 🎉</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[0, 1, 2].map(i => <Skeleton key={i} height={92} radius={16} />)}
           </div>
+        ) : error ? (
+          <ErrorState
+            title="No pudimos revisar los descuadres"
+            hint="No es lo mismo que “todo cuadra”: la consulta no llegó a completarse. Intenta de nuevo."
+            detail={error}
+            showDetail
+            onRetry={load}
+          />
+        ) : alertas.length === 0 ? (
+          <EmptyState
+            icon={ShieldCheck}
+            title="Todo cuadra"
+            hint="No hay descuadres pendientes entre lo declarado en producción y lo recibido en bodega."
+          />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {alertas.map(a => (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Logo from '@/components/ui/Logo'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 
 interface AppUser {
   id: string
@@ -173,6 +174,7 @@ function Avatar({ u }: { u: AppUser }) {
 export default function UsuariosAdminPage() {
   const [users, setUsers]       = useState<AppUser[]>([])
   const [loading, setLoading]   = useState(true)
+  const [errorUsers, setErrorUsers] = useState<string | null>(null)
   const [filter, setFilter]     = useState<'todos' | 'comercial' | 'administracion' | 'produccion' | 'logistica' | 'sin-area'>('todos')
   const [search, setSearch]     = useState('')
   const [sortBy, setSortBy]     = useState<'nombre' | 'actividad'>('actividad')
@@ -182,10 +184,17 @@ export default function UsuariosAdminPage() {
 
   function loadUsers() {
     setLoading(true)
+    setErrorUsers(null)
     fetch('/api/admin/usuarios')
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => { setUsers(Array.isArray(data) ? data : []); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch(err => {
+        setErrorUsers(err instanceof Error ? err.message : 'Error desconocido')
+        setLoading(false)
+      })
   }
 
   useEffect(() => { loadUsers() }, [])
@@ -317,14 +326,29 @@ export default function UsuariosAdminPage() {
           </div>
 
           {loading && (
-            <div style={{ textAlign: 'center', padding: '48px 20px', color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>
-              Cargando usuarios...
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 12 }}>
+              {[0, 1, 2, 3, 4].map(i => <Skeleton key={i} height={52} radius={8} />)}
             </div>
           )}
 
-          {!loading && filtered.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '48px 20px', color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>
-              Sin usuarios que coincidan
+          {!loading && errorUsers && (
+            <div style={{ padding: '20px 16px' }}>
+              <ErrorState
+                title="No pudimos cargar los usuarios"
+                hint="Revisa tu conexión y vuelve a intentar."
+                detail={errorUsers}
+                showDetail
+                onRetry={loadUsers}
+              />
+            </div>
+          )}
+
+          {!loading && !errorUsers && filtered.length === 0 && (
+            <div style={{ padding: '20px 16px' }}>
+              <EmptyState
+                title={search || filter !== 'todos' ? 'Sin usuarios que coincidan' : 'Todavía no hay usuarios'}
+                hint={search || filter !== 'todos' ? 'Prueba con otro filtro o término de búsqueda.' : undefined}
+              />
             </div>
           )}
 

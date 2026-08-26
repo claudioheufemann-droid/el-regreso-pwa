@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeft, TrendingUp, Plus, Trash2, Save, Beer, Percent, ArrowRight, Lock, Pencil } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { createClient } from '@/lib/supabase/client'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import NotificationsBell from '@/components/ui/NotificationsBell'
+import ProductImage from '@/components/ui/ProductImage'
 import type { AppUser } from '@/lib/auth'
 import {
   type CostoPrecio, type Zona, type Formato, type ItemSimulacion, type PromoTramo,
@@ -24,33 +26,9 @@ const C = {
   red: '#DC2626', redSoft: '#FEF2F2',
 }
 
-const IMAGEN_BARRIL = '/productos/cerveza/barril.webp'
-const CODIGO_IMAGENES: Record<string, string> = {
-  'C-1': '/productos/cerveza/arboretum.webp', 'C-2': '/productos/cerveza/la-barra.webp',
-  'C-4': '/productos/cerveza/descenso.webp', 'C-5': '/productos/cerveza/aguas-blancas.webp',
-  'C-8': '/productos/cerveza/mocho.webp', 'C-9': '/productos/cerveza/fisura.webp',
-  'K-1': '/productos/kombucha/natural.webp', 'K-2': '/productos/kombucha/lemon-fresh.webp',
-  'K-4': '/productos/kombucha/berry-menta.webp', 'K-6': '/productos/kombucha/maqui-hops.webp',
-  'K-10': '/productos/kombucha/maracuya-cardamomo.webp', 'K-11': '/productos/kombucha/mango-merken.webp',
-  'K-22': '/productos/kombucha/detox.webp',
-}
-
-function ProductoThumb({ codigo, categoria, formato, size = 40 }: { codigo: string | null; categoria: string; formato: Formato; size?: number }) {
-  const src = formato === 'barril' ? IMAGEN_BARRIL : (codigo ? CODIGO_IMAGENES[codigo] : undefined)
-  const [imgOk, setImgOk] = useState(!!src)
-  const emoji = categoria === 'kombucha' ? '🫧' : '🍺'
-  if (src && imgOk) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={src} alt="" width={size} height={size} onError={() => setImgOk(false)}
-        style={{ width: size, height: size, borderRadius: 9, objectFit: 'contain', background: C.bg, flexShrink: 0 }} />
-    )
-  }
-  return (
-    <div style={{ width: size, height: size, borderRadius: 9, flexShrink: 0, background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.5 }}>
-      {emoji}
-    </div>
-  )
+// La foto la resuelve ProductImage (fuente única en lib/producto-imagenes.ts).
+function ProductoThumb({ nombre, codigo, categoria, formato, size = 40 }: { nombre?: string | null; codigo: string | null; categoria: string; formato: Formato; size?: number }) {
+  return <ProductImage nombre={nombre} codigo={codigo} categoria={categoria} esBarril={formato === 'barril'} size={size} radius={9} />
 }
 
 function SemaforoBadge({ pct }: { pct: number }) {
@@ -97,6 +75,7 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
   const [nota, setNota] = useState('')
   const [guardandoSim, setGuardandoSim] = useState(false)
   const [historial, setHistorial] = useState<SimulacionGuardada[] | null>(null)
+  const [errorHistorial, setErrorHistorial] = useState<string | null>(null)
   const [cargandoHistorial, setCargandoHistorial] = useState(false)
 
   const catalogoMap = useMemo(() => new Map(filas.map(f => [f.id, f])), [filas])
@@ -161,13 +140,21 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
 
   async function cargarHistorial() {
     setCargandoHistorial(true)
+    setErrorHistorial(null)
     const { data, error } = await supabase
       .from('simulaciones_rentabilidad')
       .select('id, created_at, nota, zona, venta_neta_total, costo_total, margen_clp, margen_pct, items')
       .order('created_at', { ascending: false })
       .limit(50)
     setCargandoHistorial(false)
-    if (error) { console.error('rentabilidad: error cargando historial', error); return }
+    if (error) {
+      console.error('rentabilidad: error cargando historial', error)
+      // Antes esto sólo logueaba y volvía — `historial` se quedaba en null
+      // y el tab mostraba "Sin simulaciones guardadas todavía", que es
+      // mentira: la consulta ni siquiera llegó a responder.
+      setErrorHistorial(error.message)
+      return
+    }
     // Mismo caso que costo_neto/precio_neto: columnas numeric vuelven como
     // string desde PostgREST — se convierten acá antes de formatear.
     setHistorial((data ?? []).map(s => ({
@@ -290,7 +277,7 @@ export default function RentabilidadClient({ user, filasIniciales }: { user: App
         )}
 
         {tab === 'historial' && (
-          <HistorialTab cargando={cargandoHistorial} historial={historial} />
+          <HistorialTab cargando={cargandoHistorial} historial={historial} error={errorHistorial} onRetry={cargarHistorial} />
         )}
       </div>
 
@@ -355,7 +342,7 @@ function FilaProducto({ cp, guardando, onGuardar }: { cp: CostoPrecio; guardando
   return (
     <div style={{ padding: '12px 14px', background: C.card, borderRadius: 14, border: `1px solid ${C.line}`, marginBottom: 8, opacity: guardando ? 0.6 : 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <ProductoThumb codigo={cp.codigo} categoria={cp.categoria} formato={cp.formato} />
+        <ProductoThumb nombre={cp.producto} codigo={cp.codigo} categoria={cp.categoria} formato={cp.formato} />
         <p style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {cp.producto}
         </p>
@@ -632,7 +619,7 @@ function PromocionesTab({ filasZona, onUsarEnSimulador }: {
                 display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 10,
                 border: `1px solid ${C.line}`, background: C.card, cursor: 'pointer', textAlign: 'left',
               }}>
-                <ProductoThumb codigo={cp.codigo} categoria={cp.categoria} formato={cp.formato} size={28} />
+                <ProductoThumb nombre={cp.producto} codigo={cp.codigo} categoria={cp.categoria} formato={cp.formato} size={28} />
                 <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>{cp.producto} · {cp.formato === 'lata' ? 'Lata' : 'Barril'}</span>
               </button>
             ))}
@@ -643,7 +630,7 @@ function PromocionesTab({ filasZona, onUsarEnSimulador }: {
       ) : (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: C.card, borderRadius: 12, border: `1px solid ${C.line}`, marginBottom: 12 }}>
-            <ProductoThumb codigo={productoSel.codigo} categoria={productoSel.categoria} formato={productoSel.formato} />
+            <ProductoThumb nombre={productoSel.producto} codigo={productoSel.codigo} categoria={productoSel.categoria} formato={productoSel.formato} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{productoSel.producto} · {productoSel.formato === 'lata' ? 'Lata' : 'Barril'}</p>
               <p style={{ fontSize: 11, color: C.faint }}>Precio neto {fmtCLP(productoSel.precio_neto)} · Costo {fmtCLP(productoSel.costo_neto)}</p>
@@ -777,9 +764,31 @@ function PromocionesTab({ filasZona, onUsarEnSimulador }: {
   )
 }
 
-function HistorialTab({ cargando, historial }: { cargando: boolean; historial: SimulacionGuardada[] | null }) {
-  if (cargando) return <p style={{ textAlign: 'center', color: C.faint, fontSize: 13, padding: 30 }}>Cargando…</p>
-  if (!historial || historial.length === 0) return <p style={{ textAlign: 'center', color: C.faint, fontSize: 13, padding: 30 }}>Sin simulaciones guardadas todavía.</p>
+function HistorialTab({ cargando, historial, error, onRetry }: {
+  cargando: boolean; historial: SimulacionGuardada[] | null; error: string | null; onRetry: () => void
+}) {
+  if (cargando) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0' }}>
+      {[0, 1, 2].map(i => <Skeleton key={i} height={64} radius={12} />)}
+    </div>
+  )
+  if (error) return (
+    <ErrorState
+      compact
+      title="No pudimos cargar el historial"
+      hint="Revisa tu conexión y vuelve a intentar."
+      detail={error}
+      showDetail
+      onRetry={onRetry}
+    />
+  )
+  if (!historial || historial.length === 0) return (
+    <EmptyState
+      compact
+      title="Sin simulaciones guardadas todavía"
+      hint="Las simulaciones que guardes aparecerán acá."
+    />
+  )
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {historial.map(s => (

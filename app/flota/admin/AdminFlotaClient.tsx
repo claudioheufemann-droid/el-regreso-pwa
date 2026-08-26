@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, AlertTriangle, CheckCircle, TrendingUp, Truck, Clock, Fuel, PackageCheck } from 'lucide-react'
+import { AlertTriangle, CheckCircle, TrendingUp, Truck, Clock, Fuel, PackageCheck } from 'lucide-react'
+import AppHeader from '@/components/ui/AppHeader'
 
 const F = '#D4AF37'
 const F_BORDER = 'rgba(212,175,55,0.28)'
@@ -55,7 +56,7 @@ function fmtFecha(iso: string | null) {
 }
 
 function DesvioChip({ km_teoricos, km_inicio, km_fin }: { km_teoricos: number | null; km_inicio: number | null; km_fin: number | null }) {
-  if (!km_teoricos || !km_inicio || !km_fin) return <span style={{ fontSize: 11, color: 'var(--muted)' }}>Sin datos</span>
+  if (!km_teoricos || !km_inicio || !km_fin) return <span style={{ fontSize: 11, color: 'var(--muted)' }}>No informado</span>
   const recorridos = km_fin - km_inicio
   const desvio = recorridos - km_teoricos
   const porc = (desvio / km_teoricos) * 100
@@ -166,24 +167,28 @@ export default function AdminFlotaClient({ viajes, vehiculos }: Props) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ background: '#0F0F0F', borderBottom: '1px solid rgba(212,175,55,0.15)', padding: '14px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => router.push('/flota')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: 0 }}>
-            <ChevronLeft size={18} /> Flota
-          </button>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 15, fontWeight: 800, color: '#F4EEDF' }}>Panel Admin</p>
-            <p style={{ fontSize: 11, color: 'var(--muted)' }}>Controles y alertas de flota</p>
-          </div>
-          <button onClick={() => router.push('/flota/admin/entregas')} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
-            background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
-            color: F, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-          }}>
-            <PackageCheck size={14} /> Entregas
-          </button>
-        </div>
+      {/* Header estándar de la app (AppHeader), en vez del header propio que
+          tenía esta pantalla: mismo lugar pero otro alto, otra tipografía, y
+          sin campana de notificaciones ni acceso a configuración. */}
+      <div style={{ padding: '0 16px' }}>
+        <AppHeader
+          eyebrow="Flota"
+          title="Control"
+          backHref="/flota"
+          extraAction={
+            <button
+              onClick={() => router.push('/flota/admin/entregas')}
+              aria-label="Ver entregas"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, minHeight: 44, padding: '0 12px', borderRadius: 10,
+                background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
+                color: F, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              <PackageCheck size={14} /> Entregas
+            </button>
+          }
+        />
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>

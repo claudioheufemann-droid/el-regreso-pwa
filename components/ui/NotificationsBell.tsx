@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bell } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 
 interface Notificacion {
   id: string
@@ -66,6 +67,7 @@ export default function NotificationsBell({ inline = false, variant = 'dark' }: 
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<Notificacion[]>([])
   const [loading, setLoading] = useState(false)
+  const [errorItems, setErrorItems] = useState<string | null>(null)
   const [unread, setUnread] = useState(0)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -100,10 +102,17 @@ export default function NotificationsBell({ inline = false, variant = 'dark' }: 
   async function abrir() {
     setOpen(true)
     setLoading(true)
+    setErrorItems(null)
     try {
       const res = await fetch('/api/notificaciones')
+      if (!res.ok) throw new Error(`La API respondió ${res.status}`)
       const data = await res.json()
       setItems(Array.isArray(data) ? data : [])
+    } catch (err) {
+      // Antes un fallo acá dejaba `items` en su valor previo (o vacío la
+      // primera vez) y el panel decía "Sin notificaciones por ahora" —
+      // indistinguible de que realmente no hubiera ninguna.
+      setErrorItems(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
       setLoading(false)
     }
@@ -187,9 +196,23 @@ export default function NotificationsBell({ inline = false, variant = 'dark' }: 
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 20px' }}>
               {loading ? (
-                <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 13, padding: 30 }}>Cargando…</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[0, 1, 2, 3].map(i => <Skeleton key={i} height={48} radius={10} />)}
+                </div>
+              ) : errorItems ? (
+                <ErrorState
+                  compact
+                  title="No pudimos cargar tus notificaciones"
+                  hint="Revisa tu conexión y vuelve a intentar."
+                  detail={errorItems}
+                  showDetail
+                  onRetry={abrir}
+                />
               ) : items.length === 0 ? (
-                <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 13, padding: 30 }}>Sin notificaciones por ahora.</p>
+                <EmptyState
+                  compact
+                  title="Sin notificaciones por ahora"
+                />
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {items.map(n => (

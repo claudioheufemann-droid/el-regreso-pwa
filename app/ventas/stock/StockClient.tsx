@@ -7,6 +7,7 @@ import { useUser } from '@/lib/userContext'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import type { StockProductoRow } from './page'
+import ProductImage from '@/components/ui/ProductImage'
 
 const C = {
   bg: '#F1F5F9', card: '#FFFFFF', hero: '#0F172A',
@@ -48,50 +49,11 @@ function fCajas(cantidad: number): string {
   return `${fNum(cajas)} caja${cajas === 1 ? '' : 's'} + ${resto} un.`
 }
 
-// Mapea codigo_producto (ej. "C-1", "K-4") a la misma imagen de lata usada
-// en Producción (app/logistica/produccion/declarar). Solo cubre los productos
-// que ya tienen foto subida — el resto cae al emoji de respaldo.
-const CODIGO_IMAGENES: Record<string, string> = {
-  'C-1':  '/productos/cerveza/arboretum.webp',
-  'C-2':  '/productos/cerveza/la-barra.webp',
-  'C-4':  '/productos/cerveza/descenso.webp',
-  'C-5':  '/productos/cerveza/aguas-blancas.webp',
-  'C-8':  '/productos/cerveza/mocho.webp',
-  'C-9':  '/productos/cerveza/fisura.webp',
-  'K-1':  '/productos/kombucha/natural.webp',
-  'K-2':  '/productos/kombucha/lemon-fresh.webp',
-  'K-4':  '/productos/kombucha/berry-menta.webp',
-  'K-6':  '/productos/kombucha/maqui-hops.webp',
-  'K-10': '/productos/kombucha/maracuya-cardamomo.webp',
-  'K-11': '/productos/kombucha/mango-merken.webp',
-  'K-22': '/productos/kombucha/detox.webp',
-}
-
-// Foto genérica de barril — se usa para todos los barriles sin importar el sabor.
-const IMAGEN_BARRIL = '/productos/cerveza/barril.webp'
-
-function ProductoThumb({ codigo, categoria, tipo, size = 44 }: { codigo: string | null; categoria: string | null; tipo?: 'barril' | 'envase'; size?: number }) {
-  const src = tipo === 'barril' ? IMAGEN_BARRIL : (codigo ? CODIGO_IMAGENES[codigo] : undefined)
-  const [imgOk, setImgOk] = useState(!!src)
-  const emoji = categoria === 'Kombucha' ? '🫧' : '🍺'
-  if (src && imgOk) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src} alt="" width={size} height={size}
-        onError={() => setImgOk(false)}
-        style={{ width: size, height: size, borderRadius: 10, objectFit: 'contain', background: C.bg, flexShrink: 0 }}
-      />
-    )
-  }
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: 10, flexShrink: 0,
-      background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.5,
-    }}>
-      {emoji}
-    </div>
-  )
+// La foto del producto la resuelve ProductImage (fuente única en
+// lib/producto-imagenes.ts). Antes este archivo tenía su propia copia del mapa
+// código→imagen y caía a un emoji cuando faltaba la foto.
+function ProductoThumb({ nombre, codigo, categoria, tipo, size = 44 }: { nombre?: string | null; codigo: string | null; categoria: string | null; tipo?: 'barril' | 'envase'; size?: number }) {
+  return <ProductImage nombre={nombre} codigo={codigo} categoria={categoria} esBarril={tipo === 'barril'} size={size} />
 }
 
 const fNum = (n: number) => n.toLocaleString('es-CL')
@@ -275,7 +237,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
             <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>CÁMARA GENERAL BARRIOS BAJOS</p>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Stock de productos</h1>
             <p style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
-              {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Sin datos cargados todavía'}
+              {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Sin informe de stock cargado todavía'}
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
@@ -415,7 +377,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
                                 }}
                               >
                                 <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
-                                  <ProductoThumb codigo={f.codigo_producto} categoria={f.categoria} tipo={f.tipo} />
+                                  <ProductoThumb nombre={f.producto} codigo={f.codigo_producto} categoria={f.categoria} tipo={f.tipo} />
                                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flex: 1, minWidth: 0 }}>
                                     <div style={{ minWidth: 0 }}>
                                       <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{f.producto}</p>

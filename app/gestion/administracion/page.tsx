@@ -28,11 +28,19 @@ export default async function AdministracionPage() {
 
   // Siempre filtrar a esta macro-área (incluso para admin)
   // La vista global está disponible en el Panel KPIs dentro del módulo
-  const { data: tasks } = await supabase
-    .from('tasks')
-    .select('*, responsable:users(id, nombre, iniciales, rol, area, email, avatar_url), responsable_ids')
-    .in('area', ADMIN_AREAS)
-    .order('created_at', { ascending: false })
+  const [{ data: tasks }, { data: deudas }] = await Promise.all([
+    supabase
+      .from('tasks')
+      .select('*, responsable:users(id, nombre, iniciales, rol, area, email, avatar_url), responsable_ids')
+      .in('area', ADMIN_AREAS)
+      .order('created_at', { ascending: false }),
+    // Antes Administración mostraba exactamente la misma pantalla de tareas
+    // que Comercial y Producción, sin nada propio de Contabilidad/Finanzas.
+    supabase.from('deudores').select('deuda_vencida').gt('deuda_vencida', 0),
+  ])
+
+  const deudaVencida = (deudas ?? []).reduce((s, d) => s + (d.deuda_vencida ?? 0), 0)
+  const deudaFmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(deudaVencida)
 
   return (
     <div className="h-screen flex flex-col">
@@ -45,6 +53,7 @@ export default async function AdministracionPage() {
         currentUserId={currentUserId}
         currentMacroArea="administracion"
         backHref="/gestion"
+        areaStat={{ label: 'Deuda vencida', value: deudaFmt, href: '/ventas/admin/deudores' }}
       />
     </div>
   )

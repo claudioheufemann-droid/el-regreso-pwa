@@ -3,12 +3,68 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Lock } from 'lucide-react'
+import { Lock, ClipboardList, AlertTriangle, CircleDollarSign, CheckCircle2, Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/lib/userContext'
+import { useGlobalSearch } from '@/lib/globalSearchContext'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import NotificationsBell from '@/components/ui/NotificationsBell'
+import type { ResumenEjecutivo } from '@/app/page'
+
+function fPeso(n: number) {
+  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
+}
+
+/** Home ejecutivo — sólo admin/gerencia. Antes el hub era puro menú, sin
+ *  ningún número: había que entrar a 3 módulos distintos para saber si
+ *  algo necesitaba atención hoy. */
+function AtencionRequerida({ resumen }: { resumen: ResumenEjecutivo }) {
+  const items: { n: number; label: (n: number) => string; href: string; icon: typeof ClipboardList; color: string }[] = [
+    { n: resumen.tareasAtrasadas, label: (n: number) => `${n} tarea${n !== 1 ? 's' : ''} atrasada${n !== 1 ? 's' : ''}`, href: '/gestion', icon: ClipboardList, color: '#E74C3C' },
+    { n: resumen.clientesEnRiesgo, label: (n: number) => `${n} cliente${n !== 1 ? 's' : ''} en riesgo`, href: '/ventas/clientes', icon: AlertTriangle, color: '#E67E22' },
+    { n: resumen.deudaVencida > 0 ? 1 : 0, label: () => `${fPeso(resumen.deudaVencida)} en deuda vencida`, href: '/ventas/admin/deudores', icon: CircleDollarSign, color: '#D4AF37' },
+  ].filter(it => it.n > 0)
+
+  return (
+    <div style={{
+      background: '#0D0D10', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18,
+      padding: '14px 16px', marginBottom: 14,
+    }}>
+      <p style={{ fontSize: 10.5, fontWeight: 800, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: items.length > 0 ? 10 : 4 }}>
+        Atención requerida
+      </p>
+      {items.length === 0 ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
+          <CheckCircle2 size={16} color="#5A8A4A" />
+          <span style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Todo al día — nada pendiente ahora mismo.</span>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {items.map((it, i) => {
+            const Icon = it.icon
+            return (
+              <Link key={i} href={it.href} style={{
+                display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none',
+                padding: '6px 2px',
+              }}>
+                <span style={{
+                  width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                  background: `${it.color}18`, border: `1px solid ${it.color}35`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Icon size={13} color={it.color} />
+                </span>
+                <span style={{ fontSize: 13, color: '#F4EEDF', fontWeight: 700, flex: 1 }}>{it.label(it.n)}</span>
+                <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.2)' }}>›</span>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 /* ── Logo La Ida Kombucha — SVG inline (fallback si no hay archivo) ── */
 function LaIdaLogo({ size = 100 }: { size?: number }) {
@@ -279,10 +335,13 @@ function ModuleCard({ href, color, rgb, title, subtitle, img, locked }: ModuleCa
 }
 
 /* ── Main ── */
-export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boolean; nombre: string; macroArea?: string | null }) {
+export default function HubClient({ isAdmin, nombre, macroArea, resumenEjecutivo }: {
+  isAdmin: boolean; nombre: string; macroArea?: string | null; resumenEjecutivo?: ResumenEjecutivo | null
+}) {
   const firstName = nombre.split(' ')[0]
   const router = useRouter()
   const { user } = useUser()
+  const { openSearch } = useGlobalSearch()
   const [showSettings, setShowSettings] = useState(false)
   const initials = user?.iniciales ?? (nombre.slice(0, 2).toUpperCase())
 
@@ -301,6 +360,21 @@ export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boo
       fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
       <div style={{ width: '100%', maxWidth: 420, position: 'relative' }}>
+
+        {/* ── Buscador global ── */}
+        <button
+          onClick={openSearch}
+          aria-label="Buscar en toda la app"
+          title="Buscar (Ctrl+K)"
+          style={{
+            position: 'absolute', top: 0, right: 96, zIndex: 5,
+            width: 40, height: 40, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
+            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Search size={16} color="rgba(255,255,255,0.6)" />
+        </button>
 
         {/* ── Campanita de notificaciones ── */}
         <NotificationsBell />
@@ -372,6 +446,9 @@ export default function HubClient({ isAdmin, nombre, macroArea }: { isAdmin: boo
             </span>
           </div>
         </div>
+
+        {/* ── HOME EJECUTIVO — sólo admin/gerencia ── */}
+        {isAdmin && resumenEjecutivo && <AtencionRequerida resumen={resumenEjecutivo} />}
 
         {/* ── MODULE CARDS ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

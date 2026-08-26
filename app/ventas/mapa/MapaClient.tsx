@@ -313,7 +313,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
             </PanelCard>
             <PanelCard title="Salud del cliente" icon={<Heart size={13} style={{ color: C.green }} />}>
               {SALUD_LEGEND.map(s => <LegendRow key={s.label} dot={s.color} label={s.label} />)}
-              <LegendRow dot="#6B7280" label="Sin información" />
+              <LegendRow dot="#6B7280" label="No informado" />
             </PanelCard>
             <PanelCard title="Insights de la zona" icon={<TrendingUp size={13} style={{ color: C.gold }} />}>
               {insights.zonaCaliente && (
@@ -674,7 +674,7 @@ function RankingPanel({ insights }: { insights: { rankingLocalidades: [string, n
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16 }}>
       <p style={{ fontSize: 13, fontWeight: 700, color: C.cream, marginBottom: 12 }}>Ranking de zonas <span style={{ color: C.muted, fontWeight: 500 }}>(litros)</span></p>
       {insights.rankingLocalidades.length === 0 ? (
-        <p style={{ fontSize: 12, color: C.muted }}>Sin datos de zonas.</p>
+        <p style={{ fontSize: 12, color: C.muted }}>Sin actividad por zona en este período.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {insights.rankingLocalidades.map(([loc, litros], i) => {
