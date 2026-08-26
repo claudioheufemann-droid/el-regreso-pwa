@@ -21,6 +21,13 @@ interface FrequencyStat {
   alert_level: string; siguiente_compra_estimada: string | null
   score: number; segmento: string; confianza_score: string
   litros_totales: number; revenue_total: number; pedidos_por_mes: number
+  /** Modelo de ciclo v2 — ver supabase/migrations/ciclo_estacional_v2.sql */
+  es_estacional?: boolean
+  /** Cliente de temporada, actualmente en su temporada baja: no es "riesgo". */
+  temporada_baja?: boolean
+  factor_estacional?: number
+  /** Ciclo sin ajuste estacional ni calibración (para explicar el cálculo). */
+  ciclo_base_dias?: number | null
 }
 interface Cliente {
   id: number; nombre_fantasia: string | null; razon_social: string | null
@@ -78,14 +85,18 @@ const MC = {
 
 // ── Stock proyectado del cliente ───────────────────────────────────────────────
 // No existe (todavía) un trackeo real de litros en el local del cliente — se
-// estima a partir del ciclo de compra ya calculado por client_scores:
+// estima a partir del ciclo de compra que calcula client_scores:
 //   litros por pedido = litros_totales / total_pedidos  (tamaño típico de compra)
-//   consumo diario     = litros por pedido / ciclo_promedio_dias
-//   días restantes     = ciclo_promedio_dias - dias_sin_compra  (puede ser negativo = vencido)
-//   fecha de quiebre    = siguiente_compra_estimada (ya viene calculada)
-// "L disponibles" es entonces litros_por_pedido menos lo ya consumido —
-// una estimación, no un stock real, pero consistente con lo que ya se muestra
-// hoy como "Quiebre stock".
+//   consumo diario    = litros por pedido / ciclo_promedio_dias
+//   días restantes    = ciclo_promedio_dias - dias_sin_compra  (negativo = vencido)
+//   fecha de quiebre   = siguiente_compra_estimada (ya viene calculada)
+//
+// `ciclo_promedio_dias` NO es un promedio simple pese al nombre (se conservó
+// por compatibilidad): desde ciclo_estacional_v2.sql es
+//   mediana de los últimos 8 gaps desestacionalizados
+//     × factor del mes proyectado          (estacionalidad)
+//     × factor de calibración global       (corrige el sesgo del modelo)
+// Detalle y justificación en supabase/migrations/ciclo_estacional_v2.sql.
 type StockBand = 'verde' | 'amarillo' | 'naranja' | 'rojo' | null
 interface StockProyectado {
   diasRestantes: number
@@ -94,6 +105,8 @@ interface StockProyectado {
   fechaQuiebre: string | null
   agotado: boolean
   band: StockBand
+  /** Cliente de temporada fuera de su temporada: se muestra neutro, no en rojo. */
+  temporadaBaja: boolean
 }
 function calcularStock(f: FrequencyStat | null): StockProyectado | null {
   if (!f || !f.ciclo_promedio_dias || f.total_pedidos <= 0) return null
@@ -110,6 +123,7 @@ function calcularStock(f: FrequencyStat | null): StockProyectado | null {
     fechaQuiebre: f.siguiente_compra_estimada,
     agotado,
     band,
+    temporadaBaja: !!f.temporada_baja,
   }
 }
 const BAND_COLOR: Record<Exclude<StockBand,null>, { fg:string; bg:string }> = {
@@ -118,8 +132,11 @@ const BAND_COLOR: Record<Exclude<StockBand,null>, { fg:string; bg:string }> = {
   naranja:  { fg: MC.orange, bg: MC.orangeBg },
   rojo:     { fg: MC.red,    bg: MC.redBg    },
 }
-/** Riesgo alto = naranja o rojo; medio = amarillo; sin riesgo = verde o sin historial. */
-function riesgoDeBand(band: StockBand): 'alto' | 'medio' | 'bajo' {
+/** Riesgo alto = naranja o rojo; medio = amarillo; sin riesgo = verde o sin historial.
+ *  Un cliente de temporada FUERA de su temporada nunca es riesgo alto: que no
+ *  compre en su temporada baja es su comportamiento normal, no una alerta. */
+function riesgoDeBand(band: StockBand, temporadaBaja = false): 'alto' | 'medio' | 'bajo' {
+  if (temporadaBaja) return 'bajo'
   if (band === 'rojo' || band === 'naranja') return 'alto'
   if (band === 'amarillo') return 'medio'
   return 'bajo'
@@ -468,8 +485,22 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
   const stock    = calcularStock(c.frecuencia)
   const diasSin  = c.frecuencia?.dias_sin_compra ?? 0
   const deudaV   = c.deuda?.deuda_vencida ?? 0
-  const bandColor = stock ? BAND_COLOR[stock.band ?? 'verde'] : { fg: MC.muted, bg: 'rgba(124,138,168,0.1)' }
-  const riesgoLabel = !stock ? 'Sin historial' : riesgoDeBand(stock.band) === 'alto' ? 'Riesgo alto' : riesgoDeBand(stock.band) === 'medio' ? 'Riesgo medio' : 'Sin riesgo'
+  // Cliente de temporada fuera de su temporada: se pinta neutro (gris) y se
+  // rotula "Temporada baja". Que no compre ahora es su patrón normal — pintarlo
+  // en rojo llenaba la lista del vendedor de falsas urgencias cada invierno.
+  const enTemporadaBaja = !!stock?.temporadaBaja
+  const bandColor = !stock
+    ? { fg: MC.muted, bg: 'rgba(124,138,168,0.1)' }
+    : enTemporadaBaja
+      ? { fg: MC.muted, bg: 'rgba(124,138,168,0.12)' }
+      : BAND_COLOR[stock.band ?? 'verde']
+  const riesgoLabel = !stock
+    ? 'Sin historial'
+    : enTemporadaBaja
+      ? 'Temporada baja'
+      : riesgoDeBand(stock.band) === 'alto' ? 'Riesgo alto'
+      : riesgoDeBand(stock.band) === 'medio' ? 'Riesgo medio'
+      : 'Sin riesgo'
 
   const waTarget: WATarget = { nombre:c.nombre_fantasia??'', telefono:c.telefono, contexto:'general', cicloPromedioDias:c.frecuencia?.ciclo_promedio_dias, siguienteCompra:c.frecuencia?.siguiente_compra_estimada, subtitulo:c.categoria??undefined }
 
@@ -736,7 +767,10 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
     }
 
     if (!isDesktop && riesgoFiltro !== 'todos') {
-      res = res.filter(c => riesgoDeBand(calcularStock(c.frecuencia)?.band ?? null) === riesgoFiltro)
+      res = res.filter(c => {
+        const s = calcularStock(c.frecuencia)
+        return riesgoDeBand(s?.band ?? null, s?.temporadaBaja) === riesgoFiltro
+      })
     }
 
     res = [...res].sort((a, b) => {
@@ -771,7 +805,10 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
       )
     }
     const counts = { todos: base.length, alto: 0, medio: 0, bajo: 0 }
-    for (const c of base) counts[riesgoDeBand(calcularStock(c.frecuencia)?.band ?? null)]++
+    for (const c of base) {
+      const s = calcularStock(c.frecuencia)
+      counts[riesgoDeBand(s?.band ?? null, s?.temporadaBaja)]++
+    }
     return counts
   }, [clientes, busqueda, vendFiltro, isAdmin, user])
 

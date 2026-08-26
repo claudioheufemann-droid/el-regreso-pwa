@@ -125,6 +125,9 @@ export default async function ClientesPage() {
     alert_level: string; siguiente_compra_estimada: string | null
     score: number; segmento: string; confianza_score: string
     litros_totales: number; revenue_total: number; pedidos_por_mes: number
+    // Modelo de ciclo v2 (ver supabase/migrations/ciclo_estacional_v2.sql)
+    es_estacional: boolean; temporada_baja: boolean
+    factor_estacional: number; ciclo_base_dias: number | null
   }>()
   // get_client_scores trae UNA FILA POR (nombre_fantasia, vendedor_actual) —
   // un mismo cliente puede tener varias filas si el ERP le cambió el nombre al
@@ -161,6 +164,10 @@ export default async function ClientesPage() {
       litros_totales: filas.reduce((sum, f) => sum + (f.litros_totales ?? 0), 0),
       revenue_total:  filas.reduce((sum, f) => sum + (f.revenue_total  ?? 0), 0),
       pedidos_por_mes: masReciente.pedidos_por_mes ?? 0,
+      es_estacional:     masReciente.es_estacional ?? false,
+      temporada_baja:    masReciente.temporada_baja ?? false,
+      factor_estacional: masReciente.factor_estacional ?? 1,
+      ciclo_base_dias:   masReciente.ciclo_base_dias ?? null,
     })
   }
 
