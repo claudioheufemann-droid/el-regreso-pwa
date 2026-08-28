@@ -74,8 +74,15 @@ export async function POST(req: NextRequest) {
   // Antes este endpoint no tenía NINGÚN chequeo — cualquiera que conociera
   // la URL podía subir un Excel arbitrario y, con mode=replace, BORRAR toda
   // la tabla clientes. Cerrado el 28-ago-2026 al automatizar el sync.
+  // Secret dedicado (no CRON_SECRET): se detectó que process.env.CRON_SECRET
+  // devolvía valores inconsistentes entre esta función y /api/upload-ventas
+  // dentro del MISMO deployment (47 vs 64 caracteres, nunca se explicó del
+  // todo — probablemente contenedores Lambda calientes con distinta
+  // instantánea de env vars). En vez de perseguir eso, secret propio y
+  // recién generado para este endpoint, sin ambigüedad posible.
   const auth = req.headers.get('authorization')
-  const esCron = !!process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`
+  const secret = process.env.UPLOAD_SECRET_CLIENTES
+  const esCron = !!secret && auth === `Bearer ${secret}`
   if (!esCron) {
     const sessionClient = await createServerClient()
     const { data: { user } } = await sessionClient.auth.getUser()

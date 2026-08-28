@@ -39,7 +39,7 @@ jobs:
           ERP_USERNAME: ${{ secrets.ERP_USERNAME }}
           ERP_PASSWORD: ${{ secrets.ERP_PASSWORD }}
           UPLOAD_URL_BASE: ${{ secrets.UPLOAD_URL_BASE }}
-          UPLOAD_SECRET: ${{ secrets.CRON_SECRET }}
+          UPLOAD_SECRET: ${{ secrets.UPLOAD_SECRET_CLIENTES }}
         run: python extractor_clientes_deudores.py
 
       - name: Guardar Excels descargados (diagnóstico)
