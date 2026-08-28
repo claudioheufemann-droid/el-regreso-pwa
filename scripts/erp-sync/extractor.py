@@ -319,6 +319,7 @@ def subir_a_pwa(filepath: Path) -> dict:
 
 
 def main() -> int:
+    print(f"DEBUG TEMPORAL: UPLOAD_SECRET largo={len(UPLOAD_SECRET or '')}")
     faltan = [k for k, v in {
         "ERP_USERNAME": ERP_USERNAME, "ERP_PASSWORD": ERP_PASSWORD, "UPLOAD_SECRET": UPLOAD_SECRET,
     }.items() if not v]
