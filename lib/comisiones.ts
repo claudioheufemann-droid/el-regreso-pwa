@@ -40,22 +40,28 @@ export const VENDEDORES_COMISIONABLES = [
 ] as const
 
 /**
- * Quién más, además de Claudio, puede ver la tarjeta de Claudio dentro del
- * módulo /ventas/comisiones (decisión de Claudio 2026-08-07: "solo Douglas
- * y Claudio pueden ver las tarjetas de todos" — Benjamín ve el módulo, pero
- * no esta tarjeta).
+ * Quién tiene acceso al módulo /ventas/comisiones — remuneración de TODO el
+ * equipo comercial (Claudio, Marcelo, Yadro), no sólo la propia. Decisión de
+ * Claudio 2026-08-28: sólo él, Douglas, Benjamín y Mariel — el acceso ya no
+ * es parcial (antes Benjamín entraba al módulo pero no veía la tarjeta de
+ * Claudio; hoy quien entra ve todo, o no entra).
  *
- * A propósito NO se reutiliza/amplía `ve_comision_gerente`: ese flag
- * también decide si la tarjeta se MONTA en el dashboard normal de /ventas
- * (VentasHoyClient → veComision), y ese dashboard debe seguir mostrándosela
- * sólo a Claudio. Ampliar el flag le habría dado a Douglas la tarjeta ahí
- * también, que no es lo que se pidió — el acceso extra es sólo dentro de
- * Comisiones, un lugar explícitamente para los 3 administradores.
+ * A propósito NO se reutiliza `puede_ver_margenes`: ese permiso es de
+ * Rentabilidad (costos/márgenes internos), un tema distinto — ampliarlo le
+ * habría dado a Mariel acceso a Rentabilidad también, que no es lo que se
+ * pidió. Tampoco se amplía `ve_comision_gerente`: ese flag decide además si
+ * la tarjeta de Claudio se MONTA en el dashboard normal de /ventas
+ * (VentasHoyClient → veComision), que debe seguir siendo sólo de Claudio.
+ * El acceso extra de este módulo es una lista puntual, aparte.
  */
-const EMAILS_VEN_COMISION_GERENTE_EQUIPO = ['douglas@elregresobeer.com']
+const EMAILS_VEN_COMISIONES_EQUIPO = [
+  'douglas@elregresobeer.com',
+  'benja.alarcon@elregresobeer.com',
+  'mariel.lillo@elregresobeer.com',
+]
 
-export function puedeVerComisionGerenteEquipo(user: { veComisionGerente: boolean; email: string }): boolean {
-  return user.veComisionGerente || EMAILS_VEN_COMISION_GERENTE_EQUIPO.includes(user.email)
+export function puedeVerComisionesEquipo(user: { veComisionGerente: boolean; email: string }): boolean {
+  return user.veComisionGerente || EMAILS_VEN_COMISIONES_EQUIPO.includes(user.email)
 }
 
 /** Cláusula SEGUNDA — remuneración fija bruta mensual. */
