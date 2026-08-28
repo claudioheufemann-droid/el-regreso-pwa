@@ -319,14 +319,6 @@ def subir_a_pwa(filepath: Path) -> dict:
 
 
 def main() -> int:
-    print(f"DEBUG TEMPORAL: UPLOAD_SECRET largo={len(UPLOAD_SECRET or '')}")
-    try:
-        r = requests.post(UPLOAD_URL, headers={
-            "Authorization": f"Bearer {UPLOAD_SECRET}", "x-debug-auth": "1",
-        }, timeout=30)
-        print(f"DEBUG TEMPORAL: respuesta diagnostico = {r.status_code} {r.text}")
-    except Exception as e:
-        print(f"DEBUG TEMPORAL: fallo diagnostico: {e}")
     faltan = [k for k, v in {
         "ERP_USERNAME": ERP_USERNAME, "ERP_PASSWORD": ERP_PASSWORD, "UPLOAD_SECRET": UPLOAD_SECRET,
     }.items() if not v]

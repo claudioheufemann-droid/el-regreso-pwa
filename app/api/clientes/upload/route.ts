@@ -77,15 +77,6 @@ export async function POST(req: NextRequest) {
   const auth = req.headers.get('authorization')
   const esCron = !!process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`
   if (!esCron) {
-    if (req.headers.get('x-debug-auth') === '1') {
-      return NextResponse.json({
-        tieneCronSecretEnServidor: !!process.env.CRON_SECRET,
-        largoCronSecretServidor: process.env.CRON_SECRET?.length ?? 0,
-        recibioAuthHeader: !!auth,
-        largoAuthHeaderRecibido: auth?.length ?? 0,
-        authEmpiezaConBearer: auth?.startsWith('Bearer ') ?? false,
-      })
-    }
     const sessionClient = await createServerClient()
     const { data: { user } } = await sessionClient.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })

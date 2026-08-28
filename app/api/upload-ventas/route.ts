@@ -247,14 +247,6 @@ export async function POST(req: NextRequest) {
   const auth = req.headers.get('authorization')
   const esCron = !!process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`
 
-  if (req.headers.get('x-debug-auth') === '1') {
-    return NextResponse.json({
-      largoCronSecretServidor: process.env.CRON_SECRET?.length ?? 0,
-      largoAuthHeaderRecibido: auth?.length ?? 0,
-      esCron,
-    })
-  }
-
   let supabase
   if (esCron) {
     const svcKey = process.env.SUPABASE_SERVICE_KEY
