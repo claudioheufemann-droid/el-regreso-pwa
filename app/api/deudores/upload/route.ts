@@ -58,6 +58,19 @@ function parseDeudoresFromExcel(buffer: ArrayBuffer) {
 // POST: Upload Excel file with deudores
 export async function POST(req: Request) {
   try {
+    // ── Autenticación dual (mismo patrón que /api/upload-ventas) ──────────
+    // a) UI admin: sesión por cookies. b) Cron ERP: Bearer CRON_SECRET.
+    // Antes este endpoint no tenía NINGÚN chequeo. Cerrado el 28-ago-2026
+    // al automatizar el sync.
+    const auth = req.headers.get('authorization')
+    const esCron = !!process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`
+    if (!esCron) {
+      const { createClient: createServerClient } = await import('@/lib/supabase/server')
+      const sessionClient = await createServerClient()
+      const { data: { user } } = await sessionClient.auth.getUser()
+      if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
     const formData = await req.formData()
     const file = formData.get('file') as File
 
