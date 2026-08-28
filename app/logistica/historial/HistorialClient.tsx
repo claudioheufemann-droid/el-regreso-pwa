@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 import { Archive, FileText, ImageIcon, AlertTriangle, Trash2 } from 'lucide-react'
 import type { AppUser } from '@/lib/auth'
 
@@ -48,13 +49,22 @@ const ESTADO_INFO: Record<string, { label: string; color: string }> = {
 export default function HistorialClient({ user }: { user: AppUser }) {
   const [lotes, setLotes] = useState<LoteRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [borrandoId, setBorrandoId] = useState<string | null>(null)
 
+  // Sin `.catch`, un fallo de red dejaba `lotes` en [] y la pantalla decía
+  // "Todavía no hay envíos registrados" — un vacío falso que esconde que la
+  // consulta nunca llegó a completarse.
   const load = useCallback(() => {
     setLoading(true)
+    setError(null)
     fetch('/api/logistica/lotes')
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => setLotes(Array.isArray(data) ? data : []))
+      .catch(err => setError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -86,12 +96,23 @@ export default function HistorialClient({ user }: { user: AppUser }) {
         </p>
 
         {loading ? (
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Cargando…</p>
-        ) : lotes.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'rgba(255,255,255,0.3)' }}>
-            <Archive size={28} style={{ marginBottom: 8, opacity: 0.4 }} />
-            <p style={{ fontSize: 13 }}>Todavía no hay envíos registrados.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[0, 1, 2, 3].map(i => <Skeleton key={i} height={72} radius={14} />)}
           </div>
+        ) : error ? (
+          <ErrorState
+            title="No pudimos cargar el historial"
+            hint="Revisa tu conexión y vuelve a intentar."
+            detail={error}
+            showDetail
+            onRetry={load}
+          />
+        ) : lotes.length === 0 ? (
+          <EmptyState
+            icon={Archive}
+            title="Todavía no hay envíos registrados"
+            hint="Cuando producción declare un lote, aparecerá acá."
+          />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {lotes.map(l => {

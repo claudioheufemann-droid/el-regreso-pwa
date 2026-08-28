@@ -9,7 +9,7 @@ const navItems: SidebarNavItem[] = [
   { href: '/flota/despachos', icon: Route,    label: 'Despachos',    exact: false },
   { href: '/flota/historial', icon: History,  label: 'Historial',    exact: false },
   { href: '/flota/kpis',      icon: Gauge,    label: 'KPIs',         exact: false },
-  { href: '/flota/admin',     icon: BarChart3,label: 'Reportes',     exact: false },
+  { href: '/flota/admin',     icon: BarChart3,label: 'Control',      exact: false },
 ]
 
 export default function FlotaSidebar() {

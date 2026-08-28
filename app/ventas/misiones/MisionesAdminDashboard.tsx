@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { RefreshCw, MessageCircle, Phone, TrendingUp, TrendingDown, Users, Target, Droplets, DollarSign, AlertTriangle, Calendar, MapPin, BarChart3, ChevronDown, Sparkles, CheckCircle2, XCircle, Clock, ShoppingBag } from 'lucide-react'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { useIsDesktop } from '@/lib/useIsDesktop'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 
 // ── Fila compacta para mobile (reemplaza tablas anchas con scroll-x) ─────────
 function MobileRow({ avatarChar, avatarColor, title, subtitle, metric, metricColor, progress, progressColor, actions }: {
@@ -183,7 +184,7 @@ function DonutChart({ completadas, vencidas, total }: { completadas: number; ven
 
 // ── Gauge semicircular ────────────────────────────────────────────────────────
 
-function Gauge({ pct }: { pct: number }) {
+function Gauge({ pct, sinActividad }: { pct: number; sinActividad?: boolean }) {
   const r = 65; const cx = 90; const cy = 90
   const angle = 180
   const arcLen = Math.PI * r
@@ -216,8 +217,10 @@ function Gauge({ pct }: { pct: number }) {
         return <circle cx={ix} cy={iy} r={7} fill={color} />
       })()}
       {/* Center text */}
-      <text x={cx} y={cy - 2} textAnchor="middle" fontSize="28" fontWeight="900" fill={color} style={{ fontVariantNumeric: 'tabular-nums' }}>{pct}%</text>
-      <text x={cx} y={cy + 16} textAnchor="middle" fontSize="11" fill="var(--muted)">Completado</text>
+      <text x={cx} y={cy - 2} textAnchor="middle" fontSize="28" fontWeight="900" fill={sinActividad ? 'var(--muted)' : color} style={{ fontVariantNumeric: 'tabular-nums' }}>
+        {sinActividad ? '—' : `${pct}%`}
+      </text>
+      <text x={cx} y={cy + 16} textAnchor="middle" fontSize="11" fill="var(--muted)">{sinActividad ? 'Sin actividad' : 'Completado'}</text>
     </svg>
   )
 }
@@ -294,8 +297,13 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
     if (refresh) setRefreshing(true); else setLoading(true)
     try {
       const res = await fetch(`/api/misiones-admin?semana=${s}`)
+      // Antes un !res.ok o un fetch rechazado se comían el error en
+      // silencio y `stats` se quedaba en lo que tuviera (null la primera
+      // vez) — el "No pudimos cargar" de abajo aparecía sin remitente ni
+      // forma de saber si era un problema pasajero.
       if (res.ok) setStats(await res.json())
-    } catch { /* silent */ }
+      else setStats(null)
+    } catch { setStats(null) }
     finally { setLoading(false); setRefreshing(false) }
   }, [])
 
@@ -304,16 +312,26 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
   if (!isAdmin) return null
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 400, color: 'var(--muted)' }}>
-      <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', marginRight: 10 }} />
-      Cargando dashboard…
+    <div style={{ padding: '0 0 60px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Skeleton height={32} width="45%" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }} className="kpi-grid-4">
+        {[0, 1, 2, 3].map(i => <Skeleton key={i} height={110} radius={16} />)}
+      </div>
+      <Skeleton height={220} radius={16} />
     </div>
   )
 
+  // Antes esto era un texto genérico sin retry — si la API fallaba (o el
+  // `catch { /* silent */ }` de `load` se comía el error), el admin veía
+  // "No se pudieron cargar los datos" y ahí se acababa: sin saber por qué,
+  // sin forma de reintentar salvo recargar toda la página.
   if (!stats) return (
-    <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>
-      <AlertTriangle size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-      <p>No se pudieron cargar los datos.</p>
+    <div style={{ padding: '60px 16px' }}>
+      <ErrorState
+        title="No pudimos cargar el dashboard de misiones"
+        hint="Revisa tu conexión y vuelve a intentar."
+        onRetry={() => load(semana)}
+      />
     </div>
   )
 
@@ -371,15 +389,15 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
           value={stats.total} delta={stats.dTotal} sparkData={stats.sparklines.total} />
         <KpiCard icon={<Target size={22}/>} color="var(--green-dim)" label="Completadas"
           value={stats.completadas}
-          pct={`${pct}% del total`}
+          pct={stats.total > 0 ? `${pct}% del total` : 'Sin actividad'}
           delta={stats.dCompletadas} sparkData={stats.sparklines.completadas} />
         <KpiCard icon={<Phone size={22}/>} color="var(--gold)" label="Por Contactar"
           value={stats.porContactar}
-          pct={`${stats.total > 0 ? Math.round(stats.porContactar/stats.total*100) : 0}% del total`}
+          pct={stats.total > 0 ? `${Math.round(stats.porContactar/stats.total*100)}% del total` : 'Sin actividad'}
           delta={-stats.dPorContactar} sparkData={stats.sparklines.porContactar} />
         <KpiCard icon={<AlertTriangle size={22}/>} color="var(--gold)" label="Vencidas"
           value={stats.vencidas}
-          pct={`${stats.total > 0 ? Math.round(stats.vencidas/stats.total*100) : 0}% del total`}
+          pct={stats.total > 0 ? `${Math.round(stats.vencidas/stats.total*100)}% del total` : 'Sin actividad'}
           delta={-stats.dVencidas} sparkData={stats.sparklines.vencidas} />
       </div>
 
@@ -518,7 +536,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
                 />
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0 2px' }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>Total: {stats.completadas}/{stats.total} ({pct}%)</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>Total: {stats.completadas}/{stats.total}{stats.total > 0 ? ` (${pct}%)` : ''}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)' }}>{stats.volumen.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L</span>
               </div>
             </div>
@@ -550,7 +568,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 16px' }}>
           <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 12 }}>Progreso de la semana</p>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
-            <Gauge pct={pct} />
+            <Gauge pct={pct} sinActividad={stats.total === 0} />
           </div>
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Meta semanal: <strong style={{ color: 'var(--cream)' }}>{stats.total} misiones</strong></p>

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { vendedorCanonico } from '@/lib/types'
-import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { type RangoKey, type KpisRango, type VendedorRango,
          type PuntoSerie, type DatosRango, type PeriodoOpcion, type PeriodoLigero, type EnvaseRango, type EntregasRango,
          type OrigenEntregadoRango,
          type ConsumoInternoRango, type AlertaInsight, type HoyData } from './hoyTypes'
@@ -24,7 +25,11 @@ import { RANGOS, type RangoKey, type KpisRango, type VendedorRango,
 export type { RangoKey, KpisRango, VendedorRango, PuntoSerie, DatosRango, PeriodoOpcion, PeriodoLigero, EnvaseRango, EntregasRango, OrigenEntregadoRango, ConsumoInternoRango, AlertaInsight, HoyData }
 
 /** Cuántos períodos anteriores se ofrecen en el selector. */
-const PERIODOS_VISIBLES = 4
+export const PERIODOS_VISIBLES = 4
+
+/** Desde esta fecha `fecha_entrega` es confiable (ver nota extensa más abajo). */
+export const ENTREGA_CONFIABLE_DESDE = '2026-05-24'
+export const porEntregaPeriodo = (fechaFin: string) => fechaFin >= ENTREGA_CONFIABLE_DESDE
 
 /**
  * Valores de `ventas.vendedor_actual` que NO van en el ranking de vendedores.
@@ -52,8 +57,8 @@ const KPIS_CERO: KpisRango = {
   revenueCerveza: 0, revenueKombucha: 0, revenueOtros: 0,
 }
 
-const iso = (d: Date) => d.toISOString().split('T')[0]
-const addDias = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
+export const iso = (d: Date) => d.toISOString().split('T')[0]
+export const addDias = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapKpis(row: any): KpisRango {
@@ -226,6 +231,131 @@ function armarEnvases(
   })), ...desaparecidos]
 }
 
+/**
+ * Fechas + etiqueta de comparación de un rango relativo a hoy ('hoy'/'7d'/
+ * '30d'/'anio'). Antes vivía inline dentro de `getHoyData`, calculada para
+ * los 4 rangos SIEMPRE, aunque el usuario nunca cambiara de esa pestaña.
+ * Ahora se calcula uno a la vez, sólo cuando el rango lazy-carga (ver
+ * app/api/ventas/rango/route.ts).
+ */
+export function rangoRelativo(hoy: Date, key: Exclude<RangoKey, 'periodo' | 'custom'>) {
+  const relDef = (desde: Date, hasta: Date, etiqueta: string) => {
+    const dias = Math.max(1, Math.round((hasta.getTime() - desde.getTime()) / 86400000) + 1)
+    const prevHasta = addDias(desde, -1)
+    const prevDesde = addDias(prevHasta, -(dias - 1))
+    return { desde: iso(desde), hasta: iso(hasta), prevDesde: iso(prevDesde), prevHasta: iso(prevHasta), etiqueta, porEntrega: key !== 'anio' }
+  }
+  if (key === 'hoy') return relDef(hoy, hoy, 'vs ayer')
+  if (key === '7d')  return relDef(addDias(hoy, -6), hoy, 'vs 7 días previos')
+  if (key === '30d') return relDef(addDias(hoy, -29), hoy, 'vs 30 días previos')
+  // anio
+  const anioIni = new Date(hoy.getFullYear(), 0, 1)
+  return {
+    desde: iso(anioIni), hasta: iso(hoy),
+    prevDesde: iso(new Date(hoy.getFullYear() - 1, 0, 1)),
+    prevHasta: iso(new Date(hoy.getFullYear() - 1, hoy.getMonth(), hoy.getDate())),
+    etiqueta: 'vs mismo período del año anterior',
+    porEntrega: false,
+  }
+}
+
+/**
+ * Calcula UN rango completo (con su comparación) — las mismas 7 familias de
+ * RPC y las mismas funciones de mapeo (`mapKpis`, `armarVendedores`, …) que
+ * antes corrían para los ~14 rangos de una sola vez dentro de `getHoyData`.
+ * Reutiliza esas funciones tal cual — no se reescribió ninguna regla de
+ * negocio, sólo se aisló el cálculo de UN rango para poder pedirlo aparte.
+ *
+ * `previo` es null para un rango sin comparación (no debería pasar hoy, pero
+ * queda cubierto: `armarVendedores`/`armarEnvases`/`mapKpis` ya aceptan null).
+ */
+export async function calcularUnRango(
+  supabase: SupabaseClient,
+  p_prov: string[] | null,
+  actual: { desde: string; hasta: string; porEntrega: boolean },
+  previo: { desde: string; hasta: string; porEntrega: boolean } | null,
+  etiquetaComparacion: string,
+): Promise<DatosRango> {
+  const [
+    kpisAct, kpisPrev,
+    vendAct, vendPrev,
+    envAct, envPrev,
+    entAct, origenAct, porEntregarVendAct, consumoAct,
+    serieRes,
+  ] = await Promise.all([
+    supabase.rpc('ventas_dashboard_kpis', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega }),
+    previo
+      ? supabase.rpc('ventas_dashboard_kpis', { p_ini: previo.desde, p_fin: previo.hasta, p_provincias: p_prov, p_por_entrega: previo.porEntrega })
+      : Promise.resolve({ data: null }),
+    supabase.rpc('ventas_agg_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: actual.porEntrega }),
+    previo
+      ? supabase.rpc('ventas_agg_periodo', { p_ini: previo.desde, p_fin: previo.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: previo.porEntrega })
+      : Promise.resolve({ data: null }),
+    supabase.rpc('ventas_envases_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega }),
+    previo
+      ? supabase.rpc('ventas_envases_periodo', { p_ini: previo.desde, p_fin: previo.hasta, p_provincias: p_prov, p_por_entrega: previo.porEntrega })
+      : Promise.resolve({ data: null }),
+    supabase.rpc('ventas_entregas_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov }),
+    supabase.rpc('ventas_entregado_origen_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega }),
+    supabase.rpc('ventas_entregas_por_vendedor', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov }),
+    supabase.rpc('ventas_consumo_interno_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega }),
+    // Serie acotada a este rango — antes se pedía una serie ANCHA compartida
+    // (desde el 1-ene) y se recortaba en memoria; acá alcanza con pedir
+    // exactamente la ventana que este rango necesita. Mismo criterio
+    // (fecha_pedido, p_por_entrega=false) que usaba el recorte de la serie
+    // ancha, así que el resultado es idéntico fila por fila.
+    supabase.rpc('ventas_serie_diaria', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: false }),
+  ])
+
+  const serie: PuntoSerie[] = ((serieRes.data ?? []) as Record<string, unknown>[]).map(r => ({
+    fecha: String(r.fecha),
+    litros: Number(r.litros ?? 0),
+    revenue: Number(r.revenue ?? 0),
+    clientes: Number(r.clientes ?? 0),
+    pedidos: Number(r.pedidos ?? 0),
+  }))
+
+  return {
+    desde: actual.desde,
+    hasta: actual.hasta,
+    etiquetaComparacion,
+    porEntrega: actual.porEntrega,
+    actual: mapKpis((kpisAct.data as unknown[])?.[0]),
+    previo: mapKpis((kpisPrev.data as unknown[])?.[0]),
+    vendedores: armarVendedores(
+      vendAct.data as Record<string, unknown>[] | null,
+      vendPrev.data as Record<string, unknown>[] | null,
+      porEntregarVendAct.data as Record<string, unknown>[] | null,
+    ),
+    envases: armarEnvases(envAct.data as Record<string, unknown>[] | null, envPrev.data as Record<string, unknown>[] | null),
+    entregas: mapEntregas((entAct.data as unknown[])?.[0]),
+    origenEntregado: mapOrigenEntregado((origenAct.data as unknown[])?.[0]),
+    consumoInterno: mapConsumoInterno(consumoAct.data as Record<string, unknown>[] | null),
+    serie,
+  }
+}
+
+/**
+ * Datos de la carga inicial de /ventas.
+ *
+ * Antes acá se calculaban DE UNA los ~14 rangos posibles (hoy/7d/30d/año +
+ * 4 períodos 24→23 + el rango a mano) — 7 familias de RPC × 14 rangos, más
+ * de 80 llamadas concurrentes en cada carga de la pantalla. Medido contra
+ * el servidor real (no un script aislado): ese `Promise.all` por sí solo
+ * tardaba 4-4.7 s, muy por encima de lo que tardaban las mismas llamadas en
+ * paralelo puro (~2.5 s) — hay contención real (probablemente el pool de
+ * conexiones de Supabase) al disparar un burst tan grande desde el mismo
+ * proceso.
+ *
+ * Ahora la carga inicial calcula SÓLO el período activo (la pestaña que se
+ * ve por defecto) + el rango a mano si el usuario navegó con uno. El resto
+ * (Hoy/7D/30D/Año y los otros 3 períodos del selector) se calcula bajo
+ * demanda cuando el usuario realmente cambia de pestaña, vía
+ * GET /api/ventas/rango (mismas funciones puras de mapeo, mismas reglas de
+ * negocio — ver `calcularUnRango` arriba). El cliente ya tenía un fallback
+ * al período activo mientras algo no está cargado (`?? periodoActivoDatos`),
+ * así que la pantalla nunca queda en blanco esperando.
+ */
 export async function getHoyData(
   provinciasScope: string[] | null,
   usuario: { nombre: string; iniciales: string; avatarUrl: string | null } | null,
@@ -239,49 +369,30 @@ export async function getHoyData(
   // ── Períodos de venta 24→23 ────────────────────────────────────────────────
   // Se piden uno más de los visibles: el más antiguo sólo sirve como base de
   // comparación del anteúltimo.
-  const { data: periodosRaw } = await supabase
-    .from('periodos')
-    .select('id, nombre, fecha_inicio, fecha_fin, activo')
-    .lte('fecha_inicio', iso(hoy))
-    .order('fecha_inicio', { ascending: false })
-    .limit(PERIODOS_VISIBLES + 1)
+  const [{ data: periodosRaw }, { data: periodosTodosRaw }] = await Promise.all([
+    supabase
+      .from('periodos')
+      .select('id, nombre, fecha_inicio, fecha_fin, activo')
+      .lte('fecha_inicio', iso(hoy))
+      .order('fecha_inicio', { ascending: false })
+      .limit(PERIODOS_VISIBLES + 1),
+    // Lista liviana de TODOS los períodos que existen (para el selector) — sin
+    // los cálculos pesados de arriba. Elegir uno de acá fuera de la ventana
+    // visible navega a /ventas?desde=&hasta= (ver aplicarRango en el cliente),
+    // que sí calcula ese período completo en el servidor.
+    supabase
+      .from('periodos')
+      .select('id, nombre, fecha_inicio, fecha_fin')
+      .lte('fecha_inicio', iso(hoy))
+      .order('fecha_inicio', { ascending: false }),
+  ])
 
   const periodosLista = (periodosRaw ?? []) as {
     id: number; nombre: string; fecha_inicio: string; fecha_fin: string; activo: boolean
   }[]
-
-  // Lista liviana de TODOS los períodos que existen (para el selector) — sin
-  // los cálculos pesados de arriba. Elegir uno de acá fuera de la ventana
-  // visible navega a /ventas?desde=&hasta= (ver aplicarRango en el cliente),
-  // que sí calcula ese período completo en el servidor.
-  const { data: periodosTodosRaw } = await supabase
-    .from('periodos')
-    .select('id, nombre, fecha_inicio, fecha_fin')
-    .lte('fecha_inicio', iso(hoy))
-    .order('fecha_inicio', { ascending: false })
   const periodosDisponibles: PeriodoLigero[] = ((periodosTodosRaw ?? []) as {
     id: number; nombre: string; fecha_inicio: string; fecha_fin: string
   }[]).map(p => ({ id: p.id, nombre: p.nombre, inicio: p.fecha_inicio, fin: p.fecha_fin }))
-
-  // ── Rangos relativos a hoy ────────────────────────────────────────────────
-  const relDef = (desde: Date, hasta: Date, etiqueta: string) => {
-    const dias = Math.max(1, Math.round((hasta.getTime() - desde.getTime()) / 86400000) + 1)
-    const prevHasta = addDias(desde, -1)
-    const prevDesde = addDias(prevHasta, -(dias - 1))
-    return { desde: iso(desde), hasta: iso(hasta), prevDesde: iso(prevDesde), prevHasta: iso(prevHasta), etiqueta }
-  }
-  const anioIni = new Date(hoy.getFullYear(), 0, 1)
-  const relativos: Record<Exclude<RangoKey, 'periodo' | 'custom'>, ReturnType<typeof relDef>> = {
-    hoy:  relDef(hoy, hoy, 'vs ayer'),
-    '7d': relDef(addDias(hoy, -6), hoy, 'vs 7 días previos'),
-    '30d': relDef(addDias(hoy, -29), hoy, 'vs 30 días previos'),
-    anio: {
-      desde: iso(anioIni), hasta: iso(hoy),
-      prevDesde: iso(new Date(hoy.getFullYear() - 1, 0, 1)),
-      prevHasta: iso(new Date(hoy.getFullYear() - 1, hoy.getMonth(), hoy.getDate())),
-      etiqueta: 'vs mismo período del año anterior',
-    },
-  }
 
   // Rango elegido a mano: se compara contra el lapso previo de igual largo
   const customDef = custom
@@ -299,55 +410,16 @@ export async function getHoyData(
       })()
     : null
 
-  // "Año" es la excepción histórica: acumula desde el 1-ene, mucho antes de
-  // que existiera fecha_entrega. Filtrarlo por entrega dejaba fuera buena
-  // parte de las ventas del año y mostraba un total muy por debajo del real.
-  // Para ese rango se vuelve a fecha_pedido.
-  //
-  // Mismo problema con los PERÍODOS 24→23 y el rango a mano: fecha_entrega
-  // recién existe desde el 25-may-2026 (verificado contra la base: mayo 514
-  // filas, junio 2264, julio 3812 — antes de eso, NADA tiene fecha_entrega).
-  // Un período que termina antes de esa fecha da 0,0 L si se filtra por
-  // entrega, no porque no hubiera ventas sino porque el dato no existía
-  // todavía. Se usa fecha_pedido para esos períodos/rangos, igual criterio
-  // que "Año". `porEntrega` viaja también en cada DatosRango (ver
-  // hoyTypes.ts) para que el cliente sepa qué criterio se usó al pedir el
-  // detalle — antes lo adivinaba con `rango !== 'anio'`, que quedaba mal
-  // para un período histórico.
-  const ENTREGA_CONFIABLE_DESDE = '2026-05-24'
-  const porEntregaPeriodo = (fechaFin: string) => fechaFin >= ENTREGA_CONFIABLE_DESDE
-
   // Pedido de Claudio: un pedido tomado en un período pero no entregado no
-  // debe sumar venta/comisión (ya lo cumple lo de arriba, vía fecha_entrega)
-  // NI perderse de vista al cerrar el período. Las funciones que calculan
-  // "por entregar"/"pendiente" (ventas_entregas_periodo,
-  // ventas_entregas_por_vendedor, ventas_clientes_por_entregar,
-  // ventas_pedidos_pendientes_cliente, ventas_detalle_clientes_por_vendedor)
-  // ya NO filtran por fecha_pedido dentro de [p_ini, p_fin]: el pendiente se
-  // "traslada" solo al período VIGENTE (el que contiene hoy) mientras no se
-  // entregue, y un período ya cerrado siempre da 0 pendientes — así no queda
-  // duplicado en el cerrado ni perdido entre medio. Ver migración
+  // debe sumar venta/comisión NI perderse de vista al cerrar el período. Ver
   // supabase/migrations/pendientes_entrega_trasladan_al_periodo_vigente.sql.
-
-  // Cada rango a consultar: los relativos + cada período 24→23 + el custom.
-  // Para los períodos, el "previo" es el período 24→23 anterior de la lista.
-  const consultas: { desde: string; hasta: string; porEntrega: boolean }[] = [
-    ...Object.entries(relativos).flatMap(([k, r]) => [
-      { desde: r.desde, hasta: r.hasta, porEntrega: k !== 'anio' },
-      { desde: r.prevDesde, hasta: r.prevHasta, porEntrega: k !== 'anio' },
-    ]),
-    ...periodosLista.map(p => ({ desde: p.fecha_inicio, hasta: p.fecha_fin, porEntrega: porEntregaPeriodo(p.fecha_fin) })),
-    ...(customDef ? [
-      { desde: customDef.desde, hasta: customDef.hasta, porEntrega: porEntregaPeriodo(customDef.hasta) },
-      { desde: customDef.prevDesde, hasta: customDef.prevHasta, porEntrega: porEntregaPeriodo(customDef.hasta) },
-    ] : []),
-  ]
 
   // El período ACTIVO (en curso) no se compara contra el período anterior
   // completo — eso hace ver una caída falsa cuando en realidad sólo llevamos
   // unos días. Se compara contra el mismo tramo de días ya transcurridos del
-  // período anterior ("mismo día acumulado"). Los períodos ya cerrados siguen
-  // comparándose completo contra completo (ambos terminaron, no hay sesgo).
+  // período anterior ("mismo día acumulado"). Sólo aplica al período activo:
+  // los otros 3 del selector (cerrados) comparan completo contra completo, y
+  // eso lo resuelve la ruta lazy sin necesitar esta lógica.
   const idxActivo = periodosLista.findIndex(p => p.activo)
   const periodoActivo = idxActivo >= 0 ? periodosLista[idxActivo] : null
   const periodoAnteriorAlActivo = periodoActivo ? periodosLista[idxActivo + 1] : null
@@ -360,121 +432,81 @@ export async function getHoyData(
     const finTruncado = addDias(inicioAnt, diasTranscurridos - 1)
     return { desde: iso(inicioAnt), hasta: iso(finTruncado > finAntCompleto ? finAntCompleto : finTruncado) }
   })()
-  const iTruncado = truncadoDef ? consultas.length : -1
-  if (truncadoDef) consultas.push({ desde: truncadoDef.desde, hasta: truncadoDef.hasta, porEntrega: true })
 
-  // La serie tiene que cubrir el más antiguo de todos los rangos pedidos (el
-  // custom puede ser de años anteriores), si no los sparklines saldrían vacíos.
-  const serieDesde = [
-    iso(anioIni),
-    ...(periodosLista.length ? [periodosLista[periodosLista.length - 1].fecha_inicio] : []),
-    ...(customDef ? [customDef.prevDesde] : []),
-  ].sort()[0]
+  const metasPorPeriodo = new Map<number, number>()
+  const primerPeriodo = periodosLista[0] ?? null
 
-  const [kpisAll, vendAll, envAll, entAll, origenEntregadoAll, porEntregarVendAll, consumoInternoAll, serieRes, metasRes, scoresRes, syncRes] = await Promise.all([
-    Promise.all(consultas.map(c => supabase.rpc('ventas_dashboard_kpis', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
-    Promise.all(consultas.map(c => supabase.rpc('ventas_agg_periodo', { p_ini: c.desde, p_fin: c.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
-    Promise.all(consultas.map(c => supabase.rpc('ventas_envases_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
-    Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
-    Promise.all(consultas.map(c => supabase.rpc('ventas_entregado_origen_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
-    Promise.all(consultas.map(c => supabase.rpc('ventas_entregas_por_vendedor', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov }))),
-    Promise.all(consultas.map(c => supabase.rpc('ventas_consumo_interno_periodo', { p_ini: c.desde, p_fin: c.hasta, p_provincias: p_prov, p_por_entrega: c.porEntrega }))),
-    // Una sola serie se recorta (recorte()) para todas las tarjetas de todos
-    // los rangos, incluido "Año" que llega hasta enero — antes de que
-    // existiera fecha_entrega. Por eso el sparkline usa fecha_pedido (cobertura
-    // completa siempre): es una mini-tendencia visual, no el número auditado
-    // de cada tarjeta (ese sí usa el criterio correcto por rango, ver arriba).
-    supabase.rpc('ventas_serie_diaria', { p_ini: serieDesde, p_fin: iso(hoy), p_provincias: p_prov, p_por_entrega: false }),
+  // ── Cálculo eager: sólo el período activo (+ el rango a mano si hay) ──────
+  const [datosActivoRes, metasRes, scoresRes, syncRes, datosCustomRes] = await Promise.all([
+    primerPeriodo
+      ? calcularUnRango(
+          supabase, p_prov,
+          { desde: primerPeriodo.fecha_inicio, hasta: primerPeriodo.fecha_fin, porEntrega: porEntregaPeriodo(primerPeriodo.fecha_fin) },
+          primerPeriodo.activo && truncadoDef
+            ? { desde: truncadoDef.desde, hasta: truncadoDef.hasta, porEntrega: true }
+            : periodosLista[1]
+              ? { desde: periodosLista[1].fecha_inicio, hasta: periodosLista[1].fecha_fin, porEntrega: porEntregaPeriodo(periodosLista[1].fecha_fin) }
+              : null,
+          !periodosLista[1]
+            ? 'sin período anterior'
+            : (primerPeriodo.activo && truncadoDef) ? `vs mismos días de ${periodosLista[1].nombre}` : `vs ${periodosLista[1].nombre}`,
+        )
+      : Promise.resolve(null),
     supabase.from('metas').select('periodo_id, meta_litros').eq('tipo', 'mensual'),
     supabase.rpc('get_client_scores', { p_vendedor: null }),
     supabase.from('ventas').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    customDef
+      ? calcularUnRango(
+          supabase, p_prov,
+          { desde: customDef.desde, hasta: customDef.hasta, porEntrega: porEntregaPeriodo(customDef.hasta) },
+          { desde: customDef.prevDesde, hasta: customDef.prevHasta, porEntrega: porEntregaPeriodo(customDef.hasta) },
+          customDef.etiqueta,
+        )
+      : Promise.resolve(null),
   ])
 
-  const serieCompleta: PuntoSerie[] = ((serieRes.data ?? []) as Record<string, unknown>[]).map(r => ({
-    fecha: String(r.fecha),
-    litros: Number(r.litros ?? 0),
-    revenue: Number(r.revenue ?? 0),
-    clientes: Number(r.clientes ?? 0),
-    pedidos: Number(r.pedidos ?? 0),
-  }))
-  const recorte = (desde: string, hasta: string) => serieCompleta.filter(p => p.fecha >= desde && p.fecha <= hasta)
-
-  const kpiEn = (i: number) => mapKpis((kpisAll[i].data as unknown[])?.[0])
-  const vendEn = (i: number) => (vendAll[i].data as Record<string, unknown>[] | null)
-  const envEn  = (i: number) => (envAll[i].data as Record<string, unknown>[] | null)
-  const entEn  = (i: number) => mapEntregas((entAll[i].data as unknown[])?.[0])
-  const origenEntEn = (i: number) => mapOrigenEntregado((origenEntregadoAll[i].data as unknown[])?.[0])
-  const porEntregarVendEn = (i: number) => (porEntregarVendAll[i].data as Record<string, unknown>[] | null)
-  const consumoInternoEn = (i: number) => mapConsumoInterno(consumoInternoAll[i].data as Record<string, unknown>[] | null)
-
-  // ── Rangos relativos ──────────────────────────────────────────────────────
-  const rangos = {} as Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>
-  const clavesRel = Object.keys(relativos) as Exclude<RangoKey, 'periodo' | 'custom'>[]
-  clavesRel.forEach((k, idx) => {
-    const r = relativos[k]
-    const iAct = idx * 2, iPrev = idx * 2 + 1
-    rangos[k] = {
-      desde: r.desde,
-      hasta: r.hasta,
-      etiquetaComparacion: r.etiqueta,
-      porEntrega: k !== 'anio',
-      actual: kpiEn(iAct),
-      previo: kpiEn(iPrev),
-      vendedores: armarVendedores(vendEn(iAct), vendEn(iPrev), porEntregarVendEn(iAct)),
-      envases: armarEnvases(envEn(iAct), envEn(iPrev)),
-      entregas: entEn(iAct),
-      origenEntregado: origenEntEn(iAct),
-      consumoInterno: consumoInternoEn(iAct),
-      serie: recorte(r.desde, r.hasta),
-    }
-  })
-
-  // ── Períodos 24→23 ────────────────────────────────────────────────────────
-  const offsetPeriodos = clavesRel.length * 2
-  const metasPorPeriodo = new Map<number, number>()
   for (const m of (metasRes.data ?? []) as { periodo_id: number; meta_litros: number }[]) {
     metasPorPeriodo.set(m.periodo_id, (metasPorPeriodo.get(m.periodo_id) ?? 0) + Number(m.meta_litros ?? 0))
   }
 
+  // ── Períodos del selector: el activo con datos, el resto lazy (`datos: null`) ──
   const periodos: PeriodoOpcion[] = periodosLista
     .slice(0, PERIODOS_VISIBLES)
-    .map((p, i) => {
-      const iAct = offsetPeriodos + i
-      const iPrev = offsetPeriodos + i + 1   // el período 24→23 anterior
-      const anterior = periodosLista[i + 1]
-      // El período activo compara "mismo día acumulado" (iTruncado); los
-      // períodos ya cerrados comparan completo contra completo (iPrev).
-      const esActivo = p.activo && iTruncado >= 0
-      const iComparar = esActivo ? iTruncado : iPrev
-      return {
-        id: p.id,
-        nombre: p.nombre,
-        inicio: p.fecha_inicio,
-        fin: p.fecha_fin,
-        activo: p.activo,
-        metaLitros: metasPorPeriodo.get(p.id) ?? 0,
-        datos: {
-          desde: p.fecha_inicio,
-          hasta: p.fecha_fin,
-          etiquetaComparacion: !anterior
-            ? 'sin período anterior'
-            : esActivo ? `vs mismos días de ${anterior.nombre}` : `vs ${anterior.nombre}`,
-          porEntrega: porEntregaPeriodo(p.fecha_fin),
-          actual: kpiEn(iAct),
-          previo: anterior ? kpiEn(iComparar) : { ...KPIS_CERO },
-          vendedores: armarVendedores(vendEn(iAct), anterior ? vendEn(iComparar) : null, porEntregarVendEn(iAct)),
-          envases: armarEnvases(envEn(iAct), anterior ? envEn(iComparar) : null),
-          entregas: entEn(iAct),
-          origenEntregado: origenEntEn(iAct),
-          consumoInterno: consumoInternoEn(iAct),
-          serie: recorte(p.fecha_inicio, p.fecha_fin),
-        },
-      }
-    })
+    .map((p, i) => ({
+      id: p.id,
+      nombre: p.nombre,
+      inicio: p.fecha_inicio,
+      fin: p.fecha_fin,
+      activo: p.activo,
+      metaLitros: metasPorPeriodo.get(p.id) ?? 0,
+      datos: i === 0 ? datosActivoRes : null,
+    }))
 
   // ── Alertas e insights ───────────────────────────────────────────────────
   const alertas: AlertaInsight[] = []
+
+  // `get_client_scores` tarda ~3,7 s porque client_raw_metrics es una vista
+  // sin materializar que reagrega las 51.000 filas de `ventas` en cada carga
+  // (medido 2026-08-26; ver supabase/migrations/client_metrics_cache_materializado.sql).
+  // Con statement_timeout de 3 s en el rol `anon` eso significa que hoy, con
+  // el login desactivado, la consulta SIEMPRE se cancela.
+  //
+  // El `?? []` que había acá convertía ese fallo en silencio: sin scores no
+  // se genera ninguna alerta, y la pantalla queda idéntica a "no hay nada que
+  // avisar". Es la peor forma de fallar para una tira que existe justamente
+  // para avisar. Ahora, si la consulta falla, se dice.
+  const scoresFallo = !!scoresRes.error
   const scores = (scoresRes.data ?? []) as Record<string, unknown>[]
+
+  if (scoresFallo) {
+    alertas.push({
+      tipo: 'alerta',
+      titulo: 'No pudimos calcular las alertas de clientes',
+      detalle: 'La consulta de scoring superó el tiempo límite. Esto no significa que no haya clientes en riesgo.',
+      href: '/ventas/clientes',
+    })
+  }
+
   const sinComprar30 = scores.filter(s => Number(s.dias_sin_compra ?? 0) > 30).length
   if (sinComprar30 > 0) {
     alertas.push({
@@ -494,12 +526,11 @@ export async function getHoyData(
     })
   }
   // Variación de categorías en el período activo vs el período 24→23 anterior
-  const pAct = periodos[0]
-  if (pAct) {
+  if (datosActivoRes) {
     const pct = (a: number, b: number) => (b > 0 ? ((a - b) / b) * 100 : null)
     const pares: [string, number, number][] = [
-      ['Kombucha', pAct.datos.actual.litrosKombucha, pAct.datos.previo.litrosKombucha],
-      ['Cerveza', pAct.datos.actual.litrosCerveza, pAct.datos.previo.litrosCerveza],
+      ['Kombucha', datosActivoRes.actual.litrosKombucha, datosActivoRes.previo.litrosKombucha],
+      ['Cerveza', datosActivoRes.actual.litrosCerveza, datosActivoRes.previo.litrosCerveza],
     ]
     for (const [nombre, act, prv] of pares) {
       const p = pct(act, prv)
@@ -513,30 +544,12 @@ export async function getHoyData(
     }
   }
 
-  // El custom va al final de `consultas`, después de los períodos
-  const iCustom = offsetPeriodos + periodosLista.length
-  const datosCustom: DatosRango | null = customDef
-    ? {
-        desde: customDef.desde,
-        hasta: customDef.hasta,
-        etiquetaComparacion: customDef.etiqueta,
-        porEntrega: porEntregaPeriodo(customDef.hasta),
-        actual: kpiEn(iCustom),
-        previo: kpiEn(iCustom + 1),
-        vendedores: armarVendedores(vendEn(iCustom), vendEn(iCustom + 1), porEntregarVendEn(iCustom)),
-        envases: armarEnvases(envEn(iCustom), envEn(iCustom + 1)),
-        entregas: entEn(iCustom),
-        origenEntregado: origenEntEn(iCustom),
-        consumoInterno: consumoInternoEn(iCustom),
-        serie: recorte(customDef.desde, customDef.hasta),
-      }
-    : null
-
   return {
-    rangos,
+    // Vacío: Hoy/7D/30D/Año se calculan bajo demanda (ver `/api/ventas/rango`).
+    rangos: {},
     periodos,
     periodosDisponibles,
-    custom: datosCustom,
+    custom: datosCustomRes,
     alertas,
     ultimaSync: (syncRes.data as { created_at?: string } | null)?.created_at ?? null,
     usuario,

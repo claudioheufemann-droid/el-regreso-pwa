@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { upsertOrQueue } from '@/lib/offlineQueue'
@@ -8,6 +8,7 @@ import { uploadConTimeout, queuePhoto } from '@/lib/offlinePhotoQueue'
 import { compressImage } from '@/lib/compress-image'
 import { fetchConTimeout } from '@/lib/utils'
 import { Fuel, CheckCircle2, AlertTriangle, Flag, ChevronLeft, Camera } from 'lucide-react'
+import { ErrorState, Skeleton } from '@/components/ui/States'
 import { C, TAP, fPeso, fHora, cardStyle, btnPrimario } from '../theme'
 
 /**
@@ -85,6 +86,7 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
   const [jornada, setJornada] = useState<Jornada | null>(null)
   const [cargas, setCargas] = useState<Carga[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const [kmInicio, setKmInicio] = useState('')
   const [fotoInicioFile, setFotoInicioFile] = useState<File | null>(null)
@@ -105,12 +107,24 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
   const [fotoBoletaFile, setFotoBoletaFile] = useState<File | null>(null)
   const [guardandoCarga, setGuardandoCarga] = useState(false)
 
-  useEffect(() => {
+  // Este fallo no era cosmético: sin `.catch`, un error de red dejaba
+  // `jornada` en null y la pantalla ofrecía "Inicio de jornada" aunque el
+  // vendedor YA tuviera una abierta — abriendo una segunda y ensuciando el
+  // cálculo de kilometraje del día. Ahora un fallo se declara como fallo.
+  const cargar = useCallback(() => {
+    setLoading(true)
+    setError(null)
     fetch('/api/terreno/jornada')
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(j => setJornada(j))
+      .catch(err => setError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => { cargar() }, [cargar])
 
   async function analizar(file: File, tipo: 'inicio' | 'fin') {
     const setAnalizando = tipo === 'inicio' ? setAnalizandoInicio : setAnalizandoFin
@@ -207,7 +221,32 @@ export default function JornadaClient({ vendedorId }: { vendedorId: string }) {
     setFotoBoletaFile(null)
   }
 
-  if (loading) return <div style={{ background: C.bg, minHeight: '100vh' }} />
+  if (loading) {
+    return (
+      <div style={{ background: C.bg, minHeight: '100vh', padding: '20px 16px' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Skeleton height={36} width={110} radius={100} />
+          <Skeleton height={30} width="60%" />
+          <Skeleton height={220} radius={16} />
+        </div>
+      </div>
+    )
+  }
+
+  // Un error acá NO puede caer al formulario de "iniciar jornada": no
+  // sabemos si ya hay una abierta, y ofrecerlo invitaría a duplicarla.
+  if (error) {
+    return (
+      <div style={{ background: C.bg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <ErrorState
+          title="No pudimos consultar tu jornada"
+          hint="Sin esta respuesta no sabemos si ya tienes una jornada abierta, así que no te dejamos iniciar otra. Reintenta cuando tengas señal."
+          detail={error}
+          onRetry={cargar}
+        />
+      </div>
+    )
+  }
 
   const listoInicio = !!kmInicio && !!fotoInicioFile
   const listoFin = !!kmFin && !!fotoFinFile

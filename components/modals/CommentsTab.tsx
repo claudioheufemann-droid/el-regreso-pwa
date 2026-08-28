@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
+import { MessageCircle } from 'lucide-react'
 
 interface Comment {
   id: string
@@ -33,15 +35,26 @@ export default function CommentsTab({ taskId, currentUserId, accentColor }: Prop
   const [comments, setComments] = useState<Comment[]>([])
   const [texto, setTexto] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
+    setLoading(true)
+    setError(null)
     fetch(`/api/tasks/${taskId}/comments`)
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => { setComments(Array.isArray(data) ? data : []); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch(err => {
+        setError(err instanceof Error ? err.message : 'Error desconocido')
+        setLoading(false)
+      })
   }, [taskId])
+
+  useEffect(() => { cargar() }, [cargar])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -70,8 +83,21 @@ export default function CommentsTab({ taskId, currentUserId, accentColor }: Prop
   }
 
   if (loading) return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
-      <div style={{ fontSize: 12, color: '#4A4540' }}>Cargando comentarios...</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16 }}>
+      {[0, 1, 2].map(i => <Skeleton key={i} height={44} radius={10} />)}
+    </div>
+  )
+
+  if (error) return (
+    <div style={{ padding: 16 }}>
+      <ErrorState
+        compact
+        title="No pudimos cargar los comentarios"
+        hint="Revisa tu conexión y vuelve a intentar."
+        detail={error}
+        showDetail
+        onRetry={cargar}
+      />
     </div>
   )
 
@@ -80,11 +106,12 @@ export default function CommentsTab({ taskId, currentUserId, accentColor }: Prop
       {/* Comments list */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
         {comments.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>💬</div>
-            <div style={{ fontSize: 12, color: '#4A4540' }}>Sin comentarios aún.</div>
-            <div style={{ fontSize: 11, color: '#3A3530', marginTop: 4 }}>Sé el primero en escribir.</div>
-          </div>
+          <EmptyState
+            compact
+            icon={MessageCircle}
+            title="Sin comentarios aún"
+            hint="Sé el primero en escribir."
+          />
         )}
         {comments.map((c, idx) => {
           const isMe = c.user_id === currentUserId

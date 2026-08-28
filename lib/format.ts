@@ -18,3 +18,25 @@ export function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
   return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`
 }
+
+const CONECTORES = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'san', 'santa'])
+
+/**
+ * Normaliza nombres de localidad para mostrar — la tabla `clientes` los
+ * trae con capitalización inconsistente según cómo los cargó cada
+ * vendedor ("VALDIVIA", "san jose", "Puerto Montt"). Sólo afecta el
+ * texto en pantalla, no toca el dato en la base.
+ */
+export function formatLocalidad(raw: string | null | undefined): string | null {
+  const s = raw?.trim()
+  if (!s) return null
+  return s
+    .toLowerCase()
+    .split(/(\s+)/)
+    .map((palabra, i) => {
+      if (/^\s+$/.test(palabra)) return palabra
+      if (i > 0 && CONECTORES.has(palabra)) return palabra
+      return palabra.charAt(0).toUpperCase() + palabra.slice(1)
+    })
+    .join('')
+}

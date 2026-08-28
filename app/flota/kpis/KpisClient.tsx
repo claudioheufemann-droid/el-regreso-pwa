@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
+import { ErrorState, SkeletonCard } from '@/components/ui/States'
 import { REGIONES_OPERATIVAS } from '@/lib/regiones'
 
 interface Resumen {
@@ -28,14 +29,24 @@ export default function KpisClient() {
   const [resumen, setResumen] = useState<Resumen | null>(null)
   const [serie, setSerie] = useState<PuntoSerie[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
+  // Antes esta carga no manejaba el fallo: si la red se caía o la API
+  // devolvía error, `resumen` quedaba en null y la condición de abajo
+  // (`loading || !resumen`) dejaba la pantalla en "Cargando…" para siempre,
+  // sin forma de reintentar. Ahora el fallo es un estado más, con salida.
   const load = useCallback(() => {
     setLoading(true)
+    setError(null)
     const params = new URLSearchParams({ desde, hasta })
     if (region) params.set('region', region)
     fetch(`/api/logistica/kpis?${params}`)
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => { setResumen(data.resumen); setSerie(data.serie ?? []) })
+      .catch(err => setError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setLoading(false))
   }, [desde, hasta, region])
 
@@ -57,8 +68,18 @@ export default function KpisClient() {
           </select>
         </div>
 
-        {loading || !resumen ? (
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Cargando…</p>
+        {loading ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <SkeletonCard /><SkeletonCard />
+          </div>
+        ) : error || !resumen ? (
+          <ErrorState
+            title="No pudimos cargar los indicadores"
+            hint="Revisa tu conexión y vuelve a intentar. Los datos siguen guardados."
+            detail={error}
+            showDetail
+            onRetry={load}
+          />
         ) : (
           <>
             {/* ── Tarjetas principales ── */}

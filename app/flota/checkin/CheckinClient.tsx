@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { notificar } from '@/lib/notificar'
 import {
@@ -217,7 +217,7 @@ function InputDireccionValidada({
 interface Vehiculo { id: string; nombre: string; tipo: string; patente: string | null; km_actual: number; estado: string; combustible: string | null }
 interface Ruta { id: string; nombre: string | null; vehiculo_id: string; km_teoricos: number | null; estado: string }
 interface ClienteFlota { nombre_fantasia: string; direccion: string | null; localidad: string | null; ruta_despacho: string | null; lat: number | null; lng: number | null }
-interface Props { user: AppUser; vehiculos: Vehiculo[]; rutasHoy: Ruta[]; clientes: ClienteFlota[] }
+interface Props { user: AppUser; vehiculos: Vehiculo[]; rutasHoy: Ruta[] }
 
 const TIPO_LABEL: Record<string, string> = { camioneta: 'Camioneta', furgon: 'Furgón', camion_34: 'Camión 3/4' }
 
@@ -260,7 +260,7 @@ async function fileToBase64(file: File): Promise<string> {
   })
 }
 
-export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: Props) {
+export default function CheckInClient({ user, vehiculos, rutasHoy }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [paso, setPaso] = useState(1)
@@ -349,12 +349,35 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
     return () => clearTimeout(t)
   }, [paradas]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const clientesFiltrados = busquedaCliente.trim().length > 0
-    ? clientes.filter(c =>
-        c.nombre_fantasia.toLowerCase().includes(busquedaCliente.toLowerCase()) ||
-        (c.localidad ?? '').toLowerCase().includes(busquedaCliente.toLowerCase())
-      ).slice(0, 6)
-    : []
+  // Búsqueda en vivo contra Supabase — antes la página traía TODOS los
+  // clientes con ruta de despacho de golpe sólo para filtrar 6 en memoria acá.
+  const [clientesFiltrados, setClientesFiltrados] = useState<ClienteFlota[]>([])
+  const [buscandoClientes, setBuscandoClientes] = useState(false)
+
+  const buscarClientesFlota = useCallback(async (termino: string) => {
+    setBuscandoClientes(true)
+    const t = termino.replace(/[,()]/g, ' ').trim()
+    const { data } = await supabase
+      .from('clientes')
+      .select('nombre_fantasia, direccion, localidad, ruta_despacho, lat, lng')
+      .or(`nombre_fantasia.ilike.%${t}%,localidad.ilike.%${t}%`)
+      .order('nombre_fantasia')
+      .limit(6)
+    setClientesFiltrados(data ?? [])
+    setBuscandoClientes(false)
+  }, [supabase])
+
+  useEffect(() => {
+    const q = busquedaCliente.trim()
+    if (!q) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setClientesFiltrados([])
+      setBuscandoClientes(false)
+      return
+    }
+    const t = setTimeout(() => buscarClientesFlota(q), 350)
+    return () => clearTimeout(t)
+  }, [busquedaCliente, buscarClientesFlota])
 
   function agregarCliente(c: ClienteFlota) {
     setParadas(prev => [...prev, {
@@ -545,11 +568,19 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
       {paso === 1 && (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '12px 12px 0' }}>
-            {disponibles.length === 0 ? (
+            {vehiculos.length === 0 ? (
+              // Distinto de "0 disponibles": acá no hay NINGÚN vehículo cargado en
+              // el sistema todavía — decir "todos están en uso" sería mentira.
+              <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                <AlertTriangle size={32} color="#D4AF37" style={{ margin: '0 auto 12px', display: 'block' }} />
+                <p style={{ fontSize: 15, fontWeight: 700, color: '#F4EEDF', marginBottom: 6 }}>No hay vehículos registrados</p>
+                <p style={{ fontSize: 13, color: 'var(--muted)' }}>Pide a un administrador que cargue la flota antes de iniciar una salida.</p>
+              </div>
+            ) : disponibles.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px' }}>
                 <AlertTriangle size={32} color="#D4AF37" style={{ margin: '0 auto 12px', display: 'block' }} />
                 <p style={{ fontSize: 15, fontWeight: 700, color: '#F4EEDF', marginBottom: 6 }}>Sin vehículos disponibles</p>
-                <p style={{ fontSize: 13, color: 'var(--muted)' }}>Todos los vehículos están en uso o en mantención</p>
+                <p style={{ fontSize: 13, color: 'var(--muted)' }}>Todos los vehículos están actualmente en uso o en mantenimiento.</p>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -704,7 +735,9 @@ export default function CheckInClient({ user, vehiculos, rutasHoy, clientes }: P
                       <X size={14} />
                     </button>
                   </div>
-                  {clientesFiltrados.length > 0 ? clientesFiltrados.map(c => (
+                  {buscandoClientes ? (
+                    <p style={{ padding: '12px 14px', fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>Buscando…</p>
+                  ) : clientesFiltrados.length > 0 ? clientesFiltrados.map(c => (
                     <div key={c.nombre_fantasia} onMouseDown={() => agregarCliente(c)}
                       style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.08)')}

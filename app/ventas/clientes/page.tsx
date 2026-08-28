@@ -69,12 +69,19 @@ export default async function ClientesPage() {
   const [
     { data: clientes },
     { data: estadosData },
-    { data: scoreData },
+    { data: scoreData, error: scoreError },
     { data: deudoresData },
     ultimasVentasRaw,
   ] = await Promise.all([
     clientesQuery,
     supabase.from('clientes_estado').select('nombre_fantasia, estado, nota'),
+    // ~3,7 s: client_raw_metrics es una vista sin materializar que reagrega
+    // las 51.000 filas de `ventas` en cada carga (ver la migración
+    // client_metrics_cache_materializado.sql). Si supera el statement_timeout
+    // del rol, `scoreData` viene null y TODA la inteligencia de la cartera
+    // (ciclo, días sin comprar, score, segmento) se apaga. Antes eso se veía
+    // igual que "este cliente no tiene historial" — un dato falso, no un
+    // hueco. Por eso ahora el error viaja hasta la UI.
     supabase.rpc('get_client_scores'),
     supabase.from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total'),
     // Fuente directa de último pedido — más fiable que client_scores.ultima_compra
@@ -307,6 +314,7 @@ export default async function ClientesPage() {
       actividad={actividad}
       isAdmin={appUser?.isAdmin ?? false}
       vendedoresScope={vendedoresScope as string[]}
+      scoringCaido={!!scoreError}
     />
   )
 }

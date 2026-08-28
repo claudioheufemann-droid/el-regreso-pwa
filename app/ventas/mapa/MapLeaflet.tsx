@@ -96,7 +96,7 @@ function getColorSalud(dias: number | null): string {
 }
 
 function getSaludLabel(dias: number | null): string {
-  if (dias === null) return 'Sin datos'
+  if (dias === null) return 'No informado'
   if (dias <= 7)  return `Excelente · ${dias}d`
   if (dias <= 15) return `Atención · ${dias}d`
   if (dias <= 30) return `Riesgo · ${dias}d`

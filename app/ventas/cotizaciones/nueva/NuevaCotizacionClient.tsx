@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useMemo, useRef, useState, useEffect, useCallback, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ChevronLeft, Search, Plus, Minus, X, FileText, Send, Share2, Check,
@@ -39,8 +39,8 @@ function disponibleDe(info: CatalogoInfo, envase: Envase, stockPorCodigo: StockP
   return envase === 'barril' ? s.barril : s.envase
 }
 
-export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }: {
-  user: AppUser; clientes: ClienteParaCotizacion[]; stockPorCodigo: StockPorCodigo
+export default function NuevaCotizacionClient({ user, stockPorCodigo }: {
+  user: AppUser; stockPorCodigo: StockPorCodigo
 }) {
   const router = useRouter()
   const supabase = createClient()
@@ -73,11 +73,37 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
   const [emailManual, setEmailManual] = useState('')
   const [telefonoManual, setTelefonoManual] = useState('')
 
-  const sugerencias = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
-    if (!q || clienteSel) return []
-    return clientes.filter(c => c.nombre_fantasia.toLowerCase().includes(q)).slice(0, 8)
-  }, [busqueda, clientes, clienteSel])
+  // Búsqueda en vivo contra Supabase — antes filtraba en memoria sobre TODA
+  // la cartera (~600 clientes) que la página traía de golpe sólo para esto.
+  const [sugerencias, setSugerencias] = useState<ClienteParaCotizacion[]>([])
+  const [buscandoClientes, setBuscandoClientes] = useState(false)
+  const [errorClientes, setErrorClientes] = useState(false)
+
+  const buscarClientes = useCallback(async (termino: string) => {
+    setBuscandoClientes(true)
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('id, nombre_fantasia, razon_social, email, telefono')
+      .ilike('nombre_fantasia', `%${termino.replace(/[,()]/g, ' ').trim()}%`)
+      .order('nombre_fantasia')
+      .limit(8)
+    setErrorClientes(!!error)
+    setSugerencias(error ? [] : (data ?? []))
+    setBuscandoClientes(false)
+  }, [supabase])
+
+  useEffect(() => {
+    const q = busqueda.trim()
+    if (!q || clienteSel) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSugerencias([])
+      setErrorClientes(false)
+      setBuscandoClientes(false)
+      return
+    }
+    const t = setTimeout(() => buscarClientes(q), 350)
+    return () => clearTimeout(t)
+  }, [busqueda, clienteSel, buscarClientes])
 
   const clienteFinal = useMemo(() => {
     if (modoCliente === 'existente' && clienteSel) {
@@ -302,7 +328,11 @@ export default function NuevaCotizacionClient({ user, clientes, stockPorCodigo }
                         style={{ width: '100%', padding: '12px 12px 12px 36px', borderRadius: 12, border: `1px solid ${C.line}`, background: C.card, color: C.text, fontSize: 14, outline: 'none' }}
                       />
                     </div>
-                    {sugerencias.length > 0 && (
+                    {buscandoClientes ? (
+                      <div style={{ marginTop: 6, padding: '10px 14px', fontSize: 12.5, color: C.muted }}>Buscando…</div>
+                    ) : errorClientes ? (
+                      <div style={{ marginTop: 6, padding: '10px 14px', fontSize: 12.5, color: C.red }}>No pudimos buscar clientes.</div>
+                    ) : sugerencias.length > 0 && (
                       <div style={{ marginTop: 6, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden' }}>
                         {sugerencias.map(c => (
                           <button key={c.id} onClick={() => { setClienteSel(c); setBusqueda('') }} style={{

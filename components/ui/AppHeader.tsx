@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Search } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
+import { useGlobalSearch } from '@/lib/globalSearchContext'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 
@@ -30,6 +31,7 @@ interface AppHeaderProps {
 export default function AppHeader({ eyebrow, title, extraAction, hideBack, backHref = '/' }: AppHeaderProps) {
   const { user } = useUser()
   const router = useRouter()
+  const { openSearch } = useGlobalSearch()
   const [showSettings, setShowSettings] = useState(false)
 
   const initials = user?.iniciales ?? (user?.nombre?.slice(0, 2).toUpperCase() ?? '··')
@@ -68,6 +70,18 @@ export default function AppHeader({ eyebrow, title, extraAction, hideBack, backH
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {extraAction}
+          <button
+            onClick={openSearch}
+            aria-label="Buscar en toda la app"
+            title="Buscar (Ctrl+K)"
+            style={{
+              width: 40, height: 40, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Search size={17} color="rgba(255,255,255,0.6)" />
+          </button>
           <NotificationsBell inline variant="dark" />
           {/* Avatar → configuración */}
           <button

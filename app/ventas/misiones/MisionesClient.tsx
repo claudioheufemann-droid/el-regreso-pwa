@@ -20,6 +20,7 @@ import { hapticExito } from '@/lib/haptics'
 const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import { Skeleton } from '@/components/ui/States'
 import { SEG_COLOR } from '@/lib/theme'
 
 // ── Paleta — SEG_COLOR importado de lib/theme (fuente única) ─────────────────
@@ -1720,7 +1721,8 @@ function HistorialView({ historial }: { historial: HistorialSemana[] }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {historial.map(sem => {
         const isOpen = openSemana === sem.semana
-        const pct = sem.total > 0 ? Math.round((sem.completadas / sem.total) * 100) : 0
+        const hayActividad = sem.total > 0
+        const pct = hayActividad ? Math.round((sem.completadas / sem.total) * 100) : 0
         return (
           <div key={sem.semana} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
             <button onClick={() => setOpenSemana(isOpen ? null : sem.semana)} style={{
@@ -1730,10 +1732,12 @@ function HistorialView({ historial }: { historial: HistorialSemana[] }) {
               <Calendar size={15} color="var(--muted)" />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rangoSemana(sem.semana)}</p>
-                <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sem.completadas} de {sem.total} con pedido — {pct}%</p>
+                <p style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {hayActividad ? `${sem.completadas} de ${sem.total} con pedido — ${pct}%` : 'Sin actividad esta semana'}
+                </p>
               </div>
               <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: `${pct}%`, height: '100%', background: pct >= 80 ? 'var(--green-dim)' : 'var(--gold)', borderRadius: 4 }} />
+                <div style={{ width: hayActividad ? `${pct}%` : '0%', height: '100%', background: pct >= 80 ? 'var(--green-dim)' : 'var(--gold)', borderRadius: 4 }} />
               </div>
               {isOpen ? <ChevronDown size={15} color="var(--muted)" /> : <ChevronRight size={15} color="var(--muted)" />}
             </button>
@@ -2196,12 +2200,12 @@ export default function MisionesClient({
         {tab === 'proxima' && <ProximaView proxima={proxima} isDesktop />}
         {tab === 'historial' && <HistorialView historial={historial} />}
         {tab === 'resumen' && isAdmin && (
-          <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>}>
+          <Suspense fallback={<div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>  <Skeleton height={28} width="40%" />  <Skeleton height={140} radius={16} />  <Skeleton height={140} radius={16} /></div>}>
             <MisionesAdminDashboard isAdmin={isAdmin} />
           </Suspense>
         )}
         {tab === 'calendario' && (
-          <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>}>
+          <Suspense fallback={<div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>  <Skeleton height={28} width="40%" />  <Skeleton height={140} radius={16} />  <Skeleton height={140} radius={16} /></div>}>
             <CalendarioMensual isAdmin={isAdmin} vendedorActual={vendedorActual} isDesktop />
           </Suspense>
         )}
@@ -2267,12 +2271,12 @@ export default function MisionesClient({
       {tab === 'proxima'   && <ProximaView   proxima={proxima} isDesktop={false} />}
       {tab === 'historial' && <HistorialView  historial={historial} />}
       {tab === 'resumen' && isAdmin && (
-        <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>}>
+        <Suspense fallback={<div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>  <Skeleton height={28} width="40%" />  <Skeleton height={140} radius={16} />  <Skeleton height={140} radius={16} /></div>}>
           <MisionesAdminDashboard isAdmin={isAdmin} />
         </Suspense>
       )}
       {tab === 'calendario' && (
-        <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>}>
+        <Suspense fallback={<div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>  <Skeleton height={28} width="40%" />  <Skeleton height={140} radius={16} />  <Skeleton height={140} radius={16} /></div>}>
           <CalendarioMensual isAdmin={isAdmin} vendedorActual={vendedorActual} isDesktop={false} />
         </Suspense>
       )}

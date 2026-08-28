@@ -25,11 +25,16 @@ export default async function ProduccionPage() {
   // Visibilidad total: cualquier usuario puede ver la carga de tareas de esta área,
   // sin importar su macro_area asignada — solo la creación/edición sigue controlada por isAdmin.
 
-  const { data: tasks } = await supabase
-    .from('tasks')
-    .select('*, responsable:users(id, nombre, iniciales, rol, area, email, avatar_url), responsable_ids')
-    .in('area', PRODUCCION_AREAS)
-    .order('created_at', { ascending: false })
+  const [{ data: tasks }, { count: lotesPendientes }] = await Promise.all([
+    supabase
+      .from('tasks')
+      .select('*, responsable:users(id, nombre, iniciales, rol, area, email, avatar_url), responsable_ids')
+      .in('area', PRODUCCION_AREAS)
+      .order('created_at', { ascending: false }),
+    // Antes Producción mostraba exactamente la misma pantalla de tareas que
+    // Comercial y Administración, sin nada propio de Bodega/Producción.
+    supabase.from('lotes_produccion').select('id', { count: 'exact', head: true }).eq('estado', 'declarado'),
+  ])
 
   return (
     <div className="h-screen flex flex-col">
@@ -42,6 +47,7 @@ export default async function ProduccionPage() {
         currentUserId={currentUserId}
         currentMacroArea="produccion"
         backHref="/gestion"
+        areaStat={{ label: 'Lotes pendientes de recepción', value: String(lotesPendientes ?? 0), href: '/logistica/produccion' }}
       />
     </div>
   )

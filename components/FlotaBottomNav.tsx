@@ -11,7 +11,7 @@ const ITEMS: NavItem[] = [
   { href: '/flota/despachos', icon: Route,     label: 'Despachos'               },
   { href: '/flota/historial', icon: History,   label: 'Historial'               },
   { href: '/flota/kpis',      icon: Gauge,     label: 'KPIs'                    },
-  { href: '/flota/admin',     icon: BarChart3, label: 'Reportes'                },
+  { href: '/flota/admin',     icon: BarChart3, label: 'Control'                 },
 ]
 
 const RUTAS_PANTALLA_COMPLETA = ['/flota/checkin', '/flota/checkout', '/flota/viaje', '/flota/vehiculo']

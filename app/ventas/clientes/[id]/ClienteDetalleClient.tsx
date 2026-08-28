@@ -16,6 +16,7 @@ import { useIsDesktop } from '@/lib/useIsDesktop'
 import RegistrarContactoModal, { type TipoContacto } from '@/components/ui/RegistrarContactoModal'
 import FollowUpModal, { type FollowUp } from '@/components/ui/FollowUpModal'
 import { VENDEDOR_DISPLAY } from '@/lib/types'
+import { formatLocalidad } from '@/lib/format'
 
 const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
 
@@ -695,6 +696,25 @@ export default function ClienteDetalleClient({
     setPersonas(prev => prev.filter(p => p.id !== id))
   }
 
+  // ── Completitud de ficha ──────────────────────────────────────────────────
+  // Mismos 9 campos que ya se listaban en "Información general" — antes se
+  // ocultaban en silencio si faltaban, sin dar ninguna señal de que la ficha
+  // estaba incompleta. Ahora ese mismo conteo alimenta un indicador visible.
+  const infoFields = [
+    { icon: <Tag size={13} />,        label: 'Tipo de negocio', value: cliente.tipo },
+    { icon: <Activity size={13} />,   label: 'Segmento',        value: cliente.giro },
+    { icon: <MapPin size={13} />,     label: 'Dirección',       value: cliente.direccion },
+    { icon: <Navigation size={13} />, label: 'Comuna',          value: cliente.localidad },
+    { icon: <Phone size={13} />,      label: 'Teléfono',        value: cliente.telefono },
+    { icon: <Mail size={13} />,       label: 'Email',           value: cliente.email },
+    { icon: <FileText size={13} />,   label: 'RUT',             value: cliente.rut },
+    { icon: <Truck size={13} />,      label: 'Ruta',            value: cliente.ruta_despacho },
+    { icon: <Clock size={13} />,      label: 'Cond. de pago',   value: cliente.condicion_venta },
+  ]
+  const camposCompletos = infoFields.filter(r => r.value).length
+  const pctFicha = Math.round((camposCompletos / infoFields.length) * 100)
+  const fichaColor = pctFicha >= 80 ? '#5A8A4A' : pctFicha >= 50 ? '#D4AF37' : '#B5543E'
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <>
@@ -789,6 +809,16 @@ export default function ClienteDetalleClient({
                   {cliente.ruta_despacho && (
                     <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(212,175,55,0.06)', color: GOLD, border: `1px solid ${GOLD}20` }}>
                       ✦ {cliente.ruta_despacho}
+                    </span>
+                  )}
+
+                  {/* Completitud de ficha */}
+                  {pctFicha < 100 && (
+                    <span
+                      title={`Faltan: ${infoFields.filter(r => !r.value).map(r => r.label).join(', ')}`}
+                      style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: `${fichaColor}15`, color: fichaColor, border: `1px solid ${fichaColor}30` }}
+                    >
+                      Ficha {pctFicha}% completa
                     </span>
                   )}
                 </div>
@@ -910,40 +940,38 @@ export default function ClienteDetalleClient({
 
               {/* Col 1 — Customer Info */}
               <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: isDesktop ? 18 : 14, padding: isDesktop ? 20 : 13 }}>
-                <p style={{ fontSize: 11, fontWeight: 800, color: '#555', letterSpacing: '0.08em', marginBottom: 16 }}>INFORMACIÓN GENERAL</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#555', letterSpacing: '0.08em' }}>INFORMACIÓN GENERAL</p>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: fichaColor }}>{pctFicha}% completa</span>
+                </div>
 
                 {/* Mini map placeholder */}
                 {(cliente.direccion || cliente.localidad) && (
                   <div style={{ borderRadius: 12, overflow: 'hidden', marginBottom: 16, height: 100, background: 'rgba(212,175,55,0.04)', border: '1px solid rgba(212,175,55,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 6 }}>
                     <MapPin size={20} color={GOLD} />
                     <p style={{ fontSize: 11, color: '#555', textAlign: 'center', maxWidth: 160 }}>
-                      {cliente.direccion ?? ''}{cliente.localidad ? `, ${cliente.localidad}` : ''}
+                      {cliente.direccion ?? ''}{cliente.localidad ? `, ${formatLocalidad(cliente.localidad)}` : ''}
                     </p>
                   </div>
                 )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                  {[
-                    { icon: <Tag size={13} />,       label: 'Tipo de negocio', value: cliente.tipo },
-                    { icon: <Activity size={13} />,  label: 'Segmento',        value: cliente.giro },
-                    { icon: <MapPin size={13} />,    label: 'Dirección',       value: cliente.direccion },
-                    { icon: <Navigation size={13} />,label: 'Comuna',          value: cliente.localidad },
-                    { icon: <Phone size={13} />,     label: 'Teléfono',        value: cliente.telefono },
-                    { icon: <Mail size={13} />,      label: 'Email',           value: cliente.email },
-                    { icon: <FileText size={13} />,  label: 'RUT',             value: cliente.rut },
-                    { icon: <Truck size={13} />,     label: 'Ruta',            value: cliente.ruta_despacho },
-                    { icon: <Clock size={13} />,     label: 'Cond. de pago',   value: cliente.condicion_venta },
-                  ].filter(r => r.value).map((r, i) => (
+                  {infoFields.filter(r => r.value).map((r, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                       <span style={{ color: '#444', flexShrink: 0 }}>{r.icon}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: 10, color: '#444', marginBottom: 1 }}>{r.label}</p>
                         <p style={{ fontSize: 12, color: '#ccc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {r.value}
+                          {r.label === 'Comuna' ? formatLocalidad(r.value) : r.value}
                         </p>
                       </div>
                     </div>
                   ))}
+                  {infoFields.some(r => !r.value) && (
+                    <p style={{ fontSize: 11, color: '#444', marginTop: 10 }}>
+                      Faltan: {infoFields.filter(r => !r.value).map(r => r.label).join(', ')}
+                    </p>
+                  )}
                 </div>
               </div>
 

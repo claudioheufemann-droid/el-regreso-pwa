@@ -117,7 +117,7 @@ export default function BuscarClienteSheet({ onClose }: { onClose: () => void })
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 700, color: '#F0EDE8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre_fantasia}</p>
                 <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <MapPin size={9} /> {c.categoria ?? c.localidad ?? 'Sin datos'}
+                  <MapPin size={9} /> {c.categoria ?? c.localidad ?? 'No informado'}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>

@@ -628,6 +628,11 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+/* Pulso del Skeleton de components/ui/States.tsx */
+@keyframes rg-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
 
 .animate-fade-in  { animation: fade-in  0.2s ease-out both; }
 .animate-slide-up { animation: slide-up 0.28s var(--spring) both; }
@@ -1193,3 +1198,34 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
   right: 8px !important;
 }
 .leaflet-popup-close-button:hover { color: #fff !important; }
+
+/* ═══════════════════════════════════════════════════════════
+   ACCESIBILIDAD — movimiento reducido (WCAG 2.3.3)
+   Quien tenga activado "reducir movimiento" en iOS/Android/Windows
+   ve la app igual, pero sin animaciones que puedan marear. No se
+   desactivan del todo (eso rompe transiciones que comunican estado):
+   se acortan a lo mínimo perceptible.
+   ═══════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACCESIBILIDAD — foco visible por teclado
+   Antes ningún control tenía anillo de foco: navegar la app con Tab
+   era imposible porque no se veía dónde estabas parado. Se usa
+   :focus-visible para que el anillo aparezca solo con teclado y no
+   al tocar con el dedo.
+   ═══════════════════════════════════════════════════════════ */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 6px;
+}

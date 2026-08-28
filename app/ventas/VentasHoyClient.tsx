@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Droplet, Users, ShoppingBag,
   DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar, CheckCircle2, Truck, RefreshCw,
-  Building2,
+  Building2, Boxes, Loader2,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
+import { Skeleton } from '@/components/ui/States'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import MiComision from './MiComision'
 import MiComisionVendedor from '@/app/terreno/MiComisionVendedor'
@@ -185,18 +186,25 @@ interface FilaPedidoProducto {
 function DetallePedidoProductos({ pedido }: { pedido: string }) {
   const [items, setItems] = useState<FilaPedidoProducto[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reintento, setReintento] = useState(0)
 
   useEffect(() => {
     let vivo = true
+    setError(null)
     fetch(`/api/ventas/detalle?tipo=pedido-productos&pedido=${encodeURIComponent(pedido)}`)
       .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
       .then(d => { if (vivo) setItems(Array.isArray(d) ? d : []) })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
-  }, [pedido])
+  }, [pedido, reintento])
 
-  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
-  if (!items) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
+  if (error) return (
+    <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>
+      No se pudo cargar: {error}{' '}
+      <button onClick={() => setReintento(n => n + 1)} style={{ color: C.blue, background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}>Reintentar</button>
+    </p>
+  )
+  if (!items) return <Skeleton height={40} radius={8} />
   if (items.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin detalle de productos.</p>
 
   return (
@@ -234,18 +242,24 @@ function DetallePedidoProductos({ pedido }: { pedido: string }) {
 function DetallePedidoProductosInline({ pedido }: { pedido: string }) {
   const [items, setItems] = useState<FilaPedidoProducto[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reintento, setReintento] = useState(0)
 
   useEffect(() => {
     let vivo = true
+    setError(null)
     fetch(`/api/ventas/detalle?tipo=pedido-productos&pedido=${encodeURIComponent(pedido)}`)
       .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
       .then(d => { if (vivo) setItems(Array.isArray(d) ? d : []) })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
-  }, [pedido])
+  }, [pedido, reintento])
 
-  if (error) return <p style={{ fontSize: 11, color: C.red, marginTop: 4, paddingLeft: 14 }}>No se pudo cargar el detalle.</p>
-  if (!items) return <p style={{ fontSize: 11, color: C.muted, marginTop: 4, paddingLeft: 14 }}>Cargando…</p>
+  if (error) return (
+    <p style={{ fontSize: 11, color: C.red, marginTop: 4, paddingLeft: 14 }}>
+      No se pudo cargar el detalle. <button onClick={() => setReintento(n => n + 1)} style={{ color: C.blue, background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}>Reintentar</button>
+    </p>
+  )
+  if (!items) return <div style={{ marginTop: 4, paddingLeft: 14 }}><Skeleton height={16} width="70%" /></div>
   if (items.length === 0) return null
 
   return (
@@ -307,9 +321,11 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
 }) {
   const [pedidos, setPedidos] = useState<FilaPedidoCliente[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reintento, setReintento] = useState(0)
 
   useEffect(() => {
     let vivo = true
+    setError(null)
     const base = `cliente=${encodeURIComponent(cliente)}&desde=${desde}&hasta=${hasta}`
     const fetches = [
       fetch(`/api/ventas/detalle?tipo=pedidos-pendientes-cliente&${base}`)
@@ -343,10 +359,15 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
       })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
-  }, [cliente, desde, hasta, porEntrega])
+  }, [cliente, desde, hasta, porEntrega, reintento])
 
-  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
-  if (!pedidos) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
+  if (error) return (
+    <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>
+      No se pudo cargar: {error}{' '}
+      <button onClick={() => { setError(null); setReintento(n => n + 1) }} style={{ color: C.blue, background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}>Reintentar</button>
+    </p>
+  )
+  if (!pedidos) return <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{[0, 1].map(i => <Skeleton key={i} height={44} radius={8} />)}</div>
   if (pedidos.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin pedidos en este rango.</p>
 
   const fechaOrden = (p: FilaPedidoCliente) => (p.estado === 'entregado' ? p.fechaEntrega : p.fechaPedido) ?? ''
@@ -372,7 +393,7 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
                     ? `Entregado el ${ped.fechaEntrega ? fFechaCorta(ped.fechaEntrega) : '—'}${horaEntrega ? ` a las ${horaEntrega}` : ''}`
                     : ped.estado === 'pendiente'
                       ? 'Pendiente de entrega'
-                      : 'Sin información de entrega del ERP'}
+                      : 'Entrega no informada por el ERP'}
                 </p>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -429,6 +450,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
   const [errorDe, setErrorDe] = useState<{ tipo: TipoDetalle; msg: string } | null>(null)
   const [busca, setBusca] = useState('')
   const [abierto, setAbierto] = useState<string | null>(null)
+  const [reintento, setReintento] = useState(0)
 
   // Con selector la vista la manda el estado interno; sin selector, la prop.
   const tipoActivo = conSelector ? vista : tipo
@@ -437,6 +459,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
 
   useEffect(() => {
     let vivo = true
+    setErrorDe(null)
     const qs = [
       tipoActivo === 'envase' ? `bucket=${encodeURIComponent(envaseBucket ?? '')}` : '',
       tipoActivo === 'productos' && categoria ? `categoria=${encodeURIComponent(categoria)}` : '',
@@ -448,7 +471,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
       .then(d => { if (vivo) setDatos({ tipo: tipoActivo, filas: Array.isArray(d) ? d : [] }) })
       .catch(e => { if (vivo) setErrorDe({ tipo: tipoActivo, msg: String(e) }) })
     return () => { vivo = false }
-  }, [tipoActivo, envaseBucket, categoria, origenPedidos, porEntrega, desde, hasta])
+  }, [tipoActivo, envaseBucket, categoria, origenPedidos, porEntrega, desde, hasta, reintento])
 
   const esProd = tipoActivo === 'productos' || tipoActivo === 'envase'
   const esPedidos = tipoActivo === 'pedidos-origen' || tipoActivo === 'pedidos-periodo'
@@ -622,9 +645,22 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px 24px' }}>
           {error ? (
-            <p style={{ textAlign: 'center', color: C.red, fontSize: 13, padding: 28 }}>No se pudo cargar: {error}</p>
+            <div style={{ textAlign: 'center', padding: 28 }}>
+              <p style={{ color: C.red, fontSize: 13, marginBottom: 10 }}>No se pudo cargar: {error}</p>
+              <button
+                onClick={() => setReintento(n => n + 1)}
+                style={{
+                  minHeight: 40, padding: '0 18px', borderRadius: 100, border: 'none', cursor: 'pointer',
+                  background: C.blueSoft, color: C.blue, fontSize: 13, fontWeight: 700,
+                }}
+              >
+                Reintentar
+              </button>
+            </div>
           ) : !filas ? (
-            <p style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 28 }}>Cargando…</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[0, 1, 2, 3, 4].map(i => <Skeleton key={i} height={52} radius={10} />)}
+            </div>
           ) : visibles.length === 0 ? (
             <p style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: 28 }}>
               {busca ? 'Sin coincidencias'
@@ -847,19 +883,26 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
   const [clientes, setClientes] = useState<FilaCliente[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [abierto, setAbierto] = useState<string | null>(null)
+  const [reintento, setReintento] = useState(0)
 
   useEffect(() => {
     let vivo = true
+    setError(null)
     const qs = `tipo=clientes-vendedor&vendedor=${encodeURIComponent(vendedor)}&desde=${desde}&hasta=${hasta}&porEntrega=${porEntrega}`
     fetch(`/api/ventas/detalle?${qs}`)
       .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
       .then(d => { if (vivo) setClientes(Array.isArray(d) ? d : []) })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
-  }, [vendedor, desde, hasta, porEntrega])
+  }, [vendedor, desde, hasta, porEntrega, reintento])
 
-  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
-  if (!clientes) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
+  if (error) return (
+    <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>
+      No se pudo cargar: {error}{' '}
+      <button onClick={() => { setError(null); setReintento(n => n + 1) }} style={{ color: C.blue, background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}>Reintentar</button>
+    </p>
+  )
+  if (!clientes) return <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{[0, 1, 2].map(i => <Skeleton key={i} height={48} radius={10} />)}</div>
   if (clientes.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin locales en este rango.</p>
 
   return (
@@ -928,19 +971,26 @@ function DetalleClientesProducto({ producto, envase, desde, hasta, porEntrega }:
   const [clientes, setClientes] = useState<FilaCliente[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [abierto, setAbierto] = useState<string | null>(null)
+  const [reintento, setReintento] = useState(0)
 
   useEffect(() => {
     let vivo = true
+    setError(null)
     const qs = `tipo=clientes-producto&producto=${encodeURIComponent(producto)}&envase=${encodeURIComponent(envase)}&desde=${desde}&hasta=${hasta}&porEntrega=${porEntrega}`
     fetch(`/api/ventas/detalle?${qs}`)
       .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
       .then(d => { if (vivo) setClientes(Array.isArray(d) ? d : []) })
       .catch(e => { if (vivo) setError(String(e)) })
     return () => { vivo = false }
-  }, [producto, envase, desde, hasta, porEntrega])
+  }, [producto, envase, desde, hasta, porEntrega, reintento])
 
-  if (error) return <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>No se pudo cargar: {error}</p>
-  if (!clientes) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Cargando…</p>
+  if (error) return (
+    <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>
+      No se pudo cargar: {error}{' '}
+      <button onClick={() => { setError(null); setReintento(n => n + 1) }} style={{ color: C.blue, background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}>Reintentar</button>
+    </p>
+  )
+  if (!clientes) return <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{[0, 1, 2].map(i => <Skeleton key={i} height={48} radius={10} />)}</div>
   if (clientes.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin clientes en este rango.</p>
 
   return (
@@ -1109,13 +1159,17 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
   const [showActualizaciones, setShowActualizaciones] = useState(false)
   const [eventosSync, setEventosSync] = useState<{ hora: string; filas: number }[] | null>(null)
   const [errorSync, setErrorSync] = useState(false)
-  useEffect(() => {
-    if (!showActualizaciones || eventosSync !== null) return
+  const cargarSync = useCallback(() => {
+    setErrorSync(false)
     fetch('/api/ventas/actualizaciones')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(evs => setEventosSync(Array.isArray(evs) ? evs : []))
       .catch(() => setErrorSync(true))
-  }, [showActualizaciones, eventosSync])
+  }, [])
+  useEffect(() => {
+    if (!showActualizaciones || eventosSync !== null) return
+    cargarSync()
+  }, [showActualizaciones, eventosSync, cargarSync])
 
   const [syncStale, setSyncStale] = useState(false)
   useEffect(() => {
@@ -1140,10 +1194,59 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
   // mano roto o inexistente), cae al período activo en vez de a null -mejor
   // mostrar algo con sentido que "No hay períodos de venta configurados".
   const periodoActivoDatos = data.periodos[0]?.datos ?? null
+
+  // ── Carga bajo demanda de Hoy/7D/30D/Año y de los períodos 1-3 del selector ──
+  // La carga inicial de la página sólo trae calculado el período activo (ver
+  // el comentario grande en app/ventas/hoyData.ts). El resto se pide acá,
+  // recién cuando el usuario efectivamente cambia a esa pestaña — y queda en
+  // caché en memoria para no volver a pedirlo si vuelve a esa misma pestaña.
+  const [rangosCargados, setRangosCargados] = useState<Partial<Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>>>({})
+  const [periodosCargados, setPeriodosCargados] = useState<Record<number, DatosRango>>({})
+  const [cargandoRango, setCargandoRango] = useState(false)
+  const [errorRango, setErrorRango] = useState<string | null>(null)
+  const [reintentoRango, setReintentoRango] = useState(0)
+
+  useEffect(() => {
+    setErrorRango(null)
+    if (rango !== 'periodo' && rango !== 'custom') {
+      if (data.rangos[rango] || rangosCargados[rango]) return
+      setCargandoRango(true)
+      fetch(`/api/ventas/rango?tipo=relativo&key=${rango}`)
+        .then(async r => {
+          if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error ?? `La API respondió ${r.status}`)
+          return r.json()
+        })
+        .then((res: { key: string; datos: DatosRango }) => {
+          setRangosCargados(prev => ({ ...prev, [res.key]: res.datos }))
+        })
+        .catch(err => setErrorRango(err instanceof Error ? err.message : 'Error desconocido'))
+        .finally(() => setCargandoRango(false))
+      return
+    }
+    if (rango === 'periodo' && periodoSel && !periodoSel.datos && !periodosCargados[periodoSel.id]) {
+      setCargandoRango(true)
+      fetch(`/api/ventas/rango?tipo=periodo&id=${periodoSel.id}`)
+        .then(async r => {
+          if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error ?? `La API respondió ${r.status}`)
+          return r.json()
+        })
+        .then((res: { id: number; datos: DatosRango }) => {
+          setPeriodosCargados(prev => ({ ...prev, [res.id]: res.datos }))
+        })
+        .catch(err => setErrorRango(err instanceof Error ? err.message : 'Error desconocido'))
+        .finally(() => setCargandoRango(false))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rango, periodoIdx, reintentoRango])
+
   const d: DatosRango | null =
-    rango === 'periodo' ? (periodoSel?.datos ?? periodoActivoDatos)
+    rango === 'periodo' ? (periodoSel?.datos ?? (periodoSel ? periodosCargados[periodoSel.id] : undefined) ?? periodoActivoDatos)
     : rango === 'custom' ? (data.custom ?? periodoActivoDatos)
-    : (data.rangos[rango as Exclude<RangoKey, 'periodo' | 'custom'>] ?? periodoActivoDatos)
+    : (data.rangos[rango as Exclude<RangoKey, 'periodo' | 'custom'>] ?? rangosCargados[rango as Exclude<RangoKey, 'periodo' | 'custom'>] ?? periodoActivoDatos)
+  // Mientras el rango pedido todavía no llegó, `d` cae al período activo (ver
+  // arriba) para que la pantalla nunca quede en blanco — el aviso de "Calculando
+  // …" / error de más abajo (`cargandoRango`/`errorRango`) es lo que evita que
+  // eso se confunda con "estos son los números reales de Hoy/7D/etc".
 
   function aplicarRango(desde: string, hasta: string) {
     if (!desde || !hasta) return
@@ -1237,9 +1340,12 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
                   </p>
                   <div style={{ maxHeight: 320, overflowY: 'auto' }}>
                     {errorSync ? (
-                      <p style={{ textAlign: 'center', color: C.red, fontSize: 12, padding: 20 }}>No se pudo cargar el historial.</p>
+                      <p style={{ textAlign: 'center', color: C.red, fontSize: 12, padding: 20 }}>
+                        No se pudo cargar el historial.{' '}
+                        <button onClick={() => { setEventosSync(null); cargarSync() }} style={{ color: C.blue, background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}>Reintentar</button>
+                      </p>
                     ) : eventosSync === null ? (
-                      <p style={{ textAlign: 'center', color: C.muted, fontSize: 12, padding: 20 }}>Cargando…</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 0' }}>{[0, 1, 2].map(i => <Skeleton key={i} height={32} radius={8} />)}</div>
                     ) : eventosSync.length === 0 ? (
                       <p style={{ textAlign: 'center', color: C.muted, fontSize: 12, padding: 20 }}>Sin cargas en los últimos 7 días.</p>
                     ) : (
@@ -1369,12 +1475,15 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
                             </span>
                           </span>
                           {(() => {
-                            // Los eager ya tienen su dato calculado en memoria;
-                            // el resto se pide una vez al abrir el selector.
-                            if (eager) return (
+                            // El período activo (índice 0) ya trae su dato calculado
+                            // en memoria; los demás sólo lo tienen si ya se cargaron
+                            // (el usuario los abrió antes en esta sesión) — hasta
+                            // entonces se usa el resumen liviano de abajo.
+                            const datosPrecisos = eager?.datos ?? (eager ? periodosCargados[eager.id] : undefined)
+                            if (datosPrecisos) return (
                               <span style={{ textAlign: 'right', flexShrink: 0 }}>
-                                <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: on ? C.blue : C.muted }}>{fL(eager.datos.actual.litros)}</span>
-                                <span style={{ display: 'block', fontSize: 10, color: C.faint }}>{fPesoFull(eager.datos.actual.revenue)}</span>
+                                <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: on ? C.blue : C.muted }}>{fL(datosPrecisos.actual.litros)}</span>
+                                <span style={{ display: 'block', fontSize: 10, color: C.faint }}>{fPesoFull(datosPrecisos.actual.revenue)}</span>
                               </span>
                             )
                             const r = resumenPeriodos?.[p.id]
@@ -1455,6 +1564,27 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
               )
             })}
           </div>
+
+          {/* La pantalla nunca queda en blanco esperando (cae al período activo
+              mientras carga), pero eso no puede pasar en silencio: si no se avisa,
+              parece que "Hoy" muestra los números del período completo. */}
+          {cargandoRango && (
+            <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Loader2 size={12} style={{ animation: 'spin 0.8s linear infinite' }} />
+              Calculando {rango === 'periodo' ? (periodoSel?.nombre ?? 'este período') : RANGOS.find(r => r.key === rango)?.label}…
+            </p>
+          )}
+          {!cargandoRango && errorRango && (
+            <p style={{ fontSize: 11.5, color: C.red, marginTop: 8 }}>
+              No pudimos calcular este rango.{' '}
+              <button
+                onClick={() => setReintentoRango(n => n + 1)}
+                style={{ color: C.blue, background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Reintentar
+              </button>
+            </p>
+          )}
         </div>
 
         {/* Desktop: grid de dos columnas para aprovechar el ancho — columna
@@ -1935,7 +2065,9 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={foto} alt="" width={22} height={22} style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'contain', background: '#fff', flexShrink: 0 }} />
                       ) : (
-                        <span style={{ fontSize: 17 }}>🥫</span>
+                        // Marcador neutro, no emoji: el emoji se veía distinto en
+                        // cada sistema operativo y leía como error de carga.
+                        <Boxes size={17} color={C.faint} strokeWidth={1.9} style={{ flexShrink: 0 }} />
                       )}
                       <span style={{ fontSize: 12, fontWeight: 600, color: C.text, minWidth: 0, wordBreak: 'break-word' }}>{e.tipo}</span>
                       <ChevronRight size={14} color={C.faint} style={{ marginLeft: 'auto', flexShrink: 0 }} />
