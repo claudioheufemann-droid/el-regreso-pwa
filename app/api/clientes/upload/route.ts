@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import * as XLSX from 'xlsx'
 
 function getString(row: Record<string, unknown>, ...keys: string[]): string | null {
@@ -68,6 +69,19 @@ function normalizePhone(raw: string | null): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  // ── Autenticación dual (mismo patrón que /api/upload-ventas) ────────────
+  // a) UI admin: sesión por cookies. b) Cron ERP: Bearer CRON_SECRET.
+  // Antes este endpoint no tenía NINGÚN chequeo — cualquiera que conociera
+  // la URL podía subir un Excel arbitrario y, con mode=replace, BORRAR toda
+  // la tabla clientes. Cerrado el 28-ago-2026 al automatizar el sync.
+  const auth = req.headers.get('authorization')
+  const esCron = !!process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`
+  if (!esCron) {
+    const sessionClient = await createServerClient()
+    const { data: { user } } = await sessionClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_KEY
   if (!url || !key) {
