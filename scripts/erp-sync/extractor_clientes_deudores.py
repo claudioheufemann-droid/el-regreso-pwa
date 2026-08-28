@@ -129,6 +129,7 @@ def main() -> int:
     if faltan:
         print(f"ERROR: faltan variables de entorno: {', '.join(faltan)}")
         return 1
+    print(f"DEBUG: UPLOAD_SECRET largo={len(UPLOAD_SECRET)} UPLOAD_URL_BASE={UPLOAD_URL_BASE!r}")
 
     con_error = 0
 
