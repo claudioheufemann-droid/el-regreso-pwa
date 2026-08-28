@@ -58,12 +58,14 @@ function parseDeudoresFromExcel(buffer: ArrayBuffer) {
 // POST: Upload Excel file with deudores
 export async function POST(req: Request) {
   try {
-    // ── Autenticación dual (mismo patrón que /api/upload-ventas) ──────────
-    // a) UI admin: sesión por cookies. b) Cron ERP: Bearer CRON_SECRET.
-    // Antes este endpoint no tenía NINGÚN chequeo. Cerrado el 28-ago-2026
-    // al automatizar el sync.
+    // ── Autenticación dual ──────────────────────────────────────────────
+    // a) UI admin: sesión por cookies. b) Cron ERP: Bearer UPLOAD_SECRET_CLIENTES
+    // (secret dedicado, no CRON_SECRET — ver nota larga en
+    // app/api/clientes/upload/route.ts sobre por qué). Antes este endpoint
+    // no tenía NINGÚN chequeo. Cerrado el 28-ago-2026 al automatizar el sync.
     const auth = req.headers.get('authorization')
-    const esCron = !!process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`
+    const secret = process.env.UPLOAD_SECRET_CLIENTES
+    const esCron = !!secret && auth === `Bearer ${secret}`
     if (!esCron) {
       const { createClient: createServerClient } = await import('@/lib/supabase/server')
       const sessionClient = await createServerClient()
