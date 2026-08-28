@@ -27,12 +27,18 @@
  * "Transición 1" y "Transición 2" son carteras traspasadas que hoy atienden
  * Los Ríos y Los Lagos (confirmado por Claudio). "Equipo Ventas",
  * "CERVECERÍA", "No indica" e "Inactivo" quedan fuera a propósito.
+ *
+ * Corrección 2026-08-28: acá decía 'Los Rios', pero ese valor no existe ni
+ * una sola vez en `ventas.vendedor_actual` — las ventas de Nicol Delgado
+ * (Los Ríos) quedan con su email, `nicol.delgado@elregresobeer.com` (773
+ * filas). Con 'Los Rios' su venta nunca sumó a la comisión de Claudio; no se
+ * sabe desde cuándo. Ver [[project_modulo_comisiones_acceso]].
  */
 export const VENDEDORES_COMISIONABLES = [
   'Yadro Fabijancic',
   'Marcelo Diaz',
   'Claudio Heufemann',
-  'Los Rios',
+  'nicol.delgado@elregresobeer.com',
   'Los Lagos',
   'OnLine',
   'Transición 1',

@@ -215,9 +215,12 @@ export default function ComisionesClient({ user, periodoInicial, periodosDisponi
             desde={periodo.desde} hasta={periodo.hasta} nombrePeriodo={periodo.nombre}
           />
 
-          {/* Marcelo y Yadro — cláusula TERCERA. `vendedor` explícito porque
-              quien mira no es el vendedor: el endpoint exige acceso de equipo
-              para aceptar ese parámetro (ver comision-vendedor/route.ts). */}
+          {/* Marcelo, Yadro, Nicol y Marion — cláusula TERCERA. `vendedor`
+              explícito porque quien mira no es el vendedor: el endpoint exige
+              acceso de equipo para aceptar ese parámetro (ver
+              comision-vendedor/route.ts). Nicol y Marion (Los Lagos) usan el
+              valor del ERP como `vendedor`, no su nombre — ver el comentario
+              en VENDEDORES_CONTRATO_TERCERA (lib/comisionesVendedor.ts). */}
           <MiComisionVendedor
             key={`marcelo_${periodo.desde}_${periodo.hasta}`}
             desde={periodo.desde} hasta={periodo.hasta} nombrePeriodo={periodo.nombre}
@@ -227,6 +230,16 @@ export default function ComisionesClient({ user, periodoInicial, periodosDisponi
             key={`yadro_${periodo.desde}_${periodo.hasta}`}
             desde={periodo.desde} hasta={periodo.hasta} nombrePeriodo={periodo.nombre}
             vendedor="Yadro Fabijancic" nombreMostrar="Yadro"
+          />
+          <MiComisionVendedor
+            key={`nicol_${periodo.desde}_${periodo.hasta}`}
+            desde={periodo.desde} hasta={periodo.hasta} nombrePeriodo={periodo.nombre}
+            vendedor="nicol.delgado@elregresobeer.com" nombreMostrar="Nicol"
+          />
+          <MiComisionVendedor
+            key={`marion_${periodo.desde}_${periodo.hasta}`}
+            desde={periodo.desde} hasta={periodo.hasta} nombrePeriodo={periodo.nombre}
+            vendedor="Los Lagos" nombreMostrar="Marion"
           />
         </div>
       </div>

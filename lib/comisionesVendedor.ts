@@ -31,8 +31,19 @@
  *     como nota informativa.
  */
 
-/** Vendedores bajo la cláusula TERCERA — hoy Yadro y Marcelo. */
-export const VENDEDORES_CONTRATO_TERCERA = ['Yadro Fabijancic', 'Marcelo Diaz'] as const
+/**
+ * Vendedores bajo la cláusula TERCERA — Yadro y Marcelo por nombre propio.
+ * Marion Meza (Los Lagos) aparece como 'Los Lagos' porque así es como el ERP
+ * registra sus ventas (`ventas.vendedor_actual`), no por su nombre — mismo
+ * valor que ya usa `VENDEDORES_COMISIONABLES` (lib/comisiones.ts). Nicol
+ * Delgado aparece con su email porque así quedan sus ventas en el ERP (no
+ * "Los Rios": ese valor no existe ni una sola vez en `ventas.vendedor_actual`
+ * — su fila en `users.vendedores_erp` estaba mal cargada y se corrigió el
+ * 2026-08-28 al mismo tiempo que esto). Decisión de Claudio 2026-08-28: Nicol
+ * y Marion tienen el mismo contrato tipo que Yadro/Marcelo (mismos tramos y
+ * bonos), sólo cambia a quién se le atribuye.
+ */
+export const VENDEDORES_CONTRATO_TERCERA = ['Yadro Fabijancic', 'Marcelo Diaz', 'nicol.delgado@elregresobeer.com', 'Los Lagos'] as const
 
 /**
  * Variantes con que cada vendedor aparece en `ventas.vendedor_actual` /
@@ -47,6 +58,8 @@ export const VENDEDORES_CONTRATO_TERCERA = ['Yadro Fabijancic', 'Marcelo Diaz'] 
 export const VENDEDOR_ERP_VARIANTES: Record<string, string[]> = {
   'Yadro Fabijancic': ['Yadro Fabijancic', 'Yadro Favijancic'],
   'Marcelo Diaz': ['Marcelo Diaz'],
+  'nicol.delgado@elregresobeer.com': ['nicol.delgado@elregresobeer.com'],
+  'Los Lagos': ['Los Lagos'],
 }
 
 /** Cláusula SEGUNDA — remuneración fija bruta mensual (igual en ambos contratos). */
