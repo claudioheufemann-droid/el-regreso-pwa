@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import AppHeader from '@/components/ui/AppHeader'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compress-image'
 import { PackageCheck, Inbox, FileText, ImageIcon, AlertTriangle, Minus, Plus } from 'lucide-react'
@@ -94,6 +95,7 @@ function CantidadStepper({ value, alterada, onchange }: { value: number; alterad
 export default function RecepcionClient() {
   const [lotes, setLotes] = useState<LoteRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [abierto, setAbierto] = useState<string | null>(null)
   const [cantidades, setCantidades] = useState<Record<string, number>>({})
   const [noCorresponde, setNoCorresponde] = useState<Record<string, boolean>>({})
@@ -103,11 +105,19 @@ export default function RecepcionClient() {
   const [saving, setSaving] = useState(false)
   const guiaInputRef = useRef<HTMLInputElement>(null)
 
+  // Sin `.catch`, un fallo de red se veía como "no hay lotes esperando
+  // check-in" — bodega podía dar por recibido un envío que la pantalla
+  // nunca alcanzó a consultar.
   const load = useCallback(() => {
     setLoading(true)
+    setError(null)
     fetch('/api/logistica/lotes?estado=enviado')
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => setLotes(Array.isArray(data) ? data : []))
+      .catch(err => setError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -179,12 +189,23 @@ export default function RecepcionClient() {
         </p>
 
         {loading ? (
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Cargando…</p>
-        ) : lotes.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'rgba(255,255,255,0.3)' }}>
-            <Inbox size={28} style={{ marginBottom: 8, opacity: 0.4 }} />
-            <p style={{ fontSize: 13 }}>No hay lotes esperando check-in.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[0, 1, 2].map(i => <Skeleton key={i} height={86} radius={16} />)}
           </div>
+        ) : error ? (
+          <ErrorState
+            title="No pudimos cargar los lotes en camino"
+            hint="La consulta no llegó a completarse, así que esta pantalla no prueba que no haya envíos. Intenta de nuevo."
+            detail={error}
+            showDetail
+            onRetry={load}
+          />
+        ) : lotes.length === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            title="No hay lotes esperando check-in"
+            hint="Cuando producción declare un envío, aparecerá acá para que lo recibas."
+          />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {lotes.map(l => (

@@ -11,6 +11,7 @@ import TaskDetailModal from '@/components/modals/TaskDetailModal'
 import TaskCalendar from '@/components/calendar/TaskCalendar'
 import TaskRow from '@/components/area/TaskRow'
 import AppHeader from '@/components/ui/AppHeader'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 import Avatar from '@/components/ui/Avatar'
 import GestionPanel from '@/components/dashboard/GestionPanel'
 import HomeDashboard from '@/components/dashboard/HomeDashboard'
@@ -26,6 +27,8 @@ interface Props {
   currentUserId: string
   currentMacroArea: string | null   // null = admin global (ve todo)
   backHref?: string                 // where "Cambiar módulo" navigates
+  /** Dato real y propio del área (ventas/deuda/producción) — ver page.tsx de cada macro-área. */
+  areaStat?: { label: string; value: string; href: string } | null
 }
 
 function toLocalDateStr(d: Date): string {
@@ -132,7 +135,12 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
         const atrasadas = macroTasks.filter(t => t.estado === 'Atrasada').length
         const activas = macroTasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada').length
         const total = macroTasks.length
-        const pct = total === 0 ? 0 : Math.round((completadas / total) * 100)
+        // "0% cumplido" con total=0 no es un dato (un porcentaje real de cero
+        // tareas completadas): es la ausencia de tareas. Se muestran cosas
+        // distintas — "—" y "Sin actividad" — para no leerlo como que el área
+        // viene rindiendo mal.
+        const hayActividad = total > 0
+        const pct = hayActividad ? Math.round((completadas / total) * 100) : 0
         const barColor = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : macro.color
 
         return (
@@ -140,10 +148,12 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <div style={{ width: 22, height: 22, borderRadius: 7, background: `${macro.color}18`, border: `1px solid ${macro.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: macro.color, flexShrink: 0 }}>{macro.code}</div>
               <span style={{ fontSize: 10, fontWeight: 700, color: macro.color, letterSpacing: 1.2, flex: 1 }}>{macro.label.toUpperCase()}</span>
-              <span style={{ fontSize: 18, fontWeight: 900, color: barColor, lineHeight: 1 }}>{pct}%</span>
+              <span style={{ fontSize: 18, fontWeight: 900, color: hayActividad ? barColor : 'var(--muted)', lineHeight: 1 }}>
+                {hayActividad ? `${pct}%` : '—'}
+              </span>
             </div>
             <div style={{ height: 6, background: 'rgba(128,128,128,0.15)', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
-              <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${barColor}80, ${barColor})`, borderRadius: 6, transition: 'width 0.4s ease' }} />
+              <div style={{ height: '100%', width: hayActividad ? `${pct}%` : '0%', background: `linear-gradient(90deg, ${barColor}80, ${barColor})`, borderRadius: 6, transition: 'width 0.4s ease' }} />
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               {[
@@ -156,7 +166,7 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
                   <span style={{ fontSize: 9, color: 'var(--muted)' }}>{s.count} {s.label}</span>
                 </div>
               ))}
-              {total === 0 && <span style={{ fontSize: 9, color: 'var(--muted)' }}>Sin tareas</span>}
+              {!hayActividad && <span style={{ fontSize: 9, color: 'var(--muted)' }}>Sin actividad</span>}
             </div>
           </div>
         )
@@ -168,7 +178,7 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
 type View = 'home' | 'mis-tareas' | 'equipo' | 'calendar' | 'filter' | 'analytics' | 'historial'
 type FilterKey = 'activas' | 'en-proceso' | 'aprobar' | 'atraso'
 
-export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId, currentMacroArea, backHref = '/' }: Props) {
+export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId, currentMacroArea, backHref = '/', areaStat = null }: Props) {
   const router = useRouter()
   const isDesktop = useIsDesktop()
   const [tasks, setTasks] = useState(initialTasks)
@@ -181,6 +191,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   // Equipo necesita ver las 3 macro-áreas a la vez, no solo la del dashboard activo —
   // se carga una vez, sin scope, y se reutiliza en "Mis Tareas" al ver a un compañero.
   const [allTasks, setAllTasks] = useState<RcTask[] | null>(null)
+  const [errorAllTasks, setErrorAllTasks] = useState<string | null>(null)
   const [filterKey, setFilterKey] = useState<FilterKey>('activas')
   const [showNewTask, setShowNewTask] = useState(false)
   // Áreas disponibles para crear tareas: SIEMPRE todas (cualquiera puede asignar a cualquier área),
@@ -240,13 +251,25 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   }, [])
 
   // Carga perezosa: solo al entrar a Equipo/Historial por primera vez, todas las tareas de la empresa
-  useEffect(() => {
-    if ((view !== 'equipo' && view !== 'historial') || allTasks !== null) return
+  const cargarAllTasks = useCallback(() => {
+    setErrorAllTasks(null)
     fetch('/api/tasks', { cache: 'no-store' })
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => setAllTasks(Array.isArray(data) ? data : []))
-      .catch(() => setAllTasks([]))
-  }, [view, allTasks])
+      .catch(err => {
+        // Antes esto convertía CUALQUIER fallo en "sin tareas" — Equipo e
+        // Historial mostraban vacío en vez de decir que la consulta falló.
+        setErrorAllTasks(err instanceof Error ? err.message : 'Error desconocido')
+      })
+  }, [])
+
+  useEffect(() => {
+    if ((view !== 'equipo' && view !== 'historial') || allTasks !== null || errorAllTasks) return
+    cargarAllTasks()
+  }, [view, allTasks, errorAllTasks, cargarAllTasks])
 
   // Sincronizar eliminaciones en tiempo real entre todas las ventanas/usuarios —
   // sin esto, borrar una tarea solo la quitaba de la sesión que hizo la acción;
@@ -412,6 +435,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
               isAdmin={isAdmin}
               currentUserId={currentUserId}
               currentMacroArea={currentMacroArea}
+              areaStat={areaStat}
               availableAreas={availableTaskAreas}
               backHref={backHref}
               onTaskUpdated={handleUpdate}
@@ -525,8 +549,18 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>Carga de tareas de toda la empresa, por área</div>
                 </div>
 
-                {allTasks === null ? (
-                  <div style={{ textAlign: 'center', padding: '48px 20px', fontSize: 12, color: 'var(--muted)' }}>Cargando equipo…</div>
+                {allTasks === null && !errorAllTasks ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {[0, 1].map(i => <Skeleton key={i} height={120} radius={14} />)}
+                  </div>
+                ) : errorAllTasks ? (
+                  <ErrorState
+                    title="No pudimos cargar el equipo"
+                    hint="Revisa tu conexión y vuelve a intentar."
+                    detail={errorAllTasks}
+                    showDetail
+                    onRetry={cargarAllTasks}
+                  />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
                     {sections.map(({ macroKey, macro, teamStats }) => (
@@ -620,8 +654,18 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                   <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)', marginBottom: 4 }}>Historial</div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>{source.length} tarea{source.length !== 1 ? 's' : ''} completada{source.length !== 1 ? 's' : ''} en total</div>
                 </div>
-                {allTasks === null ? (
-                  <div style={{ textAlign: 'center', padding: '48px 20px', fontSize: 12, color: 'var(--muted)' }}>Cargando historial…</div>
+                {allTasks === null && !errorAllTasks ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {[0, 1, 2, 3].map(i => <Skeleton key={i} height={56} radius={12} />)}
+                  </div>
+                ) : errorAllTasks ? (
+                  <ErrorState
+                    title="No pudimos cargar el historial"
+                    hint="Revisa tu conexión y vuelve a intentar."
+                    detail={errorAllTasks}
+                    showDetail
+                    onRetry={cargarAllTasks}
+                  />
                 ) : source.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '48px 20px' }}>
                     <div style={{ fontSize: 36, marginBottom: 12 }}>🗂️</div>

@@ -3,41 +3,64 @@
 /**
  * Clientes cercanos ahora — tema claro, igual que el resto de Terreno.
  *
- * Pide GPS y muestra mini-mapa + lista de clientes a menos de 500 m. Tocar
- * uno arranca la venta con ese cliente ya elegido.
+ * Pide GPS y consulta /api/clientes/cercanos (cálculo server-side, radio
+ * elegible) en vez de traer toda la cartera con coordenadas al navegador.
+ * Antes el radio estaba fijo en 500 m y sin fecha de última compra — ahora
+ * hay selector 1/3/5/10 km y cada cliente muestra hace cuánto no compra,
+ * con acción directa para llamar además de tomar el pedido.
  */
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { ChevronLeft, MapPin, Loader2, ChevronRight } from 'lucide-react'
-import { C, TAP, cardStyle } from '../theme'
+import { ChevronLeft, MapPin, Loader2, ChevronRight, Phone } from 'lucide-react'
+import { C, cardStyle } from '../theme'
+import { formatLocalidad } from '@/lib/format'
 
 const MiniMapaCercanos = dynamic(() => import('../MiniMapaCercanos'), {
   ssr: false,
   loading: () => <div style={{ height: 220, borderRadius: 12, background: C.line }} />,
 })
 
-interface ClienteGps {
+interface ClienteCercano {
   nombre: string
   categoria: string | null
   localidad: string | null
+  telefono: string | null
   lat: number
   lng: number
+  distancia: number
+  diasSinComprar: number | null
+  ultimaCompra: string | null
 }
 
-function distanciaMetros(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+const RADIOS = [
+  { label: '1 km', metros: 1000 },
+  { label: '3 km', metros: 3000 },
+  { label: '5 km', metros: 5000 },
+  { label: '10 km', metros: 10000 },
+]
+
+function fFecha(iso: string | null): string | null {
+  if (!iso) return null
+  const [, m, d] = iso.split('-').map(Number)
+  const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+  return `${d} ${meses[m - 1]}`
 }
 
-export default function CercanosClient({ clientes }: { clientes: ClienteGps[] }) {
+export default function CercanosClient() {
   const router = useRouter()
   const [estado, setEstado] = useState<'idle' | 'buscando' | 'ok' | 'error'>('idle')
-  const [cercanos, setCercanos] = useState<(ClienteGps & { distancia: number })[]>([])
+  const [cercanos, setCercanos] = useState<ClienteCercano[]>([])
   const [miPos, setMiPos] = useState<{ lat: number; lng: number } | null>(null)
+  const [radio, setRadio] = useState(RADIOS[1].metros) // 3 km por defecto — 500 m dejaba la lista vacía casi siempre
+
+  const consultar = useCallback((lat: number, lng: number, radioM: number) => {
+    setEstado('buscando')
+    fetch(`/api/clientes/cercanos?lat=${lat}&lng=${lng}&radio=${radioM}&limit=20`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((data: ClienteCercano[]) => { setCercanos(data); setEstado('ok') })
+      .catch(() => setEstado('error'))
+  }, [])
 
   function buscar() {
     if (typeof navigator === 'undefined' || !navigator.geolocation) { setEstado('error'); return }
@@ -46,18 +69,16 @@ export default function CercanosClient({ clientes }: { clientes: ClienteGps[] })
       pos => {
         const { latitude, longitude } = pos.coords
         setMiPos({ lat: latitude, lng: longitude })
-        setCercanos(
-          clientes
-            .map(c => ({ ...c, distancia: distanciaMetros(latitude, longitude, c.lat, c.lng) }))
-            .filter(c => c.distancia <= 500)
-            .sort((a, b) => a.distancia - b.distancia)
-            .slice(0, 8)
-        )
-        setEstado('ok')
+        consultar(latitude, longitude, radio)
       },
       () => setEstado('error'),
       { enableHighAccuracy: true, timeout: 8000 },
     )
+  }
+
+  function cambiarRadio(metros: number) {
+    setRadio(metros)
+    if (miPos) consultar(miPos.lat, miPos.lng, metros)
   }
 
   return (
@@ -80,6 +101,26 @@ export default function CercanosClient({ clientes }: { clientes: ClienteGps[] })
           <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>VENTA OPORTUNISTA</p>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Clientes cerca</h1>
         </div>
+
+        {estado !== 'idle' && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+            {RADIOS.map(r => (
+              <button
+                key={r.metros}
+                onClick={() => cambiarRadio(r.metros)}
+                style={{
+                  flex: 1, minHeight: 38, borderRadius: 10, cursor: 'pointer',
+                  border: `1px solid ${radio === r.metros ? C.blue : C.line}`,
+                  background: radio === r.metros ? C.blueSoft : C.card,
+                  color: radio === r.metros ? C.blue : C.muted,
+                  fontSize: 12.5, fontWeight: 700,
+                }}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {estado === 'idle' && (
           <button
@@ -113,7 +154,7 @@ export default function CercanosClient({ clientes }: { clientes: ClienteGps[] })
             <button
               onClick={buscar}
               style={{
-                minHeight: TAP, padding: '0 18px', borderRadius: 11, cursor: 'pointer',
+                minHeight: 44, padding: '0 18px', borderRadius: 11, cursor: 'pointer',
                 border: 'none', background: C.hero, color: '#fff', fontSize: 14, fontWeight: 800,
               }}
             >
@@ -126,7 +167,7 @@ export default function CercanosClient({ clientes }: { clientes: ClienteGps[] })
           cercanos.length === 0 ? (
             <div style={{ ...cardStyle, padding: 28, textAlign: 'center' }}>
               <p style={{ fontSize: 13.5, color: C.muted }}>
-                No hay clientes registrados a menos de 500 m de donde estás.
+                No hay clientes registrados a menos de {radio >= 1000 ? `${radio / 1000} km` : `${radio} m`} de donde estás.
               </p>
             </div>
           ) : (
@@ -141,14 +182,7 @@ export default function CercanosClient({ clientes }: { clientes: ClienteGps[] })
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {cercanos.map(c => (
-                  <button
-                    key={c.nombre}
-                    onClick={() => router.push(`/terreno/nueva-visita?cliente=${encodeURIComponent(c.nombre)}`)}
-                    style={{
-                      ...cardStyle, padding: '12px 13px', cursor: 'pointer', textAlign: 'left',
-                      display: 'flex', alignItems: 'center', gap: 11, minHeight: 60,
-                    }}
-                  >
+                  <div key={c.nombre} style={{ ...cardStyle, padding: '12px 13px', display: 'flex', alignItems: 'center', gap: 11, minHeight: 60 }}>
                     <span style={{
                       width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: C.blueSoft,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -156,15 +190,44 @@ export default function CercanosClient({ clientes }: { clientes: ClienteGps[] })
                     }}>
                       {c.nombre.charAt(0).toUpperCase()}
                     </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <button
+                      onClick={() => router.push(`/terreno/nueva-visita?cliente=${encodeURIComponent(c.nombre)}`)}
+                      style={{ flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    >
                       <p style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{c.nombre}</p>
-                      <p style={{ fontSize: 11.5, color: C.muted }}>{c.categoria ?? c.localidad ?? 'Sin categoría'}</p>
+                      <p style={{ fontSize: 11.5, color: C.muted }}>
+                        {c.categoria ?? formatLocalidad(c.localidad) ?? 'Sin categoría'}
+                        {c.diasSinComprar != null && (
+                          <span style={{ color: C.amber, fontWeight: 700 }}> · {c.diasSinComprar}d sin comprar</span>
+                        )}
+                        {c.diasSinComprar == null && (
+                          <span style={{ color: C.faint }}> · Sin historial de compra</span>
+                        )}
+                      </p>
+                      {c.ultimaCompra && (
+                        <p style={{ fontSize: 10.5, color: C.faint, marginTop: 1 }}>Última compra: {fFecha(c.ultimaCompra)}</p>
+                      )}
+                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 800, color: C.blue, whiteSpace: 'nowrap' }}>
+                        {c.distancia < 1000 ? `${Math.round(c.distancia)} m` : `${(c.distancia / 1000).toFixed(1)} km`}
+                      </span>
+                      {c.telefono && (
+                        <a
+                          href={`tel:${c.telefono}`}
+                          aria-label={`Llamar a ${c.nombre}`}
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            width: 30, height: 30, borderRadius: 9, background: C.blueSoft,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none',
+                          }}
+                        >
+                          <Phone size={14} color={C.blue} />
+                        </a>
+                      )}
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: C.blue, flexShrink: 0, whiteSpace: 'nowrap' }}>
-                      {c.distancia < 1000 ? `${Math.round(c.distancia)} m` : `${(c.distancia / 1000).toFixed(1)} km`}
-                    </span>
                     <ChevronRight size={16} color={C.faint} style={{ flexShrink: 0 }} />
-                  </button>
+                  </div>
                 ))}
               </div>
             </>

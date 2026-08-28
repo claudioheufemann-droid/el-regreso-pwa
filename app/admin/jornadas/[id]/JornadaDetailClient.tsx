@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import Logo from '@/components/ui/Logo'
+import { ErrorState, Skeleton } from '@/components/ui/States'
 import type { PuntoRuta } from './RutaMap'
 
 const RutaMap = dynamic(() => import('./RutaMap'), {
@@ -72,18 +73,27 @@ export default function JornadaDetailClient({ jornadaId }: { jornadaId: string }
   const [visitas, setVisitas] = useState<Visita[]>([])
   const [cargas, setCargas] = useState<Carga[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [nota, setNota] = useState('')
   const [procesando, setProcesando] = useState(false)
 
+  // Sin manejo de fallo, un error de red dejaba `jornada` en null y el
+  // guard de abajo devolvía una pantalla NEGRA vacía para siempre: ni
+  // mensaje ni forma de reintentar ni de volver. Ahora el fallo se ve.
   function cargar() {
     setLoading(true)
+    setError(null)
     fetch(`/api/admin/jornadas/${jornadaId}`)
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => {
         setJornada(data.jornada)
         setVisitas(data.visitas ?? [])
         setCargas(data.cargas ?? [])
       })
+      .catch(err => setError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setLoading(false))
   }
 
@@ -103,8 +113,30 @@ export default function JornadaDetailClient({ jornadaId }: { jornadaId: string }
     }
   }
 
-  if (loading || !jornada) {
-    return <div style={{ minHeight: '100vh', background: '#07070D' }} />
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#07070D', padding: '80px 16px 0' }}>
+        <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Skeleton height={28} width="55%" />
+          <Skeleton height={120} />
+          <Skeleton height={320} radius={14} />
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !jornada) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#07070D', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <ErrorState
+          title="No pudimos cargar esta jornada"
+          hint="Puede ser un problema de conexión. Intenta de nuevo o vuelve al listado."
+          detail={error}
+          showDetail
+          onRetry={cargar}
+        />
+      </div>
+    )
   }
 
   const info = ESTADO_INFO[jornada.estado] ?? { label: jornada.estado, color: 'rgba(255,255,255,0.4)' }

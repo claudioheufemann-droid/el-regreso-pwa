@@ -14,7 +14,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import type { AppUser } from '@/lib/auth'
 import { C, TAP } from '../theme'
-import PasoCliente, { type ClienteExistente, type NuevoClienteDetalle } from './PasoCliente'
+import PasoCliente, { type ClienteResumen, type NuevoClienteDetalle } from './PasoCliente'
 import PasoVenta, { type CierrePayload } from './PasoVenta'
 import HojaFotosVisita from './HojaFotosVisita'
 import { SLOTS_FOTO, CAMPO_DE_SLOT, type SlotFoto } from '@/lib/fotosVisita'
@@ -46,8 +46,6 @@ import {
  *    realmente sirve — al decidir si se le vende y cómo cobra.
  */
 
-interface Producto { producto: string; categoria_producto: string | null; envase: string | null }
-
 interface VisitaRetomada {
   id: string
   cliente_nombre: string
@@ -62,26 +60,17 @@ interface VisitaRetomada {
   foto_competencia?: string | null
 }
 
-interface DeudorInfo {
-  nombre_fantasia: string
-  saldo_total: number
-  deuda_vencida: number
-  ultimo_pago: string | null
-  fecha_ultima_compra: string | null
-  limite_cta_cte: number | null
-}
-
 interface Props {
   vendedor: AppUser
-  clientesExistentes: ClienteExistente[]
-  catalogoProductos: Producto[]
+  recientes: ClienteResumen[]
+  frecuentes: ClienteResumen[]
+  pendientes: ClienteResumen[]
   visitaRetomada?: VisitaRetomada | null
-  deudores?: DeudorInfo[]
   clientePre?: string | null
 }
 
 export default function NuevaVisitaClient({
-  vendedor, clientesExistentes, visitaRetomada, clientePre = null,
+  vendedor, recientes, frecuentes, pendientes, visitaRetomada, clientePre = null,
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -169,15 +158,18 @@ export default function NuevaVisitaClient({
     )
   }
 
-  function onClienteConfirmado(nombre: string, esNuevo: boolean, canal: string, detalle?: NuevoClienteDetalle) {
+  // `coords` viene directo de la fila que el vendedor tocó en PasoCliente
+  // (recientes/cerca/frecuentes/pendientes/búsqueda ya traen su propio
+  // lat/lng) — antes esto se resolvía buscando en un arreglo con TODA la
+  // cartera cargada en memoria; ahora no existe ese arreglo, así que la
+  // coordenada la manda quien confirma, no se vuelve a buscar acá.
+  function onClienteConfirmado(nombre: string, esNuevo: boolean, canal: string, detalle?: NuevoClienteDetalle, coords?: { lat: number; lng: number }) {
     setCliente({ nombre, esNuevo })
     const id = crypto.randomUUID()
     setVisitaId(id)
 
-    const c = clientesExistentes.find(x => x.nombre_fantasia?.toLowerCase().trim() === nombre.toLowerCase().trim())
-    clienteCoordsRef.current = (c?.lat != null && c?.lng != null)
-      ? { lat: c.lat, lng: c.lng }
-      : (detalle?.lat != null && detalle?.lng != null) ? { lat: detalle.lat, lng: detalle.lng } : null
+    clienteCoordsRef.current = coords
+      ?? ((detalle?.lat != null && detalle?.lng != null) ? { lat: detalle.lat, lng: detalle.lng } : null)
 
     let clienteTerrenoId: string | null = null
     if (esNuevo && detalle) {
@@ -205,13 +197,26 @@ export default function NuevaVisitaClient({
     capturarUbicacion(id)
   }
 
-  // Pedido rápido: ?cliente=Nombre (desde misiones o detalle de cliente).
+  // Pedido rápido: ?cliente=Nombre (desde misiones, cercanos o detalle de
+  // cliente). Antes se resolvía buscando en el arreglo con TODA la cartera;
+  // ahora es una consulta puntual por nombre exacto — un solo cliente, no
+  // los ~600.
   const pedidoRapidoRef = useRef(false)
   useEffect(() => {
     if (pedidoRapidoRef.current || !clientePre || visitaRetomada || cliente) return
     pedidoRapidoRef.current = true
-    const c = clientesExistentes.find(x => x.nombre_fantasia?.toLowerCase().trim() === clientePre.toLowerCase().trim())
-    onClienteConfirmado(clientePre, !c, c?.categoria_negocio ?? '')
+    supabase
+      .from('clientes')
+      .select('categoria, lat, lng')
+      .eq('nombre_fantasia', clientePre)
+      .maybeSingle()
+      .then(({ data: c }) => {
+        onClienteConfirmado(
+          clientePre, !c, (c?.categoria as string | null) ?? '',
+          undefined,
+          c?.lat != null && c?.lng != null ? { lat: Number(c.lat), lng: Number(c.lng) } : undefined,
+        )
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientePre])
 
@@ -434,7 +439,7 @@ export default function NuevaVisitaClient({
         </div>
 
         {etapa === 'cliente' && (
-          <PasoCliente clientes={clientesExistentes} onConfirmar={onClienteConfirmado} />
+          <PasoCliente recientes={recientes} frecuentes={frecuentes} pendientes={pendientes} onConfirmar={onClienteConfirmado} />
         )}
         {etapa === 'venta' && (
           <PasoVenta

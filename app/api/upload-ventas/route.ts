@@ -411,40 +411,44 @@ export async function POST(req: NextRequest) {
     insertadas += data?.length ?? batch.length
   }
 
-  // ── Reconciliación: borrar pedidos huérfanos dentro del rango de este archivo ──
-  // El borrado de arriba solo elimina pedidos que SÍ vienen en este archivo
-  // (upsert por pedido). Si el ERP borra un pedido por completo, ese pedido
-  // nunca vuelve a aparecer en NINGÚN archivo futuro, así que nada lo borra
-  // de la BD — queda huérfano para siempre. Pasó real: 150 pedidos fantasma
-  // acumulados jul-ago 2026 (detectado y limpiado a mano 25-ago-2026).
-  // Fix: dentro del rango [fechaMin, fechaMax] que cubre ESTE archivo, borrar
-  // cualquier pedido numérico real que no venga en el archivo actual — el
-  // archivo es la fuente de verdad del ERP para ese rango. Sólo funciona si
-  // el sync efectivamente pide el rango completo del período (ver extractor.py
-  // periodo_actual()); si solo se pide "hoy", esto no detecta nada porque el
-  // rango es demasiado angosto para contener el pedido borrado.
-  const fechaMinArchivo = fechasOrdenadas[0]
-  const fechaMaxArchivo = fechasOrdenadas[fechasOrdenadas.length - 1]
-  let pedidosHuerfanosBorrados = 0
-  if (fechaMinArchivo && fechaMaxArchivo && pedidosEnArchivo.length > 0) {
-    const listaPedidos = `(${pedidosEnArchivo.join(',')})`
-    const { data: huerfanos, error: reconcileError } = await supabase
-      .from('ventas')
-      .delete()
-      .gte('fecha_pedido', fechaMinArchivo)
-      .lte('fecha_pedido', fechaMaxArchivo)
-      .not('pedido', 'is', null)
-      .filter('pedido', 'match', '^[0-9]+$')
-      .not('pedido', 'in', listaPedidos)
-      .select('pedido')
+  // ── Reconciliación de pedidos huérfanos: DESACTIVADA (28-ago-2026) ─────────
+  // INCIDENTE REAL: esta reconciliación borró 1.938 filas de `ventas` de un
+  // solo golpe en la corrida del 27-ago 20:01 UTC (ver git blame / historial
+  // de este bloque para el código exacto que lo causó).
+  //
+  // Causa: el informe del ERP filtra por FECHA DE ENTREGA, no por fecha de
+  // pedido — un archivo pedido para un rango de entrega angosto (ej. últimos
+  // 5 días) puede traer pedidos con fecha_pedido de semanas atrás (entregas
+  // tardías). El código usaba fechaMin/fechaMax de las FECHAS DE PEDIDO
+  // encontradas en ese archivo angosto como si fuera "el rango que cubre este
+  // archivo", y borraba como huérfano todo pedido real fuera de ese archivo
+  // pero DENTRO de ese rango amplio — que la mayoría de las veces es casi
+  // todo el historial reciente, porque el archivo angosto solo trae los
+  // pocos pedidos que calzan con ENTREGARSE en la ventana pedida.
+  //
+  // No se reactiva hasta rediseñarlo bien (la única forma segura sería
+  // reconciliar por fecha de ENTREGA, no de pedido, y sólo cuando se pidió
+  // explícitamente un rango ancho y confiable — no en cada sync de 15 min).
+  // Mientras tanto: el upsert por pedido de arriba sigue corrigiendo pedidos
+  // que SÍ vienen en cada archivo; un pedido borrado por completo en el ERP
+  // simplemente queda en la BD hasta que se audite/limpie a mano.
+  const pedidosHuerfanosBorrados = 0
 
-    if (reconcileError) {
-      return NextResponse.json(
-        { error: `Error al reconciliar pedidos huérfanos: ${reconcileError.message}` },
-        { status: 500 }
-      )
-    }
-    pedidosHuerfanosBorrados = new Set((huerfanos ?? []).map(h => h.pedido)).size
+  // ── Refrescar el caché de métricas de cliente ───────────────────────────
+  // `client_metrics_cache` (ver supabase/migrations/client_metrics_cache_
+  // materializado.sql) guarda ya calculados el ciclo de compra, el score y
+  // la segmentación de cada cliente, porque recalcularlos en vivo cuesta
+  // ~3,7 s por carga de pantalla. Ese caché sólo queda viejo cuando entran
+  // ventas nuevas — o sea, exactamente acá.
+  //
+  // Tolerante a que la migración todavía no esté aplicada: si la función no
+  // existe, se ignora. Y nunca hace fallar el sync: las ventas ya están
+  // guardadas, y un caché un rato viejo es infinitamente mejor que perder
+  // la carga del ERP por un refresco.
+  let cacheRefrescado = false
+  {
+    const { error: refreshError } = await supabase.rpc('refrescar_client_metrics')
+    cacheRefrescado = !refreshError
   }
 
   // Sin notificación acá a propósito: la carga de ventas es un sync de
@@ -492,6 +496,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     insertadas,
+    cacheRefrescado,
     entregadas: insertadas - sinEntregar,
     pendientesDeEntrega: sinEntregar,
     pedidosHuerfanosBorrados,

@@ -136,14 +136,20 @@ export interface DatosRango {
   serie: PuntoSerie[]
 }
 
-/** Un período de venta 24→23 con sus datos ya calculados. */
+/**
+ * Un período de venta 24→23 del selector. `datos` viene ya calculado sólo
+ * para el período activo (el que se ve por defecto al abrir /ventas); para
+ * los otros 3 llega `null` — se piden bajo demanda cuando el usuario los
+ * elige (ver GET /api/ventas/rango y el estado `periodosCargados` en
+ * VentasHoyClient).
+ */
 export interface PeriodoOpcion {
   id: number
   nombre: string        // "Agosto 2026"
   inicio: string        // 2026-07-24
   fin: string           // 2026-08-23
   activo: boolean
-  datos: DatosRango
+  datos: DatosRango | null
   metaLitros: number
 }
 
@@ -168,8 +174,9 @@ export interface PeriodoLigero {
 }
 
 export interface HoyData {
-  /** Rangos relativos a hoy (no incluye 'periodo' ni 'custom') */
-  rangos: Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>
+  /** Rangos relativos a hoy (no incluye 'periodo' ni 'custom'). Vacío en la
+   *  carga inicial — se llenan bajo demanda (ver GET /api/ventas/rango). */
+  rangos: Partial<Record<Exclude<RangoKey, 'periodo' | 'custom'>, DatosRango>>
   /** Período activo primero, luego los anteriores — con datos ya calculados */
   periodos: PeriodoOpcion[]
   /** TODOS los períodos que existen (para el selector) — sin datos calculados */

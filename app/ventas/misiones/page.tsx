@@ -97,7 +97,7 @@ function enriquecerMision(
   const ctc = contactoMap.get(m.nombre_fantasia)
   const prioridad = m.alert_level==='critico' ? 'Alta' : m.alert_level==='vencido' ? 'Media' : 'Baja'
   const ciclo = m.ciclo_promedio_dias
-  const frecuencia_texto = ciclo ? `Cada ${ciclo} días` : 'Sin datos'
+  const frecuencia_texto = ciclo ? `Cada ${ciclo} días` : 'No informado'
 
   let dias_para_compra: number | null = null
   if (m.siguiente_compra_estimada) {

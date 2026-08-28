@@ -62,7 +62,7 @@ export default function MiniMapaCercanos({ miLat, miLng, clientes }: {
               <div style={{ fontFamily: 'system-ui, sans-serif', minWidth: 160 }}>
                 <p style={{ fontWeight: 800, fontSize: 13, marginBottom: 2 }}>{c.nombre}</p>
                 <p style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
-                  {c.categoria ?? c.localidad ?? 'Sin datos'} · {c.distancia < 1000 ? `${Math.round(c.distancia)}m` : `${(c.distancia/1000).toFixed(1)}km`}
+                  {c.categoria ?? c.localidad ?? 'No informado'} · {c.distancia < 1000 ? `${Math.round(c.distancia)}m` : `${(c.distancia/1000).toFixed(1)}km`}
                 </p>
                 <button
                   onClick={() => router.push(`/terreno/nueva-visita?cliente=${encodeURIComponent(c.nombre)}`)}

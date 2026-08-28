@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { ChevronLeft, CheckCircle2, FileText, Camera, PackageCheck, AlertTriangle } from 'lucide-react'
 import type { PuntoEntrega } from './EntregaMap'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 
 const EntregaMap = dynamic(() => import('./EntregaMap'), {
   ssr: false,
@@ -60,13 +61,19 @@ export default function EntregasAdminClient() {
   const [fecha, setFecha] = useState(hoyISO())
   const [despachos, setDespachos] = useState<Despacho[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [aprobando, setAprobando] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
+    setError(null)
     fetch(`/api/logistica/despachos?fecha=${fecha}`)
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`La API respondió ${r.status}`)
+        return r.json()
+      })
       .then(data => setDespachos(Array.isArray(data) ? data : []))
+      .catch(err => setError(err instanceof Error ? err.message : 'Error desconocido'))
       .finally(() => setLoading(false))
   }, [fecha])
 
@@ -176,7 +183,17 @@ export default function EntregasAdminClient() {
         </div>
 
         {loading ? (
-          <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 13, padding: 30 }}>Cargando…</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[0, 1, 2].map(i => <Skeleton key={i} height={64} radius={14} />)}
+          </div>
+        ) : error ? (
+          <ErrorState
+            title="No pudimos cargar las entregas"
+            hint="Revisa tu conexión y vuelve a intentar."
+            detail={error}
+            showDetail
+            onRetry={load}
+          />
         ) : (
           <>
             {/* Bandeja de aprobación */}
@@ -184,7 +201,13 @@ export default function EntregasAdminClient() {
               Bandeja de aprobación {pendientesAprobar.length > 0 && `(${pendientesAprobar.length})`}
             </p>
             {pendientesAprobar.length === 0 ? (
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 20 }}>Sin entregas pendientes de aprobar.</p>
+              <div style={{ marginBottom: 20 }}>
+                <EmptyState
+                  compact
+                  icon={CheckCircle2}
+                  title="Sin entregas pendientes de aprobar"
+                />
+              </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
                 {pendientesAprobar.map(r => (

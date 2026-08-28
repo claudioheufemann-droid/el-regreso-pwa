@@ -13,6 +13,8 @@ interface Props {
   isAdmin: boolean
   currentUserId: string
   currentMacroArea: string | null
+  /** Dato real y propio del área (ventas/deuda/producción) — distingue Comercial de Administración de Producción más allá del color. */
+  areaStat?: { label: string; value: string; href: string } | null
   availableAreas: string[]
   backHref?: string
   onTaskUpdated: (t: RcTask) => void
@@ -145,7 +147,30 @@ function KpiCard({ value, label, sub, color, bg, border, glow, icon, up = true, 
   )
 }
 
-export default function HomeDashboard({ tasks, users, userName, isAdmin, currentUserId, currentMacroArea, availableAreas, backHref = '/', onTaskUpdated, onTaskDeleted, onTaskCreated, onNavigate }: Props) {
+/**
+ * Franja de contexto propia del área — antes Comercial, Administración y
+ * Producción mostraban exactamente la misma pantalla de tareas, sin nada
+ * que reflejara de qué área se trataba más allá del color del acento. Cada
+ * page.tsx de macro-área calcula su propio dato real (ver comentario ahí)
+ * y lo pasa acá.
+ */
+function AreaStatCard({ stat, color }: { stat: { label: string; value: string; href: string }; color: string }) {
+  return (
+    <a href={stat.href} style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', textDecoration: 'none',
+      background: `${color}0F`, border: `1px solid ${color}30`, borderRadius: 14,
+      padding: '12px 16px',
+    }}>
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: `${color}CC`, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>{stat.label}</div>
+        <div style={{ fontSize: 20, fontWeight: 900, color, letterSpacing: -0.5 }}>{stat.value}</div>
+      </div>
+      <span style={{ fontSize: 16, color: `${color}80` }}>›</span>
+    </a>
+  )
+}
+
+export default function HomeDashboard({ tasks, users, userName, isAdmin, currentUserId, currentMacroArea, areaStat, availableAreas, backHref = '/', onTaskUpdated, onTaskDeleted, onTaskCreated, onNavigate }: Props) {
   const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<TabKey>('todas')
   const [search, setSearch] = useState('')
@@ -179,6 +204,10 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
   const kpiAprobar     = activeTasks.filter(t => t.estado === 'Por Aprobar').length
   const kpiTotal       = activeTasks.length
   const cumplimiento   = kpiTotal > 0 ? Math.round((kpiCompletadas / kpiTotal) * 100) : 0
+  // "0% cumplido" y "no hay tareas todavía" son cosas distintas y hasta
+  // ahora se veían igual: un 0% grande en rojo hacía leer como fracaso lo
+  // que era simplemente un período sin actividad registrada.
+  const hayActividad   = kpiTotal > 0
 
   const priAlta  = activeTasks.filter(t => t.prioridad_maxima && t.estado !== 'Completada').length
   const priMedia = activeTasks.filter(t => !t.prioridad_maxima && t.estado !== 'Completada' && t.estado !== 'Rechazada').length
@@ -324,6 +353,9 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
         </button>
 
+        {/* ── Contexto propio del área — lo que distingue esta pantalla de las otras 2 macro-áreas ── */}
+        {areaStat && macroConfig && <AreaStatCard stat={areaStat} color={macroConfig.color} />}
+
         {/* ── KPI CARDS — minimal monocromático ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
           {kpis.map(k => (
@@ -395,8 +427,10 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
 
           {/* % Cumplimiento */}
           <div style={{ flexShrink: 0, textAlign: 'center', paddingLeft: 13, borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1, color: GOLD }}>{cumplimiento}%</div>
-            <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', marginTop: 3, letterSpacing: '0.6px' }}>CUMPLIDO</div>
+            <div style={{ fontSize: hayActividad ? 24 : 20, fontWeight: 900, lineHeight: 1, color: hayActividad ? GOLD : 'rgba(255,255,255,0.28)' }}>
+              {hayActividad ? `${cumplimiento}%` : '—'}
+            </div>
+            <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', marginTop: 3, letterSpacing: '0.6px' }}>{hayActividad ? 'CUMPLIDO' : 'SIN ACTIVIDAD'}</div>
             <svg width="48" height="20" viewBox="0 0 48 20" style={{ marginTop: 6, display: 'block' }}>
               <polyline points="0,16 8,13 16,15 24,9 32,11 40,5 48,3" fill="none" stroke={GOLD} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
             </svg>
@@ -557,6 +591,9 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
       </button>
 
+      {/* ── Contexto propio del área — lo que distingue esta pantalla de las otras 2 macro-áreas ── */}
+      {areaStat && macroConfig && <AreaStatCard stat={areaStat} color={macroConfig.color} />}
+
       {/* ── LAYOUT MASTER: izquierda 1fr + sidebar derecho 280px (filas 1+2+3) ── */}
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? '1fr 280px' : '1fr', gap: 14, alignItems: 'stretch' }}>
 
@@ -659,13 +696,22 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
             <div style={{ ...CARD_SNAP, display: 'flex', flexDirection: 'column' }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 14 }}>Cumplimiento general</div>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                <RingChart pct={cumplimiento} />
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}>de tareas completadas</div>
+                {hayActividad ? (
+                  <>
+                    <RingChart pct={cumplimiento} />
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>de tareas completadas</div>
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: 'rgba(255,255,255,0.28)' }}>—</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Sin actividad todavía</div>
+                  </div>
+                )}
               </div>
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
                   <span style={{ fontSize: 11, color: 'var(--muted)' }}>Meta mensual</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{cumplimiento}% / 100%</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)' }}>{hayActividad ? `${cumplimiento}% / 100%` : '— / 100%'}</span>
                 </div>
                 <div style={{ height: 6, background: 'rgba(128,128,128,0.08)', borderRadius: 4, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${cumplimiento}%`, background: cumplimiento>=80?'#22C55E':cumplimiento>=50?'#D4AF37':'#E74C3C', borderRadius: 4 }} />
@@ -1066,7 +1112,7 @@ export default function HomeDashboard({ tasks, users, userName, isAdmin, current
         {[
           { icon: '📋', value: String(kpiTotal), label: 'Total tareas', color: 'var(--cream)' },
           { icon: '🕐', value: `${avgDays} días`, label: 'Tiempo promedio', color: 'var(--cream)' },
-          { icon: '✓',  value: `${cumplimiento}%`, label: 'Cumplimiento', color: cumplimiento>=80?'#22C55E':cumplimiento>=50?'#D4AF37':'#E74C3C' },
+          { icon: '✓',  value: hayActividad ? `${cumplimiento}%` : '—', label: hayActividad ? 'Cumplimiento' : 'Sin actividad', color: !hayActividad ? 'rgba(255,255,255,0.28)' : cumplimiento>=80?'#22C55E':cumplimiento>=50?'#D4AF37':'#E74C3C' },
           { icon: '📅', value: String(semanaVencen), label: 'Vencen esta semana', color: semanaVencen>0?'#E67E22':'var(--cream)' },
         ].map((stat, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: isDesktop ? 14 : 10, paddingLeft: isDesktop ? 32 : 0, borderRight: isDesktop && i<3 ? '1px solid rgba(255,255,255,0.06)' : 'none', flex: isDesktop ? 1 : undefined }}>

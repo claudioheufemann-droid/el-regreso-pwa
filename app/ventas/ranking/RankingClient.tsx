@@ -137,7 +137,7 @@ export default function RankingClient({ rankingMes, rankingSemana, miRegion, isA
         {ordenado.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <Trophy size={36} color="rgba(255,255,255,0.12)" style={{ margin: '0 auto 12px' }} />
-            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)' }}>Sin datos para este período</p>
+            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)' }}>Sin actividad en este período</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>

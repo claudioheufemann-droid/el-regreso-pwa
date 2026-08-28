@@ -38,8 +38,60 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { data: profile } = await supabase.from('users').select('id').eq('email', user.email!).single()
+  const { data: profile } = await supabase.from('users').select('id, is_admin').eq('email', user.email!).single()
   if (!profile) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 })
+
+  // AUTORIZACIÓN, no sólo autenticación. La pantalla del viaje ya limitaba
+  // "marcar entregado" al conductor que inició el viaje (ViajeDetailClient,
+  // `puedeEditar`), pero eso es sólo la UI: este endpoint aceptaba el POST de
+  // CUALQUIER usuario con sesión, sobre CUALQUIER parada de CUALQUIER viaje.
+  // Una prueba de entrega (foto, guía, hora, cantidades) es un registro con
+  // consecuencias — stock, facturación, cobranza — así que la regla se
+  // aplica también acá, del lado del servidor.
+  //
+  // Quién puede registrar la entrega de una parada:
+  //   · el conductor del viaje de flota vinculado al despacho,
+  //   · el chofer asignado al despacho,
+  //   · quien armó el despacho (logística, que a veces cierra por radio), o
+  //   · un admin.
+  // Se resuelve con consultas planas (parada → despacho → viaje) en vez de
+  // un embed anidado de PostgREST: son índices por PK, y no dependen de que
+  // el nombre de la relación se infiera bien.
+  const { data: parada } = await supabase
+    .from('despacho_paradas')
+    .select('id, despacho_id')
+    .eq('id', paradaId)
+    .maybeSingle()
+
+  if (!parada) return NextResponse.json({ error: 'Parada no encontrada' }, { status: 404 })
+
+  const { data: despacho } = await supabase
+    .from('despachos')
+    .select('chofer_id, creado_por, viaje_flota_id')
+    .eq('id', parada.despacho_id)
+    .maybeSingle()
+
+  let conductorId: string | null = null
+  if (despacho?.viaje_flota_id) {
+    const { data: viaje } = await supabase
+      .from('viajes_flota')
+      .select('conductor_id')
+      .eq('id', despacho.viaje_flota_id)
+      .maybeSingle()
+    conductorId = viaje?.conductor_id ?? null
+  }
+
+  const autorizado = !!profile.is_admin
+    || (!!conductorId && conductorId === profile.id)
+    || (!!despacho?.chofer_id && despacho.chofer_id === profile.id)
+    || (!!despacho?.creado_por && despacho.creado_por === profile.id)
+
+  if (!autorizado) {
+    return NextResponse.json(
+      { error: 'Solo quien va en el viaje puede registrar esta entrega.' },
+      { status: 403 },
+    )
+  }
 
   const body = await req.json() as EntregarInput
 
@@ -80,13 +132,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   await supabase.from('despacho_paradas').update({ estado: body.estado }).eq('id', paradaId)
 
   if (body.estado !== 'entregado') {
-    const { data: parada } = await supabase
+    const { data: paradaCliente } = await supabase
       .from('despacho_paradas')
       .select('cliente:clientes(nombre_fantasia), cliente_terreno:clientes_terreno(nombre_fantasia)')
       .eq('id', paradaId)
       .single()
-    const nombreCliente = (parada?.cliente as { nombre_fantasia?: string } | null)?.nombre_fantasia
-      ?? (parada?.cliente_terreno as { nombre_fantasia?: string } | null)?.nombre_fantasia
+    const nombreCliente = (paradaCliente?.cliente as { nombre_fantasia?: string } | null)?.nombre_fantasia
+      ?? (paradaCliente?.cliente_terreno as { nombre_fantasia?: string } | null)?.nombre_fantasia
       ?? 'Cliente'
     sendPushToAllAdmins({
       title: '🔴 Incidencia de entrega',

@@ -14,6 +14,7 @@ import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { VEND_COLOR, SEG_COLOR } from '@/lib/theme'
 import { vendedorCanonico, VENDEDORES_CARTERA_ACTIVAS } from '@/lib/types'
+import { formatLocalidad } from '@/lib/format'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface FrequencyStat {
@@ -55,6 +56,9 @@ interface Props {
   actividad: ActividadItem[]
   isAdmin: boolean
   vendedoresScope: string[]
+  /** El scoring de clientes no se pudo calcular (timeout de la consulta).
+   *  Sin él, ciclo/días sin comprar/score salen vacíos y hay que decirlo. */
+  scoringCaido?: boolean
 }
 
 // ── Paleta — importada desde lib/theme (fuente única de verdad) ───────────────
@@ -394,7 +398,7 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
             <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2 }}>
               <span style={{ fontSize:10, color:vendColor, fontWeight:700 }}>{vendedorCanonico(c.vendedor).split(' ')[0]}</span>
               {(c.localidad_entrega || c.localidad) && (
-                <span style={{ fontSize:10, color:'#555' }}>· {c.localidad_entrega || c.localidad}</span>
+                <span style={{ fontSize:10, color:'#555' }}>· {formatLocalidad(c.localidad_entrega || c.localidad)}</span>
               )}
             </div>
           </div>
@@ -546,7 +550,7 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
               {c.nombre_fantasia}
             </p>
             <p style={{ fontSize:12, color:MC.muted, marginTop:1 }}>
-              {vendedorCanonico(c.vendedor).split(' ')[0]}{(c.localidad_entrega || c.localidad) ? ` · ${c.localidad_entrega || c.localidad}` : ''}
+              {vendedorCanonico(c.vendedor).split(' ')[0]}{(c.localidad_entrega || c.localidad) ? ` · ${formatLocalidad(c.localidad_entrega || c.localidad)}` : ''}
             </p>
           </div>
           <span style={{ fontSize:11, fontWeight:700, padding:'5px 11px', borderRadius:20, flexShrink:0,
@@ -710,7 +714,7 @@ function CampanaWAModal({ clientes, onClose }: { clientes: Cliente[]; onClose: (
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function ClientesClient({ clientes, periodo, totalesPorVendedor, stats, actividad, isAdmin, vendedoresScope }: Props) {
+export default function ClientesClient({ clientes, periodo, totalesPorVendedor, stats, actividad, isAdmin, vendedoresScope, scoringCaido }: Props) {
   const isDesktop = useIsDesktop()
   const router    = useRouter()
   const { user }  = useUser()
@@ -857,6 +861,26 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
 
       {/* ── Encabezado estándar ────────────────────────────────────────── */}
       <AppHeader eyebrow={`Cartera${periodo ? ` · ${periodo.nombre}` : ''}`} title="Clientes" />
+
+      {/* Sin scoring, las columnas de ciclo y días sin comprar quedan vacías.
+          Un vacío sin explicación se lee como "este cliente no compra hace
+          nada", que es lo contrario de lo que pasa. */}
+      {scoringCaido && (
+        <div role="alert" style={{
+          display:'flex', alignItems:'flex-start', gap:10, marginBottom:14,
+          padding:'12px 14px', borderRadius:12,
+          background:'rgba(248,113,113,0.10)', border:'1px solid rgba(248,113,113,0.28)',
+        }}>
+          <AlertTriangle size={16} color="#F87171" style={{ flexShrink:0, marginTop:1 }} />
+          <div style={{ minWidth:0 }}>
+            <p style={{ fontSize:13, fontWeight:800, color:'#F87171' }}>Sin datos de comportamiento de compra</p>
+            <p style={{ fontSize:12, color:MC.muted, marginTop:2, lineHeight:1.45 }}>
+              El cálculo de ciclo, días sin comprar y score superó el tiempo límite.
+              Los clientes y sus ventas sí son correctos; lo que falta es el análisis.
+            </p>
+          </div>
+        </div>
+      )}
 
       {isDesktop && (
         <>
