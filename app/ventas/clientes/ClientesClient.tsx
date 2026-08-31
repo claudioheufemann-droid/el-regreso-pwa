@@ -593,7 +593,7 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
           (no flex:1) para que ningún bloque se aplaste cuando el texto de al
           lado es más largo; el excedente se recorta con ellipsis, no con wrap. */}
       <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:11 }}>
-        <div style={{ display:'flex', alignItems:'flex-start', gap:4, width:64, flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:4, width:58, flexShrink:0 }}>
           <Archive size={13} color={MC.muted} style={{ flexShrink:0, marginTop:2 }}/>
           <div style={{ minWidth:0, overflow:'hidden' }}>
             <p style={{ fontSize:9, color:MC.muted, marginBottom:1, whiteSpace:'nowrap' }}>Stock</p>
@@ -609,11 +609,11 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
           </div>
         </div>
 
-        <div style={{ display:'flex', alignItems:'flex-start', gap:4, width:82, flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:4, width:92, flexShrink:0 }}>
           <BarChart3 size={13} color={MC.muted} style={{ flexShrink:0, marginTop:2 }}/>
           <div style={{ minWidth:0, overflow:'hidden' }}>
             <p style={{ fontSize:9, color:MC.muted, marginBottom:1, whiteSpace:'nowrap' }}>Últ. pedido</p>
-            <p style={{ fontSize:12, fontWeight:800, color: c.ultimoPedido ? MC.text : MC.muted,
+            <p style={{ fontSize:11, fontWeight:800, color: c.ultimoPedido ? MC.text : MC.muted,
               whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
               {c.ultimoPedido ? fFecha(c.ultimoPedido.ultimaFecha) : '—'}
             </p>
