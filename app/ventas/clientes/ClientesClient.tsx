@@ -935,13 +935,13 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
       {/* ── Cabecera CRM móvil (navy) ─────────────────────────────────────── */}
       {!isDesktop && (
         <div style={{ background:MC.bg, margin:'0 -16px', padding:'0 16px 4px' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2 }}>
-            <p style={{ fontSize:12, color:MC.muted }}>
-              Última actualización: {horaActualizado ? `Hoy ${horaActualizado}` : '—'}
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2, gap:8 }}>
+            <p style={{ fontSize:11, color:MC.muted, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', minWidth:0 }}>
+              Actualizado: {horaActualizado ? `hoy ${horaActualizado}` : '—'}
             </p>
-            <div style={{ display:'flex', gap:8 }}>
+            <div style={{ display:'flex', gap:6, flexShrink:0 }}>
               <button onClick={()=>setShowFiltroSheet(true)}
-                style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 12px',
+                style={{ display:'flex', alignItems:'center', gap:4, padding:'8px 10px', whiteSpace:'nowrap',
                   background:MC.card, border:`1px solid ${MC.border}`, borderRadius:10,
                   color:MC.text, fontSize:12, fontWeight:600, cursor:'pointer' }}>
                 <Filter size={13}/> Filtrar
@@ -954,7 +954,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
               </button>
               <div style={{ position:'relative' }}>
                 <button onClick={()=>setShowSort(s=>!s)}
-                  style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 12px',
+                  style={{ display:'flex', alignItems:'center', gap:4, padding:'8px 10px', whiteSpace:'nowrap',
                     background:MC.card, border:`1px solid ${MC.border}`, borderRadius:10,
                     color:MC.text, fontSize:12, fontWeight:600, cursor:'pointer' }}>
                   <ChevronDown size={13}/> Ordenar
