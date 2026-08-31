@@ -7,7 +7,7 @@ import { useUser } from '@/lib/userContext'
 import {
   Search, Filter, ChevronDown, ChevronLeft, ChevronRight,
   MessageCircle, MoreVertical, Users, CheckCircle2, Clock,
-  PhoneOff, AlertTriangle, Zap, Bell, Activity, X, User,
+  PhoneOff, AlertTriangle, Zap, Bell, Activity, X, User, Phone,
 } from 'lucide-react'
 import type { ActividadItem } from './page'
 import AppHeader from '@/components/ui/AppHeader'
@@ -65,27 +65,27 @@ interface Props {
 // SEG_COLOR y VEND_COLOR vienen del import de arriba
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
-// ── Paleta CRM móvil (navy) — sólo para la vista móvil de esta pantalla ───────
+// ── Paleta CRM móvil (blanca) — sólo para la vista móvil de esta pantalla ─────
 // Deliberadamente local (no toca las variables --bg/--surface globales, que
-// son casi-negras): mismo patrón ya usado en Ventas > Hoy para secciones que
-// necesitan una identidad propia sin migrar el resto de la app.
+// son casi-negras): mismo patrón ya usado en Ventas > Hoy (const C) para
+// secciones que necesitan una identidad propia sin migrar el resto de la app.
 const MC = {
-  bg:        '#0B1220',
-  card:      '#131C31',
-  cardHover: '#16213A',
-  border:    'rgba(255,255,255,0.07)',
-  text:      '#F1F5F9',
-  muted:     '#7C8AA8',
-  blue:      '#3B82F6',
-  blueBg:    'rgba(59,130,246,0.12)',
-  green:     '#22C55E',
-  greenBg:   'rgba(34,197,94,0.12)',
-  amber:     '#F5A524',
-  amberBg:   'rgba(245,165,36,0.12)',
-  orange:    '#FB923C',
-  orangeBg:  'rgba(251,146,60,0.12)',
-  red:       '#F43F5E',
-  redBg:     'rgba(244,63,94,0.12)',
+  bg:        '#F1F5F9',
+  card:      '#FFFFFF',
+  cardHover: '#F8FAFC',
+  border:    '#E2E8F0',
+  text:      '#0F172A',
+  muted:     '#64748B',
+  blue:      '#2563EB',
+  blueBg:    'rgba(37,99,235,0.10)',
+  green:     '#059669',
+  greenBg:   'rgba(5,150,105,0.10)',
+  amber:     '#D97706',
+  amberBg:   'rgba(217,119,6,0.10)',
+  orange:    '#EA580C',
+  orangeBg:  'rgba(234,88,12,0.10)',
+  red:       '#DC2626',
+  redBg:     'rgba(220,38,38,0.10)',
   whatsapp:  '#25D366',
 }
 
@@ -536,24 +536,24 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
 
   return (
     <div onClick={onClick} style={{
-      background:MC.card, borderRadius:18, marginBottom:12, cursor:'pointer',
+      background:MC.card, borderRadius:16, marginBottom:10, cursor:'pointer',
       border:`1px solid ${MC.border}`, borderLeft:`4px solid ${bandColor.fg}`,
-      overflow:'hidden',
+      boxShadow:'0 1px 2px rgba(15,23,42,0.04)', overflow:'hidden',
     }}>
-      <div style={{ padding:'14px 16px' }}>
+      <div style={{ padding:'12px 14px' }}>
         {/* Cabecera: score + nombre + riesgo */}
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-          <ScoreBadge seg={seg} score={score} segColor={segColor} size={48}/>
+        <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:10 }}>
+          <ScoreBadge seg={seg} score={score} segColor={segColor} size={40}/>
           <div style={{ flex:1, minWidth:0 }}>
-            <p style={{ fontSize:16, fontWeight:800, color:MC.text,
+            <p style={{ fontSize:14, fontWeight:800, color:MC.text,
               overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {c.nombre_fantasia}
             </p>
-            <p style={{ fontSize:12, color:MC.muted, marginTop:1 }}>
+            <p style={{ fontSize:11, color:MC.muted, marginTop:1 }}>
               {vendedorCanonico(c.vendedor).split(' ')[0]}{(c.localidad_entrega || c.localidad) ? ` · ${formatLocalidad(c.localidad_entrega || c.localidad)}` : ''}
             </p>
           </div>
-          <span style={{ fontSize:11, fontWeight:700, padding:'5px 11px', borderRadius:20, flexShrink:0,
+          <span style={{ fontSize:10, fontWeight:700, padding:'4px 9px', borderRadius:20, flexShrink:0,
             color:bandColor.fg, background:bandColor.bg }}>
             {riesgoLabel}
           </span>
@@ -588,7 +588,7 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
               )}
             </div>
 
-            <div style={{ height:6, borderRadius:3, background:'rgba(255,255,255,0.06)', overflow:'hidden', marginBottom:6 }}>
+            <div style={{ height:6, borderRadius:3, background:'rgba(15,23,42,0.08)', overflow:'hidden', marginBottom:6 }}>
               <div style={{ height:'100%', width:`${stock.agotado ? 100 : pct}%`, background:bandColor.fg, transition:'width 0.4s' }}/>
             </div>
 
@@ -598,37 +598,37 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
             </div>
           </>
         ) : (
-          <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:10, padding:'10px 12px', marginBottom:12 }}>
+          <div style={{ background:'rgba(15,23,42,0.04)', borderRadius:10, padding:'10px 12px', marginBottom:12 }}>
             <p style={{ fontSize:12, color:MC.muted }}>Sin historial suficiente para proyectar stock</p>
           </div>
         )}
 
-        <div style={{ height:1, background:MC.border, marginBottom:12 }}/>
+        <div style={{ height:1, background:MC.border, marginBottom:10 }}/>
 
         {/* KPIs comerciales */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6, marginBottom:10 }}>
           <div>
-            <p style={{ fontSize:9, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:3 }}>ÚLTIMO PEDIDO</p>
-            <p style={{ fontSize:12, fontWeight:700, color: c.ultimoPedido ? MC.text : MC.muted }}>
+            <p style={{ fontSize:8, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:2 }}>ÚLT. PEDIDO</p>
+            <p style={{ fontSize:11, fontWeight:700, color: c.ultimoPedido ? MC.text : MC.muted }}>
               {c.ultimoPedido ? fFecha(c.ultimoPedido.ultimaFecha) : '—'}
             </p>
-            {diasSin > 0 && <p style={{ fontSize:10, color:bandColor.fg, fontWeight:600, marginTop:1 }}>{diasSin}d sin comprar</p>}
+            {diasSin > 0 && <p style={{ fontSize:9, color:bandColor.fg, fontWeight:600, marginTop:1 }}>{diasSin}d sin comprar</p>}
           </div>
           <div>
-            <p style={{ fontSize:9, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:3 }}>VENTAS PERÍODO</p>
-            <p style={{ fontSize:12, fontWeight:700, color:MC.text }}>{fLitros(c.ultimoPedido?.litrosPeriodo ?? 0)}</p>
-            <p style={{ fontSize:10, color:MC.muted, marginTop:1 }}>{fPeso(c.ultimoPedido?.ventaPeriodo ?? 0)}</p>
+            <p style={{ fontSize:8, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:2 }}>VENTAS PERÍODO</p>
+            <p style={{ fontSize:11, fontWeight:700, color:MC.text }}>{fLitros(c.ultimoPedido?.litrosPeriodo ?? 0)}</p>
+            <p style={{ fontSize:9, color:MC.muted, marginTop:1 }}>{fPeso(c.ultimoPedido?.ventaPeriodo ?? 0)}</p>
           </div>
           <div>
-            <p style={{ fontSize:9, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:3 }}>TOTAL COMPRADO</p>
-            <p style={{ fontSize:12, fontWeight:700, color:MC.text }}>{fLitros(c.frecuencia?.litros_totales ?? 0)}</p>
-            <p style={{ fontSize:10, color:MC.muted, marginTop:1 }}>{fPeso(c.frecuencia?.revenue_total ?? 0)}</p>
+            <p style={{ fontSize:8, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:2 }}>TOTAL COMPRADO</p>
+            <p style={{ fontSize:11, fontWeight:700, color:MC.text }}>{fLitros(c.frecuencia?.litros_totales ?? 0)}</p>
+            <p style={{ fontSize:9, color:MC.muted, marginTop:1 }}>{fPeso(c.frecuencia?.revenue_total ?? 0)}</p>
           </div>
         </div>
 
         {/* Deuda (si aplica) */}
         {deudaV > 0 && (
-          <div style={{ background:MC.redBg, borderRadius:8, padding:'6px 10px', marginBottom:10,
+          <div style={{ background:MC.redBg, borderRadius:8, padding:'6px 10px', marginBottom:8,
             display:'flex', alignItems:'center', gap:6 }}>
             <AlertTriangle size={11} color={MC.red}/>
             <span style={{ fontSize:11, fontWeight:700, color:MC.red }}>Deuda vencida: {fPeso(deudaV)}</span>
@@ -636,17 +636,25 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
         )}
 
         {/* Acciones */}
-        <div style={{ display:'flex', gap:8 }}>
+        <div style={{ display:'flex', gap:7 }}>
           <button onClick={e=>{e.stopPropagation();onWA(waTarget)}}
-            style={{ flex:1, minHeight:42, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-              background:MC.greenBg, border:`1px solid rgba(34,197,94,0.3)`,
-              borderRadius:11, color:MC.whatsapp, fontSize:13, fontWeight:700, cursor:'pointer' }}>
-            <MessageCircle size={15}/> WhatsApp
+            style={{ flex:1, minHeight:38, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+              background:MC.greenBg, border:`1px solid rgba(5,150,105,0.25)`,
+              borderRadius:10, color:MC.whatsapp, fontSize:12, fontWeight:700, cursor:'pointer' }}>
+            <MessageCircle size={14}/> WhatsApp
           </button>
+          {c.telefono && (
+            <a href={`tel:${c.telefono}`} onClick={e=>e.stopPropagation()}
+              style={{ minHeight:38, width:38, display:'flex', alignItems:'center', justifyContent:'center',
+                background:MC.blueBg, border:`1px solid rgba(37,99,235,0.25)`,
+                borderRadius:10, color:MC.blue, flexShrink:0 }}>
+              <Phone size={15}/>
+            </a>
+          )}
           <button onClick={e=>{e.stopPropagation();onClick()}}
-            style={{ minHeight:42, padding:'0 16px', display:'flex', alignItems:'center', gap:5,
-              background:MC.blueBg, border:`1px solid rgba(59,130,246,0.3)`,
-              borderRadius:11, color:MC.blue, fontSize:12, fontWeight:700, cursor:'pointer' }}>
+            style={{ minHeight:38, padding:'0 14px', display:'flex', alignItems:'center', gap:5,
+              background:MC.blueBg, border:`1px solid rgba(37,99,235,0.25)`,
+              borderRadius:10, color:MC.blue, fontSize:12, fontWeight:700, cursor:'pointer' }}>
             Ver ficha →
           </button>
         </div>
@@ -874,7 +882,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
           <AlertTriangle size={16} color="#F87171" style={{ flexShrink:0, marginTop:1 }} />
           <div style={{ minWidth:0 }}>
             <p style={{ fontSize:13, fontWeight:800, color:'#F87171' }}>Sin datos de comportamiento de compra</p>
-            <p style={{ fontSize:12, color:MC.muted, marginTop:2, lineHeight:1.45 }}>
+            <p style={{ fontSize:12, color:'var(--muted)', marginTop:2, lineHeight:1.45 }}>
               El cálculo de ciclo, días sin comprar y score superó el tiempo límite.
               Los clientes y sus ventas sí son correctos; lo que falta es el análisis.
             </p>
@@ -1013,12 +1021,12 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
                 <button key={f.key} onClick={()=>{setRiesgoFiltro(f.key);setPagina(1)}}
                   style={{ flexShrink:0, display:'flex', alignItems:'center', gap:6, padding:'9px 14px', borderRadius:12,
                     cursor:'pointer', border:`1px solid ${active?f.color:MC.border}`,
-                    background: active ? f.color : MC.card, color: active ? '#0B1220' : MC.text,
+                    background: active ? f.color : MC.card, color: active ? '#FFFFFF' : MC.text,
                     fontSize:13, fontWeight:active?800:600 }}>
                   {f.label}
                   <span style={{ fontSize:12, fontWeight:800, padding:'0 6px', borderRadius:8,
-                    background: active ? 'rgba(11,18,32,0.2)' : 'rgba(255,255,255,0.06)',
-                    color: active ? '#0B1220' : MC.muted }}>
+                    background: active ? 'rgba(255,255,255,0.25)' : 'rgba(15,23,42,0.06)',
+                    color: active ? '#FFFFFF' : MC.muted }}>
                     {f.count}
                   </span>
                 </button>
