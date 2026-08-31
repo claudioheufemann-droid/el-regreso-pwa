@@ -1,13 +1,14 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, Search, Beer, Layers, Copy, Check, AlertTriangle, CircleAlert, ChevronDown, ChevronLeft, Boxes } from 'lucide-react'
+import { Package, Search, Beer, Layers, ImageIcon, Download, Share2, X, Loader2, AlertTriangle, CircleAlert, ChevronDown, ChevronLeft, Boxes } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import type { StockProductoRow } from './page'
 import ProductImage from '@/components/ui/ProductImage'
+import StockShareImage from './StockShareImage'
 
 const C = {
   bg: '#F1F5F9', card: '#FFFFFF', hero: '#0F172A',
@@ -62,42 +63,6 @@ function fFecha(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
   const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
   return `${d} ${meses[m - 1]} ${y}`
-}
-
-// Texto para compartir por WhatsApp: usa el formato que WhatsApp sí renderiza
-// (*negrita*, _cursiva_, líneas divisorias) para que se vea prolijo y de marca
-// sin agregar pasos — sigue siendo copiar → pegar, sin fotos ni adjuntos.
-const DIVISOR = '━━━━━━━━━━━━━━━━'
-
-function buildResumenCopiable(filas: StockProductoRow[], fechaInforme: string | null): string {
-  const categorias = ['Cerveza', 'Kombucha'] as const
-  const tipos = [{ key: 'barril' as const, label: 'Barriles (30L)', emoji: '🛢️' }, { key: 'envase' as const, label: 'Latas', emoji: '🥫' }]
-
-  let out = `🍺 *EL REGRESO BEER* — Stock disponible\n📍 Cámara General Barrios Bajos`
-  if (fechaInforme) out += ` · ${fFecha(fechaInforme)}`
-  out += `\n${DIVISOR}`
-
-  for (const cat of categorias) {
-    const deCategoria = filas.filter(f => (f.categoria ?? 'Otros') === cat)
-    if (!deCategoria.length) continue
-    out += `\n*${cat === 'Kombucha' ? 'KOMBUCHAS' : 'CERVEZAS'}*\n`
-    for (const t of tipos) {
-      const items = deCategoria.filter(f => f.tipo === t.key).sort((a, b) => a.producto.localeCompare(b.producto))
-      if (!items.length) continue
-      out += `\n${t.emoji} ${t.label}\n`
-      for (const f of items) {
-        // Solo verde/rojo — sin texto de alerta: esto lo lee el cliente,
-        // no debe ver "poco stock" ni "revisar stock".
-        const icon = nivelDe(f) === 'ok' ? '🟢' : '🔴'
-        const detalle = f.tipo === 'envase'
-          ? `${fNum(f.cantidad)} latas (${fCajas(f.cantidad)})`
-          : `${fNum(f.cantidad)} Barril${f.cantidad === 1 ? '' : 'es'}`
-        out += `${icon} *${f.producto}*: ${detalle}\n`
-      }
-    }
-  }
-  out += `\n${DIVISOR}\n_Cervecería Artesanal · Valdivia_`
-  return out.trim()
 }
 
 function AlertaBadge({ nivel }: { nivel: Nivel }) {
@@ -178,8 +143,15 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
   const [showSettings, setShowSettings] = useState(false)
   const [tab, setTab] = useState<'barril' | 'envase'>('barril')
   const [busca, setBusca] = useState('')
-  const [copiado, setCopiado] = useState(false)
   const [expandido, setExpandido] = useState<string | null>(null)
+
+  // Imagen compartible del stock (reemplaza el texto plano que copiaba antes:
+  // difícil de leer para el cliente). Se renderiza una tarjeta oculta
+  // (StockShareImage) fuera de pantalla y se rasteriza con html-to-image.
+  const shareCardRef = useRef<HTMLDivElement>(null)
+  const [generandoImagen, setGenerandoImagen] = useState(false)
+  const [imagenGenerada, setImagenGenerada] = useState<string | null>(null)
+  const [errorImagen, setErrorImagen] = useState('')
 
   const barriles = useMemo(() => filas.filter(f => f.tipo === 'barril'), [filas])
   const envases = useMemo(() => filas.filter(f => f.tipo === 'envase'), [filas])
@@ -207,11 +179,46 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
 
   const maxCant = Math.max(1, ...listaActual.map(f => f.cantidad))
 
-  async function copiarResumen() {
-    const texto = buildResumenCopiable(filas, fechaInforme)
-    await navigator.clipboard.writeText(texto)
-    setCopiado(true)
-    setTimeout(() => setCopiado(false), 2000)
+  async function generarImagen() {
+    if (!shareCardRef.current) return
+    setGenerandoImagen(true)
+    setErrorImagen('')
+    try {
+      const { toPng } = await import('html-to-image')
+      // Esperar un frame para que las fotos de producto (<img loading="lazy">)
+      // terminen de pintar en la tarjeta oculta antes de rasterizar.
+      await new Promise(r => setTimeout(r, 50))
+      const dataUrl = await toPng(shareCardRef.current, { pixelRatio: 2, backgroundColor: '#FFFFFF' })
+      setImagenGenerada(dataUrl)
+    } catch {
+      setErrorImagen('No se pudo generar la imagen. Intenta de nuevo.')
+      setTimeout(() => setErrorImagen(''), 3500)
+    } finally {
+      setGenerandoImagen(false)
+    }
+  }
+
+  async function compartirImagen() {
+    if (!imagenGenerada) return
+    try {
+      const res = await fetch(imagenGenerada)
+      const blob = await res.blob()
+      const file = new File([blob], 'stock-el-regreso.png', { type: 'image/png' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Stock disponible — El Regreso Beer' })
+        return
+      }
+    } catch {
+      // Si el usuario cancela el share nativo, no hacer nada (no es un error real).
+    }
+  }
+
+  function descargarImagen() {
+    if (!imagenGenerada) return
+    const a = document.createElement('a')
+    a.href = imagenGenerada
+    a.download = `stock-el-regreso-${fechaInforme ?? 'hoy'}.png`
+    a.click()
   }
 
   return (
@@ -243,16 +250,18 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
             {filas.length > 0 && (
               <button
-                onClick={copiarResumen}
+                onClick={generarImagen}
+                disabled={generandoImagen}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '9px 14px', borderRadius: 12, border: `1px solid ${copiado ? C.green : C.line}`,
-                  background: copiado ? C.greenSoft : C.card, color: copiado ? C.green : C.text,
-                  fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                  padding: '9px 14px', borderRadius: 12, border: `1px solid ${C.line}`,
+                  background: C.card, color: C.text,
+                  fontSize: 12.5, fontWeight: 700, cursor: generandoImagen ? 'default' : 'pointer',
+                  opacity: generandoImagen ? 0.6 : 1,
                 }}
               >
-                {copiado ? <Check size={14} /> : <Copy size={14} />}
-                {copiado ? 'Copiado' : 'Copiar stock'}
+                {generandoImagen ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <ImageIcon size={14} />}
+                {generandoImagen ? 'Generando…' : 'Compartir stock'}
               </button>
             )}
             <NotificationsBell inline variant="light" />
@@ -432,6 +441,50 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
           userEmail={user?.email ?? ''}
           avatarUrl={user?.avatarUrl ?? undefined}
         />
+      )}
+
+      {/* Tarjeta oculta: se rasteriza con html-to-image, nunca se ve en pantalla. */}
+      <StockShareImage ref={shareCardRef} barriles={barriles} envases={envases} fechaInforme={fechaInforme} />
+
+      {errorImagen && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 400,
+          background: C.red, color: '#fff', fontSize: 13, fontWeight: 600,
+          padding: '10px 18px', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+        }}>
+          {errorImagen}
+        </div>
+      )}
+
+      {/* Vista previa de la imagen generada */}
+      {imagenGenerada && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 500, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={e => { if (e.target === e.currentTarget) setImagenGenerada(null) }}
+        >
+          <div style={{ background: C.bg, borderRadius: 20, padding: 16, maxWidth: 420, width: '100%', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <p style={{ fontSize: 14, fontWeight: 800, color: C.text }}>Stock listo para compartir</p>
+              <button onClick={() => setImagenGenerada(null)} aria-label="Cerrar" style={{ background: C.bg, border: `1px solid ${C.line}`, borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.muted }}>
+                <X size={15} />
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', borderRadius: 12, border: `1px solid ${C.line}`, marginBottom: 14 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imagenGenerada} alt="Stock disponible" style={{ width: '100%', display: 'block' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={descargarImagen} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px 0', borderRadius: 12, border: `1px solid ${C.line}`, background: C.card, color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                <Download size={15} /> Descargar
+              </button>
+              {typeof navigator !== 'undefined' && 'share' in navigator && (
+                <button onClick={compartirImagen} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px 0', borderRadius: 12, border: 'none', background: C.hero, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  <Share2 size={15} /> Compartir
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
