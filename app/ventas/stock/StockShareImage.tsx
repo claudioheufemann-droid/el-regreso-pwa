@@ -108,39 +108,48 @@ const StockShareImage = forwardRef<HTMLDivElement, {
   ]
 
   return (
-    <div
-      ref={ref}
-      style={{
-        position: 'fixed', top: 0, left: -99999, width: 680,
-        background: IC.bg, fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-        padding: '32px 28px',
-      }}
-    >
-      {/* Encabezado de marca */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-        <div style={{
-          width: 46, height: 46, borderRadius: 12, background: IC.hero,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0,
-        }}>🍺</div>
-        <div>
-          <p style={{ fontSize: 20, fontWeight: 900, color: IC.text, letterSpacing: '-0.3px' }}>El Regreso Beer</p>
-          <p style={{ fontSize: 12.5, color: IC.muted }}>Cervecería Artesanal · Valdivia</p>
+    // Wrapper EXTERNO oculto — nunca el nodo capturado. html-to-image clona el
+    // nodo apuntado por `ref` con sus estilos inline tal cual; si el opacity:0
+    // o el left:-9999px van en ESE nodo, el clon sale igual de invisible/vacío
+    // en el PNG (confirmado: 3 intentos con eso en el nodo capturado dieron
+    // un PNG 100% blanco, sin ni el logo). Ocultando sólo el contenedor
+    // (height/width 0 + overflow hidden) el nodo interno queda con estilos
+    // "normales" para el clon, y el layout de la página no se mueve ni un px.
+    <div style={{ position: 'fixed', top: 0, left: 0, width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+      <div
+        ref={ref}
+        style={{
+          width: 680,
+          background: IC.bg, fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+          padding: '32px 28px',
+        }}
+      >
+        {/* Encabezado de marca */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+          <div style={{
+            width: 46, height: 46, borderRadius: 12, background: IC.hero,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0,
+          }}>🍺</div>
+          <div>
+            <p style={{ fontSize: 20, fontWeight: 900, color: IC.text, letterSpacing: '-0.3px' }}>El Regreso Beer</p>
+            <p style={{ fontSize: 12.5, color: IC.muted }}>Cervecería Artesanal · Valdivia</p>
+          </div>
         </div>
+
+        <div style={{ height: 1, background: IC.line, margin: '18px 0 20px' }} />
+
+        <p style={{ fontSize: 17, fontWeight: 800, color: IC.text, marginBottom: 2 }}>Stock disponible para pedidos</p>
+        <p style={{ fontSize: 12.5, color: IC.muted, marginBottom: 22 }}>
+          {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Actualizado hoy'}
+        </p>
+
+        {grupos.map(({ g, esLata }, i) => <Seccion key={i} g={g} esLata={esLata} />)}
+
+        <div style={{ height: 1, background: IC.line, margin: '4px 0 16px' }} />
+        <p style={{ fontSize: 11.5, color: IC.muted, textAlign: 'center' }}>
+          ¿Qué te gustaría pedir? Escríbenos y coordinamos tu pedido.
+        </p>
       </div>
-
-      <div style={{ height: 1, background: IC.line, margin: '18px 0 20px' }} />
-
-      <p style={{ fontSize: 17, fontWeight: 800, color: IC.text, marginBottom: 2 }}>Stock disponible para pedidos</p>
-      <p style={{ fontSize: 12.5, color: IC.muted, marginBottom: 22 }}>
-        {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Actualizado hoy'}
-      </p>
-
-      {grupos.map(({ g, esLata }, i) => <Seccion key={i} g={g} esLata={esLata} />)}
-
-      <div style={{ height: 1, background: IC.line, margin: '4px 0 16px' }} />
-      <p style={{ fontSize: 11.5, color: IC.muted, textAlign: 'center' }}>
-        ¿Qué te gustaría pedir? Escríbenos y coordinamos tu pedido.
-      </p>
     </div>
   )
 })
