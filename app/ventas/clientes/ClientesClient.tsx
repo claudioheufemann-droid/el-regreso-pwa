@@ -8,6 +8,7 @@ import {
   Search, Filter, ChevronDown, ChevronLeft, ChevronRight,
   MessageCircle, MoreVertical, Users, CheckCircle2, Clock,
   PhoneOff, AlertTriangle, Zap, Bell, Activity, X, User, Phone,
+  Archive, BarChart3, Package,
 } from 'lucide-react'
 import type { ActividadItem } from './page'
 import AppHeader from '@/components/ui/AppHeader'
@@ -496,10 +497,13 @@ function fLitros(n: number): string {
   return `${n.toLocaleString('es-CL', { maximumFractionDigits: 0 })} L`
 }
 
+// Iniciales del avatar: primera letra del nombre de fantasía (o "?" si falta).
+function inicialAvatar(nombre: string | null): string {
+  const n = (nombre ?? '').trim()
+  return n ? n[0].toUpperCase() : '?'
+}
+
 function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onWA: (t:WATarget)=>void }) {
-  const seg      = c.frecuencia?.segmento ?? 'E'
-  const score    = c.frecuencia?.score ?? 0
-  const segColor = SEG_COLOR[seg] ?? '#888'
   const stock    = calcularStock(c.frecuencia)
   const diasSin  = c.frecuencia?.dias_sin_compra ?? 0
   const deudaV   = c.deuda?.deuda_vencida ?? 0
@@ -508,17 +512,28 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
   // rotula "Temporada baja". Que no compre ahora es su patrón normal — pintarlo
   // en rojo llenaba la lista del vendedor de falsas urgencias cada invierno.
   const enTemporadaBaja = !!stock?.temporadaBaja
-  // "Nuevo" pisa cualquier otra clasificación: con 1-2 pedidos casi nunca hay
-  // ciclo calculado todavía, así que sin esto la tarjeta decía "Sin historial"
-  // — cierto, pero mucho menos útil para el vendedor que saber que es nuevo.
-  const bandColor = nuevo
+
+  // El avatar y la barra de stock reflejan el estado REAL de la banda (verde/
+  // ámbar/naranja/rojo) tal como lo calcula calcularStock — "Nuevo" es sólo
+  // una etiqueta encima, no cambia el color de estos dos (un cliente nuevo con
+  // ciclo ya calculado sigue mostrando su banda real, como en el mockup).
+  const avatarColor = !stock || enTemporadaBaja
+    ? { fg: MC.muted, bg: 'rgba(15,23,42,0.07)' }
+    : BAND_COLOR[stock.band ?? 'verde']
+
+  // La etiqueta SÍ prioriza "Nuevo" sobre el riesgo: con 1-2 pedidos casi nunca
+  // hay ciclo calculado todavía, y "Sin historial" es mucho menos útil para el
+  // vendedor que saber que es un cliente nuevo.
+  const badgeColor = nuevo
     ? { fg: MC.blue, bg: MC.blueBg }
     : !stock
-      ? { fg: MC.muted, bg: 'rgba(124,138,168,0.1)' }
+      ? { fg: MC.muted, bg: 'rgba(15,23,42,0.07)' }
       : enTemporadaBaja
-        ? { fg: MC.muted, bg: 'rgba(124,138,168,0.12)' }
-        : BAND_COLOR[stock.band ?? 'verde']
-  const riesgoLabel = nuevo
+        ? { fg: MC.muted, bg: 'rgba(15,23,42,0.07)' }
+        : riesgoDeBand(stock.band) === 'alto' ? { fg: MC.red, bg: MC.redBg }
+        : riesgoDeBand(stock.band) === 'medio' ? { fg: MC.amber, bg: MC.amberBg }
+        : { fg: MC.green, bg: MC.greenBg }
+  const badgeLabel = nuevo
     ? 'Nuevo'
     : !stock
       ? 'Sin historial'
@@ -537,126 +552,99 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
   return (
     <div onClick={onClick} style={{
       background:MC.card, borderRadius:16, marginBottom:10, cursor:'pointer',
-      border:`1px solid ${MC.border}`, borderLeft:`4px solid ${bandColor.fg}`,
-      boxShadow:'0 1px 2px rgba(15,23,42,0.04)', overflow:'hidden',
+      border:`1px solid ${MC.border}`, boxShadow:'0 1px 2px rgba(15,23,42,0.04)',
+      padding:'12px 14px',
     }}>
-      <div style={{ padding:'12px 14px' }}>
-        {/* Cabecera: score + nombre + riesgo */}
-        <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:10 }}>
-          <ScoreBadge seg={seg} score={score} segColor={segColor} size={40}/>
-          <div style={{ flex:1, minWidth:0 }}>
-            <p style={{ fontSize:14, fontWeight:800, color:MC.text,
-              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {c.nombre_fantasia}
+      {/* Cabecera: avatar + nombre/localidad·vendedor + badge + chevron */}
+      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ width:40, height:40, borderRadius:'50%', flexShrink:0,
+          display:'flex', alignItems:'center', justifyContent:'center',
+          background:avatarColor.bg, color:avatarColor.fg, fontSize:16, fontWeight:800 }}>
+          {inicialAvatar(c.nombre_fantasia)}
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <p style={{ fontSize:15, fontWeight:800, color:MC.text,
+            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {c.nombre_fantasia}
+          </p>
+          <p style={{ fontSize:12, color:MC.muted, marginTop:1,
+            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {(c.localidad_entrega || c.localidad) ? formatLocalidad(c.localidad_entrega || c.localidad) : '—'}
+            {' · '}{vendedorCanonico(c.vendedor).split(' ')[0]}
+          </p>
+        </div>
+        <span style={{ fontSize:11, fontWeight:700, padding:'5px 11px', borderRadius:20, flexShrink:0,
+          color:badgeColor.fg, background:badgeColor.bg }}>
+          {badgeLabel}
+        </span>
+        <ChevronRight size={16} color={MC.muted} style={{ flexShrink:0 }}/>
+      </div>
+
+      {/* Deuda vencida (si aplica) — no está en el mockup porque ninguno de sus
+          ejemplos tiene deuda, pero es información crítica que no se puede perder. */}
+      {deudaV > 0 && (
+        <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:8 }}>
+          <AlertTriangle size={11} color={MC.red}/>
+          <span style={{ fontSize:11, fontWeight:700, color:MC.red }}>Deuda vencida: {fPeso(deudaV)}</span>
+        </div>
+      )}
+
+      {/* Fila de datos: Stock · Últ. pedido · Total + acciones */}
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:12 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:6, minWidth:0 }}>
+          <Archive size={15} color={MC.muted} style={{ flexShrink:0, marginTop:1 }}/>
+          <div style={{ minWidth:0 }}>
+            <p style={{ fontSize:10, color:MC.muted, marginBottom:1 }}>Stock</p>
+            <p style={{ fontSize:13, fontWeight:800, color: stock ? (stock.agotado ? MC.red : MC.text) : MC.muted, whiteSpace:'nowrap' }}>
+              {stock ? (stock.agotado ? 'Agotado' : `${stock.diasRestantes} días`) : '—'}
             </p>
-            <p style={{ fontSize:11, color:MC.muted, marginTop:1 }}>
-              {vendedorCanonico(c.vendedor).split(' ')[0]}{(c.localidad_entrega || c.localidad) ? ` · ${formatLocalidad(c.localidad_entrega || c.localidad)}` : ''}
-            </p>
+            {stock && (
+              <div style={{ width:44, height:4, borderRadius:2, background:'rgba(15,23,42,0.08)', overflow:'hidden', marginTop:4 }}>
+                <div style={{ height:'100%', width:`${stock.agotado ? 100 : pct}%`, background:avatarColor.fg }}/>
+              </div>
+            )}
           </div>
-          <span style={{ fontSize:10, fontWeight:700, padding:'4px 9px', borderRadius:20, flexShrink:0,
-            color:bandColor.fg, background:bandColor.bg }}>
-            {riesgoLabel}
-          </span>
         </div>
 
-        {/* Stock proyectado */}
-        {stock ? (
-          <>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-              {stock.agotado ? (
-                <div>
-                  <p style={{ fontSize:11, color:MC.muted, fontWeight:600, marginBottom:2 }}>Stock agotado</p>
-                  <p style={{ fontSize:12, color:bandColor.fg, fontWeight:700 }}>
-                    Debió terminar: {stock.fechaQuiebre ? fFecha(stock.fechaQuiebre) : '—'}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div>
-                    <p style={{ fontSize:11, color:MC.muted, fontWeight:600, marginBottom:2 }}>Stock posible</p>
-                    <p style={{ fontSize:20, fontWeight:900, color:bandColor.fg, letterSpacing:'-0.5px' }}>
-                      {stock.diasRestantes} días
-                    </p>
-                  </div>
-                  <div style={{ textAlign:'right' }}>
-                    <p style={{ fontSize:11, color:MC.muted, fontWeight:600, marginBottom:2 }}>Se termina</p>
-                    <p style={{ fontSize:14, fontWeight:800, color:MC.text }}>
-                      {stock.fechaQuiebre ? fFecha(stock.fechaQuiebre) : '—'}
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div style={{ height:6, borderRadius:3, background:'rgba(15,23,42,0.08)', overflow:'hidden', marginBottom:6 }}>
-              <div style={{ height:'100%', width:`${stock.agotado ? 100 : pct}%`, background:bandColor.fg, transition:'width 0.4s' }}/>
-            </div>
-
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
-              <span style={{ fontSize:11, color:MC.muted }}>{fLitros(stock.litrosDisponibles)} disponibles</span>
-              <span style={{ fontSize:11, color:MC.muted }}>Consumo prom.: {stock.consumoSemanal.toFixed(0)} L/sem</span>
-            </div>
-          </>
-        ) : (
-          <div style={{ background:'rgba(15,23,42,0.04)', borderRadius:10, padding:'10px 12px', marginBottom:12 }}>
-            <p style={{ fontSize:12, color:MC.muted }}>Sin historial suficiente para proyectar stock</p>
-          </div>
-        )}
-
-        <div style={{ height:1, background:MC.border, marginBottom:10 }}/>
-
-        {/* KPIs comerciales */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6, marginBottom:10 }}>
-          <div>
-            <p style={{ fontSize:8, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:2 }}>ÚLT. PEDIDO</p>
-            <p style={{ fontSize:11, fontWeight:700, color: c.ultimoPedido ? MC.text : MC.muted }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:6, minWidth:0 }}>
+          <BarChart3 size={15} color={MC.muted} style={{ flexShrink:0, marginTop:1 }}/>
+          <div style={{ minWidth:0 }}>
+            <p style={{ fontSize:10, color:MC.muted, marginBottom:1 }}>Últ. pedido</p>
+            <p style={{ fontSize:13, fontWeight:800, color: c.ultimoPedido ? MC.text : MC.muted, whiteSpace:'nowrap' }}>
               {c.ultimoPedido ? fFecha(c.ultimoPedido.ultimaFecha) : '—'}
             </p>
-            {diasSin > 0 && <p style={{ fontSize:9, color:bandColor.fg, fontWeight:600, marginTop:1 }}>{diasSin}d sin comprar</p>}
-          </div>
-          <div>
-            <p style={{ fontSize:8, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:2 }}>VENTAS PERÍODO</p>
-            <p style={{ fontSize:11, fontWeight:700, color:MC.text }}>{fLitros(c.ultimoPedido?.litrosPeriodo ?? 0)}</p>
-            <p style={{ fontSize:9, color:MC.muted, marginTop:1 }}>{fPeso(c.ultimoPedido?.ventaPeriodo ?? 0)}</p>
-          </div>
-          <div>
-            <p style={{ fontSize:8, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:2 }}>TOTAL COMPRADO</p>
-            <p style={{ fontSize:11, fontWeight:700, color:MC.text }}>{fLitros(c.frecuencia?.litros_totales ?? 0)}</p>
-            <p style={{ fontSize:9, color:MC.muted, marginTop:1 }}>{fPeso(c.frecuencia?.revenue_total ?? 0)}</p>
+            {diasSin > 0 && <p style={{ fontSize:10, color:MC.muted, marginTop:1, whiteSpace:'nowrap' }}>{diasSin}d sin comprar</p>}
           </div>
         </div>
 
-        {/* Deuda (si aplica) */}
-        {deudaV > 0 && (
-          <div style={{ background:MC.redBg, borderRadius:8, padding:'6px 10px', marginBottom:8,
-            display:'flex', alignItems:'center', gap:6 }}>
-            <AlertTriangle size={11} color={MC.red}/>
-            <span style={{ fontSize:11, fontWeight:700, color:MC.red }}>Deuda vencida: {fPeso(deudaV)}</span>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:6, minWidth:0, flex:1 }}>
+          <Package size={15} color={MC.muted} style={{ flexShrink:0, marginTop:1 }}/>
+          <div style={{ minWidth:0 }}>
+            <p style={{ fontSize:10, color:MC.muted, marginBottom:1 }}>Total</p>
+            <p style={{ fontSize:13, fontWeight:800, color:MC.text, whiteSpace:'nowrap' }}>{fLitros(c.frecuencia?.litros_totales ?? 0)}</p>
+            <p style={{ fontSize:10, color:MC.muted, marginTop:1, whiteSpace:'nowrap' }}>{fPeso(c.frecuencia?.revenue_total ?? 0)}</p>
           </div>
-        )}
+        </div>
 
-        {/* Acciones */}
-        <div style={{ display:'flex', gap:7 }}>
-          <button onClick={e=>{e.stopPropagation();onWA(waTarget)}}
-            style={{ flex:1, minHeight:38, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-              background:MC.greenBg, border:`1px solid rgba(5,150,105,0.25)`,
-              borderRadius:10, color:MC.whatsapp, fontSize:12, fontWeight:700, cursor:'pointer' }}>
-            <MessageCircle size={14}/> WhatsApp
+        {/* Acciones: WhatsApp y llamada, botones circulares */}
+        <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+          <button onClick={e=>{e.stopPropagation();onWA(waTarget)}} aria-label="WhatsApp"
+            style={{ width:36, height:36, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+              background:MC.greenBg, border:'none', color:MC.whatsapp, cursor:'pointer' }}>
+            <MessageCircle size={16}/>
           </button>
-          {c.telefono && (
-            <a href={`tel:${c.telefono}`} onClick={e=>e.stopPropagation()}
-              style={{ minHeight:38, width:38, display:'flex', alignItems:'center', justifyContent:'center',
-                background:MC.blueBg, border:`1px solid rgba(37,99,235,0.25)`,
-                borderRadius:10, color:MC.blue, flexShrink:0 }}>
-              <Phone size={15}/>
+          {c.telefono ? (
+            <a href={`tel:${c.telefono}`} onClick={e=>e.stopPropagation()} aria-label="Llamar"
+              style={{ width:36, height:36, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+                background:'rgba(15,23,42,0.06)', color:MC.text }}>
+              <Phone size={16}/>
             </a>
+          ) : (
+            <span style={{ width:36, height:36, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+              background:'rgba(15,23,42,0.04)', color:'#CBD5E1' }}>
+              <Phone size={16}/>
+            </span>
           )}
-          <button onClick={e=>{e.stopPropagation();onClick()}}
-            style={{ minHeight:38, padding:'0 14px', display:'flex', alignItems:'center', gap:5,
-              background:MC.blueBg, border:`1px solid rgba(37,99,235,0.25)`,
-              borderRadius:10, color:MC.blue, fontSize:12, fontWeight:700, cursor:'pointer' }}>
-            Ver ficha →
-          </button>
         </div>
       </div>
     </div>
