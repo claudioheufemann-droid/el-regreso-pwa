@@ -589,60 +589,68 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
         </div>
       )}
 
-      {/* Fila de datos: Stock · Últ. pedido · Total + acciones */}
-      <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:12 }}>
-        <div style={{ display:'flex', alignItems:'flex-start', gap:6, minWidth:0 }}>
-          <Archive size={15} color={MC.muted} style={{ flexShrink:0, marginTop:1 }}/>
-          <div style={{ minWidth:0 }}>
-            <p style={{ fontSize:10, color:MC.muted, marginBottom:1 }}>Stock</p>
-            <p style={{ fontSize:13, fontWeight:800, color: stock ? (stock.agotado ? MC.red : MC.text) : MC.muted, whiteSpace:'nowrap' }}>
+      {/* Fila de datos: Stock · Últ. pedido · Total + acciones — anchos fijos
+          (no flex:1) para que ningún bloque se aplaste cuando el texto de al
+          lado es más largo; el excedente se recorta con ellipsis, no con wrap. */}
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:11 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:4, width:64, flexShrink:0 }}>
+          <Archive size={13} color={MC.muted} style={{ flexShrink:0, marginTop:2 }}/>
+          <div style={{ minWidth:0, overflow:'hidden' }}>
+            <p style={{ fontSize:9, color:MC.muted, marginBottom:1, whiteSpace:'nowrap' }}>Stock</p>
+            <p style={{ fontSize:12, fontWeight:800, color: stock ? (stock.agotado ? MC.red : MC.text) : MC.muted,
+              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
               {stock ? (stock.agotado ? 'Agotado' : `${stock.diasRestantes} días`) : '—'}
             </p>
             {stock && (
-              <div style={{ width:44, height:4, borderRadius:2, background:'rgba(15,23,42,0.08)', overflow:'hidden', marginTop:4 }}>
+              <div style={{ width:36, height:4, borderRadius:2, background:'rgba(15,23,42,0.08)', overflow:'hidden', marginTop:4 }}>
                 <div style={{ height:'100%', width:`${stock.agotado ? 100 : pct}%`, background:avatarColor.fg }}/>
               </div>
             )}
           </div>
         </div>
 
-        <div style={{ display:'flex', alignItems:'flex-start', gap:6, minWidth:0 }}>
-          <BarChart3 size={15} color={MC.muted} style={{ flexShrink:0, marginTop:1 }}/>
-          <div style={{ minWidth:0 }}>
-            <p style={{ fontSize:10, color:MC.muted, marginBottom:1 }}>Últ. pedido</p>
-            <p style={{ fontSize:13, fontWeight:800, color: c.ultimoPedido ? MC.text : MC.muted, whiteSpace:'nowrap' }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:4, width:82, flexShrink:0 }}>
+          <BarChart3 size={13} color={MC.muted} style={{ flexShrink:0, marginTop:2 }}/>
+          <div style={{ minWidth:0, overflow:'hidden' }}>
+            <p style={{ fontSize:9, color:MC.muted, marginBottom:1, whiteSpace:'nowrap' }}>Últ. pedido</p>
+            <p style={{ fontSize:12, fontWeight:800, color: c.ultimoPedido ? MC.text : MC.muted,
+              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
               {c.ultimoPedido ? fFecha(c.ultimoPedido.ultimaFecha) : '—'}
             </p>
-            {diasSin > 0 && <p style={{ fontSize:10, color:MC.muted, marginTop:1, whiteSpace:'nowrap' }}>{diasSin}d sin comprar</p>}
+            {diasSin > 0 && <p style={{ fontSize:9, color:MC.muted, marginTop:1, whiteSpace:'nowrap' }}>{diasSin}d sin comprar</p>}
           </div>
         </div>
 
-        <div style={{ display:'flex', alignItems:'flex-start', gap:6, minWidth:0, flex:1 }}>
-          <Package size={15} color={MC.muted} style={{ flexShrink:0, marginTop:1 }}/>
-          <div style={{ minWidth:0 }}>
-            <p style={{ fontSize:10, color:MC.muted, marginBottom:1 }}>Total</p>
-            <p style={{ fontSize:13, fontWeight:800, color:MC.text, whiteSpace:'nowrap' }}>{fLitros(c.frecuencia?.litros_totales ?? 0)}</p>
-            <p style={{ fontSize:10, color:MC.muted, marginTop:1, whiteSpace:'nowrap' }}>{fPeso(c.frecuencia?.revenue_total ?? 0)}</p>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:4, flex:1, minWidth:0 }}>
+          <Package size={13} color={MC.muted} style={{ flexShrink:0, marginTop:2 }}/>
+          <div style={{ minWidth:0, overflow:'hidden' }}>
+            <p style={{ fontSize:9, color:MC.muted, marginBottom:1, whiteSpace:'nowrap' }}>Total</p>
+            <p style={{ fontSize:12, fontWeight:800, color:MC.text, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              {fLitros(c.frecuencia?.litros_totales ?? 0)}
+            </p>
+            <p style={{ fontSize:9, color:MC.muted, marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              {fPeso(c.frecuencia?.revenue_total ?? 0)}
+            </p>
           </div>
         </div>
 
         {/* Acciones: WhatsApp y llamada, botones circulares */}
-        <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+        <div style={{ display:'flex', gap:5, flexShrink:0 }}>
           <button onClick={e=>{e.stopPropagation();onWA(waTarget)}} aria-label="WhatsApp"
-            style={{ width:36, height:36, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
-              background:MC.greenBg, border:'none', color:MC.whatsapp, cursor:'pointer' }}>
-            <MessageCircle size={16}/>
+            style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+              background:MC.greenBg, border:'none', color:MC.whatsapp, cursor:'pointer', flexShrink:0 }}>
+            <MessageCircle size={15}/>
           </button>
           {c.telefono ? (
             <a href={`tel:${c.telefono}`} onClick={e=>e.stopPropagation()} aria-label="Llamar"
-              style={{ width:36, height:36, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
-                background:'rgba(15,23,42,0.06)', color:MC.text }}>
-              <Phone size={16}/>
+              style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+                background:'rgba(15,23,42,0.06)', color:MC.text, flexShrink:0 }}>
+              <Phone size={15}/>
             </a>
           ) : (
-            <span style={{ width:36, height:36, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
-              background:'rgba(15,23,42,0.04)', color:'#CBD5E1' }}>
-              <Phone size={16}/>
+            <span style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+              background:'rgba(15,23,42,0.04)', color:'#CBD5E1', flexShrink:0 }}>
+              <Phone size={15}/>
             </span>
           )}
         </div>
