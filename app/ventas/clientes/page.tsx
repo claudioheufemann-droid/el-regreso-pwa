@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { VENDEDORES_SCOPE, VENDEDORES_CARTERA_ACTIVAS, esClienteExcluido, vendedorCanonico, nombresErpDe } from '@/lib/types'
 import { getUltimaVentasCached } from '@/lib/misionesCache'
@@ -22,12 +23,24 @@ export default async function ClientesPage() {
   const supabase = await createClient()
   const appUser  = await getServerUser()
 
+  // El nombre de LOGIN (appUser.nombre, ej. "Marcelo D.") casi nunca coincide
+  // con el nombre vigente/ERP que usa VENDEDOR_ALIAS (ej. "Marcelo Diaz") —
+  // por eso existe vendedoresErp (ver AppUser en lib/auth.ts). Antes esta
+  // página resolvía el scope con vendedorCanonico(appUser.nombre) directo:
+  // funcionaba de pura casualidad para Marion/Nicol/Yadro (sus nombres de
+  // login ya coincidían con el vigente o un alias existente), pero Marcelo
+  // D. — cuyo login es la forma corta, no "Marcelo Diaz" — se quedaba con
+  // CERO clientes: 31-ago-2026, bug reportado end-to-end.
+  const miVendedorCanonico = appUser?.vendedoresErp?.length
+    ? vendedorCanonico(appUser.vendedoresErp[0])
+    : '__sin_vendedor__'
+
   // Vendedores con cartera propia para los botones "macro" del filtro — admin
   // ve la lista completa, un vendedor ve solo su propio nombre (no se le
   // ofrece ni siquiera la opción de mirar la cartera de otro).
   const vendedoresScope = appUser?.isAdmin
     ? [...VENDEDORES_CARTERA_ACTIVAS]
-    : [vendedorCanonico(appUser?.nombre ?? '')]
+    : [miVendedorCanonico]
 
   // El campo clientes.vendedor guarda nombres REALES (Marcelo Diaz, Yadro
   // Fabijancic, Los Rios/Los Lagos, nicol.delgado@elregresobeer.com desde el
@@ -49,10 +62,10 @@ export default async function ClientesPage() {
   // VENDEDORES_SCOPE) — no se puede reusar el mismo scope para ambas tablas.
   const scopeClientesDB: string[] | null = appUser?.isAdmin
     ? null
-    : nombresErpDe(vendedorCanonico(appUser?.nombre ?? '__sin_vendedor__'))
+    : nombresErpDe(miVendedorCanonico)
   const scopeVentasDB: string[] = appUser?.isAdmin
     ? [...VENDEDORES_SCOPE]
-    : nombresErpDe(vendedorCanonico(appUser?.nombre ?? '__sin_vendedor__'))
+    : nombresErpDe(miVendedorCanonico)
 
   // Queries en paralelo
   let clientesQuery = supabase.from('clientes')
@@ -81,7 +94,11 @@ export default async function ClientesPage() {
     // eso se veía igual que "este cliente no tiene historial" — un dato
     // falso, no un hueco. Por eso el error viaja hasta la UI.
     supabase.rpc('get_client_scores'),
-    supabase.from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total'),
+    // Service-role a propósito — ver lib/supabase/admin.ts. `deudores` tiene
+    // RLS por sesión autenticada; el scope real ya lo aplica esta misma
+    // página (scopeClientesDB) sobre `clientes`, así que cruzar por
+    // nombre_fantasia después no expone nada fuera de esa cartera.
+    createAdminClient().from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total'),
     // Fuente directa de último pedido — más fiable que client_scores.ultima_compra
     getUltimaVentasCached(scopeVentasDB),
     supabase.from('periodos').select('id, nombre, fecha_inicio, fecha_fin').eq('activo', true).single(),

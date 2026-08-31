@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import DeudoresVendedorClient from './DeudoresVendedorClient'
@@ -10,7 +10,9 @@ export default async function DeudoresVentasPage() {
   const user = await getServerUser()
   if (!user) redirect('/login')
 
-  const supabase = await createClient()
+  // Service-role a propósito — ver lib/supabase/admin.ts. El scope de
+  // cartera (vendedoresScope) lo aplica esta misma página, no RLS.
+  const supabase = createAdminClient()
   const esAdmin = user.isAdmin
 
   // Mismo patrón que /ventas/misiones: comparar por vendedoresErp (nombres
