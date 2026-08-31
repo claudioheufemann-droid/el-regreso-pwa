@@ -13,15 +13,18 @@ export async function GET() {
   }
   const supabase = createClient(url, key)
 
-  const [ultimoClientes, ultimoDeudores, totalClientes, totalDeudores] = await Promise.all([
+  const [ultimoClientes, ultimoDeudores, ultimoStock, totalClientes, totalDeudores, totalStock] = await Promise.all([
     supabase.from('erp_sync_log').select('*').eq('fuente', 'clientes').order('creado_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('erp_sync_log').select('*').eq('fuente', 'deudores').order('creado_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('erp_sync_log').select('*').eq('fuente', 'stock').order('creado_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('clientes').select('*', { count: 'exact', head: true }),
     supabase.from('deudores').select('*', { count: 'exact', head: true }),
+    supabase.from('stock_productos').select('*', { count: 'exact', head: true }),
   ])
 
   return NextResponse.json({
     clientes: { ultimaCorrida: ultimoClientes.data ?? null, total: totalClientes.count ?? 0 },
     deudores: { ultimaCorrida: ultimoDeudores.data ?? null, total: totalDeudores.count ?? 0 },
+    stock: { ultimaCorrida: ultimoStock.data ?? null, total: totalStock.count ?? 0 },
   })
 }
