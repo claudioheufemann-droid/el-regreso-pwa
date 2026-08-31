@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Loader2, Package } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
+import SyncStatusCard from '@/components/ui/SyncStatusCard'
 
 interface StockProductoParsed {
   tipo: 'barril' | 'envase'
@@ -103,6 +104,8 @@ export default function StockUploadClient() {
       </div>
 
       <div style={{ maxWidth: 600 }}>
+        <SyncStatusCard fuente="stock" />
+
         {!preview && !result && (
           <>
             <div
