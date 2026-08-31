@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { vendedorCanonico, nombresErpDe } from '@/lib/types'
 import DeudoresVendedorClient from './DeudoresVendedorClient'
 
 // Apartado de Deudores dentro de Ventas (distinto de /ventas/admin/deudores,
@@ -23,7 +24,15 @@ export default async function DeudoresVentasPage() {
   let query = supabase.from('deudores').select('*').order('deuda_vencida', { ascending: false })
   if (vendedoresScope) query = query.in('vendedor', vendedoresScope)
 
-  const { data: deudores } = await query
+  // Total de clientes de la cartera (para el "26 de 165 clientes" del
+  // resumen) — clientes.vendedor SÍ usa nombres históricos/alias ("Los
+  // Rios" etc.), por eso acá hace falta expandir con nombresErpDe() y no
+  // alcanza con vendedoresErp crudo como en la query de arriba.
+  const miVendedorCanonico = user.vendedoresErp.length ? vendedorCanonico(user.vendedoresErp[0]) : '__sin_vendedor__'
+  let clientesQuery = supabase.from('clientes').select('id', { count: 'exact', head: true })
+  if (!esAdmin) clientesQuery = clientesQuery.in('vendedor', nombresErpDe(miVendedorCanonico))
 
-  return <DeudoresVendedorClient initialDeudores={deudores ?? []} isAdmin={esAdmin} />
+  const [{ data: deudores }, { count: totalClientes }] = await Promise.all([query, clientesQuery])
+
+  return <DeudoresVendedorClient initialDeudores={deudores ?? []} isAdmin={esAdmin} totalClientes={totalClientes ?? 0} />
 }
