@@ -1,8 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import { ChevronDown, ChevronRight, Wallet } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import {
+  ChevronDown, ChevronRight, Wallet, ChevronLeft, Search, X, Users, Coins,
+  MessageCircle, Phone, FileDown, Filter,
+} from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { useIsDesktop } from '@/lib/useIsDesktop'
+import { useUser } from '@/lib/userContext'
+import NotificationsBell from '@/components/ui/NotificationsBell'
+import SettingsPanel from '@/components/ui/SettingsPanel'
+import WAModal, { type WATarget } from '@/components/ui/WAModal'
 
 interface Deudor {
   id: string
@@ -31,7 +40,430 @@ interface Deudor {
   updated_at: string
 }
 
-export default function DeudoresVendedorClient({ initialDeudores, isAdmin }: { initialDeudores: Deudor[]; isAdmin: boolean }) {
+// ── Paleta clara — mismo patrón que Clientes/Stock (const MC/C locales) ───────
+const MC = {
+  bg: '#F1F5F9', card: '#FFFFFF', text: '#0F172A', muted: '#64748B', faint: '#94A3B8',
+  border: '#E2E8F0', blue: '#2563EB', blueSoft: '#EFF6FF',
+  green: '#059669', greenSoft: '#ECFDF5', amber: '#D97706', amberSoft: '#FFFBEB',
+  red: '#DC2626', redSoft: '#FEF2F2', whatsapp: '#25D366',
+}
+
+type Bucket = 'al-dia' | '1-30' | '31-60' | '+60'
+
+const BUCKET_LABEL: Record<Exclude<Bucket, 'al-dia'>, string> = {
+  '1-30': '1–30 días', '31-60': '31–60 días', '+60': '+60 días',
+}
+const BUCKET_COLOR: Record<Bucket, { fg: string; bg: string }> = {
+  'al-dia': { fg: MC.green, bg: MC.greenSoft },
+  '1-30':   { fg: MC.amber, bg: MC.amberSoft },
+  '31-60':  { fg: MC.amber, bg: MC.amberSoft },
+  '+60':    { fg: MC.red,   bg: MC.redSoft },
+}
+
+// Los 6 buckets granulares que trae el ERP se consolidan en 3 (el criterio
+// que se usa en toda la pantalla): el bucket más viejo con saldo > 0 manda.
+function bucketDe(d: Deudor): Bucket {
+  if ((d.deuda_entre_60_89_dias || 0) + (d.deuda_mas_90_dias || 0) > 0) return '+60'
+  if ((d.deuda_entre_30_44_dias || 0) + (d.deuda_entre_45_59_dias || 0) > 0) return '31-60'
+  if ((d.deuda_menor_14_dias || 0) + (d.deuda_entre_15_29_dias || 0) > 0) return '1-30'
+  return 'al-dia'
+}
+
+// Color de avatar puramente decorativo (no repite la lectura de riesgo del
+// bucket, que ya la da el badge) — mismo espíritu que los avatares por
+// iniciales de Clientes.
+const AVATAR_PALETTE = [
+  { bg: '#FEE2E2', fg: '#DC2626' }, { bg: '#FEF3C7', fg: '#D97706' },
+  { bg: '#DBEAFE', fg: '#2563EB' }, { bg: '#D1FAE5', fg: '#059669' },
+  { bg: '#EDE9FE', fg: '#7C3AED' }, { bg: '#FCE7F3', fg: '#DB2777' },
+]
+function avatarColorDe(nombre: string) {
+  let hash = 0
+  for (let i = 0; i < nombre.length; i++) hash = (hash * 31 + nombre.charCodeAt(i)) >>> 0
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length]
+}
+
+function fFecha(iso: string): string {
+  const [y, m, d] = iso.split('T')[0].split('-')
+  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  return `${parseInt(d)} ${meses[parseInt(m) - 1]} ${y}`
+}
+
+function csvEscape(v: string | number): string {
+  const s = String(v)
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function exportarCSV(deudores: Deudor[]) {
+  const headers = ['Cliente', 'Localidad', 'Vendedor', 'Deuda vencida', 'Saldo total', 'Barriles', 'Último pago']
+  const filas = deudores.map(d => [
+    d.nombre_fantasia, d.localidad ?? '', d.vendedor ?? '',
+    d.deuda_vencida, d.saldo_total, d.barriles_adeudados,
+    d.ultimo_pago ? fFecha(d.ultimo_pago) : '',
+  ])
+  const csv = [headers, ...filas].map(fila => fila.map(csvEscape).join(',')).join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `deudores-${new Date().toISOString().split('T')[0]}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ── Tarjeta compacta (móvil) ───────────────────────────────────────────────────
+function DeudorCard({ d, abierto, onToggle, onWA }: {
+  d: Deudor; abierto: boolean; onToggle: () => void; onWA: (t: WATarget) => void
+}) {
+  const bucket = bucketDe(d)
+  const avatar = avatarColorDe(d.nombre_fantasia)
+  const bucketColor = BUCKET_COLOR[bucket]
+
+  const waTarget: WATarget = {
+    nombre: d.nombre_fantasia, telefono: d.telefono, contexto: 'general',
+    alertTipo: 'gris', subtitulo: d.localidad ?? undefined,
+  }
+
+  return (
+    <div style={{
+      background: MC.card, borderRadius: 16, marginBottom: 10,
+      border: `1px solid ${MC.border}`, boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
+      overflow: 'hidden',
+    }}>
+      <button onClick={onToggle} style={{
+        display: 'block', width: '100%', textAlign: 'left', background: 'transparent',
+        border: 'none', cursor: 'pointer', padding: '12px 14px', font: 'inherit',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: avatar.bg, color: avatar.fg, fontSize: 15, fontWeight: 800,
+          }}>
+            {d.nombre_fantasia[0]?.toUpperCase() ?? '?'}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 14, fontWeight: 800, color: MC.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {d.nombre_fantasia}
+            </p>
+            <p style={{ fontSize: 11.5, color: MC.muted, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {d.localidad ?? '—'}{d.vendedor ? ` · ${d.vendedor.split(' ')[0]}` : ''}
+            </p>
+          </div>
+          {bucket !== 'al-dia' && (
+            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 9px', borderRadius: 20, flexShrink: 0, color: bucketColor.fg, background: bucketColor.bg }}>
+              {BUCKET_LABEL[bucket]}
+            </span>
+          )}
+          <ChevronRight size={16} color={MC.faint} style={{ flexShrink: 0, transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10 }}>
+          <div>
+            <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>DEUDA VENCIDA</p>
+            <p style={{ fontSize: 17, fontWeight: 800, color: d.deuda_vencida > 0 ? bucketColor.fg : MC.green }}>
+              {formatCurrency(d.deuda_vencida)}
+            </p>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>SALDO TOTAL</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: MC.text }}>{formatCurrency(d.saldo_total)}</p>
+          </div>
+        </div>
+      </button>
+
+      {abierto && (
+        <div style={{ borderTop: `1px solid ${MC.border}`, padding: '12px 14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <div>
+              <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>ÚLTIMO PAGO</p>
+              <p style={{ fontSize: 12.5, fontWeight: 600, color: MC.text }}>{d.ultimo_pago ? fFecha(d.ultimo_pago) : '—'}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>BARRILES ADEUDADOS</p>
+              <p style={{ fontSize: 12.5, fontWeight: 600, color: d.barriles_adeudados > 0 ? MC.text : MC.faint }}>{d.barriles_adeudados || '—'}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>TELÉFONO</p>
+              <p style={{ fontSize: 12.5, fontWeight: 600, color: MC.text }}>{d.telefono ?? '—'}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>DÍAS DE PAGO</p>
+              <p style={{ fontSize: 12.5, fontWeight: 600, color: MC.text }}>{d.dias_pago ? `${d.dias_pago} días` : '—'}</p>
+            </div>
+          </div>
+
+          <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 6 }}>DEUDA POR ANTIGÜEDAD</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
+            {[
+              { label: '0–14 días', value: d.deuda_menor_14_dias },
+              { label: '15–29 días', value: d.deuda_entre_15_29_dias },
+              { label: '30–44 días', value: d.deuda_entre_30_44_dias },
+              { label: '45–59 días', value: d.deuda_entre_45_59_dias },
+              { label: '60–89 días', value: d.deuda_entre_60_89_dias },
+              { label: '+90 días', value: d.deuda_mas_90_dias },
+            ].filter(b => (b.value || 0) > 0).map(b => (
+              <div key={b.label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, color: MC.muted }}>{b.label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: MC.red }}>{formatCurrency(b.value || 0)}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 7 }}>
+            <button onClick={e => { e.stopPropagation(); onWA(waTarget) }}
+              style={{ flex: 1, minHeight: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                background: MC.greenSoft, border: `1px solid rgba(5,150,105,0.25)`,
+                borderRadius: 10, color: MC.whatsapp, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              <MessageCircle size={14} /> WhatsApp
+            </button>
+            {d.telefono && (
+              <a href={`tel:${d.telefono}`} onClick={e => e.stopPropagation()}
+                style={{ minHeight: 38, width: 38, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: MC.blueSoft, border: `1px solid rgba(37,99,235,0.25)`,
+                  borderRadius: 10, color: MC.blue, flexShrink: 0 }}>
+                <Phone size={15} />
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function DeudoresVendedorClient({ initialDeudores, isAdmin, totalClientes }: {
+  initialDeudores: Deudor[]; isAdmin: boolean; totalClientes: number
+}) {
+  const router = useRouter()
+  const isDesktop = useIsDesktop()
+  const { user } = useUser()
+  const [showSettings, setShowSettings] = useState(false)
+  const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+
+  const [filterVendedor, setFilterVendedor] = useState('')
+  const [filterBucket, setFilterBucket] = useState<Bucket | 'todos'>('todos')
+  const [searchText, setSearchText] = useState('')
+  const [sortBy, setSortBy] = useState<'deuda' | 'nombre' | 'antigua'>('deuda')
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [mostrarFiltrosAdmin, setMostrarFiltrosAdmin] = useState(false)
+
+  const vendedores = Array.from(new Set(initialDeudores.map(d => d.vendedor).filter((v): v is string => !!v)))
+
+  // KPIs — sobre el total sin filtrar, para que sean un número de referencia
+  // estable (igual que "Todos N" del chip por defecto).
+  const kpis = {
+    total: initialDeudores.length,
+    saldo: initialDeudores.reduce((s, d) => s + (d.saldo_total || 0), 0),
+  }
+
+  const bucketCounts = useMemo(() => {
+    const counts: Record<Bucket, number> = { 'al-dia': 0, '1-30': 0, '31-60': 0, '+60': 0 }
+    for (const d of initialDeudores) counts[bucketDe(d)]++
+    return counts
+  }, [initialDeudores])
+
+  const filtrados = useMemo(() => {
+    let res = initialDeudores.filter(d => {
+      if (isAdmin && filterVendedor && d.vendedor !== filterVendedor) return false
+      if (filterBucket !== 'todos' && bucketDe(d) !== filterBucket) return false
+      if (searchText && !d.nombre_fantasia.toLowerCase().includes(searchText.toLowerCase())) return false
+      return true
+    })
+    const rangoBucket: Record<Bucket, number> = { '+60': 3, '31-60': 2, '1-30': 1, 'al-dia': 0 }
+    res = [...res].sort((a, b) => {
+      switch (sortBy) {
+        case 'nombre':  return a.nombre_fantasia.localeCompare(b.nombre_fantasia)
+        case 'antigua': return rangoBucket[bucketDe(b)] - rangoBucket[bucketDe(a)] || b.deuda_vencida - a.deuda_vencida
+        default:        return b.deuda_vencida - a.deuda_vencida
+      }
+    })
+    return res
+  }, [initialDeudores, isAdmin, filterVendedor, filterBucket, searchText, sortBy])
+
+  const selectStyle: React.CSSProperties = {
+    padding: '9px 30px 9px 12px', borderRadius: 10, border: `1px solid ${MC.border}`,
+    background: MC.card, color: MC.text, fontSize: 12.5, fontWeight: 600, outline: 'none',
+    appearance: 'none',
+    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%2364748B\' stroke-width=\'2\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")',
+    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+  }
+
+  if (isDesktop) return <DeudoresTablaDesktop initialDeudores={initialDeudores} isAdmin={isAdmin} />
+
+  return (
+    <div style={{ minHeight: '100vh', background: MC.bg, paddingBottom: 'max(120px, calc(env(safe-area-inset-bottom, 0px) + 100px))' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px 0' }}>
+        <button
+          onClick={() => router.push('/ventas')}
+          aria-label="Volver"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            background: MC.card, border: `1px solid ${MC.border}`,
+            borderRadius: 100, padding: '7px 14px 7px 10px', marginBottom: 14,
+            color: MC.text, fontSize: 13, fontWeight: 700, cursor: 'pointer', minHeight: 36,
+          }}
+        >
+          <ChevronLeft size={17} strokeWidth={2.5} color={MC.blue} />
+          Volver
+        </button>
+
+        {/* Título y acciones en filas separadas — mismo motivo que Stock: un
+            botón ancho al lado del título en pantallas angostas lo aplasta. */}
+        <div style={{ marginBottom: 4 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>Deudores</h1>
+          <p style={{ fontSize: 12.5, color: MC.faint, marginTop: 2 }}>
+            {isAdmin ? 'Deuda de toda la cartera.' : 'Deuda de tus clientes asignados.'}
+          </p>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
+          <NotificationsBell inline variant="light" />
+          <button
+            onClick={() => setShowSettings(true)}
+            aria-label="Cuenta"
+            style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', border: `1px solid ${MC.border}`, background: MC.text, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0, padding: 0 }}
+          >
+            {user?.avatarUrl
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={user.avatarUrl} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : (user?.iniciales || '··')}
+          </button>
+        </div>
+
+        {/* KPI cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16 }}>
+          <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.blueSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={15} color={MC.blue} />
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Total deudores</span>
+            </div>
+            <p style={{ fontSize: 22, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>
+              {kpis.total} <span style={{ fontSize: 12, fontWeight: 500, color: MC.faint }}>de {totalClientes} clientes</span>
+            </p>
+          </div>
+          <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.amberSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Coins size={15} color={MC.amber} />
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Saldo total</span>
+            </div>
+            <p style={{ fontSize: 22, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>{formatCurrency(kpis.saldo)}</p>
+          </div>
+        </div>
+
+        {/* Chips de rango de días */}
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 12 }}>
+          {([
+            { key: 'todos' as const, label: 'Todos', count: initialDeudores.length, color: MC.blue },
+            { key: '1-30' as const, label: '1–30 días', count: bucketCounts['1-30'], color: MC.amber },
+            { key: '31-60' as const, label: '31–60 días', count: bucketCounts['31-60'], color: MC.amber },
+            { key: '+60' as const, label: '+60 días', count: bucketCounts['+60'], color: MC.red },
+          ]).map(f => {
+            const active = filterBucket === f.key
+            return (
+              <button key={f.key} onClick={() => setFilterBucket(f.key)}
+                style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 12,
+                  cursor: 'pointer', border: `1px solid ${active ? f.color : MC.border}`,
+                  background: active ? f.color : MC.card, color: active ? '#FFFFFF' : MC.text,
+                  fontSize: 13, fontWeight: active ? 800 : 600 }}>
+                {f.label}
+                <span style={{ fontSize: 12, fontWeight: 800, padding: '0 6px', borderRadius: 8,
+                  background: active ? 'rgba(255,255,255,0.25)' : 'rgba(15,23,42,0.06)',
+                  color: active ? '#FFFFFF' : MC.muted }}>
+                  {f.count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Buscador */}
+        <div style={{ position: 'relative', marginBottom: 10 }}>
+          <Search size={15} color={MC.faint} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+          <input
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder="Buscar cliente…"
+            style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: 12, border: `1px solid ${MC.border}`, background: MC.card, fontSize: 13, color: MC.text, outline: 'none' }}
+          />
+          {searchText && <button onClick={() => setSearchText('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: MC.faint }}><X size={14} /></button>}
+        </div>
+
+        {/* Ordenar + filtro admin */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} style={selectStyle}>
+            <option value="deuda">Deuda (mayor a menor)</option>
+            <option value="antigua">Más antigua primero</option>
+            <option value="nombre">Nombre (A–Z)</option>
+          </select>
+          {isAdmin && (
+            <button onClick={() => setMostrarFiltrosAdmin(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
+                border: `1px solid ${filterVendedor ? MC.blue : MC.border}`, background: filterVendedor ? MC.blueSoft : MC.card,
+                color: filterVendedor ? MC.blue : MC.text, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+              <Filter size={13} /> {filterVendedor || 'Vendedor'}
+            </button>
+          )}
+        </div>
+
+        {isAdmin && mostrarFiltrosAdmin && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            <button onClick={() => { setFilterVendedor(''); setMostrarFiltrosAdmin(false) }}
+              style={{ padding: '6px 12px', borderRadius: 20, border: `1px solid ${!filterVendedor ? MC.blue : MC.border}`,
+                background: !filterVendedor ? MC.blueSoft : MC.card, color: !filterVendedor ? MC.blue : MC.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              Todos
+            </button>
+            {vendedores.map(v => (
+              <button key={v} onClick={() => { setFilterVendedor(v); setMostrarFiltrosAdmin(false) }}
+                style={{ padding: '6px 12px', borderRadius: 20, border: `1px solid ${filterVendedor === v ? MC.blue : MC.border}`,
+                  background: filterVendedor === v ? MC.blueSoft : MC.card, color: filterVendedor === v ? MC.blue : MC.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                {v}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Contador + exportar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: MC.text }}>{filtrados.length} cliente{filtrados.length === 1 ? '' : 's'}</p>
+          {filtrados.length > 0 && (
+            <button onClick={() => exportarCSV(filtrados)}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', color: MC.blue, fontSize: 12.5, fontWeight: 700 }}>
+              <FileDown size={14} /> Exportar
+            </button>
+          )}
+        </div>
+
+        {/* Lista */}
+        {filtrados.length === 0 ? (
+          <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: '40px 20px', textAlign: 'center' }}>
+            <Wallet size={32} color={MC.faint} style={{ margin: '0 auto 10px' }} />
+            <p style={{ fontSize: 13, color: MC.muted }}>
+              {initialDeudores.length === 0
+                ? (isAdmin ? 'Todavía no hay deudores cargados.' : 'Ninguno de tus clientes tiene deuda registrada.')
+                : 'Sin resultados para este filtro'}
+            </p>
+          </div>
+        ) : (
+          filtrados.map(d => (
+            <DeudorCard key={d.id} d={d} abierto={expandedRow === d.id} onToggle={() => setExpandedRow(expandedRow === d.id ? null : d.id)} onWA={setWaTarget} />
+          ))
+        )}
+      </div>
+
+      {showSettings && (
+        <SettingsPanel onClose={() => setShowSettings(false)} userName={user?.nombre ?? ''} userEmail={user?.email ?? ''} avatarUrl={user?.avatarUrl ?? undefined} />
+      )}
+      {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
+    </div>
+  )
+}
+
+// ── Tabla de escritorio (sin cambios de fondo, tema oscuro existente) ─────────
+function DeudoresTablaDesktop({ initialDeudores, isAdmin }: { initialDeudores: Deudor[]; isAdmin: boolean }) {
   const [filterVendedor, setFilterVendedor] = useState('')
   const [filterDeudaVencida, setFilterDeudaVencida] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
   const [searchText, setSearchText] = useState('')
@@ -80,7 +512,6 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin }: { i
         {isAdmin ? 'Deuda de toda la cartera.' : 'Deuda de tus clientes asignados.'}
       </p>
 
-      {/* KPI Cards */}
       <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Total Deudores', value: totals.deudores, format: 'n', color: '#60a5fa' },
@@ -102,7 +533,6 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin }: { i
         ))}
       </div>
 
-      {/* Filters */}
       <div className="grid-stack-mobile" style={{
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 12, padding: '16px 20px', marginBottom: 16,
@@ -146,7 +576,6 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin }: { i
         </div>
       </div>
 
-      {/* Table */}
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 12, overflow: 'hidden',
@@ -223,7 +652,6 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin }: { i
                         }}>
                           <div className="grid-stack-mobile" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
 
-                            {/* Contacto */}
                             <div>
                               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
                                 Contacto
@@ -241,7 +669,6 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin }: { i
                               ))}
                             </div>
 
-                            {/* Deuda por antigüedad */}
                             <div>
                               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
                                 Deuda por Antigüedad
@@ -263,7 +690,6 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin }: { i
                               ))}
                             </div>
 
-                            {/* Cuenta */}
                             <div>
                               <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
                                 Cuenta
