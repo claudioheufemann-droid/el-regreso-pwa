@@ -38,8 +38,8 @@
       "schedule": "0 13 * * 1"
     },
     {
-      "path": "/api/cron/deuda-alerts",
-      "schedule": "0 11 * * 1-5"
+      "path": "/api/cron/cartera-diaria",
+      "schedule": "0 13 * * *"
     },
     {
       "path": "/api/cron/agenda-diaria",
