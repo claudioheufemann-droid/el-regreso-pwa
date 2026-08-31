@@ -17,6 +17,11 @@ interface UserContextType {
   /** Acceso al módulo /ventas/comisiones (Claudio/Douglas/Benjamín/Mariel) —
    *  aparte de puedeVerMargenes, ver lib/comisiones.ts. */
   veComisiones: boolean
+  /** Admin real de la cuenta, sin importar si está "viendo como vendedor"
+   *  ahora mismo — ver AppUser.esAdminReal en lib/auth.ts. */
+  esAdminReal: boolean
+  /** Nombre del vendedor simulado, o null en vista normal. */
+  impersonando: string | null
   logout: () => Promise<void>
 }
 
@@ -26,6 +31,8 @@ const UserContext = createContext<UserContextType>({
   region: null,
   puedeVerMargenes: false,
   veComisiones: false,
+  esAdminReal: false,
+  impersonando: null,
   logout: async () => {},
 })
 
@@ -52,7 +59,14 @@ export function UserProvider({
         isAdmin: initialUser?.isAdmin ?? false,
         region: initialUser?.region ?? null,
         puedeVerMargenes: initialUser?.puedeVerMargenes ?? false,
-        veComisiones: initialUser ? puedeVerComisionesEquipo(initialUser) : false,
+        // Mientras se impersona un vendedor, email sigue siendo el del admin
+        // real (a propósito — password/reauth no puede apuntar a otro
+        // usuario), así que puedeVerComisionesEquipo() lo seguiría
+        // reconociendo. Se apaga acá explícitamente para que la vista sea
+        // fiel a la del vendedor simulado.
+        veComisiones: initialUser && !initialUser.impersonando ? puedeVerComisionesEquipo(initialUser) : false,
+        esAdminReal: initialUser?.esAdminReal ?? false,
+        impersonando: initialUser?.impersonando ?? null,
         logout,
       }}
     >

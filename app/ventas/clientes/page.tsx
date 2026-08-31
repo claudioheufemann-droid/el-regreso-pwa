@@ -54,39 +54,41 @@ export default async function ClientesPage() {
     ? [...VENDEDORES_SCOPE]
     : nombresErpDe(vendedorCanonico(appUser?.nombre ?? '__sin_vendedor__'))
 
-  const { data: periodo } = await supabase
-    .from('periodos').select('id, nombre, fecha_inicio, fecha_fin').eq('activo', true).single()
-
-  const fechaInicio = periodo?.fecha_inicio ?? '2000-01-01'
-  const fechaFin    = periodo?.fecha_fin    ?? new Date().toISOString().split('T')[0]
-
   // Queries en paralelo
   let clientesQuery = supabase.from('clientes')
     .select('id, nombre_fantasia, razon_social, categoria, vendedor, localidad, localidad_entrega, ruta_despacho, telefono, lat, lng')
   if (scopeClientesDB) clientesQuery = clientesQuery.in('vendedor', scopeClientesDB)
   clientesQuery = clientesQuery.order('nombre_fantasia')
 
+  // `periodo` no depende de nada de acá abajo, así que va DENTRO del mismo
+  // Promise.all en vez de esperarlo antes (como estaba) — nada más lo usa
+  // hasta el segundo Promise.all (ventasPeriodo), que ya corre después.
   const [
     { data: clientes },
     { data: estadosData },
     { data: scoreData, error: scoreError },
     { data: deudoresData },
     ultimasVentasRaw,
+    { data: periodo },
   ] = await Promise.all([
     clientesQuery,
     supabase.from('clientes_estado').select('nombre_fantasia, estado, nota'),
-    // ~3,7 s: client_raw_metrics es una vista sin materializar que reagrega
-    // las 51.000 filas de `ventas` en cada carga (ver la migración
-    // client_metrics_cache_materializado.sql). Si supera el statement_timeout
-    // del rol, `scoreData` viene null y TODA la inteligencia de la cartera
-    // (ciclo, días sin comprar, score, segmento) se apaga. Antes eso se veía
-    // igual que "este cliente no tiene historial" — un dato falso, no un
-    // hueco. Por eso ahora el error viaja hasta la UI.
+    // client_scores ahora es una vista MATERIALIZADA (antes recalculaba en
+    // vivo las 51.000 filas de `ventas` en cada carga, ~3,7s — ver migración
+    // materializar_client_scores.sql) refrescada cada 15 min por pg_cron. Si
+    // igual llega a fallar, `scoreData` viene null y TODA la inteligencia de
+    // la cartera (ciclo, días sin comprar, score, segmento) se apaga. Antes
+    // eso se veía igual que "este cliente no tiene historial" — un dato
+    // falso, no un hueco. Por eso el error viaja hasta la UI.
     supabase.rpc('get_client_scores'),
     supabase.from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total'),
     // Fuente directa de último pedido — más fiable que client_scores.ultima_compra
     getUltimaVentasCached(scopeVentasDB),
+    supabase.from('periodos').select('id, nombre, fecha_inicio, fecha_fin').eq('activo', true).single(),
   ])
+
+  const fechaInicio = periodo?.fecha_inicio ?? '2000-01-01'
+  const fechaFin    = periodo?.fecha_fin    ?? new Date().toISOString().split('T')[0]
 
   // Mapa de último pedido real desde ventas (primera aparición = más reciente, pues viene ordenado desc)
   const ultimaVentaMap = new Map<string, string>()

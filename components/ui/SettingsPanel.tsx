@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useUser } from '@/lib/userContext'
 
 interface Props {
   onClose: () => void
@@ -10,10 +12,63 @@ interface Props {
   avatarUrl?: string | null
 }
 
-type Section = 'main' | 'password'
+type Section = 'main' | 'password' | 'vendedor'
+interface VendedorOpcion { id: string; nombre: string; region: string | null }
 
 export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl: initialAvatarUrl }: Props) {
+  const router = useRouter()
+  const { esAdminReal, impersonando } = useUser()
   const [section, setSection] = useState<Section>('main')
+
+  // "Ver como vendedor" (sólo admins reales) ──────────────────────────────
+  const [vendedores, setVendedores] = useState<VendedorOpcion[] | null>(null)
+  const [vendedorElegido, setVendedorElegido] = useState('')
+  const [aplicandoVista, setAplicandoVista] = useState(false)
+  const [errorVista, setErrorVista] = useState('')
+
+  async function abrirSelectorVendedor() {
+    setSection('vendedor')
+    setErrorVista('')
+    if (vendedores === null) {
+      try {
+        const res = await fetch('/api/admin/vendedores-lista')
+        const data = await res.json()
+        if (res.ok) setVendedores(data)
+        else setVendedores([])
+      } catch { setVendedores([]) }
+    }
+  }
+
+  async function aplicarVistaVendedor() {
+    if (!vendedorElegido) return
+    setAplicandoVista(true)
+    setErrorVista('')
+    try {
+      const res = await fetch('/api/admin/impersonar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendedorId: vendedorElegido }),
+      })
+      if (!res.ok) throw new Error()
+      onClose()
+      router.refresh()
+    } catch {
+      setErrorVista('No se pudo activar la vista. Intenta de nuevo.')
+    } finally {
+      setAplicandoVista(false)
+    }
+  }
+
+  async function salirVistaVendedor() {
+    setAplicandoVista(true)
+    try {
+      await fetch('/api/admin/impersonar', { method: 'DELETE' })
+      onClose()
+      router.refresh()
+    } finally {
+      setAplicandoVista(false)
+    }
+  }
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl ?? null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarMsg, setAvatarMsg] = useState('')
@@ -167,11 +222,11 @@ export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl:
         <div style={{ padding: '4px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(128,128,128,0.1)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {section !== 'main' && (
-              <button onClick={() => { setSection('main'); setPwdError(''); setPwdSuccess(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gold)', fontSize: 18, padding: '2px 6px 2px 0' }}>←</button>
+              <button onClick={() => { setSection('main'); setPwdError(''); setPwdSuccess(false); setErrorVista('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gold)', fontSize: 18, padding: '2px 6px 2px 0' }}>←</button>
             )}
             <div>
               <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--cream)' }}>
-                {section === 'main' ? '⚙ Configuración' : '🔑 Cambiar Contraseña'}
+                {section === 'main' ? '⚙ Configuración' : section === 'password' ? '🔑 Cambiar Contraseña' : '👁 Ver como vendedor'}
               </div>
               {section === 'main' && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{userName}</div>}
             </div>
@@ -210,6 +265,46 @@ export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl:
                   {uploadingAvatar ? '...' : 'Cambiar'}
                 </button>
               </div>
+
+              {/* Ver como vendedor (sólo admins reales) */}
+              {esAdminReal && (
+                impersonando ? (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 14,
+                    padding: '16px', borderRadius: 14,
+                    background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.25)',
+                  }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(96,165,250,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>👁</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#60A5FA' }}>Viendo como {impersonando}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Seguís siendo admin — esto es sólo la vista</div>
+                    </div>
+                    <button onClick={salirVistaVendedor} disabled={aplicandoVista}
+                      style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(96,165,250,0.35)',
+                        background: 'rgba(96,165,250,0.12)', color: '#60A5FA', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                      {aplicandoVista ? '...' : 'Salir'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={abrirSelectorVendedor}
+                    className="touch-active"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      padding: '16px', borderRadius: 14, cursor: 'pointer',
+                      background: 'var(--surface2)', border: '1px solid rgba(128,128,128,0.1)',
+                      textAlign: 'left', width: '100%',
+                    }}
+                  >
+                    <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(96,165,250,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>👁</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--cream)' }}>Ver como vendedor</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Probar la interfaz de un vendedor puntual</div>
+                    </div>
+                    <span style={{ color: 'var(--muted)', fontSize: 16 }}>›</span>
+                  </button>
+                )
+              )}
 
               {/* Cambiar contraseña */}
               <button
@@ -327,6 +422,54 @@ export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl:
                 </div>
               </button>
 
+            </div>
+          )}
+
+          {/* ── SECCIÓN VER COMO VENDEDOR ── */}
+          {section === 'vendedor' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                Elige un vendedor para ver la app exactamente como la ve él o ella
+                (su cartera, sus filtros, su menú). Vas a seguir siendo admin —
+                podés salir de esta vista en cualquier momento desde Configuración.
+              </p>
+
+              {vendedores === null ? (
+                <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '20px 0' }}>Cargando vendedores…</p>
+              ) : vendedores.length === 0 ? (
+                <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '20px 0' }}>No hay vendedores con región asignada.</p>
+              ) : (
+                <>
+                  <div>
+                    <label style={labelStyle}>Vendedor</label>
+                    <select
+                      value={vendedorElegido}
+                      onChange={e => setVendedorElegido(e.target.value)}
+                      style={{ ...inputStyle, background: 'var(--surface2)', border: '1px solid rgba(128,128,128,0.2)', color: 'var(--cream)' }}
+                    >
+                      <option value="">Selecciona…</option>
+                      {vendedores.map(v => (
+                        <option key={v.id} value={v.id}>{v.nombre}{v.region ? ` — ${v.region}` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {errorVista && (
+                    <div style={{ fontSize: 12, color: '#FF7070', padding: '10px 14px', background: 'rgba(255,68,68,0.08)', borderRadius: 10, border: '1px solid rgba(255,68,68,0.2)' }}>
+                      {errorVista}
+                    </div>
+                  )}
+
+                  <button onClick={aplicarVistaVendedor} disabled={!vendedorElegido || aplicandoVista} className="touch-active" style={{
+                    padding: '14px', borderRadius: 12, cursor: 'pointer',
+                    background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)',
+                    fontSize: 13, fontWeight: 700, color: '#60A5FA',
+                    opacity: !vendedorElegido || aplicandoVista ? 0.4 : 1,
+                  }}>
+                    {aplicandoVista ? 'Activando…' : 'Ver como este vendedor'}
+                  </button>
+                </>
+              )}
             </div>
           )}
 
