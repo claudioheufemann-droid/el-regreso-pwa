@@ -3,7 +3,7 @@ import { createClient as createSbClient } from '@supabase/supabase-js'
 import { SUPABASE_URL } from '@/lib/supabase/config'
 import { getServerUser } from '@/lib/auth'
 import {
-  VENDEDORES_COMISIONABLES, calcularResumen, puedeVerComisionGerenteEquipo,
+  VENDEDORES_COMISIONABLES, calcularResumen, puedeVerComisionesEquipo,
   type ClienteComision, type ProductoComision, type CarteraComision, type PorEntregarComision,
 } from '@/lib/comisiones'
 
@@ -17,14 +17,14 @@ export const dynamic = 'force-dynamic'
  *
  * Es información de remuneración personal: sólo la ve quien tenga el permiso
  * `users.ve_comision_gerente` (Claudio) o esté en la lista puntual de
- * `puedeVerComisionGerenteEquipo` (hoy, además, Douglas — pedido explícito
- * de Claudio para el módulo /ventas/comisiones). Un admin cualquiera NO debe
- * poder mirar cuánto gana otra persona.
+ * `puedeVerComisionesEquipo` (hoy, además, Douglas/Benjamín/Mariel — acceso
+ * del módulo /ventas/comisiones). Un admin cualquiera NO debe poder mirar
+ * cuánto gana otra persona.
  */
 export async function GET(req: Request) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  if (!puedeVerComisionGerenteEquipo(user)) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
+  if (!puedeVerComisionesEquipo(user)) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
 
   const { searchParams } = new URL(req.url)
   const desde = searchParams.get('desde') ?? ''

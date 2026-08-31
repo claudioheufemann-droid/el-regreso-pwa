@@ -22,11 +22,11 @@ import { C } from './theme'
  *    logueado tiene este contrato — el endpoint deriva el vendedor de la
  *    sesión, nunca de un parámetro, así que no hay forma de pedir la
  *    comisión de otro vendedor.
- *  · Con prop `vendedor` (uso en /ventas/comisiones, sólo admins con
- *    puede_ver_margenes): pide explícitamente la comisión de ESE
- *    vendedor. El control de acceso real vive en el endpoint (ver
- *    app/api/ventas/comision-vendedor/route.ts) — acá sólo cambia el
- *    texto de "yo" a su nombre.
+ *  · Con prop `vendedor` (uso en /ventas/comisiones, sólo quienes tienen
+ *    acceso al módulo — ver puedeVerComisionesEquipo en lib/comisiones.ts):
+ *    pide explícitamente la comisión de ESE vendedor. El control de acceso
+ *    real vive en el endpoint (ver app/api/ventas/comision-vendedor/route.ts)
+ *    — acá sólo cambia el texto de "yo" a su nombre.
  */
 
 interface Payload {
