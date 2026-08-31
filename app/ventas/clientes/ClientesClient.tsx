@@ -16,23 +16,12 @@ import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { VEND_COLOR, SEG_COLOR } from '@/lib/theme'
 import { vendedorCanonico, VENDEDORES_CARTERA_ACTIVAS } from '@/lib/types'
 import { formatLocalidad } from '@/lib/format'
+import {
+  type FrequencyStat, type StockBand, calcularStock, riesgoDeBand,
+  diasDesde, esClienteNuevo,
+} from '@/lib/stockRiesgo'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
-interface FrequencyStat {
-  dias_sin_compra: number; ciclo_promedio_dias: number | null; total_pedidos: number
-  alert_level: string; siguiente_compra_estimada: string | null
-  score: number; segmento: string; confianza_score: string
-  litros_totales: number; revenue_total: number; pedidos_por_mes: number
-  /** Modelo de ciclo v2 — ver supabase/migrations/ciclo_estacional_v2.sql */
-  es_estacional?: boolean
-  /** Cliente de temporada, actualmente en su temporada baja: no es "riesgo". */
-  temporada_baja?: boolean
-  factor_estacional?: number
-  /** Ciclo sin ajuste estacional ni calibración (para explicar el cálculo). */
-  ciclo_base_dias?: number | null
-  /** Fecha de la primera compra ALGUNA VEZ (para clasificar "Nuevo"). */
-  primera_compra?: string | null
-}
 interface Cliente {
   id: number; nombre_fantasia: string | null; razon_social: string | null
   categoria: string | null; vendedor: string | null; localidad: string | null
@@ -90,70 +79,16 @@ const MC = {
   whatsapp:  '#25D366',
 }
 
-// ── Stock proyectado del cliente ───────────────────────────────────────────────
-// No existe (todavía) un trackeo real de litros en el local del cliente — se
-// estima a partir del ciclo de compra que calcula client_scores:
-//   litros por pedido = litros_totales / total_pedidos  (tamaño típico de compra)
-//   consumo diario    = litros por pedido / ciclo_promedio_dias
-//   días restantes    = ciclo_promedio_dias - dias_sin_compra  (negativo = vencido)
-//   fecha de quiebre   = siguiente_compra_estimada (ya viene calculada)
-//
-// `ciclo_promedio_dias` NO es un promedio simple pese al nombre (se conservó
-// por compatibilidad): desde ciclo_estacional_v2.sql es
-//   mediana de los últimos 8 gaps desestacionalizados
-//     × factor del mes proyectado          (estacionalidad)
-//     × factor de calibración global       (corrige el sesgo del modelo)
-// Detalle y justificación en supabase/migrations/ciclo_estacional_v2.sql.
-type StockBand = 'verde' | 'amarillo' | 'naranja' | 'rojo' | null
-interface StockProyectado {
-  diasRestantes: number
-  litrosDisponibles: number
-  consumoSemanal: number
-  fechaQuiebre: string | null
-  agotado: boolean
-  band: StockBand
-  /** Cliente de temporada fuera de su temporada: se muestra neutro, no en rojo. */
-  temporadaBaja: boolean
-}
-function calcularStock(f: FrequencyStat | null): StockProyectado | null {
-  if (!f || !f.ciclo_promedio_dias || f.total_pedidos <= 0) return null
-  const litrosPorPedido = f.litros_totales / f.total_pedidos
-  const consumoDiario = litrosPorPedido / f.ciclo_promedio_dias
-  const diasRestantes = Math.round(f.ciclo_promedio_dias - f.dias_sin_compra)
-  const litrosDisponibles = Math.max(0, consumoDiario * diasRestantes)
-  const agotado = diasRestantes <= 0
-  const band: StockBand = agotado ? 'rojo' : diasRestantes < 3 ? 'rojo' : diasRestantes <= 7 ? 'naranja' : diasRestantes <= 14 ? 'amarillo' : 'verde'
-  return {
-    diasRestantes,
-    litrosDisponibles,
-    consumoSemanal: consumoDiario * 7,
-    fechaQuiebre: f.siguiente_compra_estimada,
-    agotado,
-    band,
-    temporadaBaja: !!f.temporada_baja,
-  }
-}
+// ── Stock proyectado del cliente — lógica en lib/stockRiesgo.ts (fuente única,
+// también la usa el cron de avisos diarios app/api/cron/cartera-diaria) ──────
 const BAND_COLOR: Record<Exclude<StockBand,null>, { fg:string; bg:string }> = {
   verde:    { fg: MC.green,  bg: MC.greenBg  },
   amarillo: { fg: MC.amber,  bg: MC.amberBg  },
   naranja:  { fg: MC.orange, bg: MC.orangeBg },
   rojo:     { fg: MC.red,    bg: MC.redBg    },
 }
-/** Riesgo alto = naranja o rojo; medio = amarillo; sin riesgo = verde o sin historial.
- *  Un cliente de temporada FUERA de su temporada nunca es riesgo alto: que no
- *  compre en su temporada baja es su comportamiento normal, no una alerta. */
-function riesgoDeBand(band: StockBand, temporadaBaja = false): 'alto' | 'medio' | 'bajo' {
-  if (temporadaBaja) return 'bajo'
-  if (band === 'rojo' || band === 'naranja') return 'alto'
-  if (band === 'amarillo') return 'medio'
-  return 'bajo'
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function diasDesde(f?: string | null): number | null {
-  if (!f) return null
-  return Math.floor((Date.now() - new Date(f).getTime()) / 86400000)
-}
 function fFecha(s: string): string {
   const [y, m, d] = s.split('T')[0].split('-')
   return `${parseInt(d)} ${MESES[parseInt(m)-1]} ${y}`
@@ -170,18 +105,6 @@ function fPeso(n: number): string {
 function esPasada(f: string | null | undefined): boolean {
   if (!f) return false
   return new Date(f) < new Date()
-}
-
-// Cliente "Nuevo": su primera compra ALGUNA VEZ fue hace <=30 días. Se usa
-// `primera_compra` (ventas reales) y no `clientes.created_at` porque esta
-// última es cuándo se cargó la fila en la app (hubo una importación masiva
-// de 723 clientes de golpe el 28-may-2026), no cuándo el cliente empezó a
-// comprar de verdad.
-const DIAS_CLIENTE_NUEVO = 30
-function esClienteNuevo(f: FrequencyStat | null): boolean {
-  if (!f?.primera_compra) return false
-  const dias = diasDesde(f.primera_compra)
-  return dias !== null && dias >= 0 && dias <= DIAS_CLIENTE_NUEVO
 }
 
 // ── Score badge con anillo SVG de progreso ─────────────────────────────────────
