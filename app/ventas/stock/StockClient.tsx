@@ -258,15 +258,21 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
           Volver
         </button>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>CÁMARA GENERAL BARRIOS BAJOS</p>
-            <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Stock de productos</h1>
-            <p style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
-              {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Sin informe de stock cargado todavía'}
-            </p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
+        {/* Título y acciones en filas separadas — antes iban en la misma fila
+            con justify-content:space-between; el botón "Compartir stock" con
+            la flecha del menú (más ancho que el "Copiar stock" original) no
+            entraba junto al resto de íconos en pantallas angostas, y como
+            flexShrink:0 nunca cede espacio, todo el aplaste caía sobre el
+            título — quedaba partido letra por letra ("CÁMAR/A/GENERA/L…"). */}
+        <div style={{ marginBottom: 4 }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>CÁMARA GENERAL BARRIOS BAJOS</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px' }}>Stock de productos</h1>
+          <p style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
+            {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Sin informe de stock cargado todavía'}
+          </p>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             {filas.length > 0 && (
               <div style={{ position: 'relative' }}>
                 <button
