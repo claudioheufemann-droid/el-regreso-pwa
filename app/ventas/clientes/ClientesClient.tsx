@@ -767,7 +767,12 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
     // ventas.vendedor_actual y no reconocen "Nicol Delgado"/"Marion Meza" como
     // claves): unifica clientes.vendedor ("Los Rios", "Los Lagos", nombres
     // viejos del ERP) con el nombre vigente de quien atiende esa cartera hoy.
-    const vendEfectivo = isAdmin ? vendFiltro : vendedorCanonico(user?.nombre ?? '')
+    //
+    // Partir de vendedoresErp[0], NUNCA de user.nombre (nombre de LOGIN): para
+    // Marcelo D. (login "Marcelo D.", ERP "Marcelo Diaz") vendedorCanonico
+    // del nombre de login no calzaba con nada y su cartera quedaba en 0
+    // clientes — bug real, 31-ago-2026.
+    const vendEfectivo = isAdmin ? vendFiltro : vendedorCanonico(user?.vendedoresErp?.[0] ?? '')
     let res = clientes.filter(c => c.estadoCliente !== 'inactivo')
 
     if (vendEfectivo !== 'all')
@@ -827,7 +832,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
   // Conteos de los chips de riesgo (móvil) — sobre búsqueda/vendedor aplicados,
   // pero SIN el propio filtro de riesgo, para que los conteos no cambien al elegir uno.
   const riesgoCounts = useMemo(() => {
-    const vendEfectivo = isAdmin ? vendFiltro : vendedorCanonico(user?.nombre ?? '')
+    const vendEfectivo = isAdmin ? vendFiltro : vendedorCanonico(user?.vendedoresErp?.[0] ?? '')
     let base = clientes.filter(c => c.estadoCliente !== 'inactivo')
     if (vendEfectivo !== 'all') base = base.filter(c => vendedorCanonico(c.vendedor ?? '') === vendEfectivo)
     if (busqueda.trim()) {

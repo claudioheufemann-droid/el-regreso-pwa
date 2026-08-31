@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { vendedorCanonico } from '@/lib/types'
@@ -22,7 +23,16 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
   // cualquier vendedor podía ver el detalle completo (contactos, deuda,
   // historial de ventas) de un cliente que no es suyo con solo cambiar el
   // número en la URL.
-  if (!appUser?.isAdmin && vendedorCanonico(cliente.vendedor) !== vendedorCanonico(appUser?.nombre ?? '')) {
+  //
+  // vendedorCanonico(appUser.nombre) — el nombre de LOGIN, no el del ERP —
+  // era el bug real acá: para Marcelo D. (login "Marcelo D.", ERP "Marcelo
+  // Diaz") esto NUNCA calzaba y su propia ficha de cliente le tiraba 404.
+  // Fix: partir de vendedoresErp (ver AppUser en lib/auth.ts), como ya hace
+  // /ventas/clientes/page.tsx.
+  const miVendedorCanonico = appUser?.vendedoresErp?.length
+    ? vendedorCanonico(appUser.vendedoresErp[0])
+    : '__sin_vendedor__'
+  if (!appUser?.isAdmin && vendedorCanonico(cliente.vendedor) !== miVendedorCanonico) {
     notFound()
   }
 
@@ -50,7 +60,9 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
       .eq('cliente_nombre_fantasia', cliente.nombre_fantasia)
       .order('fecha_hora', { ascending: false })
       .limit(100),
-    supabase
+    // Service-role a propósito — ver lib/supabase/admin.ts. El chequeo de
+    // cartera ya ocurrió arriba (notFound() si no es tu cliente).
+    createAdminClient()
       .from('deudores')
       .select('deuda_vencida, saldo_total, barriles_adeudados, ultimo_pago, deuda_menor_14_dias, deuda_entre_15_29_dias, deuda_entre_30_44_dias, deuda_entre_45_59_dias, deuda_entre_60_89_dias, deuda_mas_90_dias')
       .eq('nombre_fantasia', cliente.nombre_fantasia)
