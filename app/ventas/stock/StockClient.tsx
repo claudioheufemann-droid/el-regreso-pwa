@@ -8,7 +8,7 @@ import SettingsPanel from '@/components/ui/SettingsPanel'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import type { StockProductoRow } from './page'
 import ProductImage from '@/components/ui/ProductImage'
-import StockShareImage from './StockShareImage'
+import StockShareImage, { FILTRO_LABEL, type FiltroStock } from './StockShareImage'
 
 const C = {
   bg: '#F1F5F9', card: '#FFFFFF', hero: '#0F172A',
@@ -152,6 +152,8 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
   const [generandoImagen, setGenerandoImagen] = useState(false)
   const [imagenGenerada, setImagenGenerada] = useState<string | null>(null)
   const [errorImagen, setErrorImagen] = useState('')
+  const [filtroImagen, setFiltroImagen] = useState<FiltroStock>('todo')
+  const [menuCompartirAbierto, setMenuCompartirAbierto] = useState(false)
 
   const barriles = useMemo(() => filas.filter(f => f.tipo === 'barril'), [filas])
   const envases = useMemo(() => filas.filter(f => f.tipo === 'envase'), [filas])
@@ -179,15 +181,32 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
 
   const maxCant = Math.max(1, ...listaActual.map(f => f.cantidad))
 
-  async function generarImagen() {
-    if (!shareCardRef.current) return
+  // Cuántos productos tiene cada una de las 4 combinaciones envase×tipo, para
+  // mostrar el conteo en el menú de compartir y deshabilitar las que no
+  // tengan nada que mostrar.
+  const conteoPorFiltro = useMemo(() => {
+    const porCat = (lista: StockProductoRow[], cat: string) => lista.filter(f => (f.categoria ?? 'Otros') === cat).length
+    return {
+      'barril-cerveza': porCat(barriles, 'Cerveza'),
+      'barril-kombucha': porCat(barriles, 'Kombucha'),
+      'lata-cerveza': porCat(envases, 'Cerveza'),
+      'lata-kombucha': porCat(envases, 'Kombucha'),
+    } as Record<Exclude<FiltroStock, 'todo'>, number>
+  }, [barriles, envases])
+
+  async function generarImagen(filtro: FiltroStock) {
+    setMenuCompartirAbierto(false)
     setGenerandoImagen(true)
     setErrorImagen('')
+    setFiltroImagen(filtro)
     try {
+      // La tarjeta oculta recién recibe el nuevo `filtro` en el próximo
+      // render de React — hay que esperar a que se pinte esa versión antes
+      // de rasterizar, si no se captura la sección anterior (o vacía).
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+      await new Promise(r => setTimeout(r, 60))
+      if (!shareCardRef.current) return
       const { toPng } = await import('html-to-image')
-      // Esperar un frame para que las fotos de producto (<img loading="lazy">)
-      // terminen de pintar en la tarjeta oculta antes de rasterizar.
-      await new Promise(r => setTimeout(r, 50))
       const dataUrl = await toPng(shareCardRef.current, { pixelRatio: 2, backgroundColor: '#FFFFFF' })
       setImagenGenerada(dataUrl)
     } catch {
@@ -203,7 +222,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
     try {
       const res = await fetch(imagenGenerada)
       const blob = await res.blob()
-      const file = new File([blob], 'stock-el-regreso.png', { type: 'image/png' })
+      const file = new File([blob], `stock-el-regreso-${filtroImagen}.png`, { type: 'image/png' })
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Stock disponible — El Regreso Beer' })
         return
@@ -217,7 +236,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
     if (!imagenGenerada) return
     const a = document.createElement('a')
     a.href = imagenGenerada
-    a.download = `stock-el-regreso-${fechaInforme ?? 'hoy'}.png`
+    a.download = `stock-el-regreso-${filtroImagen}-${fechaInforme ?? 'hoy'}.png`
     a.click()
   }
 
@@ -249,20 +268,56 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
             {filas.length > 0 && (
-              <button
-                onClick={generarImagen}
-                disabled={generandoImagen}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '9px 14px', borderRadius: 12, border: `1px solid ${C.line}`,
-                  background: C.card, color: C.text,
-                  fontSize: 12.5, fontWeight: 700, cursor: generandoImagen ? 'default' : 'pointer',
-                  opacity: generandoImagen ? 0.6 : 1,
-                }}
-              >
-                {generandoImagen ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <ImageIcon size={14} />}
-                {generandoImagen ? 'Generando…' : 'Compartir stock'}
-              </button>
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setMenuCompartirAbierto(v => !v)}
+                  disabled={generandoImagen}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '9px 14px', borderRadius: 12, border: `1px solid ${C.line}`,
+                    background: C.card, color: C.text,
+                    fontSize: 12.5, fontWeight: 700, cursor: generandoImagen ? 'default' : 'pointer',
+                    opacity: generandoImagen ? 0.6 : 1,
+                  }}
+                >
+                  {generandoImagen ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <ImageIcon size={14} />}
+                  {generandoImagen ? 'Generando…' : 'Compartir stock'}
+                  {!generandoImagen && <ChevronDown size={13} color={C.faint} />}
+                </button>
+
+                {menuCompartirAbierto && (
+                  <>
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setMenuCompartirAbierto(false)} />
+                    <div style={{
+                      position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 100,
+                      background: C.card, border: `1px solid ${C.line}`, borderRadius: 14,
+                      boxShadow: '0 12px 32px rgba(15,23,42,0.14)', overflow: 'hidden', minWidth: 240,
+                    }}>
+                      {(['todo', 'barril-cerveza', 'barril-kombucha', 'lata-cerveza', 'lata-kombucha'] as const).map((f, i) => {
+                        const cantidad = f === 'todo' ? filas.length : conteoPorFiltro[f]
+                        const deshabilitado = cantidad === 0
+                        return (
+                          <button
+                            key={f}
+                            onClick={() => !deshabilitado && generarImagen(f)}
+                            disabled={deshabilitado}
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%',
+                              padding: '11px 14px', background: 'transparent',
+                              border: 'none', borderTop: i === 0 ? 'none' : `1px solid ${C.line}`,
+                              textAlign: 'left', cursor: deshabilitado ? 'default' : 'pointer',
+                              opacity: deshabilitado ? 0.4 : 1,
+                            }}
+                          >
+                            <span style={{ fontSize: 13, fontWeight: f === 'todo' ? 800 : 600, color: C.text }}>{FILTRO_LABEL[f]}</span>
+                            <span style={{ fontSize: 11, color: C.muted, fontWeight: 700 }}>{cantidad}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
             <NotificationsBell inline variant="light" />
             <button
@@ -444,7 +499,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
       )}
 
       {/* Tarjeta oculta: se rasteriza con html-to-image, nunca se ve en pantalla. */}
-      <StockShareImage ref={shareCardRef} barriles={barriles} envases={envases} fechaInforme={fechaInforme} />
+      <StockShareImage ref={shareCardRef} barriles={barriles} envases={envases} fechaInforme={fechaInforme} filtro={filtroImagen} />
 
       {errorImagen && (
         <div style={{
@@ -464,7 +519,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
         >
           <div style={{ background: C.bg, borderRadius: 20, padding: 16, maxWidth: 420, width: '100%', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <p style={{ fontSize: 14, fontWeight: 800, color: C.text }}>Stock listo para compartir</p>
+              <p style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{FILTRO_LABEL[filtroImagen]} — lista para compartir</p>
               <button onClick={() => setImagenGenerada(null)} aria-label="Cerrar" style={{ background: C.bg, border: `1px solid ${C.line}`, borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.muted }}>
                 <X size={15} />
               </button>
