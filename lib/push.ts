@@ -140,6 +140,18 @@ export async function sendPushToUsers(userIds: string[], payload: PushPayload) {
   await Promise.allSettled(userIds.map(id => sendPushToUser(id, payload)))
 }
 
+/** Envía a todos los usuarios de una `macro_area` (ej. 'comercial'). */
+export async function sendPushToArea(macroArea: string, payload: PushPayload) {
+  try {
+    const supabase = supabaseAdmin()
+    const { data: usuarios } = await supabase.from('users').select('id').eq('macro_area', macroArea)
+    if (!usuarios?.length) return
+    await sendPushToUsers(usuarios.map(u => u.id), payload)
+  } catch (e) {
+    console.error(`Push a área ${macroArea} error:`, e)
+  }
+}
+
 export async function sendPushToAllAdmins(payload: PushPayload) {
   try {
     const supabase = supabaseAdmin()

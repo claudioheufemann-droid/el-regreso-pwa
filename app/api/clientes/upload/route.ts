@@ -212,6 +212,17 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // Quiénes de este archivo YA existían, calculado antes de tocar la tabla —
+  // así "nuevo cliente" significa realmente nuevo, no un efecto del propio
+  // upsert/replace que estamos por hacer.
+  const nombresEnArchivo = clientes.map(c => (c as Record<string, unknown>).nombre_fantasia as string)
+  const { data: existentesData } = await supabase
+    .from('clientes')
+    .select('nombre_fantasia')
+    .in('nombre_fantasia', nombresEnArchivo)
+  const nombresExistentes = new Set((existentesData ?? []).map((r: { nombre_fantasia: string }) => r.nombre_fantasia))
+  const clientesNuevos = (clientes as Record<string, unknown>[]).filter(c => !nombresExistentes.has(c.nombre_fantasia as string))
+
   let insertadas = 0
   let actualizadas = 0
   let eliminadasPrev = 0
@@ -272,9 +283,27 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // "Nuevo cliente" solo tiene sentido en upsert: en replace se borra todo
+  // y se recarga de cero, así que todo "parece nuevo" sin serlo realmente.
+  if (mode === 'upsert') {
+    actualizadas = clientes.length - clientesNuevos.length
+    if (clientesNuevos.length > 0) {
+      const { sendPushToArea } = await import('@/lib/push')
+      const nombres = clientesNuevos.map(c => c.nombre_fantasia as string)
+      const primeros = nombres.slice(0, 5).join(', ')
+      const resto = nombres.length > 5 ? ` y ${nombres.length - 5} más` : ''
+      await sendPushToArea('comercial', {
+        title: clientesNuevos.length === 1 ? 'Nuevo cliente' : `${clientesNuevos.length} nuevos clientes`,
+        body: `${primeros}${resto}`,
+        url: '/ventas/clientes',
+        tag: 'nuevo-cliente',
+      })
+    }
+  }
+
   await logSync(supabase, {
     origen: esCron ? 'automatico' : 'manual', ok: true,
-    total: clientes.length, insertados: insertadas, actualizados: actualizadas,
+    total: clientes.length, insertados: clientesNuevos.length, actualizados: actualizadas,
     eliminados: mode === 'replace' ? clientes.length : 0,
   })
 

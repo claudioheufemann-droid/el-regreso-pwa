@@ -2,12 +2,13 @@ name: ERP Sync — Clientes y Deudores
 
 on:
   schedule:
-    # 2 veces al día (10:00 y 18:00 UTC ≈ 06:00 y 14:00 Chile). A diferencia de
-    # ventas, clientes/deudores no cambian minuto a minuto — no hace falta cada
-    # 15 min. El schedule nativo de GitHub no es confiable en este repo (ver
-    # memoria del proyecto); el disparo real viene de cron-job.org llamando a
-    # workflow_dispatch, igual que erp-sync-ventas.yml. Este queda de respaldo.
-    - cron: '0 10,18 * * *'
+    # Cada hora, en punto. A diferencia de erp-sync-ventas.yml, este SÍ corre
+    # confiable con el `schedule` nativo de GitHub (verificado: corridas
+    # exitosas cada 12h desde el 28-ago-2026 con el cron anterior de 2x/día,
+    # sin necesitar el disparador externo de cron-job.org). Subido a cada
+    # hora el 31-ago-2026 a pedido — clientes/deudores no cambian tan rápido
+    # como ventas, pero así el aviso de "cliente nuevo" llega casi en vivo.
+    - cron: '0 * * * *'
   workflow_dispatch:   # permite dispararlo a mano desde la pestaña Actions
 
 jobs:
