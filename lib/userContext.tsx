@@ -4,6 +4,7 @@ import { createContext, useContext, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { AppUser } from '@/lib/auth'
+import { puedeVerComisionesEquipo } from '@/lib/comisiones'
 
 export type { AppUser }
 export type UserRole = 'admin' | 'user'
@@ -13,6 +14,9 @@ interface UserContextType {
   isAdmin: boolean
   region: string | null      // scope geográfico del vendedor (null = sin scope)
   puedeVerMargenes: boolean  // acceso a Rentabilidad (costos/márgenes internos)
+  /** Acceso al módulo /ventas/comisiones (Claudio/Douglas/Benjamín/Mariel) —
+   *  aparte de puedeVerMargenes, ver lib/comisiones.ts. */
+  veComisiones: boolean
   logout: () => Promise<void>
 }
 
@@ -21,6 +25,7 @@ const UserContext = createContext<UserContextType>({
   isAdmin: false,
   region: null,
   puedeVerMargenes: false,
+  veComisiones: false,
   logout: async () => {},
 })
 
@@ -47,6 +52,7 @@ export function UserProvider({
         isAdmin: initialUser?.isAdmin ?? false,
         region: initialUser?.region ?? null,
         puedeVerMargenes: initialUser?.puedeVerMargenes ?? false,
+        veComisiones: initialUser ? puedeVerComisionesEquipo(initialUser) : false,
         logout,
       }}
     >

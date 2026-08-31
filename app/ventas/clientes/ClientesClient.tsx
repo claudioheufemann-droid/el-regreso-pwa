@@ -7,7 +7,8 @@ import { useUser } from '@/lib/userContext'
 import {
   Search, Filter, ChevronDown, ChevronLeft, ChevronRight,
   MessageCircle, MoreVertical, Users, CheckCircle2, Clock,
-  PhoneOff, AlertTriangle, Zap, Bell, Activity, X, User,
+  PhoneOff, AlertTriangle, Zap, Bell, Activity, X, User, Phone,
+  Archive, BarChart3, Package,
 } from 'lucide-react'
 import type { ActividadItem } from './page'
 import AppHeader from '@/components/ui/AppHeader'
@@ -65,27 +66,27 @@ interface Props {
 // SEG_COLOR y VEND_COLOR vienen del import de arriba
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
-// ── Paleta CRM móvil (navy) — sólo para la vista móvil de esta pantalla ───────
+// ── Paleta CRM móvil (blanca) — sólo para la vista móvil de esta pantalla ─────
 // Deliberadamente local (no toca las variables --bg/--surface globales, que
-// son casi-negras): mismo patrón ya usado en Ventas > Hoy para secciones que
-// necesitan una identidad propia sin migrar el resto de la app.
+// son casi-negras): mismo patrón ya usado en Ventas > Hoy (const C) para
+// secciones que necesitan una identidad propia sin migrar el resto de la app.
 const MC = {
-  bg:        '#0B1220',
-  card:      '#131C31',
-  cardHover: '#16213A',
-  border:    'rgba(255,255,255,0.07)',
-  text:      '#F1F5F9',
-  muted:     '#7C8AA8',
-  blue:      '#3B82F6',
-  blueBg:    'rgba(59,130,246,0.12)',
-  green:     '#22C55E',
-  greenBg:   'rgba(34,197,94,0.12)',
-  amber:     '#F5A524',
-  amberBg:   'rgba(245,165,36,0.12)',
-  orange:    '#FB923C',
-  orangeBg:  'rgba(251,146,60,0.12)',
-  red:       '#F43F5E',
-  redBg:     'rgba(244,63,94,0.12)',
+  bg:        '#F1F5F9',
+  card:      '#FFFFFF',
+  cardHover: '#F8FAFC',
+  border:    '#E2E8F0',
+  text:      '#0F172A',
+  muted:     '#64748B',
+  blue:      '#2563EB',
+  blueBg:    'rgba(37,99,235,0.10)',
+  green:     '#059669',
+  greenBg:   'rgba(5,150,105,0.10)',
+  amber:     '#D97706',
+  amberBg:   'rgba(217,119,6,0.10)',
+  orange:    '#EA580C',
+  orangeBg:  'rgba(234,88,12,0.10)',
+  red:       '#DC2626',
+  redBg:     'rgba(220,38,38,0.10)',
   whatsapp:  '#25D366',
 }
 
@@ -496,10 +497,13 @@ function fLitros(n: number): string {
   return `${n.toLocaleString('es-CL', { maximumFractionDigits: 0 })} L`
 }
 
+// Iniciales del avatar: primera letra del nombre de fantasía (o "?" si falta).
+function inicialAvatar(nombre: string | null): string {
+  const n = (nombre ?? '').trim()
+  return n ? n[0].toUpperCase() : '?'
+}
+
 function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onWA: (t:WATarget)=>void }) {
-  const seg      = c.frecuencia?.segmento ?? 'E'
-  const score    = c.frecuencia?.score ?? 0
-  const segColor = SEG_COLOR[seg] ?? '#888'
   const stock    = calcularStock(c.frecuencia)
   const diasSin  = c.frecuencia?.dias_sin_compra ?? 0
   const deudaV   = c.deuda?.deuda_vencida ?? 0
@@ -508,17 +512,28 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
   // rotula "Temporada baja". Que no compre ahora es su patrón normal — pintarlo
   // en rojo llenaba la lista del vendedor de falsas urgencias cada invierno.
   const enTemporadaBaja = !!stock?.temporadaBaja
-  // "Nuevo" pisa cualquier otra clasificación: con 1-2 pedidos casi nunca hay
-  // ciclo calculado todavía, así que sin esto la tarjeta decía "Sin historial"
-  // — cierto, pero mucho menos útil para el vendedor que saber que es nuevo.
-  const bandColor = nuevo
+
+  // El avatar y la barra de stock reflejan el estado REAL de la banda (verde/
+  // ámbar/naranja/rojo) tal como lo calcula calcularStock — "Nuevo" es sólo
+  // una etiqueta encima, no cambia el color de estos dos (un cliente nuevo con
+  // ciclo ya calculado sigue mostrando su banda real, como en el mockup).
+  const avatarColor = !stock || enTemporadaBaja
+    ? { fg: MC.muted, bg: 'rgba(15,23,42,0.07)' }
+    : BAND_COLOR[stock.band ?? 'verde']
+
+  // La etiqueta SÍ prioriza "Nuevo" sobre el riesgo: con 1-2 pedidos casi nunca
+  // hay ciclo calculado todavía, y "Sin historial" es mucho menos útil para el
+  // vendedor que saber que es un cliente nuevo.
+  const badgeColor = nuevo
     ? { fg: MC.blue, bg: MC.blueBg }
     : !stock
-      ? { fg: MC.muted, bg: 'rgba(124,138,168,0.1)' }
+      ? { fg: MC.muted, bg: 'rgba(15,23,42,0.07)' }
       : enTemporadaBaja
-        ? { fg: MC.muted, bg: 'rgba(124,138,168,0.12)' }
-        : BAND_COLOR[stock.band ?? 'verde']
-  const riesgoLabel = nuevo
+        ? { fg: MC.muted, bg: 'rgba(15,23,42,0.07)' }
+        : riesgoDeBand(stock.band) === 'alto' ? { fg: MC.red, bg: MC.redBg }
+        : riesgoDeBand(stock.band) === 'medio' ? { fg: MC.amber, bg: MC.amberBg }
+        : { fg: MC.green, bg: MC.greenBg }
+  const badgeLabel = nuevo
     ? 'Nuevo'
     : !stock
       ? 'Sin historial'
@@ -536,119 +551,108 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
 
   return (
     <div onClick={onClick} style={{
-      background:MC.card, borderRadius:18, marginBottom:12, cursor:'pointer',
-      border:`1px solid ${MC.border}`, borderLeft:`4px solid ${bandColor.fg}`,
-      overflow:'hidden',
+      background:MC.card, borderRadius:16, marginBottom:10, cursor:'pointer',
+      border:`1px solid ${MC.border}`, boxShadow:'0 1px 2px rgba(15,23,42,0.04)',
+      padding:'12px 14px',
     }}>
-      <div style={{ padding:'14px 16px' }}>
-        {/* Cabecera: score + nombre + riesgo */}
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-          <ScoreBadge seg={seg} score={score} segColor={segColor} size={48}/>
-          <div style={{ flex:1, minWidth:0 }}>
-            <p style={{ fontSize:16, fontWeight:800, color:MC.text,
-              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {c.nombre_fantasia}
+      {/* Cabecera: avatar + nombre/localidad·vendedor + badge + chevron */}
+      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ width:40, height:40, borderRadius:'50%', flexShrink:0,
+          display:'flex', alignItems:'center', justifyContent:'center',
+          background:avatarColor.bg, color:avatarColor.fg, fontSize:16, fontWeight:800 }}>
+          {inicialAvatar(c.nombre_fantasia)}
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <p style={{ fontSize:15, fontWeight:800, color:MC.text,
+            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {c.nombre_fantasia}
+          </p>
+          <p style={{ fontSize:12, color:MC.muted, marginTop:1,
+            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {(c.localidad_entrega || c.localidad) ? formatLocalidad(c.localidad_entrega || c.localidad) : '—'}
+            {' · '}{vendedorCanonico(c.vendedor).split(' ')[0]}
+          </p>
+        </div>
+        <span style={{ fontSize:11, fontWeight:700, padding:'5px 11px', borderRadius:20, flexShrink:0,
+          color:badgeColor.fg, background:badgeColor.bg }}>
+          {badgeLabel}
+        </span>
+        <ChevronRight size={16} color={MC.muted} style={{ flexShrink:0 }}/>
+      </div>
+
+      {/* Deuda vencida (si aplica) — no está en el mockup porque ninguno de sus
+          ejemplos tiene deuda, pero es información crítica que no se puede perder. */}
+      {deudaV > 0 && (
+        <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:8 }}>
+          <AlertTriangle size={11} color={MC.red}/>
+          <span style={{ fontSize:11, fontWeight:700, color:MC.red }}>Deuda vencida: {fPeso(deudaV)}</span>
+        </div>
+      )}
+
+      {/* Fila de datos: Stock · Últ. pedido · Total + acciones — anchos fijos
+          (no flex:1) para que ningún bloque se aplaste cuando el texto de al
+          lado es más largo; el excedente se recorta con ellipsis, no con wrap. */}
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:11 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:4, width:66, flexShrink:0 }}>
+          <Archive size={13} color={MC.muted} style={{ flexShrink:0, marginTop:2 }}/>
+          <div style={{ minWidth:0, overflow:'hidden' }}>
+            <p style={{ fontSize:9, color:MC.muted, marginBottom:1, whiteSpace:'nowrap' }}>Stock</p>
+            <p style={{ fontSize:12, fontWeight:800, color: stock ? (stock.agotado ? MC.red : MC.text) : MC.muted,
+              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              {stock ? (stock.agotado ? 'Agotado' : `${stock.diasRestantes} días`) : '—'}
             </p>
-            <p style={{ fontSize:12, color:MC.muted, marginTop:1 }}>
-              {vendedorCanonico(c.vendedor).split(' ')[0]}{(c.localidad_entrega || c.localidad) ? ` · ${formatLocalidad(c.localidad_entrega || c.localidad)}` : ''}
-            </p>
+            {stock && (
+              <div style={{ width:36, height:4, borderRadius:2, background:'rgba(15,23,42,0.08)', overflow:'hidden', marginTop:4 }}>
+                <div style={{ height:'100%', width:`${stock.agotado ? 100 : pct}%`, background:avatarColor.fg }}/>
+              </div>
+            )}
           </div>
-          <span style={{ fontSize:11, fontWeight:700, padding:'5px 11px', borderRadius:20, flexShrink:0,
-            color:bandColor.fg, background:bandColor.bg }}>
-            {riesgoLabel}
-          </span>
         </div>
 
-        {/* Stock proyectado */}
-        {stock ? (
-          <>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-              {stock.agotado ? (
-                <div>
-                  <p style={{ fontSize:11, color:MC.muted, fontWeight:600, marginBottom:2 }}>Stock agotado</p>
-                  <p style={{ fontSize:12, color:bandColor.fg, fontWeight:700 }}>
-                    Debió terminar: {stock.fechaQuiebre ? fFecha(stock.fechaQuiebre) : '—'}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div>
-                    <p style={{ fontSize:11, color:MC.muted, fontWeight:600, marginBottom:2 }}>Stock posible</p>
-                    <p style={{ fontSize:20, fontWeight:900, color:bandColor.fg, letterSpacing:'-0.5px' }}>
-                      {stock.diasRestantes} días
-                    </p>
-                  </div>
-                  <div style={{ textAlign:'right' }}>
-                    <p style={{ fontSize:11, color:MC.muted, fontWeight:600, marginBottom:2 }}>Se termina</p>
-                    <p style={{ fontSize:14, fontWeight:800, color:MC.text }}>
-                      {stock.fechaQuiebre ? fFecha(stock.fechaQuiebre) : '—'}
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div style={{ height:6, borderRadius:3, background:'rgba(255,255,255,0.06)', overflow:'hidden', marginBottom:6 }}>
-              <div style={{ height:'100%', width:`${stock.agotado ? 100 : pct}%`, background:bandColor.fg, transition:'width 0.4s' }}/>
-            </div>
-
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
-              <span style={{ fontSize:11, color:MC.muted }}>{fLitros(stock.litrosDisponibles)} disponibles</span>
-              <span style={{ fontSize:11, color:MC.muted }}>Consumo prom.: {stock.consumoSemanal.toFixed(0)} L/sem</span>
-            </div>
-          </>
-        ) : (
-          <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:10, padding:'10px 12px', marginBottom:12 }}>
-            <p style={{ fontSize:12, color:MC.muted }}>Sin historial suficiente para proyectar stock</p>
-          </div>
-        )}
-
-        <div style={{ height:1, background:MC.border, marginBottom:12 }}/>
-
-        {/* KPIs comerciales */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
-          <div>
-            <p style={{ fontSize:9, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:3 }}>ÚLTIMO PEDIDO</p>
-            <p style={{ fontSize:12, fontWeight:700, color: c.ultimoPedido ? MC.text : MC.muted }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:4, width:92, flexShrink:0 }}>
+          <BarChart3 size={13} color={MC.muted} style={{ flexShrink:0, marginTop:2 }}/>
+          <div style={{ minWidth:0, overflow:'hidden' }}>
+            <p style={{ fontSize:9, color:MC.muted, marginBottom:1, whiteSpace:'nowrap' }}>Últ. pedido</p>
+            <p style={{ fontSize:11, fontWeight:800, color: c.ultimoPedido ? MC.text : MC.muted,
+              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
               {c.ultimoPedido ? fFecha(c.ultimoPedido.ultimaFecha) : '—'}
             </p>
-            {diasSin > 0 && <p style={{ fontSize:10, color:bandColor.fg, fontWeight:600, marginTop:1 }}>{diasSin}d sin comprar</p>}
-          </div>
-          <div>
-            <p style={{ fontSize:9, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:3 }}>VENTAS PERÍODO</p>
-            <p style={{ fontSize:12, fontWeight:700, color:MC.text }}>{fLitros(c.ultimoPedido?.litrosPeriodo ?? 0)}</p>
-            <p style={{ fontSize:10, color:MC.muted, marginTop:1 }}>{fPeso(c.ultimoPedido?.ventaPeriodo ?? 0)}</p>
-          </div>
-          <div>
-            <p style={{ fontSize:9, color:MC.muted, fontWeight:700, letterSpacing:'0.04em', marginBottom:3 }}>TOTAL COMPRADO</p>
-            <p style={{ fontSize:12, fontWeight:700, color:MC.text }}>{fLitros(c.frecuencia?.litros_totales ?? 0)}</p>
-            <p style={{ fontSize:10, color:MC.muted, marginTop:1 }}>{fPeso(c.frecuencia?.revenue_total ?? 0)}</p>
+            {diasSin > 0 && <p style={{ fontSize:9, color:MC.muted, marginTop:1, whiteSpace:'nowrap' }}>{diasSin}d sin comprar</p>}
           </div>
         </div>
 
-        {/* Deuda (si aplica) */}
-        {deudaV > 0 && (
-          <div style={{ background:MC.redBg, borderRadius:8, padding:'6px 10px', marginBottom:10,
-            display:'flex', alignItems:'center', gap:6 }}>
-            <AlertTriangle size={11} color={MC.red}/>
-            <span style={{ fontSize:11, fontWeight:700, color:MC.red }}>Deuda vencida: {fPeso(deudaV)}</span>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:4, flex:1, minWidth:0 }}>
+          <Package size={13} color={MC.muted} style={{ flexShrink:0, marginTop:2 }}/>
+          <div style={{ minWidth:0, overflow:'hidden' }}>
+            <p style={{ fontSize:9, color:MC.muted, marginBottom:1, whiteSpace:'nowrap' }}>Total</p>
+            <p style={{ fontSize:12, fontWeight:800, color:MC.text, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              {fLitros(c.frecuencia?.litros_totales ?? 0)}
+            </p>
+            <p style={{ fontSize:9, color:MC.muted, marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              {fPeso(c.frecuencia?.revenue_total ?? 0)}
+            </p>
           </div>
-        )}
+        </div>
 
-        {/* Acciones */}
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={e=>{e.stopPropagation();onWA(waTarget)}}
-            style={{ flex:1, minHeight:42, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-              background:MC.greenBg, border:`1px solid rgba(34,197,94,0.3)`,
-              borderRadius:11, color:MC.whatsapp, fontSize:13, fontWeight:700, cursor:'pointer' }}>
-            <MessageCircle size={15}/> WhatsApp
+        {/* Acciones: WhatsApp y llamada, botones circulares */}
+        <div style={{ display:'flex', gap:5, flexShrink:0 }}>
+          <button onClick={e=>{e.stopPropagation();onWA(waTarget)}} aria-label="WhatsApp"
+            style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+              background:MC.greenBg, border:'none', color:MC.whatsapp, cursor:'pointer', flexShrink:0 }}>
+            <MessageCircle size={15}/>
           </button>
-          <button onClick={e=>{e.stopPropagation();onClick()}}
-            style={{ minHeight:42, padding:'0 16px', display:'flex', alignItems:'center', gap:5,
-              background:MC.blueBg, border:`1px solid rgba(59,130,246,0.3)`,
-              borderRadius:11, color:MC.blue, fontSize:12, fontWeight:700, cursor:'pointer' }}>
-            Ver ficha →
-          </button>
+          {c.telefono ? (
+            <a href={`tel:${c.telefono}`} onClick={e=>e.stopPropagation()} aria-label="Llamar"
+              style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+                background:'rgba(15,23,42,0.06)', color:MC.text, flexShrink:0 }}>
+              <Phone size={15}/>
+            </a>
+          ) : (
+            <span style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+              background:'rgba(15,23,42,0.04)', color:'#CBD5E1', flexShrink:0 }}>
+              <Phone size={15}/>
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -874,7 +878,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
           <AlertTriangle size={16} color="#F87171" style={{ flexShrink:0, marginTop:1 }} />
           <div style={{ minWidth:0 }}>
             <p style={{ fontSize:13, fontWeight:800, color:'#F87171' }}>Sin datos de comportamiento de compra</p>
-            <p style={{ fontSize:12, color:MC.muted, marginTop:2, lineHeight:1.45 }}>
+            <p style={{ fontSize:12, color:'var(--muted)', marginTop:2, lineHeight:1.45 }}>
               El cálculo de ciclo, días sin comprar y score superó el tiempo límite.
               Los clientes y sus ventas sí son correctos; lo que falta es el análisis.
             </p>
@@ -927,13 +931,13 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
       {/* ── Cabecera CRM móvil (navy) ─────────────────────────────────────── */}
       {!isDesktop && (
         <div style={{ background:MC.bg, margin:'0 -16px', padding:'0 16px 4px' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2 }}>
-            <p style={{ fontSize:12, color:MC.muted }}>
-              Última actualización: {horaActualizado ? `Hoy ${horaActualizado}` : '—'}
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2, gap:8 }}>
+            <p style={{ fontSize:11, color:MC.muted, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', minWidth:0 }}>
+              Actualizado: {horaActualizado ? `hoy ${horaActualizado}` : '—'}
             </p>
-            <div style={{ display:'flex', gap:8 }}>
+            <div style={{ display:'flex', gap:6, flexShrink:0 }}>
               <button onClick={()=>setShowFiltroSheet(true)}
-                style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 12px',
+                style={{ display:'flex', alignItems:'center', gap:4, padding:'8px 10px', whiteSpace:'nowrap',
                   background:MC.card, border:`1px solid ${MC.border}`, borderRadius:10,
                   color:MC.text, fontSize:12, fontWeight:600, cursor:'pointer' }}>
                 <Filter size={13}/> Filtrar
@@ -946,7 +950,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
               </button>
               <div style={{ position:'relative' }}>
                 <button onClick={()=>setShowSort(s=>!s)}
-                  style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 12px',
+                  style={{ display:'flex', alignItems:'center', gap:4, padding:'8px 10px', whiteSpace:'nowrap',
                     background:MC.card, border:`1px solid ${MC.border}`, borderRadius:10,
                     color:MC.text, fontSize:12, fontWeight:600, cursor:'pointer' }}>
                   <ChevronDown size={13}/> Ordenar
@@ -1013,12 +1017,12 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
                 <button key={f.key} onClick={()=>{setRiesgoFiltro(f.key);setPagina(1)}}
                   style={{ flexShrink:0, display:'flex', alignItems:'center', gap:6, padding:'9px 14px', borderRadius:12,
                     cursor:'pointer', border:`1px solid ${active?f.color:MC.border}`,
-                    background: active ? f.color : MC.card, color: active ? '#0B1220' : MC.text,
+                    background: active ? f.color : MC.card, color: active ? '#FFFFFF' : MC.text,
                     fontSize:13, fontWeight:active?800:600 }}>
                   {f.label}
                   <span style={{ fontSize:12, fontWeight:800, padding:'0 6px', borderRadius:8,
-                    background: active ? 'rgba(11,18,32,0.2)' : 'rgba(255,255,255,0.06)',
-                    color: active ? '#0B1220' : MC.muted }}>
+                    background: active ? 'rgba(255,255,255,0.25)' : 'rgba(15,23,42,0.06)',
+                    color: active ? '#FFFFFF' : MC.muted }}>
                     {f.count}
                   </span>
                 </button>

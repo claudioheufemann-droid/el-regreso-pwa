@@ -9,6 +9,19 @@ function getAdminClient() {
   return createSupabaseClient(url, key)
 }
 
+// Registro de cada corrida (automática o manual) para que el admin vea el
+// estado de la sincronización dentro de la app, sin ir a GitHub Actions.
+async function logSync(supabase: ReturnType<typeof getAdminClient>, params: {
+  origen: 'automatico' | 'manual'; ok: boolean; mensaje?: string
+  total?: number; insertados?: number; actualizados?: number; eliminados?: number
+}) {
+  try {
+    await supabase.from('erp_sync_log').insert({ fuente: 'deudores', ...params })
+  } catch {
+    // El log es informativo — nunca debe tumbar la carga real.
+  }
+}
+
 // Helper to parse Excel and extract deudores data
 function parseDeudoresFromExcel(buffer: ArrayBuffer) {
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
@@ -157,6 +170,7 @@ export async function POST(req: Request) {
       })
 
     if (upsertError) {
+      await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: upsertError.message })
       return NextResponse.json({ error: upsertError.message }, { status: 500 })
     }
 
@@ -173,6 +187,7 @@ export async function POST(req: Request) {
         .in('nombre_fantasia', nombresAEliminar)
 
       if (deleteError) {
+        await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: deleteError.message })
         return NextResponse.json({ error: deleteError.message }, { status: 500 })
       }
       eliminados = nombresAEliminar.length
@@ -180,6 +195,11 @@ export async function POST(req: Request) {
 
     const nuevos = nombresFantasia.filter(n => !nombresExistentes.has(n)).length
     const actualizados = nombresFantasia.filter(n => nombresExistentes.has(n)).length
+
+    await logSync(supabase, {
+      origen: esCron ? 'automatico' : 'manual', ok: true,
+      total: deudores.length, insertados: nuevos, actualizados, eliminados,
+    })
 
     return NextResponse.json({
       ok: true,
@@ -191,6 +211,13 @@ export async function POST(req: Request) {
       duplicados_en_archivo: duplicados.length,
     })
   } catch (error: unknown) {
+    try {
+      const secret = process.env.UPLOAD_SECRET_CLIENTES
+      const esCronErr = !!secret && req.headers.get('authorization') === `Bearer ${secret}`
+      await logSync(getAdminClient(), { origen: esCronErr ? 'automatico' : 'manual', ok: false, mensaje: String(error) })
+    } catch {
+      // si ni el log funciona, seguimos devolviendo el error real igual
+    }
     return NextResponse.json({ error: String(error) }, { status: 500 })
   }
 }

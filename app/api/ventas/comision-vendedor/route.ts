@@ -6,6 +6,7 @@ import {
   VENDEDORES_CONTRATO_TERCERA, VENDEDOR_ERP_VARIANTES, calcularResumenVendedor,
   type CanalVenta, type EventoApertura, type CarteraVendedor, type PorEntregarVendedor,
 } from '@/lib/comisionesVendedor'
+import { puedeVerComisionesEquipo } from '@/lib/comisiones'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,11 +24,11 @@ export const dynamic = 'force-dynamic'
  *    en este modo el endpoint nunca confía en un nombre que venga del
  *    cliente.
  *  · Con `vendedor=Nombre` (uso admin, /ventas/comisiones): sólo lo puede
- *    pedir quien tenga `puede_ver_margenes` (Claudio/Benja/Douglas) — el
- *    mismo permiso de Rentabilidad. Un vendedor sin ese permiso que
- *    intente usar este parámetro (para ver la comisión de un compañero)
- *    recibe 403 igual, se ignora el hecho de que sea o no vendedor de
- *    cláusula tercera.
+ *    pedir quien tenga acceso al módulo de comisiones del equipo
+ *    (`puedeVerComisionesEquipo` — Claudio/Douglas/Benjamín/Mariel). Un
+ *    vendedor sin ese permiso que intente usar este parámetro (para ver la
+ *    comisión de un compañero) recibe 403 igual, se ignora el hecho de que
+ *    sea o no vendedor de cláusula tercera.
  */
 export async function GET(req: Request) {
   const user = await getServerUser()
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
 
   let p_vendedores: string[]
   if (vendedorParam) {
-    if (!user.puedeVerMargenes) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
+    if (!puedeVerComisionesEquipo(user)) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
     const variantes = VENDEDOR_ERP_VARIANTES[vendedorParam]
     if (!variantes) return NextResponse.json({ error: 'Vendedor inválido' }, { status: 400 })
     p_vendedores = variantes
@@ -62,7 +63,7 @@ export async function GET(req: Request) {
 
   // Cliente service-role, mismo motivo que /api/ventas/comision: el cálculo
   // cruza tablas con RLS por dueño/región y el control de acceso ya se hizo
-  // arriba, explícito, contra vendedoresErp o puedeVerMargenes.
+  // arriba, explícito, contra vendedoresErp o puedeVerComisionesEquipo.
   const serviceKey = process.env.SUPABASE_SERVICE_KEY
   if (!serviceKey) return NextResponse.json({ error: 'Falta SUPABASE_SERVICE_KEY' }, { status: 500 })
   const supabase = createSbClient(SUPABASE_URL, serviceKey)

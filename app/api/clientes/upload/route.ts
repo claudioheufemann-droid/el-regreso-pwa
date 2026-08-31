@@ -68,6 +68,20 @@ function normalizePhone(raw: string | null): string | null {
   return cleaned
 }
 
+// Registro de cada corrida (automática o manual) para que el admin vea el
+// estado de la sincronización dentro de la app, sin ir a GitHub Actions.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function logSync(supabase: any, params: {
+  origen: 'automatico' | 'manual'; ok: boolean; mensaje?: string
+  total?: number; insertados?: number; actualizados?: number; eliminados?: number
+}) {
+  try {
+    await supabase.from('erp_sync_log').insert({ fuente: 'clientes', ...params })
+  } catch {
+    // El log es informativo — nunca debe tumbar la carga real.
+  }
+}
+
 export async function POST(req: NextRequest) {
   // ── Autenticación dual (mismo patrón que /api/upload-ventas) ────────────
   // a) UI admin: sesión por cookies. b) Cron ERP: Bearer CRON_SECRET.
@@ -198,6 +212,17 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // Quiénes de este archivo YA existían, calculado antes de tocar la tabla —
+  // así "nuevo cliente" significa realmente nuevo, no un efecto del propio
+  // upsert/replace que estamos por hacer.
+  const nombresEnArchivo = clientes.map(c => (c as Record<string, unknown>).nombre_fantasia as string)
+  const { data: existentesData } = await supabase
+    .from('clientes')
+    .select('nombre_fantasia')
+    .in('nombre_fantasia', nombresEnArchivo)
+  const nombresExistentes = new Set((existentesData ?? []).map((r: { nombre_fantasia: string }) => r.nombre_fantasia))
+  const clientesNuevos = (clientes as Record<string, unknown>[]).filter(c => !nombresExistentes.has(c.nombre_fantasia as string))
+
   let insertadas = 0
   let actualizadas = 0
   let eliminadasPrev = 0
@@ -210,6 +235,7 @@ export async function POST(req: NextRequest) {
       .neq('id', 0)
 
     if (delError) {
+      await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: delError.message })
       return NextResponse.json({ error: `Error al limpiar tabla: ${delError.message}` }, { status: 500 })
     }
     eliminadasPrev = 1 // we don't know exact count easily
@@ -228,6 +254,7 @@ export async function POST(req: NextRequest) {
         .select('id')
 
       if (error) {
+        await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: error.message })
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
       insertadas += data?.length ?? batch.length
@@ -246,6 +273,7 @@ export async function POST(req: NextRequest) {
           .select('id')
 
         if (e2) {
+          await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: e2.message })
           return NextResponse.json({ error: e2.message }, { status: 500 })
         }
         insertadas += d2?.length ?? batch.length
@@ -254,6 +282,30 @@ export async function POST(req: NextRequest) {
       }
     }
   }
+
+  // "Nuevo cliente" solo tiene sentido en upsert: en replace se borra todo
+  // y se recarga de cero, así que todo "parece nuevo" sin serlo realmente.
+  if (mode === 'upsert') {
+    actualizadas = clientes.length - clientesNuevos.length
+    if (clientesNuevos.length > 0) {
+      const { sendPushToArea } = await import('@/lib/push')
+      const nombres = clientesNuevos.map(c => c.nombre_fantasia as string)
+      const primeros = nombres.slice(0, 5).join(', ')
+      const resto = nombres.length > 5 ? ` y ${nombres.length - 5} más` : ''
+      await sendPushToArea('comercial', {
+        title: clientesNuevos.length === 1 ? 'Nuevo cliente' : `${clientesNuevos.length} nuevos clientes`,
+        body: `${primeros}${resto}`,
+        url: '/ventas/clientes',
+        tag: 'nuevo-cliente',
+      })
+    }
+  }
+
+  await logSync(supabase, {
+    origen: esCron ? 'automatico' : 'manual', ok: true,
+    total: clientes.length, insertados: clientesNuevos.length, actualizados: actualizadas,
+    eliminados: mode === 'replace' ? clientes.length : 0,
+  })
 
   return NextResponse.json({
     total: clientes.length,
