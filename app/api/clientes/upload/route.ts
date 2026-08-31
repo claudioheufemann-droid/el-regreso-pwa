@@ -68,6 +68,20 @@ function normalizePhone(raw: string | null): string | null {
   return cleaned
 }
 
+// Registro de cada corrida (automática o manual) para que el admin vea el
+// estado de la sincronización dentro de la app, sin ir a GitHub Actions.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function logSync(supabase: any, params: {
+  origen: 'automatico' | 'manual'; ok: boolean; mensaje?: string
+  total?: number; insertados?: number; actualizados?: number; eliminados?: number
+}) {
+  try {
+    await supabase.from('erp_sync_log').insert({ fuente: 'clientes', ...params })
+  } catch {
+    // El log es informativo — nunca debe tumbar la carga real.
+  }
+}
+
 export async function POST(req: NextRequest) {
   // ── Autenticación dual (mismo patrón que /api/upload-ventas) ────────────
   // a) UI admin: sesión por cookies. b) Cron ERP: Bearer CRON_SECRET.
@@ -210,6 +224,7 @@ export async function POST(req: NextRequest) {
       .neq('id', 0)
 
     if (delError) {
+      await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: delError.message })
       return NextResponse.json({ error: `Error al limpiar tabla: ${delError.message}` }, { status: 500 })
     }
     eliminadasPrev = 1 // we don't know exact count easily
@@ -228,6 +243,7 @@ export async function POST(req: NextRequest) {
         .select('id')
 
       if (error) {
+        await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: error.message })
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
       insertadas += data?.length ?? batch.length
@@ -246,6 +262,7 @@ export async function POST(req: NextRequest) {
           .select('id')
 
         if (e2) {
+          await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: e2.message })
           return NextResponse.json({ error: e2.message }, { status: 500 })
         }
         insertadas += d2?.length ?? batch.length
@@ -254,6 +271,12 @@ export async function POST(req: NextRequest) {
       }
     }
   }
+
+  await logSync(supabase, {
+    origen: esCron ? 'automatico' : 'manual', ok: true,
+    total: clientes.length, insertados: insertadas, actualizados: actualizadas,
+    eliminados: mode === 'replace' ? clientes.length : 0,
+  })
 
   return NextResponse.json({
     total: clientes.length,

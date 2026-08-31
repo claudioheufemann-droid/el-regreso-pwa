@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react'
 import { Upload, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import SyncStatusCard from '@/components/ui/SyncStatusCard'
 
 interface Deudor {
   id: string
@@ -127,6 +128,8 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
 
   return (
     <div style={{ maxWidth: 1400 }}>
+
+      <SyncStatusCard fuente="deudores" />
 
       {/* Upload zone */}
       <div style={{

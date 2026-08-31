@@ -5,6 +5,7 @@ import {
   Upload, CheckCircle, AlertCircle, FileSpreadsheet, Loader2,
   Users, RefreshCw, Download, Info, MapPin,
 } from 'lucide-react'
+import SyncStatusCard from '@/components/ui/SyncStatusCard'
 
 interface UploadResult {
   total: number
@@ -179,6 +180,8 @@ export default function ClientesUploadClient() {
           Sube un Excel con la lista de clientes para cargarlos en Supabase
         </p>
       </div>
+
+      <SyncStatusCard fuente="clientes" />
 
       {/* SQL Setup notice */}
       <div style={{
