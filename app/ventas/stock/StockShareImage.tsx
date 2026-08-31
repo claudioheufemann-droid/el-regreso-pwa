@@ -87,25 +87,38 @@ function Seccion({ g, esLata }: { g: Grupo; esLata: boolean }) {
   )
 }
 
+export type FiltroStock = 'todo' | 'barril-cerveza' | 'barril-kombucha' | 'lata-cerveza' | 'lata-kombucha'
+
+export const FILTRO_LABEL: Record<FiltroStock, string> = {
+  todo: 'Todo el stock',
+  'barril-cerveza': 'Barriles · Cerveza',
+  'barril-kombucha': 'Barriles · Kombucha',
+  'lata-cerveza': 'Latas · Cerveza',
+  'lata-kombucha': 'Latas · Kombucha',
+}
+
 /**
  * Tarjeta oculta (fuera de pantalla) que se convierte a PNG con html-to-image
  * para compartir el stock como imagen — reemplaza el bloque de texto plano
  * que copiaba el botón anterior, mucho más difícil de leer para el cliente.
- * Separada en 4 secciones fijas (barriles cerveza/kombucha, latas
- * cerveza/kombucha) tal como se pidió, cada una sólo si tiene productos.
+ * `filtro` elige si se comparten las 4 secciones juntas o sólo una (pedido
+ * explícito: poder mandar por separado "sólo barriles de kombucha", etc.).
  */
 const StockShareImage = forwardRef<HTMLDivElement, {
-  barriles: StockProductoRow[]; envases: StockProductoRow[]; fechaInforme: string | null
-}>(function StockShareImage({ barriles, envases, fechaInforme }, ref) {
+  barriles: StockProductoRow[]; envases: StockProductoRow[]; fechaInforme: string | null; filtro: FiltroStock
+}>(function StockShareImage({ barriles, envases, fechaInforme, filtro }, ref) {
   const porCategoria = (lista: StockProductoRow[], cat: string) =>
     lista.filter(f => (f.categoria ?? 'Otros') === cat).sort((a, b) => a.producto.localeCompare(b.producto))
 
-  const grupos: { g: Grupo; esLata: boolean }[] = [
-    { g: { titulo: '🍺 Barriles · Cerveza', tint: IC.cerveza, tintSoft: IC.cervezaSoft, items: porCategoria(barriles, 'Cerveza') }, esLata: false },
-    { g: { titulo: '🫧 Barriles · Kombucha', tint: IC.kombucha, tintSoft: IC.kombuchaSoft, items: porCategoria(barriles, 'Kombucha') }, esLata: false },
-    { g: { titulo: '🍺 Latas · Cerveza', tint: IC.cerveza, tintSoft: IC.cervezaSoft, items: porCategoria(envases, 'Cerveza') }, esLata: true },
-    { g: { titulo: '🫧 Latas · Kombucha', tint: IC.kombucha, tintSoft: IC.kombuchaSoft, items: porCategoria(envases, 'Kombucha') }, esLata: true },
+  const todasLasSecciones: { key: FiltroStock; g: Grupo; esLata: boolean }[] = [
+    { key: 'barril-cerveza', g: { titulo: '🍺 Barriles · Cerveza', tint: IC.cerveza, tintSoft: IC.cervezaSoft, items: porCategoria(barriles, 'Cerveza') }, esLata: false },
+    { key: 'barril-kombucha', g: { titulo: '🫧 Barriles · Kombucha', tint: IC.kombucha, tintSoft: IC.kombuchaSoft, items: porCategoria(barriles, 'Kombucha') }, esLata: false },
+    { key: 'lata-cerveza', g: { titulo: '🍺 Latas · Cerveza', tint: IC.cerveza, tintSoft: IC.cervezaSoft, items: porCategoria(envases, 'Cerveza') }, esLata: true },
+    { key: 'lata-kombucha', g: { titulo: '🫧 Latas · Kombucha', tint: IC.kombucha, tintSoft: IC.kombuchaSoft, items: porCategoria(envases, 'Kombucha') }, esLata: true },
   ]
+
+  const secciones = filtro === 'todo' ? todasLasSecciones : todasLasSecciones.filter(s => s.key === filtro)
+  const subtitulo = filtro === 'todo' ? 'Stock disponible para pedidos' : `${FILTRO_LABEL[filtro]} disponibles`
 
   return (
     // Wrapper EXTERNO oculto — nunca el nodo capturado. html-to-image clona el
@@ -138,12 +151,12 @@ const StockShareImage = forwardRef<HTMLDivElement, {
 
         <div style={{ height: 1, background: IC.line, margin: '18px 0 20px' }} />
 
-        <p style={{ fontSize: 17, fontWeight: 800, color: IC.text, marginBottom: 2 }}>Stock disponible para pedidos</p>
+        <p style={{ fontSize: 17, fontWeight: 800, color: IC.text, marginBottom: 2 }}>{subtitulo}</p>
         <p style={{ fontSize: 12.5, color: IC.muted, marginBottom: 22 }}>
           {fechaInforme ? `Actualizado ${fFecha(fechaInforme)}` : 'Actualizado hoy'}
         </p>
 
-        {grupos.map(({ g, esLata }, i) => <Seccion key={i} g={g} esLata={esLata} />)}
+        {secciones.map(({ key, g, esLata }) => <Seccion key={key} g={g} esLata={esLata} />)}
 
         <div style={{ height: 1, background: IC.line, margin: '4px 0 16px' }} />
         <p style={{ fontSize: 11.5, color: IC.muted, textAlign: 'center' }}>
