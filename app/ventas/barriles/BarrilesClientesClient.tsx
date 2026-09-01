@@ -28,6 +28,7 @@ interface Barril {
   localidad_entrega: string | null
   nro_ruta: string | null
   updated_at: string
+  telefono?: string | null
 }
 
 const MC = {
@@ -73,7 +74,7 @@ function avatarColorDe(nombre: string) {
 }
 
 interface ClienteBarriles {
-  nombre: string; localidad: string | null; vendedor: string | null; barriles: Barril[]
+  nombre: string; localidad: string | null; vendedor: string | null; telefono: string | null; barriles: Barril[]
   peorDias: number | null
 }
 
@@ -82,7 +83,7 @@ function agruparPorCliente(barriles: Barril[]): ClienteBarriles[] {
   for (const b of barriles) {
     let g = map.get(b.nombre_fantasia)
     if (!g) {
-      g = { nombre: b.nombre_fantasia, localidad: b.localidad_entrega || b.localidad, vendedor: b.vendedor, barriles: [], peorDias: null }
+      g = { nombre: b.nombre_fantasia, localidad: b.localidad_entrega || b.localidad, vendedor: b.vendedor, telefono: b.telefono ?? null, barriles: [], peorDias: null }
       map.set(b.nombre_fantasia, g)
     }
     g.barriles.push(b)
@@ -122,7 +123,7 @@ function ClienteCard({ g, abierto, onToggle, onWA }: {
 
   const tipos = [...new Set(g.barriles.map(b => b.producto).filter((p): p is string => !!p))]
   const waTarget: WATarget = {
-    nombre: g.nombre, telefono: null, contexto: 'barril', subtitulo: g.localidad ?? undefined,
+    nombre: g.nombre, telefono: g.telefono, contexto: 'barril', subtitulo: g.localidad ?? undefined,
     cantidadBarriles: g.barriles.length,
     productoSugerido: tipos.join(', ') || undefined,
   }
