@@ -28,12 +28,35 @@ function fmtNum(n: number)  { return new Intl.NumberFormat('es-CL', { maximumFra
 
 const MEDAL = ['🥇', '🥈', '🥉']
 
-export default function RankingClient({ rankingMes, rankingSemana, miRegion, isAdmin, periodoNombre }: {
+function AvatarVendedor({ info, size = 34 }: { info?: AvatarInfo; size?: number }) {
+  if (info?.avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={info.avatarUrl} alt="" width={size} height={size}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(255,255,255,0.12)' }} />
+    )
+  }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.38, fontWeight: 800, color: 'rgba(255,255,255,0.45)',
+    }}>
+      {info?.iniciales || '··'}
+    </div>
+  )
+}
+
+interface AvatarInfo { avatarUrl: string | null; iniciales: string }
+
+export default function RankingClient({ rankingMes, rankingSemana, miRegion, isAdmin, periodoNombre, avatarPorRegion }: {
   rankingMes: RankingRow[]
   rankingSemana: RankingRow[]
   miRegion: string | null
   isAdmin: boolean
   periodoNombre: string
+  avatarPorRegion: Record<string, AvatarInfo>
 }) {
   const [kpi, setKpi]         = useState<KpiKey>('pct_meta')
   const [periodo, setPeriodo] = useState<Periodo>('mes')
@@ -84,6 +107,7 @@ export default function RankingClient({ rankingMes, rankingSemana, miRegion, isA
             }}>
               {miIndex < 3 ? MEDAL[miIndex] : `${miIndex + 1}º`}
             </div>
+            <AvatarVendedor info={avatarPorRegion[miRow.region]} size={40} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 13, fontWeight: 800, color: '#F0EDE8' }}>
                 Vas {miIndex + 1}º de {ordenado.length} · {miRow.region}
@@ -160,6 +184,7 @@ export default function RankingClient({ rankingMes, rankingSemana, miRegion, isA
                   }}>
                     {i < 3 ? MEDAL[i] : `${i + 1}`}
                   </div>
+                  <AvatarVendedor info={avatarPorRegion[r.region]} />
                   {/* Nombre + región */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 14, fontWeight: 700, color: esYo ? G : '#F0EDE8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
