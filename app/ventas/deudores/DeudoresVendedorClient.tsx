@@ -440,12 +440,113 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
   )
 }
 
+// ── Saldo no vencido ─────────────────────────────────────────────────────────
+// El ERP separa saldo_total en deuda_vencida (lo que ya se pasó de plazo) y el
+// resto: plata que el cliente debe pero cuyo plazo de pago todavía no se cumple
+// (pedidos recientes dentro de sus días de pago). "Deuda vencida" no lo muestra
+// en ningún lado — este panel es la vista al resto de la cuenta corriente, con
+// el detalle de qué cliente la tiene. Se calcula sobre deuda_vencida cruda del
+// ERP (no deuda_comercial): saldo_total tampoco distingue maquila, así que
+// restarle la comercial dejaría la maquila vencida metida en el "no vencido".
+function saldoNoVencidoDe(d: Pick<Deudor, 'saldo_total' | 'deuda_vencida'>): number {
+  return Math.max(0, (d.saldo_total || 0) - (d.deuda_vencida || 0))
+}
+
+const PALETA_SNV = {
+  claro: {
+    overlay: 'rgba(15,23,42,0.55)', card: '#FFFFFF', sub: '#F8FAFC', text: '#0F172A',
+    muted: '#64748B', faint: '#94A3B8', border: '#E2E8F0', accent: '#2563EB', accentSoft: '#EFF6FF',
+  },
+  oscuro: {
+    overlay: 'rgba(0,0,0,0.6)', card: '#141414', sub: 'rgba(255,255,255,0.04)', text: 'var(--cream)',
+    muted: 'var(--muted)', faint: '#6B7280', border: 'var(--border)', accent: 'var(--gold)', accentSoft: 'rgba(212,175,55,0.1)',
+  },
+} as const
+
+function SaldoNoVencidoModal({ deudores, isAdmin, tema, onClose }: {
+  deudores: Deudor[]; isAdmin: boolean; tema: 'claro' | 'oscuro'; onClose: () => void
+}) {
+  const p = PALETA_SNV[tema]
+
+  const filas = useMemo(() => {
+    return deudores
+      .map(d => ({ d, monto: saldoNoVencidoDe(d) }))
+      .filter(f => f.monto > 0)
+      .sort((a, b) => b.monto - a.monto)
+  }, [deudores])
+
+  const total = filas.reduce((s, f) => s + f.monto, 0)
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: p.overlay, zIndex: 9999,
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ background: p.card, borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 520,
+        maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div style={{ padding: '18px 20px 14px', borderBottom: `1px solid ${p.border}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <p style={{ fontSize: 9.5, color: p.muted, fontWeight: 700, letterSpacing: '0.06em' }}>SALDO NO VENCIDO</p>
+              <p style={{ fontSize: 24, fontWeight: 900, color: p.text, letterSpacing: '-0.5px', marginTop: 2 }}>
+                {formatCurrency(total)}
+              </p>
+              <p style={{ fontSize: 12, color: p.muted, marginTop: 3 }}>
+                {filas.length} cliente{filas.length === 1 ? '' : 's'} con saldo dentro de su plazo de pago
+              </p>
+            </div>
+            <button onClick={onClose} aria-label="Cerrar"
+              style={{ background: p.sub, border: `1px solid ${p.border}`, borderRadius: '50%',
+                width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: p.muted, flexShrink: 0 }}>
+              <X size={16} />
+            </button>
+          </div>
+          <p style={{ fontSize: 11, color: p.faint, marginTop: 10, lineHeight: 1.45 }}>
+            Es plata que estos clientes deben pero cuyo plazo de pago todavía no se cumple — no hay que cobrarla
+            todavía, sólo tenerla presente.
+          </p>
+        </div>
+
+        <div style={{ overflowY: 'auto', padding: '10px 20px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filas.length === 0 ? (
+            <p style={{ fontSize: 13, color: p.muted, textAlign: 'center', padding: '24px 0' }}>
+              Ningún cliente tiene saldo no vencido en este filtro.
+            </p>
+          ) : (
+            filas.map(({ d, monto }) => (
+              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                background: p.sub, border: `1px solid ${p.border}`, borderRadius: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13.5, fontWeight: 700, color: p.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {d.nombre_fantasia}
+                  </p>
+                  <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
+                    {[d.localidad, isAdmin && d.vendedor ? nombreCorto(vendedorCanonico(d.vendedor)) : null].filter(Boolean).join(' · ') || '—'}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <p style={{ fontSize: 14, fontWeight: 800, color: p.accent }}>{formatCurrency(monto)}</p>
+                  <p style={{ fontSize: 10, color: p.faint, marginTop: 1 }}>de {formatCurrency(d.saldo_total)} saldo total</p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clientesPorVendedor, totalClientesPropios, maquilaPorCliente }: Props) {
   const router = useRouter()
   const isDesktop = useIsDesktop()
   const { user } = useUser()
   const [showSettings, setShowSettings] = useState(false)
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+  const [showSaldoNoVencido, setShowSaldoNoVencido] = useState(false)
 
   // 'todos' = las 4 carteras sumadas; o el nombre canónico de un vendedor.
   const [cartera, setCartera] = useState<string>('todos')
@@ -589,7 +690,13 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
               <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Deuda vencida</span>
             </div>
             <p style={{ fontSize: 22, fontWeight: 800, color: MC.red, letterSpacing: '-0.5px' }}>{formatCurrency(kpis.vencida)}</p>
-            <p style={{ fontSize: 11, color: MC.faint, marginTop: 2 }}>Saldo total {formatCurrency(kpis.saldo)}</p>
+            <button onClick={() => setShowSaldoNoVencido(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 3, padding: 0,
+                background: 'none', border: 'none', cursor: 'pointer', color: MC.blue,
+                fontSize: 11, fontWeight: 600 }}>
+              Saldo total {formatCurrency(kpis.saldo)}
+              <ChevronRight size={12} />
+            </button>
           </div>
         </div>
 
@@ -681,6 +788,9 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
         <SettingsPanel onClose={() => setShowSettings(false)} userName={user?.nombre ?? ''} userEmail={user?.email ?? ''} avatarUrl={user?.avatarUrl ?? undefined} />
       )}
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
+      {showSaldoNoVencido && (
+        <SaldoNoVencidoModal deudores={base} isAdmin={isAdmin} tema="claro" onClose={() => setShowSaldoNoVencido(false)} />
+      )}
     </div>
   )
 }
@@ -694,6 +804,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
   const [searchText, setSearchText] = useState('')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+  const [showSaldoNoVencido, setShowSaldoNoVencido] = useState(false)
   // Detalle de cobranza del cliente desplegado — lo llena PanelCobranza y lo
   // consume el mensaje de WhatsApp de esa misma fila.
   const [cobranza, setCobranza] = useState<DatosCobranza | null>(null)
@@ -758,19 +869,33 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
           { label: 'Deuda Vencida', value: totals.deuda_vencida, format: '$', color: '#f87171' },
           { label: 'Saldo Total', value: totals.saldo_total, format: '$', color: 'var(--gold)' },
           { label: 'Barriles', value: totals.barriles_adeudados, format: 'n', color: '#c084fc' },
-        ].map(({ label, value, format, color }) => (
-          <div key={label} style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderTop: `3px solid ${color}`, borderRadius: 12, padding: '16px 20px',
-          }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
-              {label}
-            </p>
-            <p style={{ fontSize: 22, fontWeight: 900, color }}>
-              {format === '$' ? formatCurrency(value) : value.toLocaleString('es-CL')}
-            </p>
-          </div>
-        ))}
+        ].map(({ label, value, format, color }) => {
+          const esSaldo = label === 'Saldo Total'
+          return (
+            <div key={label} style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderTop: `3px solid ${color}`, borderRadius: 12, padding: '16px 20px',
+            }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
+                {label}
+              </p>
+              <p style={{ fontSize: 22, fontWeight: 900, color }}>
+                {format === '$' ? formatCurrency(value) : value.toLocaleString('es-CL')}
+              </p>
+              {/* El saldo total incluye lo vencido más lo que aún no vence —
+                  este botón abre el detalle de esa segunda parte. */}
+              {esSaldo && (
+                <button onClick={() => setShowSaldoNoVencido(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 6, padding: 0,
+                    background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)',
+                    fontSize: 11, fontWeight: 600 }}>
+                  Ver saldo no vencido
+                  <ChevronRight size={12} />
+                </button>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Desglose por vendedor — también es el filtro (tarjetas seleccionables) */}
@@ -1036,6 +1161,9 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
       </p>
 
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
+      {showSaldoNoVencido && (
+        <SaldoNoVencidoModal deudores={filteredDeudores} isAdmin={isAdmin} tema="oscuro" onClose={() => setShowSaldoNoVencido(false)} />
+      )}
     </div>
   )
 }
