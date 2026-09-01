@@ -8,7 +8,7 @@ import {
   CreditCard, Calendar, CheckCircle2, XCircle, Sunset, Star,
   AlertTriangle, TrendingUp, Package, Activity,
   Zap, ChevronRight, Navigation, Info, BarChart2,
-  Bell, Users, Trash2, Plus,
+  Bell, Users, Trash2, Plus, Layers,
 } from 'lucide-react'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import AppHeader from '@/components/ui/AppHeader'
@@ -996,6 +996,26 @@ export default function ClienteDetalleClient({
                     ))}
                   </div>
                 </div>
+
+                {/* Barriles prestados — sólo si tiene algo pendiente de devolver.
+                    Visible para vendedor y admin (no gateado como "Deuda
+                    detallada" más abajo): quien atiende a este cliente
+                    necesita saber que hay que ir a buscar el barril, no sólo
+                    el admin. Dato ya venía en `deudores.barriles_adeudados`
+                    pero nunca se mostraba en ningún lado de la app. */}
+                {(deudor?.barriles_adeudados ?? 0) > 0 && (
+                  <div style={{ background: 'rgba(245,165,36,0.06)', border: '1px solid rgba(245,165,36,0.2)', borderRadius: isDesktop ? 18 : 14, padding: isDesktop ? 20 : 13, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(245,165,36,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Layers size={20} color="#D4AF37" />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 800, color: '#555', letterSpacing: '0.08em', marginBottom: 3 }}>BARRILES PRESTADOS</p>
+                      <p style={{ fontSize: 22, fontWeight: 900, color: '#D4AF37', lineHeight: 1 }}>
+                        {deudor?.barriles_adeudados} <span style={{ fontSize: 13, fontWeight: 600, color: '#888' }}>sin devolver</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Estado selector (admin) */}
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: isDesktop ? 18 : 14, padding: isDesktop ? 20 : 13 }}>
