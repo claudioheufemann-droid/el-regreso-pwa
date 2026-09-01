@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { MessageCircle, X, Send, Edit3 } from 'lucide-react'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
-export type WAContexto = 'general' | 'mision' | 'visita' | 'campana'
+export type WAContexto = 'general' | 'mision' | 'visita' | 'campana' | 'barril'
 export type AlertTipo  = 'rojo' | 'amarillo' | 'verde' | 'morado' | 'gris' | 'rm_urgente'
 
 export interface WATarget {
@@ -18,6 +18,8 @@ export interface WATarget {
   productoSugerido?: string | null
   litrosEstimados?: number | null
   subtitulo?: string
+  // Barriles pendientes de devolución
+  cantidadBarriles?: number | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -58,6 +60,12 @@ export function generarMensajeWA(t: WATarget): string {
         return `Hola! Estamos por la zona y quería saber si necesitás algo. ¿Tenés stock? ¿Necesitás hacer un pedido?`
       if (t.contexto === 'campana')
         return `Hola! Tenemos propuestas especiales y novedades que te pueden interesar. ¿Te cuento?`
+      if (t.contexto === 'barril') {
+        const cantidad = t.cantidadBarriles ?? 1
+        const pl = cantidad !== 1
+        const tipoTxt = t.productoSugerido ? ` (${t.productoSugerido})` : ''
+        return `Hola! Te escribimos de El Regreso Beer a ${t.nombre}. Tienen actualmente ${cantidad} barril${pl ? 'es' : ''}${tipoTxt} nuestro${pl ? 's' : ''} pendiente${pl ? 's' : ''} de devolución. Necesitamos recuperarlo${pl ? 's' : ''} lo antes posible, ¿qué día podemos pasar a retirarlo${pl ? 's' : ''}?`
+      }
       const cuando = t.siguienteCompra ? ` para el ${fFecha(t.siguienteCompra)}` : ' la próxima semana'
       return `Hola! Oye, según tu historial pedís ${ciclo} y estimo que podrías necesitar reabastecer${cuando}. ¿Coordinamos tu próximo pedido?`
     }
