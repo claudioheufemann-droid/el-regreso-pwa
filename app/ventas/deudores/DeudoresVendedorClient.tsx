@@ -74,8 +74,8 @@ function conDeudaComercial(filas: DeudorRaw[], maquilaPorCliente: Record<string,
     const maquila = maquilaPorCliente[d.nombre_fantasia] ?? 0
     return {
       ...d,
-      maquila_vencida: maquila,
-      deuda_comercial: Math.max(0, (d.deuda_vencida || 0) - maquila),
+      maquila_vencida: Math.round(maquila),
+      deuda_comercial: Math.round(Math.max(0, (d.deuda_vencida || 0) - maquila)),
     }
   })
 }

@@ -88,7 +88,7 @@ export async function GET(req: Request) {
     deudaVencida,
     // Lo que realmente persigue el área comercial: el total del ERP menos el
     // co-packing, que se factura al mismo cliente pero no es venta.
-    deudaComercial: Math.max(0, deudaVencida - detalle.maquilaVencida),
+    deudaComercial: Math.round(Math.max(0, deudaVencida - detalle.maquilaVencida)),
     saldoTotal: Number(deudor.saldo_total) || 0,
     contacto: contacto ?? null,
     detalle,
