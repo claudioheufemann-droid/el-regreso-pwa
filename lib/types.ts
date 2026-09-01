@@ -118,13 +118,27 @@ export const VENDEDORES_CARTERA_ACTIVAS = [
  */
 export const VENDEDORES_INCOBRABLES = ['Incobrable', 'Incobrable 2024', 'Incobrable 2025']
 
+/**
+ * Carteras que se cobran en el módulo Deudores. Son las 4 de venta MÁS la de
+ * Claudio, que lleva sus propias cuentas (supermercados y distribuidoras:
+ * Teja Market, El Trébol, los Eltit) y cuya deuda también hay que perseguir
+ * — 12 deudores por ~$9M al 1-sep-2026, la segunda cartera más grande.
+ *
+ * Lista aparte de VENDEDORES_CARTERA_ACTIVAS a propósito: esa alimenta los
+ * filtros de /ventas/clientes, donde Claudio no es un vendedor de terreno.
+ */
+export const VENDEDORES_CARTERA_COBRANZA = [
+  ...VENDEDORES_CARTERA_ACTIVAS,
+  'Claudio Heufemann',
+] as const
+
 export type GrupoCartera = 'vendedor' | 'incobrable' | 'otros'
 
 /** Clasifica un `vendedor` crudo del ERP en las 3 carteras que usa Deudores. */
 export function grupoCarteraDe(vendedor: string | null | undefined): GrupoCartera {
   if (vendedor && VENDEDORES_INCOBRABLES.includes(vendedor)) return 'incobrable'
   const canonico = vendedorCanonico(vendedor)
-  return (VENDEDORES_CARTERA_ACTIVAS as readonly string[]).includes(canonico) ? 'vendedor' : 'otros'
+  return (VENDEDORES_CARTERA_COBRANZA as readonly string[]).includes(canonico) ? 'vendedor' : 'otros'
 }
 
 /** Nombre corto para chips y tarjetas ("Nicol Delgado" → "Nicol"). */

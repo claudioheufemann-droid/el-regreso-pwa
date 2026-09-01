@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  AlertTriangle, Check, ChevronRight, FileText, Loader2, Pencil, User,
+  AlertTriangle, Check, ChevronRight, FileText, HelpCircle, Loader2, Pencil, User,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import type { DetalleCobranza, DocumentoVencido } from '@/lib/cobranza'
@@ -22,6 +22,8 @@ export interface DatosCobranza {
   email: string | null
   localidad: string | null
   deudaVencida: number
+  /** Deuda vencida menos la maquila: lo que persigue el área comercial. */
+  deudaComercial: number
   saldoTotal: number
   contacto: ContactoCobranza | null
   detalle: DetalleCobranza
@@ -202,6 +204,12 @@ function FilaDocumento({ d, p }: { d: DocumentoVencido; p: Paleta }) {
                   con abono
                 </span>
               )}
+              {d.esMaquila && (
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: p.muted, background: p.sub,
+                  border: `1px solid ${p.border}`, padding: '2px 6px', borderRadius: 6, marginLeft: 6 }}>
+                  maquila
+                </span>
+              )}
             </p>
             <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
               {fFechaCorta(d.fechaEmision)} · venció {fFechaCorta(d.fechaVencimiento)}
@@ -333,12 +341,16 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
 
   const { detalle } = datos
   const c = colorMora(detalle.diasMoraMaxima, p)
-  const sinDocumentos = detalle.vencidos.length === 0
+  // La maquila va en su propio bloque: es plata del mismo cliente pero de otra
+  // línea de negocio (co-packing), y mezclarla infla lo que el vendedor cree
+  // que tiene que cobrar.
+  const comerciales = detalle.vencidos.filter(d => !d.esMaquila)
+  const maquila = detalle.vencidos.filter(d => d.esMaquila)
 
   return (
     <div style={{ marginBottom: 12 }}>
       {/* Días exactos de mora — el número que el vendedor dice por teléfono. */}
-      {datos.deudaVencida > 0 && (
+      {datos.deudaComercial > 0 && (
         <div style={{ background: c.bg, border: `1px solid ${c.fg}30`, borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
           <p style={{ fontSize: 9.5, color: p.muted, fontWeight: 700, letterSpacing: '0.05em' }}>DEUDA VENCIDA HACE</p>
           <p style={{ fontSize: 26, fontWeight: 900, color: c.fg, letterSpacing: '-0.5px', lineHeight: 1.1, marginTop: 2 }}>
@@ -359,45 +371,73 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
       <BloqueContacto cliente={cliente} contacto={datos.contacto} p={p}
         onCambio={ct => setDatos(d => (d ? { ...d, contacto: ct } : d))} />
 
-      {/* Facturas vencidas con su detalle */}
+      {/* Facturas vencidas con su detalle. El total del encabezado es la deuda
+          COMERCIAL y la lista siempre la suma: facturas identificadas + resto.
+          Antes el resto no se mostraba y el vendedor veía menos plata de la
+          que en realidad tiene que cobrar. */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }}>
         <span style={{ fontSize: 9.5, color: p.muted, fontWeight: 700, letterSpacing: '0.05em' }}>
-          FACTURAS VENCIDAS{detalle.vencidos.length > 0 ? ` (${detalle.vencidos.length})` : ''}
+          DEUDA VENCIDA A COBRAR
         </span>
-        <span style={{ fontSize: 12, fontWeight: 800, color: p.red }}>{formatCurrency(datos.deudaVencida)}</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: p.red }}>{formatCurrency(datos.deudaComercial)}</span>
       </div>
 
-      {sinDocumentos ? (
+      {comerciales.length === 0 && detalle.restoPorTramo.length === 0 ? (
         <div style={{ background: p.sub, border: `1px solid ${p.border}`, borderRadius: 12, padding: '14px 12px', marginBottom: 10 }}>
           <p style={{ fontSize: 12, color: p.muted, lineHeight: 1.5 }}>
-            {datos.deudaVencida > 0
-              ? 'El ERP marca deuda vencida pero no hay ventas cargadas que la expliquen — puede ser anterior al histórico de ventas de la app o un ajuste manual de cuenta corriente.'
-              : 'Este cliente no tiene documentos vencidos.'}
+            {datos.deudaComercial > 0
+              ? 'El ERP marca deuda vencida pero no hay ventas cargadas que la expliquen.'
+              : 'Este cliente no tiene deuda comercial vencida.'}
           </p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
-          {detalle.vencidos.map(d => <FilaDocumento key={d.pedido} d={d} p={p} />)}
+          {comerciales.map(d => <FilaDocumento key={d.pedido} d={d} p={p} />)}
+
+          {/* El resto: plata vencida que el ERP tiene pero que ninguna factura
+              del informe de ventas explica. Va con su antigüedad, que es lo
+              único que se sabe de ella y sirve igual para cobrar. */}
+          {detalle.restoPorTramo.map(r => (
+            <div key={r.tramo} style={{ border: `1px dashed ${p.border}`, borderRadius: 12, background: p.sub, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <HelpCircle size={14} color={p.faint} style={{ flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: p.text }}>Sin detalle de factura</p>
+                  <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>Vencida hace {r.label}</p>
+                </div>
+                <p style={{ fontSize: 13.5, fontWeight: 800, color: p.text, flexShrink: 0 }}>{fPlata(r.monto)}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Honestidad sobre el origen del dato: el ERP no publica el detalle por
-          factura, así que cuando la reconstrucción no cuadra hay que decirlo —
-          y decir por qué, que es lo que le permite al vendedor actuar. */}
-      {!sinDocumentos && !detalle.conciliado && (
+      {/* Explicación del resto — una sola vez, no por fila. */}
+      {detalle.restoSinDetalle > 0 && (
         <div style={{ display: 'flex', gap: 8, background: p.amberSoft, border: `1px solid ${p.amber}30`,
           borderRadius: 10, padding: '9px 11px', marginBottom: 10 }}>
           <AlertTriangle size={14} color={p.amber} style={{ flexShrink: 0, marginTop: 1 }} />
           <p style={{ fontSize: 11, color: p.muted, lineHeight: 1.45 }}>
-            Este detalle se reconstruye desde el informe de ventas y acá no cuadra exacto: suma{' '}
-            {fPlata(detalle.totalReconstruido)} contra los {formatCurrency(datos.deudaVencida)} del ERP.
-            {detalle.montoSinRespaldo > 0 && (
-              <> Hay {fPlata(detalle.montoSinRespaldo)} en tramos sin ninguna venta cargada que los
-              respalde — deuda anterior al histórico de la app o un ajuste manual de cuenta corriente.</>
-            )}{' '}
-            También pasa con notas de crédito y abonos parciales.{' '}
-            <strong style={{ color: p.text }}>El monto a cobrar es el del ERP.</strong>
+            Los {fPlata(detalle.restoSinDetalle)} sin detalle están en la deuda del ERP pero no hay factura en el
+            informe de ventas que los explique: suele ser deuda anterior al histórico de la app, un ajuste de cuenta
+            corriente hecho a mano, o notas de crédito.{' '}
+            <strong style={{ color: p.text }}>Igual hay que cobrarlos.</strong>
           </p>
+        </div>
+      )}
+
+      {/* Maquila: se muestra aparte y no suma al total de arriba. */}
+      {maquila.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }}>
+            <span style={{ fontSize: 9.5, color: p.faint, fontWeight: 700, letterSpacing: '0.05em' }}>
+              MAQUILA — NO ES COBRANZA COMERCIAL
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: p.muted }}>{fPlata(detalle.maquilaVencida)}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: 0.72 }}>
+            {maquila.map(d => <FilaDocumento key={d.pedido} d={d} p={p} />)}
+          </div>
         </div>
       )}
 
@@ -411,9 +451,12 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
   )
 }
 
-/** Documentos en el formato que espera el mensaje de WhatsApp. */
+/**
+ * Documentos en el formato que espera el mensaje de WhatsApp. Sin maquila: al
+ * cliente se le cobra su deuda comercial, el co-packing se conversa aparte.
+ */
 export function documentosParaWA(d: DetalleCobranza) {
-  return d.vencidos.map(v => ({
+  return d.vencidos.filter(v => !v.esMaquila).map(v => ({
     pedido: v.pedido,
     fechaEmision: v.fechaEmision,
     fechaVencimiento: v.fechaVencimiento,

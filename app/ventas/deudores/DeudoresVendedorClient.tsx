@@ -9,7 +9,7 @@ import {
 import { formatCurrency } from '@/lib/utils'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { useUser } from '@/lib/userContext'
-import { VENDEDORES_CARTERA_ACTIVAS, vendedorCanonico, grupoCarteraDe, nombreCorto } from '@/lib/types'
+import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCorto } from '@/lib/types'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
@@ -44,13 +44,40 @@ interface Deudor {
   external_fecha?: string | null
   external_remito_mas_antiguo?: number | null
   updated_at: string
+  /** Parte de `deuda_vencida` que es co-packing (calculada en page.tsx). */
+  maquila_vencida: number
+  /** `deuda_vencida` menos la maquila: lo que persigue el área comercial. */
+  deuda_comercial: number
 }
 
+/** Fila cruda de Supabase, antes de descontarle la maquila. */
+type DeudorRaw = Omit<Deudor, 'maquila_vencida' | 'deuda_comercial'>
+
 interface Props {
-  initialDeudores: Deudor[]
+  initialDeudores: DeudorRaw[]
   isAdmin: boolean
   clientesPorVendedor: Record<string, number>
   totalClientesPropios: number
+  maquilaPorCliente: Record<string, number>
+}
+
+/**
+ * La maquila (litros producidos o latas cerradas para otra cervecería) se
+ * factura al mismo cliente y el ERP la mete en `deuda_vencida`, pero no es
+ * deuda del área comercial y nadie del equipo de ventas la cobra. Se descuenta
+ * acá, una vez, para que TODA la pantalla —KPIs, carteras, orden, tarjetas—
+ * hable de la misma plata (pedido de Claudio, 2026-09-01, a raíz de los
+ * $2.639.613 de El Growler que son litros de maquila).
+ */
+function conDeudaComercial(filas: DeudorRaw[], maquilaPorCliente: Record<string, number>): Deudor[] {
+  return filas.map(d => {
+    const maquila = maquilaPorCliente[d.nombre_fantasia] ?? 0
+    return {
+      ...d,
+      maquila_vencida: Math.round(maquila),
+      deuda_comercial: Math.round(Math.max(0, (d.deuda_vencida || 0) - maquila)),
+    }
+  })
 }
 
 // ── Paleta clara — mismo patrón que Clientes/Stock (const MC/C locales) ───────
@@ -80,13 +107,13 @@ function bucketDe(d: Deudor): Bucket {
 }
 
 // ── Carteras ─────────────────────────────────────────────────────────────────
-// Para el admin, el universo del módulo son SOLO las 4 carteras de venta
-// (Nicol, Marion, Marcelo, Yadro). Todo lo que el ERP aparca bajo un
-// pseudo-vendedor — Incobrable/2024/2025, CERVECERÍA, Inactivo, Vendedor
-// Muestras, OnLine, cuentas de gerencia, clientes sin vendedor — queda fuera:
-// no es deuda que alguien esté cobrando y distorsiona el total (dato de
-// Claudio, 2026-09-01: "sólo lo que tienen por deudas los vendedores").
-const CARTERAS = VENDEDORES_CARTERA_ACTIVAS as readonly string[]
+// Para el admin, el universo del módulo son las 4 carteras de venta (Nicol,
+// Marion, Marcelo, Yadro) más la de Claudio, que lleva sus propias cuentas
+// —supermercados y distribuidoras— y también las cobra. Todo lo que el ERP
+// aparca bajo un pseudo-vendedor — Incobrable/2024/2025, CERVECERÍA, Inactivo,
+// Vendedor Muestras, OnLine, clientes sin vendedor — queda fuera: no es deuda
+// que alguien esté cobrando y distorsiona el total.
+const CARTERAS = VENDEDORES_CARTERA_COBRANZA as readonly string[]
 
 function esCarteraDeVenta(d: Deudor): boolean {
   return grupoCarteraDe(d.vendedor) === 'vendedor'
@@ -109,7 +136,7 @@ function resumenCarteras(deudores: Deudor[], clientesPorVendedor: Record<string,
     const fila = acc.get(vendedorCanonico(d.vendedor))
     if (!fila) continue
     fila.deudores++
-    fila.vencida += d.deuda_vencida || 0
+    fila.vencida += d.deuda_comercial || 0
     fila.saldo += d.saldo_total || 0
   }
   const filas = [...acc.values()].sort((a, b) => b.vencida - a.vencida)
@@ -148,13 +175,19 @@ function csvEscape(v: string | number): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
+/** Días exactos de mora, mirando sólo la deuda comercial (la maquila no cuenta). */
+function diasMoraDe(d: Deudor): number {
+  return diasMoraDeudor({ ...d, deuda_vencida: d.deuda_comercial })
+}
+
 function exportarCSV(deudores: Deudor[]) {
-  const headers = ['Cliente', 'Localidad', 'Vendedor', 'Deuda vencida', 'Días vencida', 'Doc. más antiguo', 'Remito', 'Saldo total', 'Barriles', 'Último pago']
+  const headers = ['Cliente', 'Localidad', 'Vendedor', 'Deuda vencida', 'Días vencida', 'Doc. más antiguo', 'Remito', 'Maquila (no comercial)', 'Saldo total', 'Barriles', 'Último pago']
   const filas = deudores.map(d => [
     d.nombre_fantasia, d.localidad ?? '', vendedorCanonico(d.vendedor) || '',
-    d.deuda_vencida, diasMoraDeudor(d),
+    d.deuda_comercial, diasMoraDe(d),
     d.external_fecha ? fFecha(d.external_fecha) : '',
     d.external_remito_mas_antiguo ?? '',
+    Math.round(d.maquila_vencida),
     d.saldo_total, d.barriles_adeudados,
     d.ultimo_pago ? fFecha(d.ultimo_pago) : '',
   ])
@@ -270,7 +303,7 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
   // Días exactos de mora del documento más antiguo. Se calculan de la propia
   // fila (external_fecha + dias_pago), así que se pueden mostrar en la lista
   // sin desplegar nada ni pedir datos al servidor.
-  const diasMora = diasMoraDeudor(d)
+  const diasMora = diasMoraDe(d)
 
   // El detalle por factura llega cuando se despliega la tarjeta; el mensaje de
   // WhatsApp lo usa si ya está, y si no igual sale con días y monto.
@@ -282,7 +315,8 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
     subtitulo: d.localidad ?? undefined,
     contacto: cobranza?.contacto?.contacto ?? null,
     diasVencida: cobranza?.detalle.diasMoraMaxima ?? diasMora,
-    montoVencido: d.deuda_vencida,
+    // Se le cobra la deuda comercial, no la maquila.
+    montoVencido: d.deuda_comercial,
     documentos: cobranza ? documentosParaWA(cobranza.detalle) : undefined,
   }
 
@@ -325,9 +359,16 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10 }}>
           <div>
             <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>DEUDA VENCIDA</p>
-            <p style={{ fontSize: 17, fontWeight: 800, color: d.deuda_vencida > 0 ? bucketColor.fg : MC.green }}>
-              {formatCurrency(d.deuda_vencida)}
+            <p style={{ fontSize: 17, fontWeight: 800, color: d.deuda_comercial > 0 ? bucketColor.fg : MC.green }}>
+              {formatCurrency(d.deuda_comercial)}
             </p>
+            {/* La maquila se nombra, pero fuera del número: si no, el vendedor
+                cree que tiene que cobrar plata que no le corresponde. */}
+            {d.maquila_vencida > 0 && (
+              <p style={{ fontSize: 10, color: MC.faint, marginTop: 2 }}>
+                + {formatCurrency(Math.round(d.maquila_vencida))} de maquila
+              </p>
+            )}
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>SALDO TOTAL</p>
@@ -399,12 +440,113 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
   )
 }
 
-export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clientesPorVendedor, totalClientesPropios }: Props) {
+// ── Saldo no vencido ─────────────────────────────────────────────────────────
+// El ERP separa saldo_total en deuda_vencida (lo que ya se pasó de plazo) y el
+// resto: plata que el cliente debe pero cuyo plazo de pago todavía no se cumple
+// (pedidos recientes dentro de sus días de pago). "Deuda vencida" no lo muestra
+// en ningún lado — este panel es la vista al resto de la cuenta corriente, con
+// el detalle de qué cliente la tiene. Se calcula sobre deuda_vencida cruda del
+// ERP (no deuda_comercial): saldo_total tampoco distingue maquila, así que
+// restarle la comercial dejaría la maquila vencida metida en el "no vencido".
+function saldoNoVencidoDe(d: Pick<Deudor, 'saldo_total' | 'deuda_vencida'>): number {
+  return Math.max(0, (d.saldo_total || 0) - (d.deuda_vencida || 0))
+}
+
+const PALETA_SNV = {
+  claro: {
+    overlay: 'rgba(15,23,42,0.55)', card: '#FFFFFF', sub: '#F8FAFC', text: '#0F172A',
+    muted: '#64748B', faint: '#94A3B8', border: '#E2E8F0', accent: '#2563EB', accentSoft: '#EFF6FF',
+  },
+  oscuro: {
+    overlay: 'rgba(0,0,0,0.6)', card: '#141414', sub: 'rgba(255,255,255,0.04)', text: 'var(--cream)',
+    muted: 'var(--muted)', faint: '#6B7280', border: 'var(--border)', accent: 'var(--gold)', accentSoft: 'rgba(212,175,55,0.1)',
+  },
+} as const
+
+function SaldoNoVencidoModal({ deudores, isAdmin, tema, onClose }: {
+  deudores: Deudor[]; isAdmin: boolean; tema: 'claro' | 'oscuro'; onClose: () => void
+}) {
+  const p = PALETA_SNV[tema]
+
+  const filas = useMemo(() => {
+    return deudores
+      .map(d => ({ d, monto: saldoNoVencidoDe(d) }))
+      .filter(f => f.monto > 0)
+      .sort((a, b) => b.monto - a.monto)
+  }, [deudores])
+
+  const total = filas.reduce((s, f) => s + f.monto, 0)
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: p.overlay, zIndex: 9999,
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ background: p.card, borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 520,
+        maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div style={{ padding: '18px 20px 14px', borderBottom: `1px solid ${p.border}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <p style={{ fontSize: 9.5, color: p.muted, fontWeight: 700, letterSpacing: '0.06em' }}>SALDO NO VENCIDO</p>
+              <p style={{ fontSize: 24, fontWeight: 900, color: p.text, letterSpacing: '-0.5px', marginTop: 2 }}>
+                {formatCurrency(total)}
+              </p>
+              <p style={{ fontSize: 12, color: p.muted, marginTop: 3 }}>
+                {filas.length} cliente{filas.length === 1 ? '' : 's'} con saldo dentro de su plazo de pago
+              </p>
+            </div>
+            <button onClick={onClose} aria-label="Cerrar"
+              style={{ background: p.sub, border: `1px solid ${p.border}`, borderRadius: '50%',
+                width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: p.muted, flexShrink: 0 }}>
+              <X size={16} />
+            </button>
+          </div>
+          <p style={{ fontSize: 11, color: p.faint, marginTop: 10, lineHeight: 1.45 }}>
+            Es plata que estos clientes deben pero cuyo plazo de pago todavía no se cumple — no hay que cobrarla
+            todavía, sólo tenerla presente.
+          </p>
+        </div>
+
+        <div style={{ overflowY: 'auto', padding: '10px 20px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filas.length === 0 ? (
+            <p style={{ fontSize: 13, color: p.muted, textAlign: 'center', padding: '24px 0' }}>
+              Ningún cliente tiene saldo no vencido en este filtro.
+            </p>
+          ) : (
+            filas.map(({ d, monto }) => (
+              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                background: p.sub, border: `1px solid ${p.border}`, borderRadius: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13.5, fontWeight: 700, color: p.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {d.nombre_fantasia}
+                  </p>
+                  <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
+                    {[d.localidad, isAdmin && d.vendedor ? nombreCorto(vendedorCanonico(d.vendedor)) : null].filter(Boolean).join(' · ') || '—'}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <p style={{ fontSize: 14, fontWeight: 800, color: p.accent }}>{formatCurrency(monto)}</p>
+                  <p style={{ fontSize: 10, color: p.faint, marginTop: 1 }}>de {formatCurrency(d.saldo_total)} saldo total</p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clientesPorVendedor, totalClientesPropios, maquilaPorCliente }: Props) {
   const router = useRouter()
   const isDesktop = useIsDesktop()
   const { user } = useUser()
   const [showSettings, setShowSettings] = useState(false)
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+  const [showSaldoNoVencido, setShowSaldoNoVencido] = useState(false)
 
   // 'todos' = las 4 carteras sumadas; o el nombre canónico de un vendedor.
   const [cartera, setCartera] = useState<string>('todos')
@@ -413,11 +555,16 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
   const [sortBy, setSortBy] = useState<'deuda' | 'nombre' | 'antigua'>('deuda')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
+  const deudores = useMemo(
+    () => conDeudaComercial(initialDeudores, maquilaPorCliente),
+    [initialDeudores, maquilaPorCliente],
+  )
+
   // Universo del módulo. Para el vendedor su cartera ya viene acotada por la
-  // query del server; para el admin, sólo las 4 carteras de venta.
+  // query del server; para el admin, las carteras de cobranza.
   const universo = useMemo(
-    () => (isAdmin ? initialDeudores.filter(esCarteraDeVenta) : initialDeudores),
-    [initialDeudores, isAdmin],
+    () => (isAdmin ? deudores.filter(esCarteraDeVenta) : deudores),
+    [deudores, isAdmin],
   )
 
   const { filas, total } = useMemo(
@@ -439,7 +586,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
   const kpis = {
     total: base.length,
     saldo: base.reduce((s, d) => s + (d.saldo_total || 0), 0),
-    vencida: base.reduce((s, d) => s + (d.deuda_vencida || 0), 0),
+    vencida: base.reduce((s, d) => s + (d.deuda_comercial || 0), 0),
   }
 
   const bucketCounts = useMemo(() => {
@@ -458,8 +605,8 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
     res = [...res].sort((a, b) => {
       switch (sortBy) {
         case 'nombre':  return a.nombre_fantasia.localeCompare(b.nombre_fantasia)
-        case 'antigua': return rangoBucket[bucketDe(b)] - rangoBucket[bucketDe(a)] || b.deuda_vencida - a.deuda_vencida
-        default:        return b.deuda_vencida - a.deuda_vencida
+        case 'antigua': return rangoBucket[bucketDe(b)] - rangoBucket[bucketDe(a)] || b.deuda_comercial - a.deuda_comercial
+        default:        return b.deuda_comercial - a.deuda_comercial
       }
     })
     return res
@@ -474,7 +621,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
   }
 
   if (isDesktop) {
-    return <DeudoresTablaDesktop initialDeudores={initialDeudores} isAdmin={isAdmin} clientesPorVendedor={clientesPorVendedor} />
+    return <DeudoresTablaDesktop deudores={deudores} isAdmin={isAdmin} clientesPorVendedor={clientesPorVendedor} />
   }
 
   const subtitulo = !isAdmin
@@ -543,7 +690,13 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
               <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Deuda vencida</span>
             </div>
             <p style={{ fontSize: 22, fontWeight: 800, color: MC.red, letterSpacing: '-0.5px' }}>{formatCurrency(kpis.vencida)}</p>
-            <p style={{ fontSize: 11, color: MC.faint, marginTop: 2 }}>Saldo total {formatCurrency(kpis.saldo)}</p>
+            <button onClick={() => setShowSaldoNoVencido(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 3, padding: 0,
+                background: 'none', border: 'none', cursor: 'pointer', color: MC.blue,
+                fontSize: 11, fontWeight: 600 }}>
+              Saldo total {formatCurrency(kpis.saldo)}
+              <ChevronRight size={12} />
+            </button>
           </div>
         </div>
 
@@ -635,27 +788,31 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
         <SettingsPanel onClose={() => setShowSettings(false)} userName={user?.nombre ?? ''} userEmail={user?.email ?? ''} avatarUrl={user?.avatarUrl ?? undefined} />
       )}
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
+      {showSaldoNoVencido && (
+        <SaldoNoVencidoModal deudores={base} isAdmin={isAdmin} tema="claro" onClose={() => setShowSaldoNoVencido(false)} />
+      )}
     </div>
   )
 }
 
 // ── Tabla de escritorio (tema oscuro existente) ──────────────────────────────
-function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }: {
-  initialDeudores: Deudor[]; isAdmin: boolean; clientesPorVendedor: Record<string, number>
+function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
+  deudores: Deudor[]; isAdmin: boolean; clientesPorVendedor: Record<string, number>
 }) {
   const [cartera, setCartera] = useState<string>('todos')
   const [filterDeudaVencida, setFilterDeudaVencida] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
   const [searchText, setSearchText] = useState('')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+  const [showSaldoNoVencido, setShowSaldoNoVencido] = useState(false)
   // Detalle de cobranza del cliente desplegado — lo llena PanelCobranza y lo
   // consume el mensaje de WhatsApp de esa misma fila.
   const [cobranza, setCobranza] = useState<DatosCobranza | null>(null)
 
   // Mismo criterio que en móvil: para el admin, sólo las 4 carteras de venta.
   const universo = useMemo(
-    () => (isAdmin ? initialDeudores.filter(esCarteraDeVenta) : initialDeudores),
-    [initialDeudores, isAdmin],
+    () => (isAdmin ? deudores.filter(esCarteraDeVenta) : deudores),
+    [deudores, isAdmin],
   )
 
   const { filas, total } = useMemo(
@@ -665,8 +822,8 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
 
   const filteredDeudores = universo.filter(d => {
     if (isAdmin && cartera !== 'todos' && vendedorCanonico(d.vendedor) !== cartera) return false
-    if (filterDeudaVencida === 'vencida' && d.deuda_vencida <= 0) return false
-    if (filterDeudaVencida === 'sin-vencida' && d.deuda_vencida > 0) return false
+    if (filterDeudaVencida === 'vencida' && d.deuda_comercial <= 0) return false
+    if (filterDeudaVencida === 'sin-vencida' && d.deuda_comercial > 0) return false
     if (searchText && !d.nombre_fantasia.toLowerCase().includes(searchText.toLowerCase())) return false
     return true
   })
@@ -674,7 +831,7 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
   const totals = {
     deudores: filteredDeudores.length,
     saldo_total: filteredDeudores.reduce((sum, d) => sum + (d.saldo_total || 0), 0),
-    deuda_vencida: filteredDeudores.reduce((sum, d) => sum + (d.deuda_vencida || 0), 0),
+    deuda_vencida: filteredDeudores.reduce((sum, d) => sum + (d.deuda_comercial || 0), 0),
     barriles_adeudados: filteredDeudores.reduce((sum, d) => sum + (d.barriles_adeudados || 0), 0),
   }
 
@@ -712,19 +869,33 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
           { label: 'Deuda Vencida', value: totals.deuda_vencida, format: '$', color: '#f87171' },
           { label: 'Saldo Total', value: totals.saldo_total, format: '$', color: 'var(--gold)' },
           { label: 'Barriles', value: totals.barriles_adeudados, format: 'n', color: '#c084fc' },
-        ].map(({ label, value, format, color }) => (
-          <div key={label} style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderTop: `3px solid ${color}`, borderRadius: 12, padding: '16px 20px',
-          }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
-              {label}
-            </p>
-            <p style={{ fontSize: 22, fontWeight: 900, color }}>
-              {format === '$' ? formatCurrency(value) : value.toLocaleString('es-CL')}
-            </p>
-          </div>
-        ))}
+        ].map(({ label, value, format, color }) => {
+          const esSaldo = label === 'Saldo Total'
+          return (
+            <div key={label} style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderTop: `3px solid ${color}`, borderRadius: 12, padding: '16px 20px',
+            }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
+                {label}
+              </p>
+              <p style={{ fontSize: 22, fontWeight: 900, color }}>
+                {format === '$' ? formatCurrency(value) : value.toLocaleString('es-CL')}
+              </p>
+              {/* El saldo total incluye lo vencido más lo que aún no vence —
+                  este botón abre el detalle de esa segunda parte. */}
+              {esSaldo && (
+                <button onClick={() => setShowSaldoNoVencido(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 6, padding: 0,
+                    background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)',
+                    fontSize: 11, fontWeight: 600 }}>
+                  Ver saldo no vencido
+                  <ChevronRight size={12} />
+                </button>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Desglose por vendedor — también es el filtro (tarjetas seleccionables) */}
@@ -845,13 +1016,18 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
                         {deudor.nombre_fantasia}
                       </td>
                       {isAdmin && <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{vendedorCanonico(deudor.vendedor) || '—'}</td>}
-                      <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: deudor.deuda_vencida > 0 ? '#f87171' : '#4ade80' }}>
-                        {formatCurrency(deudor.deuda_vencida)}
+                      <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: deudor.deuda_comercial > 0 ? '#f87171' : '#4ade80' }}>
+                        {formatCurrency(deudor.deuda_comercial)}
+                        {deudor.maquila_vencida > 0 && (
+                          <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: 'var(--muted)' }}>
+                            + {formatCurrency(Math.round(deudor.maquila_vencida))} maquila
+                          </span>
+                        )}
                       </td>
                       {/* Días exactos de mora del documento más antiguo impago. */}
                       <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap',
-                        color: diasMoraDeudor(deudor) >= 60 ? '#f87171' : diasMoraDeudor(deudor) > 0 ? '#fbbf24' : 'var(--muted)' }}>
-                        {diasMoraDeudor(deudor) > 0 ? `${diasMoraDeudor(deudor)} días` : '—'}
+                        color: diasMoraDe(deudor) >= 60 ? '#f87171' : diasMoraDe(deudor) > 0 ? '#fbbf24' : 'var(--muted)' }}>
+                        {diasMoraDe(deudor) > 0 ? `${diasMoraDe(deudor)} días` : '—'}
                       </td>
                       <td style={{ padding: '11px 14px', textAlign: 'right', color: 'var(--cream)', fontWeight: 600 }}>
                         {formatCurrency(deudor.saldo_total)}
@@ -890,8 +1066,8 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
                                   contexto: 'cobranza', alertTipo: 'cobranza',
                                   subtitulo: deudor.localidad ?? undefined,
                                   contacto: cobranza?.contacto?.contacto ?? null,
-                                  diasVencida: cobranza?.detalle.diasMoraMaxima ?? diasMoraDeudor(deudor),
-                                  montoVencido: deudor.deuda_vencida,
+                                  diasVencida: cobranza?.detalle.diasMoraMaxima ?? diasMoraDe(deudor),
+                                  montoVencido: deudor.deuda_comercial,
                                   documentos: cobranza ? documentosParaWA(cobranza.detalle) : undefined,
                                 })
                               }}
@@ -985,6 +1161,9 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
       </p>
 
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
+      {showSaldoNoVencido && (
+        <SaldoNoVencidoModal deudores={filteredDeudores} isAdmin={isAdmin} tema="oscuro" onClose={() => setShowSaldoNoVencido(false)} />
+      )}
     </div>
   )
 }

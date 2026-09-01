@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import RankingClient from './RankingClient'
 
@@ -39,10 +40,21 @@ export default async function RankingPage() {
   const sem = semanaActual()
 
   // RPC SECURITY DEFINER → KPIs agregados de todas las regiones (sin datos crudos)
-  const [{ data: rankingMes }, { data: rankingSemana }] = await Promise.all([
+  const [{ data: rankingMes }, { data: rankingSemana }, { data: vendedoresRaw }] = await Promise.all([
     supabase.rpc('ranking_regiones', { p_ini: mesIni, p_fin: mesFin }),
     supabase.rpc('ranking_regiones', { p_ini: sem.ini, p_fin: sem.fin }),
+    // Cada fila del ranking es por REGIÓN (una cartera = una región, ver
+    // VENDEDORES_CARTERA_ACTIVAS en lib/types.ts) — la foto se busca por ese
+    // mismo cruce, no por nombre (el "vendedor" del ranking es de display).
+    // Service-role a propósito (lib/supabase/admin.ts): `users` exige sesión
+    // autenticada por RLS, y en modo demo no la hay.
+    createAdminClient().from('users').select('region, avatar_url, iniciales').eq('is_admin', false).not('region', 'is', null),
   ])
+
+  const avatarPorRegion: Record<string, { avatarUrl: string | null; iniciales: string }> = {}
+  for (const v of vendedoresRaw ?? []) {
+    if (v.region) avatarPorRegion[v.region] = { avatarUrl: v.avatar_url, iniciales: v.iniciales ?? '' }
+  }
 
   return (
     <RankingClient
@@ -51,6 +63,7 @@ export default async function RankingPage() {
       miRegion={appUser?.region ?? null}
       isAdmin={appUser?.isAdmin ?? false}
       periodoNombre={periodo?.nombre ?? 'Mes actual'}
+      avatarPorRegion={avatarPorRegion}
     />
   )
 }

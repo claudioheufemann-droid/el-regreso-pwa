@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { vendedorCanonico } from '@/lib/types'
-import { reconstruirCobranza, type FilaVenta } from '@/lib/cobranza'
+import { reconstruirCobranza, sumarDias, type FilaVenta } from '@/lib/cobranza'
 
 /**
  * GET /api/deudores/detalle?cliente=<nombre_fantasia>
@@ -51,8 +51,12 @@ export async function GET(req: Request) {
   }
 
   // Sólo se necesitan las ventas desde el documento más antiguo con saldo: lo
-  // anterior ya está pagado, por definición del informe del ERP.
-  const desde = deudor.external_fecha ? String(deudor.external_fecha).slice(0, 10) : null
+  // anterior ya está pagado, por definición del informe del ERP. Se piden 10
+  // días antes porque la fecha del remito del ERP puede ir por delante de la
+  // del pedido; el margen real lo aplica reconstruirCobranza.
+  const desde = deudor.external_fecha
+    ? sumarDias(String(deudor.external_fecha).slice(0, 10), -10)
+    : null
 
   let qVentas = supabase
     .from('ventas')
@@ -73,6 +77,7 @@ export async function GET(req: Request) {
   if (errVentas) return NextResponse.json({ error: errVentas.message }, { status: 500 })
 
   const detalle = reconstruirCobranza(deudor, (ventas ?? []) as FilaVenta[])
+  const deudaVencida = Number(deudor.deuda_vencida) || 0
 
   return NextResponse.json({
     cliente,
@@ -80,7 +85,10 @@ export async function GET(req: Request) {
     telefono: deudor.telefono ?? null,
     email: deudor.email ?? null,
     localidad: deudor.localidad ?? null,
-    deudaVencida: Number(deudor.deuda_vencida) || 0,
+    deudaVencida,
+    // Lo que realmente persigue el área comercial: el total del ERP menos el
+    // co-packing, que se factura al mismo cliente pero no es venta.
+    deudaComercial: Math.round(Math.max(0, deudaVencida - detalle.maquilaVencida)),
     saldoTotal: Number(deudor.saldo_total) || 0,
     contacto: contacto ?? null,
     detalle,
