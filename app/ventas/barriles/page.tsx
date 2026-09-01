@@ -42,13 +42,13 @@ export default async function BarrilesClientesPage() {
   // el nombre de otra persona o de "Inactivo".
   const nombresParaEnriquecer = [...new Set((barrilesRaw ?? []).map(b => b.nombre_fantasia))]
   const { data: clientesInfo } = nombresParaEnriquecer.length
-    ? await supabase.from('clientes').select('nombre_fantasia, vendedor, localidad, localidad_entrega').in('nombre_fantasia', nombresParaEnriquecer)
-    : { data: [] as { nombre_fantasia: string; vendedor: string | null; localidad: string | null; localidad_entrega: string | null }[] }
+    ? await supabase.from('clientes').select('nombre_fantasia, vendedor, localidad, localidad_entrega, telefono').in('nombre_fantasia', nombresParaEnriquecer)
+    : { data: [] as { nombre_fantasia: string; vendedor: string | null; localidad: string | null; localidad_entrega: string | null; telefono: string | null }[] }
 
   const infoPorCliente = new Map((clientesInfo ?? []).map(c => [c.nombre_fantasia, c]))
   const barriles = (barrilesRaw ?? []).map(b => {
     const info = infoPorCliente.get(b.nombre_fantasia)
-    return info ? { ...b, vendedor: info.vendedor, localidad: info.localidad, localidad_entrega: info.localidad_entrega } : b
+    return info ? { ...b, vendedor: info.vendedor, localidad: info.localidad, localidad_entrega: info.localidad_entrega, telefono: info.telefono } : b
   })
 
   return <BarrilesClientesClient initialBarriles={barriles} isAdmin={esAdmin} />
