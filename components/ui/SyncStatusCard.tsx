@@ -9,7 +9,7 @@ interface CorridaLog {
   creado_at: string
 }
 interface EstadoFuente { ultimaCorrida: CorridaLog | null; total: number }
-interface EstadoSync { clientes: EstadoFuente; deudores: EstadoFuente; stock: EstadoFuente }
+interface EstadoSync { clientes: EstadoFuente; deudores: EstadoFuente; stock: EstadoFuente; barriles: EstadoFuente }
 
 function hace(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime()
@@ -25,7 +25,7 @@ function hace(iso: string): string {
 /** Panel de estado de la sincronización automática ERP → PWA (Clientes o
  *  Deudores), para que el admin vea si sigue corriendo sola sin ir a GitHub
  *  Actions. `fuente` decide qué mitad de /api/erp-sync-status mostrar. */
-export default function SyncStatusCard({ fuente }: { fuente: 'clientes' | 'deudores' | 'stock' }) {
+export default function SyncStatusCard({ fuente }: { fuente: 'clientes' | 'deudores' | 'stock' | 'barriles' }) {
   const [estado, setEstado] = useState<EstadoFuente | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -93,10 +93,10 @@ export default function SyncStatusCard({ fuente }: { fuente: 'clientes' | 'deudo
 
           {corrida.ok ? (
             <p style={{ fontSize: 12, color: 'var(--muted)' }}>
-              {fuente === 'stock'
-                ? `${corrida.total ?? 0} productos (foto reemplazada completa)`
+              {fuente === 'stock' || fuente === 'barriles'
+                ? `${corrida.total ?? 0} ${fuente === 'barriles' ? 'barriles' : 'productos'} (foto reemplazada completa)`
                 : `${corrida.total ?? 0} procesados`}
-              {fuente !== 'stock' && corrida.insertados != null && ` · ${corrida.insertados} nuevos`}
+              {fuente !== 'stock' && fuente !== 'barriles' && corrida.insertados != null && ` · ${corrida.insertados} nuevos`}
               {corrida.actualizados != null && corrida.actualizados > 0 && ` · ${corrida.actualizados} actualizados`}
               {corrida.eliminados != null && corrida.eliminados > 0 && ` · ${corrida.eliminados} eliminados`}
               {' · '}{estado?.total ?? 0} en total hoy
