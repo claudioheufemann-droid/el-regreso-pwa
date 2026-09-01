@@ -13,6 +13,8 @@ import { VENDEDORES_CARTERA_ACTIVAS, vendedorCanonico, grupoCarteraDe, nombreCor
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import PanelCobranza, { documentosParaWA, type DatosCobranza } from '@/components/deudores/PanelCobranza'
+import { diasMoraDeudor } from '@/lib/cobranza'
 
 interface Deudor {
   id: string
@@ -38,6 +40,9 @@ interface Deudor {
   deuda_entre_60_89_dias: number
   deuda_mas_90_dias: number
   dias_pago?: number
+  /** Emisión del remito más antiguo con saldo — base de los días exactos de mora. */
+  external_fecha?: string | null
+  external_remito_mas_antiguo?: number | null
   updated_at: string
 }
 
@@ -58,9 +63,6 @@ const MC = {
 
 type Bucket = 'al-dia' | '1-30' | '31-60' | '+60'
 
-const BUCKET_LABEL: Record<Exclude<Bucket, 'al-dia'>, string> = {
-  '1-30': '1–30 días', '31-60': '31–60 días', '+60': '+60 días',
-}
 const BUCKET_COLOR: Record<Bucket, { fg: string; bg: string }> = {
   'al-dia': { fg: MC.green, bg: MC.greenSoft },
   '1-30':   { fg: MC.amber, bg: MC.amberSoft },
@@ -147,10 +149,13 @@ function csvEscape(v: string | number): string {
 }
 
 function exportarCSV(deudores: Deudor[]) {
-  const headers = ['Cliente', 'Localidad', 'Vendedor', 'Deuda vencida', 'Saldo total', 'Barriles', 'Último pago']
+  const headers = ['Cliente', 'Localidad', 'Vendedor', 'Deuda vencida', 'Días vencida', 'Doc. más antiguo', 'Remito', 'Saldo total', 'Barriles', 'Último pago']
   const filas = deudores.map(d => [
     d.nombre_fantasia, d.localidad ?? '', vendedorCanonico(d.vendedor) || '',
-    d.deuda_vencida, d.saldo_total, d.barriles_adeudados,
+    d.deuda_vencida, diasMoraDeudor(d),
+    d.external_fecha ? fFecha(d.external_fecha) : '',
+    d.external_remito_mas_antiguo ?? '',
+    d.saldo_total, d.barriles_adeudados,
     d.ultimo_pago ? fFecha(d.ultimo_pago) : '',
   ])
   const csv = [headers, ...filas].map(fila => fila.map(csvEscape).join(',')).join('\n')
@@ -262,9 +267,23 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
   const avatar = avatarColorDe(d.nombre_fantasia)
   const bucketColor = BUCKET_COLOR[bucket]
 
+  // Días exactos de mora del documento más antiguo. Se calculan de la propia
+  // fila (external_fecha + dias_pago), así que se pueden mostrar en la lista
+  // sin desplegar nada ni pedir datos al servidor.
+  const diasMora = diasMoraDeudor(d)
+
+  // El detalle por factura llega cuando se despliega la tarjeta; el mensaje de
+  // WhatsApp lo usa si ya está, y si no igual sale con días y monto.
+  const [cobranza, setCobranza] = useState<DatosCobranza | null>(null)
+
   const waTarget: WATarget = {
-    nombre: d.nombre_fantasia, telefono: d.telefono, contexto: 'general',
-    alertTipo: 'gris', subtitulo: d.localidad ?? undefined,
+    nombre: d.nombre_fantasia, telefono: d.telefono,
+    contexto: 'cobranza', alertTipo: 'cobranza',
+    subtitulo: d.localidad ?? undefined,
+    contacto: cobranza?.contacto?.contacto ?? null,
+    diasVencida: cobranza?.detalle.diasMoraMaxima ?? diasMora,
+    montoVencido: d.deuda_vencida,
+    documentos: cobranza ? documentosParaWA(cobranza.detalle) : undefined,
   }
 
   return (
@@ -293,9 +312,11 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
               {d.localidad ?? '—'}{d.vendedor ? ` · ${nombreCorto(vendedorCanonico(d.vendedor))}` : ''}
             </p>
           </div>
-          {bucket !== 'al-dia' && (
-            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 9px', borderRadius: 20, flexShrink: 0, color: bucketColor.fg, background: bucketColor.bg }}>
-              {BUCKET_LABEL[bucket]}
+          {/* Días exactos, no el rango: "153 días" le sirve al vendedor para
+              cobrar; "+60 días" no le dice nada por teléfono. */}
+          {diasMora > 0 && (
+            <span style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 20, flexShrink: 0, color: bucketColor.fg, background: bucketColor.bg, whiteSpace: 'nowrap' }}>
+              {diasMora} {diasMora === 1 ? 'día' : 'días'}
             </span>
           )}
           <ChevronRight size={16} color={MC.faint} style={{ flexShrink: 0, transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
@@ -317,6 +338,9 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
 
       {abierto && (
         <div style={{ borderTop: `1px solid ${MC.border}`, padding: '12px 14px' }}>
+          {/* Mora exacta + contacto + facturas vencidas con su detalle */}
+          <PanelCobranza cliente={d.nombre_fantasia} tema="claro" onDatos={setCobranza} />
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
             <div>
               <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>ÚLTIMO PAGO</p>
@@ -336,7 +360,7 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
             </div>
           </div>
 
-          <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 6 }}>DEUDA POR ANTIGÜEDAD</p>
+          <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 6 }}>TRAMOS DE ANTIGÜEDAD (ERP)</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
             {[
               { label: '0–14 días', value: d.deuda_menor_14_dias },
@@ -358,7 +382,7 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
               style={{ flex: 1, minHeight: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 background: MC.greenSoft, border: `1px solid rgba(5,150,105,0.25)`,
                 borderRadius: 10, color: MC.whatsapp, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              <MessageCircle size={14} /> WhatsApp
+              <MessageCircle size={14} /> Cobrar por WhatsApp
             </button>
             {d.telefono && (
               <a href={`tel:${d.telefono}`} onClick={e => e.stopPropagation()}
@@ -623,6 +647,10 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
   const [filterDeudaVencida, setFilterDeudaVencida] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
   const [searchText, setSearchText] = useState('')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [waTarget, setWaTarget] = useState<WATarget | null>(null)
+  // Detalle de cobranza del cliente desplegado — lo llena PanelCobranza y lo
+  // consume el mensaje de WhatsApp de esa misma fila.
+  const [cobranza, setCobranza] = useState<DatosCobranza | null>(null)
 
   // Mismo criterio que en móvil: para el admin, sólo las 4 carteras de venta.
   const universo = useMemo(
@@ -787,9 +815,9 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {[...(isAdmin ? ['Cliente', 'Vendedor'] : ['Cliente']), 'Deuda Vencida', 'Saldo Total', 'Barriles', 'Último Pago', ''].map(h => (
+                  {[...(isAdmin ? ['Cliente', 'Vendedor'] : ['Cliente']), 'Deuda Vencida', 'Días Vencida', 'Saldo Total', 'Barriles', 'Último Pago', ''].map(h => (
                     <th key={h} style={{
-                      padding: '10px 14px', textAlign: h === 'Deuda Vencida' || h === 'Saldo Total' || h === 'Barriles' ? 'right' : 'left',
+                      padding: '10px 14px', textAlign: h === 'Deuda Vencida' || h === 'Saldo Total' || h === 'Barriles' || h === 'Días Vencida' ? 'right' : 'left',
                       fontSize: 11, fontWeight: 700, color: 'var(--muted)',
                       letterSpacing: '0.5px', textTransform: 'uppercase',
                       whiteSpace: 'nowrap',
@@ -804,7 +832,7 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
                   <>
                     <tr
                       key={deudor.id}
-                      onClick={() => setExpandedRow(expandedRow === deudor.id ? null : deudor.id)}
+                      onClick={() => { setExpandedRow(expandedRow === deudor.id ? null : deudor.id); setCobranza(null) }}
                       style={{
                         borderBottom: '1px solid var(--border)', cursor: 'pointer',
                         background: expandedRow === deudor.id ? 'rgba(212,175,55,0.04)' : 'transparent',
@@ -819,6 +847,11 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
                       {isAdmin && <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{vendedorCanonico(deudor.vendedor) || '—'}</td>}
                       <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: deudor.deuda_vencida > 0 ? '#f87171' : '#4ade80' }}>
                         {formatCurrency(deudor.deuda_vencida)}
+                      </td>
+                      {/* Días exactos de mora del documento más antiguo impago. */}
+                      <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap',
+                        color: diasMoraDeudor(deudor) >= 60 ? '#f87171' : diasMoraDeudor(deudor) > 0 ? '#fbbf24' : 'var(--muted)' }}>
+                        {diasMoraDeudor(deudor) > 0 ? `${diasMoraDeudor(deudor)} días` : '—'}
                       </td>
                       <td style={{ padding: '11px 14px', textAlign: 'right', color: 'var(--cream)', fontWeight: 600 }}>
                         {formatCurrency(deudor.saldo_total)}
@@ -838,12 +871,45 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
 
                     {expandedRow === deudor.id && (
                       <tr key={`${deudor.id}-detail`}>
-                        <td colSpan={isAdmin ? 7 : 6} style={{
+                        <td colSpan={isAdmin ? 9 : 8} style={{
                           padding: '20px 24px',
                           background: 'rgba(212,175,55,0.03)',
                           borderBottom: '1px solid var(--border)',
                           borderLeft: '3px solid var(--gold)',
                         }}>
+                          {/* Mora exacta, contacto de cobranza y facturas
+                              vencidas con su detalle de productos y precios. */}
+                          <PanelCobranza cliente={deudor.nombre_fantasia} tema="oscuro" onDatos={setCobranza} />
+
+                          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation()
+                                setWaTarget({
+                                  nombre: deudor.nombre_fantasia, telefono: deudor.telefono,
+                                  contexto: 'cobranza', alertTipo: 'cobranza',
+                                  subtitulo: deudor.localidad ?? undefined,
+                                  contacto: cobranza?.contacto?.contacto ?? null,
+                                  diasVencida: cobranza?.detalle.diasMoraMaxima ?? diasMoraDeudor(deudor),
+                                  montoVencido: deudor.deuda_vencida,
+                                  documentos: cobranza ? documentosParaWA(cobranza.detalle) : undefined,
+                                })
+                              }}
+                              style={{ minHeight: 38, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 7,
+                                background: 'rgba(37,211,102,0.12)', border: '1px solid rgba(37,211,102,0.3)',
+                                borderRadius: 10, color: '#25D366', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                              <MessageCircle size={14} /> Cobrar por WhatsApp
+                            </button>
+                            {deudor.telefono && (
+                              <a href={`tel:${deudor.telefono}`} onClick={e => e.stopPropagation()}
+                                style={{ minHeight: 38, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 7,
+                                  background: 'rgba(96,165,250,0.10)', border: '1px solid rgba(96,165,250,0.28)',
+                                  borderRadius: 10, color: '#60a5fa', fontSize: 12.5, fontWeight: 700, textDecoration: 'none' }}>
+                                <Phone size={14} /> Llamar
+                              </a>
+                            )}
+                          </div>
+
                           <div className="grid-stack-mobile" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
 
                             <div>
@@ -917,6 +983,8 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }:
       <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, textAlign: 'right' }}>
         Mostrando {filteredDeudores.length} de {universo.length} deudores
       </p>
+
+      {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
     </div>
   )
 }
