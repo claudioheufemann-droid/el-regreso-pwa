@@ -4,8 +4,17 @@ import { useState } from 'react'
 import { MessageCircle, X, Send, Edit3 } from 'lucide-react'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
-export type WAContexto = 'general' | 'mision' | 'visita' | 'campana'
-export type AlertTipo  = 'rojo' | 'amarillo' | 'verde' | 'morado' | 'gris' | 'rm_urgente'
+export type WAContexto = 'general' | 'mision' | 'visita' | 'campana' | 'barril' | 'cobranza'
+export type AlertTipo  = 'rojo' | 'amarillo' | 'verde' | 'morado' | 'gris' | 'rm_urgente' | 'cobranza'
+
+/** Un documento vencido, tal como se lista en el mensaje de cobranza. */
+export interface WADocumento {
+  pedido: string
+  fechaEmision: string
+  fechaVencimiento: string
+  diasMora: number
+  monto: number
+}
 
 export interface WATarget {
   nombre: string
@@ -18,6 +27,14 @@ export interface WATarget {
   productoSugerido?: string | null
   litrosEstimados?: number | null
   subtitulo?: string
+  // Barriles pendientes de devolución
+  cantidadBarriles?: number | null
+  // Cobranza — nombre de la persona con la que se habla de pagos, días exactos
+  // de mora del documento más antiguo y el detalle de lo que se está cobrando.
+  contacto?: string | null
+  diasVencida?: number | null
+  montoVencido?: number | null
+  documentos?: WADocumento[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -27,10 +44,47 @@ function fFecha(s: string): string {
   return `${parseInt(d[2])} ${MESES[parseInt(d[1]!)-1]}`
 }
 
+const CLP = new Intl.NumberFormat('es-CL', {
+  style: 'currency', currency: 'CLP', minimumFractionDigits: 0, maximumFractionDigits: 0,
+})
+
+/**
+ * Mensaje de cobranza. Va con nombre de la persona, no sólo el del local: es
+ * la diferencia entre un mensaje que se lee y uno que se ignora. Si todavía no
+ * hay contacto cargado, saluda al local y sigue funcionando igual.
+ */
+function mensajeCobranza(t: WATarget): string {
+  const empresa = t.nombre
+  const saludo = t.contacto?.trim()
+    ? `Hola ${t.contacto.trim()}, de ${empresa}.`
+    : `Hola, ${empresa}.`
+
+  const dias = t.diasVencida ?? 0
+  const cuanto = dias > 0
+    ? `hace ${dias} ${dias === 1 ? 'día' : 'días'}`
+    : 'pendiente'
+  const monto = t.montoVencido ? ` por un monto de ${CLP.format(t.montoVencido)}` : ''
+
+  // Como máximo 4 documentos: más que eso el mensaje se vuelve un muro de
+  // texto en el celular y se pierde justo lo que uno quiere que lean.
+  const docs = (t.documentos ?? []).slice(0, 4)
+  const resto = (t.documentos?.length ?? 0) - docs.length
+  const detalle = docs.length
+    ? '\n\n' + docs
+        .map(d => `• N° ${d.pedido.replace(/^0+/, '')} del ${fFecha(d.fechaEmision)} — venció el ${fFecha(d.fechaVencimiento)} (${d.diasMora} ${d.diasMora === 1 ? 'día' : 'días'}) — ${CLP.format(d.monto)}`)
+        .join('\n') +
+      (resto > 0 ? `\n• y ${resto} documento${resto === 1 ? '' : 's'} más` : '')
+    : ''
+
+  return `${saludo} Te escribo desde El Regreso Beer porque tienes una deuda vencida ${cuanto}${monto}.${detalle}\n\nNecesitamos que puedas regularizarla lo antes posible. Si ya hiciste la transferencia, mándame el comprobante y la descontamos al tiro. ¡Gracias!`
+}
+
 export function generarMensajeWA(t: WATarget): string {
   const producto = t.productoSugerido ?? 'cerveza'
   const litros   = t.litrosEstimados ? `${t.litrosEstimados}L` : 'tu pedido habitual'
   const ciclo    = t.cicloPromedioDias ? `cada ${t.cicloPromedioDias} días` : 'seguido'
+
+  if (t.contexto === 'cobranza' || t.alertTipo === 'cobranza') return mensajeCobranza(t)
 
   switch (t.alertTipo) {
 
@@ -58,6 +112,12 @@ export function generarMensajeWA(t: WATarget): string {
         return `Hola! Estamos por la zona y quería saber si necesitás algo. ¿Tenés stock? ¿Necesitás hacer un pedido?`
       if (t.contexto === 'campana')
         return `Hola! Tenemos propuestas especiales y novedades que te pueden interesar. ¿Te cuento?`
+      if (t.contexto === 'barril') {
+        const cantidad = t.cantidadBarriles ?? 1
+        const pl = cantidad !== 1
+        const tipoTxt = t.productoSugerido ? ` (${t.productoSugerido})` : ''
+        return `Hola! Te escribimos de El Regreso Beer a ${t.nombre}. Tienen actualmente ${cantidad} barril${pl ? 'es' : ''}${tipoTxt} nuestro${pl ? 's' : ''} pendiente${pl ? 's' : ''} de devolución. Necesitamos recuperarlo${pl ? 's' : ''} lo antes posible, ¿qué día podemos pasar a retirarlo${pl ? 's' : ''}?`
+      }
       const cuando = t.siguienteCompra ? ` para el ${fFecha(t.siguienteCompra)}` : ' la próxima semana'
       return `Hola! Oye, según tu historial pedís ${ciclo} y estimo que podrías necesitar reabastecer${cuando}. ¿Coordinamos tu próximo pedido?`
     }
@@ -72,6 +132,7 @@ const ALERTA_LABEL: Record<AlertTipo, { label: string; color: string }> = {
   morado:     { label: '🟣 Cliente en fuga',        color: '#C084FC' },
   gris:       { label: '⚪ Cobranza pendiente',     color: '#94A3B8' },
   rm_urgente: { label: '⏰ Corte RM hoy 4PM',       color: '#FB923C' },
+  cobranza:   { label: '💰 Deuda vencida',          color: '#F87171' },
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────

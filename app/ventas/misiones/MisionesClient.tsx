@@ -51,7 +51,12 @@ interface AlertaCfg {
   icon: React.ReactNode
 }
 
-const ALERTA_CFG: Record<AlertTipo, AlertaCfg> = {
+// Los tipos de alerta que produce Misiones. 'cobranza' vive en WAModal para el
+// mensaje del módulo Deudores (que sí conoce días de mora y facturas) y no se
+// genera nunca acá — Misiones marca la deuda con 'gris'.
+type AlertMision = Exclude<AlertTipo, 'cobranza'>
+
+const ALERTA_CFG: Record<AlertMision, AlertaCfg> = {
   rojo:       { emoji: '🔴', label: 'Quiebre inminente',     labelCorto: 'Urgente',    color: '#F87171', bg: 'rgba(248,113,113,0.1)',  border: 'rgba(248,113,113,0.35)', puntos: 50,  icon: <Flame size={10} /> },
   amarillo:   { emoji: '🟡', label: 'Ventana óptima',         labelCorto: 'Esta sem.',  color: '#FBBF24', bg: 'rgba(251,191,36,0.1)',   border: 'rgba(251,191,36,0.35)',  puntos: 25,  icon: <Clock size={10} /> },
   verde:      { emoji: '🟢', label: 'Oportunidad cross-sell', labelCorto: 'Cross-sell', color: '#4ADE80', bg: 'rgba(74,222,128,0.1)',   border: 'rgba(74,222,128,0.35)',  puntos: 100, icon: <Star size={10} /> },
@@ -60,7 +65,7 @@ const ALERTA_CFG: Record<AlertTipo, AlertaCfg> = {
   rm_urgente: { emoji: '⏰', label: 'Corte RM — ¡hoy 4PM!',  labelCorto: 'Corte 4PM',  color: '#FB923C', bg: 'rgba(251,146,60,0.1)',   border: 'rgba(251,146,60,0.35)',  puntos: 60,  icon: <Timer size={10} /> },
 }
 
-function computeAlertTipo(m: MisionEnriquecida): AlertTipo {
+function computeAlertTipo(m: MisionEnriquecida): AlertMision {
   if (m.tiene_deuda) return 'gris'
   const esRM = !!(m.localidad?.toLowerCase().includes('metropolitana') || m.localidad?.toLowerCase().includes('santiago'))
   // RM client in urgent window (before 4PM): flag as rm_urgente

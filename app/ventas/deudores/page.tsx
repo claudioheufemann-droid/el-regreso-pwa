@@ -1,12 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { vendedorCanonico, nombresErpDe } from '@/lib/types'
+import { vendedorCanonico } from '@/lib/types'
 import DeudoresVendedorClient from './DeudoresVendedorClient'
 
 // Apartado de Deudores dentro de Ventas (distinto de /ventas/admin/deudores,
 // que además tiene la carga manual/estado de sync — sólo admin). Acá cada
-// vendedor ve la deuda de SU cartera; el admin ve todo.
+// vendedor ve la deuda de SU cartera; el admin ve la suma de las 4 carteras.
 export default async function DeudoresVentasPage() {
   const user = await getServerUser()
   if (!user) redirect('/login')
@@ -24,15 +24,29 @@ export default async function DeudoresVentasPage() {
   let query = supabase.from('deudores').select('*').order('deuda_vencida', { ascending: false })
   if (vendedoresScope) query = query.in('vendedor', vendedoresScope)
 
-  // Total de clientes de la cartera (para el "26 de 165 clientes" del
-  // resumen) — clientes.vendedor SÍ usa nombres históricos/alias ("Los
-  // Rios" etc.), por eso acá hace falta expandir con nombresErpDe() y no
-  // alcanza con vendedoresErp crudo como en la query de arriba.
+  // Denominador del "26 de 165 clientes": cartera total por vendedor. Se trae
+  // la columna cruda y se agrupa por nombre canónico porque clientes.vendedor
+  // usa nombres históricos/alias ("Los Lagos", el mail de Nicol, "Marion"…) —
+  // agrupar acá evita que la misma cartera se cuente partida en dos.
+  const [{ data: deudores }, { data: clientesRows }] = await Promise.all([
+    query,
+    supabase.from('clientes').select('vendedor'),
+  ])
+
+  const clientesPorVendedor: Record<string, number> = {}
+  for (const c of clientesRows ?? []) {
+    const key = vendedorCanonico(c.vendedor) || '__sin_vendedor__'
+    clientesPorVendedor[key] = (clientesPorVendedor[key] ?? 0) + 1
+  }
+
   const miVendedorCanonico = user.vendedoresErp.length ? vendedorCanonico(user.vendedoresErp[0]) : '__sin_vendedor__'
-  let clientesQuery = supabase.from('clientes').select('id', { count: 'exact', head: true })
-  if (!esAdmin) clientesQuery = clientesQuery.in('vendedor', nombresErpDe(miVendedorCanonico))
 
-  const [{ data: deudores }, { count: totalClientes }] = await Promise.all([query, clientesQuery])
-
-  return <DeudoresVendedorClient initialDeudores={deudores ?? []} isAdmin={esAdmin} totalClientes={totalClientes ?? 0} />
+  return (
+    <DeudoresVendedorClient
+      initialDeudores={deudores ?? []}
+      isAdmin={esAdmin}
+      clientesPorVendedor={clientesPorVendedor}
+      totalClientesPropios={clientesPorVendedor[miVendedorCanonico] ?? 0}
+    />
+  )
 }
