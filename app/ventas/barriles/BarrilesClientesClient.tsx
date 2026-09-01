@@ -120,8 +120,11 @@ function ClienteCard({ g, abierto, onToggle, onWA }: {
   const bucketColor = BUCKET_COLOR[bucket]
   const primerBarril = g.barriles[0]
 
+  const tipos = [...new Set(g.barriles.map(b => b.producto).filter((p): p is string => !!p))]
   const waTarget: WATarget = {
-    nombre: g.nombre, telefono: null, contexto: 'general', subtitulo: g.localidad ?? undefined,
+    nombre: g.nombre, telefono: null, contexto: 'barril', subtitulo: g.localidad ?? undefined,
+    cantidadBarriles: g.barriles.length,
+    productoSugerido: tipos.join(', ') || undefined,
   }
 
   return (
