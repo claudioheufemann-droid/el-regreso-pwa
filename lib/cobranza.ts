@@ -25,10 +25,23 @@
  * 5 facturas de 5 clientes distintos (Teja Market, El Trébol El Bosque, Beer
  * Masters, La Birra Esquina, Cliente Birra): diferencia máxima $3.
  *
- * Cuando ningún subconjunto cuadra (nota de crédito, abono parcial, una venta
- * que el informe de ventas no trae), el resultado se marca `conciliado: false`
- * y cae al reparto por antigüedad. La cifra a cobrar SIEMPRE es la del ERP
- * (`deuda_vencida`), nunca la suma reconstruida.
+ * LO QUE NO SE PUEDE RECONSTRUIR SE MUESTRA IGUAL
+ * -----------------------------------------------
+ * 79 de los 171 deudores no tienen ninguna venta cargada en la app, y en otros
+ * la deuda es más vieja que el histórico. Esa plata va en `restoPorTramo`, con
+ * su antigüedad, para que la pantalla SIEMPRE sume la deuda vencida completa:
+ * facturas identificadas + resto. Antes el resto simplemente desaparecía y el
+ * vendedor veía menos plata de la que tenía que cobrar.
+ *
+ * MAQUILA
+ * -------
+ * El co-packing a terceros se factura al mismo cliente y entra en la deuda del
+ * ERP, pero no es cobranza del área comercial. Los documentos que lo contienen
+ * quedan marcados con `esMaquila` y su plata sale en `maquilaVencida`, para
+ * que la pantalla la muestre aparte y no la sume a lo que se cobra.
+ *
+ * La cifra a cobrar SIEMPRE sale del ERP (`deuda_vencida`, menos maquila),
+ * nunca de la suma reconstruida.
  */
 
 import { IVA, ILA_CERVEZA } from './rentabilidad'
@@ -56,6 +69,21 @@ export function aplicaIla(l: Pick<LineaVenta, 'producto' | 'categoria_producto'>
   const cat = l.categoria_producto ?? ''
   if (RE_KOMBUCHA.test(cat) && !/cerveza/i.test(cat)) return false
   return true
+}
+
+// ── Maquila (co-packing a terceros) ──────────────────────────────────────────
+// No es venta del área comercial: son litros que se le producen o latas que se
+// le cierran a otra cervecería. El ERP la factura al mismo cliente y por eso
+// entra en el informe de Deudores, pero no es plata que persiga un vendedor
+// (dato de Claudio, 2026-09-01, a partir de los $2.639.613 de El Growler).
+//
+// Los dos productos con que el ERP la carga hoy. Verificado el 1-sep-2026:
+// las 27 facturas que los contienen son 100% maquila — ninguna mezcla maquila
+// con venta comercial — así que la exclusión puede ser por documento entero.
+const PRODUCTOS_MAQUILA = ['litros maquila', 'latas finales']
+
+export function esLineaMaquila(producto: string): boolean {
+  return PRODUCTOS_MAQUILA.includes(producto.trim().toLowerCase())
 }
 
 /** Precio que efectivamente se le factura al cliente por esa línea (IVA + ILA si aplica). */
@@ -150,7 +178,16 @@ export interface DocumentoVencido {
   montoOriginal: number
   /** true cuando el tramo trae menos plata que el documento: quedó un abono a cuenta. */
   abonoParcial: boolean
+  /** Documento de co-packing a terceros: no es deuda del área comercial. */
+  esMaquila: boolean
   items: ItemDocumento[]
+}
+
+/** Plata vencida en un tramo que ninguna factura del informe de ventas explica. */
+export interface RestoTramo {
+  tramo: TramoKey
+  label: string
+  monto: number
 }
 
 export interface DeudorEntrada {
@@ -186,11 +223,20 @@ export interface DetalleCobranza {
   /** Suma de `vencidos`. Referencial: la cifra a cobrar es `deuda_vencida` del ERP. */
   totalReconstruido: number
   /**
-   * Plata que el ERP tiene en un tramo para el que no existe ninguna venta
-   * cargada. Pasa cuando la deuda es anterior al histórico de ventas de la app
-   * o cuando es un ajuste de cuenta corriente hecho a mano en el ERP.
+   * Deuda vencida que no quedó explicada por ninguna factura, desglosada por
+   * antigüedad. Es la diferencia entre lo que el ERP dice que hay en cada
+   * tramo y lo que se pudo identificar ahí. Con esto la lista de la pantalla
+   * SIEMPRE suma la deuda vencida completa: facturas + resto.
+   *
+   * Pasa por tres motivos: la deuda es anterior al histórico de ventas de la
+   * app (79 de los 171 deudores no tienen ninguna venta cargada), es un ajuste
+   * de cuenta corriente hecho a mano en el ERP, o hay notas de crédito.
    */
-  montoSinRespaldo: number
+  restoPorTramo: RestoTramo[]
+  /** Suma de `restoPorTramo`. */
+  restoSinDetalle: number
+  /** Parte de la deuda vencida que es co-packing y no cobranza comercial. */
+  maquilaVencida: number
   /** true si cada tramo del ERP cuadró exacto con un subconjunto de pedidos. */
   conciliado: boolean
 }
@@ -199,6 +245,12 @@ export interface DetalleCobranza {
 const TOLERANCIA_PCT = 0.005 // 0,5% — el bruto calculado cuadra al peso; esto cubre redondeos
 const TOLERANCIA_MIN = 1_500 // pesos
 const MAX_EXHAUSTIVO = 18 // 2^18 ≈ 262k combinaciones: instantáneo y de sobra por tramo
+
+/** Días de holgura entre la fecha del remito del ERP y la del pedido en ventas. */
+const HOLGURA_REMITO_DIAS = 7
+
+/** Bajo este monto, un saldo sin explicar es redondeo y no se muestra. */
+const RESTO_MINIMO = 1_000
 
 function popcount(n: number): number {
   let c = 0
@@ -293,6 +345,7 @@ function armarDocumentos(ventas: FilaVenta[], diasPago: number, hoy: string): Do
       monto,
       montoOriginal: monto,
       abonoParcial: false,
+      esMaquila: filas.every(f => esLineaMaquila(f.producto)),
       items,
     })
   }
@@ -325,50 +378,83 @@ export function reconstruirCobranza(
   }
 
   // Nada anterior al documento más antiguo con saldo puede seguir impago: el
-  // ERP ya dijo cuál es el más viejo que debe.
+  // ERP ya dijo cuál es el más viejo que debe. Pero `external_fecha` es la
+  // fecha del REMITO y `fecha_pedido` la del pedido, y no siempre coinciden:
+  // en 16 de los 92 deudores con ventas cargadas el remito sale 1 a 3 días
+  // después del pedido. Sin esta holgura, la factura más antigua —
+  // justamente la que más importa cobrar — quedaba fuera de la lista
+  // (Vintage Pizza Bar perdía así $1,59M de $2,96M).
+  const desde = fechaDocumentoAntiguo ? sumarDias(fechaDocumentoAntiguo, -HOLGURA_REMITO_DIAS) : null
   const candidatos = armarDocumentos(
-    fechaDocumentoAntiguo
-      ? ventas.filter(v => v.fecha_pedido.slice(0, 10) >= fechaDocumentoAntiguo)
-      : ventas,
+    desde ? ventas.filter(v => v.fecha_pedido.slice(0, 10) >= desde) : ventas,
     diasPago,
     hoy,
   )
 
   const porVencer = candidatos.filter(d => d.diasMora <= 0)
   const vencidos: DocumentoVencido[] = []
+  const restoPorTramo: RestoTramo[] = []
   let conciliado = true
-  let montoSinRespaldo = 0
 
   for (const tramo of TRAMOS) {
     const objetivo = saldosTramo[tramo.key]
     if (objetivo <= 0) continue // tramo sin saldo ⇒ esos pedidos ya se pagaron
+
     const delTramo = candidatos.filter(d => d.tramo === tramo.key)
+    let asignado = 0
+
     if (delTramo.length === 0) {
       conciliado = false
-      montoSinRespaldo += objetivo
-      continue
+    } else {
+      const exacto = subconjuntoQueSuma(delTramo, objetivo)
+      if (exacto) {
+        vencidos.push(...exacto)
+        asignado = exacto.reduce((s, d) => s + d.monto, 0)
+      } else {
+        // Sin combinación exacta: hubo abono parcial o nota de crédito. Se
+        // toman del más antiguo al más nuevo hasta cubrir el saldo del tramo y
+        // el último queda marcado como parcial, para que el vendedor sepa que
+        // ese documento ya tiene plata abonada.
+        conciliado = false
+        let restante = objetivo
+        for (const d of [...delTramo].sort((a, b) => b.diasMora - a.diasMora)) {
+          if (restante <= 0) break
+          const doc = restante < d.monto ? { ...d, monto: restante, abonoParcial: true } : d
+          vencidos.push(doc)
+          asignado += doc.monto
+          restante -= d.monto
+        }
+      }
     }
 
-    const exacto = subconjuntoQueSuma(delTramo, objetivo)
-    if (exacto) {
-      vencidos.push(...exacto)
-      continue
-    }
-
-    // Sin combinación exacta: hubo abono parcial o nota de crédito. Se toman
-    // del más antiguo al más nuevo hasta cubrir el saldo del tramo y el último
-    // queda marcado como parcial, para que el vendedor sepa que ese documento
-    // ya tiene plata abonada.
-    conciliado = false
-    let restante = objetivo
-    for (const d of [...delTramo].sort((a, b) => b.diasMora - a.diasMora)) {
-      if (restante <= 0) break
-      vencidos.push(restante < d.monto ? { ...d, monto: restante, abonoParcial: true } : d)
-      restante -= d.monto
+    // Lo que el tramo tiene y ninguna factura explica. Se publica para que la
+    // pantalla pueda mostrar la deuda COMPLETA — antes este saldo simplemente
+    // desaparecía de la lista y el vendedor veía menos plata de la que cobra.
+    // El umbral deja fuera los restos de redondeo (unos pocos pesos): una fila
+    // "sin detalle de factura, $3" es ruido, no información.
+    const resto = objetivo - asignado
+    if (resto > RESTO_MINIMO) {
+      conciliado = false
+      restoPorTramo.push({ tramo: tramo.key, label: tramo.label, monto: resto })
     }
   }
 
   vencidos.sort((a, b) => b.diasMora - a.diasMora)
+
+  // Los tramos del ERP a veces suman MÁS que su propia `deuda_vencida` — pasa
+  // cuando hay un abono a cuenta que el ERP todavía no imputó a ningún
+  // documento (Tilo Restobar: tramos por $1.820.007 contra $1.540.010 de deuda).
+  // Sin este ajuste la pantalla haría cobrar plata de más. Se recorta desde el
+  // documento más nuevo: la mora más antigua es la que el ERP confirma con
+  // `external_fecha` y es la que más urge cobrar.
+  const deudaVencida = Number(deudor.deuda_vencida) || 0
+  let exceso = vencidos.reduce((s, d) => s + d.monto, 0) - deudaVencida
+  for (let i = vencidos.length - 1; i >= 0 && exceso > 1; i--) {
+    const quita = Math.min(exceso, vencidos[i].monto)
+    vencidos[i] = { ...vencidos[i], monto: vencidos[i].monto - quita, abonoParcial: true }
+    exceso -= quita
+  }
+  const vencidosFinal = vencidos.filter(d => d.monto > 1)
 
   return {
     diasMoraMaxima,
@@ -376,10 +462,21 @@ export function reconstruirCobranza(
     remitoMasAntiguo:
       deudor.external_remito_mas_antiguo != null ? Number(deudor.external_remito_mas_antiguo) : null,
     diasPago,
-    vencidos,
+    vencidos: vencidosFinal,
     porVencer: porVencer.sort((a, b) => b.diasMora - a.diasMora),
-    totalReconstruido: vencidos.reduce((s, d) => s + d.monto, 0),
-    montoSinRespaldo,
+    totalReconstruido: vencidosFinal.reduce((s, d) => s + d.monto, 0),
+    restoPorTramo,
+    restoSinDetalle: restoPorTramo.reduce((s, r) => s + r.monto, 0),
+    maquilaVencida: vencidosFinal.filter(d => d.esMaquila).reduce((s, d) => s + d.monto, 0),
     conciliado,
   }
+}
+
+/**
+ * Cuánto de la deuda vencida de un cliente es maquila. Se usa en la carga de
+ * /ventas/deudores para descontarla de los totales por cartera sin tener que
+ * reconstruir los 171 deudores: sólo 3 clientes tienen maquila.
+ */
+export function maquilaVencidaDe(deudor: DeudorEntrada, ventas: FilaVenta[], hoy: string = hoyISO()): number {
+  return reconstruirCobranza(deudor, ventas, hoy).maquilaVencida
 }
