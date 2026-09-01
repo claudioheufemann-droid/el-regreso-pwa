@@ -1,0 +1,56 @@
+name: ERP Sync — Barriles en Cliente
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # cada hora — mismo patrón que clientes/deudores/stock
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        working-directory: scripts/erp-sync
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Ejecutar sync (login → descarga Barriles → upload a la PWA)
+        working-directory: scripts/erp-sync
+        env:
+          HEADLESS: '1'
+          ERP_URL: ${{ secrets.ERP_URL }}
+          ERP_USERNAME: ${{ secrets.ERP_USERNAME }}
+          ERP_PASSWORD: ${{ secrets.ERP_PASSWORD }}
+          UPLOAD_URL_BASE: ${{ secrets.UPLOAD_URL_BASE }}
+          UPLOAD_SECRET: ${{ secrets.UPLOAD_SECRET_BARRILES }}
+        run: python extractor_barriles.py
+
+      - name: Guardar Excel descargado (diagnóstico)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: barriles-xlsx
+          path: scripts/erp-sync/downloads/*.xlsx
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Guardar capturas si algo falla (debug)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: erp-sync-barriles-debug
+          path: scripts/erp-sync/*.png
+          if-no-files-found: ignore
+          retention-days: 5

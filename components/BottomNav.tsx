@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { BarChart2, Users, ListChecks, Package, FileText, TrendingUp, Wallet, CircleDollarSign } from 'lucide-react'
+import { BarChart2, Users, ListChecks, Package, FileText, TrendingUp, Wallet, CircleDollarSign, Layers } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
@@ -10,12 +10,14 @@ import { NavPill, type NavItem } from '@/components/ui/NavPill'
 // 31-ago-2026: se sacó Misiones (módulo dado de baja) y, del admin, "Cargar"
 // (carga manual de ventas — obsoleta desde que el sync ERP quedó automático).
 // Se agregó Deudores: cada vendedor ve la deuda de su propia cartera.
+// 01-sep-2026: se agregó Barriles (barriles sin devolver por cliente).
 const VENDEDOR_ITEMS: NavItem[] = [
   { href: '/ventas',              icon: BarChart2,        label: 'Ventas',       exact: true },
   { href: '/ventas/stock',        icon: Package,          label: 'Stock'                     },
   { href: '/ventas/cotizaciones', icon: FileText,         label: 'Cotizaciones'              },
   { href: '/ventas/clientes',     icon: Users,            label: 'Clientes'                  },
   { href: '/ventas/deudores',     icon: CircleDollarSign, label: 'Deudores'                  },
+  { href: '/ventas/barriles',     icon: Layers,           label: 'Barriles'                  },
   { href: '/ventas/agenda',       icon: ListChecks,       label: 'Agenda'                    },
 ]
 
@@ -25,6 +27,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { href: '/ventas/cotizaciones',         icon: FileText,         label: 'Cotizaciones'              },
   { href: '/ventas/clientes',             icon: Users,            label: 'Clientes'                  },
   { href: '/ventas/deudores',             icon: CircleDollarSign, label: 'Deudores'                  },
+  { href: '/ventas/barriles',             icon: Layers,           label: 'Barriles'                  },
   { href: '/ventas/agenda',               icon: ListChecks,       label: 'Agenda'                    },
 ]
 
