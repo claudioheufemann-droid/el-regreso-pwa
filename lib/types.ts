@@ -109,6 +109,27 @@ export const VENDEDORES_CARTERA_ACTIVAS = [
   'Yadro Fabijancic',
 ] as const
 
+/**
+ * Valores de `deudores.vendedor` / `clientes.vendedor` que el ERP usa para
+ * "aparcar" deuda que no es cartera de nadie: castigada (incobrable) o de
+ * cuentas internas. No son personas y ensucian cualquier total de cobranza
+ * (dato de Claudio, 2026-09-01: los vendedores son Marion, Nicol, Yadro y
+ * Marcelo — todo lo demás no va en la suma).
+ */
+export const VENDEDORES_INCOBRABLES = ['Incobrable', 'Incobrable 2024', 'Incobrable 2025']
+
+export type GrupoCartera = 'vendedor' | 'incobrable' | 'otros'
+
+/** Clasifica un `vendedor` crudo del ERP en las 3 carteras que usa Deudores. */
+export function grupoCarteraDe(vendedor: string | null | undefined): GrupoCartera {
+  if (vendedor && VENDEDORES_INCOBRABLES.includes(vendedor)) return 'incobrable'
+  const canonico = vendedorCanonico(vendedor)
+  return (VENDEDORES_CARTERA_ACTIVAS as readonly string[]).includes(canonico) ? 'vendedor' : 'otros'
+}
+
+/** Nombre corto para chips y tarjetas ("Nicol Delgado" → "Nicol"). */
+export const nombreCorto = (v: string) => v.split(' ')[0]
+
 export const CATEGORIAS_NEGOCIO = [
   'Bar',
   'Minimarket',

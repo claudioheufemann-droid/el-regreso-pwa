@@ -4,11 +4,12 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ChevronDown, ChevronRight, Wallet, ChevronLeft, Search, X, Users, Coins,
-  MessageCircle, Phone, FileDown, Filter,
+  MessageCircle, Phone, FileDown,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { useUser } from '@/lib/userContext'
+import { VENDEDORES_CARTERA_ACTIVAS, vendedorCanonico, grupoCarteraDe, nombreCorto } from '@/lib/types'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
@@ -40,6 +41,13 @@ interface Deudor {
   updated_at: string
 }
 
+interface Props {
+  initialDeudores: Deudor[]
+  isAdmin: boolean
+  clientesPorVendedor: Record<string, number>
+  totalClientesPropios: number
+}
+
 // ── Paleta clara — mismo patrón que Clientes/Stock (const MC/C locales) ───────
 const MC = {
   bg: '#F1F5F9', card: '#FFFFFF', text: '#0F172A', muted: '#64748B', faint: '#94A3B8',
@@ -67,6 +75,50 @@ function bucketDe(d: Deudor): Bucket {
   if ((d.deuda_entre_30_44_dias || 0) + (d.deuda_entre_45_59_dias || 0) > 0) return '31-60'
   if ((d.deuda_menor_14_dias || 0) + (d.deuda_entre_15_29_dias || 0) > 0) return '1-30'
   return 'al-dia'
+}
+
+// ── Carteras ─────────────────────────────────────────────────────────────────
+// Para el admin, el universo del módulo son SOLO las 4 carteras de venta
+// (Nicol, Marion, Marcelo, Yadro). Todo lo que el ERP aparca bajo un
+// pseudo-vendedor — Incobrable/2024/2025, CERVECERÍA, Inactivo, Vendedor
+// Muestras, OnLine, cuentas de gerencia, clientes sin vendedor — queda fuera:
+// no es deuda que alguien esté cobrando y distorsiona el total (dato de
+// Claudio, 2026-09-01: "sólo lo que tienen por deudas los vendedores").
+const CARTERAS = VENDEDORES_CARTERA_ACTIVAS as readonly string[]
+
+function esCarteraDeVenta(d: Deudor): boolean {
+  return grupoCarteraDe(d.vendedor) === 'vendedor'
+}
+
+interface FilaCartera {
+  vendedor: string
+  deudores: number
+  clientes: number
+  vencida: number
+  saldo: number
+}
+
+/** Una fila por vendedor (siempre las 4, aunque alguna venga en cero) + total. */
+function resumenCarteras(deudores: Deudor[], clientesPorVendedor: Record<string, number>) {
+  const acc = new Map<string, FilaCartera>(
+    CARTERAS.map(v => [v, { vendedor: v, deudores: 0, clientes: clientesPorVendedor[v] ?? 0, vencida: 0, saldo: 0 }]),
+  )
+  for (const d of deudores) {
+    const fila = acc.get(vendedorCanonico(d.vendedor))
+    if (!fila) continue
+    fila.deudores++
+    fila.vencida += d.deuda_vencida || 0
+    fila.saldo += d.saldo_total || 0
+  }
+  const filas = [...acc.values()].sort((a, b) => b.vencida - a.vencida)
+  const total = filas.reduce(
+    (t, f) => ({
+      deudores: t.deudores + f.deudores, clientes: t.clientes + f.clientes,
+      vencida: t.vencida + f.vencida, saldo: t.saldo + f.saldo,
+    }),
+    { deudores: 0, clientes: 0, vencida: 0, saldo: 0 },
+  )
+  return { filas, total }
 }
 
 // Color de avatar puramente decorativo (no repite la lectura de riesgo del
@@ -97,7 +149,7 @@ function csvEscape(v: string | number): string {
 function exportarCSV(deudores: Deudor[]) {
   const headers = ['Cliente', 'Localidad', 'Vendedor', 'Deuda vencida', 'Saldo total', 'Barriles', 'Último pago']
   const filas = deudores.map(d => [
-    d.nombre_fantasia, d.localidad ?? '', d.vendedor ?? '',
+    d.nombre_fantasia, d.localidad ?? '', vendedorCanonico(d.vendedor) || '',
     d.deuda_vencida, d.saldo_total, d.barriles_adeudados,
     d.ultimo_pago ? fFecha(d.ultimo_pago) : '',
   ])
@@ -109,6 +161,97 @@ function exportarCSV(deudores: Deudor[]) {
   a.download = `deudores-${new Date().toISOString().split('T')[0]}.csv`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+// ── Resumen por vendedor (admin) ─────────────────────────────────────────────
+// Es a la vez el desglose y el filtro: tocar una fila filtra la lista de abajo.
+// Un panel de filtro aparte sería un segundo control para lo mismo.
+function FilaCarteraRow({ nombre, deudores, clientes, vencida, seleccionado, onClick, destacado }: {
+  nombre: string; deudores: number; clientes: number; vencida: number
+  seleccionado: boolean; onClick: () => void; destacado?: boolean
+}) {
+  const avatar = avatarColorDe(nombre)
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 46,
+        padding: '9px 14px 9px 11px', textAlign: 'left', cursor: 'pointer', font: 'inherit',
+        background: seleccionado ? MC.blueSoft : 'transparent',
+        border: 'none', borderTop: `1px solid ${MC.border}`,
+        borderLeft: `3px solid ${seleccionado ? MC.blue : 'transparent'}`,
+      }}
+    >
+      {destacado ? (
+        <div style={{
+          width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: MC.blueSoft,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Users size={15} color={MC.blue} />
+        </div>
+      ) : (
+        <div style={{
+          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: avatar.bg, color: avatar.fg, fontSize: 13, fontWeight: 800,
+        }}>
+          {nombre[0]?.toUpperCase()}
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{
+          fontSize: 13.5, fontWeight: destacado ? 800 : 700,
+          color: seleccionado ? MC.blue : MC.text,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {nombre}
+        </p>
+        <p style={{ fontSize: 11, color: MC.muted, marginTop: 1 }}>
+          {deudores} deudor{deudores === 1 ? '' : 'es'}{clientes > 0 ? ` de ${clientes}` : ''}
+        </p>
+      </div>
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <p style={{ fontSize: 13.5, fontWeight: 800, color: vencida > 0 ? MC.red : MC.green }}>
+          {formatCurrency(vencida)}
+        </p>
+        <p style={{ fontSize: 9.5, color: MC.faint, fontWeight: 700, letterSpacing: '0.04em' }}>VENCIDA</p>
+      </div>
+    </button>
+  )
+}
+
+function ResumenCarteras({ filas, total, activo, onSelect }: {
+  filas: FilaCartera[]
+  total: { deudores: number; clientes: number; vencida: number; saldo: number }
+  activo: string
+  onSelect: (v: string) => void
+}) {
+  return (
+    <div style={{
+      background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`,
+      overflow: 'hidden', marginBottom: 12,
+    }}>
+      <p style={{
+        fontSize: 10, fontWeight: 800, color: MC.faint, letterSpacing: '0.06em',
+        padding: '11px 14px 8px',
+      }}>
+        POR VENDEDOR
+      </p>
+      <FilaCarteraRow
+        nombre="Todos los vendedores" destacado
+        deudores={total.deudores} clientes={total.clientes} vencida={total.vencida}
+        seleccionado={activo === 'todos'} onClick={() => onSelect('todos')}
+      />
+      {filas.map(f => (
+        <FilaCarteraRow
+          key={f.vendedor}
+          nombre={nombreCorto(f.vendedor)}
+          deudores={f.deudores} clientes={f.clientes} vencida={f.vencida}
+          seleccionado={activo === f.vendedor} onClick={() => onSelect(f.vendedor)}
+        />
+      ))}
+    </div>
+  )
 }
 
 // ── Tarjeta compacta (móvil) ───────────────────────────────────────────────────
@@ -147,7 +290,7 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
               {d.nombre_fantasia}
             </p>
             <p style={{ fontSize: 11.5, color: MC.muted, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {d.localidad ?? '—'}{d.vendedor ? ` · ${d.vendedor.split(' ')[0]}` : ''}
+              {d.localidad ?? '—'}{d.vendedor ? ` · ${nombreCorto(vendedorCanonico(d.vendedor))}` : ''}
             </p>
           </div>
           {bucket !== 'al-dia' && (
@@ -232,40 +375,57 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
   )
 }
 
-export default function DeudoresVendedorClient({ initialDeudores, isAdmin, totalClientes }: {
-  initialDeudores: Deudor[]; isAdmin: boolean; totalClientes: number
-}) {
+export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clientesPorVendedor, totalClientesPropios }: Props) {
   const router = useRouter()
   const isDesktop = useIsDesktop()
   const { user } = useUser()
   const [showSettings, setShowSettings] = useState(false)
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
 
-  const [filterVendedor, setFilterVendedor] = useState('')
+  // 'todos' = las 4 carteras sumadas; o el nombre canónico de un vendedor.
+  const [cartera, setCartera] = useState<string>('todos')
   const [filterBucket, setFilterBucket] = useState<Bucket | 'todos'>('todos')
   const [searchText, setSearchText] = useState('')
   const [sortBy, setSortBy] = useState<'deuda' | 'nombre' | 'antigua'>('deuda')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
-  const [mostrarFiltrosAdmin, setMostrarFiltrosAdmin] = useState(false)
 
-  const vendedores = Array.from(new Set(initialDeudores.map(d => d.vendedor).filter((v): v is string => !!v)))
+  // Universo del módulo. Para el vendedor su cartera ya viene acotada por la
+  // query del server; para el admin, sólo las 4 carteras de venta.
+  const universo = useMemo(
+    () => (isAdmin ? initialDeudores.filter(esCarteraDeVenta) : initialDeudores),
+    [initialDeudores, isAdmin],
+  )
 
-  // KPIs — sobre el total sin filtrar, para que sean un número de referencia
-  // estable (igual que "Todos N" del chip por defecto).
+  const { filas, total } = useMemo(
+    () => resumenCarteras(universo, clientesPorVendedor),
+    [universo, clientesPorVendedor],
+  )
+
+  // Base de KPIs y contadores de chips: manda el filtro por vendedor, no el de
+  // antigüedad (si no, cada chip se contaría a sí mismo y marcaría el total).
+  const base = useMemo(
+    () => (isAdmin && cartera !== 'todos' ? universo.filter(d => vendedorCanonico(d.vendedor) === cartera) : universo),
+    [universo, isAdmin, cartera],
+  )
+
+  const clientesBase = isAdmin
+    ? (cartera === 'todos' ? total.clientes : (clientesPorVendedor[cartera] ?? 0))
+    : totalClientesPropios
+
   const kpis = {
-    total: initialDeudores.length,
-    saldo: initialDeudores.reduce((s, d) => s + (d.saldo_total || 0), 0),
+    total: base.length,
+    saldo: base.reduce((s, d) => s + (d.saldo_total || 0), 0),
+    vencida: base.reduce((s, d) => s + (d.deuda_vencida || 0), 0),
   }
 
   const bucketCounts = useMemo(() => {
     const counts: Record<Bucket, number> = { 'al-dia': 0, '1-30': 0, '31-60': 0, '+60': 0 }
-    for (const d of initialDeudores) counts[bucketDe(d)]++
+    for (const d of base) counts[bucketDe(d)]++
     return counts
-  }, [initialDeudores])
+  }, [base])
 
   const filtrados = useMemo(() => {
-    let res = initialDeudores.filter(d => {
-      if (isAdmin && filterVendedor && d.vendedor !== filterVendedor) return false
+    let res = base.filter(d => {
       if (filterBucket !== 'todos' && bucketDe(d) !== filterBucket) return false
       if (searchText && !d.nombre_fantasia.toLowerCase().includes(searchText.toLowerCase())) return false
       return true
@@ -279,7 +439,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, total
       }
     })
     return res
-  }, [initialDeudores, isAdmin, filterVendedor, filterBucket, searchText, sortBy])
+  }, [base, filterBucket, searchText, sortBy])
 
   const selectStyle: React.CSSProperties = {
     padding: '9px 30px 9px 12px', borderRadius: 10, border: `1px solid ${MC.border}`,
@@ -289,7 +449,15 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, total
     backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
   }
 
-  if (isDesktop) return <DeudoresTablaDesktop initialDeudores={initialDeudores} isAdmin={isAdmin} />
+  if (isDesktop) {
+    return <DeudoresTablaDesktop initialDeudores={initialDeudores} isAdmin={isAdmin} clientesPorVendedor={clientesPorVendedor} />
+  }
+
+  const subtitulo = !isAdmin
+    ? 'Deuda de tus clientes asignados.'
+    : cartera === 'todos'
+      ? 'Suma de las carteras de los 4 vendedores.'
+      : `Cartera de ${nombreCorto(cartera)}.`
 
   return (
     <div style={{ minHeight: '100vh', background: MC.bg, paddingBottom: 'max(120px, calc(env(safe-area-inset-bottom, 0px) + 100px))' }}>
@@ -312,9 +480,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, total
             botón ancho al lado del título en pantallas angostas lo aplasta. */}
         <div style={{ marginBottom: 4 }}>
           <h1 style={{ fontSize: 26, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>Deudores</h1>
-          <p style={{ fontSize: 12.5, color: MC.faint, marginTop: 2 }}>
-            {isAdmin ? 'Deuda de toda la cartera.' : 'Deuda de tus clientes asignados.'}
-          </p>
+          <p style={{ fontSize: 12.5, color: MC.faint, marginTop: 2 }}>{subtitulo}</p>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
           <NotificationsBell inline variant="light" />
@@ -330,8 +496,9 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, total
           </button>
         </div>
 
-        {/* KPI cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16 }}>
+        {/* KPI cards — siguen el filtro por vendedor: si estás viendo una
+            cartera, el número de arriba es el de esa cartera. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 12 }}>
           <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.blueSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -340,24 +507,29 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, total
               <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Total deudores</span>
             </div>
             <p style={{ fontSize: 22, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>
-              {kpis.total} <span style={{ fontSize: 12, fontWeight: 500, color: MC.faint }}>de {totalClientes} clientes</span>
+              {kpis.total}
+              {clientesBase > 0 && <span style={{ fontSize: 12, fontWeight: 500, color: MC.faint }}> de {clientesBase} clientes</span>}
             </p>
           </div>
           <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.amberSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Coins size={15} color={MC.amber} />
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.redSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Coins size={15} color={MC.red} />
               </div>
-              <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Saldo total</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Deuda vencida</span>
             </div>
-            <p style={{ fontSize: 22, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>{formatCurrency(kpis.saldo)}</p>
+            <p style={{ fontSize: 22, fontWeight: 800, color: MC.red, letterSpacing: '-0.5px' }}>{formatCurrency(kpis.vencida)}</p>
+            <p style={{ fontSize: 11, color: MC.faint, marginTop: 2 }}>Saldo total {formatCurrency(kpis.saldo)}</p>
           </div>
         </div>
+
+        {/* Desglose + filtro por vendedor (sólo admin) */}
+        {isAdmin && <ResumenCarteras filas={filas} total={total} activo={cartera} onSelect={setCartera} />}
 
         {/* Chips de rango de días */}
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 12 }}>
           {([
-            { key: 'todos' as const, label: 'Todos', count: initialDeudores.length, color: MC.blue },
+            { key: 'todos' as const, label: 'Todos', count: base.length, color: MC.blue },
             { key: '1-30' as const, label: '1–30 días', count: bucketCounts['1-30'], color: MC.amber },
             { key: '31-60' as const, label: '31–60 días', count: bucketCounts['31-60'], color: MC.amber },
             { key: '+60' as const, label: '+60 días', count: bucketCounts['+60'], color: MC.red },
@@ -392,39 +564,14 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, total
           {searchText && <button onClick={() => setSearchText('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: MC.faint }}><X size={14} /></button>}
         </div>
 
-        {/* Ordenar + filtro admin */}
+        {/* Ordenar */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} style={selectStyle}>
             <option value="deuda">Deuda (mayor a menor)</option>
             <option value="antigua">Más antigua primero</option>
             <option value="nombre">Nombre (A–Z)</option>
           </select>
-          {isAdmin && (
-            <button onClick={() => setMostrarFiltrosAdmin(v => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
-                border: `1px solid ${filterVendedor ? MC.blue : MC.border}`, background: filterVendedor ? MC.blueSoft : MC.card,
-                color: filterVendedor ? MC.blue : MC.text, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
-              <Filter size={13} /> {filterVendedor || 'Vendedor'}
-            </button>
-          )}
         </div>
-
-        {isAdmin && mostrarFiltrosAdmin && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-            <button onClick={() => { setFilterVendedor(''); setMostrarFiltrosAdmin(false) }}
-              style={{ padding: '6px 12px', borderRadius: 20, border: `1px solid ${!filterVendedor ? MC.blue : MC.border}`,
-                background: !filterVendedor ? MC.blueSoft : MC.card, color: !filterVendedor ? MC.blue : MC.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-              Todos
-            </button>
-            {vendedores.map(v => (
-              <button key={v} onClick={() => { setFilterVendedor(v); setMostrarFiltrosAdmin(false) }}
-                style={{ padding: '6px 12px', borderRadius: 20, border: `1px solid ${filterVendedor === v ? MC.blue : MC.border}`,
-                  background: filterVendedor === v ? MC.blueSoft : MC.card, color: filterVendedor === v ? MC.blue : MC.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                {v}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Contador + exportar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -442,7 +589,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, total
           <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: '40px 20px', textAlign: 'center' }}>
             <Wallet size={32} color={MC.faint} style={{ margin: '0 auto 10px' }} />
             <p style={{ fontSize: 13, color: MC.muted }}>
-              {initialDeudores.length === 0
+              {universo.length === 0
                 ? (isAdmin ? 'Todavía no hay deudores cargados.' : 'Ninguno de tus clientes tiene deuda registrada.')
                 : 'Sin resultados para este filtro'}
             </p>
@@ -451,6 +598,12 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, total
           filtrados.map(d => (
             <DeudorCard key={d.id} d={d} abierto={expandedRow === d.id} onToggle={() => setExpandedRow(expandedRow === d.id ? null : d.id)} onWA={setWaTarget} />
           ))
+        )}
+
+        {isAdmin && (
+          <p style={{ fontSize: 11, color: MC.faint, textAlign: 'center', marginTop: 14, lineHeight: 1.5 }}>
+            Sólo carteras de venta. No incluye incobrables, CERVECERÍA ni cuentas internas.
+          </p>
         )}
       </div>
 
@@ -462,17 +615,28 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, total
   )
 }
 
-// ── Tabla de escritorio (sin cambios de fondo, tema oscuro existente) ─────────
-function DeudoresTablaDesktop({ initialDeudores, isAdmin }: { initialDeudores: Deudor[]; isAdmin: boolean }) {
-  const [filterVendedor, setFilterVendedor] = useState('')
+// ── Tabla de escritorio (tema oscuro existente) ──────────────────────────────
+function DeudoresTablaDesktop({ initialDeudores, isAdmin, clientesPorVendedor }: {
+  initialDeudores: Deudor[]; isAdmin: boolean; clientesPorVendedor: Record<string, number>
+}) {
+  const [cartera, setCartera] = useState<string>('todos')
   const [filterDeudaVencida, setFilterDeudaVencida] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
   const [searchText, setSearchText] = useState('')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
-  const vendedores = Array.from(new Set(initialDeudores.map(d => d.vendedor).filter((v): v is string => !!v)))
+  // Mismo criterio que en móvil: para el admin, sólo las 4 carteras de venta.
+  const universo = useMemo(
+    () => (isAdmin ? initialDeudores.filter(esCarteraDeVenta) : initialDeudores),
+    [initialDeudores, isAdmin],
+  )
 
-  const filteredDeudores = initialDeudores.filter(d => {
-    if (isAdmin && filterVendedor && d.vendedor !== filterVendedor) return false
+  const { filas, total } = useMemo(
+    () => resumenCarteras(universo, clientesPorVendedor),
+    [universo, clientesPorVendedor],
+  )
+
+  const filteredDeudores = universo.filter(d => {
+    if (isAdmin && cartera !== 'todos' && vendedorCanonico(d.vendedor) !== cartera) return false
     if (filterDeudaVencida === 'vencida' && d.deuda_vencida <= 0) return false
     if (filterDeudaVencida === 'sin-vencida' && d.deuda_vencida > 0) return false
     if (searchText && !d.nombre_fantasia.toLowerCase().includes(searchText.toLowerCase())) return false
@@ -509,7 +673,9 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin }: { initialDeudores: D
         <h1 style={{ fontSize: 24, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>Deudores</h1>
       </div>
       <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
-        {isAdmin ? 'Deuda de toda la cartera.' : 'Deuda de tus clientes asignados.'}
+        {isAdmin
+          ? 'Suma de las carteras de los 4 vendedores. No incluye incobrables, CERVECERÍA ni cuentas internas.'
+          : 'Deuda de tus clientes asignados.'}
       </p>
 
       <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
@@ -533,6 +699,34 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin }: { initialDeudores: D
         ))}
       </div>
 
+      {/* Desglose por vendedor — también es el filtro (tarjetas seleccionables) */}
+      {isAdmin && (
+        <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: `repeat(${filas.length + 1},1fr)`, gap: 12, marginBottom: 20 }}>
+          {[{ vendedor: 'todos', nombre: 'Todos', deudores: total.deudores, clientes: total.clientes, vencida: total.vencida },
+            ...filas.map(f => ({ vendedor: f.vendedor, nombre: nombreCorto(f.vendedor), deudores: f.deudores, clientes: f.clientes, vencida: f.vencida }))
+          ].map(f => {
+            const activo = cartera === f.vendedor
+            return (
+              <button key={f.vendedor} onClick={() => setCartera(f.vendedor)}
+                style={{
+                  textAlign: 'left', cursor: 'pointer', font: 'inherit',
+                  background: activo ? 'rgba(212,175,55,0.08)' : 'var(--surface)',
+                  border: `1px solid ${activo ? 'var(--gold)' : 'var(--border)'}`,
+                  borderRadius: 12, padding: '13px 16px',
+                }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: activo ? 'var(--gold)' : 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
+                  {f.nombre}
+                </p>
+                <p style={{ fontSize: 18, fontWeight: 900, color: '#f87171' }}>{formatCurrency(f.vencida)}</p>
+                <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
+                  {f.deudores} deudor{f.deudores === 1 ? '' : 'es'}{f.clientes > 0 ? ` de ${f.clientes}` : ''}
+                </p>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       <div className="grid-stack-mobile" style={{
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 12, padding: '16px 20px', marginBottom: 16,
@@ -554,9 +748,9 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin }: { initialDeudores: D
             <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>
               VENDEDOR
             </label>
-            <select value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)} style={selectStyle}>
-              <option value="">Todos</option>
-              {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+            <select value={cartera} onChange={e => setCartera(e.target.value)} style={selectStyle}>
+              <option value="todos">Todos los vendedores</option>
+              {filas.map(f => <option key={f.vendedor} value={f.vendedor}>{f.vendedor}</option>)}
             </select>
           </div>
         )}
@@ -583,7 +777,7 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin }: { initialDeudores: D
         {filteredDeudores.length === 0 ? (
           <div style={{ padding: '48px 24px', textAlign: 'center' }}>
             <p style={{ color: 'var(--muted)', fontSize: 14 }}>
-              {initialDeudores.length === 0
+              {universo.length === 0
                 ? (isAdmin ? 'Todavía no hay deudores cargados.' : 'Ninguno de tus clientes tiene deuda registrada.')
                 : 'No hay deudores que coincidan con los filtros'}
             </p>
@@ -622,7 +816,7 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin }: { initialDeudores: D
                       <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--cream)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {deudor.nombre_fantasia}
                       </td>
-                      {isAdmin && <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{deudor.vendedor || '—'}</td>}
+                      {isAdmin && <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{vendedorCanonico(deudor.vendedor) || '—'}</td>}
                       <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: deudor.deuda_vencida > 0 ? '#f87171' : '#4ade80' }}>
                         {formatCurrency(deudor.deuda_vencida)}
                       </td>
@@ -721,7 +915,7 @@ function DeudoresTablaDesktop({ initialDeudores, isAdmin }: { initialDeudores: D
       </div>
 
       <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, textAlign: 'right' }}>
-        Mostrando {filteredDeudores.length} de {initialDeudores.length} deudores
+        Mostrando {filteredDeudores.length} de {universo.length} deudores
       </p>
     </div>
   )
