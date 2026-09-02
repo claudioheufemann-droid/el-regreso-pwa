@@ -15,10 +15,10 @@
  *    otro producto: preferimos un marcador neutro (ver ProductImage) antes
  *    que mentirle al vendedor sobre qué está mirando.
  *
- * Productos sin fotografía al 2026-08-26 — pendiente de sesión de fotos:
+ * Productos sin fotografía al 2026-09-02 — pendiente de sesión de fotos:
  * Nitro Coffee, Ámbar Lager, Barley Wine, Carrot Cake Stout, Cucumbeer
- * Sour, Del Caribe Sour, Doble Hazy IPA, Doble IPA, Helles Colab,
- * Imperial Stout, Red IPA.
+ * Sour, Del Caribe Sour, Doble Hazy IPA, Helles Colab,
+ * Imperial Stout.
  */
 
 /** Foto genérica de barril — el envase es el mismo sin importar el sabor. */
@@ -39,6 +39,9 @@ export const IMAGEN_POR_NOMBRE: Record<string, string> = {
   'Kombucha Maqui':              '/productos/kombucha/maqui-hops.webp',
   'Kombucha Maracuyá Cardamomo': '/productos/kombucha/maracuya-cardamomo.webp',
   'Kombucha Natural':            '/productos/kombucha/natural.webp',
+  'Kombucha Lupulada':           '/productos/kombucha/lupulada.webp',
+  'Doble IPA':                   '/productos/cerveza/doble-ipa.webp',
+  'Red IPA':                     '/productos/cerveza/red-ipa.webp',
 }
 
 /** codigo_producto del ERP → el mismo archivo del mapa por nombre. */
@@ -56,6 +59,9 @@ export const IMAGEN_POR_CODIGO: Record<string, string> = {
   'K-10': IMAGEN_POR_NOMBRE['Kombucha Maracuyá Cardamomo'],
   'K-11': IMAGEN_POR_NOMBRE['Kombucha Mango'],
   'K-22': IMAGEN_POR_NOMBRE['Kombucha Detox'],
+  'C-26': IMAGEN_POR_NOMBRE['Doble IPA'],
+  'C-11': IMAGEN_POR_NOMBRE['Red IPA'],
+  'K-30': IMAGEN_POR_NOMBRE['Kombucha Lupulada'],
 }
 
 /**
