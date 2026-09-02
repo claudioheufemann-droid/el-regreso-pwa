@@ -28,6 +28,15 @@ function mesDe(fecha: string) {
   return fecha.slice(0, 7) + '-01' // yyyy-mm-01
 }
 
+/** Espacios dobles del ERP ("Mocho  English") y descriptores entre
+ *  paréntesis en costos_precios ("Kombucha Lemon (Fresh)") hacen que el
+ *  nombre de ventas.producto no calce contra costos_precios.producto con una
+ *  igualdad estricta — normalizamos ambos lados igual antes de cruzar
+ *  (confirmado con datos reales: sin esto se perdía ~48% del volumen). */
+function normalizarProducto(nombre: string): string {
+  return nombre.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+/g, ' ').trim()
+}
+
 /**
  * GET /api/produccion/datos
  *
@@ -64,7 +73,7 @@ export async function GET(req: Request) {
     .from('costos_precios')
     .select('producto, codigo')
     .not('codigo', 'is', null)
-  const codigoPorProducto = new Map((costosPrecios ?? []).map(c => [c.producto as string, c.codigo as string]))
+  const codigoPorProducto = new Map((costosPrecios ?? []).map(c => [normalizarProducto(c.producto as string), c.codigo as string]))
 
   // ventas puede tener >50k filas — PostgREST limita a 1000 por página.
   const PAGE = 1000
@@ -84,7 +93,6 @@ export async function GET(req: Request) {
 
   let excluidosCliente = 0
   let excluidosProducto = 0
-  const productosNoReconocidos = new Map<string, number>()
   const litrosExcluidosProducto = new Map<string, number>()
 
   const general = new Map<string, number>()
@@ -95,10 +103,10 @@ export async function GET(req: Request) {
   for (const f of filas) {
     if (!f.fecha_pedido || !f.producto) continue
     if (esClienteExcluido(f.nombre_fantasia)) { excluidosCliente++; continue }
-    const codigo = codigoPorProducto.get(f.producto)
+    const nombreNormalizado = normalizarProducto(f.producto)
+    const codigo = codigoPorProducto.get(nombreNormalizado)
     if (!codigo) {
       excluidosProducto++
-      productosNoReconocidos.set(f.producto, (productosNoReconocidos.get(f.producto) ?? 0) + 1)
       litrosExcluidosProducto.set(f.producto, (litrosExcluidosProducto.get(f.producto) ?? 0) + (f.litros ?? 0))
       continue
     }
@@ -109,8 +117,11 @@ export async function GET(req: Request) {
 
     general.set(mes, (general.get(mes) ?? 0) + litros)
 
-    if (!porProducto.has(f.producto)) porProducto.set(f.producto, new Map())
-    const serieProd = porProducto.get(f.producto)!
+    // Se agrega bajo el nombre NORMALIZADO (no el crudo de la fila) para que
+    // variantes del mismo producto ("Mocho  English" con doble espacio,
+    // "Kombucha Lemon (Fresh)") caigan en una sola serie.
+    if (!porProducto.has(nombreNormalizado)) porProducto.set(nombreNormalizado, new Map())
+    const serieProd = porProducto.get(nombreNormalizado)!
     serieProd.set(mes, (serieProd.get(mes) ?? 0) + litros)
 
     const bucket = bucketEnvase(f.envase, litros)
@@ -134,8 +145,9 @@ export async function GET(req: Request) {
     calidad.push({ tipo: 'excluido_cliente', clave: null, detalle: `${excluidosCliente} filas de ventas excluidas por ser clientes internos/mermas/muestras (no cuentan como demanda real).`, severidad: 'info' })
   }
   if (excluidosProducto > 0) {
-    const top = [...productosNoReconocidos.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, c]) => `${n} (${c})`).join(', ')
-    calidad.push({ tipo: 'producto_no_reconocido', clave: null, detalle: `${excluidosProducto} filas con un nombre de producto que no calza con ningún código activo en costos_precios (merch, fletes, o nombres viejos del ERP) — no entran al forecast. Los más frecuentes: ${top}.`, severidad: 'advertencia' })
+    const top = [...litrosExcluidosProducto.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
+      .map(([n, litros]) => `${n} (${Math.round(litros)} L)`).join(', ')
+    calidad.push({ tipo: 'producto_no_reconocido', clave: null, detalle: `${excluidosProducto} filas con un nombre de producto que no calza con ningún código activo en costos_precios (merch, fletes, o nombres viejos del ERP) — no entran al forecast. Por volumen, las más importantes: ${top}.`, severidad: 'advertencia' })
   }
   for (const [producto, serie] of porProducto) {
     if (serie.size < 6) {
