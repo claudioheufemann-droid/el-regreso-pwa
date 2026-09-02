@@ -93,6 +93,7 @@ export async function GET(req: Request) {
 
   let excluidosCliente = 0
   let excluidosProducto = 0
+  let excluidosMesEnCurso = 0
   const litrosExcluidosProducto = new Map<string, number>()
 
   const general = new Map<string, number>()
@@ -100,8 +101,16 @@ export async function GET(req: Request) {
   const porEnvase = new Map<EnvaseBucket, Map<string, number>>()
   const mesesConVenta = new Set<string>()
 
+  // El mes en curso siempre está incompleto (hoy puede ser el día 2) — si
+  // entra al modelo como si fuera un mes cerrado, Prophet lo lee como una
+  // caída real de demanda y el backtest compara contra un total falso.
+  // Confirmado con una corrida real: metía un desvío de ~550% en "general".
+  const hoy = new Date()
+  const mesEnCurso = `${hoy.getUTCFullYear()}-${String(hoy.getUTCMonth() + 1).padStart(2, '0')}-01`
+
   for (const f of filas) {
     if (!f.fecha_pedido || !f.producto) continue
+    if (mesDe(f.fecha_pedido) >= mesEnCurso) { excluidosMesEnCurso++; continue }
     if (esClienteExcluido(f.nombre_fantasia)) { excluidosCliente++; continue }
     const nombreNormalizado = normalizarProducto(f.producto)
     const codigo = codigoPorProducto.get(nombreNormalizado)
@@ -158,6 +167,6 @@ export async function GET(req: Request) {
   return NextResponse.json({
     series: { general: toArray(general), producto: productoObj, envase: envaseObj },
     calidadDatos: calidad,
-    meta: { totalFilas: filas.length, excluidosCliente, excluidosProducto, mesesConVenta: mesesConVenta.size },
+    meta: { totalFilas: filas.length, excluidosCliente, excluidosProducto, excluidosMesEnCurso, mesesConVenta: mesesConVenta.size },
   })
 }
