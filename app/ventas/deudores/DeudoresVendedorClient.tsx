@@ -657,12 +657,18 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
   // parezca "132 clientes que me deben" cuando en realidad una parte grande
   // todavía ni vence.
   const conVencida = base.filter(d => d.deuda_comercial > 0).length
+  const kpisSaldo = base.reduce((s, d) => s + (d.saldo_total || 0), 0)
+  const kpisVencida = base.reduce((s, d) => s + (d.deuda_comercial || 0), 0)
   const kpis = {
     total: base.length,
     conVencida,
     soloNoVencida: base.length - conVencida,
-    saldo: base.reduce((s, d) => s + (d.saldo_total || 0), 0),
-    vencida: base.reduce((s, d) => s + (d.deuda_comercial || 0), 0),
+    saldo: kpisSaldo,
+    vencida: kpisVencida,
+    /** Lo que el cliente debe pero todavía no vence (saldo_total incluye
+        ambas partes) — antes solo se veía como link chico, ahora pesa
+        tanto como la vencida y el total. */
+    noVencida: Math.max(0, kpisSaldo - kpisVencida),
   }
 
   const bucketCounts = useMemo(() => {
@@ -748,47 +754,59 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
 
         {/* KPI cards — siguen el filtro por vendedor: si estás viendo una
             cartera, el número de arriba es el de esa cartera. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 12 }}>
-          <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.blueSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Users size={15} color={MC.blue} />
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Total deudores</span>
+        <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.blueSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Users size={15} color={MC.blue} />
             </div>
-            <p style={{ fontSize: 22, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>
-              {kpis.total}
-              {clientesBase > 0 && (
-                <span style={{ fontSize: 12, fontWeight: 500, color: MC.faint }}>
-                  {' '}de {clientesBase} clientes ({Math.round((kpis.total / clientesBase) * 100)}%)
-                </span>
-              )}
-            </p>
-            {/* "Deudor" acá no siempre significa "hay que cobrarle": la mitad
-                suele ser plata que todavía no vence. */}
-            <p style={{ fontSize: 11, color: MC.faint, marginTop: 3 }}>
-              {kpis.conVencida} con deuda vencida
-              {kpis.soloNoVencida > 0 && ` · ${kpis.soloNoVencida} solo dentro de plazo`}
-            </p>
+            <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Total deudores</span>
           </div>
-          <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.redSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Coins size={15} color={MC.red} />
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Deuda vencida</span>
+          <p style={{ fontSize: 22, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>
+            {kpis.total}
+            {clientesBase > 0 && (
+              <span style={{ fontSize: 12, fontWeight: 500, color: MC.faint }}>
+                {' '}de {clientesBase} clientes ({Math.round((kpis.total / clientesBase) * 100)}%)
+              </span>
+            )}
+          </p>
+          {/* "Deudor" acá no siempre significa "hay que cobrarle": la mitad
+              suele ser plata que todavía no vence. */}
+          <p style={{ fontSize: 11, color: MC.faint, marginTop: 3 }}>
+            {kpis.conVencida} con deuda vencida
+            {kpis.soloNoVencida > 0 && ` · ${kpis.soloNoVencida} solo dentro de plazo`}
+          </p>
+        </div>
+
+        {/* Desglose de plata: vencida / no vencida / total con el mismo peso
+            visual — antes solo la vencida era grande y roja, el resto vivía
+            en un link chico y azul que subestimaba montos igual de relevantes
+            para Claudio. Todo el bloque abre el detalle de saldo no vencido. */}
+        <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.redSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Coins size={15} color={MC.red} />
             </div>
-            {/* nowrap: globals.css pone overflow-wrap:anywhere a todo en
-                mobile y sin esto un monto largo se parte a mitad del número. */}
-            <p style={{ fontSize: 22, fontWeight: 800, color: MC.red, letterSpacing: '-0.5px', whiteSpace: 'nowrap' }}>{formatCurrency(kpis.vencida)}</p>
-            <button onClick={() => setShowSaldoNoVencido(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 3, padding: 0,
-                background: 'none', border: 'none', cursor: 'pointer', color: MC.blue,
-                fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
-              Saldo total {formatCurrency(kpis.saldo)}
-              <ChevronRight size={12} />
-            </button>
+            <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Deuda vencida</span>
           </div>
+          {/* nowrap: globals.css pone overflow-wrap:anywhere a todo en
+              mobile y sin esto un monto largo se parte a mitad del número. */}
+          <p style={{ fontSize: 26, fontWeight: 800, color: MC.red, letterSpacing: '-0.5px', whiteSpace: 'nowrap', marginBottom: 14 }}>
+            {formatCurrency(kpis.vencida)}
+          </p>
+          <button onClick={() => setShowSaldoNoVencido(true)}
+            style={{ display: 'flex', width: '100%', gap: 16, padding: 0,
+              background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+            <div style={{ flex: 1, borderTop: `1px solid ${MC.border}`, paddingTop: 10 }}>
+              <p style={{ fontSize: 9.5, fontWeight: 700, color: MC.faint, letterSpacing: '0.05em', marginBottom: 3 }}>NO VENCIDA</p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: MC.amber, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>{formatCurrency(kpis.noVencida)}</p>
+            </div>
+            <div style={{ flex: 1, borderTop: `1px solid ${MC.border}`, paddingTop: 10 }}>
+              <p style={{ fontSize: 9.5, fontWeight: 700, color: MC.faint, letterSpacing: '0.05em', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 3 }}>
+                SALDO TOTAL <ChevronRight size={11} />
+              </p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: MC.text, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>{formatCurrency(kpis.saldo)}</p>
+            </div>
+          </button>
         </div>
 
         {/* Desglose + filtro por vendedor (sólo admin) */}
