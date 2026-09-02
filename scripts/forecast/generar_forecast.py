@@ -88,9 +88,13 @@ def backtest(df: pd.DataFrame) -> dict | None:
     real = test["y"].to_numpy()
     estim = pred["yhat"].clip(lower=0).to_numpy()
     mae = float(abs(real - estim).mean())
-    # MAPE ignora meses reales en 0 (división por cero no tiene sentido ahí)
+    # MAPE ignora meses reales en 0 (división por cero no tiene sentido ahí).
+    # abs() también en el denominador: algunas series (ej. "otros formatos",
+    # que mezcla devoluciones/notas de crédito) pueden tener un mes con litros
+    # netos negativos — sin el abs() el signo del error se invertía y mostraba
+    # desvíos negativos sin sentido (confirmado con una corrida real: -108%).
     no_cero = real != 0
-    mape = float((abs(real[no_cero] - estim[no_cero]) / real[no_cero]).mean() * 100) if no_cero.any() else None
+    mape = float((abs(real[no_cero] - estim[no_cero]) / abs(real[no_cero])).mean() * 100) if no_cero.any() else None
     return {"mae": round(mae, 2), "mape": round(mape, 1) if mape is not None else None,
             "mesesEvaluados": MESES_BACKTEST, "mesesHistorial": len(df)}
 
