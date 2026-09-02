@@ -30,16 +30,14 @@ export default async function StockPage() {
   // la tabla tenga datos (confirmado: rol anon devuelve 0 filas acá).
   const admin = createAdminClient()
 
-  const [{ data }, { data: periodos }, { data: costosPrecios }] = await Promise.all([
+  const [{ data }, { data: periodoActivo }, { data: costosPrecios }] = await Promise.all([
     admin
       .from('stock_productos')
       .select('tipo, producto, codigo_producto, categoria, cantidad, litros, lotes, fecha_informe')
       .order('cantidad', { ascending: false }),
-    supabase
-      .from('periodos')
-      .select('fecha_inicio, fecha_fin, activo')
-      .order('fecha_inicio', { ascending: false })
-      .limit(2),
+    // `periodos` tiene meses futuros precreados (ej. "Marzo 2027") — hay que
+    // anclar al que tiene activo=true, no al de fecha_inicio más reciente.
+    supabase.from('periodos').select('fecha_inicio, fecha_fin').eq('activo', true).maybeSingle(),
     // Puente nombre→código: `ventas.producto` no tiene codigo_producto propio,
     // y su texto no calza directo contra stock_productos.producto (que trae
     // prefijos tipo "Lata (473 ml) de X" o sufijos "(estilo)"). costos_precios
@@ -57,9 +55,18 @@ export default async function StockPage() {
   // pedido explícito: mostrarle al cliente primero lo que más se pide.
   // Ventana = período activo + el inmediatamente anterior, así un producto
   // recién lanzado a mitad de mes no queda al fondo por poca data.
-  const [actual, anterior] = periodos ?? []
-  const inicio = anterior?.fecha_inicio ?? actual?.fecha_inicio ?? null
-  const fin = actual?.fecha_fin ?? null
+  let inicio: string | null = periodoActivo?.fecha_inicio ?? null
+  const fin = periodoActivo?.fecha_fin ?? null
+  if (periodoActivo) {
+    const { data: anterior } = await supabase
+      .from('periodos')
+      .select('fecha_inicio')
+      .lt('fecha_inicio', periodoActivo.fecha_inicio)
+      .order('fecha_inicio', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (anterior) inicio = anterior.fecha_inicio
+  }
 
   let ventaPorCodigo: Record<string, number> = {}
   if (inicio && fin) {
