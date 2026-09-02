@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import StockClient from './StockClient'
 
 export const dynamic = 'force-dynamic'
@@ -22,9 +23,15 @@ export interface StockProductoRow {
 
 export default async function StockPage() {
   const supabase = await createClient()
+  // Service-role a propósito (lib/supabase/admin.ts): stock_productos y
+  // costos_precios exigen RLS `authenticated`, y en modo demo no hay sesión
+  // real — mismo gap ya resuelto para deudores/users/barriles_clientes.
+  // Sin esto la página queda mostrando "aún no se ha cargado el stock" aunque
+  // la tabla tenga datos (confirmado: rol anon devuelve 0 filas acá).
+  const admin = createAdminClient()
 
   const [{ data }, { data: periodos }, { data: costosPrecios }] = await Promise.all([
-    supabase
+    admin
       .from('stock_productos')
       .select('tipo, producto, codigo_producto, categoria, cantidad, litros, lotes, fecha_informe')
       .order('cantidad', { ascending: false }),
@@ -38,7 +45,7 @@ export default async function StockPage() {
     // prefijos tipo "Lata (473 ml) de X" o sufijos "(estilo)"). costos_precios
     // sí tiene el nombre limpio que usa ventas, con su código — cubre el
     // 100% de los códigos que hoy aparecen en stock_productos (verificado).
-    supabase.from('costos_precios').select('producto, codigo').not('codigo', 'is', null),
+    admin.from('costos_precios').select('producto, codigo').not('codigo', 'is', null),
   ])
 
   const filas = (data ?? []) as (StockProductoRow & { fecha_informe: string })[]
