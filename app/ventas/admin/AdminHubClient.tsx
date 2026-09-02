@@ -17,6 +17,13 @@ interface Props {
   vendedores: string[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deudores: any[]
+  huerfanos: { tabla: string; huerfanos: number }[]
+}
+
+const NOMBRE_TABLA: Record<string, string> = {
+  ventas: 'Ventas',
+  misiones: 'Misiones',
+  predicciones_compra: 'Predicción de compra',
 }
 
 const TABS = [
@@ -26,7 +33,7 @@ const TABS = [
   { id: 'metas',     label: 'Metas',             icon: Target      },
 ]
 
-export default function AdminHubClient({ periodos, metas, vendedores, deudores }: Props) {
+export default function AdminHubClient({ periodos, metas, vendedores, deudores, huerfanos }: Props) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') ?? 'ventas')
@@ -99,6 +106,35 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores }
           </div>
         }
       />
+
+      {/* Salud de datos: cuántas filas de ventas/misiones/predicciones no
+          calzan con ningún cliente actual — alerta temprana de que un sync
+          del ERP renombró o perdió un cliente. */}
+      {(() => {
+        const conProblemas = huerfanos.filter(h => h.huerfanos > 0)
+        const total = huerfanos.reduce((s, h) => s + h.huerfanos, 0)
+        return (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            padding: '10px 14px', borderRadius: 10, marginBottom: 20,
+            background: conProblemas.length ? 'rgba(251,191,36,0.08)' : 'rgba(74,222,128,0.06)',
+            border: `1px solid ${conProblemas.length ? 'rgba(251,191,36,0.25)' : 'rgba(74,222,128,0.2)'}`,
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: conProblemas.length ? '#F0B429' : '#4ADE80' }}>
+              {conProblemas.length ? `⚠ Salud de datos: ${total} clientes sin calzar` : '✓ Salud de datos: todo calza'}
+            </span>
+            {conProblemas.map(h => (
+              <span key={h.tabla} style={{
+                fontSize: 11.5, fontWeight: 600, color: 'var(--muted)',
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 999, padding: '3px 10px',
+              }}>
+                {NOMBRE_TABLA[h.tabla] ?? h.tabla}: {h.huerfanos}
+              </span>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Tab Bar */}
       <div className="scroll-x-mobile" style={{
