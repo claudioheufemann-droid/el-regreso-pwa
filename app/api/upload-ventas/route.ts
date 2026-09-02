@@ -184,7 +184,12 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
         total_sin_impuesto:
           parseFloat(String(row['TotalSImp$'] ?? row['Total s/imp $'] ?? '0')) || 0,
         pedido: String(row['Pedido'] ?? '').trim() || null,
-        numero_factura: String(row['Factura'] ?? '').trim() || null,
+        // La hoja "Datos" (la que usa este endpoint) trae esta columna como
+        // "FacturaEnMinusculas", no "Factura" — verificado el 2026-09-02: con
+        // sólo 'Factura' el campo quedaba null en el 100% de las 53.212 filas
+        // ya cargadas, pese a que el ERP sí trae el número (589/795 filas con
+        // dato en un export de muestra).
+        numero_factura: String(row['Factura'] ?? row['FacturaEnMinusculas'] ?? '').trim() || null,
         tipo_venta:
           String(row['TipoDeVenta'] ?? row['Tipo de venta'] ?? '').trim() || null,
         localidad: String(row['Localidad'] ?? '').trim() || null,
