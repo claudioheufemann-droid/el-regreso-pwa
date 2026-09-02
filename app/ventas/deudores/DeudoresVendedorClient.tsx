@@ -50,10 +50,14 @@ interface Deudor {
   maquila_vencida: number
   /** `deuda_vencida` menos la maquila: lo que persigue el área comercial. */
   deuda_comercial: number
+  /** `saldo_total` menos la maquila — para que "vencida + no vencida" sume
+      exactamente este número. Sin esto, saldo_total (crudo del ERP) incluye
+      la maquila pero deuda_comercial ya no, y las tres cifras no calzan. */
+  saldo_comercial: number
 }
 
 /** Fila cruda de Supabase, antes de descontarle la maquila. */
-type DeudorRaw = Omit<Deudor, 'maquila_vencida' | 'deuda_comercial'>
+type DeudorRaw = Omit<Deudor, 'maquila_vencida' | 'deuda_comercial' | 'saldo_comercial'>
 
 interface Props {
   initialDeudores: DeudorRaw[]
@@ -78,6 +82,7 @@ function conDeudaComercial(filas: DeudorRaw[], maquilaPorCliente: Record<string,
       ...d,
       maquila_vencida: Math.round(maquila),
       deuda_comercial: Math.round(Math.max(0, (d.deuda_vencida || 0) - maquila)),
+      saldo_comercial: Math.round(Math.max(0, (d.saldo_total || 0) - maquila)),
     }
   })
 }
@@ -139,7 +144,7 @@ function resumenCarteras(deudores: Deudor[], clientesPorVendedor: Record<string,
     if (!fila) continue
     fila.deudores++
     fila.vencida += d.deuda_comercial || 0
-    fila.saldo += d.saldo_total || 0
+    fila.saldo += d.saldo_comercial || 0
   }
   const filas = [...acc.values()].sort((a, b) => b.vencida - a.vencida)
   const total = filas.reduce(
@@ -190,7 +195,7 @@ function exportarCSV(deudores: Deudor[]) {
     d.external_fecha ? fFecha(d.external_fecha) : '',
     d.external_remito_mas_antiguo ?? '',
     Math.round(d.maquila_vencida),
-    d.saldo_total, d.barriles_adeudados,
+    d.saldo_comercial, d.barriles_adeudados,
     d.ultimo_pago ? fFecha(d.ultimo_pago) : '',
   ])
   const csv = [headers, ...filas].map(fila => fila.map(csvEscape).join(',')).join('\n')
@@ -374,7 +379,7 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>SALDO TOTAL</p>
-            <p style={{ fontSize: 13, fontWeight: 700, color: MC.text }}>{formatCurrency(d.saldo_total)}</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: MC.text }}>{formatCurrency(d.saldo_comercial)}</p>
           </div>
         </div>
       </button>
@@ -518,7 +523,7 @@ function FilaSaldoNoVencido({ d, monto, isAdmin, p, tema }: {
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <p style={{ fontSize: 14, fontWeight: 800, color: p.accent }}>{formatCurrency(monto)}</p>
-          <p style={{ fontSize: 10, color: p.faint, marginTop: 1 }}>de {formatCurrency(d.saldo_total)} saldo total</p>
+          <p style={{ fontSize: 10, color: p.faint, marginTop: 1 }}>de {formatCurrency(d.saldo_comercial)} saldo total</p>
         </div>
         <ChevronRight size={15} color={p.faint}
           style={{ flexShrink: 0, transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
@@ -657,7 +662,10 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
   // parezca "132 clientes que me deben" cuando en realidad una parte grande
   // todavía ni vence.
   const conVencida = base.filter(d => d.deuda_comercial > 0).length
-  const kpisSaldo = base.reduce((s, d) => s + (d.saldo_total || 0), 0)
+  // saldo_comercial (no saldo_total crudo): saldo_total incluye la maquila y
+  // deuda_comercial ya no, así que restar una de la otra directamente daba un
+  // "no vencida" o un total que no calzaban con lo que se ve en pantalla.
+  const kpisSaldo = base.reduce((s, d) => s + (d.saldo_comercial || 0), 0)
   const kpisVencida = base.reduce((s, d) => s + (d.deuda_comercial || 0), 0)
   const kpis = {
     total: base.length,
@@ -941,7 +949,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
 
   const totals = {
     deudores: filteredDeudores.length,
-    saldo_total: filteredDeudores.reduce((sum, d) => sum + (d.saldo_total || 0), 0),
+    saldo_total: filteredDeudores.reduce((sum, d) => sum + (d.saldo_comercial || 0), 0),
     deuda_vencida: filteredDeudores.reduce((sum, d) => sum + (d.deuda_comercial || 0), 0),
     barriles_adeudados: filteredDeudores.reduce((sum, d) => sum + (d.barriles_adeudados || 0), 0),
   }
@@ -1163,7 +1171,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                         {diasMoraDe(deudor) > 0 ? `${diasMoraDe(deudor)} días` : '—'}
                       </td>
                       <td style={{ padding: '11px 14px', textAlign: 'right', color: 'var(--cream)', fontWeight: 600 }}>
-                        {formatCurrency(deudor.saldo_total)}
+                        {formatCurrency(deudor.saldo_comercial)}
                       </td>
                       <td style={{ padding: '11px 14px', textAlign: 'right', color: deudor.barriles_adeudados > 0 ? '#c084fc' : 'var(--muted)', fontWeight: 600 }}>
                         {deudor.barriles_adeudados}
