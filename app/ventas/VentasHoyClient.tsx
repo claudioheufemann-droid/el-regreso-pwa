@@ -161,6 +161,9 @@ interface FilaPedido {
   fechaEntregaHora?: string | null
   entregado?: boolean
   localidad?: string | null
+  /** N° de factura del ERP — null hasta que el pedido se facture. Es lo que
+   *  de verdad se busca al cobrar o reclamar, el pedido queda de referencia. */
+  numeroFactura?: string | null
 }
 /** "24 latas" / "2 barriles" — singular/plural según el envase. */
 function fUnidades(unidades: number, envase: string): string {
@@ -285,6 +288,7 @@ interface FilaPedidoCliente {
   estado: 'entregado' | 'pendiente' | 'sin_informar'
   fechaEntrega: string | null; fechaEntregaHora: string | null
   litros: number; revenue: number
+  numeroFactura: string | null
 }
 
 /** Todos los pedidos de UN cliente en el rango, pendientes y entregados
@@ -344,16 +348,19 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
           pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
           estado: 'pendiente', fechaEntrega: null, fechaEntregaHora: null,
           litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
+          numeroFactura: (p.numeroFactura as string) ?? null,
         }))
         const entregados: FilaPedidoCliente[] = (Array.isArray(ent) ? ent : []).map((p: Record<string, unknown>) => ({
           pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
           estado: 'entregado', fechaEntrega: (p.fechaEntrega as string) ?? null, fechaEntregaHora: (p.fechaEntregaHora as string) ?? null,
           litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
+          numeroFactura: (p.numeroFactura as string) ?? null,
         }))
         const sinInformarFilas: FilaPedidoCliente[] = (Array.isArray(sinInformar) ? sinInformar : []).map((p: Record<string, unknown>) => ({
           pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
           estado: 'sin_informar', fechaEntrega: null, fechaEntregaHora: null,
           litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
+          numeroFactura: (p.numeroFactura as string) ?? null,
         }))
         setPedidos([...pendientes, ...entregados, ...sinInformarFilas])
       })
@@ -384,9 +391,13 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: colorEstado }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>#{ped.pedido}</p>
+                {/* La factura es lo que se busca en el ERP — va primero y más
+                    grande. El pedido queda de referencia abajo. */}
+                <p style={{ fontSize: 13, fontWeight: ped.numeroFactura ? 700 : 400, color: ped.numeroFactura ? C.text : C.faint, lineHeight: 1.3 }}>
+                  {ped.numeroFactura ? `Factura N° ${ped.numeroFactura}` : 'Sin facturar aún'}
+                </p>
                 <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-                  {ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha de pedido'}
+                  Pedido #{ped.pedido} · {ped.fechaPedido ? fFechaCorta(ped.fechaPedido) : 'sin fecha'}
                 </p>
                 <p style={{ fontSize: 11, fontWeight: 600, marginTop: 1, color: colorEstado }}>
                   {ped.estado === 'entregado'
@@ -709,7 +720,9 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                             : ped
                             ? (
                               <>
-                                {[`#${ped.pedido}`, ped.vendedor, ped.localidad].filter(Boolean).join(' · ')}
+                                {/* Factura primero — es lo que se busca en el ERP; el N° de
+                                    pedido queda de referencia entre paréntesis. */}
+                                {[ped.numeroFactura ? `Factura ${ped.numeroFactura} (Ped. ${ped.pedido})` : `Pedido #${ped.pedido} · sin facturar`, ped.vendedor, ped.localidad].filter(Boolean).join(' · ')}
                                 {ped.fechaPedido && (
                                   <>
                                     {' · '}

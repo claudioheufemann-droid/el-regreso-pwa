@@ -130,6 +130,7 @@ export async function GET(req: Request) {
       fechaEntrega: r.fecha_entrega ? String(r.fecha_entrega) : null,
       litros: Number(r.litros ?? 0),
       revenue: Number(r.revenue ?? 0),
+      numeroFactura: r.numero_factura ? String(r.numero_factura) : null,
     })))
   }
 
@@ -149,6 +150,7 @@ export async function GET(req: Request) {
       litros: Number(r.litros ?? 0),
       revenue: Number(r.revenue ?? 0),
       entregado: r.entregado === true,
+      numeroFactura: r.numero_factura ? String(r.numero_factura) : null,
     })))
   }
 
@@ -210,6 +212,7 @@ export async function GET(req: Request) {
       fechaPedido: r.fecha_pedido ? String(r.fecha_pedido) : null,
       litros: Number(r.litros ?? 0),
       revenue: Number(r.revenue ?? 0),
+      numeroFactura: r.numero_factura ? String(r.numero_factura) : null,
     })))
   }
 
@@ -223,6 +226,7 @@ export async function GET(req: Request) {
       fechaPedido: r.fecha_pedido ? String(r.fecha_pedido) : null,
       litros: Number(r.litros ?? 0),
       revenue: Number(r.revenue ?? 0),
+      numeroFactura: r.numero_factura ? String(r.numero_factura) : null,
     })))
   }
 
@@ -238,6 +242,7 @@ export async function GET(req: Request) {
       fechaEntregaHora: r.fecha_entrega_hora ? String(r.fecha_entrega_hora) : null,
       litros: Number(r.litros ?? 0),
       revenue: Number(r.revenue ?? 0),
+      numeroFactura: r.numero_factura ? String(r.numero_factura) : null,
     })))
   }
 

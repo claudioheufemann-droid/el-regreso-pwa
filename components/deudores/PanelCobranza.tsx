@@ -490,6 +490,7 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
 export function documentosParaWA(d: DetalleCobranza) {
   return d.vencidos.filter(v => !v.esMaquila).map(v => ({
     pedido: v.pedido,
+    numeroFactura: v.numeroFactura,
     fechaEmision: v.fechaEmision,
     fechaVencimiento: v.fechaVencimiento,
     diasMora: v.diasMora,
