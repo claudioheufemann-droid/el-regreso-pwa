@@ -723,24 +723,27 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
           Volver
         </button>
 
-        {/* Título y acciones en filas separadas — mismo motivo que Stock: un
-            botón ancho al lado del título en pantallas angostas lo aplasta. */}
-        <div style={{ marginBottom: 4 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>Deudores</h1>
-          <p style={{ fontSize: 12.5, color: MC.faint, marginTop: 2 }}>{subtitulo}</p>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
-          <NotificationsBell inline variant="light" />
-          <button
-            onClick={() => setShowSettings(true)}
-            aria-label="Cuenta"
-            style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', border: `1px solid ${MC.border}`, background: MC.text, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0, padding: 0 }}
-          >
-            {user?.avatarUrl
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={user.avatarUrl} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : (user?.iniciales || '··')}
-          </button>
+        {/* Campana + avatar en la misma fila del título, alineados arriba a la
+            derecha — mismo patrón que AppHeader y Rentabilidad. No hay botón
+            ancho acá (a diferencia de Stock) así que no hay riesgo de aplaste. */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>Deudores</h1>
+            <p style={{ fontSize: 12.5, color: MC.faint, marginTop: 2 }}>{subtitulo}</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
+            <NotificationsBell inline variant="light" />
+            <button
+              onClick={() => setShowSettings(true)}
+              aria-label="Cuenta"
+              style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', border: `1px solid ${MC.border}`, background: MC.text, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0, padding: 0 }}
+            >
+              {user?.avatarUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={user.avatarUrl} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (user?.iniciales || '··')}
+            </button>
+          </div>
         </div>
 
         {/* KPI cards — siguen el filtro por vendedor: si estás viendo una
@@ -775,11 +778,13 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
               </div>
               <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Deuda vencida</span>
             </div>
-            <p style={{ fontSize: 22, fontWeight: 800, color: MC.red, letterSpacing: '-0.5px' }}>{formatCurrency(kpis.vencida)}</p>
+            {/* nowrap: globals.css pone overflow-wrap:anywhere a todo en
+                mobile y sin esto un monto largo se parte a mitad del número. */}
+            <p style={{ fontSize: 22, fontWeight: 800, color: MC.red, letterSpacing: '-0.5px', whiteSpace: 'nowrap' }}>{formatCurrency(kpis.vencida)}</p>
             <button onClick={() => setShowSaldoNoVencido(true)}
               style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 3, padding: 0,
                 background: 'none', border: 'none', cursor: 'pointer', color: MC.blue,
-                fontSize: 11, fontWeight: 600 }}>
+                fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
               Saldo total {formatCurrency(kpis.saldo)}
               <ChevronRight size={12} />
             </button>
