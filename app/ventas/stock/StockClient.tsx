@@ -137,7 +137,7 @@ function DetalleLotes({ f }: { f: StockProductoRow }) {
   )
 }
 
-export default function StockClient({ filas, fechaInforme }: { filas: StockProductoRow[]; fechaInforme: string | null }) {
+export default function StockClient({ filas, fechaInforme, ventaPorCodigo }: { filas: StockProductoRow[]; fechaInforme: string | null; ventaPorCodigo: Record<string, number> }) {
   const router = useRouter()
   const { user } = useUser()
   const [showSettings, setShowSettings] = useState(false)
@@ -505,7 +505,7 @@ export default function StockClient({ filas, fechaInforme }: { filas: StockProdu
       )}
 
       {/* Tarjeta oculta: se rasteriza con html-to-image, nunca se ve en pantalla. */}
-      <StockShareImage ref={shareCardRef} barriles={barriles} envases={envases} fechaInforme={fechaInforme} filtro={filtroImagen} />
+      <StockShareImage ref={shareCardRef} barriles={barriles} envases={envases} fechaInforme={fechaInforme} filtro={filtroImagen} ventaPorCodigo={ventaPorCodigo} />
 
       {errorImagen && (
         <div style={{
