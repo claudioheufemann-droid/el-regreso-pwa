@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ChevronDown, ChevronRight, Wallet, ChevronLeft, Search, X, Users, Coins,
-  MessageCircle, Phone, FileDown,
+  MessageCircle, Phone, FileDown, Loader2,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useIsDesktop } from '@/lib/useIsDesktop'
@@ -13,7 +13,9 @@ import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCo
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
-import PanelCobranza, { documentosParaWA, type DatosCobranza } from '@/components/deudores/PanelCobranza'
+import PanelCobranza, {
+  documentosParaWA, FilaDocumento, CLARO as PALETA_DOC_CLARO, OSCURO as PALETA_DOC_OSCURO, type DatosCobranza,
+} from '@/components/deudores/PanelCobranza'
 import { diasMoraDeudor } from '@/lib/cobranza'
 
 interface Deudor {
@@ -48,10 +50,14 @@ interface Deudor {
   maquila_vencida: number
   /** `deuda_vencida` menos la maquila: lo que persigue el área comercial. */
   deuda_comercial: number
+  /** `saldo_total` menos la maquila — para que "vencida + no vencida" sume
+      exactamente este número. Sin esto, saldo_total (crudo del ERP) incluye
+      la maquila pero deuda_comercial ya no, y las tres cifras no calzan. */
+  saldo_comercial: number
 }
 
 /** Fila cruda de Supabase, antes de descontarle la maquila. */
-type DeudorRaw = Omit<Deudor, 'maquila_vencida' | 'deuda_comercial'>
+type DeudorRaw = Omit<Deudor, 'maquila_vencida' | 'deuda_comercial' | 'saldo_comercial'>
 
 interface Props {
   initialDeudores: DeudorRaw[]
@@ -76,6 +82,7 @@ function conDeudaComercial(filas: DeudorRaw[], maquilaPorCliente: Record<string,
       ...d,
       maquila_vencida: Math.round(maquila),
       deuda_comercial: Math.round(Math.max(0, (d.deuda_vencida || 0) - maquila)),
+      saldo_comercial: Math.round(Math.max(0, (d.saldo_total || 0) - maquila)),
     }
   })
 }
@@ -137,7 +144,7 @@ function resumenCarteras(deudores: Deudor[], clientesPorVendedor: Record<string,
     if (!fila) continue
     fila.deudores++
     fila.vencida += d.deuda_comercial || 0
-    fila.saldo += d.saldo_total || 0
+    fila.saldo += d.saldo_comercial || 0
   }
   const filas = [...acc.values()].sort((a, b) => b.vencida - a.vencida)
   const total = filas.reduce(
@@ -188,7 +195,7 @@ function exportarCSV(deudores: Deudor[]) {
     d.external_fecha ? fFecha(d.external_fecha) : '',
     d.external_remito_mas_antiguo ?? '',
     Math.round(d.maquila_vencida),
-    d.saldo_total, d.barriles_adeudados,
+    d.saldo_comercial, d.barriles_adeudados,
     d.ultimo_pago ? fFecha(d.ultimo_pago) : '',
   ])
   const csv = [headers, ...filas].map(fila => fila.map(csvEscape).join(',')).join('\n')
@@ -372,7 +379,7 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>SALDO TOTAL</p>
-            <p style={{ fontSize: 13, fontWeight: 700, color: MC.text }}>{formatCurrency(d.saldo_total)}</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: MC.text }}>{formatCurrency(d.saldo_comercial)}</p>
           </div>
         </div>
       </button>
@@ -463,6 +470,85 @@ const PALETA_SNV = {
   },
 } as const
 
+/**
+ * Una fila de "saldo no vencido", expandible. El monto agregado ya está
+ * cargado (viene de `deudores`), pero el detalle por documento —qué produjo
+ * ese saldo, con qué pedido y factura, y cuántos días faltan para que venza—
+ * no: se pide bajo demanda con el mismo endpoint que usa PanelCobranza, para
+ * no traer las líneas de venta de los ~170 deudores en la carga inicial.
+ */
+function FilaSaldoNoVencido({ d, monto, isAdmin, p, tema }: {
+  d: Deudor; monto: number; isAdmin: boolean; p: (typeof PALETA_SNV)[keyof typeof PALETA_SNV]; tema: 'claro' | 'oscuro'
+}) {
+  const [abierto, setAbierto] = useState(false)
+  const [detalle, setDetalle] = useState<DatosCobranza['detalle'] | null>(null)
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const pDoc = tema === 'oscuro' ? PALETA_DOC_OSCURO : PALETA_DOC_CLARO
+
+  const toggle = () => {
+    setAbierto(v => !v)
+    if (!detalle && !cargando) {
+      setCargando(true)
+      setError(null)
+      fetch(`/api/deudores/detalle?cliente=${encodeURIComponent(d.nombre_fantasia)}`)
+        .then(r => r.json().then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+          if (!ok) throw new Error(j.error ?? 'No se pudo cargar el detalle')
+          setDetalle(j.detalle)
+        })
+        .catch(e => setError(e instanceof Error ? e.message : 'No se pudo cargar el detalle'))
+        .finally(() => setCargando(false))
+    }
+  }
+
+  return (
+    // flexShrink:0 es necesario a propósito: el contenedor de la lista es un
+    // flex column con overflowY:auto, y esta tarjeta tiene overflow:hidden
+    // (para recortar bien las esquinas redondeadas del detalle desplegable).
+    // Un elemento con overflow != visible tiene alto mínimo automático 0 en
+    // flexbox — sin flexShrink:0, el navegador aplasta las 60 filas para que
+    // "quepan" en el alto visible del modal en vez de dejar que haga scroll
+    // (cada fila terminaba en ~1.6px de alto, con el texto recortado a nada).
+    <div style={{ background: p.sub, border: `1px solid ${p.border}`, borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
+      <button onClick={toggle} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+        padding: '10px 12px', background: 'transparent', border: 'none', cursor: 'pointer', font: 'inherit', textAlign: 'left' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 13.5, fontWeight: 700, color: p.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {d.nombre_fantasia}
+          </p>
+          <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
+            {[d.localidad, isAdmin && d.vendedor ? nombreCorto(vendedorCanonico(d.vendedor)) : null].filter(Boolean).join(' · ') || '—'}
+          </p>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <p style={{ fontSize: 14, fontWeight: 800, color: p.accent }}>{formatCurrency(monto)}</p>
+          <p style={{ fontSize: 10, color: p.faint, marginTop: 1 }}>de {formatCurrency(d.saldo_comercial)} saldo total</p>
+        </div>
+        <ChevronRight size={15} color={p.faint}
+          style={{ flexShrink: 0, transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+      </button>
+
+      {abierto && (
+        <div style={{ borderTop: `1px solid ${p.border}`, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {cargando && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', color: p.muted, fontSize: 12 }}>
+              <Loader2 size={14} className="animate-spin" /> Cargando detalle…
+            </div>
+          )}
+          {error && <p style={{ fontSize: 12, color: '#DC2626' }}>{error}</p>}
+          {detalle && detalle.porVencer.length === 0 && !cargando && (
+            <p style={{ fontSize: 12, color: p.muted }}>Sin documentos identificados para este saldo.</p>
+          )}
+          {detalle && detalle.porVencer.map(doc => (
+            <FilaDocumento key={doc.pedido} d={doc} p={pDoc} porVencer />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SaldoNoVencidoModal({ deudores, isAdmin, tema, onClose }: {
   deudores: Deudor[]; isAdmin: boolean; tema: 'claro' | 'oscuro'; onClose: () => void
 }) {
@@ -506,7 +592,8 @@ function SaldoNoVencidoModal({ deudores, isAdmin, tema, onClose }: {
           </div>
           <p style={{ fontSize: 11, color: p.faint, marginTop: 10, lineHeight: 1.45 }}>
             Es plata que estos clientes deben pero cuyo plazo de pago todavía no se cumple — no hay que cobrarla
-            todavía, sólo tenerla presente.
+            todavía, sólo tenerla presente. Toca un cliente para ver qué pedido la generó, cuántos días faltan
+            para que venza y su N° de factura.
           </p>
         </div>
 
@@ -517,21 +604,7 @@ function SaldoNoVencidoModal({ deudores, isAdmin, tema, onClose }: {
             </p>
           ) : (
             filas.map(({ d, monto }) => (
-              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                background: p.sub, border: `1px solid ${p.border}`, borderRadius: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13.5, fontWeight: 700, color: p.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {d.nombre_fantasia}
-                  </p>
-                  <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
-                    {[d.localidad, isAdmin && d.vendedor ? nombreCorto(vendedorCanonico(d.vendedor)) : null].filter(Boolean).join(' · ') || '—'}
-                  </p>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <p style={{ fontSize: 14, fontWeight: 800, color: p.accent }}>{formatCurrency(monto)}</p>
-                  <p style={{ fontSize: 10, color: p.faint, marginTop: 1 }}>de {formatCurrency(d.saldo_total)} saldo total</p>
-                </div>
-              </div>
+              <FilaSaldoNoVencido key={d.id} d={d} monto={monto} isAdmin={isAdmin} p={p} tema={tema} />
             ))
           )}
         </div>
@@ -583,10 +656,29 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
     ? (cartera === 'todos' ? total.clientes : (clientesPorVendedor[cartera] ?? 0))
     : totalClientesPropios
 
+  // "Total deudores" mezcla dos cosas distintas: clientes con plata YA vencida
+  // (hay que cobrarla) y clientes que sólo tienen saldo dentro de su plazo de
+  // pago (no vencido — no hay apuro). El desglose evita que el número solo
+  // parezca "132 clientes que me deben" cuando en realidad una parte grande
+  // todavía ni vence.
+  const conVencida = base.filter(d => d.deuda_comercial > 0).length
+  // saldo_comercial (no saldo_total crudo): saldo_total incluye la maquila y
+  // deuda_comercial ya no, así que restar una de la otra directamente daba un
+  // "no vencida" o un total que no calzaban con lo que se ve en pantalla.
+  const kpisSaldo = base.reduce((s, d) => s + (d.saldo_comercial || 0), 0)
+  const kpisVencida = base.reduce((s, d) => s + (d.deuda_comercial || 0), 0)
   const kpis = {
     total: base.length,
-    saldo: base.reduce((s, d) => s + (d.saldo_total || 0), 0),
-    vencida: base.reduce((s, d) => s + (d.deuda_comercial || 0), 0),
+    conVencida,
+    soloNoVencida: base.length - conVencida,
+    saldo: kpisSaldo,
+    vencida: kpisVencida,
+    /** Misma cuenta que el modal de detalle (saldoNoVencidoDe, por cliente,
+        sobre deuda_vencida cruda del ERP) — no saldo - deuda_comercial, que
+        da un número distinto porque deuda_comercial ya descuenta la maquila.
+        Calculado así, la tarjeta y el modal jamás pueden mostrar cifras
+        distintas para lo mismo. */
+    noVencida: base.reduce((s, d) => s + saldoNoVencidoDe(d), 0),
   }
 
   const bucketCounts = useMemo(() => {
@@ -647,57 +739,84 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
           Volver
         </button>
 
-        {/* Título y acciones en filas separadas — mismo motivo que Stock: un
-            botón ancho al lado del título en pantallas angostas lo aplasta. */}
-        <div style={{ marginBottom: 4 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>Deudores</h1>
-          <p style={{ fontSize: 12.5, color: MC.faint, marginTop: 2 }}>{subtitulo}</p>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
-          <NotificationsBell inline variant="light" />
-          <button
-            onClick={() => setShowSettings(true)}
-            aria-label="Cuenta"
-            style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', border: `1px solid ${MC.border}`, background: MC.text, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0, padding: 0 }}
-          >
-            {user?.avatarUrl
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={user.avatarUrl} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : (user?.iniciales || '··')}
-          </button>
+        {/* Campana + avatar en la misma fila del título, alineados arriba a la
+            derecha — mismo patrón que AppHeader y Rentabilidad. No hay botón
+            ancho acá (a diferencia de Stock) así que no hay riesgo de aplaste. */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>Deudores</h1>
+            <p style={{ fontSize: 12.5, color: MC.faint, marginTop: 2 }}>{subtitulo}</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
+            <NotificationsBell inline variant="light" />
+            <button
+              onClick={() => setShowSettings(true)}
+              aria-label="Cuenta"
+              style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', border: `1px solid ${MC.border}`, background: MC.text, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0, padding: 0 }}
+            >
+              {user?.avatarUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={user.avatarUrl} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (user?.iniciales || '··')}
+            </button>
+          </div>
         </div>
 
         {/* KPI cards — siguen el filtro por vendedor: si estás viendo una
             cartera, el número de arriba es el de esa cartera. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 12 }}>
-          <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.blueSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Users size={15} color={MC.blue} />
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Total deudores</span>
+        <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.blueSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Users size={15} color={MC.blue} />
             </div>
-            <p style={{ fontSize: 22, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>
-              {kpis.total}
-              {clientesBase > 0 && <span style={{ fontSize: 12, fontWeight: 500, color: MC.faint }}> de {clientesBase} clientes</span>}
-            </p>
+            <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Total deudores</span>
           </div>
-          <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.redSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Coins size={15} color={MC.red} />
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Deuda vencida</span>
+          <p style={{ fontSize: 22, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>
+            {kpis.total}
+            {clientesBase > 0 && (
+              <span style={{ fontSize: 12, fontWeight: 500, color: MC.faint }}>
+                {' '}de {clientesBase} clientes ({Math.round((kpis.total / clientesBase) * 100)}%)
+              </span>
+            )}
+          </p>
+          {/* "Deudor" acá no siempre significa "hay que cobrarle": la mitad
+              suele ser plata que todavía no vence. */}
+          <p style={{ fontSize: 11, color: MC.faint, marginTop: 3 }}>
+            {kpis.conVencida} con deuda vencida
+            {kpis.soloNoVencida > 0 && ` · ${kpis.soloNoVencida} solo dentro de plazo`}
+          </p>
+        </div>
+
+        {/* Desglose de plata: vencida / no vencida / total con el mismo peso
+            visual — antes solo la vencida era grande y roja, el resto vivía
+            en un link chico y azul que subestimaba montos igual de relevantes
+            para Claudio. Todo el bloque abre el detalle de saldo no vencido. */}
+        <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 9, background: MC.redSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Coins size={15} color={MC.red} />
             </div>
-            <p style={{ fontSize: 22, fontWeight: 800, color: MC.red, letterSpacing: '-0.5px' }}>{formatCurrency(kpis.vencida)}</p>
-            <button onClick={() => setShowSaldoNoVencido(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 3, padding: 0,
-                background: 'none', border: 'none', cursor: 'pointer', color: MC.blue,
-                fontSize: 11, fontWeight: 600 }}>
-              Saldo total {formatCurrency(kpis.saldo)}
-              <ChevronRight size={12} />
-            </button>
+            <span style={{ fontSize: 12, fontWeight: 600, color: MC.muted }}>Deuda vencida</span>
           </div>
+          {/* nowrap: globals.css pone overflow-wrap:anywhere a todo en
+              mobile y sin esto un monto largo se parte a mitad del número. */}
+          <p style={{ fontSize: 26, fontWeight: 800, color: MC.red, letterSpacing: '-0.5px', whiteSpace: 'nowrap', marginBottom: 14 }}>
+            {formatCurrency(kpis.vencida)}
+          </p>
+          <button onClick={() => setShowSaldoNoVencido(true)}
+            style={{ display: 'flex', width: '100%', gap: 16, padding: 0,
+              background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+            <div style={{ flex: 1, borderTop: `1px solid ${MC.border}`, paddingTop: 10 }}>
+              <p style={{ fontSize: 9.5, fontWeight: 700, color: MC.faint, letterSpacing: '0.05em', marginBottom: 3 }}>NO VENCIDA</p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: MC.amber, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>{formatCurrency(kpis.noVencida)}</p>
+            </div>
+            <div style={{ flex: 1, borderTop: `1px solid ${MC.border}`, paddingTop: 10 }}>
+              <p style={{ fontSize: 9.5, fontWeight: 700, color: MC.faint, letterSpacing: '0.05em', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 3 }}>
+                SALDO TOTAL <ChevronRight size={11} />
+              </p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: MC.text, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>{formatCurrency(kpis.saldo)}</p>
+            </div>
+          </button>
         </div>
 
         {/* Desglose + filtro por vendedor (sólo admin) */}
@@ -830,10 +949,19 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
 
   const totals = {
     deudores: filteredDeudores.length,
-    saldo_total: filteredDeudores.reduce((sum, d) => sum + (d.saldo_total || 0), 0),
+    saldo_total: filteredDeudores.reduce((sum, d) => sum + (d.saldo_comercial || 0), 0),
     deuda_vencida: filteredDeudores.reduce((sum, d) => sum + (d.deuda_comercial || 0), 0),
     barriles_adeudados: filteredDeudores.reduce((sum, d) => sum + (d.barriles_adeudados || 0), 0),
   }
+
+  // Mismo desglose que la vista móvil: "deudor" mezcla clientes con plata YA
+  // vencida y clientes que sólo tienen saldo dentro de plazo (no vencido).
+  const conVencida = filteredDeudores.filter(d => d.deuda_comercial > 0).length
+  const soloNoVencida = totals.deudores - conVencida
+  // El denominador "de X clientes" sólo se puede armar para admin (es la
+  // cartera que ya se sabe de clientesPorVendedor); para un vendedor viendo
+  // su propia cartera en desktop no llega ese dato acá.
+  const clientesTotal = isAdmin ? (cartera === 'todos' ? total.clientes : (clientesPorVendedor[cartera] ?? 0)) : null
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '8px 12px',
@@ -871,6 +999,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
           { label: 'Barriles', value: totals.barriles_adeudados, format: 'n', color: '#c084fc' },
         ].map(({ label, value, format, color }) => {
           const esSaldo = label === 'Saldo Total'
+          const esDeudores = label === 'Total Deudores'
           return (
             <div key={label} style={{
               background: 'var(--surface)', border: '1px solid var(--border)',
@@ -881,7 +1010,19 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
               </p>
               <p style={{ fontSize: 22, fontWeight: 900, color }}>
                 {format === '$' ? formatCurrency(value) : value.toLocaleString('es-CL')}
+                {esDeudores && clientesTotal !== null && clientesTotal > 0 && (
+                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>
+                    {' '}de {clientesTotal} ({Math.round((totals.deudores / clientesTotal) * 100)}%)
+                  </span>
+                )}
               </p>
+              {/* "Deudor" acá mezcla clientes con plata YA vencida y clientes
+                  que sólo tienen saldo dentro de plazo (no vencido). */}
+              {esDeudores && (
+                <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+                  {conVencida} con deuda vencida{soloNoVencida > 0 ? ` · ${soloNoVencida} solo dentro de plazo` : ''}
+                </p>
+              )}
               {/* El saldo total incluye lo vencido más lo que aún no vence —
                   este botón abre el detalle de esa segunda parte. */}
               {esSaldo && (
@@ -1030,7 +1171,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                         {diasMoraDe(deudor) > 0 ? `${diasMoraDe(deudor)} días` : '—'}
                       </td>
                       <td style={{ padding: '11px 14px', textAlign: 'right', color: 'var(--cream)', fontWeight: 600 }}>
-                        {formatCurrency(deudor.saldo_total)}
+                        {formatCurrency(deudor.saldo_comercial)}
                       </td>
                       <td style={{ padding: '11px 14px', textAlign: 'right', color: deudor.barriles_adeudados > 0 ? '#c084fc' : 'var(--muted)', fontWeight: 600 }}>
                         {deudor.barriles_adeudados}

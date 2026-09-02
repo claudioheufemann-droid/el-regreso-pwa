@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  AlertTriangle, Check, ChevronRight, FileText, HelpCircle, Loader2, Pencil, User,
+  AlertTriangle, Check, ChevronDown, ChevronRight, HelpCircle, Loader2, Pencil, Receipt, User,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import type { DetalleCobranza, DocumentoVencido } from '@/lib/cobranza'
@@ -33,23 +33,23 @@ export interface DatosCobranza {
 // El módulo vive en dos temas: la tarjeta móvil es clara (mismo lenguaje que
 // Clientes/Stock) y la tabla de escritorio es oscura. Mismo componente, misma
 // jerarquía visual, sólo cambian los tokens.
-interface Paleta {
+export interface Paleta {
   card: string; sub: string; text: string; muted: string; faint: string
   border: string; red: string; redSoft: string; amber: string; amberSoft: string
-  green: string; greenSoft: string; accent: string
+  green: string; greenSoft: string; accent: string; accentSoft: string
 }
 
-const CLARO: Paleta = {
+export const CLARO: Paleta = {
   card: '#FFFFFF', sub: '#F8FAFC', text: '#0F172A', muted: '#64748B', faint: '#94A3B8',
   border: '#E2E8F0', red: '#DC2626', redSoft: '#FEF2F2', amber: '#D97706', amberSoft: '#FFFBEB',
-  green: '#059669', greenSoft: '#ECFDF5', accent: '#2563EB',
+  green: '#059669', greenSoft: '#ECFDF5', accent: '#2563EB', accentSoft: '#EFF6FF',
 }
 
-const OSCURO: Paleta = {
+export const OSCURO: Paleta = {
   card: 'rgba(255,255,255,0.03)', sub: 'rgba(255,255,255,0.05)', text: 'var(--cream)',
   muted: 'var(--muted)', faint: '#6B7280', border: 'var(--border)',
   red: '#f87171', redSoft: 'rgba(248,113,113,0.10)', amber: '#fbbf24', amberSoft: 'rgba(251,191,36,0.10)',
-  green: '#4ade80', greenSoft: 'rgba(74,222,128,0.10)', accent: 'var(--gold)',
+  green: '#4ade80', greenSoft: 'rgba(74,222,128,0.10)', accent: 'var(--gold)', accentSoft: 'rgba(212,175,55,0.1)',
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -179,10 +179,18 @@ function BloqueContacto({ cliente, contacto, p, onCambio }: {
   )
 }
 
-// ── Un documento vencido ─────────────────────────────────────────────────────
-function FilaDocumento({ d, p }: { d: DocumentoVencido; p: Paleta }) {
+// ── Un documento (vencido o por vencer) ──────────────────────────────────────
+// Exportado para que /ventas/deudores lo reuse en el modal de "saldo no
+// vencido": mismo componente, mismo detalle de producto/pedido/factura por
+// documento, sólo cambia qué lista de DetalleCobranza se le pasa.
+export function FilaDocumento({ d, p, porVencer = false }: {
+  d: DocumentoVencido; p: Paleta; porVencer?: boolean
+}) {
   const [abierto, setAbierto] = useState(false)
-  const c = colorMora(d.diasMora, p)
+  // "Por vencer" no tiene mora: se muestran los días que faltan, en un tono
+  // neutro — no es plata que haya que cobrar todavía.
+  const diasRestantes = -d.diasMora
+  const c = porVencer ? { fg: p.accent, bg: p.accentSoft } : colorMora(d.diasMora, p)
   // Las líneas negativas del ERP son notas de crédito/ajustes de la misma
   // factura: se muestran igual, marcadas, porque explican por qué el total no
   // es la simple suma de los productos.
@@ -194,10 +202,12 @@ function FilaDocumento({ d, p }: { d: DocumentoVencido; p: Paleta }) {
         style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent',
           border: 'none', cursor: 'pointer', padding: '10px 12px', font: 'inherit', minHeight: 44 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FileText size={14} color={p.faint} style={{ flexShrink: 0 }} />
+          <Receipt size={14} color={d.numeroFactura ? p.accent : p.faint} style={{ flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 13, fontWeight: 800, color: p.text }}>
-              N° {d.pedido.replace(/^0+/, '')}
+            {/* La factura es lo que se busca en el ERP — va primero y más
+                grande. El pedido queda de referencia abajo, no al revés. */}
+            <p style={{ fontSize: 13, fontWeight: 800, color: d.numeroFactura ? p.text : p.faint }}>
+              {d.numeroFactura ? `Factura N° ${d.numeroFactura}` : 'Sin facturar aún'}
               {d.abonoParcial && (
                 <span style={{ fontSize: 9.5, fontWeight: 700, color: p.amber, background: p.amberSoft,
                   padding: '2px 6px', borderRadius: 6, marginLeft: 6 }}>
@@ -212,13 +222,15 @@ function FilaDocumento({ d, p }: { d: DocumentoVencido; p: Paleta }) {
               )}
             </p>
             <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
-              {fFechaCorta(d.fechaEmision)} · venció {fFechaCorta(d.fechaVencimiento)}
+              Pedido N° {d.pedido.replace(/^0+/, '')} · {fFechaCorta(d.fechaEmision)} · {porVencer ? 'vence' : 'venció'} {fFechaCorta(d.fechaVencimiento)}
             </p>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <p style={{ fontSize: 13.5, fontWeight: 800, color: p.text }}>{fPlata(d.monto)}</p>
             <span style={{ fontSize: 10, fontWeight: 700, color: c.fg }}>
-              {d.diasMora} {d.diasMora === 1 ? 'día' : 'días'}
+              {porVencer
+                ? `faltan ${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'}`
+                : `${d.diasMora} ${d.diasMora === 1 ? 'día' : 'días'}`}
             </span>
           </div>
           <ChevronRight size={15} color={p.faint}
@@ -281,6 +293,7 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [intento, setIntento] = useState(0)
+  const [verPorVencer, setVerPorVencer] = useState(false)
 
   // El callback va por ref para que el fetch dependa sólo del cliente: si
   // dependiera de `onDatos`, un padre que pase una arrow inline dispararía un
@@ -441,11 +454,30 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
         </div>
       )}
 
+      {/* Saldo no vencido: plata que el cliente debe pero cuyo plazo todavía no
+          se cumple. No hay que cobrarla, pero el mismo detalle por documento
+          (producto, N° de pedido, N° de factura) sirve para tenerla ubicada. */}
       {detalle.porVencer.length > 0 && (
-        <p style={{ fontSize: 11, color: p.faint, lineHeight: 1.45 }}>
-          Además tiene {detalle.porVencer.length} documento{detalle.porVencer.length === 1 ? '' : 's'} aún no vencido
-          {detalle.porVencer.length === 1 ? '' : 's'} por {fPlata(detalle.porVencer.reduce((s, d) => s + d.monto, 0))}.
-        </p>
+        <div>
+          <button onClick={() => setVerPorVencer(v => !v)}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%',
+              background: 'transparent', border: 'none', cursor: 'pointer', font: 'inherit', padding: '4px 0', marginBottom: verPorVencer ? 7 : 0 }}>
+            <span style={{ fontSize: 11, color: p.faint, lineHeight: 1.45, textAlign: 'left' }}>
+              Además tiene {detalle.porVencer.length} documento{detalle.porVencer.length === 1 ? '' : 's'} aún no vencido
+              {detalle.porVencer.length === 1 ? '' : 's'} por {fPlata(detalle.porVencer.reduce((s, d) => s + d.monto, 0))}.
+            </span>
+            {verPorVencer
+              ? <ChevronDown size={13} color={p.faint} style={{ flexShrink: 0, marginLeft: 8 }} />
+              : <ChevronRight size={13} color={p.faint} style={{ flexShrink: 0, marginLeft: 8 }} />}
+          </button>
+          {verPorVencer && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {detalle.porVencer.map(d => (
+                <FilaDocumento key={d.pedido} d={d} p={p} porVencer />
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

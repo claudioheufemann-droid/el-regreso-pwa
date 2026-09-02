@@ -60,7 +60,7 @@ export async function GET(req: Request) {
 
   let qVentas = supabase
     .from('ventas')
-    .select('pedido, fecha_pedido, producto, envase, categoria_producto, litros, total_sin_impuesto')
+    .select('pedido, fecha_pedido, producto, envase, categoria_producto, litros, total_sin_impuesto, numero_factura')
     .eq('nombre_fantasia', cliente)
     .order('fecha_pedido', { ascending: false })
   if (desde) qVentas = qVentas.gte('fecha_pedido', desde)
