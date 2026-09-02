@@ -17,6 +17,10 @@ interface UserContextType {
   /** Acceso al módulo /ventas/comisiones (Claudio/Douglas/Benjamín/Mariel) —
    *  aparte de puedeVerMargenes, ver lib/comisiones.ts. */
   veComisiones: boolean
+  /** Acceso al módulo /produccion (forecast) — admins + equipo de Producción
+   *  (macroArea='produccion', el mismo grupo que ve el kanban en
+   *  /gestion/produccion). */
+  puedeVerProduccion: boolean
   /** Admin real de la cuenta, sin importar si está "viendo como vendedor"
    *  ahora mismo — ver AppUser.esAdminReal en lib/auth.ts. */
   esAdminReal: boolean
@@ -31,6 +35,7 @@ const UserContext = createContext<UserContextType>({
   region: null,
   puedeVerMargenes: false,
   veComisiones: false,
+  puedeVerProduccion: false,
   esAdminReal: false,
   impersonando: null,
   logout: async () => {},
@@ -65,6 +70,7 @@ export function UserProvider({
         // reconociendo. Se apaga acá explícitamente para que la vista sea
         // fiel a la del vendedor simulado.
         veComisiones: initialUser && !initialUser.impersonando ? puedeVerComisionesEquipo(initialUser) : false,
+        puedeVerProduccion: !!initialUser && (initialUser.isAdmin || initialUser.macroArea === 'produccion'),
         esAdminReal: initialUser?.esAdminReal ?? false,
         impersonando: initialUser?.impersonando ?? null,
         logout,
