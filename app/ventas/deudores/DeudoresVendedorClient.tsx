@@ -498,7 +498,14 @@ function FilaSaldoNoVencido({ d, monto, isAdmin, p, tema }: {
   }
 
   return (
-    <div style={{ background: p.sub, border: `1px solid ${p.border}`, borderRadius: 12, overflow: 'hidden' }}>
+    // flexShrink:0 es necesario a propósito: el contenedor de la lista es un
+    // flex column con overflowY:auto, y esta tarjeta tiene overflow:hidden
+    // (para recortar bien las esquinas redondeadas del detalle desplegable).
+    // Un elemento con overflow != visible tiene alto mínimo automático 0 en
+    // flexbox — sin flexShrink:0, el navegador aplasta las 60 filas para que
+    // "quepan" en el alto visible del modal en vez de dejar que haga scroll
+    // (cada fila terminaba en ~1.6px de alto, con el texto recortado a nada).
+    <div style={{ background: p.sub, border: `1px solid ${p.border}`, borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
       <button onClick={toggle} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%',
         padding: '10px 12px', background: 'transparent', border: 'none', cursor: 'pointer', font: 'inherit', textAlign: 'left' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
