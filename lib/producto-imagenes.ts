@@ -17,9 +17,7 @@
  *
  * Productos sin fotografía al 2026-09-02 — pendiente de sesión de fotos:
  * Ámbar Lager, Cucumbeer Sour, Del Caribe Sour, Doble Hazy IPA,
- * Helles Colab, Imperial Stout.
- * (Nitro Coffee ya tiene foto por nombre, pero no aparece hoy en el ERP —
- * sin código conocido para mapear por codigo_producto.)
+ * Helles Colab, Nitro Coffee (no aparece hoy en el ERP con ese nombre).
  */
 
 /** Foto genérica de barril — el envase es el mismo sin importar el sabor. */
@@ -45,7 +43,7 @@ export const IMAGEN_POR_NOMBRE: Record<string, string> = {
   'Red IPA':                     '/productos/cerveza/red-ipa.webp',
   'Barley Wine':                 '/productos/cerveza/barley-wine.webp',
   'Carrot Cake Stout':           '/productos/cerveza/carrot-cake-stout.webp',
-  'Nitro Coffee':                '/productos/cerveza/nitro-coffee.webp',
+  'Imperial Stout':              '/productos/cerveza/imperial-stout.webp',
 }
 
 /** codigo_producto del ERP → el mismo archivo del mapa por nombre. */
@@ -68,6 +66,7 @@ export const IMAGEN_POR_CODIGO: Record<string, string> = {
   'K-30': IMAGEN_POR_NOMBRE['Kombucha Lupulada'],
   'C-13': IMAGEN_POR_NOMBRE['Barley Wine'],
   'ROT-2': IMAGEN_POR_NOMBRE['Carrot Cake Stout'],
+  'C-6':   IMAGEN_POR_NOMBRE['Imperial Stout'],
 }
 
 /**
