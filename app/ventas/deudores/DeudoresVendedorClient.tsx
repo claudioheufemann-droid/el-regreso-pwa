@@ -651,8 +651,16 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
     ? (cartera === 'todos' ? total.clientes : (clientesPorVendedor[cartera] ?? 0))
     : totalClientesPropios
 
+  // "Total deudores" mezcla dos cosas distintas: clientes con plata YA vencida
+  // (hay que cobrarla) y clientes que sólo tienen saldo dentro de su plazo de
+  // pago (no vencido — no hay apuro). El desglose evita que el número solo
+  // parezca "132 clientes que me deben" cuando en realidad una parte grande
+  // todavía ni vence.
+  const conVencida = base.filter(d => d.deuda_comercial > 0).length
   const kpis = {
     total: base.length,
+    conVencida,
+    soloNoVencida: base.length - conVencida,
     saldo: base.reduce((s, d) => s + (d.saldo_total || 0), 0),
     vencida: base.reduce((s, d) => s + (d.deuda_comercial || 0), 0),
   }
@@ -747,7 +755,17 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
             </div>
             <p style={{ fontSize: 22, fontWeight: 800, color: MC.text, letterSpacing: '-0.5px' }}>
               {kpis.total}
-              {clientesBase > 0 && <span style={{ fontSize: 12, fontWeight: 500, color: MC.faint }}> de {clientesBase} clientes</span>}
+              {clientesBase > 0 && (
+                <span style={{ fontSize: 12, fontWeight: 500, color: MC.faint }}>
+                  {' '}de {clientesBase} clientes ({Math.round((kpis.total / clientesBase) * 100)}%)
+                </span>
+              )}
+            </p>
+            {/* "Deudor" acá no siempre significa "hay que cobrarle": la mitad
+                suele ser plata que todavía no vence. */}
+            <p style={{ fontSize: 11, color: MC.faint, marginTop: 3 }}>
+              {kpis.conVencida} con deuda vencida
+              {kpis.soloNoVencida > 0 && ` · ${kpis.soloNoVencida} solo dentro de plazo`}
             </p>
           </div>
           <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 16 }}>
@@ -903,6 +921,15 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
     barriles_adeudados: filteredDeudores.reduce((sum, d) => sum + (d.barriles_adeudados || 0), 0),
   }
 
+  // Mismo desglose que la vista móvil: "deudor" mezcla clientes con plata YA
+  // vencida y clientes que sólo tienen saldo dentro de plazo (no vencido).
+  const conVencida = filteredDeudores.filter(d => d.deuda_comercial > 0).length
+  const soloNoVencida = totals.deudores - conVencida
+  // El denominador "de X clientes" sólo se puede armar para admin (es la
+  // cartera que ya se sabe de clientesPorVendedor); para un vendedor viendo
+  // su propia cartera en desktop no llega ese dato acá.
+  const clientesTotal = isAdmin ? (cartera === 'todos' ? total.clientes : (clientesPorVendedor[cartera] ?? 0)) : null
+
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '8px 12px',
     background: 'var(--bg)', border: '1px solid var(--border)',
@@ -939,6 +966,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
           { label: 'Barriles', value: totals.barriles_adeudados, format: 'n', color: '#c084fc' },
         ].map(({ label, value, format, color }) => {
           const esSaldo = label === 'Saldo Total'
+          const esDeudores = label === 'Total Deudores'
           return (
             <div key={label} style={{
               background: 'var(--surface)', border: '1px solid var(--border)',
@@ -949,7 +977,19 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
               </p>
               <p style={{ fontSize: 22, fontWeight: 900, color }}>
                 {format === '$' ? formatCurrency(value) : value.toLocaleString('es-CL')}
+                {esDeudores && clientesTotal !== null && clientesTotal > 0 && (
+                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>
+                    {' '}de {clientesTotal} ({Math.round((totals.deudores / clientesTotal) * 100)}%)
+                  </span>
+                )}
               </p>
+              {/* "Deudor" acá mezcla clientes con plata YA vencida y clientes
+                  que sólo tienen saldo dentro de plazo (no vencido). */}
+              {esDeudores && (
+                <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+                  {conVencida} con deuda vencida{soloNoVencida > 0 ? ` · ${soloNoVencida} solo dentro de plazo` : ''}
+                </p>
+              )}
               {/* El saldo total incluye lo vencido más lo que aún no vence —
                   este botón abre el detalle de esa segunda parte. */}
               {esSaldo && (
