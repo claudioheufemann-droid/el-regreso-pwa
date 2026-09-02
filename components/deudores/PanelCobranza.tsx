@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  AlertTriangle, Check, ChevronDown, ChevronRight, FileText, HelpCircle, Loader2, Pencil, Receipt, User,
+  AlertTriangle, Check, ChevronDown, ChevronRight, HelpCircle, Loader2, Pencil, Receipt, User,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import type { DetalleCobranza, DocumentoVencido } from '@/lib/cobranza'
@@ -179,87 +179,12 @@ function BloqueContacto({ cliente, contacto, p, onCambio }: {
   )
 }
 
-// ── N° de factura de un documento ────────────────────────────────────────────
-// El ERP no lo trae en el informe de ventas (sólo el N° de pedido) — se carga
-// a mano, una vez que Gestión Cervecera emite la factura, para poder
-// encontrar ese mismo documento en el sistema sin tener que buscarlo por
-// cliente y fecha.
-function BloqueFactura({ pedido, cliente, numeroFactura, p, onGuardado }: {
-  pedido: string; cliente: string; numeroFactura: string | null; p: Paleta
-  onGuardado: (numero: string | null) => void
-}) {
-  const [editando, setEditando] = useState(false)
-  const [valor, setValor] = useState(numeroFactura ?? '')
-  const [guardando, setGuardando] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function guardar() {
-    setGuardando(true)
-    setError(null)
-    try {
-      const r = await fetch('/api/deudores/factura', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cliente, pedido, numeroFactura: valor }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error ?? 'No se pudo guardar')
-      onGuardado(j.numeroFactura ?? null)
-      setEditando(false)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo guardar')
-    } finally {
-      setGuardando(false)
-    }
-  }
-
-  if (editando) {
-    return (
-      <div onClick={e => e.stopPropagation()}
-        style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
-        <input autoFocus value={valor} onChange={e => setValor(e.target.value)}
-          placeholder="N° factura"
-          onKeyDown={e => { if (e.key === 'Enter') guardar(); if (e.key === 'Escape') setEditando(false) }}
-          style={{ flex: 1, minWidth: 0, minHeight: 30, padding: '4px 8px', borderRadius: 7,
-            border: `1px solid ${p.border}`, background: p.card, color: p.text, fontSize: 12, outline: 'none' }} />
-        <button onClick={guardar} disabled={guardando}
-          style={{ minHeight: 30, padding: '0 10px', borderRadius: 7, border: 'none', background: p.accent,
-            color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', opacity: guardando ? 0.6 : 1,
-            display: 'flex', alignItems: 'center', gap: 4 }}>
-          {guardando ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-        </button>
-        <button onClick={() => { setEditando(false); setValor(numeroFactura ?? '') }}
-          style={{ minHeight: 30, padding: '0 8px', borderRadius: 7, border: `1px solid ${p.border}`,
-            background: 'transparent', color: p.muted, fontSize: 11.5, cursor: 'pointer' }}>
-          ✕
-        </button>
-        {error && <span style={{ fontSize: 10.5, color: p.red }}>{error}</span>}
-      </div>
-    )
-  }
-
-  return (
-    <button onClick={e => { e.stopPropagation(); setEditando(true) }}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, padding: '2px 8px 2px 6px',
-        borderRadius: 7, border: `1px solid ${numeroFactura ? p.accent : p.border}`,
-        background: numeroFactura ? p.accentSoft : p.sub, cursor: 'pointer', font: 'inherit' }}>
-      <Receipt size={11} color={numeroFactura ? p.accent : p.faint} />
-      <span style={{ fontSize: 11, fontWeight: 700, color: numeroFactura ? p.accent : p.faint }}>
-        {numeroFactura ? `Factura N° ${numeroFactura}` : 'Agregar N° de factura'}
-      </span>
-      <Pencil size={9.5} color={numeroFactura ? p.accent : p.faint} />
-    </button>
-  )
-}
-
 // ── Un documento (vencido o por vencer) ──────────────────────────────────────
 // Exportado para que /ventas/deudores lo reuse en el modal de "saldo no
 // vencido": mismo componente, mismo detalle de producto/pedido/factura por
 // documento, sólo cambia qué lista de DetalleCobranza se le pasa.
-export function FilaDocumento({ d, p, cliente, porVencer = false, onFactura }: {
-  d: DocumentoVencido; p: Paleta; cliente: string; porVencer?: boolean
-  /** Avisa al padre cuando se guarda un N° de factura, para reflejarlo en el estado. */
-  onFactura?: (pedido: string, numero: string | null) => void
+export function FilaDocumento({ d, p, porVencer = false }: {
+  d: DocumentoVencido; p: Paleta; porVencer?: boolean
 }) {
   const [abierto, setAbierto] = useState(false)
   // "Por vencer" no tiene mora: se muestran los días que faltan, en un tono
@@ -277,10 +202,12 @@ export function FilaDocumento({ d, p, cliente, porVencer = false, onFactura }: {
         style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent',
           border: 'none', cursor: 'pointer', padding: '10px 12px', font: 'inherit', minHeight: 44 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FileText size={14} color={p.faint} style={{ flexShrink: 0 }} />
+          <Receipt size={14} color={d.numeroFactura ? p.accent : p.faint} style={{ flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 13, fontWeight: 800, color: p.text }}>
-              N° {d.pedido.replace(/^0+/, '')}
+            {/* La factura es lo que se busca en el ERP — va primero y más
+                grande. El pedido queda de referencia abajo, no al revés. */}
+            <p style={{ fontSize: 13, fontWeight: 800, color: d.numeroFactura ? p.text : p.faint }}>
+              {d.numeroFactura ? `Factura N° ${d.numeroFactura}` : 'Sin facturar aún'}
               {d.abonoParcial && (
                 <span style={{ fontSize: 9.5, fontWeight: 700, color: p.amber, background: p.amberSoft,
                   padding: '2px 6px', borderRadius: 6, marginLeft: 6 }}>
@@ -295,10 +222,8 @@ export function FilaDocumento({ d, p, cliente, porVencer = false, onFactura }: {
               )}
             </p>
             <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
-              {fFechaCorta(d.fechaEmision)} · {porVencer ? 'vence' : 'venció'} {fFechaCorta(d.fechaVencimiento)}
+              Pedido N° {d.pedido.replace(/^0+/, '')} · {fFechaCorta(d.fechaEmision)} · {porVencer ? 'vence' : 'venció'} {fFechaCorta(d.fechaVencimiento)}
             </p>
-            <BloqueFactura pedido={d.pedido} cliente={cliente} numeroFactura={d.numeroFactura} p={p}
-              onGuardado={numero => onFactura?.(d.pedido, numero)} />
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <p style={{ fontSize: 13.5, fontWeight: 800, color: p.text }}>{fPlata(d.monto)}</p>
@@ -435,16 +360,6 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
   const comerciales = detalle.vencidos.filter(d => !d.esMaquila)
   const maquila = detalle.vencidos.filter(d => d.esMaquila)
 
-  // Refleja al toque el N° de factura que se acaba de guardar, sin tener que
-  // recargar todo el detalle.
-  const marcarFactura = (pedido: string, numero: string | null) => {
-    setDatos(d => {
-      if (!d) return d
-      const aplicar = (doc: DocumentoVencido) => (doc.pedido === pedido ? { ...doc, numeroFactura: numero } : doc)
-      return { ...d, detalle: { ...d.detalle, vencidos: d.detalle.vencidos.map(aplicar), porVencer: d.detalle.porVencer.map(aplicar) } }
-    })
-  }
-
   return (
     <div style={{ marginBottom: 12 }}>
       {/* Días exactos de mora — el número que el vendedor dice por teléfono. */}
@@ -490,7 +405,7 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
-          {comerciales.map(d => <FilaDocumento key={d.pedido} d={d} p={p} cliente={cliente} onFactura={marcarFactura} />)}
+          {comerciales.map(d => <FilaDocumento key={d.pedido} d={d} p={p} />)}
 
           {/* El resto: plata vencida que el ERP tiene pero que ninguna factura
               del informe de ventas explica. Va con su antigüedad, que es lo
@@ -534,7 +449,7 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
             <span style={{ fontSize: 12, fontWeight: 700, color: p.muted }}>{fPlata(detalle.maquilaVencida)}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: 0.72 }}>
-            {maquila.map(d => <FilaDocumento key={d.pedido} d={d} p={p} cliente={cliente} onFactura={marcarFactura} />)}
+            {maquila.map(d => <FilaDocumento key={d.pedido} d={d} p={p} />)}
           </div>
         </div>
       )}
@@ -558,7 +473,7 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
           {verPorVencer && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {detalle.porVencer.map(d => (
-                <FilaDocumento key={d.pedido} d={d} p={p} cliente={cliente} porVencer onFactura={marcarFactura} />
+                <FilaDocumento key={d.pedido} d={d} p={p} porVencer />
               ))}
             </div>
           )}

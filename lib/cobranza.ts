@@ -182,10 +182,9 @@ export interface DocumentoVencido {
   esMaquila: boolean
   items: ItemDocumento[]
   /**
-   * N° de factura que el ERP le asignó a este pedido, cargado a mano en
-   * `facturas_pedido` (el informe de ventas no lo trae). null si nadie lo
-   * cargó todavía. Se completa en /api/deudores/detalle, no acá: esta función
-   * es la reconstrucción pura, sin acceso a la base de datos.
+   * N° de factura del ERP (columna "Factura" del informe de ventas, viaja en
+   * `ventas.numero_factura`). null cuando el pedido todavía no se facturó o
+   * es anterior a que se empezara a guardar esta columna.
    */
   numeroFactura: string | null
 }
@@ -215,6 +214,8 @@ export interface DeudorEntrada {
 export interface FilaVenta extends LineaVenta {
   pedido: string | null
   fecha_pedido: string
+  /** N° de factura del ERP (columna "Factura" del informe de ventas). */
+  numero_factura: string | null
 }
 
 export interface DetalleCobranza {
@@ -354,7 +355,10 @@ function armarDocumentos(ventas: FilaVenta[], diasPago: number, hoy: string): Do
       abonoParcial: false,
       esMaquila: filas.every(f => esLineaMaquila(f.producto)),
       items,
-      numeroFactura: null,
+      // Debería ser la misma para todas las líneas del pedido (una factura
+      // por documento); si alguna línea no la trae (nota de crédito, fila
+      // vieja del histórico) se toma la primera que sí la tenga.
+      numeroFactura: filas.find(f => f.numero_factura)?.numero_factura ?? null,
     })
   }
   return docs.sort((a, b) => b.diasMora - a.diasMora)
@@ -487,22 +491,4 @@ export function reconstruirCobranza(
  */
 export function maquilaVencidaDe(deudor: DeudorEntrada, ventas: FilaVenta[], hoy: string = hoyISO()): number {
   return reconstruirCobranza(deudor, ventas, hoy).maquilaVencida
-}
-
-/**
- * Completa `numeroFactura` en vencidos + porVencer a partir de lo cargado en
- * `facturas_pedido` (pedido → número de factura). Función pura, aparte de
- * `reconstruirCobranza`, para que ésta no toque la base de datos: quien la
- * llama (la API route) es quien sabe cómo se leyó la tabla.
- */
-export function conNumeroFactura(detalle: DetalleCobranza, facturas: Record<string, string>): DetalleCobranza {
-  const marcar = (d: DocumentoVencido): DocumentoVencido => {
-    const numero = facturas[d.pedido]
-    return numero ? { ...d, numeroFactura: numero } : d
-  }
-  return {
-    ...detalle,
-    vencidos: detalle.vencidos.map(marcar),
-    porVencer: detalle.porVencer.map(marcar),
-  }
 }

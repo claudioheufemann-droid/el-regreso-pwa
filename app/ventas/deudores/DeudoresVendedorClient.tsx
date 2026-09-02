@@ -536,7 +536,7 @@ function FilaSaldoNoVencido({ d, monto, isAdmin, p, tema }: {
             <p style={{ fontSize: 12, color: p.muted }}>Sin documentos identificados para este saldo.</p>
           )}
           {detalle && detalle.porVencer.map(doc => (
-            <FilaDocumento key={doc.pedido} d={doc} p={pDoc} cliente={d.nombre_fantasia} porVencer />
+            <FilaDocumento key={doc.pedido} d={doc} p={pDoc} porVencer />
           ))}
         </div>
       )}

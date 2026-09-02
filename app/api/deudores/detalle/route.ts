@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { vendedorCanonico } from '@/lib/types'
-import { reconstruirCobranza, conNumeroFactura, sumarDias, type FilaVenta } from '@/lib/cobranza'
+import { reconstruirCobranza, sumarDias, type FilaVenta } from '@/lib/cobranza'
 
 /**
  * GET /api/deudores/detalle?cliente=<nombre_fantasia>
@@ -60,7 +60,7 @@ export async function GET(req: Request) {
 
   let qVentas = supabase
     .from('ventas')
-    .select('pedido, fecha_pedido, producto, envase, categoria_producto, litros, total_sin_impuesto')
+    .select('pedido, fecha_pedido, producto, envase, categoria_producto, litros, total_sin_impuesto, numero_factura')
     .eq('nombre_fantasia', cliente)
     .order('fecha_pedido', { ascending: false })
   if (desde) qVentas = qVentas.gte('fecha_pedido', desde)
@@ -76,21 +76,7 @@ export async function GET(req: Request) {
 
   if (errVentas) return NextResponse.json({ error: errVentas.message }, { status: 500 })
 
-  let detalle = reconstruirCobranza(deudor, (ventas ?? []) as FilaVenta[])
-
-  // Números de factura cargados a mano para los pedidos que aparecen en el
-  // detalle (vencidos + por vencer). No vive en `ventas`: ver la nota en
-  // supabase/migrations/facturas_pedido.sql.
-  const pedidos = [...detalle.vencidos, ...detalle.porVencer].map(d => d.pedido)
-  if (pedidos.length > 0) {
-    const { data: facturas } = await supabase
-      .from('facturas_pedido')
-      .select('pedido, numero_factura')
-      .in('pedido', pedidos)
-    const mapa = Object.fromEntries((facturas ?? []).map(f => [f.pedido, f.numero_factura]))
-    detalle = conNumeroFactura(detalle, mapa)
-  }
-
+  const detalle = reconstruirCobranza(deudor, (ventas ?? []) as FilaVenta[])
   const deudaVencida = Number(deudor.deuda_vencida) || 0
 
   return NextResponse.json({

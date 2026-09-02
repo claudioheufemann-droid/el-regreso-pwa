@@ -184,6 +184,7 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
         total_sin_impuesto:
           parseFloat(String(row['TotalSImp$'] ?? row['Total s/imp $'] ?? '0')) || 0,
         pedido: String(row['Pedido'] ?? '').trim() || null,
+        numero_factura: String(row['Factura'] ?? '').trim() || null,
         tipo_venta:
           String(row['TipoDeVenta'] ?? row['Tipo de venta'] ?? '').trim() || null,
         localidad: String(row['Localidad'] ?? '').trim() || null,
