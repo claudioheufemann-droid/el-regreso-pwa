@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ChevronDown, ChevronRight, Wallet, ChevronLeft, Search, X, Users, Coins,
-  MessageCircle, Phone, FileDown,
+  MessageCircle, Phone, FileDown, Loader2,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useIsDesktop } from '@/lib/useIsDesktop'
@@ -13,7 +13,9 @@ import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCo
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
-import PanelCobranza, { documentosParaWA, type DatosCobranza } from '@/components/deudores/PanelCobranza'
+import PanelCobranza, {
+  documentosParaWA, FilaDocumento, CLARO as PALETA_DOC_CLARO, OSCURO as PALETA_DOC_OSCURO, type DatosCobranza,
+} from '@/components/deudores/PanelCobranza'
 import { diasMoraDeudor } from '@/lib/cobranza'
 
 interface Deudor {
@@ -463,6 +465,78 @@ const PALETA_SNV = {
   },
 } as const
 
+/**
+ * Una fila de "saldo no vencido", expandible. El monto agregado ya está
+ * cargado (viene de `deudores`), pero el detalle por documento —qué produjo
+ * ese saldo, con qué pedido y factura, y cuántos días faltan para que venza—
+ * no: se pide bajo demanda con el mismo endpoint que usa PanelCobranza, para
+ * no traer las líneas de venta de los ~170 deudores en la carga inicial.
+ */
+function FilaSaldoNoVencido({ d, monto, isAdmin, p, tema }: {
+  d: Deudor; monto: number; isAdmin: boolean; p: (typeof PALETA_SNV)[keyof typeof PALETA_SNV]; tema: 'claro' | 'oscuro'
+}) {
+  const [abierto, setAbierto] = useState(false)
+  const [detalle, setDetalle] = useState<DatosCobranza['detalle'] | null>(null)
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const pDoc = tema === 'oscuro' ? PALETA_DOC_OSCURO : PALETA_DOC_CLARO
+
+  const toggle = () => {
+    setAbierto(v => !v)
+    if (!detalle && !cargando) {
+      setCargando(true)
+      setError(null)
+      fetch(`/api/deudores/detalle?cliente=${encodeURIComponent(d.nombre_fantasia)}`)
+        .then(r => r.json().then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+          if (!ok) throw new Error(j.error ?? 'No se pudo cargar el detalle')
+          setDetalle(j.detalle)
+        })
+        .catch(e => setError(e instanceof Error ? e.message : 'No se pudo cargar el detalle'))
+        .finally(() => setCargando(false))
+    }
+  }
+
+  return (
+    <div style={{ background: p.sub, border: `1px solid ${p.border}`, borderRadius: 12, overflow: 'hidden' }}>
+      <button onClick={toggle} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+        padding: '10px 12px', background: 'transparent', border: 'none', cursor: 'pointer', font: 'inherit', textAlign: 'left' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 13.5, fontWeight: 700, color: p.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {d.nombre_fantasia}
+          </p>
+          <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
+            {[d.localidad, isAdmin && d.vendedor ? nombreCorto(vendedorCanonico(d.vendedor)) : null].filter(Boolean).join(' · ') || '—'}
+          </p>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <p style={{ fontSize: 14, fontWeight: 800, color: p.accent }}>{formatCurrency(monto)}</p>
+          <p style={{ fontSize: 10, color: p.faint, marginTop: 1 }}>de {formatCurrency(d.saldo_total)} saldo total</p>
+        </div>
+        <ChevronRight size={15} color={p.faint}
+          style={{ flexShrink: 0, transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+      </button>
+
+      {abierto && (
+        <div style={{ borderTop: `1px solid ${p.border}`, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {cargando && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', color: p.muted, fontSize: 12 }}>
+              <Loader2 size={14} className="animate-spin" /> Cargando detalle…
+            </div>
+          )}
+          {error && <p style={{ fontSize: 12, color: '#DC2626' }}>{error}</p>}
+          {detalle && detalle.porVencer.length === 0 && !cargando && (
+            <p style={{ fontSize: 12, color: p.muted }}>Sin documentos identificados para este saldo.</p>
+          )}
+          {detalle && detalle.porVencer.map(doc => (
+            <FilaDocumento key={doc.pedido} d={doc} p={pDoc} cliente={d.nombre_fantasia} porVencer />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SaldoNoVencidoModal({ deudores, isAdmin, tema, onClose }: {
   deudores: Deudor[]; isAdmin: boolean; tema: 'claro' | 'oscuro'; onClose: () => void
 }) {
@@ -506,7 +580,8 @@ function SaldoNoVencidoModal({ deudores, isAdmin, tema, onClose }: {
           </div>
           <p style={{ fontSize: 11, color: p.faint, marginTop: 10, lineHeight: 1.45 }}>
             Es plata que estos clientes deben pero cuyo plazo de pago todavía no se cumple — no hay que cobrarla
-            todavía, sólo tenerla presente.
+            todavía, sólo tenerla presente. Toca un cliente para ver qué pedido la generó, cuántos días faltan
+            para que venza y su N° de factura.
           </p>
         </div>
 
@@ -517,21 +592,7 @@ function SaldoNoVencidoModal({ deudores, isAdmin, tema, onClose }: {
             </p>
           ) : (
             filas.map(({ d, monto }) => (
-              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                background: p.sub, border: `1px solid ${p.border}`, borderRadius: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13.5, fontWeight: 700, color: p.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {d.nombre_fantasia}
-                  </p>
-                  <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
-                    {[d.localidad, isAdmin && d.vendedor ? nombreCorto(vendedorCanonico(d.vendedor)) : null].filter(Boolean).join(' · ') || '—'}
-                  </p>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <p style={{ fontSize: 14, fontWeight: 800, color: p.accent }}>{formatCurrency(monto)}</p>
-                  <p style={{ fontSize: 10, color: p.faint, marginTop: 1 }}>de {formatCurrency(d.saldo_total)} saldo total</p>
-                </div>
-              </div>
+              <FilaSaldoNoVencido key={d.id} d={d} monto={monto} isAdmin={isAdmin} p={p} tema={tema} />
             ))
           )}
         </div>
