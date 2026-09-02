@@ -665,10 +665,12 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
     soloNoVencida: base.length - conVencida,
     saldo: kpisSaldo,
     vencida: kpisVencida,
-    /** Lo que el cliente debe pero todavía no vence (saldo_total incluye
-        ambas partes) — antes solo se veía como link chico, ahora pesa
-        tanto como la vencida y el total. */
-    noVencida: Math.max(0, kpisSaldo - kpisVencida),
+    /** Misma cuenta que el modal de detalle (saldoNoVencidoDe, por cliente,
+        sobre deuda_vencida cruda del ERP) — no saldo - deuda_comercial, que
+        da un número distinto porque deuda_comercial ya descuenta la maquila.
+        Calculado así, la tarjeta y el modal jamás pueden mostrar cifras
+        distintas para lo mismo. */
+    noVencida: base.reduce((s, d) => s + saldoNoVencidoDe(d), 0),
   }
 
   const bucketCounts = useMemo(() => {
