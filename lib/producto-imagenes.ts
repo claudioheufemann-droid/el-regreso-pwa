@@ -16,9 +16,8 @@
  *    que mentirle al vendedor sobre qué está mirando.
  *
  * Productos sin fotografía al 2026-09-02 — pendiente de sesión de fotos:
- * Nitro Coffee, Ámbar Lager, Carrot Cake Stout, Cucumbeer
- * Sour, Del Caribe Sour, Doble Hazy IPA, Helles Colab,
- * Imperial Stout.
+ * Nitro Coffee, Ámbar Lager, Cucumbeer Sour, Del Caribe Sour,
+ * Doble Hazy IPA, Helles Colab, Imperial Stout.
  */
 
 /** Foto genérica de barril — el envase es el mismo sin importar el sabor. */
@@ -43,6 +42,7 @@ export const IMAGEN_POR_NOMBRE: Record<string, string> = {
   'Doble IPA':                   '/productos/cerveza/doble-ipa.webp',
   'Red IPA':                     '/productos/cerveza/red-ipa.webp',
   'Barley Wine':                 '/productos/cerveza/barley-wine.webp',
+  'Carrot Cake Stout':           '/productos/cerveza/carrot-cake-stout.webp',
 }
 
 /** codigo_producto del ERP → el mismo archivo del mapa por nombre. */
@@ -64,6 +64,7 @@ export const IMAGEN_POR_CODIGO: Record<string, string> = {
   'C-11': IMAGEN_POR_NOMBRE['Red IPA'],
   'K-30': IMAGEN_POR_NOMBRE['Kombucha Lupulada'],
   'C-13': IMAGEN_POR_NOMBRE['Barley Wine'],
+  'ROT-2': IMAGEN_POR_NOMBRE['Carrot Cake Stout'],
 }
 
 /**
