@@ -2,7 +2,11 @@ name: Forecast de Producción (Prophet)
 
 on:
   schedule:
-    - cron: '0 8 * * 1'   # lunes 08:00 UTC (~05:00 Chile invierno) — semanal, no diario: la data es mensual
+    # Día 2 de cada mes, 08:00 UTC (~05:00 Chile invierno). Mensual porque el
+    # forecast agrega ventas por mes calendario — corre cada 15 min no aporta
+    # nada nuevo hasta que cierra el mes. Día 2 (no el 1) le da margen al sync
+    # de ventas para terminar de cargar el último día del mes anterior.
+    - cron: '0 8 2 * *'
   workflow_dispatch:
 
 jobs:
