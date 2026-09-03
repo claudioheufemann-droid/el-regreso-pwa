@@ -550,7 +550,14 @@ export default function ProduccionClient({
 
           {/* ══════════ VISTA 2: FORECASTING (datos reales) ══════════ */}
           {activeTab === 'forecasting' && (
-            <div className="flex h-full flex-col gap-6">
+            // h-full (no min-h-full) forzaba esta columna a la altura exacta
+            // del viewport: con sólo filtros+gráfico entraba justo, pero al
+            // agregar la tabla de detalle abajo, flexbox la comprimía a 0px
+            // en vez de dejar crecer la columna y que el contenedor de más
+            // arriba (flex-1 overflow-auto) scrolleara — confirmado con el
+            // computed height de la tarjeta de la tabla: 35px de alto,
+            // wrapper interno en 0px pese a tener 94 filas en el DOM.
+            <div className="flex min-h-full flex-col gap-6">
 
               {/* Filtros */}
               <div className="flex flex-wrap items-end gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
