@@ -203,6 +203,45 @@ export function esClienteExcluido(nombre: string | null | undefined): boolean {
 }
 
 /**
+ * Clientes que Ventas EXCLUYE pero que el forecast de Producción SÍ cuenta.
+ *
+ * Comercial no los reporta como venta porque no son venta a terceros, pero
+ * son litros que igual hay que producir: el punto de venta propio, el
+ * BaseCamp y las ferias consumen cerveza real. Para planificar producción,
+ * dejarlos fuera es subestimar la demanda.
+ *
+ * Es una re-inclusión sobre CLIENTES_EXCLUIR, no una lista aparte: sacar un
+ * nombre de acá lo devuelve al comportamiento de Ventas.
+ *
+ * OJO con el historial: estos clientes recién se empezaron a guardar en
+ * `ventas` en jun-2026 (antes los filtraba CLIENTES_NO_GUARDAR), así que los
+ * meses anteriores subestiman el volumen real. /api/produccion/datos detecta
+ * ese salto y lo avisa en el panel de calidad de datos.
+ *
+ * Mismo criterio de comparación que CLIENTES_EXCLUIR: minúsculas e includes(),
+ * así que basta un fragmento distintivo para cubrir variantes del ERP.
+ */
+export const CLIENTES_INCLUIR_PRODUCCION: string[] = [
+  'cliente pdv',          // punto de venta propio
+  'basecamp el regreso',  // consumo en el BaseCamp
+  'cliente feria',        // ferias y eventos
+]
+
+/**
+ * Cliente que no debe entrar al forecast de Producción.
+ *
+ * Parte de la exclusión de Ventas, pero las re-inclusiones de Producción
+ * mandan: se evalúan primero, así un cliente de CLIENTES_INCLUIR_PRODUCCION
+ * entra al forecast aunque figure en CLIENTES_EXCLUIR.
+ */
+export function esClienteExcluidoProduccion(nombre: string | null | undefined): boolean {
+  if (!nombre) return false
+  const n = nombre.toLowerCase().trim()
+  if (CLIENTES_INCLUIR_PRODUCCION.some(inc => n.includes(inc))) return false
+  return esClienteExcluido(nombre)
+}
+
+/**
  * Subconjunto de CLIENTES_EXCLUIR que además de excluirse de los reportes de
  * venta real, ni siquiera se GUARDA en `ventas` al cargar un archivo del ERP.
  *

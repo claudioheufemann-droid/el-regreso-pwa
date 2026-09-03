@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { esClienteExcluido } from '@/lib/types'
+import { esClienteExcluidoProduccion, CLIENTES_INCLUIR_PRODUCCION } from '@/lib/types'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -95,6 +95,13 @@ export async function GET(req: Request) {
   let excluidosProducto = 0
   let excluidosMesEnCurso = 0
   const litrosExcluidosProducto = new Map<string, number>()
+  // Volumen y primer mes de los clientes que Ventas excluye y Producción sí
+  // cuenta (PDV/BaseCamp/Feria). El primer mes importa: si empiezan mucho
+  // después que el resto del historial, la serie tiene un salto de nivel
+  // artificial y hay que avisarlo antes de que el modelo lo lea como
+  // crecimiento real.
+  const litrosReincluidos = new Map<string, number>()
+  const primerMesReincluido = new Map<string, string>()
 
   const general = new Map<string, number>()
   const porProducto = new Map<string, Map<string, number>>()
@@ -111,7 +118,19 @@ export async function GET(req: Request) {
   for (const f of filas) {
     if (!f.fecha_pedido || !f.producto) continue
     if (mesDe(f.fecha_pedido) >= mesEnCurso) { excluidosMesEnCurso++; continue }
-    if (esClienteExcluido(f.nombre_fantasia)) { excluidosCliente++; continue }
+    // esClienteExcluidoProduccion (no esClienteExcluido): Producción cuenta
+    // PDV/BaseCamp/Feria, que Ventas no reporta — ver
+    // CLIENTES_INCLUIR_PRODUCCION en lib/types.ts.
+    if (esClienteExcluidoProduccion(f.nombre_fantasia)) { excluidosCliente++; continue }
+
+    const nombreCliente = (f.nombre_fantasia ?? '').toLowerCase().trim()
+    if (CLIENTES_INCLUIR_PRODUCCION.some(inc => nombreCliente.includes(inc))) {
+      const clave = f.nombre_fantasia ?? '(sin nombre)'
+      litrosReincluidos.set(clave, (litrosReincluidos.get(clave) ?? 0) + (f.litros ?? 0))
+      const mesFila = mesDe(f.fecha_pedido)
+      const previo = primerMesReincluido.get(clave)
+      if (!previo || mesFila < previo) primerMesReincluido.set(clave, mesFila)
+    }
     const nombreNormalizado = normalizarProducto(f.producto)
     const codigo = codigoPorProducto.get(nombreNormalizado)
     if (!codigo) {
@@ -153,6 +172,32 @@ export async function GET(req: Request) {
   if (excluidosCliente > 0) {
     calidad.push({ tipo: 'excluido_cliente', clave: null, detalle: `${excluidosCliente} filas de ventas excluidas por ser clientes internos/mermas/muestras (no cuentan como demanda real).`, severidad: 'info' })
   }
+  if (litrosReincluidos.size > 0) {
+    const detalle = [...litrosReincluidos.entries()].sort((a, b) => b[1] - a[1])
+      .map(([n, litros]) => `${n} (${Math.round(litros)} L desde ${primerMesReincluido.get(n)?.slice(0, 7)})`).join(', ')
+    calidad.push({
+      tipo: 'reincluido_produccion', clave: null,
+      detalle: `Producción cuenta consumo propio que Ventas no reporta: ${detalle}.`,
+      severidad: 'info',
+    })
+
+    // El salto: si estos clientes arrancan mucho después que el resto del
+    // historial, todos los meses previos subestiman la demanda real y el
+    // modelo va a leer ese arranque como crecimiento genuino.
+    const primerMesGlobal = [...mesesConVenta].sort()[0]
+    const arranqueTardio = [...primerMesReincluido.entries()]
+      .filter(([, mes]) => primerMesGlobal && mes > primerMesGlobal)
+      .sort((a, b) => a[1].localeCompare(b[1]))
+    if (arranqueTardio.length > 0 && primerMesGlobal) {
+      const desde = arranqueTardio[0][1].slice(0, 7)
+      const litrosNuevos = arranqueTardio.reduce((acc, [n]) => acc + (litrosReincluidos.get(n) ?? 0), 0)
+      calidad.push({
+        tipo: 'salto_historial', clave: null,
+        detalle: `${arranqueTardio.map(([n]) => n).join(', ')} recién aparecen en ${desde}, pero el historial arranca en ${primerMesGlobal.slice(0, 7)} — antes de esa fecha no se guardaban en el ERP. Son ${Math.round(litrosNuevos)} L concentrados al final de la serie, así que los meses anteriores subestiman la demanda y el modelo puede leer ese arranque como crecimiento real. Tomar la proyección con cautela hasta tener ~6 meses con estos clientes cargados.`,
+        severidad: 'advertencia',
+      })
+    }
+  }
   if (excluidosProducto > 0) {
     const top = [...litrosExcluidosProducto.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
       .map(([n, litros]) => `${n} (${Math.round(litros)} L)`).join(', ')
@@ -167,6 +212,10 @@ export async function GET(req: Request) {
   return NextResponse.json({
     series: { general: toArray(general), producto: productoObj, envase: envaseObj },
     calidadDatos: calidad,
-    meta: { totalFilas: filas.length, excluidosCliente, excluidosProducto, excluidosMesEnCurso, mesesConVenta: mesesConVenta.size },
+    meta: {
+      totalFilas: filas.length, excluidosCliente, excluidosProducto, excluidosMesEnCurso,
+      mesesConVenta: mesesConVenta.size,
+      litrosReincluidos: Object.fromEntries([...litrosReincluidos].map(([n, l]) => [n, Math.round(l)])),
+    },
   })
 }
