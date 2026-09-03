@@ -54,7 +54,10 @@ export async function GET(req: NextRequest) {
   interface FilaMargen { territorio: string; venta_con_margen_conocido: number | null; venta_total: number; margen_clp: number | null }
   const margenPorTerritorio = new Map(((margenRpcRes.data ?? []) as FilaMargen[]).map(m => [m.territorio, m]))
 
-  const filas = ((actualRes.data ?? []) as FilaEquipo[]).map(f => {
+  // Cuentas ERP sin territorio/responsable mapeado (bolsa histórica "Equipo Ventas",
+  // "CERVECERÍA") — a pedido de Claudio no se muestran en Equipo ni en los reportes
+  // que reutilizan este endpoint. No afecta los totales de compañía de Resumen/Ventas.
+  const filas = ((actualRes.data ?? []) as FilaEquipo[]).filter(f => f.territorio !== 'Sin territorio asignado').map(f => {
     const comp = comparadoPorTerritorio.get(f.territorio)
     const meta = metaPorTerritorio.get(f.territorio) ?? null
     const margen = margenPorTerritorio.get(f.territorio) ?? null

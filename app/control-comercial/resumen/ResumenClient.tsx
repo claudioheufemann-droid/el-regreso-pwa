@@ -13,6 +13,11 @@ interface Insight { texto: string; tipo: 'oportunidad' | 'alerta'; drillHref: st
 function agruparPorTerritorio(filas: FilaVentaAgregada[]) {
   const map = new Map<string, { territorio: string; tipo: string; litros: number; monto: number }>()
   for (const f of filas) {
+    // Cuentas ERP sin territorio/responsable mapeado (bolsa histórica "Equipo Ventas",
+    // "CERVECERÍA") — a pedido de Claudio no se listan acá. El total de "Venta del
+    // período" arriba SÍ las incluye (es la cifra real de la compañía), así que la suma
+    // de este listado puede quedar por debajo de ese total a propósito.
+    if (f.territorio === 'Sin territorio asignado') continue
     const cur = map.get(f.territorio) ?? { territorio: f.territorio, tipo: f.tipo, litros: 0, monto: 0 }
     cur.litros += Number(f.litros)
     cur.monto += Number(f.monto)
@@ -136,7 +141,7 @@ export default function ResumenClient() {
                 {territorios.map(t => (
                   <div key={t.territorio} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
-                      <span style={{ fontWeight: 700, color: t.territorio === 'Sin territorio asignado' ? 'var(--muted)' : 'var(--cream)' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--cream)' }}>
                         {t.territorio}
                         {t.tipo === 'canal' && <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginLeft: 6 }}>· canal</span>}
                       </span>
@@ -145,20 +150,11 @@ export default function ResumenClient() {
                       </span>
                     </div>
                     <div style={{ height: 6, borderRadius: 4, background: 'var(--surface2)', overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%', width: `${(t.monto / montoMax) * 100}%`, borderRadius: 4,
-                        background: t.territorio === 'Sin territorio asignado' ? 'var(--muted)' : 'var(--gold)',
-                      }} />
+                      <div style={{ height: '100%', width: `${(t.monto / montoMax) * 100}%`, borderRadius: 4, background: 'var(--gold)' }} />
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-            {territorios.some(t => t.territorio === 'Sin territorio asignado') && (
-              <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 12, lineHeight: 1.5 }}>
-                &quot;Sin territorio asignado&quot; agrupa ventas de cuentas ERP que no están mapeadas a un territorio/responsable
-                (ej. bolsa histórica &quot;Equipo Ventas&quot;, cuenta &quot;CERVECERÍA&quot;) — se muestra aparte a propósito en vez de repartirla, para no inventar una atribución que no existe.
-              </p>
             )}
           </div>
         </>

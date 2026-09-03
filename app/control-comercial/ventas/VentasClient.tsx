@@ -30,6 +30,9 @@ function valorDe(f: FilaSerieAPI, unidad: Unidad, cat: Cat): number {
 function agruparPorTerritorio(filas: FilaVentaAgregada[], cat: Cat) {
   const map = new Map<string, { territorio: string; litros: number; monto: number; cerveza: number; kombucha: number }>()
   for (const f of filas) {
+    // Cuentas ERP sin territorio/responsable mapeado — a pedido de Claudio no se listan
+    // acá (el total del gráfico de arriba sí las incluye).
+    if (f.territorio === 'Sin territorio asignado') continue
     if (cat !== 'total' && f.categoria_producto !== cat) continue
     const cur = map.get(f.territorio) ?? { territorio: f.territorio, litros: 0, monto: 0, cerveza: 0, kombucha: 0 }
     cur.litros += Number(f.litros)
@@ -139,7 +142,7 @@ export default function VentasClient() {
                   <tbody>
                     {territorios.map(t => (
                       <tr key={t.territorio} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '8px', fontWeight: 700, color: t.territorio === 'Sin territorio asignado' ? 'var(--muted)' : 'var(--cream)' }}>{t.territorio}</td>
+                        <td style={{ padding: '8px', fontWeight: 700, color: 'var(--cream)' }}>{t.territorio}</td>
                         <td style={{ padding: '8px', textAlign: 'right', color: 'var(--muted)' }}>{formatCLP(t.cerveza)}</td>
                         <td style={{ padding: '8px', textAlign: 'right', color: 'var(--muted)' }}>{formatCLP(t.kombucha)}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: 'var(--cream)' }}>{formatCLP(t.monto)}</td>
