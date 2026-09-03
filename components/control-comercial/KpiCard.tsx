@@ -4,16 +4,22 @@ import Link from 'next/link'
 import { ArrowUpRight, ArrowDownRight, Minus, Info } from 'lucide-react'
 import type { KpiEjecutivo } from '@/lib/control-comercial/tipos'
 
-export function formatCLP(n: number): string {
+// n puede llegar null/undefined si la fila viene de una tabla con RLS que devolvió vacío
+// (ver notas de deudores/barriles_clientes) — nunca reventar el render por eso, mostrar "—".
+export function formatCLP(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—'
   return n.toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })
 }
-export function formatLitros(n: number): string {
+export function formatLitros(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—'
   return `${n.toLocaleString('es-CL', { maximumFractionDigits: 1 })} L`
 }
-export function formatNumero(n: number): string {
+export function formatNumero(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—'
   return n.toLocaleString('es-CL')
 }
-export function formatPct(n: number): string {
+export function formatPct(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—'
   return `${n > 0 ? '+' : ''}${n.toLocaleString('es-CL', { maximumFractionDigits: 1 })}%`
 }
 
@@ -88,5 +94,26 @@ export default function KpiCard({ kpi }: { kpi: KpiEjecutivo }) {
     <Link href={kpi.drillHref} style={{ textDecoration: 'none', display: 'block', height: '100%' }}>
       {contenido}
     </Link>
+  )
+}
+
+/** Tarjeta simple para KPIs sin comparación/tendencia — Cobranza, Barriles, Equipo. */
+export function StatTile({ titulo, valor, subtitulo, tooltip, tono }: {
+  titulo: string; valor: string; subtitulo?: string; tooltip?: string
+  tono?: 'ok' | 'alerta' | 'critico'
+}) {
+  const color = tono === 'critico' ? 'var(--red)' : tono === 'alerta' ? 'var(--gold)' : 'var(--cream)'
+  return (
+    <div
+      title={tooltip}
+      style={{
+        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16,
+        padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 92,
+      }}
+    >
+      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: 0.3, textTransform: 'uppercase' }}>{titulo}</span>
+      <span style={{ fontSize: 22, fontWeight: 900, color, letterSpacing: '-0.4px' }}>{valor}</span>
+      {subtitulo && <span style={{ fontSize: 11, color: 'var(--muted)' }}>{subtitulo}</span>}
+    </div>
   )
 }

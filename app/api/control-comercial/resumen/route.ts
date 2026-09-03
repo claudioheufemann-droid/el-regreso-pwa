@@ -5,7 +5,6 @@ import { puedeVerControlComercial } from '@/lib/control-comercial/permisos'
 import {
   periodoActual, periodoPorAncla, comparacionAnioAnterior, comparacionPeriodoAnterior,
 } from '@/lib/control-comercial/periodos'
-import { VENDEDORES_INCOBRABLES } from '@/lib/types'
 import type { FilaVentaAgregada, KpiEjecutivo, ResumenEjecutivoRaw, ResumenEjecutivoResponse } from '@/lib/control-comercial/tipos'
 
 export const dynamic = 'force-dynamic'
@@ -27,12 +26,12 @@ export async function GET(req: NextRequest) {
 
   const supabase = await createClient()
 
-  const [actualRes, comparadoRes, territorioRes, deudaRes, barrilesRes, periodoRowRes] = await Promise.all([
+  const [actualRes, comparadoRes, territorioRes, cobranzaRes, barrilesRes, periodoRowRes] = await Promise.all([
     supabase.rpc('fn_resumen_ejecutivo', { p_inicio: comparacion.actual.inicio, p_fin: comparacion.actual.fin }),
     supabase.rpc('fn_resumen_ejecutivo', { p_inicio: comparacion.comparado.inicio, p_fin: comparacion.comparado.fin }),
     supabase.rpc('fn_ventas_agregadas', { p_inicio: periodo.inicio, p_fin: comparacion.actual.fin }),
-    supabase.from('deudores').select('deuda_vencida, vendedor'),
-    supabase.from('barriles_clientes').select('fecha_entrega'),
+    supabase.rpc('fn_cobranza_kpis', { p_inicio: periodo.inicio, p_fin: comparacion.actual.fin }),
+    supabase.rpc('fn_barriles_estado'),
     supabase.from('periodos').select('id').eq('fecha_inicio', periodo.inicio).eq('fecha_fin', periodo.fin).maybeSingle(),
   ])
 
@@ -43,22 +42,15 @@ export async function GET(req: NextRequest) {
   const comparado = (comparadoRes.data?.[0] ?? null) as ResumenEjecutivoRaw | null
   const ventasPorTerritorio = (territorioRes.data ?? []) as FilaVentaAgregada[]
 
-  // Deuda vencida: total actual (snapshot ERP, no hay histórico previo para comparar todavía).
-  // deudores tiene RLS por región (admin ve todo) — si la sesión no es un usuario autenticado real
-  // (ej. LOGIN_DESACTIVADO_TEMPORAL), esto vuelve vacío en silencio, no como error. Se distingue acá.
-  const deudaVencida = (deudaRes.data ?? [])
-    .filter(d => !VENDEDORES_INCOBRABLES.includes(d.vendedor ?? ''))
-    .reduce((acc, d) => acc + Number(d.deuda_vencida ?? 0), 0)
-  const deudaDisponible = !deudaRes.error && (deudaRes.data?.length ?? 0) > 0
+  // deudores/barriles tienen RLS — si la sesión no es un usuario autenticado real (ej.
+  // LOGIN_DESACTIVADO_TEMPORAL), la RPC vuelve con 0 filas en silencio, no como error.
+  const cobranza = (cobranzaRes.data?.[0] ?? null) as {
+    deuda_vencida_actual: number; monto_recuperado: number; cuentas_regularizadas: number; hay_snapshot_inicio: boolean
+  } | null
+  const deudaDisponible = !cobranzaRes.error && cobranza !== null
 
-  // Barriles críticos: +90 días fuera (política inicial del spec §26). Snapshot actual del ERP.
-  const AHORA = Date.now()
-  const barrilesCriticos = (barrilesRes.data ?? []).filter(b => {
-    if (!b.fecha_entrega) return false
-    const dias = (AHORA - new Date(b.fecha_entrega).getTime()) / 86_400_000
-    return dias > 90
-  }).length
-  const barrilesDisponible = !barrilesRes.error && (barrilesRes.data?.length ?? 0) > 0
+  const barriles = (barrilesRes.data?.[0] ?? null) as { total: number; criticos: number } | null
+  const barrilesDisponible = !barrilesRes.error && barriles !== null && barriles.total > 0
 
   // Meta compañía $ del período (si está configurada).
   let metaVentasClp: number | null = null
@@ -115,29 +107,31 @@ export async function GET(req: NextRequest) {
   }
 
   kpis.push({
-    id: 'deuda_vencida', titulo: 'Deuda vencida', valor: CLP0(deudaVencida), formato: 'clp',
+    id: 'deuda_vencida', titulo: 'Deuda vencida', valor: CLP0(cobranza?.deuda_vencida_actual ?? 0), formato: 'clp',
     comparado: null, variacionPct: null,
     tooltip: deudaDisponible
-      ? 'Total de deuda vencida al día de hoy (foto del ERP). Todavía no hay histórico de snapshots para comparar contra el período anterior.'
+      ? 'Total de deuda vencida al día de hoy (foto del ERP), excluyendo cuentas internas e incobrables.'
       : 'No se pudo leer la cartera de deudores con esta sesión (permiso/RLS). Verifica que la sesión tenga rol autenticado real.',
     estado: deudaDisponible ? 'sin_comparacion' : 'no_disponible',
-    drillHref: '/ventas/deudores',
+    drillHref: '/control-comercial/cobranza',
   })
   kpis.push({
-    id: 'cobranza_recuperada', titulo: 'Cobranza recuperada', valor: 0, formato: 'clp',
+    id: 'cobranza_recuperada', titulo: 'Cobranza recuperada', valor: CLP0(cobranza?.monto_recuperado ?? 0), formato: 'clp',
     comparado: null, variacionPct: null,
-    tooltip: 'Aún no disponible: el ERP no registra montos de pago por cliente/fecha, solo el saldo vencido actual y la fecha del último pago. Hace falta esa fuente para calcular este KPI con confianza.',
-    estado: 'no_disponible',
-    drillHref: null,
+    tooltip: deudaDisponible && cobranza?.hay_snapshot_inicio
+      ? 'Caída de deuda vencida por cliente entre el inicio y el fin del período (fotos diarias de deudores_historial), piso en 0 por cliente.'
+      : 'Sin foto de deudores al inicio de este período todavía — el histórico se empezó a capturar recién, se irá completando período a período.',
+    estado: deudaDisponible && cobranza?.hay_snapshot_inicio ? 'sin_comparacion' : 'no_disponible',
+    drillHref: '/control-comercial/cobranza',
   })
   kpis.push({
-    id: 'barriles_criticos', titulo: 'Barriles críticos', valor: barrilesCriticos, formato: 'numero',
+    id: 'barriles_criticos', titulo: 'Barriles críticos', valor: barriles?.criticos ?? 0, formato: 'numero',
     comparado: null, variacionPct: null,
     tooltip: barrilesDisponible
-      ? 'Barriles con más de 90 días fuera (política inicial 🔴). Foto actual del ERP — no hay histórico de recuperación previo a esta fecha.'
+      ? 'Barriles con más de 90 días fuera (política inicial 🔴). Foto actual del ERP.'
       : 'No se pudo leer el detalle de barriles con esta sesión (permiso/RLS). Verifica que la sesión tenga rol autenticado real.',
     estado: barrilesDisponible ? 'sin_comparacion' : 'no_disponible',
-    drillHref: '/ventas/barriles',
+    drillHref: '/control-comercial/barriles',
   })
 
   const body: ResumenEjecutivoResponse = {

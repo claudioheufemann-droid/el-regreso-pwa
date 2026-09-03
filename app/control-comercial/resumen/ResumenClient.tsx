@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { TrendingUp, AlertTriangle, FileText } from 'lucide-react'
 import AppHeader from '@/components/ui/AppHeader'
 import KpiCard, { formatCLP, formatLitros } from '@/components/control-comercial/KpiCard'
 import type { ResumenEjecutivoResponse, FilaVentaAgregada } from '@/lib/control-comercial/tipos'
 
 type Comparar = 'anio_anterior' | 'anterior'
+interface Insight { texto: string; tipo: 'oportunidad' | 'alerta'; drillHref: string }
 
 function agruparPorTerritorio(filas: FilaVentaAgregada[]) {
   const map = new Map<string, { territorio: string; tipo: string; litros: number; monto: number }>()
@@ -23,6 +26,11 @@ export default function ResumenClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [comparar, setComparar] = useState<Comparar>('anio_anterior')
+  const [insights, setInsights] = useState<Insight[]>([])
+
+  useEffect(() => {
+    fetch('/api/control-comercial/insights').then(r => r.json()).then(d => setInsights(d.insights ?? [])).catch(() => {})
+  }, [])
 
   useEffect(() => {
     let cancelado = false
@@ -49,21 +57,29 @@ export default function ResumenClient() {
         eyebrow={data ? `${data.periodo.nombre}${data.periodo.truncado ? ' · en curso' : ''}` : 'Control Comercial'}
         title="Resumen Ejecutivo"
         extraAction={
-          <div style={{ display: 'flex', gap: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 3 }}>
-            {(['anio_anterior', 'anterior'] as Comparar[]).map(c => (
-              <button
-                key={c}
-                onClick={() => setComparar(c)}
-                style={{
-                  padding: '6px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                  fontSize: 12, fontWeight: 700,
-                  background: comparar === c ? 'var(--gold-dim)' : 'transparent',
-                  color: comparar === c ? 'var(--gold)' : 'var(--muted)',
-                }}
-              >
-                {c === 'anio_anterior' ? 'vs año anterior' : 'vs período anterior'}
-              </button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 3 }}>
+              {(['anio_anterior', 'anterior'] as Comparar[]).map(c => (
+                <button
+                  key={c}
+                  onClick={() => setComparar(c)}
+                  style={{
+                    padding: '6px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 700,
+                    background: comparar === c ? 'var(--gold-dim)' : 'transparent',
+                    color: comparar === c ? 'var(--gold)' : 'var(--muted)',
+                  }}
+                >
+                  {c === 'anio_anterior' ? 'vs año anterior' : 'vs período anterior'}
+                </button>
+              ))}
+            </div>
+            <Link href="/control-comercial/reportes" style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'var(--gold)', color: '#0A0A0A', fontWeight: 800, fontSize: 12.5, textDecoration: 'none',
+            }}>
+              <FileText size={13} /> Generar Reporte
+            </Link>
           </div>
         }
       />
@@ -88,6 +104,23 @@ export default function ResumenClient() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, marginBottom: 24 }}>
             {data.kpis.map(kpi => <KpiCard key={kpi.id} kpi={kpi} />)}
           </div>
+
+          {insights.length > 0 && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 18, marginBottom: 24 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 12 }}>Oportunidades y alertas</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {insights.map((ins, i) => (
+                  <Link key={i} href={ins.drillHref} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 10,
+                    textDecoration: 'none', background: 'var(--bg)',
+                  }}>
+                    {ins.tipo === 'oportunidad' ? <TrendingUp size={15} color="var(--green)" style={{ flexShrink: 0 }} /> : <AlertTriangle size={15} color="var(--red)" style={{ flexShrink: 0 }} />}
+                    <span style={{ fontSize: 13, color: 'var(--cream)', fontWeight: 600 }}>{ins.texto}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 18 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
