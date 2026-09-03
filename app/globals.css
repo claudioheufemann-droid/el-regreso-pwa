@@ -118,6 +118,17 @@
   --rg-card-border: rgba(0, 0, 0, 0.08);
 }
 
+/* ── Control Comercial: forzado a modo claro, fondo blanco puro ──
+   Independiente del theme global de la app (que sigue oscuro en el resto
+   de los módulos) — data-theme="light" en el layout de /control-comercial
+   activa TODAS las reglas de contraste de abajo (ya probadas en el resto
+   de la app), y esta regla, más específica, sube --bg de beige a blanco
+   puro solo dentro de ese módulo. */
+.cc-root[data-theme="light"] {
+  --bg: #FFFFFF;
+  --surface2: #F7F6F2;
+}
+
 /* ═══════════════════════════════════════════════════════════
    AUDITORÍA DE CONTRASTE — MODO CLARO (2026-07-23)
    Generado por scripts/gen-light-mode-fixes.mjs — no editar a mano.

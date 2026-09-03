@@ -56,33 +56,32 @@ export default function ResumenClient() {
       <AppHeader
         eyebrow={data ? `${data.periodo.nombre}${data.periodo.truncado ? ' · en curso' : ''}` : 'Control Comercial'}
         title="Resumen Ejecutivo"
-        extraAction={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 3 }}>
-              {(['anio_anterior', 'anterior'] as Comparar[]).map(c => (
-                <button
-                  key={c}
-                  onClick={() => setComparar(c)}
-                  style={{
-                    padding: '6px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                    fontSize: 12, fontWeight: 700,
-                    background: comparar === c ? 'var(--gold-dim)' : 'transparent',
-                    color: comparar === c ? 'var(--gold)' : 'var(--muted)',
-                  }}
-                >
-                  {c === 'anio_anterior' ? 'vs año anterior' : 'vs período anterior'}
-                </button>
-              ))}
-            </div>
-            <Link href="/control-comercial/reportes" style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
-              background: 'var(--gold)', color: '#0A0A0A', fontWeight: 800, fontSize: 12.5, textDecoration: 'none',
-            }}>
-              <FileText size={13} /> Generar Reporte
-            </Link>
-          </div>
-        }
       />
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 3 }}>
+          {(['anio_anterior', 'anterior'] as Comparar[]).map(c => (
+            <button
+              key={c}
+              onClick={() => setComparar(c)}
+              style={{
+                padding: '6px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+                background: comparar === c ? 'var(--gold-dim)' : 'transparent',
+                color: comparar === c ? 'var(--gold)' : 'var(--muted)',
+              }}
+            >
+              {c === 'anio_anterior' ? 'vs año anterior' : 'vs período anterior'}
+            </button>
+          ))}
+        </div>
+        <Link href="/control-comercial/reportes" style={{
+          display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+          background: 'var(--gold)', color: '#0A0A0A', fontWeight: 700, fontSize: 12.5, textDecoration: 'none', whiteSpace: 'nowrap',
+        }}>
+          <FileText size={13} /> Generar Reporte
+        </Link>
+      </div>
 
       {loading && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
