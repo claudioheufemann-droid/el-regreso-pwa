@@ -285,7 +285,7 @@ export default function HubClient({ isAdmin, nombre, macroArea }: {
 }) {
   const firstName = nombre.split(' ')[0]
   const router = useRouter()
-  const { user } = useUser()
+  const { user, puedeVerProduccion } = useUser()
   const { openSearch } = useGlobalSearch()
   const [showSettings, setShowSettings] = useState(false)
   const initials = user?.iniciales ?? (nombre.slice(0, 2).toUpperCase())
@@ -455,6 +455,19 @@ export default function HubClient({ isAdmin, nombre, macroArea }: {
             title="Producción Logística"
             subtitle="Declaración y recepción de lotes"
             img="/gestion-produccion.webp"
+          />
+
+          {/* Forecast de producción (Prophet): proyección de litros a 8 meses
+              por producto y tipo de envase, para planificar producción.
+              Admins + equipo de Producción (macroArea='produccion'). */}
+          <ModuleCard
+            href="/produccion"
+            color="#A855F7"
+            rgb="168,85,247"
+            title="Producción"
+            subtitle="Forecast de demanda a 8 meses"
+            img="/hub-gestion.webp"
+            locked={!puedeVerProduccion}
           />
 
         </div>

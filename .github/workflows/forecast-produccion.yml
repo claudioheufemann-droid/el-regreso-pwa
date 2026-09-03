@@ -1,0 +1,35 @@
+name: Forecast de Producción (Prophet)
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'   # lunes 08:00 UTC (~05:00 Chile invierno) — semanal, no diario: la data es mensual
+  workflow_dispatch:
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # Prophet compila un modelo Stan la primera vez que corre — más lento que el resto de los sync
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: scripts/forecast/requirements.txt
+
+      - name: Instalar dependencias
+        working-directory: scripts/forecast
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generar y subir el forecast
+        working-directory: scripts/forecast
+        env:
+          UPLOAD_URL_BASE: ${{ secrets.UPLOAD_URL_BASE }}
+          UPLOAD_SECRET_FORECAST: ${{ secrets.UPLOAD_SECRET_FORECAST }}
+        run: python generar_forecast.py
