@@ -652,7 +652,7 @@ export default function ProduccionClient({
               )}
 
               {/* Gráfico */}
-              <div className="flex min-h-[420px] flex-1 flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
+              <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-bold text-gray-800">
@@ -673,7 +673,13 @@ export default function ProduccionClient({
                   )}
                 </div>
 
-                <div className="relative min-h-[320px] w-full flex-1">
+                {/* Altura fija en vez de heredada por flex/min-height: Recharts
+                    necesita que ALGÚN ancestro tenga una altura resuelta en
+                    píxeles para poder calcular su height="100%" — una cadena
+                    de flex-1/min-height no se lo garantiza (se rompió al
+                    cambiar el wrapper de la pestaña de h-full a min-h-full
+                    para la tabla de abajo: el SVG dejó de dibujarse, 0px). */}
+                <div className="relative h-[360px] w-full">
                   {chartData.length === 0 ? (
                     <div className="flex h-full items-center justify-center text-sm text-gray-400">
                       Todavía no hay una corrida del modelo. Se genera automáticamente el día 2 de cada mes.
