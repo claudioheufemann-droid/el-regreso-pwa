@@ -61,8 +61,26 @@ export default async function ProduccionPage() {
   // resuelto para stock_productos/deudores/users.
   const admin = createAdminClient()
 
-  const [{ data: forecastRaw }, { data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }] = await Promise.all([
-    admin.from('forecast_produccion').select('nivel, clave, mes, tipo, litros, litros_min, litros_max').order('mes', { ascending: true }),
+  // forecast_produccion se pagina: PostgREST corta en 1000 filas y, ordenado
+  // por mes, las del forecast son las ÚLTIMAS — con el historial completo
+  // (1.027 filas sólo de meses pasados) la proyección quedaba entera fuera de
+  // la respuesta y el gráfico salía sin la línea verde. Las otras tres tablas
+  // tienen decenas de filas, no hace falta.
+  const PAGE = 1000
+  type ForecastRow = { nivel: string; clave: string | null; mes: string; tipo: string; litros: number; litros_min: number | null; litros_max: number | null }
+  const forecastRaw: ForecastRow[] = []
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await admin
+      .from('forecast_produccion')
+      .select('nivel, clave, mes, tipo, litros, litros_min, litros_max')
+      .order('mes', { ascending: true })
+      .range(offset, offset + PAGE - 1)
+    if (error || !data || data.length === 0) break
+    forecastRaw.push(...(data as ForecastRow[]))
+    if (data.length < PAGE) break
+  }
+
+  const [{ data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
     admin.from('stock_productos').select('producto, categoria, tipo, cantidad, litros').order('cantidad', { ascending: false }),
@@ -74,7 +92,7 @@ export default async function ProduccionPage() {
   )
 
   const seriesMap = new Map<string, SerieForecast>()
-  for (const f of forecastRaw ?? []) {
+  for (const f of forecastRaw) {
     const id = `${f.nivel}::${f.clave ?? ''}`
     if (!seriesMap.has(id)) {
       const val = validacionPorSerie.get(id)
