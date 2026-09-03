@@ -11,7 +11,7 @@ import {
   CircleDollarSign, Bell, Plus, AlertTriangle, Calendar as CalendarIcon,
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info,
 } from 'lucide-react'
-import type { SerieForecast, CalidadItem, StockItem, AvanceMes } from './page'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem } from './page'
 import { ENVASE_LABEL, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -141,11 +141,12 @@ function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.R
 }
 
 export default function ProduccionClient({
-  series, calidad, stock, ultimaCorrida, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, stock, stockSeguridad, ultimaCorrida, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
   stock: StockItem[]
+  stockSeguridad: StockSeguridadItem[]
   ultimaCorrida: string | null
   avanceMes: AvanceMes
   nombreUsuario: string
@@ -157,6 +158,7 @@ export default function ProduccionClient({
   const [busquedaInsumo, setBusquedaInsumo] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
   const [filtroEnvase, setFiltroEnvase] = useState<string>('todos')
+  const [mesSeguridad, setMesSeguridad] = useState<number>(() => new Date(avanceMes.mes + 'T00:00:00Z').getUTCMonth() + 1)
 
   const serieGeneral = series.find(s => s.nivel === 'general') ?? null
   const serieActual = series.find(s => s.id === serieId) ?? serieGeneral
@@ -267,6 +269,29 @@ export default function ProduccionClient({
       })
       .sort((a, b) => (a.serie.producto ?? '').localeCompare(b.serie.producto ?? '') || (a.serie.envaseBucket ?? '').localeCompare(b.serie.envaseBucket ?? ''))
   }, [series, filtroCategoria, filtroEnvase])
+
+  /* ── Stock de seguridad del mes elegido ─────────────────────────────────
+     Estado se define comparando el inventario actual contra dos umbrales:
+     por debajo del stock de seguridad = crítico (ni el colchón alcanza);
+     entre el colchón y el punto de reorden = bajo (ya toca reponer);
+     por encima del punto de reorden = ok. */
+  const filasStockSeguridad = useMemo(() => {
+    return stockSeguridad
+      .filter(s => s.mesCalendario === mesSeguridad)
+      .map(s => {
+        const actual = s.stockActualLitros
+        const estado: 'critico' | 'bajo' | 'ok' | 'sin_dato' =
+          actual == null ? 'sin_dato'
+            : actual < s.stockSeguridadLitros ? 'critico'
+              : actual < s.puntoReordenLitros ? 'bajo' : 'ok'
+        return { ...s, estado }
+      })
+      .sort((a, b) => {
+        const peso = { critico: 0, sin_dato: 1, bajo: 2, ok: 3 }
+        if (peso[a.estado] !== peso[b.estado]) return peso[a.estado] - peso[b.estado]
+        return a.producto.localeCompare(b.producto)
+      })
+  }, [stockSeguridad, mesSeguridad])
 
   const insumosFiltrados = DEMO_insumosData.filter(i =>
     i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
@@ -850,15 +875,126 @@ export default function ProduccionClient({
           {/* ══════════ VISTA 3: STOCK DE SEGURIDAD ══════════ */}
           {activeTab === 'seguridad' && (
             <div className="flex flex-col gap-6">
-              <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-                <Info size={18} className="mt-0.5 shrink-0" />
-                <p>
-                  El <strong>stock de seguridad y punto de reorden</strong> todavía no se calculan: es lo que va a producir
-                  el pipeline de Python cuando se le agregue ese cálculo. Abajo está el inventario real de hoy,
-                  que es el insumo que ese cálculo va a usar.
-                </p>
+
+              {stockSeguridad.length === 0 ? (
+                <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                  <Info size={18} className="mt-0.5 shrink-0" />
+                  <p>
+                    Todavía no hay una corrida del cálculo de stock de seguridad. Se genera junto con el forecast,
+                    el día 2 de cada mes.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600 shadow-sm">
+                  <Info size={18} className="mt-0.5 shrink-0 text-gray-400" />
+                  <p>
+                    Stock de seguridad = <strong>Z · σ<sub>semanal</sub> · √Lead Time</strong>, con Z=1,645 (95% de nivel de servicio)
+                    y σ calculado por mes calendario para capturar la estacionalidad del negocio (diciembre/enero/febrero
+                    varían mucho más que abril). Lead time: <strong>4 semanas cerveza</strong>, <strong>3 semanas kombucha</strong>.
+                    Punto de reorden = demanda semanal promedio × lead time + stock de seguridad.
+                  </p>
+                </div>
+              )}
+
+              {/* KPIs de estado */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                {([
+                  { estado: 'critico' as const, label: 'Crítico', color: 'red' },
+                  { estado: 'bajo' as const, label: 'Bajo (reponer)', color: 'amber' },
+                  { estado: 'ok' as const, label: 'OK', color: 'emerald' },
+                  { estado: 'sin_dato' as const, label: 'Sin dato de stock', color: 'gray' },
+                ]).map(({ estado, label, color }) => (
+                  <div key={estado} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</p>
+                    <p className={`text-3xl font-black ${
+                      color === 'red' ? 'text-red-600' : color === 'amber' ? 'text-amber-600' : color === 'emerald' ? 'text-emerald-600' : 'text-gray-400'
+                    }`}>
+                      {filasStockSeguridad.filter(f => f.estado === estado).length}
+                    </p>
+                  </div>
+                ))}
               </div>
 
+              {/* Tabla de stock de seguridad */}
+              <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+                  <div>
+                    <h3 className="font-bold text-gray-800">Stock de Seguridad y Punto de Reorden</h3>
+                    <p className="mt-1 text-sm text-gray-500">{filasStockSeguridad.length} productos · comparado contra el inventario actual del ERP.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="mesSeg" className="text-xs font-bold uppercase tracking-wider text-gray-500">Mes</label>
+                    <select
+                      id="mesSeg"
+                      value={mesSeguridad}
+                      onChange={e => setMesSeguridad(Number(e.target.value))}
+                      className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      {MESES_CORTOS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="max-h-[560px] overflow-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-3 font-bold">Producto</th>
+                        <th className="px-4 py-3 font-bold">Categoría</th>
+                        <th className="px-4 py-3 text-center font-bold">Lead Time</th>
+                        <th className="px-4 py-3 text-right font-bold">Demanda sem. prom.</th>
+                        <th className="px-4 py-3 text-right font-bold text-amber-700">Stock Seguridad</th>
+                        <th className="px-4 py-3 text-right font-bold text-amber-700">Punto Reorden</th>
+                        <th className="px-4 py-3 text-right font-bold">Stock Actual</th>
+                        <th className="px-6 py-3 text-center font-bold">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {filasStockSeguridad.length === 0 && (
+                        <tr><td colSpan={8} className="px-6 py-10 text-center text-gray-400">Sin datos para este mes.</td></tr>
+                      )}
+                      {filasStockSeguridad.map(f => (
+                        <tr key={f.producto} className="transition-colors hover:bg-gray-50">
+                          <td className="px-6 py-3 font-semibold text-gray-800">
+                            {f.producto}
+                            {f.confianza === 'baja' && (
+                              <span className="ml-2 inline-block rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-bold text-gray-400" title="Sin suficiente historial de este mes calendario puntual — se usó el σ de toda la serie del producto como respaldo">
+                                σ aprox.
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${
+                              f.categoria === 'cerveza' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
+                            }`}>
+                              {f.categoria}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center tabular-nums text-gray-600">{f.leadTimeSemanas} sem.</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fNum(f.demandaSemanalPromedio)} L</td>
+                          <td className="px-4 py-3 text-right font-bold tabular-nums text-amber-700">{fNum(f.stockSeguridadLitros)} L</td>
+                          <td className="px-4 py-3 text-right font-bold tabular-nums text-gray-900">{fNum(f.puntoReordenLitros)} L</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                            {f.stockActualLitros != null ? `${fNum(f.stockActualLitros)} L` : <span className="text-gray-300">sin dato</span>}
+                          </td>
+                          <td className="px-6 py-3 text-center">
+                            <span className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 text-xs font-bold ${
+                              f.estado === 'critico' ? 'border-red-200 bg-red-50 text-red-600'
+                                : f.estado === 'bajo' ? 'border-amber-200 bg-amber-50 text-amber-600'
+                                  : f.estado === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                                    : 'border-gray-200 bg-gray-50 text-gray-400'
+                            }`}>
+                              {f.estado === 'critico' ? 'CRÍTICO' : f.estado === 'bajo' ? 'BAJO' : f.estado === 'ok' ? 'OK' : 'SIN DATO'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Inventario actual, como referencia */}
               <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4">
                   <h3 className="font-bold text-gray-800">Inventario Actual</h3>
@@ -866,7 +1002,7 @@ export default function ProduccionClient({
                     Foto del último informe de stock del ERP · {stock.length} líneas de producto.
                   </p>
                 </div>
-                <div className="overflow-auto">
+                <div className="max-h-[420px] overflow-auto">
                   <table className="w-full border-collapse text-left">
                     <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
                       <tr>

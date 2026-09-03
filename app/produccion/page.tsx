@@ -63,6 +63,23 @@ export interface AvanceMes {
   diasEnMes: number
 }
 
+export interface StockSeguridadItem {
+  producto: string
+  categoria: 'cerveza' | 'kombucha'
+  mesCalendario: number
+  leadTimeSemanas: number
+  demandaSemanalPromedio: number
+  sigmaSemanal: number
+  stockSeguridadLitros: number
+  puntoReordenLitros: number
+  confianza: 'alta' | 'baja'
+  mesesHistorialMes: number
+  /** Litros en inventario hoy (stock_productos, sumado entre barril+envase
+   *  del mismo producto) — null si el producto no aparece en el último
+   *  informe de stock. */
+  stockActualLitros: number | null
+}
+
 export default async function ProduccionPage() {
   const user = await getServerUser()
   if (!user) redirect('/login')
@@ -94,11 +111,12 @@ export default async function ProduccionPage() {
     if (data.length < PAGE) break
   }
 
-  const [{ data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios }] = await Promise.all([
+  const [{ data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios }, { data: stockSeguridadRaw }] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
     admin.from('stock_productos').select('producto, categoria, tipo, cantidad, litros').order('cantidad', { ascending: false }),
     admin.from('costos_precios').select('producto, categoria').not('codigo', 'is', null),
+    admin.from('stock_seguridad').select('producto, categoria, mes_calendario, lead_time_semanas, demanda_semanal_promedio, sigma_semanal, stock_seguridad_litros, punto_reorden_litros, confianza, meses_historial_mes'),
   ])
 
   const categoriaPorProducto = new Map(
@@ -206,6 +224,30 @@ export default async function ProduccionPage() {
     cantidad: Number(s.cantidad), litros: s.litros != null ? Number(s.litros) : null,
   })) as StockItem[]
 
+  // Inventario actual por producto, sumado entre barril+envase — stock_productos
+  // trae nombres con prefijo ("Lata (473 ml) de X") o descriptor de estilo
+  // ("X (Kolsch)"), mismo problema ya resuelto para el cruce de ventas.
+  const stockActualPorProducto = new Map<string, number>()
+  for (const s of stockRaw ?? []) {
+    if (!s.producto || s.litros == null) continue
+    const nombre = normalizarProducto(s.producto as string)
+    stockActualPorProducto.set(nombre, (stockActualPorProducto.get(nombre) ?? 0) + Number(s.litros))
+  }
+
+  const stockSeguridad = (stockSeguridadRaw ?? []).map(s => ({
+    producto: s.producto as string,
+    categoria: s.categoria as 'cerveza' | 'kombucha',
+    mesCalendario: s.mes_calendario as number,
+    leadTimeSemanas: Number(s.lead_time_semanas),
+    demandaSemanalPromedio: Number(s.demanda_semanal_promedio),
+    sigmaSemanal: Number(s.sigma_semanal),
+    stockSeguridadLitros: Number(s.stock_seguridad_litros),
+    puntoReordenLitros: Number(s.punto_reorden_litros),
+    confianza: s.confianza as 'alta' | 'baja',
+    mesesHistorialMes: s.meses_historial_mes as number,
+    stockActualLitros: stockActualPorProducto.get(normalizarProducto(s.producto as string)) ?? null,
+  })) as StockSeguridadItem[]
+
   const avanceMes: AvanceMes = { mes: mesEnCurso, diaActual, diasEnMes }
 
   return (
@@ -213,6 +255,7 @@ export default async function ProduccionPage() {
       series={series}
       calidad={calidad}
       stock={stock}
+      stockSeguridad={stockSeguridad}
       ultimaCorrida={ultimaCorrida}
       avanceMes={avanceMes}
       nombreUsuario={user.nombre}

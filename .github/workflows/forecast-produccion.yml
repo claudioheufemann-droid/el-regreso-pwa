@@ -1,4 +1,4 @@
-name: Forecast de Producción (Prophet)
+name: Forecast de Producción (Prophet + Stock de Seguridad)
 
 on:
   schedule:
@@ -37,3 +37,10 @@ jobs:
           UPLOAD_URL_BASE: ${{ secrets.UPLOAD_URL_BASE }}
           UPLOAD_SECRET_FORECAST: ${{ secrets.UPLOAD_SECRET_FORECAST }}
         run: python generar_forecast.py
+
+      - name: Calcular y subir el stock de seguridad
+        working-directory: scripts/forecast
+        env:
+          UPLOAD_URL_BASE: ${{ secrets.UPLOAD_URL_BASE }}
+          UPLOAD_SECRET_FORECAST: ${{ secrets.UPLOAD_SECRET_FORECAST }}
+        run: python calcular_stock_seguridad.py
