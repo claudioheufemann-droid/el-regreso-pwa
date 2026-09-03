@@ -404,6 +404,18 @@ export default function HubClient({ isAdmin, nombre, macroArea }: {
             img="/hub-ventas.webp"
           />
 
+          {/* Control Comercial: analítica gerencial, solo Gerente General/Comercial + Analista Control de Gestión. */}
+          {user?.puedeVerControlComercial && (
+            <ModuleCard
+              href="/control-comercial"
+              color="#F0D584"
+              rgb="240,213,132"
+              title="Control Comercial"
+              subtitle="Resultados, metas y decisiones comerciales"
+              img="/hub-control-comercial.svg"
+            />
+          )}
+
           {/* Gestión: accesible para vendedor y admin */}
           <ModuleCard
             href="/gestion"

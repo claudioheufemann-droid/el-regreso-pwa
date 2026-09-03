@@ -14,6 +14,8 @@ export interface AppUser {
   region: string | null      // null = sin scope geográfico (admin); ej: 'Los Ríos'
   /** Acceso al módulo Rentabilidad (costos/márgenes internos) — separado de isAdmin, solo Claudio/Benja/Douglas. */
   puedeVerMargenes: boolean
+  /** Acceso al módulo Control Comercial (analítica gerencial) — separado de puedeVerMargenes: da acceso al módulo, no a los costos dentro de él. Solo Gerente General/Comercial + Analista Control de Gestión. */
+  puedeVerControlComercial: boolean
   /** Acceso a su propia remuneración variable (contrato). Ver lib/comisiones.ts. */
   veComisionGerente: boolean
   /**
@@ -112,6 +114,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
         region: vistaComo?.region ?? null,
         vendedoresErp: vistaComo?.vendedoresErp ?? [],
         puedeVerMargenes: false,
+        puedeVerControlComercial: false,
         veComisionGerente: false,
         esAdminReal: true,
         impersonando: vistaComo?.nombre ?? null,
@@ -122,7 +125,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     // Primary lookup: by auth UUID
     let { data: profile } = await supabase
       .from('users')
-      .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, ve_comision_gerente')
+      .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -134,7 +137,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     if (!profile && user.email) {
       const res = await supabase
         .from('users')
-        .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, ve_comision_gerente')
+        .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente')
         .eq('email', user.email)
         .maybeSingle()
       profile = res.data
@@ -164,6 +167,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
       region: vistaComo?.region ?? profile.region ?? null,
       vendedoresErp: vistaComo?.vendedoresErp ?? profile.vendedores_erp ?? [],
       puedeVerMargenes: vistaComo ? false : !!profile.puede_ver_margenes,
+      puedeVerControlComercial: vistaComo ? false : !!profile.puede_ver_control_comercial,
       veComisionGerente: vistaComo ? false : !!profile.ve_comision_gerente,
       esAdminReal,
       impersonando: vistaComo?.nombre ?? null,
