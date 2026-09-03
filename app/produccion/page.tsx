@@ -227,11 +227,24 @@ export default async function ProduccionPage() {
   // Inventario actual por producto, sumado entre barril+envase — stock_productos
   // trae nombres con prefijo ("Lata (473 ml) de X") o descriptor de estilo
   // ("X (Kolsch)"), mismo problema ya resuelto para el cruce de ventas.
+  //
+  // stock_productos.litros SOLO viene poblado para tipo='barril' — está así
+  // en TODA la app (confirmado: 19/19 barriles con litros, 0/21 envases), el
+  // módulo de Stock también lo trata como null para latas. Acá sí hace falta
+  // el litraje real de las latas para comparar contra el stock de seguridad
+  // (que está en litros), así que se deriva del tamaño de envase que ya
+  // viene en el propio nombre del producto ("Lata (354 ml) de X").
+  const litrosLata = (producto: string, cantidad: number): number | null => {
+    const match = producto.match(/Lata \((\d+)\s*ml\)/i)
+    return match ? cantidad * (Number(match[1]) / 1000) : null
+  }
   const stockActualPorProducto = new Map<string, number>()
   for (const s of stockRaw ?? []) {
-    if (!s.producto || s.litros == null) continue
+    if (!s.producto) continue
+    const litros = s.litros != null ? Number(s.litros) : litrosLata(s.producto as string, Number(s.cantidad))
+    if (litros == null) continue
     const nombre = normalizarProducto(s.producto as string)
-    stockActualPorProducto.set(nombre, (stockActualPorProducto.get(nombre) ?? 0) + Number(s.litros))
+    stockActualPorProducto.set(nombre, (stockActualPorProducto.get(nombre) ?? 0) + litros)
   }
 
   const stockSeguridad = (stockSeguridadRaw ?? []).map(s => ({
