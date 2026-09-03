@@ -193,7 +193,7 @@ export async function GET(req: Request) {
       const litrosNuevos = arranqueTardio.reduce((acc, [n]) => acc + (litrosReincluidos.get(n) ?? 0), 0)
       calidad.push({
         tipo: 'salto_historial', clave: null,
-        detalle: `${arranqueTardio.map(([n]) => n).join(', ')} recién aparecen en ${desde}, pero el historial arranca en ${primerMesGlobal.slice(0, 7)} — antes de esa fecha no se guardaban en el ERP. Son ${Math.round(litrosNuevos)} L concentrados al final de la serie, así que los meses anteriores subestiman la demanda y el modelo puede leer ese arranque como crecimiento real. Tomar la proyección con cautela hasta tener ~6 meses con estos clientes cargados.`,
+        detalle: `${arranqueTardio.map(([n]) => n).join(', ')} recién aparecen en ${desde}, mientras que el historial arranca en ${primerMesGlobal.slice(0, 7)} (${Math.round(litrosNuevos)} L en total). Puede ser normal —el local abrió después— o faltar historia. Si es lo segundo, los meses previos subestiman la demanda y el modelo puede leer ese arranque como crecimiento real.`,
         severidad: 'advertencia',
       })
     }
