@@ -203,35 +203,42 @@ export function esClienteExcluido(nombre: string | null | undefined): boolean {
 }
 
 /**
- * Exclusiones ADICIONALES que aplican SÓLO al forecast de Producción
- * (app/api/produccion/datos), no a los reportes de Ventas.
+ * Clientes que Ventas EXCLUYE pero que el forecast de Producción SÍ cuenta.
  *
- * Existe porque Producción no planifica la misma demanda que reporta
- * Comercial: hay clientes que son venta real y legítima —y por eso siguen
- * contando en Ventas— pero que no representan litros a producir de forma
- * recurrente (se planifican aparte, son puntuales, o se abastecen de otra
- * forma). Sacarlos de acá NO los saca de ningún reporte comercial.
+ * Comercial no los reporta como venta porque no son venta a terceros, pero
+ * son litros que igual hay que producir: el punto de venta propio, el
+ * BaseCamp y las ferias consumen cerveza real. Para planificar producción,
+ * dejarlos fuera es subestimar la demanda.
  *
- * Se aplica ENCIMA de CLIENTES_EXCLUIR, nunca la reemplaza.
+ * Es una re-inclusión sobre CLIENTES_EXCLUIR, no una lista aparte: sacar un
+ * nombre de acá lo devuelve al comportamiento de Ventas.
  *
- * Mismo criterio de comparación que CLIENTES_EXCLUIR: minúsculas, y se
- * compara con includes(), así que basta un fragmento distintivo del nombre
- * para cubrir variantes de escritura del ERP.
+ * OJO con el historial: estos clientes recién se empezaron a guardar en
+ * `ventas` en jun-2026 (antes los filtraba CLIENTES_NO_GUARDAR), así que los
+ * meses anteriores subestiman el volumen real. /api/produccion/datos detecta
+ * ese salto y lo avisa en el panel de calidad de datos.
+ *
+ * Mismo criterio de comparación que CLIENTES_EXCLUIR: minúsculas e includes(),
+ * así que basta un fragmento distintivo para cubrir variantes del ERP.
  */
-export const CLIENTES_EXCLUIR_PRODUCCION: string[] = [
-  // Vacío a propósito: pendiente de que Producción defina los nombres.
-  // Agregar acá en minúscula, ej: 'punto growler santiago',
+export const CLIENTES_INCLUIR_PRODUCCION: string[] = [
+  'cliente pdv',          // punto de venta propio
+  'basecamp el regreso',  // consumo en el BaseCamp
+  'cliente feria',        // ferias y eventos
 ]
 
 /**
- * Cliente que no debe entrar al forecast de Producción: los internos de
- * siempre (CLIENTES_EXCLUIR) más los propios de Producción.
+ * Cliente que no debe entrar al forecast de Producción.
+ *
+ * Parte de la exclusión de Ventas, pero las re-inclusiones de Producción
+ * mandan: se evalúan primero, así un cliente de CLIENTES_INCLUIR_PRODUCCION
+ * entra al forecast aunque figure en CLIENTES_EXCLUIR.
  */
 export function esClienteExcluidoProduccion(nombre: string | null | undefined): boolean {
   if (!nombre) return false
-  if (esClienteExcluido(nombre)) return true
   const n = nombre.toLowerCase().trim()
-  return CLIENTES_EXCLUIR_PRODUCCION.some(ex => n.includes(ex))
+  if (CLIENTES_INCLUIR_PRODUCCION.some(inc => n.includes(inc))) return false
+  return esClienteExcluido(nombre)
 }
 
 /**
