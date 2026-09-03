@@ -224,9 +224,7 @@ export default async function ProduccionPage() {
     cantidad: Number(s.cantidad), litros: s.litros != null ? Number(s.litros) : null,
   })) as StockItem[]
 
-  // Inventario actual por producto, sumado entre barril+envase — stock_productos
-  // trae nombres con prefijo ("Lata (473 ml) de X") o descriptor de estilo
-  // ("X (Kolsch)"), mismo problema ya resuelto para el cruce de ventas.
+  // Inventario actual por producto, sumado entre barril+envase.
   //
   // stock_productos.litros SOLO viene poblado para tipo='barril' — está así
   // en TODA la app (confirmado: 19/19 barriles con litros, 0/21 envases), el
@@ -238,12 +236,28 @@ export default async function ProduccionPage() {
     const match = producto.match(/Lata \((\d+)\s*ml\)/i)
     return match ? cantidad * (Number(match[1]) / 1000) : null
   }
+  // normalizarProducto saca el prefijo de lata y un descriptor final ENTRE
+  // PARÉNTESIS ("Mocho English (Red Ale)" → "Mocho English") — eso alcanza
+  // para los barriles, pero stock_productos repite el estilo en las latas
+  // SIN paréntesis y pegado al nombre ("Lata (473 ml) de Mocho English Red
+  // Ale" → sin el prefijo queda "Mocho English Red Ale", que no es igual a
+  // "Mocho English"). Se resuelve buscando cuál producto conocido (mismo
+  // catálogo que ya usa el forecast) es prefijo de lo que queda — más
+  // robusto que tratar de adivinar dónde termina el nombre y empieza el
+  // estilo con puro recorte de texto.
+  const productosConocidos = [...categoriaPorProducto.keys()].sort((a, b) => b.length - a.length)
+  function resolverProductoStock(nombreCrudo: string): string {
+    const limpio = normalizarProducto(nombreCrudo)
+    if (categoriaPorProducto.has(limpio)) return limpio
+    const prefijo = productosConocidos.find(p => limpio === p || limpio.startsWith(p + ' '))
+    return prefijo ?? limpio
+  }
   const stockActualPorProducto = new Map<string, number>()
   for (const s of stockRaw ?? []) {
     if (!s.producto) continue
     const litros = s.litros != null ? Number(s.litros) : litrosLata(s.producto as string, Number(s.cantidad))
     if (litros == null) continue
-    const nombre = normalizarProducto(s.producto as string)
+    const nombre = resolverProductoStock(s.producto as string)
     stockActualPorProducto.set(nombre, (stockActualPorProducto.get(nombre) ?? 0) + litros)
   }
 

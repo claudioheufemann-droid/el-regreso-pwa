@@ -40,13 +40,28 @@ export function mesEnCursoISO(): string {
   return `${hoy.getUTCFullYear()}-${String(hoy.getUTCMonth() + 1).padStart(2, '0')}-01`
 }
 
-/** Espacios dobles del ERP ("Mocho  English") y descriptores entre
- *  paréntesis en costos_precios ("Kombucha Lemon (Fresh)") hacen que el
- *  nombre de ventas.producto no calce contra costos_precios.producto con una
- *  igualdad estricta — normalizamos ambos lados igual antes de cruzar
- *  (confirmado con datos reales: sin esto se perdía ~48% del volumen). */
+/** Espacios dobles del ERP ("Mocho  English"), descriptores entre paréntesis
+ *  al FINAL en costos_precios/stock_productos ("Kombucha Lemon (Fresh)",
+ *  "Mocho English (Red Ale)") y el prefijo de envase al PRINCIPIO que trae
+ *  stock_productos para latas ("Lata (473 ml) de Mocho English Red Ale")
+ *  hacen que el mismo producto aparezca escrito de formas distintas según
+ *  la tabla — normalizamos todo antes de cruzar.
+ *
+ *  El prefijo de latas NUNCA aparece en ventas.producto (confirmado con
+ *  datos reales), así que agregarlo acá es inofensivo para ese caso — sólo
+ *  hace algo cuando el nombre viene de stock_productos.
+ *
+ *  Bug real que esto corrigió: sin sacar el prefijo, el litraje de las
+ *  latas en stock_productos quedaba guardado bajo la clave completa
+ *  ("Lata (473 ml) de Mocho English Red Ale") en vez de "Mocho English" —
+ *  nunca se sumaba al inventario real del producto, el Stock de Seguridad
+ *  mostraba sólo el litraje de los barriles como si las latas no existieran. */
 export function normalizarProducto(nombre: string): string {
-  return nombre.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+/g, ' ').trim()
+  return nombre
+    .replace(/^Lata\s*\(\s*\d+\s*ml\s*\)\s*de\s+/i, '')
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /** Separador de la clave compuesta del nivel 'producto_envase' (ver
