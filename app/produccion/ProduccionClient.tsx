@@ -11,7 +11,8 @@ import {
   CircleDollarSign, Bell, Plus, AlertTriangle, Calendar as CalendarIcon,
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info,
 } from 'lucide-react'
-import type { SerieForecast, CalidadItem, StockItem } from './page'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes } from './page'
+import { ENVASE_LABEL, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
    Paleta corporativa. Tailwind cubre el resto; estos tres colores van
@@ -117,6 +118,18 @@ const navItems = [
 
 type TabId = (typeof navItems)[number]['id']
 
+/* ── Chip de confiabilidad, según el desvío (MAPE) del backtest ────────── */
+function ChipConfiabilidad({ mape }: { mape: number | null }) {
+  if (mape == null) return <span className="text-xs text-gray-300">—</span>
+  const color = mape < 15 ? 'emerald' : mape < 30 ? 'amber' : 'red'
+  const clases = {
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    red: 'border-red-200 bg-red-50 text-red-700',
+  }[color]
+  return <span className={`inline-block rounded-full border px-2 py-0.5 text-xs font-bold ${clases}`}>{mape.toFixed(0)}%</span>
+}
+
 /* ── Badge para todo lo que todavía es maqueta ─────────────────────────── */
 function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.ReactNode }) {
   return (
@@ -128,12 +141,13 @@ function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.R
 }
 
 export default function ProduccionClient({
-  series, calidad, stock, ultimaCorrida, nombreUsuario, inicialesUsuario,
+  series, calidad, stock, ultimaCorrida, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
   stock: StockItem[]
   ultimaCorrida: string | null
+  avanceMes: AvanceMes
   nombreUsuario: string
   inicialesUsuario: string
 }) {
@@ -141,28 +155,54 @@ export default function ProduccionClient({
   const [serieId, setSerieId] = useState<string>(series[0]?.id ?? '')
   const [avisoCoccion, setAvisoCoccion] = useState(false)
   const [busquedaInsumo, setBusquedaInsumo] = useState('')
+  const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
+  const [filtroEnvase, setFiltroEnvase] = useState<string>('todos')
 
   const serieGeneral = series.find(s => s.nivel === 'general') ?? null
   const serieActual = series.find(s => s.id === serieId) ?? serieGeneral
 
+  // Ritmo del mes en curso: si vendimos X en D días, a ese ritmo el mes
+  // completo cierra en X/D*diasEnMes — la forma más simple de responder
+  // "¿vamos a cumplir lo proyectado?" sin esperar a que termine el mes.
+  const mtdLitros = serieActual?.litrosMesEnCurso ?? 0
+  const ritmoProyectado = avanceMes.diaActual > 0 ? (mtdLitros / avanceMes.diaActual) * avanceMes.diasEnMes : 0
+
   /* ── Serie seleccionada → filas para Recharts ─────────────────────────
      La proyección arranca repitiendo el último mes real, para que las dos
-     líneas queden pegadas en el gráfico en vez de mostrar un corte. */
+     líneas queden pegadas en el gráfico en vez de mostrar un corte. El mes
+     en curso (excluido del entrenamiento por estar incompleto) se agrega acá
+     con lo vendido hasta hoy y el ritmo proyectado a fin de mes, para
+     comparar contra la proyección del modelo en la misma columna. */
   const chartData = useMemo(() => {
     if (!serieActual) return []
     const puntos = [...serieActual.puntos].sort((a, b) => a.mes.localeCompare(b.mes))
     const idxCorte = puntos.findIndex(p => p.tipo === 'forecast')
-    return puntos.map((p, i) => {
+    const filas = puntos.map((p, i) => {
       const esUltimoReal = idxCorte > 0 && i === idxCorte - 1
+      const esMesEnCurso = p.mes === avanceMes.mes
       return {
         month: etiquetaMes(p.mes),
         mesIso: p.mes,
         ventaReal: p.tipo === 'historico' ? p.litros : null,
         ventaProyectada: p.tipo === 'forecast' || esUltimoReal ? p.litros : null,
         rango: p.litrosMin != null && p.litrosMax != null ? [p.litrosMin, p.litrosMax] : null,
+        mtd: esMesEnCurso ? mtdLitros : null,
+        ritmo: esMesEnCurso ? ritmoProyectado : null,
       }
     })
-  }, [serieActual])
+    // El mes en curso puede no venir en `puntos` (el modelo lo excluyó del
+    // historial y todavía no corrió con él como forecast, ej. recién
+    // empezó el mes) — si falta, se agrega igual para no perder el avance.
+    if (!filas.some(f => f.mesIso === avanceMes.mes)) {
+      filas.push({
+        month: etiquetaMes(avanceMes.mes), mesIso: avanceMes.mes,
+        ventaReal: null, ventaProyectada: null, rango: null,
+        mtd: mtdLitros, ritmo: ritmoProyectado,
+      })
+      filas.sort((a, b) => a.mesIso.localeCompare(b.mesIso))
+    }
+    return filas
+  }, [serieActual, avanceMes.mes, mtdLitros, ritmoProyectado])
 
   /* ── Temporada alta (Dic–Feb): tramos consecutivos para las ReferenceArea ── */
   const tramosTemporadaAlta = useMemo(() => {
@@ -197,6 +237,28 @@ export default function ProduccionClient({
   const litrosProximoMes = proximosMeses[0]?.litros ?? null
 
   const advertencias = calidad.filter(c => c.severidad === 'advertencia')
+
+  /* ── Tabla de detalle producto × envase, debajo del gráfico ────────────
+     Cada fila es una combinación real (ej. "Doble IPA — Barril 30L").
+     Filtrable por categoría (cerveza/kombucha) y por tipo de envase;
+     agrupada visualmente por producto para no repetir el nombre en cada
+     línea de envase. */
+  const envasesDisponibles = useMemo(() => {
+    const set = new Set(series.filter(s => s.nivel === 'producto_envase' && s.envaseBucket).map(s => s.envaseBucket as string))
+    return [...set]
+  }, [series])
+
+  const filasTablaDetalle = useMemo(() => {
+    return series
+      .filter(s => s.nivel === 'producto_envase')
+      .filter(s => filtroCategoria === 'todas' || s.categoria === filtroCategoria)
+      .filter(s => filtroEnvase === 'todos' || s.envaseBucket === filtroEnvase)
+      .map(s => {
+        const proximo = s.puntos.filter(p => p.tipo === 'forecast').sort((a, b) => a.mes.localeCompare(b.mes))[0] ?? null
+        return { serie: s, proximo }
+      })
+      .sort((a, b) => (a.serie.producto ?? '').localeCompare(b.serie.producto ?? '') || (a.serie.envaseBucket ?? '').localeCompare(b.serie.envaseBucket ?? ''))
+  }, [series, filtroCategoria, filtroEnvase])
 
   const insumosFiltrados = DEMO_insumosData.filter(i =>
     i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
@@ -524,6 +586,13 @@ export default function ProduccionClient({
                           ))}
                         </optgroup>
                       )}
+                      {series.some(s => s.nivel === 'producto_envase') && (
+                        <optgroup label="Por producto y envase">
+                          {series.filter(s => s.nivel === 'producto_envase').map(s => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                     <ChevronDown size={16} className="pointer-events-none absolute right-3 top-2.5 text-gray-400" />
                   </div>
@@ -539,6 +608,41 @@ export default function ProduccionClient({
                   </div>
                 </div>
               </div>
+
+              {/* ¿Vamos a cumplir lo proyectado? — comparación simple del mes en curso */}
+              {mtdLitros > 0 && (
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Llevamos vendido este mes</p>
+                    <p className="text-2xl font-black text-gray-900">{fNum(mtdLitros)} L</p>
+                    <p className="text-xs text-gray-500">día {avanceMes.diaActual} de {avanceMes.diasEnMes}</p>
+                  </div>
+                  <div className="text-gray-300">→</div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400">A este ritmo, cerrarías con</p>
+                    <p className="text-2xl font-black" style={{ color: COLORS.amber }}>{fNum(ritmoProyectado)} L</p>
+                    <p className="text-xs text-gray-500">proyección lineal simple</p>
+                  </div>
+                  {(() => {
+                    const objetivo = chartData.find(f => f.mesIso === avanceMes.mes)?.ventaProyectada
+                    if (objetivo == null || objetivo === 0) return null
+                    const pct = (ritmoProyectado / objetivo) * 100
+                    const cumple = pct >= 95
+                    return (
+                      <>
+                        <div className="text-gray-300">vs.</div>
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wider text-gray-400">El modelo proyectó</p>
+                          <p className="text-2xl font-black" style={{ color: COLORS.darkGreen }}>{fNum(objetivo)} L</p>
+                          <p className={`text-xs font-bold ${cumple ? 'text-green-600' : 'text-red-600'}`}>
+                            {cumple ? '✓' : '⚠'} vas al {pct.toFixed(0)}% de lo proyectado
+                          </p>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
 
               {/* Gráfico */}
               <div className="flex min-h-[420px] flex-1 flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
@@ -565,7 +669,7 @@ export default function ProduccionClient({
                 <div className="relative min-h-[320px] w-full flex-1">
                   {chartData.length === 0 ? (
                     <div className="flex h-full items-center justify-center text-sm text-gray-400">
-                      Todavía no hay una corrida del modelo. Se genera automáticamente cada semana.
+                      Todavía no hay una corrida del modelo. Se genera automáticamente el día 2 de cada mes.
                     </div>
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
@@ -607,9 +711,111 @@ export default function ProduccionClient({
                           stroke={COLORS.amber} strokeWidth={3} strokeDasharray="5 5" connectNulls={false}
                           dot={false} activeDot={{ r: 6 }}
                         />
+                        {/* Avance del mes en curso: un solo punto cada una —
+                            lo vendido hasta hoy (relleno) y a qué ritmo
+                            cerraría el mes (hueco), para comparar de un
+                            vistazo contra la proyección verde del modelo. */}
+                        <Line
+                          type="monotone" dataKey="mtd" name="Vendido hasta hoy"
+                          stroke={COLORS.amber} strokeWidth={0} connectNulls={false}
+                          dot={{ r: 6, fill: COLORS.amber, strokeWidth: 2, stroke: '#fff' }}
+                          isAnimationActive={false}
+                        />
+                        <Line
+                          type="monotone" dataKey="ritmo" name="Ritmo proyectado"
+                          stroke={COLORS.gray} strokeWidth={0} connectNulls={false}
+                          dot={{ r: 6, fill: '#fff', strokeWidth: 2, stroke: COLORS.gray }}
+                          isAnimationActive={false}
+                        />
                       </ComposedChart>
                     </ResponsiveContainer>
                   )}
+                </div>
+              </div>
+
+              {/* ── Detalle por producto y envase ── */}
+              <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+                  <div>
+                    <h3 className="font-bold text-gray-800">Detalle por producto y envase</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {filasTablaDetalle.length} combinaciones · litros vendidos en lo que va del mes y proyección del próximo mes cerrado.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(['todas', 'cerveza', 'kombucha'] as const).map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setFiltroCategoria(c)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-bold capitalize transition-colors ${
+                          filtroCategoria === c
+                            ? 'text-white'
+                            : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                        }`}
+                        style={{ backgroundColor: filtroCategoria === c ? COLORS.darkGreen : undefined, borderColor: filtroCategoria === c ? COLORS.darkGreen : undefined }}
+                      >
+                        {c === 'todas' ? 'Todas' : c}
+                      </button>
+                    ))}
+                    <span className="mx-1 self-center text-gray-300">|</span>
+                    <select
+                      value={filtroEnvase}
+                      onChange={e => setFiltroEnvase(e.target.value)}
+                      className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="todos">Todos los envases</option>
+                      {envasesDisponibles.map(b => <option key={b} value={b}>{ENVASE_LABEL[b as EnvaseBucket] ?? b}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="max-h-[520px] overflow-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-3 font-bold">Producto</th>
+                        <th className="px-4 py-3 font-bold">Envase</th>
+                        <th className="px-4 py-3 font-bold">Categoría</th>
+                        <th className="px-4 py-3 text-right font-bold">Vendido este mes</th>
+                        <th className="px-4 py-3 text-right font-bold text-amber-700">Próximo mes (proy.)</th>
+                        <th className="px-6 py-3 text-center font-bold">Confiabilidad</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {filasTablaDetalle.length === 0 && (
+                        <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-400">Sin combinaciones para este filtro.</td></tr>
+                      )}
+                      {filasTablaDetalle.map(({ serie, proximo }, i) => {
+                        const productoRepetido = i > 0 && filasTablaDetalle[i - 1].serie.producto === serie.producto
+                        return (
+                          <tr key={serie.id} className="transition-colors hover:bg-gray-50">
+                            <td className="px-6 py-2.5 font-semibold text-gray-800">
+                              {productoRepetido ? <span className="text-gray-300">″</span> : serie.producto}
+                            </td>
+                            <td className="px-4 py-2.5 text-gray-600">{ENVASE_LABEL[(serie.envaseBucket ?? 'otros') as EnvaseBucket] ?? serie.envaseBucket}</td>
+                            <td className="px-4 py-2.5">
+                              {serie.categoria && (
+                                <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${
+                                  serie.categoria === 'cerveza' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
+                                }`}>
+                                  {serie.categoria}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
+                              {serie.litrosMesEnCurso > 0 ? `${fNum(serie.litrosMesEnCurso)} L` : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-bold tabular-nums text-gray-900">
+                              {proximo ? `${fNum(proximo.litros)} L` : <span className="text-gray-300">sin datos</span>}
+                            </td>
+                            <td className="px-6 py-2.5 text-center">
+                              <ChipConfiabilidad mape={serie.mape} />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

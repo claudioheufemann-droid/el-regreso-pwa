@@ -1,40 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { esClienteExcluidoProduccion, CLIENTES_INCLUIR_PRODUCCION } from '@/lib/types'
+import { bucketEnvase, mesDe, mesEnCursoISO, normalizarProducto, claveProductoEnvase, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_KEY
   if (!url || !key) throw new Error('Supabase no configurado')
   return createSupabaseClient(url, key)
-}
-
-type EnvaseBucket = 'barril_30' | 'barril_50' | 'lata_354' | 'lata_473' | 'otros'
-
-/** Litros de un barril → familia de tamaño. Múltiplos de 30 (30/60/90/120…)
- *  son N barriles de 30L en una sola línea; 50L exacto es la otra medida
- *  estándar. El resto (growlers, casos atípicos) va a "otros". */
-function bucketEnvase(envase: string | null, litros: number): EnvaseBucket {
-  if (envase === 'Lata (354 ml)') return 'lata_354'
-  if (envase === 'Lata (473 ml)') return 'lata_473'
-  if (envase === 'Barril') {
-    if (litros > 0 && litros % 30 === 0) return 'barril_30'
-    if (litros === 50) return 'barril_50'
-  }
-  return 'otros'
-}
-
-function mesDe(fecha: string) {
-  return fecha.slice(0, 7) + '-01' // yyyy-mm-01
-}
-
-/** Espacios dobles del ERP ("Mocho  English") y descriptores entre
- *  paréntesis en costos_precios ("Kombucha Lemon (Fresh)") hacen que el
- *  nombre de ventas.producto no calce contra costos_precios.producto con una
- *  igualdad estricta — normalizamos ambos lados igual antes de cruzar
- *  (confirmado con datos reales: sin esto se perdía ~48% del volumen). */
-function normalizarProducto(nombre: string): string {
-  return nombre.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+/g, ' ').trim()
 }
 
 /**
@@ -68,12 +41,15 @@ export async function GET(req: Request) {
 
   // Puente nombre→código — mismo criterio que app/ventas/stock/page.tsx: es
   // lo que separa "producto real de fábrica" de merch/arriendos/fletes, que
-  // no le sirven a producción para planificar litros a brewear.
+  // no le sirven a producción para planificar litros a brewear. categoria
+  // (cerveza/kombucha) viaja directo desde costos_precios — más confiable
+  // que inferirla del nombre.
   const { data: costosPrecios } = await supabase
     .from('costos_precios')
-    .select('producto, codigo')
+    .select('producto, codigo, categoria')
     .not('codigo', 'is', null)
   const codigoPorProducto = new Map((costosPrecios ?? []).map(c => [normalizarProducto(c.producto as string), c.codigo as string]))
+  const categoriaPorProducto = new Map((costosPrecios ?? []).map(c => [normalizarProducto(c.producto as string), (c.categoria as string | null) ?? null]))
 
   // ventas puede tener >50k filas — PostgREST limita a 1000 por página.
   const PAGE = 1000
@@ -106,14 +82,18 @@ export async function GET(req: Request) {
   const general = new Map<string, number>()
   const porProducto = new Map<string, Map<string, number>>()
   const porEnvase = new Map<EnvaseBucket, Map<string, number>>()
+  // Cruce producto × envase — clave "Producto::bucket". Es lo que Producción
+  // necesita de verdad para planificar: no alcanza con saber "cuánto Doble
+  // IPA" o "cuánto barril 30L" por separado, hace falta "cuánto Doble IPA EN
+  // barril 30L" para decidir en qué formato embotellar/embarrilar cada lote.
+  const porProductoEnvase = new Map<string, Map<string, number>>()
   const mesesConVenta = new Set<string>()
 
   // El mes en curso siempre está incompleto (hoy puede ser el día 2) — si
   // entra al modelo como si fuera un mes cerrado, Prophet lo lee como una
   // caída real de demanda y el backtest compara contra un total falso.
   // Confirmado con una corrida real: metía un desvío de ~550% en "general".
-  const hoy = new Date()
-  const mesEnCurso = `${hoy.getUTCFullYear()}-${String(hoy.getUTCMonth() + 1).padStart(2, '0')}-01`
+  const mesEnCurso = mesEnCursoISO()
 
   for (const f of filas) {
     if (!f.fecha_pedido || !f.producto) continue
@@ -156,6 +136,11 @@ export async function GET(req: Request) {
     if (!porEnvase.has(bucket)) porEnvase.set(bucket, new Map())
     const serieEnv = porEnvase.get(bucket)!
     serieEnv.set(mes, (serieEnv.get(mes) ?? 0) + litros)
+
+    const clavePE = claveProductoEnvase(nombreNormalizado, bucket)
+    if (!porProductoEnvase.has(clavePE)) porProductoEnvase.set(clavePE, new Map())
+    const serieProdEnv = porProductoEnvase.get(clavePE)!
+    serieProdEnv.set(mes, (serieProdEnv.get(mes) ?? 0) + litros)
   }
 
   const toArray = (m: Map<string, number>) =>
@@ -166,6 +151,9 @@ export async function GET(req: Request) {
 
   const envaseObj: Record<string, { mes: string; litros: number }[]> = {}
   for (const [bucket, serie] of porEnvase) envaseObj[bucket] = toArray(serie)
+
+  const productoEnvaseObj: Record<string, { mes: string; litros: number }[]> = {}
+  for (const [clave, serie] of porProductoEnvase) productoEnvaseObj[clave] = toArray(serie)
 
   // Calidad de datos que ya se puede juzgar acá, sin correr el modelo todavía.
   const calidad: { tipo: string; clave: string | null; detalle: string; severidad: 'info' | 'advertencia' }[] = []
@@ -208,9 +196,18 @@ export async function GET(req: Request) {
       calidad.push({ tipo: 'historial_corto', clave: producto, detalle: `"${producto}" tiene sólo ${serie.size} mes(es) con ventas registradas — no alcanza para un forecast confiable (mínimo 6).`, severidad: 'advertencia' })
     }
   }
+  // Nada de "historial corto" por cada combo producto×envase: con ~100
+  // combinaciones posibles, la mayoría chicas, inundaría el panel de avisos
+  // sin agregar nada que "producto" ya no haya dicho. Python igual las salta
+  // sin forecastear si no alcanzan el mínimo — la tabla del frontend lo
+  // refleja mostrando "—" en vez de un número inventado.
 
   return NextResponse.json({
-    series: { general: toArray(general), producto: productoObj, envase: envaseObj },
+    series: {
+      general: toArray(general), producto: productoObj, envase: envaseObj,
+      productoEnvase: productoEnvaseObj,
+    },
+    categoriaPorProducto: Object.fromEntries(categoriaPorProducto),
     calidadDatos: calidad,
     meta: {
       totalFilas: filas.length, excluidosCliente, excluidosProducto, excluidosMesEnCurso,

@@ -99,7 +99,11 @@ def backtest(df: pd.DataFrame) -> dict | None:
             "mesesEvaluados": MESES_BACKTEST, "mesesHistorial": len(df)}
 
 
-def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], forecast_out: list, validacion_out: list, calidad_out: list):
+def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], forecast_out: list, validacion_out: list, calidad_out: list, silencioso: bool = False):
+    """silencioso=True: no agrega notas de calidad por serie individual — para
+    producto_envase, que son ~100 combinaciones y la mayoría chicas; una
+    advertencia por cada una ahogaría el panel sin decir nada que "producto"
+    (su nivel padre) no haya dicho ya."""
     df = a_dataframe(puntos)
     etiqueta = clave or "general"
 
@@ -110,21 +114,23 @@ def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], forecast_o
         })
 
     if len(df) < MIN_MESES_FORECAST:
-        calidad_out.append({
-            "tipo": "historial_corto", "clave": clave,
-            "detalle": f'"{etiqueta}" tiene sólo {len(df)} mes(es) de historial — no se proyectó (mínimo {MIN_MESES_FORECAST}).',
-            "severidad": "advertencia",
-        })
+        if not silencioso:
+            calidad_out.append({
+                "tipo": "historial_corto", "clave": clave,
+                "detalle": f'"{etiqueta}" tiene sólo {len(df)} mes(es) de historial — no se proyectó (mínimo {MIN_MESES_FORECAST}).',
+                "severidad": "advertencia",
+            })
         return
 
     try:
         proy = ajustar_y_proyectar(df)
     except Exception as e:
-        calidad_out.append({
-            "tipo": "error_modelo", "clave": clave,
-            "detalle": f'"{etiqueta}" no se pudo proyectar: {e}',
-            "severidad": "advertencia",
-        })
+        if not silencioso:
+            calidad_out.append({
+                "tipo": "error_modelo", "clave": clave,
+                "detalle": f'"{etiqueta}" no se pudo proyectar: {e}',
+                "severidad": "advertencia",
+            })
         return
 
     for _, row in proy.iterrows():
@@ -164,6 +170,11 @@ def main() -> int:
     print(f"\nPor envase: {len(series['envase'])} series")
     for envase, puntos in series["envase"].items():
         procesar_serie("envase", envase, puntos, forecast, validacion, calidad)
+
+    productoEnvase = series.get("productoEnvase", {})
+    print(f"\nPor producto y envase: {len(productoEnvase)} series")
+    for clave, puntos in productoEnvase.items():
+        procesar_serie("producto_envase", clave, puntos, forecast, validacion, calidad, silencioso=True)
 
     print(f"\nSubiendo resultado: {len(forecast)} filas forecast, {len(validacion)} validaciones, {len(calidad)} notas de calidad ...")
     r = requests.post(
