@@ -10,7 +10,10 @@ export default async function ControlComercialLayout({ children }: { children: R
   if (!puedeVerControlComercial(user)) redirect('/')
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
+    // data-theme="light" es a propósito: Control Comercial es el único módulo con fondo
+    // blanco (pedido explícito), independiente del theme oscuro del resto de la app —
+    // ver la regla .cc-root[data-theme="light"] en globals.css.
+    <div className="cc-root min-h-screen flex" data-theme="light" style={{ background: 'var(--bg)' }}>
       <div className="hidden lg:flex">
         <Sidebar />
       </div>
