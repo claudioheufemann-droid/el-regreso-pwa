@@ -1,302 +1,860 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { AlertTriangle, Info, TrendingUp } from 'lucide-react'
-import AppHeader from '@/components/ui/AppHeader'
-import type { SerieForecast, ValidacionSerie, CalidadItem, PuntoForecast } from './page'
+import React, { useMemo, useState } from 'react'
+import Link from 'next/link'
+import {
+  Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea,
+  ResponsiveContainer, ComposedChart, Line, Area,
+} from 'recharts'
+import {
+  LayoutDashboard, TrendingUp, Package, CalendarDays, ShoppingCart,
+  CircleDollarSign, Bell, Plus, AlertTriangle, Calendar as CalendarIcon,
+  TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info,
+} from 'lucide-react'
+import type { SerieForecast, CalidadItem, StockItem } from './page'
 
-const C = {
-  bg: '#0A0A0D', card: '#131318', card2: '#1A1A21', border: 'rgba(255,255,255,0.08)',
-  text: '#F4EEDF', muted: 'rgba(255,255,255,0.55)', faint: 'rgba(255,255,255,0.32)',
-  accent: '#A855F7', accentSoft: 'rgba(168,85,247,0.14)',
-  green: '#4ADE80', amber: '#F0B429', red: '#F87171',
+/* ────────────────────────────────────────────────────────────────────────
+   Paleta corporativa. Tailwind cubre el resto; estos tres colores van
+   inline porque no existen como tokens del tema.
+   ──────────────────────────────────────────────────────────────────────── */
+const COLORS = {
+  darkGreen: '#0F3D2E',
+  lightGreen: '#1A5441',
+  amber: '#E5A922',
+  lightAmber: '#FDE68A',
+  kombucha: '#B45309',
+  gray: '#9CA3AF',
 }
 
-const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-function fMes(iso: string, corto = false) {
-  const [y, m] = iso.split('-').map(Number)
-  return corto ? `${MESES[m - 1]} '${String(y).slice(2)}` : `${MESES[m - 1]} ${y}`
-}
+/* ────────────────────────────────────────────────────────────────────────
+   DATOS DE DEMOSTRACIÓN
+   Estas tres secciones (cocciones, insumos/MRP, presupuesto) NO tienen
+   respaldo en la base todavía: no existen tablas de recetas, insumos ni
+   plan de cocción. Se dejan como maqueta para validar el diseño, y van
+   marcadas en pantalla con el badge <BadgeDemo/> para que nadie tome una
+   decisión de compra con estos números. Reemplazar por datos reales
+   cuando existan las tablas.
+   ──────────────────────────────────────────────────────────────────────── */
+const DEMO_budgetData = [
+  { month: 'Ene', cerveza: 45000, kombucha: 20000, tendencia: 65000 },
+  { month: 'Feb', cerveza: 48000, kombucha: 22000, tendencia: 70000 },
+  { month: 'Mar', cerveza: 35000, kombucha: 18000, tendencia: 53000 },
+  { month: 'Abr', cerveza: 34000, kombucha: 19000, tendencia: 53000 },
+  { month: 'May', cerveza: 36000, kombucha: 20000, tendencia: 56000 },
+  { month: 'Jun', cerveza: 35000, kombucha: 21000, tendencia: 56000 },
+  { month: 'Jul', cerveza: 32000, kombucha: 17000, tendencia: 49000 },
+  { month: 'Ago', cerveza: 33000, kombucha: 18000, tendencia: 51000 },
+  { month: 'Sep', cerveza: 40000, kombucha: 22000, tendencia: 62000 },
+  { month: 'Oct', cerveza: 42000, kombucha: 24000, tendencia: 66000 },
+  { month: 'Nov', cerveza: 47000, kombucha: 26000, tendencia: 73000 },
+  { month: 'Dic', cerveza: 55000, kombucha: 30000, tendencia: 85000 },
+]
+
+const DEMO_insumosData = [
+  { id: 1, insumo: 'Malta Pale Ale', categoria: 'Malta', stock: 420, consumo: 850, necesidad: 430, leadTime: 15, fechaPedido: '15/11/2026', estado: 'critico' },
+  { id: 2, insumo: 'Lúpulo Citra', categoria: 'Lúpulo', stock: 15, consumo: 45, necesidad: 30, leadTime: 20, fechaPedido: '10/11/2026', estado: 'bajo' },
+  { id: 3, insumo: 'Levadura US-05', categoria: 'Levadura', stock: 12, consumo: 10, necesidad: 0, leadTime: 7, fechaPedido: '-', estado: 'ok' },
+  { id: 4, insumo: 'Té Negro (Orgánico)', categoria: 'Kombucha Base', stock: 45, consumo: 40, necesidad: 0, leadTime: 10, fechaPedido: '-', estado: 'ok' },
+  { id: 5, insumo: 'Jengibre Fresco', categoria: 'Adjuntos', stock: 8, consumo: 30, necesidad: 22, leadTime: 3, fechaPedido: '27/11/2026', estado: 'bajo' },
+  { id: 6, insumo: 'Lúpulo Mosaic', categoria: 'Lúpulo', stock: 5, consumo: 25, necesidad: 20, leadTime: 20, fechaPedido: '05/11/2026', estado: 'critico' },
+  { id: 7, insumo: 'Latas 473ml', categoria: 'Empaque', stock: 1500, consumo: 5000, necesidad: 3500, leadTime: 30, fechaPedido: '01/11/2026', estado: 'critico' },
+]
+
+const DEMO_calendario = [
+  { dia: 1, cocciones: [] },
+  { dia: 2, cocciones: [{ estilo: 'Doble IPA', tipo: 'cerveza', urgente: false }, { estilo: 'Kombucha Maqui', tipo: 'kombucha', urgente: false }] },
+  { dia: 3, cocciones: [{ estilo: 'Doble IPA', tipo: 'cerveza', urgente: false }] },
+  { dia: 4, cocciones: [{ estilo: 'Doble IPA', tipo: 'cerveza', urgente: false }] },
+  { dia: 5, cocciones: [{ estilo: 'La Barra APA', tipo: 'cerveza', urgente: false }] },
+  { dia: 6, cocciones: [{ estilo: 'Red IPA', tipo: 'cerveza', urgente: false }] },
+  { dia: 7, cocciones: [] },
+  { dia: 8, cocciones: [{ estilo: 'Kombucha Lemon', tipo: 'kombucha', urgente: false }] },
+  { dia: 9, cocciones: [{ estilo: 'Kombucha Lemon', tipo: 'kombucha', urgente: false }] },
+  { dia: 10, cocciones: [{ estilo: 'Kombucha Maqui', tipo: 'kombucha', urgente: false }] },
+  { dia: 11, cocciones: [{ estilo: 'Imperial Stout', tipo: 'cerveza', urgente: false }, { estilo: 'Kombucha Detox', tipo: 'kombucha', urgente: false }] },
+  { dia: 12, cocciones: [{ estilo: 'La Barra APA', tipo: 'cerveza', urgente: false }, { estilo: 'Mocho English', tipo: 'cerveza', urgente: false }] },
+  { dia: 13, cocciones: [{ estilo: 'La Barra APA', tipo: 'cerveza', urgente: false }] },
+  { dia: 14, cocciones: [] },
+  { dia: 15, cocciones: [{ estilo: 'Doble IPA', tipo: 'cerveza', urgente: false }] },
+  { dia: 16, cocciones: [{ estilo: 'Kombucha Berry Menta', tipo: 'kombucha', urgente: false }] },
+  { dia: 17, cocciones: [{ estilo: 'ÁMBAR LAGER', tipo: 'cerveza', urgente: true, detalle: 'Tanque FV-4 | Vol: 1000L' }] },
+  { dia: 18, cocciones: [{ estilo: 'ÁMBAR LAGER', tipo: 'cerveza', urgente: true }] },
+  { dia: 19, cocciones: [{ estilo: 'Imperial Stout', tipo: 'cerveza', urgente: false }] },
+  { dia: 20, cocciones: [{ estilo: 'Fisura', tipo: 'cerveza', urgente: false }] },
+  { dia: 21, cocciones: [] },
+  { dia: 22, cocciones: [{ estilo: 'Doble IPA', tipo: 'cerveza', urgente: false }] },
+  { dia: 23, cocciones: [{ estilo: 'Imperial Stout', tipo: 'cerveza', urgente: false }] },
+  { dia: 24, cocciones: [{ estilo: 'Arboretum', tipo: 'cerveza', urgente: false }] },
+  { dia: 25, cocciones: [] },
+  { dia: 26, cocciones: [] },
+  { dia: 27, cocciones: [{ estilo: 'La Barra APA', tipo: 'cerveza', urgente: false }] },
+  { dia: 28, cocciones: [] },
+  { dia: 29, cocciones: [{ estilo: 'Aguas Blancas', tipo: 'cerveza', urgente: false }] },
+  { dia: 30, cocciones: [{ estilo: 'Kombucha Natural', tipo: 'kombucha', urgente: false }] },
+  { dia: 31, cocciones: [] },
+]
+
+/* ── Utilidades de formato ─────────────────────────────────────────────── */
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const fNum = (n: number) => Math.round(n).toLocaleString('es-CL')
 
-const ENVASE_LABEL: Record<string, string> = {
-  barril_30: 'Barril 30L', barril_50: 'Barril 50L',
-  lata_354: 'Lata 354ml', lata_473: 'Lata 473ml', otros: 'Otros formatos',
+function etiquetaMes(iso: string) {
+  const [y, m] = iso.split('-').map(Number)
+  return `${MESES_CORTOS[m - 1]} '${String(y).slice(2)}`
+}
+function indiceMes(iso: string) {
+  return Number(iso.split('-')[1]) - 1
 }
 
-type Vista = 'general' | 'producto' | 'envase'
+const navItems = [
+  { id: 'resumen', icon: LayoutDashboard, label: 'Resumen General' },
+  { id: 'forecasting', icon: TrendingUp, label: 'Forecasting' },
+  { id: 'seguridad', icon: Package, label: 'Stock de Seguridad' },
+  { id: 'plan', icon: CalendarDays, label: 'Plan Maestro' },
+  { id: 'insumos', icon: ShoppingCart, label: 'Insumos y Compras' },
+  { id: 'presupuesto', icon: CircleDollarSign, label: 'Presupuesto' },
+] as const
 
-export default function ProduccionClient({ series, validacion, calidad, ultimaCorrida }: {
-  series: SerieForecast[]; validacion: ValidacionSerie[]; calidad: CalidadItem[]; ultimaCorrida: string | null
-}) {
-  const [vista, setVista] = useState<Vista>('general')
-  const [clave, setClave] = useState<string | null>(null)
+type TabId = (typeof navItems)[number]['id']
 
-  const serieGeneral = series.find(s => s.nivel === 'general')
-  const productos = series.filter(s => s.nivel === 'producto')
-  const envases = series.filter(s => s.nivel === 'envase')
-
-  const opcionesProducto = useMemo(() =>
-    [...productos].sort((a, b) => sumaHistorica(b) - sumaHistorica(a)).map(s => s.clave!),
-    [productos])
-  const opcionesEnvase = useMemo(() => {
-    const orden = ['barril_30', 'barril_50', 'lata_354', 'lata_473', 'otros']
-    return envases.map(s => s.clave!).sort((a, b) => orden.indexOf(a) - orden.indexOf(b))
-  }, [envases])
-
-  const claveActual = vista === 'general' ? null : (clave ?? (vista === 'producto' ? opcionesProducto[0] : opcionesEnvase[0]) ?? null)
-  const serieActual = vista === 'general'
-    ? serieGeneral
-    : series.find(s => s.nivel === vista && s.clave === claveActual)
-
-  const etiquetaActual = vista === 'general' ? 'Total compañía' : vista === 'envase' ? ENVASE_LABEL[claveActual ?? ''] ?? claveActual : claveActual
-
-  const validacionActual = validacion.find(v => v.nivel === vista && v.clave === (vista === 'general' ? null : claveActual))
-
-  const advertencias = calidad.filter(c => c.severidad === 'advertencia')
-
+/* ── Badge para todo lo que todavía es maqueta ─────────────────────────── */
+function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.ReactNode }) {
   return (
-    <div style={{ background: C.bg, minHeight: '100vh', color: C.text }}>
-      <div style={{ maxWidth: 780, margin: '0 auto', padding: '0 16px 100px' }}>
-        <AppHeader eyebrow="Producción" title="Forecast de demanda" />
-
-        <p style={{ fontSize: 12.5, color: C.muted, marginTop: -8, marginBottom: 18 }}>
-          Proyección a 8 meses con Prophet, sólo ventas reales (sin clientes internos ni mermas).
-          {ultimaCorrida && <> Última corrida: <b style={{ color: C.text }}>{ultimaCorrida.slice(0, 10)}</b>.</>}
-        </p>
-
-        {!serieGeneral && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, textAlign: 'center', color: C.muted, fontSize: 13.5 }}>
-            Todavía no corrió el modelo. Se genera automáticamente cada semana — o corré el script manualmente (<code>scripts/forecast/generar_forecast.py</code>).
-          </div>
-        )}
-
-        {serieGeneral && (
-          <>
-            {/* ── Selector de vista ── */}
-            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              {(['general', 'producto', 'envase'] as Vista[]).map(v => (
-                <button key={v} onClick={() => { setVista(v); setClave(null) }} style={{
-                  flex: 1, padding: '10px 8px', borderRadius: 10, border: `1px solid ${vista === v ? C.accent : C.border}`,
-                  background: vista === v ? C.accentSoft : C.card, color: vista === v ? C.accent : C.muted,
-                  fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                }}>
-                  {v === 'general' ? 'General' : v === 'producto' ? 'Por producto' : 'Por envase'}
-                </button>
-              ))}
-            </div>
-
-            {/* ── Selector secundario ── */}
-            {vista !== 'general' && (
-              <div className="scroll-x-mobile" style={{ display: 'flex', gap: 6, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
-                {(vista === 'producto' ? opcionesProducto : opcionesEnvase).map(op => {
-                  const activo = op === claveActual
-                  const label = vista === 'envase' ? (ENVASE_LABEL[op] ?? op) : op
-                  return (
-                    <button key={op} onClick={() => setClave(op)} style={{
-                      flexShrink: 0, padding: '7px 13px', borderRadius: 999,
-                      border: `1px solid ${activo ? C.accent : C.border}`,
-                      background: activo ? C.accentSoft : 'transparent',
-                      color: activo ? C.accent : C.muted, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                    }}>
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
-            {serieActual ? (
-              <>
-                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '18px 16px 10px', marginBottom: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <p style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{etiquetaActual}</p>
-                    {validacionActual && <ChipConfiabilidad mape={validacionActual.mape} />}
-                  </div>
-                  <Chart puntos={serieActual.puntos} />
-                  <Leyenda />
-                </div>
-
-                <Tabla puntos={serieActual.puntos} />
-
-                {validacionActual && (
-                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, marginTop: 16 }}>
-                    <p style={{ fontSize: 12.5, fontWeight: 800, color: C.text, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <TrendingUp size={14} color={C.accent} /> Validación del modelo
-                    </p>
-                    <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>
-                      Se entrenó sin los últimos {validacionActual.mesesEvaluados} meses y se compararon esos meses contra lo que realmente se vendió.
-                      Error promedio: <b style={{ color: C.text }}>{fNum(validacionActual.mae ?? 0)} L/mes</b>
-                      {validacionActual.mape != null && <> (<b style={{ color: C.text }}>{validacionActual.mape.toFixed(0)}%</b> de desvío)</>}
-                      , sobre {validacionActual.mesesHistorial} meses de historial.
-                    </p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p style={{ color: C.muted, fontSize: 13, textAlign: 'center', padding: 20 }}>Sin datos para esta serie.</p>
-            )}
-
-            {/* ── Validación general (todas las series) ── */}
-            <TablaValidacion validacion={validacion} />
-
-            {/* ── Calidad de datos ── */}
-            {calidad.length > 0 && (
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, marginTop: 16 }}>
-                <p style={{ fontSize: 12.5, fontWeight: 800, color: C.text, marginBottom: 10 }}>
-                  Calidad de datos {advertencias.length > 0 && <span style={{ color: C.amber }}>· {advertencias.length} advertencia{advertencias.length === 1 ? '' : 's'}</span>}
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {calidad.map((c, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                      {c.severidad === 'advertencia'
-                        ? <AlertTriangle size={14} color={C.amber} style={{ flexShrink: 0, marginTop: 2 }} />
-                        : <Info size={14} color={C.faint} style={{ flexShrink: 0, marginTop: 2 }} />}
-                      <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{c.detalle}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function sumaHistorica(s: SerieForecast) {
-  return s.puntos.filter(p => p.tipo === 'historico').reduce((acc, p) => acc + p.litros, 0)
-}
-
-function ChipConfiabilidad({ mape }: { mape: number | null }) {
-  if (mape == null) return null
-  const color = mape < 15 ? C.green : mape < 30 ? C.amber : C.red
-  const label = mape < 15 ? 'Confiable' : mape < 30 ? 'Aproximado' : 'Poco confiable'
-  return (
-    <span style={{ fontSize: 10.5, fontWeight: 700, color, background: `${color}22`, borderRadius: 999, padding: '3px 9px' }}>
-      {label} · {mape.toFixed(0)}% desvío
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-700">
+      <Info size={12} />
+      {children}
     </span>
   )
 }
 
-function Leyenda() {
-  return (
-    <div style={{ display: 'flex', gap: 16, marginTop: 6, marginBottom: 4 }}>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: C.muted }}>
-        <span style={{ width: 14, height: 2, background: C.text, display: 'inline-block' }} /> Histórico
-      </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: C.muted }}>
-        <svg width="14" height="8"><line x1="0" y1="4" x2="14" y2="4" stroke={C.accent} strokeWidth="2" strokeDasharray="3,2" /></svg> Proyección
-      </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: C.muted }}>
-        <span style={{ width: 14, height: 8, background: C.accentSoft, borderRadius: 2, display: 'inline-block' }} /> Rango estimado
-      </span>
-    </div>
+export default function ProduccionClient({
+  series, calidad, stock, ultimaCorrida, nombreUsuario, inicialesUsuario,
+}: {
+  series: SerieForecast[]
+  calidad: CalidadItem[]
+  stock: StockItem[]
+  ultimaCorrida: string | null
+  nombreUsuario: string
+  inicialesUsuario: string
+}) {
+  const [activeTab, setActiveTab] = useState<TabId>('resumen')
+  const [serieId, setSerieId] = useState<string>(series[0]?.id ?? '')
+  const [avisoCoccion, setAvisoCoccion] = useState(false)
+  const [busquedaInsumo, setBusquedaInsumo] = useState('')
+
+  const serieGeneral = series.find(s => s.nivel === 'general') ?? null
+  const serieActual = series.find(s => s.id === serieId) ?? serieGeneral
+
+  /* ── Serie seleccionada → filas para Recharts ─────────────────────────
+     La proyección arranca repitiendo el último mes real, para que las dos
+     líneas queden pegadas en el gráfico en vez de mostrar un corte. */
+  const chartData = useMemo(() => {
+    if (!serieActual) return []
+    const puntos = [...serieActual.puntos].sort((a, b) => a.mes.localeCompare(b.mes))
+    const idxCorte = puntos.findIndex(p => p.tipo === 'forecast')
+    return puntos.map((p, i) => {
+      const esUltimoReal = idxCorte > 0 && i === idxCorte - 1
+      return {
+        month: etiquetaMes(p.mes),
+        mesIso: p.mes,
+        ventaReal: p.tipo === 'historico' ? p.litros : null,
+        ventaProyectada: p.tipo === 'forecast' || esUltimoReal ? p.litros : null,
+        rango: p.litrosMin != null && p.litrosMax != null ? [p.litrosMin, p.litrosMax] : null,
+      }
+    })
+  }, [serieActual])
+
+  /* ── Temporada alta (Dic–Feb): tramos consecutivos para las ReferenceArea ── */
+  const tramosTemporadaAlta = useMemo(() => {
+    const tramos: { x1: string; x2: string }[] = []
+    let inicio: string | null = null
+    let previo: string | null = null
+    for (const fila of chartData) {
+      const alta = [11, 0, 1].includes(indiceMes(fila.mesIso))
+      if (alta && inicio === null) inicio = fila.month
+      if (!alta && inicio !== null && previo !== null) {
+        tramos.push({ x1: inicio, x2: previo })
+        inicio = null
+      }
+      previo = fila.month
+    }
+    if (inicio !== null && previo !== null) tramos.push({ x1: inicio, x2: previo })
+    return tramos
+  }, [chartData])
+
+  /* ── KPIs reales ──────────────────────────────────────────────────────── */
+  const productosEnRiesgo = useMemo(
+    () => series.filter(s => s.nivel === 'producto' && (s.mape == null || s.mape > 30)),
+    [series]
   )
-}
+  const desviacionGeneral = serieGeneral?.mape ?? null
+  const precisionSerie = serieActual?.mape != null ? Math.max(0, 100 - serieActual.mape) : null
 
-/* ── Gráfico de líneas (SVG a mano, sin librería — misma convención que
-   app/flota/kpis/KpisClient.tsx) ── */
-function Chart({ puntos }: { puntos: PuntoForecast[] }) {
-  const W = 680, H = 220, PAD_L = 44, PAD_R = 10, PAD_T = 14, PAD_B = 24
-  if (puntos.length < 2) {
-    return <div style={{ height: H, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.faint, fontSize: 12.5 }}>No hay suficientes puntos para graficar.</div>
-  }
-
-  const n = puntos.length
-  const x = (i: number) => PAD_L + (i / (n - 1)) * (W - PAD_L - PAD_R)
-
-  const valores = puntos.flatMap(p => [p.litros, p.litrosMin ?? p.litros, p.litrosMax ?? p.litros])
-  const maxY = Math.max(...valores) * 1.12 || 1
-  const y = (v: number) => H - PAD_B - (v / maxY) * (H - PAD_T - PAD_B)
-
-  const idxCorte = puntos.findIndex(p => p.tipo === 'forecast')
-  const historicos = idxCorte === -1 ? puntos.map((p, i) => [i, p] as const) : puntos.slice(0, idxCorte).map((p, i) => [i, p] as const)
-  // La línea de proyección arranca en el último punto histórico (idxCorte-1)
-  // para que las dos líneas se junten sin cortarse en el gráfico.
-  const inicioProy = idxCorte <= 0 ? idxCorte : idxCorte - 1
-  const proyectados = idxCorte === -1 ? [] : puntos.slice(inicioProy).map((p, i) => [inicioProy + i, p] as const)
-
-  const pathHist = historicos.map(([i, p], k) => `${k === 0 ? 'M' : 'L'}${x(i)},${y(p.litros)}`).join(' ')
-  const pathProy = proyectados.map(([i, p], k) => `${k === 0 ? 'M' : 'L'}${x(i)},${y(p.litros)}`).join(' ')
-  const bandaArriba = proyectados.map(([i, p]) => `${x(i)},${y(p.litrosMax ?? p.litros)}`)
-  const bandaAbajo = [...proyectados].reverse().map(([i, p]) => `${x(i)},${y(p.litrosMin ?? p.litros)}`)
-  const bandaPath = proyectados.length > 0 ? `M${bandaArriba.join(' L')} L${bandaAbajo.join(' L')} Z` : ''
-
-  // Grillas horizontales + etiquetas de mes cada ~2 puntos para no amontonar
-  const gridY = [0.25, 0.5, 0.75, 1].map(f => f * maxY)
-  const pasoEtiqueta = Math.ceil(n / 6)
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img" aria-label="Proyección de litros por mes">
-      {gridY.map(v => (
-        <g key={v}>
-          <line x1={PAD_L} y1={y(v)} x2={W - PAD_R} y2={y(v)} stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
-          <text x={PAD_L - 6} y={y(v) + 3} textAnchor="end" fontSize="9" fill={C.faint}>{fNum(v)}</text>
-        </g>
-      ))}
-      {bandaPath && <path d={bandaPath} fill={C.accent} fillOpacity={0.15} stroke="none" />}
-      <path d={pathHist} fill="none" stroke={C.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      {pathProy && <path d={pathProy} fill="none" stroke={C.accent} strokeWidth={2} strokeDasharray="5,4" strokeLinecap="round" strokeLinejoin="round" />}
-      {puntos.map((p, i) => (i % pasoEtiqueta === 0 || i === n - 1) && (
-        <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize="9" fill={C.faint}>{fMes(p.mes, true)}</text>
-      ))}
-      {idxCorte > 0 && <line x1={x(idxCorte)} y1={PAD_T} x2={x(idxCorte)} y2={H - PAD_B} stroke="rgba(255,255,255,0.15)" strokeWidth={1} strokeDasharray="2,3" />}
-    </svg>
+  const proximosMeses = useMemo(
+    () => (serieGeneral?.puntos ?? []).filter(p => p.tipo === 'forecast').slice(0, 3),
+    [serieGeneral]
   )
-}
+  const litrosProximoMes = proximosMeses[0]?.litros ?? null
 
-function Tabla({ puntos }: { puntos: PuntoForecast[] }) {
+  const advertencias = calidad.filter(c => c.severidad === 'advertencia')
+
+  const insumosFiltrados = DEMO_insumosData.filter(i =>
+    i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
+    i.categoria.toLowerCase().includes(busquedaInsumo.toLowerCase())
+  )
+
+  const tituloActual = navItems.find(i => i.id === activeTab)?.label ?? ''
+
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
-      <div style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: 460 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1.4fr', padding: '10px 14px', borderBottom: `1px solid ${C.border}`, fontSize: 10.5, fontWeight: 800, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            <span>Mes</span><span>Tipo</span><span style={{ textAlign: 'right' }}>Litros</span><span style={{ textAlign: 'right' }}>Rango estimado</span>
-          </div>
-          {puntos.map((p, i) => (
-            <div key={i} style={{
-              display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1.4fr', padding: '9px 14px',
-              borderBottom: i === puntos.length - 1 ? 'none' : `1px solid ${C.border}`, fontSize: 12.5,
-            }}>
-              <span style={{ color: C.text, fontWeight: 600 }}>{fMes(p.mes)}</span>
-              <span style={{ color: p.tipo === 'forecast' ? C.accent : C.muted, fontWeight: 600 }}>{p.tipo === 'forecast' ? 'Proyectado' : 'Real'}</span>
-              <span style={{ textAlign: 'right', color: C.text, fontVariantNumeric: 'tabular-nums' }}>{fNum(p.litros)} L</span>
-              <span style={{ textAlign: 'right', color: C.faint, fontVariantNumeric: 'tabular-nums' }}>
-                {p.litrosMin != null && p.litrosMax != null ? `${fNum(p.litrosMin)}–${fNum(p.litrosMax)} L` : '—'}
-              </span>
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-gray-100 font-sans text-gray-800 lg:flex-row">
+
+      {/* ══ BARRA LATERAL (escritorio) ══ */}
+      <aside
+        className="hidden w-64 shrink-0 flex-col justify-between lg:flex"
+        style={{ backgroundColor: COLORS.darkGreen }}
+      >
+        <div>
+          <div className="flex items-center gap-3 p-6 text-white">
+            <Beaker size={28} style={{ color: COLORS.amber }} />
+            <div>
+              <h1 className="text-xl font-bold leading-tight tracking-tight">EL REGRESO</h1>
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-300">Beer &amp; Kombucha</p>
             </div>
+          </div>
+
+          <nav className="mt-4 flex flex-col gap-1 px-3">
+            {navItems.map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-medium transition-colors ${
+                  activeTab === item.id ? 'text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                }`}
+                style={{ backgroundColor: activeTab === item.id ? COLORS.lightGreen : 'transparent' }}
+              >
+                <item.icon size={20} />
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="m-3 flex items-center justify-between rounded-lg border-t border-white/10 bg-black/20 p-4 text-white">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-500 text-sm font-bold">
+              {inicialesUsuario || '··'}
+            </div>
+            <div className="flex min-w-0 flex-col text-left">
+              <span className="truncate text-sm font-semibold">{nombreUsuario}</span>
+              <span className="text-xs text-gray-400">Producción</span>
+            </div>
+          </div>
+          <Link href="/" aria-label="Volver al inicio" className="shrink-0 text-gray-400 transition-colors hover:text-white">
+            <Home size={16} />
+          </Link>
+        </div>
+      </aside>
+
+      {/* ══ ÁREA PRINCIPAL ══ */}
+      <main className="flex h-full flex-1 flex-col overflow-hidden bg-gray-100">
+
+        {/* ── Barra superior ── */}
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 lg:h-16 lg:px-8 lg:py-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link href="/" aria-label="Volver al inicio" className="shrink-0 rounded-md p-1.5 text-gray-500 hover:bg-gray-100 lg:hidden">
+              <Home size={18} />
+            </Link>
+            <h2 className="truncate text-base font-bold text-gray-800 lg:text-xl">{tituloActual}</h2>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-3 lg:gap-6">
+            <div className="hidden items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-600 xl:flex">
+              <CalendarIcon size={16} />
+              <span>{ultimaCorrida ? `Modelo: ${ultimaCorrida.slice(0, 10)}` : 'Sin corrida'}</span>
+              <ChevronDown size={14} />
+            </div>
+
+            <div className="relative cursor-pointer" title={`${advertencias.length} advertencias del modelo`}>
+              <Bell size={20} className="text-gray-600" />
+              {advertencias.length > 0 && (
+                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500" />
+              )}
+            </div>
+
+            <button
+              onClick={() => setAvisoCoccion(v => !v)}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white shadow-sm transition-transform hover:scale-105 lg:px-4"
+              style={{ backgroundColor: COLORS.amber }}
+            >
+              <Plus size={18} />
+              <span className="hidden sm:inline">Nueva Cocción</span>
+            </button>
+          </div>
+        </header>
+
+        {avisoCoccion && (
+          <div className="flex shrink-0 items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 lg:px-8">
+            <Info size={16} className="mt-0.5 shrink-0" />
+            <span>
+              El plan de cocciones todavía no está conectado — no existe una tabla de cocciones en la base.
+              Cuando exista, este botón crea el registro desde acá.
+            </span>
+            <button onClick={() => setAvisoCoccion(false)} className="ml-auto shrink-0 font-bold hover:underline">Cerrar</button>
+          </div>
+        )}
+
+        {/* ── Tabs (móvil) ── */}
+        <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-gray-200 bg-white px-3 py-2 lg:hidden">
+          {navItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                activeTab === item.id ? 'text-white' : 'bg-gray-100 text-gray-600'
+              }`}
+              style={{ backgroundColor: activeTab === item.id ? COLORS.darkGreen : undefined }}
+            >
+              <item.icon size={14} />
+              {item.label}
+            </button>
           ))}
         </div>
-      </div>
-    </div>
-  )
-}
 
-function TablaValidacion({ validacion }: { validacion: ValidacionSerie[] }) {
-  if (validacion.length === 0) return null
-  const filas = [...validacion].sort((a, b) => (a.mape ?? 999) - (b.mape ?? 999))
-  return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, marginTop: 16, overflow: 'hidden' }}>
-      <p style={{ fontSize: 12.5, fontWeight: 800, color: C.text, padding: '14px 16px 10px' }}>Confiabilidad por serie</p>
-      <div style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: 460 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '8px 16px', borderTop: `1px solid ${C.border}`, fontSize: 10.5, fontWeight: 800, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            <span>Serie</span><span style={{ textAlign: 'right' }}>Desvío</span><span style={{ textAlign: 'right' }}>Error</span><span style={{ textAlign: 'right' }}>Historial</span>
-          </div>
-          {filas.map((v, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '8px 16px', borderTop: `1px solid ${C.border}`, fontSize: 12 }}>
-              <span style={{ color: C.text }}>{v.nivel === 'general' ? 'Total compañía' : (ENVASE_LABEL[v.clave ?? ''] ?? v.clave)}</span>
-              <span style={{ textAlign: 'right', color: v.mape != null && v.mape < 15 ? C.green : v.mape != null && v.mape < 30 ? C.amber : C.red, fontVariantNumeric: 'tabular-nums' }}>
-                {v.mape != null ? `${v.mape.toFixed(0)}%` : '—'}
-              </span>
-              <span style={{ textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{v.mae != null ? `${fNum(v.mae)} L` : '—'}</span>
-              <span style={{ textAlign: 'right', color: C.faint, fontVariantNumeric: 'tabular-nums' }}>{v.mesesHistorial} m.</span>
+        {/* ── Contenido ── */}
+        <div className="flex-1 overflow-auto p-4 lg:p-8">
+
+          {/* ══════════ VISTA 1: RESUMEN GENERAL ══════════ */}
+          {activeTab === 'resumen' && (
+            <div className="flex flex-col gap-6">
+
+              {/* KPIs */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 lg:gap-6">
+
+                <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+                    <AlertTriangle size={18} style={{ color: COLORS.amber }} />
+                    Productos en Riesgo
+                  </div>
+                  <div className="flex items-end justify-between gap-3">
+                    <span className="text-4xl font-bold text-gray-900">{productosEnRiesgo.length}</span>
+                    <div className="text-right text-xs font-medium leading-tight text-red-600">
+                      {productosEnRiesgo.slice(0, 2).map(p => <div key={p.id}>• {p.label}</div>)}
+                      {productosEnRiesgo.length > 2 && <div className="text-gray-400">+{productosEnRiesgo.length - 2} más</div>}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400">Forecast poco confiable (desvío &gt; 30%)</p>
+                </div>
+
+                <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+                    <CalendarDays size={18} className="text-green-600" />
+                    Demanda Próximo Mes
+                  </div>
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="flex flex-col">
+                      <span className="text-3xl font-bold text-gray-900">
+                        {litrosProximoMes != null ? fNum(litrosProximoMes) : '—'}
+                      </span>
+                      <span className="text-sm font-semibold text-gray-700">litros proyectados</span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400">Consolidado, todos los productos</p>
+                </div>
+
+                <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+                    <TrendingDown size={18} className="text-red-500" />
+                    Desviación del Modelo
+                  </div>
+                  <div className="flex items-end justify-between gap-3">
+                    <span className={`text-3xl font-bold ${desviacionGeneral != null && desviacionGeneral > 30 ? 'text-red-600' : 'text-gray-900'}`}>
+                      {desviacionGeneral != null ? `${desviacionGeneral.toFixed(0)}%` : '—'}
+                    </span>
+                    <span className="mb-1 text-xs font-medium text-gray-500">backtest 3 meses</span>
+                  </div>
+                  <p className="text-[11px] text-gray-400">Error medio vs. venta real</p>
+                </div>
+
+                <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center justify-between gap-2 text-sm font-medium text-gray-500">
+                    <span className="flex items-center gap-2">
+                      <Beaker size={18} style={{ color: COLORS.darkGreen }} />
+                      Capacidad Planta
+                    </span>
+                  </div>
+                  <div className="flex items-end justify-between gap-3">
+                    <span className="text-3xl font-bold text-gray-900">78%</span>
+                    <span className="mb-1 rounded-md bg-green-100 px-2 py-1 text-xs font-bold text-green-600">Operativa</span>
+                  </div>
+                  <BadgeDemo>Demo</BadgeDemo>
+                </div>
+              </div>
+
+              {/* Calendario + Alertas */}
+              <div className="flex flex-col gap-6 xl:h-[600px] xl:flex-row">
+
+                {/* Calendario */}
+                <div className="flex flex-[3] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-4 lg:px-6">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="font-bold text-gray-800">Cronograma de Cocciones</h3>
+                      <BadgeDemo />
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium shadow-sm">Mes</button>
+                      <button className="rounded px-3 py-1 text-sm font-medium text-gray-500 hover:bg-gray-100">Semana</button>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-auto p-4">
+                    <div className="grid min-w-[620px] grid-cols-7 gap-2">
+                      {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(dia => (
+                        <div key={dia} className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-gray-400">
+                          {dia}
+                        </div>
+                      ))}
+
+                      {DEMO_calendario.map(dia => (
+                        <div
+                          key={dia.dia}
+                          className="relative flex min-h-[80px] flex-col gap-1 rounded-md border border-gray-100 bg-gray-50/30 p-1.5 transition-colors hover:bg-gray-50"
+                        >
+                          <span className="absolute right-2 top-1.5 text-xs font-medium text-gray-400">{dia.dia}</span>
+                          <div className="mt-4 flex flex-col gap-1">
+                            {dia.cocciones.map((coccion, cIdx) => (
+                              <div
+                                key={cIdx}
+                                className={`group relative cursor-pointer truncate rounded-sm px-1.5 py-1 text-[10px] font-bold ${
+                                  coccion.urgente
+                                    ? 'border-[1.5px] border-red-500 bg-red-50 text-red-700 shadow-sm'
+                                    : coccion.tipo === 'kombucha'
+                                      ? 'text-white'
+                                      : 'text-white'
+                                }`}
+                                style={
+                                  coccion.urgente
+                                    ? undefined
+                                    : { backgroundColor: coccion.tipo === 'kombucha' ? COLORS.kombucha : COLORS.lightGreen }
+                                }
+                              >
+                                {coccion.estilo}
+                                {coccion.urgente && (
+                                  <div className="absolute -top-12 left-0 z-10 hidden w-40 flex-col rounded bg-gray-900 p-2 text-xs font-normal text-white shadow-xl group-hover:flex">
+                                    <span className="font-bold text-red-400">URGENTE · Reorden</span>
+                                    <span>{('detalle' in coccion && coccion.detalle) || 'Requiere acción'}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Alertas — REALES, salen de forecast_calidad_datos */}
+                <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm xl:max-w-sm">
+                  <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                    <h3 className="text-sm font-bold text-gray-800">Alertas del Modelo</h3>
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-600">{calidad.length}</span>
+                  </div>
+                  <div className="flex flex-col gap-2 overflow-y-auto p-2">
+                    {calidad.length === 0 && (
+                      <p className="p-4 text-center text-sm text-gray-400">Sin alertas. El modelo no encontró problemas de datos.</p>
+                    )}
+                    {calidad.map((alerta, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-start gap-3 rounded-lg border p-3 ${
+                          alerta.severidad === 'advertencia' ? 'border-amber-100 bg-amber-50/50' : 'border-gray-100 bg-gray-50'
+                        }`}
+                      >
+                        <div className={`mt-0.5 shrink-0 ${alerta.severidad === 'advertencia' ? 'text-amber-500' : 'text-gray-400'}`}>
+                          {alerta.severidad === 'advertencia' ? <AlertTriangle size={16} /> : <Info size={16} />}
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <span className="text-sm font-medium leading-snug text-gray-800">{alerta.detalle}</span>
+                          {alerta.clave && <span className="text-xs font-medium text-gray-400">{alerta.clave}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
             </div>
-          ))}
+          )}
+
+          {/* ══════════ VISTA 2: FORECASTING (datos reales) ══════════ */}
+          {activeTab === 'forecasting' && (
+            <div className="flex h-full flex-col gap-6">
+
+              {/* Filtros */}
+              <div className="flex flex-wrap items-end gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
+                  <label htmlFor="serie" className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                    Línea de Producto / Envase
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="serie"
+                      value={serieActual?.id ?? ''}
+                      onChange={e => setSerieId(e.target.value)}
+                      className="w-full appearance-none rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      {series.some(s => s.nivel === 'general') && (
+                        <optgroup label="Consolidado">
+                          {series.filter(s => s.nivel === 'general').map(s => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {series.some(s => s.nivel === 'producto') && (
+                        <optgroup label="Por producto">
+                          {series.filter(s => s.nivel === 'producto').map(s => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {series.some(s => s.nivel === 'envase') && (
+                        <optgroup label="Por envase">
+                          {series.filter(s => s.nivel === 'envase').map(s => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    <ChevronDown size={16} className="pointer-events-none absolute right-3 top-2.5 text-gray-400" />
+                  </div>
+                </div>
+
+                <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Historial disponible</label>
+                  <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-600">
+                    <Filter size={16} className="text-gray-400" />
+                    {serieActual?.mesesHistorial != null
+                      ? `${serieActual.mesesHistorial} meses de ventas reales`
+                      : `${chartData.filter(d => d.ventaReal != null).length} meses de ventas reales`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Gráfico */}
+              <div className="flex min-h-[420px] flex-1 flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800">
+                      Proyección de Demanda (Litros) vs. Venta Real
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {serieActual?.label ?? '—'} · el área ámbar marca la temporada alta (Dic–Feb).
+                    </p>
+                  </div>
+                  {precisionSerie != null && (
+                    <div className={`rounded-lg border px-3 py-1.5 text-sm font-bold ${
+                      precisionSerie >= 85 ? 'border-green-200 bg-green-50 text-green-700'
+                        : precisionSerie >= 70 ? 'border-amber-200 bg-amber-50 text-amber-700'
+                          : 'border-red-200 bg-red-50 text-red-700'
+                    }`}>
+                      Precisión Histórica: {precisionSerie.toFixed(0)}%
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative min-h-[320px] w-full flex-1">
+                  {chartData.length === 0 ? (
+                    <div className="flex h-full items-center justify-center text-sm text-gray-400">
+                      Todavía no hay una corrida del modelo. Se genera automáticamente cada semana.
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData} margin={{ top: 20, right: 20, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                        <XAxis
+                          dataKey="month" axisLine={false} tickLine={false} minTickGap={24}
+                          tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 600 }} dy={10}
+                        />
+                        <YAxis
+                          axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dx={-6}
+                          tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
+                        />
+                        <Tooltip
+                          contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                          formatter={(value, name) =>
+                            Array.isArray(value)
+                              ? [`${fNum(Number(value[0]))} – ${fNum(Number(value[1]))} L`, name]
+                              : [`${fNum(Number(value))} L`, name]
+                          }
+                        />
+                        <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#374151' }} />
+
+                        {tramosTemporadaAlta.map((t, i) => (
+                          <ReferenceArea key={i} x1={t.x1} x2={t.x2} fill={COLORS.lightAmber} fillOpacity={0.4} />
+                        ))}
+
+                        <Area
+                          dataKey="rango" name="Rango estimado" stroke="none"
+                          fill={COLORS.darkGreen} fillOpacity={0.12} connectNulls
+                        />
+                        <Line
+                          type="monotone" dataKey="ventaProyectada" name="Venta Proyectada"
+                          stroke={COLORS.darkGreen} strokeWidth={3} connectNulls
+                          dot={{ r: 3, fill: COLORS.darkGreen, strokeWidth: 0 }} activeDot={{ r: 6 }}
+                        />
+                        <Line
+                          type="monotone" dataKey="ventaReal" name="Venta Real"
+                          stroke={COLORS.amber} strokeWidth={3} strokeDasharray="5 5" connectNulls={false}
+                          dot={false} activeDot={{ r: 6 }}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ VISTA 3: STOCK DE SEGURIDAD ══════════ */}
+          {activeTab === 'seguridad' && (
+            <div className="flex flex-col gap-6">
+              <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                <Info size={18} className="mt-0.5 shrink-0" />
+                <p>
+                  El <strong>stock de seguridad y punto de reorden</strong> todavía no se calculan: es lo que va a producir
+                  el pipeline de Python cuando se le agregue ese cálculo. Abajo está el inventario real de hoy,
+                  que es el insumo que ese cálculo va a usar.
+                </p>
+              </div>
+
+              <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+                  <h3 className="font-bold text-gray-800">Inventario Actual</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Foto del último informe de stock del ERP · {stock.length} líneas de producto.
+                  </p>
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-4 font-bold">Producto</th>
+                        <th className="px-6 py-4 font-bold">Categoría</th>
+                        <th className="px-6 py-4 font-bold">Formato</th>
+                        <th className="px-6 py-4 text-right font-bold">Cantidad</th>
+                        <th className="px-6 py-4 text-right font-bold">Litros</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {stock.length === 0 && (
+                        <tr><td colSpan={5} className="px-6 py-10 text-center text-gray-400">Sin informe de stock cargado.</td></tr>
+                      )}
+                      {stock.map((s, i) => (
+                        <tr key={i} className="transition-colors hover:bg-gray-50">
+                          <td className="px-6 py-3 font-semibold text-gray-800">{s.producto}</td>
+                          <td className="px-6 py-3 text-gray-500">{s.categoria ?? '—'}</td>
+                          <td className="px-6 py-3">
+                            <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${
+                              s.tipo === 'barril' ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-600'
+                            }`}>
+                              {s.tipo === 'barril' ? 'Barril' : 'Envase'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 text-right font-bold tabular-nums text-gray-900">{fNum(s.cantidad)}</td>
+                          <td className="px-6 py-3 text-right tabular-nums text-gray-600">{s.litros != null ? `${fNum(s.litros)} L` : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ VISTA 4: PLAN MAESTRO ══════════ */}
+          {activeTab === 'plan' && (
+            <div className="flex h-full items-center justify-center">
+              <div className="flex max-w-md flex-col items-center gap-4 text-center text-gray-400">
+                <Settings size={48} className="opacity-50" />
+                <h3 className="text-xl font-medium text-gray-500">Módulo en construcción</h3>
+                <p className="text-sm">
+                  La asignación de capacidad finita (qué se cuece, en qué tanque y qué día) necesita una tabla de
+                  cocciones y de fermentadores que todavía no existe en la base.
+                </p>
+                <button
+                  onClick={() => setActiveTab('resumen')}
+                  className="mt-2 rounded-lg bg-gray-200 px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-300"
+                >
+                  Volver al Resumen
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ VISTA 5: INSUMOS Y COMPRAS (MRP) ══════════ */}
+          {activeTab === 'insumos' && (
+            <div className="flex h-full flex-col gap-6">
+              <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="font-bold text-gray-800">Planificación de Requerimiento de Materiales (MRP)</h3>
+                      <BadgeDemo />
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      No hay tablas de recetas ni de insumos en la base todavía — esta vista es una maqueta del formato.
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={busquedaInsumo}
+                      onChange={e => setBusquedaInsumo(e.target.value)}
+                      placeholder="Buscar insumo o categoría..."
+                      className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 sm:w-64"
+                    />
+                    <svg className="absolute left-3 top-3 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-4 font-bold">Insumo</th>
+                        <th className="px-6 py-4 font-bold">Categoría</th>
+                        <th className="px-6 py-4 text-right font-bold">Stock Actual</th>
+                        <th className="px-6 py-4 text-right font-bold">Consumo Proyectado</th>
+                        <th className="px-6 py-4 text-right font-bold text-amber-700">Necesidad Neta</th>
+                        <th className="px-6 py-4 text-center font-bold">Lead Time (días)</th>
+                        <th className="px-6 py-4 text-center font-bold text-green-700">Fecha Ideal Pedido</th>
+                        <th className="px-6 py-4 text-center font-bold">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {insumosFiltrados.length === 0 && (
+                        <tr><td colSpan={8} className="px-6 py-10 text-center text-gray-400">Sin resultados para “{busquedaInsumo}”.</td></tr>
+                      )}
+                      {insumosFiltrados.map(row => (
+                        <tr key={row.id} className="transition-colors hover:bg-gray-50">
+                          <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
+                          <td className="px-6 py-3 text-gray-500">{row.categoria}</td>
+                          <td className="px-6 py-3 text-right font-medium tabular-nums">
+                            {fNum(row.stock)} <span className="text-xs text-gray-400">kg/un</span>
+                          </td>
+                          <td className="px-6 py-3 text-right tabular-nums text-gray-600">
+                            {fNum(row.consumo)} <span className="text-xs text-gray-400">kg/un</span>
+                          </td>
+                          <td className={`px-6 py-3 text-right font-bold tabular-nums text-gray-900 ${row.necesidad > 0 ? 'bg-amber-50' : ''}`}>
+                            {row.necesidad > 0 ? <>{fNum(row.necesidad)} <span className="text-xs text-gray-400">kg/un</span></> : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-6 py-3 text-center tabular-nums text-gray-500">{row.leadTime}</td>
+                          <td className="px-6 py-3 text-center">
+                            {row.fechaPedido !== '-' ? (
+                              <div className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-200 bg-gray-100 px-2 py-1 font-bold text-gray-800">
+                                <CalendarIcon size={14} className="text-gray-500" />
+                                {row.fechaPedido}
+                              </div>
+                            ) : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-6 py-3 text-center">
+                            <div className={`inline-flex w-24 items-center justify-center rounded-full border px-2 py-1 text-xs font-bold ${
+                              row.estado === 'critico' ? 'border-red-200 bg-red-50 text-red-600'
+                                : row.estado === 'bajo' ? 'border-amber-200 bg-amber-50 text-amber-600'
+                                  : 'border-green-200 bg-green-50 text-green-600'
+                            }`}>
+                              {row.estado === 'critico' ? 'CRÍTICO' : row.estado === 'bajo' ? 'BAJO' : 'OK'}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ VISTA 6: PRESUPUESTO ══════════ */}
+          {activeTab === 'presupuesto' && (
+            <div className="flex flex-col gap-6 xl:h-full xl:flex-row">
+
+              <div className="flex flex-[3] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
+                <div className="mb-6">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-lg font-bold text-gray-800">Gasto Proyectado en Insumos Productivos</h3>
+                    <BadgeDemo />
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Presupuesto mensual separado por línea de negocio (Cerveza y Kombucha).
+                  </p>
+                </div>
+
+                <div className="relative min-h-[360px] w-full flex-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={DEMO_budgetData} margin={{ top: 20, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 600 }} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dx={-6} tickFormatter={(val: number) => `$${val / 1000}k`} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        formatter={(value, name) => [`$${Number(value).toLocaleString('es-CL')}`, name]}
+                      />
+                      <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#374151' }} />
+
+                      <Bar dataKey="cerveza" name="Insumos Cerveza" stackId="a" fill={COLORS.darkGreen} />
+                      <Bar dataKey="kombucha" name="Insumos Kombucha" stackId="a" fill={COLORS.amber} radius={[4, 4, 0, 0]} />
+                      <Line type="monotone" dataKey="tendencia" name="Tendencia Total" stroke={COLORS.gray} strokeWidth={2} strokeDasharray="4 4" dot={false} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="flex flex-1 flex-col gap-6 xl:max-w-sm">
+                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">Resumen Gasto Anual</h3>
+                  <div className="mb-1 text-sm text-gray-500">Total Proyectado (Insumos)</div>
+                  <div className="mb-6 text-4xl font-black text-gray-900">$978.000</div>
+
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                      <div>
+                        <div className="text-sm font-bold text-gray-800">Cerveza Artesanal</div>
+                        <div className="text-xs text-gray-500">Malta, lúpulo, levadura, etc.</div>
+                      </div>
+                      <div className="font-bold text-gray-900">$645.000</div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50/50 p-3">
+                      <div>
+                        <div className="text-sm font-bold text-gray-800">Kombucha (La Ida)</div>
+                        <div className="text-xs text-gray-500">Té, frutas, scoby, etc.</div>
+                      </div>
+                      <div className="font-bold text-amber-900">$333.000</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 rounded-xl border border-green-200 bg-green-50 p-6 shadow-sm">
+                  <div className="flex items-center gap-2 font-bold text-green-800">
+                    <CircleDollarSign size={20} />
+                    Flujo de Caja Estimado
+                  </div>
+                  <p className="text-sm leading-relaxed text-green-700">
+                    La cobranza esperada a 3 meses cubre el <strong>145%</strong> del gasto proyectado en insumos para
+                    el mismo período, asumiendo un 70% de cartera sin deuda. Flujo neto positivo.
+                  </p>
+                  <BadgeDemo />
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
-      </div>
+      </main>
     </div>
   )
 }
