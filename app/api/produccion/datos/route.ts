@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { esClienteExcluido } from '@/lib/types'
+import { esClienteExcluido, CLIENTES_EXCLUIR_PRODUCCION } from '@/lib/types'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -94,6 +94,11 @@ export async function GET(req: Request) {
   let excluidosCliente = 0
   let excluidosProducto = 0
   let excluidosMesEnCurso = 0
+  // Se cuentan por separado de excluidosCliente: son venta real que Comercial
+  // sí reporta, sólo que Producción no la planifica. Mezclarlas en un mismo
+  // número haría imposible auditar qué se sacó y por qué.
+  let excluidosProduccion = 0
+  const litrosExcluidosProduccion = new Map<string, number>()
   const litrosExcluidosProducto = new Map<string, number>()
 
   const general = new Map<string, number>()
@@ -112,6 +117,14 @@ export async function GET(req: Request) {
     if (!f.fecha_pedido || !f.producto) continue
     if (mesDe(f.fecha_pedido) >= mesEnCurso) { excluidosMesEnCurso++; continue }
     if (esClienteExcluido(f.nombre_fantasia)) { excluidosCliente++; continue }
+    // Capa propia de Producción (ver CLIENTES_EXCLUIR_PRODUCCION en lib/types.ts)
+    const nombreCliente = (f.nombre_fantasia ?? '').toLowerCase().trim()
+    if (CLIENTES_EXCLUIR_PRODUCCION.some(ex => nombreCliente.includes(ex))) {
+      excluidosProduccion++
+      const clave = f.nombre_fantasia ?? '(sin nombre)'
+      litrosExcluidosProduccion.set(clave, (litrosExcluidosProduccion.get(clave) ?? 0) + (f.litros ?? 0))
+      continue
+    }
     const nombreNormalizado = normalizarProducto(f.producto)
     const codigo = codigoPorProducto.get(nombreNormalizado)
     if (!codigo) {
@@ -153,6 +166,15 @@ export async function GET(req: Request) {
   if (excluidosCliente > 0) {
     calidad.push({ tipo: 'excluido_cliente', clave: null, detalle: `${excluidosCliente} filas de ventas excluidas por ser clientes internos/mermas/muestras (no cuentan como demanda real).`, severidad: 'info' })
   }
+  if (excluidosProduccion > 0) {
+    const detalleClientes = [...litrosExcluidosProduccion.entries()].sort((a, b) => b[1] - a[1])
+      .map(([n, litros]) => `${n} (${Math.round(litros)} L)`).join(', ')
+    calidad.push({
+      tipo: 'excluido_produccion', clave: null,
+      detalle: `${excluidosProduccion} filas excluidas por la lista propia de Producción — son venta real que Comercial sí cuenta, pero que no se planifica como producción: ${detalleClientes}.`,
+      severidad: 'info',
+    })
+  }
   if (excluidosProducto > 0) {
     const top = [...litrosExcluidosProducto.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
       .map(([n, litros]) => `${n} (${Math.round(litros)} L)`).join(', ')
@@ -167,6 +189,6 @@ export async function GET(req: Request) {
   return NextResponse.json({
     series: { general: toArray(general), producto: productoObj, envase: envaseObj },
     calidadDatos: calidad,
-    meta: { totalFilas: filas.length, excluidosCliente, excluidosProducto, excluidosMesEnCurso, mesesConVenta: mesesConVenta.size },
+    meta: { totalFilas: filas.length, excluidosCliente, excluidosProduccion, excluidosProducto, excluidosMesEnCurso, mesesConVenta: mesesConVenta.size },
   })
 }

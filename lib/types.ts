@@ -203,6 +203,38 @@ export function esClienteExcluido(nombre: string | null | undefined): boolean {
 }
 
 /**
+ * Exclusiones ADICIONALES que aplican SÓLO al forecast de Producción
+ * (app/api/produccion/datos), no a los reportes de Ventas.
+ *
+ * Existe porque Producción no planifica la misma demanda que reporta
+ * Comercial: hay clientes que son venta real y legítima —y por eso siguen
+ * contando en Ventas— pero que no representan litros a producir de forma
+ * recurrente (se planifican aparte, son puntuales, o se abastecen de otra
+ * forma). Sacarlos de acá NO los saca de ningún reporte comercial.
+ *
+ * Se aplica ENCIMA de CLIENTES_EXCLUIR, nunca la reemplaza.
+ *
+ * Mismo criterio de comparación que CLIENTES_EXCLUIR: minúsculas, y se
+ * compara con includes(), así que basta un fragmento distintivo del nombre
+ * para cubrir variantes de escritura del ERP.
+ */
+export const CLIENTES_EXCLUIR_PRODUCCION: string[] = [
+  // Vacío a propósito: pendiente de que Producción defina los nombres.
+  // Agregar acá en minúscula, ej: 'punto growler santiago',
+]
+
+/**
+ * Cliente que no debe entrar al forecast de Producción: los internos de
+ * siempre (CLIENTES_EXCLUIR) más los propios de Producción.
+ */
+export function esClienteExcluidoProduccion(nombre: string | null | undefined): boolean {
+  if (!nombre) return false
+  if (esClienteExcluido(nombre)) return true
+  const n = nombre.toLowerCase().trim()
+  return CLIENTES_EXCLUIR_PRODUCCION.some(ex => n.includes(ex))
+}
+
+/**
  * Subconjunto de CLIENTES_EXCLUIR que además de excluirse de los reportes de
  * venta real, ni siquiera se GUARDA en `ventas` al cargar un archivo del ERP.
  *
