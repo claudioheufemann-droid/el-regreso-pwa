@@ -97,12 +97,19 @@ def chunks_seguros(desde: date, hasta: date) -> list[tuple[date, date]]:
 
 def tramos_a_pedir() -> list[tuple[date, date]]:
     """Tramos a descargar en esta corrida. FECHA_DESDE/FECHA_HASTA (solo via
-    workflow_dispatch, para diagnostico manual) piden un unico rango exacto
-    sin trocear. Por defecto: el periodo completo vigente, en tramos seguros."""
+    workflow_dispatch) acotan la ventana; por defecto se usa el periodo
+    vigente completo. En ambos casos se trocea con chunks_seguros.
+
+    El rango manual ANTES se pedia entero, sin trocear: con eso cualquier
+    ventana de mas de MAX_DIAS_RANGO dias fallaba siempre, porque el ERP deja
+    de descargar y responde 'se enviara por email'. Eso hacia imposible
+    recargar historia (ej. el backfill del consumo propio de PDV/BaseCamp).
+    Trocear no cambia el caso de diagnostico: un rango corto sigue dando un
+    unico tramo."""
     if FECHA_DESDE or FECHA_HASTA:
         desde = _parse_ddmmyyyy(FECHA_DESDE) if FECHA_DESDE else periodo_actual()[0]
         hasta = _parse_ddmmyyyy(FECHA_HASTA) if FECHA_HASTA else date.today()
-        return [(desde, hasta)]
+        return chunks_seguros(desde, hasta)
     return chunks_seguros(*periodo_actual())
 
 
