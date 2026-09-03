@@ -170,43 +170,47 @@ export default function ProduccionClient({
   /* ── Serie seleccionada → filas para Recharts ─────────────────────────
      La proyección arranca repitiendo el último mes real, para que las dos
      líneas queden pegadas en el gráfico en vez de mostrar un corte.
-     El mes en curso (excluido del entrenamiento por estar incompleto) se
-     agrega con lo vendido hasta hoy COMO PARTE de "Venta Real" — no como un
-     punto suelto — para que la línea ámbar siga fluyendo hasta hoy y se vea
-     de un vistazo si va por arriba o por debajo de la línea verde del
-     modelo en esa misma columna. `ventaRealParcial` distingue ese último
-     punto (mes a medias) para pintarlo distinto — un círculo hueco en vez
-     de relleno — sin cortar la línea. */
+
+     El ritmo del mes en curso (litros hasta hoy extrapolados a mes
+     completo) se dibuja como una línea PROPIA que también arranca del
+     último mes real — igual que la verde — para que corra al lado de la
+     proyección del modelo en la misma columna y se compare de un vistazo:
+     ¿el ritmo actual queda arriba o abajo de lo que el modelo esperaba?
+     Antes se probó conectar la venta real cruda (litros del mes a medias)
+     directo a la línea de "Venta Real": comparada contra meses completos
+     se veía como una caída al vacío, no como una proyección — engañoso.
+     Extrapolar a mes completo es la comparación correcta. */
   const chartData = useMemo(() => {
     if (!serieActual) return []
     const puntos = [...serieActual.puntos].sort((a, b) => a.mes.localeCompare(b.mes))
     const idxCorte = puntos.findIndex(p => p.tipo === 'forecast')
+    const idxUltimoReal = idxCorte > 0 ? idxCorte - 1 : puntos.length - 1
     const filas = puntos.map((p, i) => {
       const esUltimoReal = idxCorte > 0 && i === idxCorte - 1
-      const esMesEnCurso = p.mes === avanceMes.mes
       return {
         month: etiquetaMes(p.mes),
         mesIso: p.mes,
-        ventaReal: esMesEnCurso ? mtdLitros : (p.tipo === 'historico' ? p.litros : null),
-        ventaRealParcial: esMesEnCurso,
+        ventaReal: p.tipo === 'historico' ? p.litros : null,
         ventaProyectada: p.tipo === 'forecast' || esUltimoReal ? p.litros : null,
         rango: p.litrosMin != null && p.litrosMax != null ? [p.litrosMin, p.litrosMax] : null,
-        ritmo: esMesEnCurso ? ritmoProyectado : null,
+        ritmo: i === idxUltimoReal ? p.litros : null,
       }
     })
     // El mes en curso puede no venir en `puntos` (el modelo lo excluyó del
     // historial y todavía no corrió con él como forecast, ej. recién
-    // empezó el mes) — si falta, se agrega igual para no perder el avance.
-    if (!filas.some(f => f.mesIso === avanceMes.mes)) {
+    // empezó el mes) — si falta, se agrega igual para no perder el ritmo.
+    const yaEsta = filas.some(f => f.mesIso === avanceMes.mes)
+    if (!yaEsta) {
       filas.push({
         month: etiquetaMes(avanceMes.mes), mesIso: avanceMes.mes,
-        ventaReal: mtdLitros, ventaRealParcial: true, ventaProyectada: null, rango: null,
-        ritmo: ritmoProyectado,
+        ventaReal: null, ventaProyectada: null, rango: null, ritmo: null,
       })
       filas.sort((a, b) => a.mesIso.localeCompare(b.mesIso))
     }
+    const idxMesEnCurso = filas.findIndex(f => f.mesIso === avanceMes.mes)
+    if (idxMesEnCurso >= 0) filas[idxMesEnCurso].ritmo = ritmoProyectado
     return filas
-  }, [serieActual, avanceMes.mes, mtdLitros, ritmoProyectado])
+  }, [serieActual, avanceMes.mes, ritmoProyectado])
 
   /* ── Temporada alta (Dic–Feb): tramos consecutivos para las ReferenceArea ── */
   const tramosTemporadaAlta = useMemo(() => {
@@ -723,32 +727,30 @@ export default function ProduccionClient({
                           stroke={COLORS.darkGreen} strokeWidth={3} connectNulls
                           dot={{ r: 3, fill: COLORS.darkGreen, strokeWidth: 0 }} activeDot={{ r: 6 }}
                         />
-                        {/* Venta Real sigue fluyendo hasta el mes en curso: su
-                            último punto es lo vendido HASTA HOY (no el mes
-                            completo) — se distingue con un círculo hueco en
-                            vez de invisible, para no confundirlo con un mes
-                            cerrado, pero sin cortar la línea. Así se ve de
-                            un vistazo si ese punto va por arriba o por abajo
-                            de la línea verde del modelo en la misma columna. */}
                         <Line
-                          type="monotone" dataKey="ventaReal" name="Venta Real (hasta hoy este mes)"
+                          type="monotone" dataKey="ventaReal" name="Venta Real"
                           stroke={COLORS.amber} strokeWidth={3} strokeDasharray="5 5" connectNulls={false}
-                          dot={(props: { cx?: number; cy?: number; index?: number; payload?: { ventaRealParcial?: boolean } }) => {
-                            const { cx, cy, index, payload } = props
-                            if (!payload?.ventaRealParcial || cx == null || cy == null) return <React.Fragment key={index} />
-                            return <circle key={index} cx={cx} cy={cy} r={6} fill="#fff" stroke={COLORS.amber} strokeWidth={2.5} />
-                          }}
-                          activeDot={{ r: 6 }}
+                          dot={false} activeDot={{ r: 6 }}
                         />
-                        {/* Ritmo proyectado: a qué ritmo cerraría el mes si
-                            sigue vendiendo al promedio diario de lo que va —
-                            un punto de referencia liviano junto al de arriba,
-                            no una línea propia (sería engañoso trazarla como
-                            tendencia real todavía). */}
+                        {/* Ritmo proyectado: arranca del mismo último mes real
+                            que la línea verde (no del dato crudo del mes a
+                            medias, que comparado contra meses completos se
+                            veía como una caída al vacío) y corre AL LADO de
+                            la proyección del modelo hasta el mes en curso —
+                            así se compara directo: ¿vendiendo al ritmo de
+                            estos días, cerramos arriba o abajo de lo que el
+                            modelo esperaba? */}
                         <Line
                           type="monotone" dataKey="ritmo" name="Ritmo proyectado a fin de mes"
-                          stroke={COLORS.gray} strokeWidth={0} connectNulls={false}
-                          dot={{ r: 5, fill: '#fff', strokeWidth: 2, stroke: COLORS.gray }}
+                          stroke={COLORS.amber} strokeWidth={2.5} strokeDasharray="2 3" connectNulls
+                          dot={(props: { cx?: number; cy?: number; index?: number; payload?: { mesIso?: string } }) => {
+                            const { cx, cy, index, payload } = props
+                            // Sólo un punto visible, en el mes en curso — el
+                            // ancla (último mes real) ya tiene su propio dot
+                            // de "Venta Proyectada"/"Venta Real" ahí mismo.
+                            if (payload?.mesIso !== avanceMes.mes || cx == null || cy == null) return <React.Fragment key={index} />
+                            return <circle key={index} cx={cx} cy={cy} r={5} fill="#fff" stroke={COLORS.amber} strokeWidth={2.5} />
+                          }}
                           isAnimationActive={false}
                         />
                       </ComposedChart>
