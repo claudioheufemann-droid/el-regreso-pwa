@@ -1,0 +1,21 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" fill="#0E0E12"/>
+  <defs>
+    <linearGradient id="gccGold" x1="0" y1="200" x2="200" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8A6D1E"/>
+      <stop offset="1" stop-color="#F0D584"/>
+    </linearGradient>
+  </defs>
+  <g opacity="0.9">
+    <rect x="34" y="118" width="20" height="52" rx="3" fill="url(#gccGold)" fill-opacity="0.55"/>
+    <rect x="66" y="90" width="20" height="80" rx="3" fill="url(#gccGold)" fill-opacity="0.7"/>
+    <rect x="98" y="60" width="20" height="110" rx="3" fill="url(#gccGold)" fill-opacity="0.85"/>
+    <rect x="130" y="38" width="20" height="132" rx="3" fill="url(#gccGold)"/>
+  </g>
+  <path d="M30 104 L72 70 L104 88 L162 30" stroke="#F0D584" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M138 30 L162 30 L162 54" stroke="#F0D584" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="30" cy="104" r="5" fill="#0E0E12" stroke="#F0D584" stroke-width="3"/>
+  <circle cx="72" cy="70" r="5" fill="#0E0E12" stroke="#F0D584" stroke-width="3"/>
+  <circle cx="104" cy="88" r="5" fill="#0E0E12" stroke="#F0D584" stroke-width="3"/>
+  <circle cx="162" cy="30" r="5" fill="#0E0E12" stroke="#F0D584" stroke-width="3"/>
+</svg>

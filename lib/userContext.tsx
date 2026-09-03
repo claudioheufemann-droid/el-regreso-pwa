@@ -14,6 +14,8 @@ interface UserContextType {
   isAdmin: boolean
   region: string | null      // scope geográfico del vendedor (null = sin scope)
   puedeVerMargenes: boolean  // acceso a Rentabilidad (costos/márgenes internos)
+  /** Acceso al módulo /control-comercial (Gerente General/Comercial + Analista Control de Gestión). */
+  puedeVerControlComercial: boolean
   /** Acceso al módulo /ventas/comisiones (Claudio/Douglas/Benjamín/Mariel) —
    *  aparte de puedeVerMargenes, ver lib/comisiones.ts. */
   veComisiones: boolean
@@ -30,6 +32,7 @@ const UserContext = createContext<UserContextType>({
   isAdmin: false,
   region: null,
   puedeVerMargenes: false,
+  puedeVerControlComercial: false,
   veComisiones: false,
   esAdminReal: false,
   impersonando: null,
@@ -59,6 +62,7 @@ export function UserProvider({
         isAdmin: initialUser?.isAdmin ?? false,
         region: initialUser?.region ?? null,
         puedeVerMargenes: initialUser?.puedeVerMargenes ?? false,
+        puedeVerControlComercial: initialUser?.puedeVerControlComercial ?? false,
         // Mientras se impersona un vendedor, email sigue siendo el del admin
         // real (a propósito — password/reauth no puede apuntar a otro
         // usuario), así que puedeVerComisionesEquipo() lo seguiría
