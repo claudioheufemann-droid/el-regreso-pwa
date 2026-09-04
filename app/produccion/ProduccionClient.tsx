@@ -961,13 +961,43 @@ export default function ProduccionClient({
                           axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dx={-6}
                           tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
                         />
+                        {/* Tooltip a medida: en el mes ancla (el último real,
+                            donde arranca la línea de proyección) "Venta Real",
+                            "Venta Proyectada" y "Ritmo proyectado" quedan con
+                            el MISMO número a propósito, sólo para que esas
+                            tres líneas conecten visualmente ahí — mostrar los
+                            tres en el tooltip como si fueran datos distintos
+                            confunde (se ve como si el modelo hubiera
+                            "proyectado" un mes que ya cerró). Se ocultan las
+                            dos entradas redundantes en ese punto puntual. */}
                         <Tooltip
-                          contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                          formatter={(value, name) =>
-                            Array.isArray(value)
-                              ? [`${fNum(Number(value[0]))} – ${fNum(Number(value[1]))} L`, name]
-                              : [`${fNum(Number(value))} L`, name]
-                          }
+                          content={({ active, payload, label }) => {
+                            if (!active || !payload || payload.length === 0) return null
+                            const fila = payload[0]?.payload as (typeof chartData)[number] | undefined
+                            const esAncla = !!fila && fila.ventaReal != null && fila.ventaProyectada != null && fila.mesIso !== avanceMes.mes
+                            const visibles = payload.filter(entrada => {
+                              if (entrada.value == null) return false
+                              if (esAncla && (entrada.dataKey === 'ventaProyectada' || entrada.dataKey === 'ritmo')) return false
+                              return true
+                            })
+                            if (visibles.length === 0) return null
+                            return (
+                              <div className="rounded-lg bg-white px-3.5 py-2.5 text-xs shadow-lg">
+                                <p className="mb-1.5 font-bold text-gray-700">{label}</p>
+                                {visibles.map(entrada => {
+                                  const valor = entrada.value
+                                  const texto = Array.isArray(valor)
+                                    ? `${fNum(Number(valor[0]))} – ${fNum(Number(valor[1]))} L`
+                                    : `${fNum(Number(valor))} L`
+                                  return (
+                                    <p key={String(entrada.dataKey)} style={{ color: entrada.color }} className="font-semibold">
+                                      {entrada.name}: {texto}
+                                    </p>
+                                  )
+                                })}
+                              </div>
+                            )
+                          }}
                         />
                         <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#374151' }} />
 
