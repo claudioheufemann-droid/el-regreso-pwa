@@ -72,6 +72,10 @@ export async function GET(req: Request) {
   let excluidosProducto = 0
   let excluidosMesEnCurso = 0
   const litrosExcluidosProducto = new Map<string, number>()
+  // Litros vendidos en envase 'otros' (pinta, recargas de growler, etc.) que
+  // NO entran a las series por envase/producto×envase — sí siguen sumando en
+  // `general`/`porProducto`. Sólo para la nota informativa de abajo.
+  let litrosOtrosPorEnvase = 0
   // Volumen y primer mes de los clientes que Ventas excluye y Producción sí
   // cuenta (PDV/BaseCamp/Feria). El primer mes importa: si empiezan mucho
   // después que el resto del historial, la serie tiene un salto de nivel
@@ -141,13 +145,25 @@ export async function GET(req: Request) {
       const serieProd = porProducto.get(nombreNormalizado)!
       serieProd.set(ciclo, (serieProd.get(ciclo) ?? 0) + litros)
 
-      if (!porEnvase.has(bucket)) porEnvase.set(bucket, new Map())
-      const serieEnv = porEnvase.get(bucket)!
-      serieEnv.set(ciclo, (serieEnv.get(ciclo) ?? 0) + litros)
+      // 'otros' NO entra a las series por envase ni producto×envase — decisión
+      // del usuario (4 sep 2026): son formatos que no se reponen como stock
+      // normal (venta por pinta/growler en el propio local, recargas,
+      // barriles ya despinchados), forecastearlos y calcularles stock de
+      // seguridad no tiene sentido — nunca vamos a tener "colchón de pintas".
+      // El litraje SÍ sigue sumando en `general` y `porProducto` arriba: es
+      // cerveza real vendida, sólo que en un envase no estándar — sacarlo de
+      // ahí también subestimaría cuánto hay que producir de ese producto.
+      if (bucket !== 'otros') {
+        if (!porEnvase.has(bucket)) porEnvase.set(bucket, new Map())
+        const serieEnv = porEnvase.get(bucket)!
+        serieEnv.set(ciclo, (serieEnv.get(ciclo) ?? 0) + litros)
 
-      if (!porProductoEnvase.has(clavePE)) porProductoEnvase.set(clavePE, new Map())
-      const serieProdEnv = porProductoEnvase.get(clavePE)!
-      serieProdEnv.set(ciclo, (serieProdEnv.get(ciclo) ?? 0) + litros)
+        if (!porProductoEnvase.has(clavePE)) porProductoEnvase.set(clavePE, new Map())
+        const serieProdEnv = porProductoEnvase.get(clavePE)!
+        serieProdEnv.set(ciclo, (serieProdEnv.get(ciclo) ?? 0) + litros)
+      } else {
+        litrosOtrosPorEnvase += litros
+      }
 
       if (esReincluido) {
         const clave = f.nombre_fantasia ?? '(sin nombre)'
@@ -177,6 +193,13 @@ export async function GET(req: Request) {
     detalle: `Los "meses" del forecast son ciclos internos, no meses calendario: cada uno junta ventas del día ${DIA_INICIO_CICLO} del mes anterior al día ${DIA_FIN_CICLO} del mes que le da nombre (ej. "Septiembre" = ${DIA_INICIO_CICLO} de agosto al ${DIA_FIN_CICLO} de septiembre). Sin superposición: cada venta cuenta en un solo ciclo.`,
     severidad: 'info',
   })
+  if (litrosOtrosPorEnvase > 0) {
+    calidad.push({
+      tipo: 'otros_excluido_envase', clave: null,
+      detalle: `${Math.round(litrosOtrosPorEnvase)} L vendidos en envase "otros" (pinta, recargas de growler, barriles despinchados) quedan fuera del forecast por envase y del stock de seguridad — no son un formato que se repone como stock normal. Siguen sumando en el total del producto y en el consolidado general.`,
+      severidad: 'info',
+    })
+  }
   if (excluidosCliente > 0) {
     calidad.push({ tipo: 'excluido_cliente', clave: null, detalle: `${excluidosCliente} filas de ventas excluidas por ser clientes internos/mermas/muestras (no cuentan como demanda real).`, severidad: 'info' })
   }
