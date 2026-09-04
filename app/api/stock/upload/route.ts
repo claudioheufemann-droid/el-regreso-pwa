@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getServerUser } from '@/lib/auth'
 import { parseStockExcel } from '@/lib/stockParser'
-import { esCamaraDisponible } from '@/lib/camaras'
+import { esCamaraVentas, esCamaraProduccion } from '@/lib/camaras'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,8 +27,10 @@ async function logSync(supabase: any, params: {
  * carga confirmada reemplaza por completo la anterior, no se acumula
  * histórico fila a fila.
  *
- * Cuáles de esas cámaras cuentan como stock disponible lo decide
- * esCamaraDisponible() en lib/stockParser.ts — acá se guarda todo.
+ * Acá se guarda TODO. Cuáles cámaras cuentan lo decide cada módulo al leer,
+ * con esCamaraVentas() / esCamaraProduccion() de lib/camaras.ts (son dos
+ * listas distintas: Ventas sólo despacha desde Barrios Bajos, Producción
+ * cuenta además Frío Planta y Latas FIFO).
  *
  * Autenticación dual (mismo patrón que /api/clientes/upload y
  * /api/deudores/upload): sesión de admin desde la UI, o Bearer
@@ -65,19 +67,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No se encontraron productos en las secciones esperadas' }, { status: 400 })
   }
 
-  // El resumen cuenta SÓLO las cámaras que son stock disponible — es lo que
-  // se le muestra al admin al previsualizar la carga, y tiene que coincidir
-  // con lo que después ve en la app, no con el total del archivo (que incluye
-  // consumo propio del PDV, muestras y producto ya despachado a terceros).
-  const disponibles = productos.filter(p => esCamaraDisponible(p.camara))
-  const barriles = disponibles.filter(p => p.tipo === 'barril')
-  const envases = disponibles.filter(p => p.tipo === 'envase')
+  // El resumen que ve el admin al previsualizar usa el criterio de VENTAS
+  // (sólo Barrios Bajos): es el mismo número que va a ver después en el módulo
+  // de Stock. Mostrar el total del archivo confundiría, porque incluye consumo
+  // propio del PDV, muestras y producto ya despachado a terceros.
+  // `enProduccion` se informa aparte para que se note que también entró.
+  const vendibles = productos.filter(p => esCamaraVentas(p.camara))
+  const barriles = vendibles.filter(p => p.tipo === 'barril')
+  const envases = vendibles.filter(p => p.tipo === 'envase')
   const tanques = productos.filter(p => p.tipo === 'tanque')
+  const soloProduccion = productos.filter(p => p.tipo !== 'tanque' && !esCamaraVentas(p.camara) && esCamaraProduccion(p.camara))
   const resumen = {
     barriles: { productos: barriles.length, cantidad: barriles.reduce((s, p) => s + p.cantidad, 0), litros: Math.round(barriles.reduce((s, p) => s + (p.litros ?? 0), 0)) },
     envases: { productos: envases.length, cantidad: envases.reduce((s, p) => s + p.cantidad, 0) },
     tanques: { productos: tanques.length, litros: Math.round(tanques.reduce((s, p) => s + (p.litros ?? 0), 0)) },
-    camarasExcluidas: [...new Set(productos.filter(p => p.tipo !== 'tanque' && !esCamaraDisponible(p.camara)).map(p => p.camara))].sort(),
+    /** Cámaras que no se venden pero sí cuentan para reposición en Producción. */
+    soloProduccion: { cantidad: soloProduccion.reduce((s, p) => s + p.cantidad, 0), camaras: [...new Set(soloProduccion.map(p => p.camara))].sort() },
+    camarasExcluidas: [...new Set(productos.filter(p => p.tipo !== 'tanque' && !esCamaraProduccion(p.camara)).map(p => p.camara))].sort(),
   }
 
   if (preview) {

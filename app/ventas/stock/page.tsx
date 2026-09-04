@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { esCamaraDisponible } from '@/lib/camaras'
+import { esCamaraVentas } from '@/lib/camaras'
 import StockClient from './StockClient'
 
 export const dynamic = 'force-dynamic'
@@ -48,11 +48,16 @@ export default async function StockPage() {
   ])
 
   // stock_productos guarda desde el 4 sep 2026 TODAS las cámaras del informe
-  // del ERP más los tanques de fermentación, no sólo Barrios Bajos. Acá hay
-  // que quedarse con lo vendible y volver a una fila por producto: el mismo
-  // producto aparece ahora en varias cámaras (ej. barriles de Mocho English
-  // en Barrios Bajos y en Frío Planta) y esta pantalla lista las filas tal
-  // cual — sin agrupar saldría el producto repetido con cantidades parciales.
+  // del ERP más los tanques de fermentación, no sólo Barrios Bajos.
+  //
+  // Ventas se queda SÓLO con Barrios Bajos (esCamaraVentas): es la bodega de
+  // despacho, y un vendedor no debería comprometer producto que está en planta
+  // o en el depósito de rotación —puede no estar liberado o trasladado, y
+  // prometerlo genera un quiebre en el despacho. Producción sí mira una lista
+  // más amplia, porque su pregunta es otra (ver lib/camaras.ts).
+  //
+  // Igual hay que agrupar por producto: aunque hoy Ventas mire una sola
+  // cámara, la fuente ya trae varias y esta pantalla lista las filas tal cual.
   // El tipo se ensancha a propósito: la tabla ya trae también 'tanque', que
   // StockProductoRow (lo que consume la UI) no contempla y se filtra abajo.
   const crudas = (data ?? []) as (Omit<StockProductoRow, 'tipo'> & {
@@ -62,7 +67,7 @@ export default async function StockPage() {
 
   const acumulado = new Map<string, StockProductoRow & { fecha_informe: string }>()
   for (const f of crudas) {
-    if (f.tipo === 'tanque' || !esCamaraDisponible(f.camara)) continue
+    if (f.tipo === 'tanque' || !esCamaraVentas(f.camara)) continue
     const clave = `${f.tipo}::${f.producto}`
     const previo = acumulado.get(clave)
     if (!previo) {

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { esClienteExcluidoProduccion } from '@/lib/types'
-import { esCamaraDisponible } from '@/lib/camaras'
+import { esCamaraProduccion } from '@/lib/camaras'
 import {
   bucketEnvase, mesDe, mesEnCursoISO, normalizarProducto,
   claveProductoEnvase, partirClaveProductoEnvase, ENVASE_LABEL,
@@ -230,12 +230,13 @@ export default async function ProduccionPage() {
 
   const ultimaCorrida = (calidadRaw?.[0] as { generado_at?: string } | undefined)?.generado_at ?? null
 
-  // Sólo las cámaras que son stock disponible para vender: quedan fuera el
-  // consumo propio del PDV/Base Camp, las contra muestras, lo comprometido a
-  // eventos y lo ya despachado a distribuidores. Ver CAMARAS_DISPONIBLES en
-  // lib/stockParser.ts — es una definición de negocio, no del parseo.
+  // Producción usa una lista de cámaras MÁS AMPLIA que Ventas: acá la
+  // pregunta es "¿cuánto producto terminado tenemos?" (para no lanzar una
+  // cocción redundante), no "¿qué puedo prometerle a un cliente hoy?". Por eso
+  // entran también Frío Planta y Latas FIFO. Ver CAMARAS_PRODUCCION en
+  // lib/camaras.ts — definición de negocio, no del parseo.
   const stockDisponibleRaw = (stockRaw ?? []).filter(
-    s => s.tipo !== 'tanque' && esCamaraDisponible(s.camara as string | null)
+    s => s.tipo !== 'tanque' && esCamaraProduccion(s.camara as string | null)
   )
 
   const stock = stockDisponibleRaw.map(s => ({

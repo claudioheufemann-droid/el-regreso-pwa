@@ -30,9 +30,10 @@
  * resto se descartaba en silencio: se estaba viendo el 53% de los barriles
  * (327 de 616) y el 46% de las latas (17.826 de 39.070), lo que hacía que el
  * stock de seguridad comparara el punto de reorden contra medio inventario.
- * Qué cámaras cuentan como disponible es ahora una decisión de negocio que
- * vive en CAMARAS_DISPONIBLES, no una condición escondida en el parseo — así
- * se puede cambiar sin volver a descargar nada del ERP.
+ * Qué cámaras cuentan es ahora una decisión de negocio que vive en
+ * lib/camaras.ts (dos listas: una para Ventas, otra para Producción), no una
+ * condición escondida en el parseo — así se puede cambiar sin volver a
+ * descargar nada del ERP.
  *
  * La sección "Stock de producto en tanques" (producto en fermentación, con
  * litros por fermentador) también se parsea, como tipo 'tanque'. Es el mismo
