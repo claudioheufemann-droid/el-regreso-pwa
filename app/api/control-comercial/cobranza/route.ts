@@ -17,10 +17,11 @@ export async function GET(req: NextRequest) {
   const periodo = anio && mes ? periodoPorAncla(anio, mes) : periodoActual()
 
   const supabase = await createClient()
-  const [agingRes, kpisRes, dsoRes] = await Promise.all([
+  const [agingRes, kpisRes, dsoRes, serieRes] = await Promise.all([
     supabase.rpc('fn_cobranza_aging'),
     supabase.rpc('fn_cobranza_kpis', { p_inicio: periodo.inicio, p_fin: periodo.fin }),
     supabase.rpc('fn_resumen_ejecutivo', { p_inicio: periodo.inicio, p_fin: periodo.fin }),
+    supabase.rpc('fn_cobranza_serie', { p_dias: 180 }),
   ])
 
   if (agingRes.error) return NextResponse.json({ error: agingRes.error.message }, { status: 500 })
@@ -38,5 +39,6 @@ export async function GET(req: NextRequest) {
     aging: agingRes.data ?? [],
     kpis,
     dso,
+    serie: serieRes.data ?? [],
   })
 }

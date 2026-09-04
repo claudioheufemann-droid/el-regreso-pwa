@@ -19,5 +19,8 @@ const ITEMS: NavItem[] = [
 
 export default function ControlComercialBottomNav() {
   const pathname = usePathname()
+  // Reunión Comercial es modo presentación (fullscreen, sin chrome de la app) —
+  // no tiene sentido flotar el nav de módulo encima de un slide.
+  if (pathname.startsWith('/control-comercial/reunion-comercial')) return null
   return <NavPill items={ITEMS} pathname={pathname} />
 }

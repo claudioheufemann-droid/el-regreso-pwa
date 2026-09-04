@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const puedeVerMargen = puedeVerCostosControlComercial(user)
 
   const supabase = await createClient()
-  const [actualRes, comparadoRes, periodoRowRes, territoriosRes, margenRpcRes] = await Promise.all([
+  const [actualRes, comparadoRes, periodoRowRes, territoriosRes, margenRpcRes, serieRes] = await Promise.all([
     supabase.rpc('fn_equipo_resumen', { p_inicio: periodo.inicio, p_fin: periodo.fin }),
     supabase.rpc('fn_equipo_resumen', { p_inicio: comparacion.comparado.inicio, p_fin: comparacion.comparado.fin }),
     supabase.from('periodos').select('id').eq('fecha_inicio', periodo.inicio).eq('fecha_fin', periodo.fin).maybeSingle(),
@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
     puedeVerMargen
       ? supabase.rpc('fn_equipo_margen', { p_inicio: periodo.inicio, p_fin: periodo.fin })
       : Promise.resolve({ data: null, error: null }),
+    supabase.rpc('fn_serie_equipo', { p_anio: periodo.anchorYear }),
   ])
 
   if (actualRes.error) return NextResponse.json({ error: actualRes.error.message }, { status: 500 })
@@ -57,6 +58,18 @@ export async function GET(req: NextRequest) {
   // Cuentas ERP sin territorio/responsable mapeado (bolsa histórica "Equipo Ventas",
   // "CERVECERÍA") — a pedido de Claudio no se muestran en Equipo ni en los reportes
   // que reutilizan este endpoint. No afecta los totales de compañía de Resumen/Ventas.
+  // Serie mensual de venta por territorio (sparkline de cada card), acotada a los
+  // períodos ya transcurridos del año: los meses futuros vienen en 0 y una línea
+  // que se desploma a cero al final leería como una caída real.
+  interface FilaSerieEquipoRpc { mes: number; territorio: string; venta_clp: number }
+  const seriePorTerritorio = new Map<string, number[]>()
+  for (const f of (serieRes.data ?? []) as FilaSerieEquipoRpc[]) {
+    if (f.mes > periodo.anchorMonth) continue
+    const arr = seriePorTerritorio.get(f.territorio) ?? Array<number>(periodo.anchorMonth).fill(0)
+    arr[f.mes - 1] = Number(f.venta_clp)
+    seriePorTerritorio.set(f.territorio, arr)
+  }
+
   const filas = ((actualRes.data ?? []) as FilaEquipo[]).filter(f => f.territorio !== 'Sin territorio asignado').map(f => {
     const comp = comparadoPorTerritorio.get(f.territorio)
     const meta = metaPorTerritorio.get(f.territorio) ?? null
@@ -64,6 +77,8 @@ export async function GET(req: NextRequest) {
     return {
       ...f,
       responsable: responsablePorTerritorio.get(f.territorio) ?? null,
+      serieVenta: seriePorTerritorio.get(f.territorio) ?? [],
+      metaVentaClp: meta,
       crecimientoYoyPct: comp && comp.venta_clp > 0 ? ((f.venta_clp - comp.venta_clp) / comp.venta_clp) * 100 : null,
       cumplimientoMetaPct: meta ? (f.venta_clp / meta) * 100 : null,
       retencionPct: f.clientes_activos > 0 ? ((f.clientes_activos - f.clientes_nuevos) / f.clientes_activos) * 100 : null,

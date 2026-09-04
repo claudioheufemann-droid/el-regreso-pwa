@@ -1,144 +1,167 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpDown } from 'lucide-react'
-import AppHeader from '@/components/ui/AppHeader'
-import { formatCLP, formatLitros, formatNumero } from '@/components/control-comercial/KpiCard'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Award, Boxes, DollarSign, TrendingUp, UserPlus } from 'lucide-react'
+import CCHeader from '@/components/control-comercial/CCHeader'
+import { PerformanceCard } from '@/components/control-comercial/cards'
+import {
+  CCPage, ErrorState, FilaLeyenda, PageSkeleton, ProgressBar, SegmentedControl,
+  formatCLPCompacto, formatLitros, formatNumero, formatPctPlano, type Tono,
+} from '@/components/control-comercial/ui'
 
 interface FilaEquipo {
   territorio: string; tipo: string; responsable: string | null
   venta_clp: number; litros: number
   clientes_activos: number; clientes_nuevos: number; clientes_perdidos: number
   deuda_vencida: number; barriles_criticos: number; barriles_total: number
+  serieVenta: number[]
   crecimientoYoyPct: number | null; cumplimientoMetaPct: number | null
   retencionPct: number | null; penetracionMulticategoriaPct: number | null
-  margenClp: number | null; margenPct: number | null; margenCoberturaPct: number | null
 }
 interface EquipoResponse { periodo: { nombre: string }; filas: FilaEquipo[]; puedeVerMargen: boolean }
 
-type Col = { key: keyof FilaEquipo | 'territorio'; label: string; fmt: (f: FilaEquipo) => string; align?: 'right' }
+type Tab = 'venta' | 'meta' | 'crecimiento' | 'clientes' | 'cobranza' | 'barriles'
 
-const COLS: Col[] = [
-  { key: 'territorio', label: 'Territorio / Canal', fmt: f => f.territorio },
-  { key: 'venta_clp', label: 'Venta $', fmt: f => formatCLP(f.venta_clp), align: 'right' },
-  { key: 'litros', label: 'Litros', fmt: f => formatLitros(f.litros), align: 'right' },
-  { key: 'crecimientoYoyPct', label: 'Crec. YoY', fmt: f => f.crecimientoYoyPct !== null ? `${f.crecimientoYoyPct >= 0 ? '+' : ''}${f.crecimientoYoyPct.toFixed(1)}%` : '—', align: 'right' },
-  { key: 'cumplimientoMetaPct', label: 'Cumpl. meta', fmt: f => f.cumplimientoMetaPct !== null ? `${f.cumplimientoMetaPct.toFixed(0)}%` : '—', align: 'right' },
-  { key: 'clientes_activos', label: 'Clientes activos', fmt: f => formatNumero(f.clientes_activos), align: 'right' },
-  { key: 'clientes_nuevos', label: 'Nuevos', fmt: f => formatNumero(f.clientes_nuevos), align: 'right' },
-  { key: 'clientes_perdidos', label: 'Perdidos', fmt: f => formatNumero(f.clientes_perdidos), align: 'right' },
-  { key: 'retencionPct', label: 'Retención', fmt: f => f.retencionPct !== null ? `${f.retencionPct.toFixed(0)}%` : '—', align: 'right' },
-  { key: 'deuda_vencida', label: 'Deuda vencida', fmt: f => formatCLP(f.deuda_vencida), align: 'right' },
-  { key: 'barriles_criticos', label: 'Barriles críticos', fmt: f => `${f.barriles_criticos} / ${f.barriles_total}`, align: 'right' },
-  { key: 'penetracionMulticategoriaPct', label: 'Multicategoría', fmt: f => f.penetracionMulticategoriaPct !== null ? `${f.penetracionMulticategoriaPct.toFixed(0)}%` : '—', align: 'right' },
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'venta', label: 'Venta $' },
+  { value: 'meta', label: 'Meta' },
+  { value: 'crecimiento', label: 'Crecimiento' },
+  { value: 'clientes', label: 'Clientes' },
+  { value: 'cobranza', label: 'Cobranza' },
+  { value: 'barriles', label: 'Barriles' },
 ]
 
-const COLS_MARGEN: Col[] = [
-  { key: 'margenPct', label: 'Margen %', fmt: f => f.margenPct !== null ? `${f.margenPct.toFixed(1)}%` : '—', align: 'right' },
-  { key: 'margenClp', label: 'Margen $', fmt: f => f.margenClp !== null ? formatCLP(f.margenClp) : '—', align: 'right' },
-]
+function etiquetaDesempeno(f: FilaEquipo): { texto: string; tono: Tono } {
+  if (f.venta_clp <= 0) return { texto: 'Sin ventas', tono: 'neutral' }
+  if (f.cumplimientoMetaPct !== null && f.cumplimientoMetaPct < 75) return { texto: 'Atención', tono: 'critico' }
+  if (f.crecimientoYoyPct !== null && f.crecimientoYoyPct > 25) return { texto: 'Fuerte crecimiento', tono: 'ok' }
+  if (f.cumplimientoMetaPct !== null && f.cumplimientoMetaPct >= 100) return { texto: 'Líder en venta', tono: 'marca' }
+  if (f.crecimientoYoyPct !== null && f.crecimientoYoyPct < 0) return { texto: 'En desarrollo', tono: 'alerta' }
+  return { texto: 'Desempeño sólido', tono: 'info' }
+}
+
+function ordenPorTab(filas: FilaEquipo[], tab: Tab): FilaEquipo[] {
+  const copia = [...filas]
+  const porNulo = (v: number | null) => v === null ? -Infinity : v
+  switch (tab) {
+    case 'meta': return copia.sort((a, b) => porNulo(b.cumplimientoMetaPct) - porNulo(a.cumplimientoMetaPct))
+    case 'crecimiento': return copia.sort((a, b) => porNulo(b.crecimientoYoyPct) - porNulo(a.crecimientoYoyPct))
+    case 'clientes': return copia.sort((a, b) => b.clientes_activos - a.clientes_activos)
+    case 'cobranza': return copia.sort((a, b) => b.deuda_vencida - a.deuda_vencida)
+    case 'barriles': return copia.sort((a, b) => b.barriles_criticos - a.barriles_criticos)
+    default: return copia.sort((a, b) => b.venta_clp - a.venta_clp)
+  }
+}
 
 export default function EquipoClient() {
   const [data, setData] = useState<EquipoResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [sortKey, setSortKey] = useState<keyof FilaEquipo>('venta_clp')
-  const [sortDir, setSortDir] = useState<1 | -1>(-1)
+  const [tab, setTab] = useState<Tab>('venta')
+  const [expandido, setExpandido] = useState<string | null>(null)
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  const cargar = useCallback(() => {
+    let cancelado = false
     setLoading(true)
+    setError(null)
     fetch('/api/control-comercial/equipo')
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? 'Error al cargar Equipo')
         return r.json()
       })
-      .then(setData)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+      .then(d => { if (!cancelado) setData(d) })
+      .catch(e => { if (!cancelado) setError(e instanceof Error ? e.message : 'Error al cargar') })
+      .finally(() => { if (!cancelado) setLoading(false) })
+    return () => { cancelado = true }
   }, [])
 
-  const filas = useMemo(() => {
-    if (!data) return []
-    return [...data.filas].sort((a, b) => {
-      const av = a[sortKey], bv = b[sortKey]
-      if (av === null) return 1
-      if (bv === null) return -1
-      if (typeof av === 'string') return sortDir * av.localeCompare(String(bv))
-      return sortDir * ((av as number) - (bv as number))
-    })
-  }, [data, sortKey, sortDir])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => cargar(), [cargar])
 
-  function toggleSort(key: keyof FilaEquipo) {
-    if (key === sortKey) setSortDir(d => (d === 1 ? -1 : 1))
-    else { setSortKey(key); setSortDir(-1) }
-  }
-
-  const cols = useMemo(() => data?.puedeVerMargen ? [...COLS, ...COLS_MARGEN] : COLS, [data?.puedeVerMargen])
+  const filas = useMemo(() => data ? ordenPorTab(data.filas, tab) : [], [data, tab])
 
   return (
-    <div style={{ padding: '0 16px 24px', maxWidth: 1200, width: '100%', margin: '0 auto' }}>
-      <AppHeader eyebrow={data?.periodo.nombre ?? 'Control Comercial'} title="Equipo" />
+    <CCPage>
+      <CCHeader title="Equipo" subtitle={data ? `${data.periodo.nombre} · performance comercial por territorio` : 'Cargando…'} />
 
-      {loading && <div style={{ height: 300, borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)', opacity: 0.5 }} />}
-      {!loading && error && <p style={{ color: 'var(--muted)', textAlign: 'center', padding: 24 }}>{error}</p>}
+      <SegmentedControl variant="pill" value={tab} onChange={setTab} options={TABS} />
+
+      {loading && <PageSkeleton />}
+      {!loading && error && <ErrorState mensaje={error} onReintentar={cargar} />}
 
       {!loading && !error && data && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 18 }}>
-          <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-            Comparación multidimensional — no es un ranking por litros. Click en una columna para ordenar.
-          </p>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1000 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {cols.map(c => (
-                    <th
-                      key={c.key}
-                      onClick={() => toggleSort(c.key as keyof FilaEquipo)}
-                      style={{
-                        textAlign: c.align ?? 'left', padding: '8px', color: sortKey === c.key ? 'var(--gold)' : 'var(--muted)',
-                        fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none',
-                      }}
-                    >
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        {c.label} {sortKey === c.key && <ArrowUpDown size={11} />}
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filas.map(f => (
-                  <tr key={f.territorio} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    {cols.map(c => (
-                      <td key={c.key} style={{ padding: '9px 8px', textAlign: c.align ?? 'left', color: c.key === 'territorio' ? 'var(--cream)' : 'var(--muted)', fontWeight: c.key === 'territorio' ? 700 : 500, whiteSpace: 'nowrap' }}>
-                        {c.key === 'territorio' ? (
-                          <div>
-                            <span>{f.territorio}</span>
-                            {f.responsable && <span style={{ fontSize: 10.5, color: 'var(--muted)', marginLeft: 6 }}>· {f.responsable}</span>}
-                          </div>
-                        ) : c.key === 'crecimientoYoyPct' && f.crecimientoYoyPct !== null ? (
-                          <span style={{ color: f.crecimientoYoyPct >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 700 }}>{c.fmt(f)}</span>
-                        ) : c.key === 'clientes_perdidos' && f.clientes_perdidos > 0 ? (
-                          <span style={{ color: 'var(--red)' }}>{c.fmt(f)}</span>
-                        ) : c.key === 'barriles_criticos' && f.barriles_criticos > 0 ? (
-                          <span style={{ color: 'var(--red)' }}>{c.fmt(f)}</span>
-                        ) : c.fmt(f)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 14, lineHeight: 1.5 }}>
-            {data.puedeVerMargen
-              ? 'Margen calculado solo sobre los productos que tienen costo cargado en Rentabilidad — puede no cubrir el 100% de la venta de cada territorio.'
-              : 'Margen por territorio oculto — requiere permiso de costos (Rentabilidad).'}
+        <div
+          className="cc-enter"
+          style={{
+            padding: '11px 14px', borderRadius: 15, background: 'var(--cc-gold-soft)',
+            display: 'flex', gap: 10, alignItems: 'flex-start',
+          }}
+        >
+          <TrendingUp size={16} color="var(--cc-gold-deep)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <p style={{ fontSize: 12, color: 'var(--cc-gold-deep)', lineHeight: 1.5 }}>
+            <strong>Comparación multidimensional</strong> — no es un ranking por litros. Las métricas
+            combinan venta, cumplimiento, crecimiento, clientes, cobranza y criticidad.
           </p>
         </div>
       )}
-    </div>
+
+      {!loading && !error && data && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {filas.map((f, i) => {
+            const desempeno = etiquetaDesempeno(f)
+            return (
+              <PerformanceCard
+                key={f.territorio}
+                posicion={i + 1}
+                titulo={f.territorio}
+                responsable={f.responsable}
+                badge={desempeno.texto}
+                badgeTono={desempeno.tono}
+                badgeIcon={desempeno.tono === 'marca' ? Award : desempeno.tono === 'ok' ? TrendingUp : undefined}
+                serie={f.serieVenta}
+                serieColor={f.crecimientoYoyPct !== null && f.crecimientoYoyPct < 0 ? 'var(--cc-red)' : 'var(--cc-green)'}
+                metricas={[
+                  { label: 'Venta $', valor: formatCLPCompacto(f.venta_clp) },
+                  { label: 'Cumpl. meta', valor: f.cumplimientoMetaPct !== null ? formatPctPlano(f.cumplimientoMetaPct) : '—', tono: f.cumplimientoMetaPct === null ? undefined : f.cumplimientoMetaPct >= 100 ? 'ok' : f.cumplimientoMetaPct >= 80 ? 'alerta' : 'critico' },
+                  { label: 'Crec. YoY', valor: f.crecimientoYoyPct !== null ? formatPctPlano(f.crecimientoYoyPct) : '—', tono: f.crecimientoYoyPct === null ? undefined : f.crecimientoYoyPct >= 0 ? 'ok' : 'critico' },
+                ]}
+                miniMetricas={[
+                  { icon: UserPlus, label: 'Nuevos clientes', valor: formatNumero(f.clientes_nuevos) },
+                  { icon: DollarSign, label: 'Deuda vencida', valor: formatCLPCompacto(f.deuda_vencida), tono: f.deuda_vencida > 0 ? 'critico' : 'ok' },
+                  { icon: Boxes, label: 'Barriles críticos', valor: formatNumero(f.barriles_criticos), tono: f.barriles_criticos > 0 ? 'critico' : 'ok' },
+                ]}
+                expandible
+                expandido={expandido === f.territorio}
+                onToggle={() => setExpandido(v => v === f.territorio ? null : f.territorio)}
+                contenidoExpandido={
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <FilaLeyenda color="var(--cc-gold)" label="Litros del período" valor={formatLitros(f.litros)} />
+                      <FilaLeyenda color="var(--cc-green)" label="Clientes activos" valor={formatNumero(f.clientes_activos)} />
+                      <FilaLeyenda color="var(--cc-red)" label="Clientes perdidos" valor={formatNumero(f.clientes_perdidos)} />
+                      {f.retencionPct !== null && <FilaLeyenda color="var(--cc-blue)" label="Retención de cartera" valor={formatPctPlano(f.retencionPct)} />}
+                      {f.penetracionMulticategoriaPct !== null && <FilaLeyenda color="var(--cc-amber)" label="Multicategoría (cerveza + kombucha)" valor={formatPctPlano(f.penetracionMulticategoriaPct)} />}
+                      <FilaLeyenda color="var(--cc-neutral)" label="Barriles totales" valor={`${f.barriles_criticos} críticos / ${f.barriles_total}`} />
+                    </div>
+                    {f.cumplimientoMetaPct !== null && (
+                      <div>
+                        <p style={{ fontSize: 10.5, color: 'var(--cc-ink-3)', fontWeight: 700, marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.3 }}>Avance de meta</p>
+                        <ProgressBar pct={f.cumplimientoMetaPct} mostrarValor tono={f.cumplimientoMetaPct >= 100 ? 'ok' : f.cumplimientoMetaPct >= 80 ? 'alerta' : 'critico'} />
+                      </div>
+                    )}
+                  </div>
+                }
+              />
+            )
+          })}
+
+          {filas.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--cc-ink-3)', fontSize: 13 }}>
+              Sin datos de equipo para este período.
+            </div>
+          )}
+        </div>
+      )}
+    </CCPage>
   )
 }
