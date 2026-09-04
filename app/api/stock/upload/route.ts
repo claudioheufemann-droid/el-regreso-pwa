@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { getServerUser } from '@/lib/auth'
 import { parseStockExcel } from '@/lib/stockParser'
+import { esCamaraDisponible } from '@/lib/camaras'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,9 +22,13 @@ async function logSync(supabase: any, params: {
 /**
  * POST /api/stock/upload?preview=true|false
  *
- * Carga del informe de stock (Camara General Barrios Bajos: barriles +
- * envases). Es una FOTO del momento: cada carga confirmada reemplaza por
- * completo la anterior, no se acumula histórico fila a fila.
+ * Carga del informe de stock: barriles y envases de TODAS las cámaras, más
+ * el producto en fermentación (tipo 'tanque'). Es una FOTO del momento: cada
+ * carga confirmada reemplaza por completo la anterior, no se acumula
+ * histórico fila a fila.
+ *
+ * Cuáles de esas cámaras cuentan como stock disponible lo decide
+ * esCamaraDisponible() en lib/stockParser.ts — acá se guarda todo.
  *
  * Autenticación dual (mismo patrón que /api/clientes/upload y
  * /api/deudores/upload): sesión de admin desde la UI, o Bearer
@@ -60,11 +65,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No se encontraron productos en las secciones esperadas' }, { status: 400 })
   }
 
-  const barriles = productos.filter(p => p.tipo === 'barril')
-  const envases = productos.filter(p => p.tipo === 'envase')
+  // El resumen cuenta SÓLO las cámaras que son stock disponible — es lo que
+  // se le muestra al admin al previsualizar la carga, y tiene que coincidir
+  // con lo que después ve en la app, no con el total del archivo (que incluye
+  // consumo propio del PDV, muestras y producto ya despachado a terceros).
+  const disponibles = productos.filter(p => esCamaraDisponible(p.camara))
+  const barriles = disponibles.filter(p => p.tipo === 'barril')
+  const envases = disponibles.filter(p => p.tipo === 'envase')
+  const tanques = productos.filter(p => p.tipo === 'tanque')
   const resumen = {
     barriles: { productos: barriles.length, cantidad: barriles.reduce((s, p) => s + p.cantidad, 0), litros: Math.round(barriles.reduce((s, p) => s + (p.litros ?? 0), 0)) },
     envases: { productos: envases.length, cantidad: envases.reduce((s, p) => s + p.cantidad, 0) },
+    tanques: { productos: tanques.length, litros: Math.round(tanques.reduce((s, p) => s + (p.litros ?? 0), 0)) },
+    camarasExcluidas: [...new Set(productos.filter(p => p.tipo !== 'tanque' && !esCamaraDisponible(p.camara)).map(p => p.camara))].sort(),
   }
 
   if (preview) {
@@ -86,9 +99,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Error al limpiar stock anterior: ${delError.message}` }, { status: 500 })
   }
 
+  // Se guardan TODAS las cámaras, no sólo las disponibles: así se puede
+  // cambiar la definición de "disponible" sin volver a descargar del ERP, y
+  // queda visible de dónde sale cada litro.
   const filas = productos.map(p => ({
     fecha_informe: fechaInforme,
     tipo: p.tipo,
+    camara: p.camara,
     producto: p.producto,
     codigo_producto: p.codigoProducto,
     categoria: p.categoria,

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { esCamaraDisponible } from '@/lib/camaras'
 import StockClient from './StockClient'
 
 export const dynamic = 'force-dynamic'
@@ -33,7 +34,7 @@ export default async function StockPage() {
   const [{ data }, { data: periodoActivo }, { data: costosPrecios }] = await Promise.all([
     admin
       .from('stock_productos')
-      .select('tipo, producto, codigo_producto, categoria, cantidad, litros, lotes, fecha_informe')
+      .select('tipo, camara, producto, codigo_producto, categoria, cantidad, litros, lotes, fecha_informe')
       .order('cantidad', { ascending: false }),
     // `periodos` tiene meses futuros precreados (ej. "Marzo 2027") — hay que
     // anclar al que tiene activo=true, no al de fecha_inicio más reciente.
@@ -46,8 +47,33 @@ export default async function StockPage() {
     admin.from('costos_precios').select('producto, codigo').not('codigo', 'is', null),
   ])
 
-  const filas = (data ?? []) as (StockProductoRow & { fecha_informe: string })[]
-  const fechaInforme = filas[0]?.fecha_informe ?? null
+  // stock_productos guarda desde el 4 sep 2026 TODAS las cámaras del informe
+  // del ERP más los tanques de fermentación, no sólo Barrios Bajos. Acá hay
+  // que quedarse con lo vendible y volver a una fila por producto: el mismo
+  // producto aparece ahora en varias cámaras (ej. barriles de Mocho English
+  // en Barrios Bajos y en Frío Planta) y esta pantalla lista las filas tal
+  // cual — sin agrupar saldría el producto repetido con cantidades parciales.
+  // El tipo se ensancha a propósito: la tabla ya trae también 'tanque', que
+  // StockProductoRow (lo que consume la UI) no contempla y se filtra abajo.
+  const crudas = (data ?? []) as (Omit<StockProductoRow, 'tipo'> & {
+    tipo: 'barril' | 'envase' | 'tanque'; fecha_informe: string; camara: string | null
+  })[]
+  const fechaInforme = crudas[0]?.fecha_informe ?? null
+
+  const acumulado = new Map<string, StockProductoRow & { fecha_informe: string }>()
+  for (const f of crudas) {
+    if (f.tipo === 'tanque' || !esCamaraDisponible(f.camara)) continue
+    const clave = `${f.tipo}::${f.producto}`
+    const previo = acumulado.get(clave)
+    if (!previo) {
+      acumulado.set(clave, { ...f, tipo: f.tipo, lotes: [...(f.lotes ?? [])] } as StockProductoRow & { fecha_informe: string })
+      continue
+    }
+    previo.cantidad += f.cantidad
+    if (f.litros != null) previo.litros = (previo.litros ?? 0) + f.litros
+    previo.lotes = [...(previo.lotes ?? []), ...(f.lotes ?? [])]
+  }
+  const filas = [...acumulado.values()].sort((a, b) => b.cantidad - a.cantidad)
 
   const codigoPorNombreVenta = new Map((costosPrecios ?? []).map(c => [c.producto as string, c.codigo as string]))
 

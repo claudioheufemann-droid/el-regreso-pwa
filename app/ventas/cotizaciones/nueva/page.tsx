@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import type { StockPorCodigo } from '@/lib/catalogo-productos'
+import { esCamaraDisponible } from '@/lib/camaras'
 import NuevaCotizacionClient from './NuevaCotizacionClient'
 
 export const dynamic = 'force-dynamic'
@@ -26,13 +27,20 @@ export default async function NuevaCotizacionPage() {
   // NuevaCotizacionClient), mismo patrón que ya usa Nueva Visita/Ruta.
   const { data: stockRaw } = await supabase
     .from('stock_productos')
-    .select('codigo_producto, tipo, cantidad')
+    .select('codigo_producto, tipo, camara, cantidad')
     .not('codigo_producto', 'is', null)
 
   // Cotizaciones solo debe ofrecer lo que realmente hay en bodega — se cruza
   // por código de producto (no por nombre, que varía entre catálogo y stock).
+  //
+  // El filtro por cámara es imprescindible desde que stock_productos guarda
+  // todos los depósitos del informe (4 sep 2026): sin él se ofrecería como
+  // vendible el consumo propio del PDV, las contra muestras y lo ya despachado
+  // a distribuidores. Los tanques además se colaban como 'envase' por el else.
   const stockPorCodigo: StockPorCodigo = {}
   for (const s of stockRaw ?? []) {
+    if (s.tipo !== 'barril' && s.tipo !== 'envase') continue
+    if (!esCamaraDisponible(s.camara as string | null)) continue
     const cod = s.codigo_producto as string
     if (!stockPorCodigo[cod]) stockPorCodigo[cod] = { barril: 0, envase: 0 }
     if (s.tipo === 'barril') stockPorCodigo[cod].barril += s.cantidad

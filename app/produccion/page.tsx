@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { esClienteExcluidoProduccion } from '@/lib/types'
+import { esCamaraDisponible } from '@/lib/camaras'
 import {
   bucketEnvase, mesDe, mesEnCursoISO, normalizarProducto,
   claveProductoEnvase, partirClaveProductoEnvase, ENVASE_LABEL,
@@ -52,6 +53,8 @@ export interface StockItem {
   producto: string
   categoria: string | null
   tipo: string
+  /** Depósito de origen en el informe del ERP. */
+  camara: string | null
   cantidad: number
   litros: number | null
 }
@@ -122,7 +125,7 @@ export default async function ProduccionPage() {
   const [{ data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios }, { data: stockSeguridadRaw }] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
-    admin.from('stock_productos').select('producto, categoria, tipo, cantidad, litros').order('cantidad', { ascending: false }),
+    admin.from('stock_productos').select('producto, categoria, tipo, camara, cantidad, litros').order('cantidad', { ascending: false }),
     admin.from('costos_precios').select('producto, categoria').not('codigo', 'is', null),
     admin.from('stock_seguridad').select('nivel, producto, envase, categoria, mes, lead_time_semanas, periodo_revision_semanas, demanda_mensual_proyectada, demanda_en_ventana, sigma_semanal, stock_seguridad_litros, punto_reorden_litros, confianza, mape_backtest, meses_historial').order('mes', { ascending: true }),
   ])
@@ -227,8 +230,16 @@ export default async function ProduccionPage() {
 
   const ultimaCorrida = (calidadRaw?.[0] as { generado_at?: string } | undefined)?.generado_at ?? null
 
-  const stock = (stockRaw ?? []).map(s => ({
-    producto: s.producto, categoria: s.categoria, tipo: s.tipo,
+  // Sólo las cámaras que son stock disponible para vender: quedan fuera el
+  // consumo propio del PDV/Base Camp, las contra muestras, lo comprometido a
+  // eventos y lo ya despachado a distribuidores. Ver CAMARAS_DISPONIBLES en
+  // lib/stockParser.ts — es una definición de negocio, no del parseo.
+  const stockDisponibleRaw = (stockRaw ?? []).filter(
+    s => s.tipo !== 'tanque' && esCamaraDisponible(s.camara as string | null)
+  )
+
+  const stock = stockDisponibleRaw.map(s => ({
+    producto: s.producto, categoria: s.categoria, tipo: s.tipo, camara: s.camara,
     cantidad: Number(s.cantidad), litros: s.litros != null ? Number(s.litros) : null,
   })) as StockItem[]
 
@@ -279,7 +290,7 @@ export default async function ProduccionPage() {
 
   const stockActualPorProducto = new Map<string, number>()
   const stockActualPorProductoEnvase = new Map<string, number>()
-  for (const s of stockRaw ?? []) {
+  for (const s of stockDisponibleRaw) {
     if (!s.producto) continue
     const cantidad = Number(s.cantidad)
     const litrosCrudos = s.litros != null ? Number(s.litros) : null
@@ -292,40 +303,22 @@ export default async function ProduccionPage() {
     stockActualPorProductoEnvase.set(clavePE, (stockActualPorProductoEnvase.get(clavePE) ?? 0) + litros)
   }
 
-  // Litros ya declarados en producción y todavía no recibidos en bodega.
+  // Litros en fermentación, que van a llegar a bodega dentro del lead time.
   // Sin esto, un producto con una cocción en curso aparece igual como
   // "crítico" y gatillaría una cocción redundante.
   //
-  // Sólo 'declarado': un lote 'enviado' ya viajó a bodega y es muy probable
-  // que el informe de stock del ERP lo esté contando — sumarlo sería
-  // contarlo dos veces. (Hoy la tabla tiene 2 lotes en total: el módulo de
-  // lotes existe pero casi no se usa, así que esto todavía casi no mueve la
-  // aguja — queda listo para cuando Producción lo empiece a cargar.)
+  // Fuente: la sección "Stock de producto en tanques" del mismo informe del
+  // ERP (tipo='tanque'), no lotes_produccion. Esa tabla se llena a mano desde
+  // el módulo de Logística y tenía 2 lotes cargados en total, mientras que el
+  // ERP trae los ~11 fermentadores completos y actualizados en cada sync.
+  //
+  // No hay doble conteo con el inventario: mientras el producto está en el
+  // tanque todavía no se envasó, así que no aparece en ninguna cámara.
   const litrosEnProduccionPorProducto = new Map<string, number>()
-  {
-    const { data: lotesActivos } = await admin
-      .from('lotes_produccion').select('id').eq('estado', 'declarado')
-    const ids = (lotesActivos ?? []).map(l => l.id as string)
-    if (ids.length > 0) {
-      const { data: items } = await admin
-        .from('lotes_produccion_items')
-        .select('producto, envase, cantidad_declarada')
-        .in('lote_id', ids)
-      for (const it of items ?? []) {
-        if (!it.producto) continue
-        // El envase acá se escribe distinto que en el resto ("Barril 30L",
-        // "Lata 500cc"): se extraen los litros por unidad del propio texto.
-        const texto = String(it.envase ?? '')
-        const litrosUnidad =
-          texto.match(/(\d+)\s*L\b/i) ? Number(texto.match(/(\d+)\s*L\b/i)![1])
-            : texto.match(/(\d+)\s*cc/i) ? Number(texto.match(/(\d+)\s*cc/i)![1]) / 1000
-              : null
-        if (litrosUnidad == null) continue
-        const nombre = resolverProductoStock(it.producto as string)
-        const litros = Number(it.cantidad_declarada) * litrosUnidad
-        litrosEnProduccionPorProducto.set(nombre, (litrosEnProduccionPorProducto.get(nombre) ?? 0) + litros)
-      }
-    }
+  for (const s of stockRaw ?? []) {
+    if (s.tipo !== 'tanque' || s.litros == null) continue
+    const nombre = resolverProductoStock(s.producto as string)
+    litrosEnProduccionPorProducto.set(nombre, (litrosEnProduccionPorProducto.get(nombre) ?? 0) + Number(s.litros))
   }
 
   const stockSeguridad = (stockSeguridadRaw ?? []).map(s => {
