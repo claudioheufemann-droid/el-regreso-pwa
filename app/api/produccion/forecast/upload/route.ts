@@ -17,7 +17,12 @@ async function logSync(supabase: any, params: { origen: 'automatico' | 'manual';
   }
 }
 
-interface ForecastFila { nivel: string; clave: string | null; mes: string; tipo: 'historico' | 'forecast'; litros: number; litrosMin?: number | null; litrosMax?: number | null }
+interface ForecastFila {
+  nivel: string; clave: string | null; mes: string; tipo: 'historico' | 'forecast'
+  litros: number; litrosMin?: number | null; litrosMax?: number | null
+  /** Descomposición del modelo: litros = tendencia + estacionalidad. */
+  tendencia?: number | null; estacionalidad?: number | null
+}
 interface ValidacionFila { nivel: string; clave: string | null; mae: number | null; mape: number | null; mesesEvaluados: number; mesesHistorial: number }
 interface CalidadFila { tipo: string; clave: string | null; detalle: string; severidad: 'info' | 'advertencia' }
 
@@ -65,6 +70,7 @@ export async function POST(req: Request) {
   const forecastRows = forecast.map(f => ({
     nivel: f.nivel, clave: f.clave, mes: f.mes, tipo: f.tipo,
     litros: f.litros, litros_min: f.litrosMin ?? null, litros_max: f.litrosMax ?? null,
+    tendencia: f.tendencia ?? null, estacionalidad: f.estacionalidad ?? null,
   }))
   const validacionRows = (validacion ?? []).map(v => ({
     nivel: v.nivel, clave: v.clave, mae: v.mae, mape: v.mape,

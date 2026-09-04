@@ -79,21 +79,35 @@ def a_dataframe(puntos: list[dict]) -> pd.DataFrame:
     return df[["ds", "y"]].sort_values("ds").reset_index(drop=True)
 
 
-def ajustar_y_proyectar(df: pd.DataFrame, mes_base: pd.Timestamp) -> pd.DataFrame:
-    """Entrena Prophet sobre toda la serie y devuelve los HORIZONTE_MESES
-    posteriores a `mes_base` — el último mes cerrado del negocio, igual para
-    todas las series.
+def ajustar_y_proyectar(df: pd.DataFrame, mes_base: pd.Timestamp) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Entrena Prophet y devuelve (proyección, descomposición).
 
-    El ancla tiene que ser común y NO el último mes de cada serie: una
-    combinación producto×envase que se dejó de vender en 2024 seguía
-    "proyectando" los 8 meses siguientes a su última venta, o sea meses que ya
-    pasaron. Salían como forecast en el gráfico, en la tabla de detalle y en el
-    stock de seguridad (bug real: filas de stock de seguridad fechadas en
-    ago-2024). Ahora se predice hasta cubrir la brecha y se recorta al
-    horizonte real.
+    · proyección: los HORIZONTE_MESES posteriores a `mes_base` — el último mes
+      cerrado del negocio, igual para todas las series.
+    · descomposición: para CADA mes de la serie (histórico y futuro), las dos
+      componentes que Prophet estima por separado y después suma —
+
+          yhat  =  trend  +  yearly
+                   ──┬──     ──┬───
+             hacia dónde va   cuánto sube o baja
+             el negocio       ese mes del año
+
+      Es lo que hace que esto sea un modelo y no una regla de tres: la
+      tendencia se estima con changepoints (quiebres de pendiente detectados
+      en los datos) y la estacionalidad como una serie de Fourier ajustada a
+      los ciclos anuales. Se exporta para poder mostrarlo en el gráfico, en
+      vez de que el usuario sólo vea una línea aparecer sin explicación.
+
+    El ancla del horizonte tiene que ser común y NO el último mes de cada
+    serie: una combinación producto×envase que se dejó de vender en 2024
+    seguía "proyectando" los 8 meses siguientes a su última venta, o sea meses
+    que ya pasaron. Salían como forecast en el gráfico, en la tabla de detalle
+    y en el stock de seguridad (bug real: filas fechadas en ago-2024). Ahora se
+    predice hasta cubrir la brecha y se recorta al horizonte real.
     """
+    tiene_anual = len(df) >= 24  # necesita ≥2 ciclos anuales para estimarla en serio
     m = Prophet(
-        yearly_seasonality=len(df) >= 24,  # necesita ≥2 ciclos anuales para estimarla en serio
+        yearly_seasonality=tiene_anual,
         weekly_seasonality=False,
         daily_seasonality=False,
         interval_width=0.8,
@@ -105,10 +119,17 @@ def ajustar_y_proyectar(df: pd.DataFrame, mes_base: pd.Timestamp) -> pd.DataFram
     brecha = max((mes_base.year - ultimo.year) * 12 + (mes_base.month - ultimo.month), 0)
     futuro = m.make_future_dataframe(periods=brecha + HORIZONTE_MESES, freq="MS")
     pred = m.predict(futuro)
+
     proyeccion = pred[pred["ds"] > mes_base].copy()
     for col in ("yhat", "yhat_lower", "yhat_upper"):
         proyeccion[col] = proyeccion[col].clip(lower=0)
-    return proyeccion[["ds", "yhat", "yhat_lower", "yhat_upper"]]
+
+    descomposicion = pred[["ds", "trend"]].copy()
+    # Sin estacionalidad anual estimada la componente no existe: se informa 0
+    # (no null) para que el gráfico pueda dibujar la banda igual, plana.
+    descomposicion["yearly"] = pred["yearly"] if tiene_anual else 0.0
+
+    return proyeccion[["ds", "yhat", "yhat_lower", "yhat_upper"]], descomposicion
 
 
 def backtest(df: pd.DataFrame) -> dict | None:
@@ -144,11 +165,19 @@ def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], mes_base: 
     df = a_dataframe(puntos)
     etiqueta = clave or "general"
 
+    # Los históricos se emiten primero y se guardan indexados por mes, para
+    # poder completarles después la descomposición del modelo (que recién se
+    # conoce cuando Prophet está entrenado). Si la serie no se proyecta, se
+    # quedan sin descomposición y el gráfico simplemente no la dibuja.
+    historicos_por_mes: dict[str, dict] = {}
     for _, row in df.iterrows():
-        forecast_out.append({
-            "nivel": nivel, "clave": clave, "mes": row["ds"].strftime("%Y-%m-%d"),
+        mes = row["ds"].strftime("%Y-%m-%d")
+        fila = {
+            "nivel": nivel, "clave": clave, "mes": mes,
             "tipo": "historico", "litros": round(float(row["y"]), 2),
-        })
+        }
+        historicos_por_mes[mes] = fila
+        forecast_out.append(fila)
 
     if len(df) < MIN_MESES_FORECAST:
         if not silencioso:
@@ -175,7 +204,7 @@ def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], mes_base: 
         return
 
     try:
-        proy = ajustar_y_proyectar(df, mes_base)
+        proy, descomp = ajustar_y_proyectar(df, mes_base)
     except Exception as e:
         if not silencioso:
             calidad_out.append({
@@ -185,13 +214,26 @@ def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], mes_base: 
             })
         return
 
+    # trend y yearly de cada mes, para dibujar la descomposición del modelo.
+    comp_por_mes = {
+        row["ds"].strftime("%Y-%m-%d"): (round(float(row["trend"]), 2), round(float(row["yearly"]), 2))
+        for _, row in descomp.iterrows()
+    }
+
+    for mes, fila in historicos_por_mes.items():
+        if mes in comp_por_mes:
+            fila["tendencia"], fila["estacionalidad"] = comp_por_mes[mes]
+
     for _, row in proy.iterrows():
+        mes = row["ds"].strftime("%Y-%m-%d")
+        tendencia, estacionalidad = comp_por_mes.get(mes, (None, None))
         forecast_out.append({
-            "nivel": nivel, "clave": clave, "mes": row["ds"].strftime("%Y-%m-%d"),
+            "nivel": nivel, "clave": clave, "mes": mes,
             "tipo": "forecast",
             "litros": round(float(row["yhat"]), 2),
             "litrosMin": round(float(row["yhat_lower"]), 2),
             "litrosMax": round(float(row["yhat_upper"]), 2),
+            "tendencia": tendencia, "estacionalidad": estacionalidad,
         })
 
     bt = backtest(df)

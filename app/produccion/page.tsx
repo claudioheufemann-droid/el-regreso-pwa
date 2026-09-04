@@ -17,6 +17,12 @@ export interface PuntoForecast {
   litros: number
   litrosMin: number | null
   litrosMax: number | null
+  /** Descomposición de Prophet: litros ≈ tendencia + estacionalidad.
+   *  `tendencia` es hacia dónde va el negocio sin el efecto del mes del año;
+   *  `estacionalidad` es cuántos litros suma o resta ese mes en particular.
+   *  Null cuando la serie no se proyectó (historial corto o descontinuada). */
+  tendencia: number | null
+  estacionalidad: number | null
 }
 
 /** Una serie lista para graficar: sus puntos + qué tan confiable resultó en
@@ -109,12 +115,12 @@ export default async function ProduccionPage() {
   // proyección quedaba entera fuera de la respuesta y el gráfico salía sin
   // la línea verde. Las otras tablas tienen decenas de filas, no hace falta.
   const PAGE = 1000
-  type ForecastRow = { nivel: string; clave: string | null; mes: string; tipo: string; litros: number; litros_min: number | null; litros_max: number | null }
+  type ForecastRow = { nivel: string; clave: string | null; mes: string; tipo: string; litros: number; litros_min: number | null; litros_max: number | null; tendencia: number | null; estacionalidad: number | null }
   const forecastRaw: ForecastRow[] = []
   for (let offset = 0; ; offset += PAGE) {
     const { data, error } = await admin
       .from('forecast_produccion')
-      .select('nivel, clave, mes, tipo, litros, litros_min, litros_max')
+      .select('nivel, clave, mes, tipo, litros, litros_min, litros_max, tendencia, estacionalidad')
       .order('mes', { ascending: true })
       .range(offset, offset + PAGE - 1)
     if (error || !data || data.length === 0) break
@@ -212,6 +218,8 @@ export default async function ProduccionPage() {
       litros: Number(f.litros),
       litrosMin: f.litros_min != null ? Number(f.litros_min) : null,
       litrosMax: f.litros_max != null ? Number(f.litros_max) : null,
+      tendencia: f.tendencia != null ? Number(f.tendencia) : null,
+      estacionalidad: f.estacionalidad != null ? Number(f.estacionalidad) : null,
     })
   }
 

@@ -3,13 +3,13 @@
 import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea,
+  Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea,
   ResponsiveContainer, ComposedChart, Line, Area,
 } from 'recharts'
 import {
   LayoutDashboard, TrendingUp, Package, CalendarDays, ShoppingCart,
   CircleDollarSign, Bell, Plus, AlertTriangle, Calendar as CalendarIcon,
-  TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info,
+  TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
 } from 'lucide-react'
 import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem } from './page'
 import { ENVASE_LABEL, type EnvaseBucket } from '@/lib/produccion/reglas'
@@ -118,6 +118,18 @@ const navItems = [
 
 type TabId = (typeof navItems)[number]['id']
 
+/** Agrupación del menú: primero entender la demanda, después decidir qué
+ *  producir y comprar. Una lista plana de seis ítems no comunicaba ese orden. */
+const GRUPOS_NAV: { titulo: string; items: TabId[] }[] = [
+  { titulo: 'Demanda', items: ['resumen', 'forecasting'] },
+  { titulo: 'Planificación', items: ['seguridad', 'plan'] },
+  { titulo: 'Abastecimiento', items: ['insumos', 'presupuesto'] },
+]
+
+/** Secciones que todavía son maqueta (ver DATOS DE DEMOSTRACIÓN arriba). Se
+ *  marcan en el propio menú para que nadie entre esperando datos reales. */
+const DEMO_TABS = new Set<TabId>(['plan', 'insumos', 'presupuesto'])
+
 /* ── Chip de confiabilidad, según el desvío (MAPE) del backtest ────────── */
 function ChipConfiabilidad({ mape }: { mape: number | null }) {
   if (mape == null) return <span className="text-xs text-gray-300">—</span>
@@ -158,6 +170,8 @@ export default function ProduccionClient({
   const [busquedaInsumo, setBusquedaInsumo] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
   const [filtroEnvase, setFiltroEnvase] = useState<string>('todos')
+  /** Muestra la descomposición del modelo (tendencia + estacionalidad). */
+  const [verModelo, setVerModelo] = useState(false)
   // Meses reales proyectados (yyyy-mm-01), no meses calendario 1-12: el
   // cálculo ahora sale del forecast, así que cada fila corresponde a un mes
   // concreto del horizonte y no tiene sentido ofrecer "Ene" si el forecast
@@ -208,6 +222,11 @@ export default function ProduccionClient({
         ventaProyectada: p.tipo === 'forecast' || esUltimoReal ? p.litros : null,
         rango: p.litrosMin != null && p.litrosMax != null ? [p.litrosMin, p.litrosMax] : null,
         ritmo: i === idxUltimoReal ? p.litros : null,
+        // Descomposición del modelo. `tendencia` se dibuja como línea sobre
+        // toda la serie —incluido el historial— porque ahí es donde se ve que
+        // el modelo la ajustó a los datos y no la inventó para el futuro.
+        tendencia: p.tendencia,
+        estacionalidad: p.estacionalidad,
       }
     })
     // El mes en curso puede no venir en `puntos` (el modelo lo excluyó del
@@ -218,6 +237,7 @@ export default function ProduccionClient({
       filas.push({
         month: etiquetaMes(avanceMes.mes), mesIso: avanceMes.mes,
         ventaReal: null, ventaProyectada: null, rango: null, ritmo: null,
+        tendencia: null, estacionalidad: null,
       })
       filas.sort((a, b) => a.mesIso.localeCompare(b.mesIso))
     }
@@ -225,6 +245,38 @@ export default function ProduccionClient({
     if (idxMesEnCurso >= 0) filas[idxMesEnCurso].ritmo = ritmoProyectado
     return filas
   }, [serieActual, avanceMes.mes, ritmoProyectado])
+
+  /* ── Descomposición del modelo ─────────────────────────────────────────
+     Sólo existe si la serie llegó a proyectarse (historial suficiente y no
+     descontinuada); si no, el botón "Ver el modelo" ni se ofrece. */
+  const hayDescomposicion = useMemo(
+    () => chartData.some(d => d.tendencia != null),
+    [chartData]
+  )
+
+  /** Primer mes proyectado, para poner números concretos en la ecuación. */
+  const descomposicionProximo = useMemo(() => {
+    const f = chartData.find(d => d.ventaReal == null && d.tendencia != null && d.estacionalidad != null)
+    if (!f) return null
+    return { mesIso: f.mesIso, tendencia: f.tendencia as number, estacionalidad: f.estacionalidad as number }
+  }, [chartData])
+
+  /** Curva estacional del año, promediando la componente `yearly` por mes
+   *  calendario. Es la forma más directa de mostrar qué aprendió el modelo:
+   *  no "diciembre vende más" dicho por alguien, sino cuántos litros estima
+   *  que aporta cada mes por encima o debajo de la tendencia. */
+  const curvaEstacional = useMemo(() => {
+    const suma = new Array(12).fill(0)
+    const n = new Array(12).fill(0)
+    for (const d of chartData) {
+      if (d.estacionalidad == null) continue
+      const i = indiceMes(d.mesIso)
+      suma[i] += d.estacionalidad
+      n[i] += 1
+    }
+    if (!n.some(c => c > 0)) return []
+    return MESES_CORTOS.map((mes, i) => ({ mes, efecto: n[i] > 0 ? suma[i] / n[i] : 0 }))
+  }, [chartData])
 
   /* ── Temporada alta (Dic–Feb): tramos consecutivos para las ReferenceArea ── */
   const tramosTemporadaAlta = useMemo(() => {
@@ -311,6 +363,15 @@ export default function ProduccionClient({
       })
   }, [stockSeguridad, mesSeguridadActivo, nivelSeguridad])
 
+  /* ── Contadores del menú ───────────────────────────────────────────────
+     Sólo los que se pueden calcular de verdad: advertencias del modelo y
+     productos en o bajo su punto de reorden. Las secciones de maqueta no
+     llevan número — inventar uno ahí sería peor que no mostrarlo. */
+  const alertasPorTab = useMemo<Partial<Record<TabId, number>>>(() => ({
+    forecasting: advertencias.length,
+    seguridad: filasStockSeguridad.filter(f => f.estado === 'critico' || f.estado === 'bajo').length,
+  }), [advertencias.length, filasStockSeguridad])
+
   const insumosFiltrados = DEMO_insumosData.filter(i =>
     i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
     i.categoria.toLowerCase().includes(busquedaInsumo.toLowerCase())
@@ -324,47 +385,117 @@ export default function ProduccionClient({
       {/* ══ BARRA LATERAL (escritorio) ══ */}
       <aside
         className="hidden w-64 shrink-0 flex-col justify-between lg:flex"
-        style={{ backgroundColor: COLORS.darkGreen }}
+        style={{
+          // Degradado sutil en vez de un plano: da profundidad sin introducir
+          // un color nuevo — es el mismo verde corporativo, apenas más oscuro
+          // abajo, así el bloque del usuario se asienta visualmente.
+          backgroundImage: `linear-gradient(180deg, ${COLORS.darkGreen} 0%, #0B2E22 100%)`,
+        }}
       >
-        <div>
-          <div className="flex items-center gap-3 p-6 text-white">
-            <Beaker size={28} style={{ color: COLORS.amber }} />
-            <div>
-              <h1 className="text-xl font-bold leading-tight tracking-tight">EL REGRESO</h1>
-              <p className="text-xs font-medium uppercase tracking-wider text-gray-300">Beer &amp; Kombucha</p>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex items-center gap-3 px-6 py-6 text-white">
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+              style={{ backgroundColor: 'rgba(229,169,34,0.14)', border: '1px solid rgba(229,169,34,0.3)' }}
+            >
+              <Beaker size={20} style={{ color: COLORS.amber }} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-lg font-black leading-tight tracking-tight">EL REGRESO</h1>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Beer &amp; Kombucha</p>
             </div>
           </div>
 
-          <nav className="mt-4 flex flex-col gap-1 px-3">
-            {navItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-medium transition-colors ${
-                  activeTab === item.id ? 'text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                }`}
-                style={{ backgroundColor: activeTab === item.id ? COLORS.lightGreen : 'transparent' }}
-              >
-                <item.icon size={20} />
-                {item.label}
-              </button>
+          {/* Los ítems se agrupan por para qué sirven: primero entender la
+              demanda, después decidir qué producir y comprar. Antes era una
+              lista plana de seis y no se leía ningún orden. */}
+          <nav className="flex flex-col gap-6 px-3 pb-4">
+            {GRUPOS_NAV.map(grupo => (
+              <div key={grupo.titulo} className="flex flex-col gap-1">
+                <p className="px-4 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/30">
+                  {grupo.titulo}
+                </p>
+                {grupo.items.map(id => {
+                  const item = navItems.find(n => n.id === id)!
+                  const activo = activeTab === id
+                  const alertas = alertasPorTab[id] ?? 0
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => setActiveTab(id)}
+                      aria-current={activo ? 'page' : undefined}
+                      className={`group relative flex items-center gap-3 rounded-lg py-2.5 pl-4 pr-3 text-left text-sm transition-all ${
+                        activo ? 'font-bold text-white' : 'font-medium text-white/60 hover:bg-white/5 hover:text-white'
+                      }`}
+                      style={{ backgroundColor: activo ? COLORS.lightGreen : 'transparent' }}
+                    >
+                      {/* Marca dorada del ítem activo: el cambio de fondo solo
+                          era poco contraste sobre el verde. */}
+                      <span
+                        className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full transition-opacity"
+                        style={{ backgroundColor: COLORS.amber, opacity: activo ? 1 : 0 }}
+                      />
+                      <item.icon size={18} className="shrink-0" style={{ color: activo ? COLORS.amber : undefined }} />
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {alertas > 0 && (
+                        <span
+                          className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-black tabular-nums"
+                          style={{ backgroundColor: 'rgba(239,68,68,0.18)', color: '#FCA5A5' }}
+                          title={`${alertas} ${alertas === 1 ? 'punto' : 'puntos'} que requieren atención`}
+                        >
+                          {alertas}
+                        </span>
+                      )}
+                      {DEMO_TABS.has(id) && (
+                        <span
+                          className="shrink-0 rounded px-1 py-0.5 text-[9px] font-black uppercase tracking-wide"
+                          style={{ backgroundColor: 'rgba(229,169,34,0.16)', color: COLORS.amber }}
+                          title="Sección de maqueta: todavía sin datos reales"
+                        >
+                          demo
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
             ))}
           </nav>
         </div>
 
-        <div className="m-3 flex items-center justify-between rounded-lg border-t border-white/10 bg-black/20 p-4 text-white">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-500 text-sm font-bold">
-              {inicialesUsuario || '··'}
-            </div>
-            <div className="flex min-w-0 flex-col text-left">
-              <span className="truncate text-sm font-semibold">{nombreUsuario}</span>
-              <span className="text-xs text-gray-400">Producción</span>
+        {/* Estado del modelo: dato operativo que antes sólo vivía en la barra
+            superior, donde competía con el título de la sección. */}
+        <div className="shrink-0 px-3 pb-3">
+          <div className="mb-2 rounded-lg px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.22)' }}>
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/35">Último cálculo</p>
+            <div className="mt-1 flex items-center gap-2">
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: ultimaCorrida ? '#34D399' : COLORS.gray }}
+              />
+              <span className="truncate text-xs font-semibold text-white/80">
+                {ultimaCorrida ? ultimaCorrida.slice(0, 10) : 'Sin corrida'}
+              </span>
             </div>
           </div>
-          <Link href="/" aria-label="Volver al inicio" className="shrink-0 text-gray-400 transition-colors hover:text-white">
-            <Home size={16} />
-          </Link>
+
+          <div className="flex items-center justify-between rounded-lg p-3 text-white" style={{ backgroundColor: 'rgba(0,0,0,0.22)' }}>
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black"
+                style={{ backgroundColor: COLORS.amber, color: COLORS.darkGreen }}
+              >
+                {inicialesUsuario || '··'}
+              </div>
+              <div className="flex min-w-0 flex-col text-left">
+                <span className="truncate text-sm font-semibold">{nombreUsuario}</span>
+                <span className="text-[11px] text-white/40">Producción</span>
+              </div>
+            </div>
+            <Link href="/" aria-label="Volver al inicio" className="shrink-0 rounded-md p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white">
+              <Home size={15} />
+            </Link>
+          </div>
         </div>
       </aside>
 
@@ -668,44 +799,55 @@ export default function ProduccionClient({
               </div>
 
               {/* ¿Vamos a cumplir lo proyectado? — comparación simple del mes en curso */}
-              {mtdLitros > 0 && (
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Llevamos vendido este mes</p>
-                    <p className="text-2xl font-black text-gray-900">{fNum(mtdLitros)} L</p>
-                    <p className="text-xs text-gray-500">día {avanceMes.diaActual} de {avanceMes.diasEnMes}</p>
-                  </div>
-                  <div className="text-gray-300">→</div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400">A este ritmo, cerrarías con</p>
-                    <p className="text-2xl font-black" style={{ color: COLORS.amber }}>{fNum(ritmoProyectado)} L</p>
-                    <p className="text-xs text-gray-500">proyección lineal simple</p>
-                  </div>
-                  {(() => {
-                    const objetivo = chartData.find(f => f.mesIso === avanceMes.mes)?.ventaProyectada
-                    if (objetivo == null || objetivo === 0) return null
-                    const pct = (ritmoProyectado / objetivo) * 100
-                    const cumple = pct >= 95
-                    return (
-                      <>
-                        <div className="text-gray-300">vs.</div>
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-wider text-gray-400">El modelo proyectó</p>
-                          <p className="text-2xl font-black" style={{ color: COLORS.darkGreen }}>{fNum(objetivo)} L</p>
-                          <p className={`text-xs font-bold ${cumple ? 'text-green-600' : 'text-red-600'}`}>
+              {mtdLitros > 0 && (() => {
+                const objetivo = chartData.find(f => f.mesIso === avanceMes.mes)?.ventaProyectada ?? null
+                const pct = objetivo != null && objetivo > 0 ? (ritmoProyectado / objetivo) * 100 : null
+                const cumple = pct != null && pct >= 95
+                const avancePct = Math.min(100, (avanceMes.diaActual / avanceMes.diasEnMes) * 100)
+                return (
+                  <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="grid gap-px bg-gray-200 sm:grid-cols-3">
+                      <div className="bg-white p-5">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Vendido este mes</p>
+                        <p className="mt-1 text-3xl font-black tabular-nums text-gray-900">{fNum(mtdLitros)} L</p>
+                        {/* Barra de avance del mes: el número solo no dice si
+                            vamos temprano o tarde en el período. */}
+                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                          <div className="h-full rounded-full" style={{ width: `${avancePct}%`, backgroundColor: COLORS.gray }} />
+                        </div>
+                        <p className="mt-1.5 text-xs text-gray-500">día {avanceMes.diaActual} de {avanceMes.diasEnMes}</p>
+                      </div>
+
+                      <div className="bg-white p-5">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">A este ritmo cerrarías con</p>
+                        <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.amber }}>{fNum(ritmoProyectado)} L</p>
+                        <p className="mt-[14px] text-xs text-gray-500">extrapolación lineal de lo vendido</p>
+                      </div>
+
+                      {objetivo != null && pct != null && (
+                        <div className="bg-white p-5">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">El modelo proyectó</p>
+                          <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.darkGreen }}>{fNum(objetivo)} L</p>
+                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${Math.min(100, pct)}%`, backgroundColor: cumple ? '#059669' : '#EF4444' }}
+                            />
+                          </div>
+                          <p className={`mt-1.5 text-xs font-bold ${cumple ? 'text-emerald-600' : 'text-red-600'}`}>
                             {cumple ? '✓' : '⚠'} vas al {pct.toFixed(0)}% de lo proyectado
                           </p>
                         </div>
-                      </>
-                    )
-                  })()}
-                </div>
-              )}
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Gráfico */}
               <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
-                <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <h3 className="text-lg font-bold text-gray-800">
                       Proyección de Demanda (Litros) vs. Venta Real
                     </h3>
@@ -713,16 +855,75 @@ export default function ProduccionClient({
                       {serieActual?.label ?? '—'} · el área ámbar marca la temporada alta (Dic–Feb).
                     </p>
                   </div>
-                  {precisionSerie != null && (
-                    <div className={`rounded-lg border px-3 py-1.5 text-sm font-bold ${
-                      precisionSerie >= 85 ? 'border-green-200 bg-green-50 text-green-700'
-                        : precisionSerie >= 70 ? 'border-amber-200 bg-amber-50 text-amber-700'
-                          : 'border-red-200 bg-red-50 text-red-700'
-                    }`}>
-                      Precisión Histórica: {precisionSerie.toFixed(0)}%
-                    </div>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Interruptor de la descomposición: por defecto apagado
+                        para no sobrecargar la lectura rápida, pero a un clic
+                        de mostrar de qué está hecha la proyección. */}
+                    {hayDescomposicion && (
+                      <button
+                        onClick={() => setVerModelo(v => !v)}
+                        aria-pressed={verModelo}
+                        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-bold transition-colors ${
+                          verModelo ? 'text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                        style={verModelo ? { backgroundColor: COLORS.darkGreen, borderColor: COLORS.darkGreen } : undefined}
+                      >
+                        <Sigma size={15} />
+                        Ver el modelo
+                      </button>
+                    )}
+                    {precisionSerie != null && (
+                      <div className={`rounded-lg border px-3 py-1.5 text-sm font-bold ${
+                        precisionSerie >= 85 ? 'border-green-200 bg-green-50 text-green-700'
+                          : precisionSerie >= 70 ? 'border-amber-200 bg-amber-50 text-amber-700'
+                            : 'border-red-200 bg-red-50 text-red-700'
+                      }`}>
+                        Precisión Histórica: {precisionSerie.toFixed(0)}%
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Ecuación del modelo, con los números del mes proyectado.
+                    Es la parte que hace evidente que la línea verde no es una
+                    regla de tres: sale de dos componentes que Prophet estima
+                    por separado sobre el historial y después suma. */}
+                {verModelo && descomposicionProximo && (
+                  <div className="mb-5 flex flex-wrap items-stretch gap-3 rounded-xl border border-gray-200 bg-gray-50/70 p-4">
+                    <div className="min-w-[190px] flex-1">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Tendencia</p>
+                      <p className="text-xl font-black tabular-nums" style={{ color: COLORS.lightGreen }}>
+                        {fNum(descomposicionProximo.tendencia)} L
+                      </p>
+                      <p className="mt-0.5 text-xs leading-snug text-gray-500">
+                        Hacia dónde va el negocio, sin el efecto del mes. Se ajusta con
+                        <em> changepoints</em>: quiebres de pendiente detectados en los datos.
+                      </p>
+                    </div>
+                    <div className="flex items-center text-2xl font-light text-gray-300">+</div>
+                    <div className="min-w-[190px] flex-1">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Estacionalidad de {etiquetaMes(descomposicionProximo.mesIso)}</p>
+                      <p className="text-xl font-black tabular-nums" style={{ color: descomposicionProximo.estacionalidad >= 0 ? COLORS.amber : '#EF4444' }}>
+                        {descomposicionProximo.estacionalidad >= 0 ? '+' : '−'}{fNum(Math.abs(descomposicionProximo.estacionalidad))} L
+                      </p>
+                      <p className="mt-0.5 text-xs leading-snug text-gray-500">
+                        Cuánto se aparta ese mes del año respecto de la tendencia. Curva de Fourier
+                        ajustada sobre {serieActual?.mesesHistorial ?? chartData.filter(d => d.ventaReal != null).length} meses.
+                      </p>
+                    </div>
+                    <div className="flex items-center text-2xl font-light text-gray-300">=</div>
+                    <div className="min-w-[150px] flex-1">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Proyección</p>
+                      <p className="text-xl font-black tabular-nums" style={{ color: COLORS.darkGreen }}>
+                        {fNum(descomposicionProximo.tendencia + descomposicionProximo.estacionalidad)} L
+                      </p>
+                      <p className="mt-0.5 text-xs leading-snug text-gray-500">
+                        El rango sombreado es el intervalo de predicción al 80%: 4 de cada 5 meses
+                        deberían caer dentro.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Altura fija en vez de heredada por flex/min-height: Recharts
                     necesita que ALGÚN ancestro tenga una altura resuelta en
@@ -738,6 +939,15 @@ export default function ProduccionClient({
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={chartData} margin={{ top: 20, right: 20, left: 10, bottom: 5 }}>
+                        <defs>
+                          {/* El intervalo se desvanece hacia abajo en vez de
+                              ser un bloque plano: se lee como incertidumbre,
+                              no como una segunda serie de datos. */}
+                          <linearGradient id="gradRango" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={COLORS.darkGreen} stopOpacity={0.22} />
+                            <stop offset="100%" stopColor={COLORS.darkGreen} stopOpacity={0.04} />
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                         <XAxis
                           dataKey="month" axisLine={false} tickLine={false} minTickGap={24}
@@ -762,9 +972,19 @@ export default function ProduccionClient({
                         ))}
 
                         <Area
-                          dataKey="rango" name="Rango estimado" stroke="none"
-                          fill={COLORS.darkGreen} fillOpacity={0.12} connectNulls
+                          dataKey="rango" name="Rango estimado (80%)" stroke="none"
+                          fill="url(#gradRango)" connectNulls
                         />
+                        {/* Tendencia del modelo sobre TODA la serie, historial
+                            incluido: ahí se ve que está ajustada a los datos
+                            reales y no dibujada sólo hacia el futuro. */}
+                        {verModelo && (
+                          <Line
+                            type="monotone" dataKey="tendencia" name="Tendencia (sin estacionalidad)"
+                            stroke={COLORS.lightGreen} strokeWidth={2} strokeDasharray="6 4"
+                            dot={false} activeDot={false} connectNulls isAnimationActive={false}
+                          />
+                        )}
                         <Line
                           type="monotone" dataKey="ventaProyectada" name="Venta Proyectada"
                           stroke={COLORS.darkGreen} strokeWidth={3} connectNulls
@@ -801,6 +1021,45 @@ export default function ProduccionClient({
                   )}
                 </div>
               </div>
+
+              {/* ── Curva estacional aprendida por el modelo ── */}
+              {verModelo && curvaEstacional.length > 0 && (
+                <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
+                  <div className="mb-4">
+                    <h3 className="text-lg font-bold text-gray-800">Estacionalidad aprendida por el modelo</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Litros que cada mes del año suma o resta respecto de la tendencia. No es una regla
+                      escrita a mano: es la curva de Fourier que Prophet ajustó sobre el historial de esta serie.
+                    </p>
+                  </div>
+                  <div className="h-[200px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={curvaEstacional} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                        <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 600 }} dy={8} />
+                        <YAxis
+                          axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dx={-6}
+                          tickFormatter={(v: number) => (Math.abs(v) >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)))}
+                        />
+                        <Tooltip
+                          contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                          formatter={(value) => {
+                            const n = Number(value)
+                            return [`${n >= 0 ? '+' : '−'}${fNum(Math.abs(n))} L`, n >= 0 ? 'Sobre la tendencia' : 'Bajo la tendencia']
+                          }}
+                        />
+                        {/* Una barra por mes, verde arriba de la tendencia y
+                            ámbar abajo — el signo se lee sin mirar el eje. */}
+                        <Bar dataKey="efecto" name="Efecto del mes" radius={[3, 3, 3, 3]} isAnimationActive={false}>
+                          {curvaEstacional.map(d => (
+                            <Cell key={d.mes} fill={d.efecto >= 0 ? COLORS.lightGreen : COLORS.amber} />
+                          ))}
+                        </Bar>
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
 
               {/* ── Detalle por producto y envase ── */}
               <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
