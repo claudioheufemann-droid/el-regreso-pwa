@@ -158,7 +158,19 @@ export default function ProduccionClient({
   const [busquedaInsumo, setBusquedaInsumo] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
   const [filtroEnvase, setFiltroEnvase] = useState<string>('todos')
-  const [mesSeguridad, setMesSeguridad] = useState<number>(() => new Date(avanceMes.mes + 'T00:00:00Z').getUTCMonth() + 1)
+  // Meses reales proyectados (yyyy-mm-01), no meses calendario 1-12: el
+  // cálculo ahora sale del forecast, así que cada fila corresponde a un mes
+  // concreto del horizonte y no tiene sentido ofrecer "Ene" si el forecast
+  // no llega hasta enero.
+  const mesesSeguridad = useMemo(
+    () => [...new Set(stockSeguridad.map(s => s.mes))].sort(),
+    [stockSeguridad]
+  )
+  const [mesSeguridad, setMesSeguridad] = useState<string>('')
+  const [nivelSeguridad, setNivelSeguridad] = useState<'producto' | 'producto_envase'>('producto')
+  const mesSeguridadActivo = mesSeguridad && mesesSeguridad.includes(mesSeguridad)
+    ? mesSeguridad
+    : mesesSeguridad[0] ?? ''
 
   const serieGeneral = series.find(s => s.nivel === 'general') ?? null
   const serieActual = series.find(s => s.id === serieId) ?? serieGeneral
@@ -271,27 +283,33 @@ export default function ProduccionClient({
   }, [series, filtroCategoria, filtroEnvase])
 
   /* ── Stock de seguridad del mes elegido ─────────────────────────────────
-     Estado se define comparando el inventario actual contra dos umbrales:
-     por debajo del stock de seguridad = crítico (ni el colchón alcanza);
-     entre el colchón y el punto de reorden = bajo (ya toca reponer);
-     por encima del punto de reorden = ok. */
+     Estado se define comparando el DISPONIBLE (inventario en bodega + lo ya
+     declarado en producción, que va a llegar dentro del lead time) contra
+     dos umbrales: por debajo del stock de seguridad = crítico (ni el colchón
+     alcanza); entre el colchón y el punto de reorden = bajo (ya toca
+     reponer); por encima del punto de reorden = ok.
+
+     Sin sumar lo que está en fermentación, un producto con la cocción ya
+     lanzada aparecía igual como crítico y gatillaba una cocción redundante. */
   const filasStockSeguridad = useMemo(() => {
     return stockSeguridad
-      .filter(s => s.mesCalendario === mesSeguridad)
+      .filter(s => s.mes === mesSeguridadActivo && s.nivel === nivelSeguridad)
       .map(s => {
-        const actual = s.stockActualLitros
+        const disponible = s.stockActualLitros != null
+          ? s.stockActualLitros + s.litrosEnProduccion
+          : null
         const estado: 'critico' | 'bajo' | 'ok' | 'sin_dato' =
-          actual == null ? 'sin_dato'
-            : actual < s.stockSeguridadLitros ? 'critico'
-              : actual < s.puntoReordenLitros ? 'bajo' : 'ok'
-        return { ...s, estado }
+          disponible == null ? 'sin_dato'
+            : disponible < s.stockSeguridadLitros ? 'critico'
+              : disponible < s.puntoReordenLitros ? 'bajo' : 'ok'
+        return { ...s, disponible, estado }
       })
       .sort((a, b) => {
         const peso = { critico: 0, sin_dato: 1, bajo: 2, ok: 3 }
         if (peso[a.estado] !== peso[b.estado]) return peso[a.estado] - peso[b.estado]
-        return a.producto.localeCompare(b.producto)
+        return a.producto.localeCompare(b.producto) || (a.envase ?? '').localeCompare(b.envase ?? '')
       })
-  }, [stockSeguridad, mesSeguridad])
+  }, [stockSeguridad, mesSeguridadActivo, nivelSeguridad])
 
   const insumosFiltrados = DEMO_insumosData.filter(i =>
     i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
@@ -888,10 +906,14 @@ export default function ProduccionClient({
                 <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600 shadow-sm">
                   <Info size={18} className="mt-0.5 shrink-0 text-gray-400" />
                   <p>
-                    Stock de seguridad = <strong>Z · σ<sub>semanal</sub> · √Lead Time</strong>, con Z=1,645 (95% de nivel de servicio)
-                    y σ calculado por mes calendario para capturar la estacionalidad del negocio (diciembre/enero/febrero
-                    varían mucho más que abril). Lead time: <strong>4 semanas cerveza</strong>, <strong>3 semanas kombucha</strong>.
-                    Punto de reorden = demanda semanal promedio × lead time + stock de seguridad.
+                    Stock de seguridad = <strong>Z · √(ventana · σ<sub>semanal</sub>² + demanda<sub>semanal</sub>² · σ<sub>LT</sub>²)</strong>,
+                    con Z=1,645 (95% de nivel de servicio). Tanto la demanda como su dispersión salen del
+                    <strong> mismo forecast de Prophet</strong> que ves en el gráfico —σ se deriva del ancho de
+                    su intervalo de predicción, así que ya incorpora la estacionalidad y la tendencia del mes
+                    proyectado en vez de estimarse aparte. La ventana es{' '}
+                    <strong>lead time + período de revisión</strong> (reponemos una vez al mes, así que el
+                    riesgo corre hasta la siguiente oportunidad de pedir, no sólo hasta que llega el lote).
+                    Lead time: <strong>4 semanas cerveza</strong>, <strong>3 semanas kombucha</strong>.
                   </p>
                 </div>
               )}
@@ -920,18 +942,41 @@ export default function ProduccionClient({
                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
                   <div>
                     <h3 className="font-bold text-gray-800">Stock de Seguridad y Punto de Reorden</h3>
-                    <p className="mt-1 text-sm text-gray-500">{filasStockSeguridad.length} productos · comparado contra el inventario actual del ERP.</p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {filasStockSeguridad.length} {nivelSeguridad === 'producto' ? 'productos' : 'combinaciones producto × formato'} · comparado contra el inventario actual del ERP.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label htmlFor="mesSeg" className="text-xs font-bold uppercase tracking-wider text-gray-500">Mes</label>
-                    <select
-                      id="mesSeg"
-                      value={mesSeguridad}
-                      onChange={e => setMesSeguridad(Number(e.target.value))}
-                      className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      {MESES_CORTOS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-                    </select>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Nivel</span>
+                      <div className="flex overflow-hidden rounded-md border border-gray-200">
+                        {([
+                          { id: 'producto' as const, label: 'Producto' },
+                          { id: 'producto_envase' as const, label: 'Por formato' },
+                        ]).map(op => (
+                          <button
+                            key={op.id}
+                            onClick={() => setNivelSeguridad(op.id)}
+                            className={`px-3 py-1.5 text-sm font-semibold transition-colors ${
+                              nivelSeguridad === op.id ? 'bg-[#0F3D2E] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            {op.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="mesSeg" className="text-xs font-bold uppercase tracking-wider text-gray-500">Mes</label>
+                      <select
+                        id="mesSeg"
+                        value={mesSeguridadActivo}
+                        onChange={e => setMesSeguridad(e.target.value)}
+                        className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      >
+                        {mesesSeguridad.map(m => <option key={m} value={m}>{etiquetaMes(m)}</option>)}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -940,29 +985,44 @@ export default function ProduccionClient({
                     <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
                       <tr>
                         <th className="px-6 py-3 font-bold">Producto</th>
+                        {nivelSeguridad === 'producto_envase' && <th className="px-4 py-3 font-bold">Formato</th>}
                         <th className="px-4 py-3 font-bold">Categoría</th>
-                        <th className="px-4 py-3 text-center font-bold">Lead Time</th>
-                        <th className="px-4 py-3 text-right font-bold">Demanda sem. prom.</th>
+                        <th className="px-4 py-3 text-center font-bold">Ventana</th>
+                        <th className="px-4 py-3 text-right font-bold">Demanda en ventana</th>
                         <th className="px-4 py-3 text-right font-bold text-amber-700">Stock Seguridad</th>
                         <th className="px-4 py-3 text-right font-bold text-amber-700">Punto Reorden</th>
-                        <th className="px-4 py-3 text-right font-bold">Stock Actual</th>
+                        <th className="px-4 py-3 text-right font-bold">En bodega</th>
+                        <th className="px-4 py-3 text-right font-bold">En producción</th>
+                        <th className="px-4 py-3 text-right font-bold">Disponible</th>
                         <th className="px-6 py-3 text-center font-bold">Estado</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
                       {filasStockSeguridad.length === 0 && (
-                        <tr><td colSpan={8} className="px-6 py-10 text-center text-gray-400">Sin datos para este mes.</td></tr>
+                        <tr><td colSpan={nivelSeguridad === 'producto_envase' ? 11 : 10} className="px-6 py-10 text-center text-gray-400">Sin datos para este mes.</td></tr>
                       )}
                       {filasStockSeguridad.map(f => (
-                        <tr key={f.producto} className="transition-colors hover:bg-gray-50">
+                        <tr key={`${f.producto}::${f.envase ?? ''}`} className="transition-colors hover:bg-gray-50">
                           <td className="px-6 py-3 font-semibold text-gray-800">
                             {f.producto}
-                            {f.confianza === 'baja' && (
-                              <span className="ml-2 inline-block rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-bold text-gray-400" title="Sin suficiente historial de este mes calendario puntual — se usó el σ de toda la serie del producto como respaldo">
-                                σ aprox.
+                            {f.confianza !== 'alta' && (
+                              <span
+                                className={`ml-2 inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-bold ${
+                                  f.confianza === 'media' ? 'border-amber-200 bg-amber-50 text-amber-600' : 'border-gray-200 bg-gray-50 text-gray-400'
+                                }`}
+                                title={
+                                  `Confianza ${f.confianza}. ` +
+                                  (f.mapeBacktest != null ? `Error del modelo en el backtest: ${f.mapeBacktest.toFixed(0)}%. ` : 'Sin backtest disponible. ') +
+                                  (f.mesesHistorial != null ? `${f.mesesHistorial} meses de historial.` : '')
+                                }
+                              >
+                                confianza {f.confianza}
                               </span>
                             )}
                           </td>
+                          {nivelSeguridad === 'producto_envase' && (
+                            <td className="px-4 py-3 text-gray-600">{f.envase ? (ENVASE_LABEL[f.envase as keyof typeof ENVASE_LABEL] ?? f.envase) : '—'}</td>
+                          )}
                           <td className="px-4 py-3">
                             <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${
                               f.categoria === 'cerveza' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
@@ -970,12 +1030,23 @@ export default function ProduccionClient({
                               {f.categoria}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-center tabular-nums text-gray-600">{f.leadTimeSemanas} sem.</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fNum(f.demandaSemanalPromedio)} L</td>
+                          <td
+                            className="px-4 py-3 text-center tabular-nums text-gray-600"
+                            title={`Lead time ${f.leadTimeSemanas} sem. + revisión mensual ${f.periodoRevisionSemanas.toFixed(1)} sem.`}
+                          >
+                            {(f.leadTimeSemanas + f.periodoRevisionSemanas).toFixed(1)} sem.
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fNum(f.demandaEnVentana)} L</td>
                           <td className="px-4 py-3 text-right font-bold tabular-nums text-amber-700">{fNum(f.stockSeguridadLitros)} L</td>
                           <td className="px-4 py-3 text-right font-bold tabular-nums text-gray-900">{fNum(f.puntoReordenLitros)} L</td>
                           <td className="px-4 py-3 text-right tabular-nums text-gray-700">
                             {f.stockActualLitros != null ? `${fNum(f.stockActualLitros)} L` : <span className="text-gray-300">sin dato</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-500">
+                            {f.litrosEnProduccion > 0 ? `+${fNum(f.litrosEnProduccion)} L` : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-gray-800">
+                            {f.disponible != null ? `${fNum(f.disponible)} L` : <span className="text-gray-300">sin dato</span>}
                           </td>
                           <td className="px-6 py-3 text-center">
                             <span className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 text-xs font-bold ${

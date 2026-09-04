@@ -31,16 +31,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Generar y subir el forecast
+      # El stock de seguridad se calcula dentro del mismo script: se deriva
+      # por completo del forecast, así que separarlo sólo abría la puerta a
+      # que quedara calculado sobre una corrida vieja del modelo.
+      - name: Generar forecast y stock de seguridad
         working-directory: scripts/forecast
         env:
           UPLOAD_URL_BASE: ${{ secrets.UPLOAD_URL_BASE }}
           UPLOAD_SECRET_FORECAST: ${{ secrets.UPLOAD_SECRET_FORECAST }}
         run: python generar_forecast.py
-
-      - name: Calcular y subir el stock de seguridad
-        working-directory: scripts/forecast
-        env:
-          UPLOAD_URL_BASE: ${{ secrets.UPLOAD_URL_BASE }}
-          UPLOAD_SECRET_FORECAST: ${{ secrets.UPLOAD_SECRET_FORECAST }}
-        run: python calcular_stock_seguridad.py

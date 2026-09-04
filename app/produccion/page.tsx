@@ -64,20 +64,28 @@ export interface AvanceMes {
 }
 
 export interface StockSeguridadItem {
+  nivel: 'producto' | 'producto_envase'
   producto: string
+  /** Bucket de envase; null cuando nivel='producto' (todos los formatos). */
+  envase: string | null
   categoria: 'cerveza' | 'kombucha'
-  mesCalendario: number
+  /** Mes concreto proyectado (yyyy-mm-01), no un mes calendario 1-12. */
+  mes: string
   leadTimeSemanas: number
-  demandaSemanalPromedio: number
+  periodoRevisionSemanas: number
+  demandaMensualProyectada: number
+  demandaEnVentana: number
   sigmaSemanal: number
   stockSeguridadLitros: number
   puntoReordenLitros: number
-  confianza: 'alta' | 'baja'
-  mesesHistorialMes: number
-  /** Litros en inventario hoy (stock_productos, sumado entre barril+envase
-   *  del mismo producto) — null si el producto no aparece en el último
-   *  informe de stock. */
+  confianza: 'alta' | 'media' | 'baja'
+  mapeBacktest: number | null
+  mesesHistorial: number | null
+  /** Litros en inventario hoy, al mismo nivel que la fila (por producto, o
+   *  por producto+formato) — null si no aparece en el informe de stock. */
   stockActualLitros: number | null
+  /** Litros declarados en producción y todavía no recibidos en bodega. */
+  litrosEnProduccion: number
 }
 
 export default async function ProduccionPage() {
@@ -116,7 +124,7 @@ export default async function ProduccionPage() {
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
     admin.from('stock_productos').select('producto, categoria, tipo, cantidad, litros').order('cantidad', { ascending: false }),
     admin.from('costos_precios').select('producto, categoria').not('codigo', 'is', null),
-    admin.from('stock_seguridad').select('producto, categoria, mes_calendario, lead_time_semanas, demanda_semanal_promedio, sigma_semanal, stock_seguridad_litros, punto_reorden_litros, confianza, meses_historial_mes'),
+    admin.from('stock_seguridad').select('nivel, producto, envase, categoria, mes, lead_time_semanas, periodo_revision_semanas, demanda_mensual_proyectada, demanda_en_ventana, sigma_semanal, stock_seguridad_litros, punto_reorden_litros, confianza, mape_backtest, meses_historial').order('mes', { ascending: true }),
   ])
 
   const categoriaPorProducto = new Map(
@@ -252,28 +260,104 @@ export default async function ProduccionPage() {
     const prefijo = productosConocidos.find(p => limpio === p || limpio.startsWith(p + ' '))
     return prefijo ?? limpio
   }
-  const stockActualPorProducto = new Map<string, number>()
-  for (const s of stockRaw ?? []) {
-    if (!s.producto) continue
-    const litros = s.litros != null ? Number(s.litros) : litrosLata(s.producto as string, Number(s.cantidad))
-    if (litros == null) continue
-    const nombre = resolverProductoStock(s.producto as string)
-    stockActualPorProducto.set(nombre, (stockActualPorProducto.get(nombre) ?? 0) + litros)
+  // El colchón ahora se calcula también por formato, así que el inventario
+  // tiene que quedar clasificado igual: no se puede servir un pedido de
+  // barril con latas. En los barriles el tamaño se deduce del propio
+  // informe (litros/cantidad = capacidad del barril; hoy son todos de 30L).
+  const bucketDeStock = (producto: string, tipo: string, cantidad: number, litros: number | null): string => {
+    if (tipo === 'barril') {
+      const capacidad = litros != null && cantidad > 0 ? Math.round(litros / cantidad) : null
+      if (capacidad === 30) return 'barril_30'
+      if (capacidad === 50) return 'barril_50'
+      return 'otros'
+    }
+    const ml = producto.match(/Lata \((\d+)\s*ml\)/i)?.[1]
+    if (ml === '354') return 'lata_354'
+    if (ml === '473') return 'lata_473'
+    return 'otros'
   }
 
-  const stockSeguridad = (stockSeguridadRaw ?? []).map(s => ({
-    producto: s.producto as string,
-    categoria: s.categoria as 'cerveza' | 'kombucha',
-    mesCalendario: s.mes_calendario as number,
-    leadTimeSemanas: Number(s.lead_time_semanas),
-    demandaSemanalPromedio: Number(s.demanda_semanal_promedio),
-    sigmaSemanal: Number(s.sigma_semanal),
-    stockSeguridadLitros: Number(s.stock_seguridad_litros),
-    puntoReordenLitros: Number(s.punto_reorden_litros),
-    confianza: s.confianza as 'alta' | 'baja',
-    mesesHistorialMes: s.meses_historial_mes as number,
-    stockActualLitros: stockActualPorProducto.get(normalizarProducto(s.producto as string)) ?? null,
-  })) as StockSeguridadItem[]
+  const stockActualPorProducto = new Map<string, number>()
+  const stockActualPorProductoEnvase = new Map<string, number>()
+  for (const s of stockRaw ?? []) {
+    if (!s.producto) continue
+    const cantidad = Number(s.cantidad)
+    const litrosCrudos = s.litros != null ? Number(s.litros) : null
+    const litros = litrosCrudos ?? litrosLata(s.producto as string, cantidad)
+    if (litros == null) continue
+    const nombre = resolverProductoStock(s.producto as string)
+    const bucket = bucketDeStock(s.producto as string, s.tipo as string, cantidad, litrosCrudos)
+    stockActualPorProducto.set(nombre, (stockActualPorProducto.get(nombre) ?? 0) + litros)
+    const clavePE = claveProductoEnvase(nombre, bucket as never)
+    stockActualPorProductoEnvase.set(clavePE, (stockActualPorProductoEnvase.get(clavePE) ?? 0) + litros)
+  }
+
+  // Litros ya declarados en producción y todavía no recibidos en bodega.
+  // Sin esto, un producto con una cocción en curso aparece igual como
+  // "crítico" y gatillaría una cocción redundante.
+  //
+  // Sólo 'declarado': un lote 'enviado' ya viajó a bodega y es muy probable
+  // que el informe de stock del ERP lo esté contando — sumarlo sería
+  // contarlo dos veces. (Hoy la tabla tiene 2 lotes en total: el módulo de
+  // lotes existe pero casi no se usa, así que esto todavía casi no mueve la
+  // aguja — queda listo para cuando Producción lo empiece a cargar.)
+  const litrosEnProduccionPorProducto = new Map<string, number>()
+  {
+    const { data: lotesActivos } = await admin
+      .from('lotes_produccion').select('id').eq('estado', 'declarado')
+    const ids = (lotesActivos ?? []).map(l => l.id as string)
+    if (ids.length > 0) {
+      const { data: items } = await admin
+        .from('lotes_produccion_items')
+        .select('producto, envase, cantidad_declarada')
+        .in('lote_id', ids)
+      for (const it of items ?? []) {
+        if (!it.producto) continue
+        // El envase acá se escribe distinto que en el resto ("Barril 30L",
+        // "Lata 500cc"): se extraen los litros por unidad del propio texto.
+        const texto = String(it.envase ?? '')
+        const litrosUnidad =
+          texto.match(/(\d+)\s*L\b/i) ? Number(texto.match(/(\d+)\s*L\b/i)![1])
+            : texto.match(/(\d+)\s*cc/i) ? Number(texto.match(/(\d+)\s*cc/i)![1]) / 1000
+              : null
+        if (litrosUnidad == null) continue
+        const nombre = resolverProductoStock(it.producto as string)
+        const litros = Number(it.cantidad_declarada) * litrosUnidad
+        litrosEnProduccionPorProducto.set(nombre, (litrosEnProduccionPorProducto.get(nombre) ?? 0) + litros)
+      }
+    }
+  }
+
+  const stockSeguridad = (stockSeguridadRaw ?? []).map(s => {
+    const nivel = s.nivel as 'producto' | 'producto_envase'
+    const producto = normalizarProducto(s.producto as string)
+    const envase = (s.envase as string | null) ?? null
+    // El inventario se compara al mismo nivel que la fila: una fila de
+    // "Mocho English en barril 30L" contra los barriles de 30L que hay,
+    // no contra el total del producto en todos los formatos.
+    const stockActual = nivel === 'producto_envase' && envase
+      ? stockActualPorProductoEnvase.get(claveProductoEnvase(producto, envase as never)) ?? null
+      : stockActualPorProducto.get(producto) ?? null
+    return {
+      nivel, producto, envase,
+      categoria: s.categoria as 'cerveza' | 'kombucha',
+      mes: (s.mes as string).slice(0, 10),
+      leadTimeSemanas: Number(s.lead_time_semanas),
+      periodoRevisionSemanas: Number(s.periodo_revision_semanas),
+      demandaMensualProyectada: Number(s.demanda_mensual_proyectada),
+      demandaEnVentana: Number(s.demanda_en_ventana),
+      sigmaSemanal: Number(s.sigma_semanal),
+      stockSeguridadLitros: Number(s.stock_seguridad_litros),
+      puntoReordenLitros: Number(s.punto_reorden_litros),
+      confianza: s.confianza as 'alta' | 'media' | 'baja',
+      mapeBacktest: s.mape_backtest != null ? Number(s.mape_backtest) : null,
+      mesesHistorial: s.meses_historial != null ? Number(s.meses_historial) : null,
+      stockActualLitros: stockActual,
+      // Los lotes se cargan por producto, sin desglose de formato confiable,
+      // así que sólo se descuentan en las filas a nivel producto.
+      litrosEnProduccion: nivel === 'producto' ? (litrosEnProduccionPorProducto.get(producto) ?? 0) : 0,
+    }
+  }) as StockSeguridadItem[]
 
   const avanceMes: AvanceMes = { mes: mesEnCurso, diaActual, diasEnMes }
 

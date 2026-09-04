@@ -18,17 +18,23 @@ async function logSync(supabase: any, params: { origen: 'automatico' | 'manual';
 }
 
 interface FilaStockSeguridad {
+  nivel: 'producto' | 'producto_envase'
   producto: string
+  envase: string | null
   categoria: 'cerveza' | 'kombucha'
-  mesCalendario: number
+  mes: string
   leadTimeSemanas: number
-  demandaSemanalPromedio: number
+  periodoRevisionSemanas: number
+  sigmaLeadTimeSemanas: number
+  demandaMensualProyectada: number
+  demandaEnVentana: number
   sigmaSemanal: number
   z: number
   stockSeguridadLitros: number
   puntoReordenLitros: number
-  confianza: 'alta' | 'baja'
-  mesesHistorialMes: number
+  confianza: 'alta' | 'media' | 'baja'
+  mapeBacktest: number | null
+  mesesHistorial: number | null
 }
 
 /**
@@ -73,11 +79,16 @@ export async function POST(req: Request) {
   const origen = esCron ? 'automatico' as const : 'manual' as const
 
   const rows = filas.map(f => ({
-    producto: f.producto, categoria: f.categoria, mes_calendario: f.mesCalendario,
-    lead_time_semanas: f.leadTimeSemanas, demanda_semanal_promedio: f.demandaSemanalPromedio,
+    nivel: f.nivel, producto: f.producto, envase: f.envase, categoria: f.categoria,
+    mes: f.mes,
+    lead_time_semanas: f.leadTimeSemanas,
+    periodo_revision_semanas: f.periodoRevisionSemanas,
+    sigma_lead_time_semanas: f.sigmaLeadTimeSemanas,
+    demanda_mensual_proyectada: f.demandaMensualProyectada,
+    demanda_en_ventana: f.demandaEnVentana,
     sigma_semanal: f.sigmaSemanal, z: f.z,
     stock_seguridad_litros: f.stockSeguridadLitros, punto_reorden_litros: f.puntoReordenLitros,
-    confianza: f.confianza, meses_historial_mes: f.mesesHistorialMes,
+    confianza: f.confianza, mape_backtest: f.mapeBacktest, meses_historial: f.mesesHistorial,
   }))
 
   const { error: delError } = await supabase.from('stock_seguridad').delete().neq('id', 0)
