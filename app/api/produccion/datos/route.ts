@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { esClienteExcluidoProduccion, CLIENTES_INCLUIR_PRODUCCION } from '@/lib/types'
-import { bucketEnvase, mesDe, mesEnCursoISO, normalizarProducto, claveProductoEnvase, type EnvaseBucket } from '@/lib/produccion/reglas'
+import { bucketEnvase, ciclosDe, cicloEstaCerrado, normalizarProducto, claveProductoEnvase, DIA_INICIO_CICLO, DIA_FIN_CICLO, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -14,9 +14,10 @@ function getAdminClient() {
  * GET /api/produccion/datos
  *
  * Prepara los datos de venta ya limpios (sin clientes internos/mermas, sólo
- * productos reconocidos) y agregados por mes, para que el script de forecast
- * (Prophet, Python) no tenga que tocar Supabase directo ni duplicar la lógica
- * de negocio — esa lógica vive UNA vez acá, en TypeScript.
+ * productos reconocidos) y agregados por CICLO INTERNO (no mes calendario —
+ * ver lib/produccion/reglas.ts), para que el script de forecast (Prophet,
+ * Python) no tenga que tocar Supabase directo ni duplicar la lógica de
+ * negocio — esa lógica vive UNA vez acá, en TypeScript.
  *
  * Autenticación dual, mismo patrón que /api/barriles/upload.
  */
@@ -89,28 +90,20 @@ export async function GET(req: Request) {
   const porProductoEnvase = new Map<string, Map<string, number>>()
   const mesesConVenta = new Set<string>()
 
-  // El mes en curso siempre está incompleto (hoy puede ser el día 2) — si
-  // entra al modelo como si fuera un mes cerrado, Prophet lo lee como una
-  // caída real de demanda y el backtest compara contra un total falso.
-  // Confirmado con una corrida real: metía un desvío de ~550% en "general".
-  const mesEnCurso = mesEnCursoISO()
-
+  // Cada venta agrega a 1 o 2 CICLOS internos (no meses calendario) — ver el
+  // comentario extenso en lib/produccion/reglas.ts. Un ciclo entra al modelo
+  // sólo cuando ya cerró (pasó su día 24): si un ciclo abierto entra como si
+  // estuviera completo, Prophet lo lee como una caída real de demanda y el
+  // backtest compara contra un total falso. Confirmado con una corrida real
+  // del esquema anterior (mes calendario): metía un desvío de ~550% en
+  // "general".
   for (const f of filas) {
     if (!f.fecha_pedido || !f.producto) continue
-    if (mesDe(f.fecha_pedido) >= mesEnCurso) { excluidosMesEnCurso++; continue }
     // esClienteExcluidoProduccion (no esClienteExcluido): Producción cuenta
     // PDV/BaseCamp/Feria, que Ventas no reporta — ver
     // CLIENTES_INCLUIR_PRODUCCION en lib/types.ts.
     if (esClienteExcluidoProduccion(f.nombre_fantasia)) { excluidosCliente++; continue }
 
-    const nombreCliente = (f.nombre_fantasia ?? '').toLowerCase().trim()
-    if (CLIENTES_INCLUIR_PRODUCCION.some(inc => nombreCliente.includes(inc))) {
-      const clave = f.nombre_fantasia ?? '(sin nombre)'
-      litrosReincluidos.set(clave, (litrosReincluidos.get(clave) ?? 0) + (f.litros ?? 0))
-      const mesFila = mesDe(f.fecha_pedido)
-      const previo = primerMesReincluido.get(clave)
-      if (!previo || mesFila < previo) primerMesReincluido.set(clave, mesFila)
-    }
     const nombreNormalizado = normalizarProducto(f.producto)
     const codigo = codigoPorProducto.get(nombreNormalizado)
     if (!codigo) {
@@ -120,27 +113,50 @@ export async function GET(req: Request) {
     }
 
     const litros = f.litros ?? 0
-    const mes = mesDe(f.fecha_pedido)
-    mesesConVenta.add(mes)
-
-    general.set(mes, (general.get(mes) ?? 0) + litros)
-
-    // Se agrega bajo el nombre NORMALIZADO (no el crudo de la fila) para que
-    // variantes del mismo producto ("Mocho  English" con doble espacio,
-    // "Kombucha Lemon (Fresh)") caigan en una sola serie.
-    if (!porProducto.has(nombreNormalizado)) porProducto.set(nombreNormalizado, new Map())
-    const serieProd = porProducto.get(nombreNormalizado)!
-    serieProd.set(mes, (serieProd.get(mes) ?? 0) + litros)
-
     const bucket = bucketEnvase(f.envase, litros)
-    if (!porEnvase.has(bucket)) porEnvase.set(bucket, new Map())
-    const serieEnv = porEnvase.get(bucket)!
-    serieEnv.set(mes, (serieEnv.get(mes) ?? 0) + litros)
-
     const clavePE = claveProductoEnvase(nombreNormalizado, bucket)
-    if (!porProductoEnvase.has(clavePE)) porProductoEnvase.set(clavePE, new Map())
-    const serieProdEnv = porProductoEnvase.get(clavePE)!
-    serieProdEnv.set(mes, (serieProdEnv.get(mes) ?? 0) + litros)
+
+    const nombreCliente = (f.nombre_fantasia ?? '').toLowerCase().trim()
+    const esReincluido = CLIENTES_INCLUIR_PRODUCCION.some(inc => nombreCliente.includes(inc))
+    if (esReincluido) {
+      const clave = f.nombre_fantasia ?? '(sin nombre)'
+      // Litros reales de la fila, UNA sola vez (no por ciclo) — esto es un
+      // total informativo para la nota de calidad, no debe inflarse por la
+      // ventana compartida del 23-24.
+      litrosReincluidos.set(clave, (litrosReincluidos.get(clave) ?? 0) + litros)
+    }
+
+    const ciclos = ciclosDe(f.fecha_pedido)
+    let contribuyoAlgunCiclo = false
+    for (const ciclo of ciclos) {
+      if (!cicloEstaCerrado(ciclo)) continue // ciclo todavía abierto — no cuenta como período completo
+      contribuyoAlgunCiclo = true
+      mesesConVenta.add(ciclo)
+
+      general.set(ciclo, (general.get(ciclo) ?? 0) + litros)
+
+      // Se agrega bajo el nombre NORMALIZADO (no el crudo de la fila) para
+      // que variantes del mismo producto ("Mocho  English" con doble
+      // espacio, "Kombucha Lemon (Fresh)") caigan en una sola serie.
+      if (!porProducto.has(nombreNormalizado)) porProducto.set(nombreNormalizado, new Map())
+      const serieProd = porProducto.get(nombreNormalizado)!
+      serieProd.set(ciclo, (serieProd.get(ciclo) ?? 0) + litros)
+
+      if (!porEnvase.has(bucket)) porEnvase.set(bucket, new Map())
+      const serieEnv = porEnvase.get(bucket)!
+      serieEnv.set(ciclo, (serieEnv.get(ciclo) ?? 0) + litros)
+
+      if (!porProductoEnvase.has(clavePE)) porProductoEnvase.set(clavePE, new Map())
+      const serieProdEnv = porProductoEnvase.get(clavePE)!
+      serieProdEnv.set(ciclo, (serieProdEnv.get(ciclo) ?? 0) + litros)
+
+      if (esReincluido) {
+        const clave = f.nombre_fantasia ?? '(sin nombre)'
+        const previo = primerMesReincluido.get(clave)
+        if (!previo || ciclo < previo) primerMesReincluido.set(clave, ciclo)
+      }
+    }
+    if (!contribuyoAlgunCiclo) excluidosMesEnCurso++
   }
 
   const toArray = (m: Map<string, number>) =>
@@ -157,6 +173,11 @@ export async function GET(req: Request) {
 
   // Calidad de datos que ya se puede juzgar acá, sin correr el modelo todavía.
   const calidad: { tipo: string; clave: string | null; detalle: string; severidad: 'info' | 'advertencia' }[] = []
+  calidad.push({
+    tipo: 'ciclo_interno', clave: null,
+    detalle: `Los "meses" del forecast son ciclos internos, no meses calendario: cada uno junta ventas del día ${DIA_INICIO_CICLO} del mes anterior al día ${DIA_FIN_CICLO} del mes que le da nombre. Los días ${DIA_INICIO_CICLO} y ${DIA_FIN_CICLO} quedan compartidos entre el ciclo que cierra y el que arranca — a propósito, como margen de reconciliación.`,
+    severidad: 'info',
+  })
   if (excluidosCliente > 0) {
     calidad.push({ tipo: 'excluido_cliente', clave: null, detalle: `${excluidosCliente} filas de ventas excluidas por ser clientes internos/mermas/muestras (no cuentan como demanda real).`, severidad: 'info' })
   }

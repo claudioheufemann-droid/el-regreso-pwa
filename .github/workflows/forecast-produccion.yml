@@ -2,11 +2,12 @@ name: Forecast de Producción (Prophet + Stock de Seguridad)
 
 on:
   schedule:
-    # Día 2 de cada mes, 08:00 UTC (~05:00 Chile invierno). Mensual porque el
-    # forecast agrega ventas por mes calendario — corre cada 15 min no aporta
-    # nada nuevo hasta que cierra el mes. Día 2 (no el 1) le da margen al sync
-    # de ventas para terminar de cargar el último día del mes anterior.
-    - cron: '0 8 2 * *'
+    # Día 25 de cada mes, 08:00 UTC (~05:00 Chile invierno). Mensual porque el
+    # forecast agrega ventas por CICLO INTERNO, no mes calendario — cada ciclo
+    # cierra el día 24 (ver lib/produccion/reglas.ts), y correr cada 15 min no
+    # aporta nada nuevo hasta que cierra. Día 25 (no el 24) le da un día de
+    # margen al sync de ventas para terminar de cargar ese último día.
+    - cron: '0 8 25 * *'
   workflow_dispatch:
 
 jobs:

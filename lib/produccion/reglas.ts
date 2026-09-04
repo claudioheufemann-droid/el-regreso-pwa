@@ -29,15 +29,93 @@ export function bucketEnvase(envase: string | null, litros: number): EnvaseBucke
   return 'otros'
 }
 
-export function mesDe(fecha: string): string {
-  return fecha.slice(0, 7) + '-01' // yyyy-mm-01
+/* ────────────────────────────────────────────────────────────────────────
+   CICLO INTERNO DE PRODUCCIÓN (no calendario)
+   Definido con el usuario el 4 sep 2026: por un tema de ciclos internos, el
+   "mes" que agrupa las ventas para el forecast no corre del 1 al último día
+   del mes calendario — corre del día 23 del mes anterior al día 24 del mes
+   que le da nombre. Ej.: el ciclo "Septiembre" (etiqueta 2026-09-01) junta
+   las ventas del 23 de agosto al 24 de septiembre.
+
+   Elegido A PROPÓSITO con superposición: los días 23 y 24 de cada mes caen
+   DENTRO de dos ciclos a la vez (el que cierra y el que recién arranca), así
+   que esas ventas se suman en los totales de AMBOS. Es el trade-off que el
+   usuario aceptó explícitamente a cambio de un margen de reconciliación
+   interna — no es un bug si un mismo litro aparece en el "vendido este mes"
+   de dos ciclos consecutivos.
+
+   La ETIQUETA de un ciclo sigue siendo yyyy-mm-01 (mismo formato que el resto
+   del pipeline: forecast_produccion.mes, stock_seguridad.mes, Prophet con
+   freq="MS") — sólo cambia qué ventas caen bajo cada etiqueta, no la cadencia
+   mensual del modelo.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/** Día en que arranca un ciclo (del mes anterior al que le da nombre). */
+export const DIA_INICIO_CICLO = 23
+/** Día en que cierra un ciclo (del mes que le da nombre). */
+export const DIA_FIN_CICLO = 24
+
+/** Suma `delta` meses a (anio, mes) y normaliza el desborde (mes 13 → enero
+ *  del año siguiente, mes 0 → diciembre del año anterior). */
+function sumarMeses(anio: number, mes: number, delta: number): { anio: number; mes: number } {
+  const total = mes - 1 + delta
+  const anioResultado = anio + Math.floor(total / 12)
+  const mesResultado = ((total % 12) + 12) % 12 + 1
+  return { anio: anioResultado, mes: mesResultado }
 }
 
-/** yyyy-mm-01 del mes actual, en UTC (mismo criterio que el servidor de
- *  Vercel usa para "hoy" en el resto del pipeline). */
-export function mesEnCursoISO(): string {
+/** Etiqueta yyyy-mm-01 del ciclo que da nombre a (anio, mes). */
+function etiquetaCiclo(anio: number, mes: number): string {
+  const { anio: y, mes: m } = sumarMeses(anio, mes, 0)
+  return `${y}-${String(m).padStart(2, '0')}-01`
+}
+
+/** yyyy-mm-dd del día en que arranca el ciclo etiquetado `cicloLabel`
+ *  (yyyy-mm-01) — el 23 del mes ANTERIOR al que le da nombre. */
+export function inicioDeCiclo(cicloLabel: string): string {
+  const [anio, mes] = cicloLabel.slice(0, 7).split('-').map(Number)
+  const { anio: y, mes: m } = sumarMeses(anio, mes, -1)
+  return `${y}-${String(m).padStart(2, '0')}-${String(DIA_INICIO_CICLO).padStart(2, '0')}`
+}
+
+/** yyyy-mm-dd del día en que cierra el ciclo etiquetado `cicloLabel`
+ *  (yyyy-mm-01) — el 24 del mes que le da nombre. */
+export function finDeCiclo(cicloLabel: string): string {
+  return `${cicloLabel.slice(0, 7)}-${String(DIA_FIN_CICLO).padStart(2, '0')}`
+}
+
+/**
+ * Ciclo(s) internos a los que pertenece una fecha. Devuelve 1 o 2 etiquetas
+ * (yyyy-mm-01): 2 sólo cuando el día del mes es 23 o 24 (la ventana
+ * compartida entre el ciclo que cierra y el que arranca).
+ */
+export function ciclosDe(fechaISO: string): string[] {
+  const [anio, mes, diaStr] = fechaISO.slice(0, 10).split('-').map(Number)
+  const dia = diaStr
+  const ciclos: string[] = []
+  if (dia <= DIA_FIN_CICLO) ciclos.push(etiquetaCiclo(anio, mes))
+  if (dia >= DIA_INICIO_CICLO) ciclos.push(etiquetaCiclo(anio, mes + 1))
+  return ciclos
+}
+
+/** ¿Ya cerró este ciclo? (hoy pasó su día de cierre, el 24 del mes que le da
+ *  nombre). Es la comparación correcta para decidir si un ciclo entra al
+ *  modelo como período completo — un simple `>=` de etiquetas no alcanza
+ *  porque, con la ventana compartida del 23-24, dos ciclos consecutivos
+ *  pueden estar "abiertos" ambos a la vez por un par de días. */
+export function cicloEstaCerrado(cicloLabel: string, hoyISO?: string): boolean {
+  const hoy = hoyISO ?? new Date().toISOString().slice(0, 10)
+  return hoy > finDeCiclo(cicloLabel)
+}
+
+/** Etiqueta (yyyy-mm-01) del ciclo interno "en curso" hoy, para trackear
+ *  avance en vivo (barra de progreso, MTD) — el ciclo abierto MÁS ANTIGUO
+ *  (mientras no pasó su día 24 de cierre), aunque el ciclo siguiente ya haya
+ *  empezado a acumular ventas desde el 23. */
+export function cicloEnCursoISO(): string {
   const hoy = new Date()
-  return `${hoy.getUTCFullYear()}-${String(hoy.getUTCMonth() + 1).padStart(2, '0')}-01`
+  const anio = hoy.getUTCFullYear(), mes = hoy.getUTCMonth() + 1, dia = hoy.getUTCDate()
+  return dia > DIA_FIN_CICLO ? etiquetaCiclo(anio, mes + 1) : etiquetaCiclo(anio, mes)
 }
 
 /** Espacios dobles del ERP ("Mocho  English"), descriptores entre paréntesis

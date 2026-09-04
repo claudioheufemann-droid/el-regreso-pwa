@@ -4,8 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { esClienteExcluidoProduccion } from '@/lib/types'
 import { esCamaraProduccion } from '@/lib/camaras'
 import {
-  bucketEnvase, mesDe, mesEnCursoISO, normalizarProducto,
+  bucketEnvase, normalizarProducto,
   claveProductoEnvase, partirClaveProductoEnvase, ENVASE_LABEL,
+  cicloEnCursoISO, inicioDeCiclo, finDeCiclo,
 } from '@/lib/produccion/reglas'
 import ProduccionClient from './ProduccionClient'
 
@@ -66,7 +67,8 @@ export interface StockItem {
 }
 
 export interface AvanceMes {
-  /** yyyy-mm-01 del mes en curso. */
+  /** yyyy-mm-01 del CICLO interno en curso (no mes calendario — ver
+   *  lib/produccion/reglas.ts). */
   mes: string
   diaActual: number
   diasEnMes: number
@@ -140,19 +142,30 @@ export default async function ProduccionPage() {
     (costosPrecios ?? []).map(c => [normalizarProducto(c.producto as string), (c.categoria as string | null) ?? null])
   )
 
-  // ── Avance del mes en curso, calculado en vivo (no viene del modelo:
-  // el modelo excluye el mes en curso a propósito porque está incompleto) ──
-  const mesEnCurso = mesEnCursoISO()
+  // ── Avance del ciclo en curso, calculado en vivo (no viene del modelo:
+  // el modelo excluye el ciclo en curso a propósito porque está incompleto).
+  // "Ciclo", no mes calendario — ver el comentario extenso en
+  // lib/produccion/reglas.ts: arranca el 23 del mes anterior y cierra el 24
+  // del mes que le da nombre.
+  const cicloEnCurso = cicloEnCursoISO()
+  const inicioCiclo = inicioDeCiclo(cicloEnCurso)
+  const finCiclo = finDeCiclo(cicloEnCurso)
+  const MS_POR_DIA = 24 * 60 * 60 * 1000
   const hoy = new Date()
-  const diaActual = hoy.getUTCDate()
-  const diasEnMes = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() + 1, 0)).getUTCDate()
+  const hoyISO = hoy.toISOString().slice(0, 10)
+  const diaActual = Math.floor(
+    (Date.parse(`${hoyISO}T00:00:00Z`) - Date.parse(`${inicioCiclo}T00:00:00Z`)) / MS_POR_DIA
+  ) + 1
+  const diasEnMes = Math.floor(
+    (Date.parse(`${finCiclo}T00:00:00Z`) - Date.parse(`${inicioCiclo}T00:00:00Z`)) / MS_POR_DIA
+  ) + 1
 
   const litrosMtdPorSerie = new Map<string, number>()
   {
     const { data: ventasMes } = await admin
       .from('ventas')
       .select('fecha_pedido, nombre_fantasia, producto, envase, litros')
-      .gte('fecha_pedido', mesEnCurso)
+      .gte('fecha_pedido', inicioCiclo)
     for (const f of ventasMes ?? []) {
       if (!f.fecha_pedido || !f.producto) continue
       if (esClienteExcluidoProduccion(f.nombre_fantasia)) continue
@@ -368,7 +381,7 @@ export default async function ProduccionPage() {
     }
   }) as StockSeguridadItem[]
 
-  const avanceMes: AvanceMes = { mes: mesEnCurso, diaActual, diasEnMes }
+  const avanceMes: AvanceMes = { mes: cicloEnCurso, diaActual, diasEnMes }
 
   return (
     <ProduccionClient
