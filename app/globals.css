@@ -504,11 +504,39 @@
 [data-theme="light"] .topbar { background: #FFFDF8 !important; border-bottom-color: rgba(168, 135, 15, 0.2) !important; }
 [data-theme="light"] .content-area { background: #F2EDE4 !important; }
 
-* {
+/* Reset histórico (mayo 2026).
+ *
+ * OJO — esta regla está FUERA de todo `@layer`, y las utilidades de Tailwind v4
+ * viven DENTRO de `@layer utilities`. En la cascada, lo que no está en un layer
+ * gana sobre lo que sí, sin importar la especificidad: por eso `px-4`, `py-3`,
+ * `ml-2`, `p-6` y todo el spacing de Tailwind quedan en 0 en la app entera
+ * (verificado en producción: un `<div class="px-4">` reporta paddingLeft 0px).
+ * `gap-*` sí funciona, porque el reset no toca `gap`.
+ *
+ * Sacarla de golpe activaría el espaciado en TODAS las pantallas a la vez, que
+ * es un cambio visual grande y sin revisar. Así que se deja como está, pero se
+ * excluye el módulo de Producción (`.prod-root`), que se diseñó asumiendo que
+ * Tailwind funciona. Cuando se quiera arreglar de raíz: mover este bloque a
+ * `@layer base`, borrar la excepción, y revisar pantalla por pantalla.
+ */
+*:not(.prod-root):not(.prod-root *) {
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* Mismo reset para el módulo de Producción, pero dentro de `@layer base` para
+ * que las utilidades de Tailwind puedan pisarlo (es el orden que Tailwind
+ * espera: base < components < utilities). */
+@layer base {
+  .prod-root,
+  .prod-root * {
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 html { -webkit-text-size-adjust: 100%; }
