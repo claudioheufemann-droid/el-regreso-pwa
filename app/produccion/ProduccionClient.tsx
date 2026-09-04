@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea,
   ResponsiveContainer, ComposedChart, Line, Area,
@@ -473,11 +474,10 @@ export default function ProduccionClient({
       >
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="flex items-center gap-3 px-5 py-6 text-white">
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-              style={{ backgroundColor: 'rgba(229,169,34,0.14)', border: '1px solid rgba(229,169,34,0.3)' }}
-            >
-              <Beaker size={20} style={{ color: COLORS.amber }} />
+            {/* Logo real de la marca (badge circular gold-on-black, ya viene
+                con su propio borde) — reemplaza el ícono genérico. */}
+            <div className="relative h-11 w-11 shrink-0">
+              <Image src="/logo-icon-1024.png" alt="El Regreso Beer Co." fill sizes="44px" style={{ objectFit: 'contain' }} priority />
             </div>
             <div className="min-w-0">
               <h1 className="text-lg font-black leading-tight tracking-tight">EL REGRESO</h1>
