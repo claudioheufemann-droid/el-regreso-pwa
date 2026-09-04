@@ -107,7 +107,7 @@ function indiceMes(iso: string) {
   return Number(iso.split('-')[1]) - 1
 }
 /** "23 jul" a partir de yyyy-mm-dd — para mostrar el rango real de un ciclo
- *  interno (23→24) en el tooltip, y así no confundir el AÑO de la etiqueta
+ *  interno (24→23) en el tooltip, y así no confundir el AÑO de la etiqueta
  *  del mes ("Ago '26") con un día del mes. */
 function fCicloCorto(iso: string) {
   const [, m, d] = iso.split('-').map(Number)
@@ -979,7 +979,7 @@ export default function ProduccionClient({
                             dos entradas redundantes en ese punto puntual. */}
                         {/* La etiqueta "Ago '26" es el mes Y AÑO (Agosto,
                             2026) — el '26 es el año abreviado, no un día del
-                            mes. Como el ciclo real corre 23→24 y no calendario
+                            mes. Como el ciclo real corre 24→23 y no calendario
                             (ver lib/produccion/reglas.ts), eso generó
                             confusión real ("¿por qué a veces aparece 25 o 26
                             del mes?", cuando en realidad eran años distintos

@@ -90,13 +90,13 @@ export async function GET(req: Request) {
   const porProductoEnvase = new Map<string, Map<string, number>>()
   const mesesConVenta = new Set<string>()
 
-  // Cada venta agrega a 1 o 2 CICLOS internos (no meses calendario) — ver el
+  // Cada venta agrega a un CICLO interno (no mes calendario) — ver el
   // comentario extenso en lib/produccion/reglas.ts. Un ciclo entra al modelo
-  // sólo cuando ya cerró (pasó su día 24): si un ciclo abierto entra como si
-  // estuviera completo, Prophet lo lee como una caída real de demanda y el
-  // backtest compara contra un total falso. Confirmado con una corrida real
-  // del esquema anterior (mes calendario): metía un desvío de ~550% en
-  // "general".
+  // sólo cuando ya cerró (pasó su día de cierre): si un ciclo abierto entra
+  // como si estuviera completo, Prophet lo lee como una caída real de
+  // demanda y el backtest compara contra un total falso. Confirmado con una
+  // corrida real del esquema anterior (mes calendario): metía un desvío de
+  // ~550% en "general".
   for (const f of filas) {
     if (!f.fecha_pedido || !f.producto) continue
     // esClienteExcluidoProduccion (no esClienteExcluido): Producción cuenta
@@ -120,9 +120,8 @@ export async function GET(req: Request) {
     const esReincluido = CLIENTES_INCLUIR_PRODUCCION.some(inc => nombreCliente.includes(inc))
     if (esReincluido) {
       const clave = f.nombre_fantasia ?? '(sin nombre)'
-      // Litros reales de la fila, UNA sola vez (no por ciclo) — esto es un
-      // total informativo para la nota de calidad, no debe inflarse por la
-      // ventana compartida del 23-24.
+      // Litros reales de la fila, UNA sola vez — total informativo para la
+      // nota de calidad, independiente de a cuántos ciclos contribuya la venta.
       litrosReincluidos.set(clave, (litrosReincluidos.get(clave) ?? 0) + litros)
     }
 
@@ -175,7 +174,7 @@ export async function GET(req: Request) {
   const calidad: { tipo: string; clave: string | null; detalle: string; severidad: 'info' | 'advertencia' }[] = []
   calidad.push({
     tipo: 'ciclo_interno', clave: null,
-    detalle: `Los "meses" del forecast son ciclos internos, no meses calendario: cada uno junta ventas del día ${DIA_INICIO_CICLO} del mes anterior al día ${DIA_FIN_CICLO} del mes que le da nombre. Los días ${DIA_INICIO_CICLO} y ${DIA_FIN_CICLO} quedan compartidos entre el ciclo que cierra y el que arranca — a propósito, como margen de reconciliación.`,
+    detalle: `Los "meses" del forecast son ciclos internos, no meses calendario: cada uno junta ventas del día ${DIA_INICIO_CICLO} del mes anterior al día ${DIA_FIN_CICLO} del mes que le da nombre (ej. "Septiembre" = ${DIA_INICIO_CICLO} de agosto al ${DIA_FIN_CICLO} de septiembre). Sin superposición: cada venta cuenta en un solo ciclo.`,
     severidad: 'info',
   })
   if (excluidosCliente > 0) {

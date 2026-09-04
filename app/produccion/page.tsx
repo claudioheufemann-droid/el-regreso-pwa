@@ -145,7 +145,7 @@ export default async function ProduccionPage() {
   // ── Avance del ciclo en curso, calculado en vivo (no viene del modelo:
   // el modelo excluye el ciclo en curso a propósito porque está incompleto).
   // "Ciclo", no mes calendario — ver el comentario extenso en
-  // lib/produccion/reglas.ts: arranca el 23 del mes anterior y cierra el 24
+  // lib/produccion/reglas.ts: arranca el 24 del mes anterior y cierra el 23
   // del mes que le da nombre.
   const cicloEnCurso = cicloEnCursoISO()
   const inicioCiclo = inicioDeCiclo(cicloEnCurso)
