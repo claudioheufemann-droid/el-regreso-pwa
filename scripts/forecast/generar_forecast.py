@@ -41,6 +41,7 @@ UPLOAD_SECRET = os.getenv("UPLOAD_SECRET_FORECAST")
 HORIZONTE_MESES = 8
 MIN_MESES_FORECAST = 6
 MESES_BACKTEST = 3
+MESES_INACTIVIDAD = 6   # sin ventas por este tiempo ⇒ serie descontinuada, no se proyecta
 HEADERS = {"Authorization": f"Bearer {UPLOAD_SECRET}"}
 
 # ── Parámetros del stock de seguridad ───────────────────────────────────
@@ -78,8 +79,19 @@ def a_dataframe(puntos: list[dict]) -> pd.DataFrame:
     return df[["ds", "y"]].sort_values("ds").reset_index(drop=True)
 
 
-def ajustar_y_proyectar(df: pd.DataFrame) -> pd.DataFrame:
-    """Entrena Prophet sobre toda la serie y devuelve sólo los meses futuros."""
+def ajustar_y_proyectar(df: pd.DataFrame, mes_base: pd.Timestamp) -> pd.DataFrame:
+    """Entrena Prophet sobre toda la serie y devuelve los HORIZONTE_MESES
+    posteriores a `mes_base` — el último mes cerrado del negocio, igual para
+    todas las series.
+
+    El ancla tiene que ser común y NO el último mes de cada serie: una
+    combinación producto×envase que se dejó de vender en 2024 seguía
+    "proyectando" los 8 meses siguientes a su última venta, o sea meses que ya
+    pasaron. Salían como forecast en el gráfico, en la tabla de detalle y en el
+    stock de seguridad (bug real: filas de stock de seguridad fechadas en
+    ago-2024). Ahora se predice hasta cubrir la brecha y se recorta al
+    horizonte real.
+    """
     m = Prophet(
         yearly_seasonality=len(df) >= 24,  # necesita ≥2 ciclos anuales para estimarla en serio
         weekly_seasonality=False,
@@ -87,9 +99,13 @@ def ajustar_y_proyectar(df: pd.DataFrame) -> pd.DataFrame:
         interval_width=0.8,
     )
     m.fit(df)
-    futuro = m.make_future_dataframe(periods=HORIZONTE_MESES, freq="MS")
+    ultimo = df["ds"].max()
+    # Meses a predecir: los que faltan para llegar al mes base (si la serie
+    # murió antes) más el horizonte propiamente tal.
+    brecha = max((mes_base.year - ultimo.year) * 12 + (mes_base.month - ultimo.month), 0)
+    futuro = m.make_future_dataframe(periods=brecha + HORIZONTE_MESES, freq="MS")
     pred = m.predict(futuro)
-    proyeccion = pred[pred["ds"] > df["ds"].max()].copy()
+    proyeccion = pred[pred["ds"] > mes_base].copy()
     for col in ("yhat", "yhat_lower", "yhat_upper"):
         proyeccion[col] = proyeccion[col].clip(lower=0)
     return proyeccion[["ds", "yhat", "yhat_lower", "yhat_upper"]]
@@ -120,7 +136,7 @@ def backtest(df: pd.DataFrame) -> dict | None:
             "mesesEvaluados": MESES_BACKTEST, "mesesHistorial": len(df)}
 
 
-def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], forecast_out: list, validacion_out: list, calidad_out: list, silencioso: bool = False):
+def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], mes_base: pd.Timestamp, forecast_out: list, validacion_out: list, calidad_out: list, silencioso: bool = False):
     """silencioso=True: no agrega notas de calidad por serie individual — para
     producto_envase, que son ~100 combinaciones y la mayoría chicas; una
     advertencia por cada una ahogaría el panel sin decir nada que "producto"
@@ -143,8 +159,23 @@ def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], forecast_o
             })
         return
 
+    # Series descontinuadas: sin ventas en los últimos MESES_INACTIVIDAD, no se
+    # proyecta. Extrapolar dos años una receta que ya no se hace no informa
+    # nada y sólo ensucia el gráfico y el stock de seguridad con productos
+    # fantasma que aparecerían pidiendo reposición.
+    ultimo = df["ds"].max()
+    meses_inactiva = (mes_base.year - ultimo.year) * 12 + (mes_base.month - ultimo.month)
+    if meses_inactiva >= MESES_INACTIVIDAD:
+        if not silencioso:
+            calidad_out.append({
+                "tipo": "serie_inactiva", "clave": clave,
+                "detalle": f'"{etiqueta}" no registra ventas desde {ultimo:%b %Y} ({meses_inactiva} meses) — no se proyectó.',
+                "severidad": "info",
+            })
+        return
+
     try:
-        proy = ajustar_y_proyectar(df)
+        proy = ajustar_y_proyectar(df, mes_base)
     except Exception as e:
         if not silencioso:
             calidad_out.append({
@@ -259,21 +290,27 @@ def main() -> int:
     forecast: list[dict] = []
     validacion: list[dict] = []
 
+    # Ancla del horizonte: el último mes cerrado del negocio, tomado de la
+    # serie general (el endpoint ya excluye el mes en curso). Es el mismo para
+    # todas las series a propósito — ver ajustar_y_proyectar().
+    mes_base = pd.to_datetime(max(p["mes"] for p in series["general"]))
+    print(f"\nÚltimo mes cerrado: {mes_base:%Y-%m} · se proyectan {HORIZONTE_MESES} meses desde ahí")
+
     print(f"\nGeneral: {len(series['general'])} meses")
-    procesar_serie("general", None, series["general"], forecast, validacion, calidad)
+    procesar_serie("general", None, series["general"], mes_base, forecast, validacion, calidad)
 
     print(f"\nPor producto: {len(series['producto'])} series")
     for producto, puntos in series["producto"].items():
-        procesar_serie("producto", producto, puntos, forecast, validacion, calidad)
+        procesar_serie("producto", producto, puntos, mes_base, forecast, validacion, calidad)
 
     print(f"\nPor envase: {len(series['envase'])} series")
     for envase, puntos in series["envase"].items():
-        procesar_serie("envase", envase, puntos, forecast, validacion, calidad)
+        procesar_serie("envase", envase, puntos, mes_base, forecast, validacion, calidad)
 
     productoEnvase = series.get("productoEnvase", {})
     print(f"\nPor producto y envase: {len(productoEnvase)} series")
     for clave, puntos in productoEnvase.items():
-        procesar_serie("producto_envase", clave, puntos, forecast, validacion, calidad, silencioso=True)
+        procesar_serie("producto_envase", clave, puntos, mes_base, forecast, validacion, calidad, silencioso=True)
 
     print(f"\nSubiendo resultado: {len(forecast)} filas forecast, {len(validacion)} validaciones, {len(calidad)} notas de calidad ...")
     r = requests.post(
