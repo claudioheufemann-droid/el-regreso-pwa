@@ -1003,11 +1003,17 @@ export default function ProduccionClient({
                       )}
                       {filasStockSeguridad.map(f => (
                         <tr key={`${f.producto}::${f.envase ?? ''}`} className="transition-colors hover:bg-gray-50">
+                          {/* flex+gap para separar el chip, NO ml-2: el reset
+                              global `* { margin:0; padding:0 }` de globals.css
+                              gana sobre las utilidades de margin/padding de
+                              Tailwind (van en @layer, el reset no), así que
+                              ml-* y px-* quedan en 0. gap sí funciona. */}
                           <td className="px-6 py-3 font-semibold text-gray-800">
+                            <span className="inline-flex items-center gap-2">
                             {f.producto}
                             {f.confianza !== 'alta' && (
                               <span
-                                className={`ml-2 inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-bold ${
+                                className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-bold ${
                                   f.confianza === 'media' ? 'border-amber-200 bg-amber-50 text-amber-600' : 'border-gray-200 bg-gray-50 text-gray-400'
                                 }`}
                                 title={
@@ -1019,6 +1025,7 @@ export default function ProduccionClient({
                                 confianza {f.confianza}
                               </span>
                             )}
+                            </span>
                           </td>
                           {nivelSeguridad === 'producto_envase' && (
                             <td className="px-4 py-3 text-gray-600">{f.envase ? (ENVASE_LABEL[f.envase as keyof typeof ENVASE_LABEL] ?? f.envase) : '—'}</td>
