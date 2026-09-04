@@ -42,6 +42,8 @@ export interface VendedorRango {
   revenue: number
   clientes: number
   litrosPrev: number
+  /** Litros del mismo vendedor en el mismo tramo de fechas, un año antes. */
+  litrosPrevAnio: number
   /** Litros de pedidos del período aún sin despachar (por fecha de pedido, no de entrega) */
   litrosPorEntregar: number
   revenuePorEntregar: number
@@ -120,6 +122,8 @@ export interface DatosRango {
   hasta: string
   /** Qué se compara contra qué, para poder explicarlo en la UI */
   etiquetaComparacion: string
+  /** Año contra el que se compara `litrosPrevAnio` en el ranking de vendedores */
+  anioComparacion: number
   /** Criterio real usado para calcular `actual`/`previo`: true = fecha de
    *  entrega, false = fecha de pedido (para rangos que caen antes del
    *  25-may-2026, cuando fecha_entrega no existía todavía). El cliente lo
