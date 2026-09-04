@@ -9,9 +9,15 @@
  * Estructura de la sección BARRILES (a partir de la fila de la cámara):
  *   [camara, totalDeclarado]                                    ← header de cámara
  *   [_, _, producto, codigo, cantidadDeclarada]                  ← nuevo producto
- *   [_, _, _, _, "30.00 Lts"]                                    ← tamaño (se ignora, se infiere de litros/barril)
+ *   [_, _, _, _, "30.00 Lts"]                                    ← tamaño declarado del bloque que sigue
  *   [_, _, _, _, _, loteBarril, lote, litros]                    ← 1 fila por barril físico
- *   ... (se repite loteBarril hasta el siguiente producto)
+ *   ... (se repite loteBarril hasta el siguiente producto o marcador de tamaño)
+ *
+ * OJO: un mismo producto puede repetir el bloque "tamaño + barriles" más de
+ * una vez dentro de la misma cámara (ej. 16 barriles de 30L seguidos de 8 de
+ * 50L, ambos bajo el mismo nombre de producto) — parseBarriles() separa cada
+ * tamaño declarado en su propia fila de salida, ver el comentario extenso
+ * ahí abajo.
  *
  * Estructura de la sección ENVASES:
  *   [camara, _, _, _, _, _, totalDeclarado]                      ← header de cámara
@@ -164,16 +170,51 @@ function camarasDeSeccion(filas: Fila[], inicio: number, fin: number): { nombre:
   return out
 }
 
+/** "30.00 Lts" / "50.00 Lts" → 30 / 50. Null si la celda no matchea el patrón
+ *  (fila de otra cosa, o el informe cambió de formato). */
+function tamanioDeclaradoDe(celda: unknown): number | null {
+  const m = String(celda ?? '').trim().match(/^(\d+(?:[.,]\d+)?)\s*lts?\.?$/i)
+  return m ? Number(m[1].replace(',', '.')) : null
+}
+
+/**
+ * Un mismo producto puede traer VARIOS bloques de tamaño dentro de la misma
+ * cámara — ej. 16 barriles de 30L seguidos de 8 de 50L, todos bajo "Aguas
+ * Blancas (Hazy IPA)". El informe separa cada bloque con una fila
+ * "[_, _, _, _, "NN.NN Lts"]" ANTES de sus barriles.
+ *
+ * Bug real que esto corrigió (4 sep 2026): la versión anterior ignoraba esa
+ * fila (no matcheaba ninguna de las dos condiciones del loop) y promediaba
+ * TODO el bloque junto — 16×30L + 8×50L = 880L / 24 barriles = 36,7L/barril,
+ * que no redondea a 30 ni a 50, así que el bucketing de aguas abajo
+ * (bucketDeStock en app/produccion/page.tsx) mandaba el bloque MEZCLADO
+ * entero a "Otros formatos" en vez de separarlo en 16×30L + 8×50L reales.
+ * Confirmado contra un informe real: 16 de 114 bloques producto×cámara de
+ * ese informe mezclan tamaños — no es un caso raro.
+ *
+ * Ahora se emite UNA fila por (producto, tamaño declarado, cámara) en vez de
+ * una por (producto, cámara): se agrupa por el tamaño que el propio informe
+ * declara (no por litros/cantidad promediados después), así que cada fila
+ * resultante ya viene limpia — litros/cantidad da 30 o 50 exacto, sin
+ * depender de que el bucketing adivine bien un promedio.
+ */
 function parseBarriles(filas: Fila[], inicio: number, camara: string, mapaFechas: Map<string, string>): StockProductoParsed[] {
   const productos: StockProductoParsed[] = []
-  let actual: { producto: string; codigo: string | null; barriles: number; litros: number; lotes: Map<string, number> } | null = null
+  let productoActual: { producto: string; codigo: string | null } | null = null
+  let tamanioDeclarado: number | null = null
+  let porTamanio = new Map<number, { barriles: number; litros: number; lotes: Map<string, number> }>()
+
   const cerrar = () => {
-    if (!actual) return
-    productos.push({
-      tipo: 'barril', camara, producto: actual.producto, codigoProducto: actual.codigo,
-      categoria: categoriaDe(actual.producto), cantidad: actual.barriles, litros: actual.litros,
-      lotes: lotesDeMapa(actual.lotes, mapaFechas),
-    })
+    if (!productoActual) return
+    for (const datos of porTamanio.values()) {
+      productos.push({
+        tipo: 'barril', camara, producto: productoActual.producto, codigoProducto: productoActual.codigo,
+        categoria: categoriaDe(productoActual.producto), cantidad: datos.barriles, litros: datos.litros,
+        lotes: lotesDeMapa(datos.lotes, mapaFechas),
+      })
+    }
+    porTamanio = new Map()
+    tamanioDeclarado = null
   }
 
   for (let i = inicio + 1; i < filas.length; i++) {
@@ -182,12 +223,22 @@ function parseBarriles(filas: Fila[], inicio: number, camara: string, mapaFechas
 
     if (f[2] != null && String(f[2]).trim() !== '') {
       cerrar()
-      actual = { producto: String(f[2]).trim(), codigo: f[3] != null ? String(f[3]).trim() : null, barriles: 0, litros: 0, lotes: new Map() }
-    } else if (actual && f[5] != null && String(f[5]).trim() !== '') {
-      actual.barriles += 1
-      actual.litros += Number(f[7]) || 0
+      productoActual = { producto: String(f[2]).trim(), codigo: f[3] != null ? String(f[3]).trim() : null }
+    } else if (f[4] != null && String(f[4]).trim() !== '') {
+      const tam = tamanioDeclaradoDe(f[4])
+      if (tam != null) tamanioDeclarado = tam
+    } else if (productoActual && f[5] != null && String(f[5]).trim() !== '') {
+      const litrosBarril = Number(f[7]) || 0
+      // Sin marcador de tamaño (informe cambió de formato, o falta la fila):
+      // no se pierde el barril — se agrupa por su propio litraje individual
+      // en vez de descartarlo.
+      const clave = tamanioDeclarado ?? litrosBarril
+      if (!porTamanio.has(clave)) porTamanio.set(clave, { barriles: 0, litros: 0, lotes: new Map() })
+      const grupo = porTamanio.get(clave)!
+      grupo.barriles += 1
+      grupo.litros += litrosBarril
       const lote = f[6] != null ? String(f[6]).trim() : 'Sin lote'
-      actual.lotes.set(lote, (actual.lotes.get(lote) ?? 0) + 1)
+      grupo.lotes.set(lote, (grupo.lotes.get(lote) ?? 0) + 1)
     }
   }
   cerrar()
