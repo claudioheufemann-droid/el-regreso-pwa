@@ -6,7 +6,7 @@ import { esCamaraProduccion } from '@/lib/camaras'
 import {
   bucketEnvase, normalizarProducto,
   claveProductoEnvase, partirClaveProductoEnvase, ENVASE_LABEL,
-  cicloEnCursoISO, inicioDeCiclo, finDeCiclo,
+  cicloEnCursoISO, inicioDeCiclo, finDeCiclo, type EnvaseBucket,
 } from '@/lib/produccion/reglas'
 import ProduccionClient from './ProduccionClient'
 
@@ -57,9 +57,12 @@ export interface CalidadItem {
 }
 
 export interface StockItem {
+  /** Nombre canónico (resuelto contra el catálogo), no el crudo del ERP —
+   *  necesario para agrupar barriles y latas del MISMO producto, que llegan
+   *  con nombres distintos desde stock_productos (ver resolverProductoStock). */
   producto: string
   categoria: string | null
-  tipo: string
+  envaseBucket: EnvaseBucket
   /** Depósito de origen en el informe del ERP. */
   camara: string | null
   cantidad: number
@@ -274,11 +277,6 @@ export default async function ProduccionPage() {
     s => s.tipo !== 'tanque' && esCamaraProduccion(s.camara as string | null)
   )
 
-  const stock = stockDisponibleRaw.map(s => ({
-    producto: s.producto, categoria: s.categoria, tipo: s.tipo, camara: s.camara,
-    cantidad: Number(s.cantidad), litros: s.litros != null ? Number(s.litros) : null,
-  })) as StockItem[]
-
   // Inventario actual por producto, sumado entre barril+envase.
   //
   // stock_productos.litros SOLO viene poblado para tipo='barril' — está así
@@ -311,7 +309,7 @@ export default async function ProduccionPage() {
   // tiene que quedar clasificado igual: no se puede servir un pedido de
   // barril con latas. En los barriles el tamaño se deduce del propio
   // informe (litros/cantidad = capacidad del barril; hoy son todos de 30L).
-  const bucketDeStock = (producto: string, tipo: string, cantidad: number, litros: number | null): string => {
+  const bucketDeStock = (producto: string, tipo: string, cantidad: number, litros: number | null): EnvaseBucket => {
     if (tipo === 'barril') {
       const capacidad = litros != null && cantidad > 0 ? Math.round(litros / cantidad) : null
       if (capacidad === 30) return 'barril_30'
@@ -326,14 +324,32 @@ export default async function ProduccionPage() {
 
   const stockActualPorProducto = new Map<string, number>()
   const stockActualPorProductoEnvase = new Map<string, number>()
+  // `stock`: una fila por (producto resuelto, formato, cámara) — es lo que
+  // consume la tabla "Inventario Actual" del cliente, agrupada visualmente
+  // ahí. Se arma en el MISMO loop que ya resolvía nombre/bucket para no
+  // repetir el cálculo dos veces.
+  const stock: StockItem[] = []
   for (const s of stockDisponibleRaw) {
     if (!s.producto) continue
     const cantidad = Number(s.cantidad)
     const litrosCrudos = s.litros != null ? Number(s.litros) : null
     const litros = litrosCrudos ?? litrosLata(s.producto as string, cantidad)
-    if (litros == null) continue
     const nombre = resolverProductoStock(s.producto as string)
     const bucket = bucketDeStock(s.producto as string, s.tipo as string, cantidad, litrosCrudos)
+
+    stock.push({
+      producto: nombre,
+      categoria: categoriaPorProducto.get(nombre) ?? null,
+      envaseBucket: bucket,
+      camara: (s.camara as string | null) ?? null,
+      cantidad,
+      litros,
+    })
+
+    // Las siguientes dos sumas SÍ necesitan litros reales — se saltan acá
+    // (no en el push de arriba) para no perder la fila en la tabla de
+    // referencia cuando el formato no tiene litraje derivable (ej. "otros").
+    if (litros == null) continue
     stockActualPorProducto.set(nombre, (stockActualPorProducto.get(nombre) ?? 0) + litros)
     const clavePE = claveProductoEnvase(nombre, bucket as never)
     stockActualPorProductoEnvase.set(clavePE, (stockActualPorProductoEnvase.get(clavePE) ?? 0) + litros)

@@ -113,6 +113,12 @@ function fCicloCorto(iso: string) {
   const [, m, d] = iso.split('-').map(Number)
   return `${d} ${MESES_CORTOS[m - 1].toLowerCase()}`
 }
+/** "Camara General Barrios Bajos (Frío)" → "Camara General Barrios Bajos" —
+ *  el ERP le agrega el tipo de depósito entre paréntesis a toda cámara, no
+ *  aporta nada distinguir eso en la tabla de inventario. */
+function nombreCamaraCorto(camara: string) {
+  return camara.replace(/\s*\([^)]*\)\s*$/, '').trim()
+}
 
 const navItems = [
   { id: 'resumen', icon: LayoutDashboard, label: 'Resumen General' },
@@ -370,6 +376,55 @@ export default function ProduccionClient({
         return a.producto.localeCompare(b.producto) || (a.envase ?? '').localeCompare(b.envase ?? '')
       })
   }, [stockSeguridad, mesSeguridadActivo, nivelSeguridad])
+
+  /* ── Inventario actual agrupado: producto → formato → cámara ───────────
+     `stock` llega como una fila por (producto, formato, cámara) — se
+     reagrupa acá para que la tabla muestre de un vistazo cuánto hay de cada
+     producto, segmentado entre lata y barril 30L/50L, y en qué depósito
+     está cada parte (un barril de 30L en Frío Planta no sirve para lo mismo
+     que uno en Barrios Bajos si hay que ir a buscarlo). */
+  const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata_354', 'lata_473', 'otros']
+  const inventarioAgrupado = useMemo(() => {
+    interface FilaCamara { camara: string; cantidad: number; litros: number | null }
+    interface GrupoFormato { bucket: EnvaseBucket; cantidad: number; litros: number | null; camaras: FilaCamara[] }
+    interface GrupoProducto { producto: string; categoria: string | null; cantidad: number; litros: number | null; formatos: GrupoFormato[] }
+
+    const porProducto = new Map<string, GrupoProducto>()
+    for (const s of stock) {
+      let grupo = porProducto.get(s.producto)
+      if (!grupo) {
+        grupo = { producto: s.producto, categoria: s.categoria, cantidad: 0, litros: null, formatos: [] }
+        porProducto.set(s.producto, grupo)
+      }
+      grupo.cantidad += s.cantidad
+      if (s.litros != null) grupo.litros = (grupo.litros ?? 0) + s.litros
+
+      let formato = grupo.formatos.find(f => f.bucket === s.envaseBucket)
+      if (!formato) {
+        formato = { bucket: s.envaseBucket, cantidad: 0, litros: null, camaras: [] }
+        grupo.formatos.push(formato)
+      }
+      formato.cantidad += s.cantidad
+      if (s.litros != null) formato.litros = (formato.litros ?? 0) + s.litros
+
+      const nombreCamara = s.camara ?? 'Sin cámara'
+      let filaCamara = formato.camaras.find(c => c.camara === nombreCamara)
+      if (!filaCamara) {
+        filaCamara = { camara: nombreCamara, cantidad: 0, litros: null }
+        formato.camaras.push(filaCamara)
+      }
+      filaCamara.cantidad += s.cantidad
+      if (s.litros != null) filaCamara.litros = (filaCamara.litros ?? 0) + s.litros
+    }
+
+    const resultado = [...porProducto.values()]
+    for (const g of resultado) {
+      g.formatos.sort((a, b) => ORDEN_ENVASE.indexOf(a.bucket) - ORDEN_ENVASE.indexOf(b.bucket))
+      for (const f of g.formatos) f.camaras.sort((a, b) => b.cantidad - a.cantidad)
+    }
+    resultado.sort((a, b) => (b.litros ?? 0) - (a.litros ?? 0) || b.cantidad - a.cantidad)
+    return resultado
+  }, [stock])
 
   /* ── Contadores del menú ───────────────────────────────────────────────
      Sólo los que se pueden calcular de verdad: advertencias del modelo y
@@ -1386,44 +1441,84 @@ export default function ProduccionClient({
                 </div>
               </div>
 
-              {/* Inventario actual, como referencia */}
+              {/* Inventario actual, agrupado producto → formato → cámara */}
               <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4">
                   <h3 className="font-bold text-gray-800">Inventario Actual</h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Foto del último informe de stock del ERP · {stock.length} líneas de producto.
+                    Foto del último informe de stock del ERP · {inventarioAgrupado.length} productos, {stock.length} líneas.
                   </p>
                 </div>
-                <div className="max-h-[420px] overflow-auto">
+                <div className="max-h-[560px] overflow-auto">
                   <table className="w-full border-collapse text-left">
                     <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
                       <tr>
-                        <th className="px-6 py-4 font-bold">Producto</th>
-                        <th className="px-6 py-4 font-bold">Categoría</th>
-                        <th className="px-6 py-4 font-bold">Formato</th>
-                        <th className="px-6 py-4 text-right font-bold">Cantidad</th>
-                        <th className="px-6 py-4 text-right font-bold">Litros</th>
+                        <th className="px-6 py-3 font-bold">Producto</th>
+                        <th className="px-4 py-3 font-bold">Categoría</th>
+                        <th className="px-4 py-3 font-bold">Formato</th>
+                        <th className="px-4 py-3 font-bold">Cámara</th>
+                        <th className="px-4 py-3 text-right font-bold">Cantidad</th>
+                        <th className="px-6 py-3 text-right font-bold">Litros</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
-                      {stock.length === 0 && (
-                        <tr><td colSpan={5} className="px-6 py-10 text-center text-gray-400">Sin informe de stock cargado.</td></tr>
+                      {inventarioAgrupado.length === 0 && (
+                        <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-400">Sin informe de stock cargado.</td></tr>
                       )}
-                      {stock.map((s, i) => (
-                        <tr key={i} className="transition-colors hover:bg-gray-50">
-                          <td className="px-6 py-3 font-semibold text-gray-800">{s.producto}</td>
-                          <td className="px-6 py-3 text-gray-500">{s.categoria ?? '—'}</td>
-                          <td className="px-6 py-3">
-                            <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${
-                              s.tipo === 'barril' ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-600'
-                            }`}>
-                              {s.tipo === 'barril' ? 'Barril' : 'Envase'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-3 text-right font-bold tabular-nums text-gray-900">{fNum(s.cantidad)}</td>
-                          <td className="px-6 py-3 text-right tabular-nums text-gray-600">{s.litros != null ? `${fNum(s.litros)} L` : '—'}</td>
-                        </tr>
-                      ))}
+                      {inventarioAgrupado.map(grupo => {
+                        const filasCamara = grupo.formatos.reduce((n, f) => n + f.camaras.length, 0)
+                        let primeraFilaProducto = true
+                        return (
+                          <React.Fragment key={grupo.producto}>
+                            {grupo.formatos.map(formato => {
+                              let primeraFilaFormato = true
+                              return formato.camaras.map(fc => {
+                                const fila = (
+                                  <tr key={`${grupo.producto}::${formato.bucket}::${fc.camara}`} className="transition-colors hover:bg-gray-50">
+                                    {primeraFilaProducto && (
+                                      <td rowSpan={filasCamara} className="border-r border-gray-100 px-6 py-2.5 align-top font-semibold text-gray-800">
+                                        {grupo.producto}
+                                      </td>
+                                    )}
+                                    {primeraFilaProducto && (
+                                      <td rowSpan={filasCamara} className="border-r border-gray-100 px-4 py-2.5 align-top">
+                                        {grupo.categoria && (
+                                          <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${
+                                            grupo.categoria === 'cerveza' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
+                                          }`}>
+                                            {grupo.categoria}
+                                          </span>
+                                        )}
+                                      </td>
+                                    )}
+                                    {primeraFilaFormato && (
+                                      <td rowSpan={formato.camaras.length} className="border-r border-gray-100 px-4 py-2.5 align-top font-semibold text-gray-700">
+                                        {ENVASE_LABEL[formato.bucket]}
+                                      </td>
+                                    )}
+                                    <td className="px-4 py-2.5 text-gray-600">{nombreCamaraCorto(fc.camara)}</td>
+                                    <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{fNum(fc.cantidad)}</td>
+                                    <td className="px-6 py-2.5 text-right tabular-nums text-gray-600">{fc.litros != null ? `${fNum(fc.litros)} L` : '—'}</td>
+                                  </tr>
+                                )
+                                primeraFilaProducto = false
+                                primeraFilaFormato = false
+                                return fila
+                              })
+                            })}
+                            {/* Subtotal del producto: lo que pide la vista agrupada —
+                                cuánto hay en total, sin tener que sumar a mano las
+                                filas de formato×cámara de arriba. */}
+                            <tr className="bg-gray-50/70 font-bold text-gray-700">
+                              <td colSpan={4} className="px-6 py-2 text-right text-xs uppercase tracking-wide text-gray-500">
+                                Total {grupo.producto}
+                              </td>
+                              <td className="px-4 py-2 text-right tabular-nums">{fNum(grupo.cantidad)}</td>
+                              <td className="px-6 py-2 text-right tabular-nums">{grupo.litros != null ? `${fNum(grupo.litros)} L` : '—'}</td>
+                            </tr>
+                          </React.Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
