@@ -12,7 +12,7 @@ import {
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
 } from 'lucide-react'
 import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem } from './page'
-import { ENVASE_LABEL, type EnvaseBucket } from '@/lib/produccion/reglas'
+import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
    Paleta corporativa. Tailwind cubre el resto; estos tres colores van
@@ -105,6 +105,13 @@ function etiquetaMes(iso: string) {
 }
 function indiceMes(iso: string) {
   return Number(iso.split('-')[1]) - 1
+}
+/** "23 jul" a partir de yyyy-mm-dd — para mostrar el rango real de un ciclo
+ *  interno (23→24) en el tooltip, y así no confundir el AÑO de la etiqueta
+ *  del mes ("Ago '26") con un día del mes. */
+function fCicloCorto(iso: string) {
+  const [, m, d] = iso.split('-').map(Number)
+  return `${d} ${MESES_CORTOS[m - 1].toLowerCase()}`
 }
 
 const navItems = [
@@ -970,6 +977,15 @@ export default function ProduccionClient({
                             confunde (se ve como si el modelo hubiera
                             "proyectado" un mes que ya cerró). Se ocultan las
                             dos entradas redundantes en ese punto puntual. */}
+                        {/* La etiqueta "Ago '26" es el mes Y AÑO (Agosto,
+                            2026) — el '26 es el año abreviado, no un día del
+                            mes. Como el ciclo real corre 23→24 y no calendario
+                            (ver lib/produccion/reglas.ts), eso generó
+                            confusión real ("¿por qué a veces aparece 25 o 26
+                            del mes?", cuando en realidad eran años distintos
+                            en distintos puntos del historial). Se agrega el
+                            rango de fechas exacto del ciclo debajo del mes
+                            para que no quede ambigüedad. */}
                         <Tooltip
                           content={({ active, payload, label }) => {
                             if (!active || !payload || payload.length === 0) return null
@@ -983,7 +999,12 @@ export default function ProduccionClient({
                             if (visibles.length === 0) return null
                             return (
                               <div className="rounded-lg bg-white px-3.5 py-2.5 text-xs shadow-lg">
-                                <p className="mb-1.5 font-bold text-gray-700">{label}</p>
+                                <p className="font-bold text-gray-700">{label}</p>
+                                {fila && (
+                                  <p className="mb-1.5 text-[11px] text-gray-400">
+                                    {fCicloCorto(inicioDeCiclo(fila.mesIso))} – {fCicloCorto(finDeCiclo(fila.mesIso))}
+                                  </p>
+                                )}
                                 {visibles.map(entrada => {
                                   const valor = entrada.value
                                   const texto = Array.isArray(valor)
