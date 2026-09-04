@@ -130,6 +130,30 @@ const GRUPOS_NAV: { titulo: string; items: TabId[] }[] = [
  *  marcan en el propio menú para que nadie entre esperando datos reales. */
 const DEMO_TABS = new Set<TabId>(['plan', 'insumos', 'presupuesto'])
 
+/**
+ * Espaciado de la barra lateral, inline y no con utilidades de Tailwind.
+ *
+ * `app/globals.css` tiene un reset `* { margin: 0; padding: 0 }` fuera de todo
+ * `@layer`; las utilidades de Tailwind v4 van DENTRO de `@layer utilities`, y
+ * en la cascada lo que no está en un layer gana sobre lo que sí. Resultado:
+ * `px-4`, `py-2.5`, `p-3` y compañía quedan en 0 en toda la app (verificado en
+ * producción: un `<div class="px-4">` reporta paddingLeft 0px). Sin esto el
+ * menú se veía apretado contra el borde.
+ *
+ * Arreglar el reset de raíz activaría el espaciado de golpe en TODAS las
+ * pantallas de la app, así que queda como tarea aparte; acá se resuelve
+ * localmente. `gap` sí funciona y se sigue usando por clases.
+ */
+const SB = {
+  header: { padding: '24px 20px' },
+  nav: { padding: '0 12px 16px' },
+  grupoTitulo: { padding: '0 16px 4px' },
+  item: { padding: '10px 12px 10px 16px' },
+  badge: { padding: '2px 6px' },
+  pie: { padding: '0 12px 12px' },
+  bloquePie: { padding: '12px 14px' },
+} as const
+
 /* ── Chip de confiabilidad, según el desvío (MAPE) del backtest ────────── */
 function ChipConfiabilidad({ mape }: { mape: number | null }) {
   if (mape == null) return <span className="text-xs text-gray-300">—</span>
@@ -393,7 +417,7 @@ export default function ProduccionClient({
         }}
       >
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex items-center gap-3 px-6 py-6 text-white">
+          <div className="flex items-center gap-3 text-white" style={SB.header}>
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
               style={{ backgroundColor: 'rgba(229,169,34,0.14)', border: '1px solid rgba(229,169,34,0.3)' }}
@@ -409,10 +433,10 @@ export default function ProduccionClient({
           {/* Los ítems se agrupan por para qué sirven: primero entender la
               demanda, después decidir qué producir y comprar. Antes era una
               lista plana de seis y no se leía ningún orden. */}
-          <nav className="flex flex-col gap-6 px-3 pb-4">
+          <nav className="flex flex-col gap-6" style={SB.nav}>
             {GRUPOS_NAV.map(grupo => (
               <div key={grupo.titulo} className="flex flex-col gap-1">
-                <p className="px-4 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/30">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/30" style={SB.grupoTitulo}>
                   {grupo.titulo}
                 </p>
                 {grupo.items.map(id => {
@@ -424,10 +448,10 @@ export default function ProduccionClient({
                       key={id}
                       onClick={() => setActiveTab(id)}
                       aria-current={activo ? 'page' : undefined}
-                      className={`group relative flex items-center gap-3 rounded-lg py-2.5 pl-4 pr-3 text-left text-sm transition-all ${
+                      className={`group relative flex items-center gap-3 rounded-lg text-left text-sm transition-all ${
                         activo ? 'font-bold text-white' : 'font-medium text-white/60 hover:bg-white/5 hover:text-white'
                       }`}
-                      style={{ backgroundColor: activo ? COLORS.lightGreen : 'transparent' }}
+                      style={{ ...SB.item, backgroundColor: activo ? COLORS.lightGreen : 'transparent' }}
                     >
                       {/* Marca dorada del ítem activo: el cambio de fondo solo
                           era poco contraste sobre el verde. */}
@@ -439,8 +463,8 @@ export default function ProduccionClient({
                       <span className="flex-1 truncate">{item.label}</span>
                       {alertas > 0 && (
                         <span
-                          className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-black tabular-nums"
-                          style={{ backgroundColor: 'rgba(239,68,68,0.18)', color: '#FCA5A5' }}
+                          className="shrink-0 rounded-full text-[10px] font-black tabular-nums"
+                          style={{ ...SB.badge, backgroundColor: 'rgba(239,68,68,0.18)', color: '#FCA5A5' }}
                           title={`${alertas} ${alertas === 1 ? 'punto' : 'puntos'} que requieren atención`}
                         >
                           {alertas}
@@ -448,8 +472,8 @@ export default function ProduccionClient({
                       )}
                       {DEMO_TABS.has(id) && (
                         <span
-                          className="shrink-0 rounded px-1 py-0.5 text-[9px] font-black uppercase tracking-wide"
-                          style={{ backgroundColor: 'rgba(229,169,34,0.16)', color: COLORS.amber }}
+                          className="shrink-0 rounded text-[9px] font-black uppercase tracking-wide"
+                          style={{ ...SB.badge, backgroundColor: 'rgba(229,169,34,0.16)', color: COLORS.amber }}
                           title="Sección de maqueta: todavía sin datos reales"
                         >
                           demo
@@ -465,8 +489,8 @@ export default function ProduccionClient({
 
         {/* Estado del modelo: dato operativo que antes sólo vivía en la barra
             superior, donde competía con el título de la sección. */}
-        <div className="shrink-0 px-3 pb-3">
-          <div className="mb-2 rounded-lg px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.22)' }}>
+        <div className="shrink-0" style={SB.pie}>
+          <div className="mb-2 rounded-lg" style={{ ...SB.bloquePie, backgroundColor: 'rgba(0,0,0,0.22)' }}>
             <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/35">Último cálculo</p>
             <div className="mt-1 flex items-center gap-2">
               <span
@@ -479,7 +503,7 @@ export default function ProduccionClient({
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg p-3 text-white" style={{ backgroundColor: 'rgba(0,0,0,0.22)' }}>
+          <div className="flex items-center justify-between rounded-lg text-white" style={{ ...SB.bloquePie, backgroundColor: 'rgba(0,0,0,0.22)' }}>
             <div className="flex min-w-0 items-center gap-3">
               <div
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black"
@@ -492,7 +516,7 @@ export default function ProduccionClient({
                 <span className="text-[11px] text-white/40">Producción</span>
               </div>
             </div>
-            <Link href="/" aria-label="Volver al inicio" className="shrink-0 rounded-md p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white">
+            <Link href="/" aria-label="Volver al inicio" className="shrink-0 rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white" style={{ padding: 6 }}>
               <Home size={15} />
             </Link>
           </div>
