@@ -335,8 +335,15 @@ export default async function ProduccionPage() {
     // El inventario se compara al mismo nivel que la fila: una fila de
     // "Mocho English en barril 30L" contra los barriles de 30L que hay,
     // no contra el total del producto en todos los formatos.
+    // A nivel formato, que no haya línea para ese envase NO es falta de dato:
+    // si el producto aparece en el informe de stock, el ERP lo está
+    // reportando y la ausencia de ese formato significa cero real, o sea
+    // quiebre total. Tratarlo como "sin dato" escondía las roturas de stock
+    // más graves (44 filas en la primera corrida) en la casilla gris.
+    // "Sin dato" queda sólo para productos que el informe no menciona.
     const stockActual = nivel === 'producto_envase' && envase
-      ? stockActualPorProductoEnvase.get(claveProductoEnvase(producto, envase as never)) ?? null
+      ? stockActualPorProductoEnvase.get(claveProductoEnvase(producto, envase as never))
+        ?? (stockActualPorProducto.has(producto) ? 0 : null)
       : stockActualPorProducto.get(producto) ?? null
     return {
       nivel, producto, envase,
