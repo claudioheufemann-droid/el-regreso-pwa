@@ -162,11 +162,25 @@ export default async function ProduccionPage() {
 
   const litrosMtdPorSerie = new Map<string, number>()
   {
-    const { data: ventasMes } = await admin
-      .from('ventas')
-      .select('fecha_pedido, nombre_fantasia, producto, envase, litros')
-      .gte('fecha_pedido', inicioCiclo)
-    for (const f of ventasMes ?? []) {
+    // Paginado — mismo motivo que forecast_produccion arriba: PostgREST corta
+    // en 1000 filas. Un ciclo de venta normal ya supera esa cifra bien antes
+    // de cerrar (1.756 filas a mitad del ciclo del 4-sep-2026), así que sin
+    // paginar la consulta se cortaba a mitad de camino y "vendido este mes"
+    // quedaba muy por debajo de lo real (2.969 L en vez de ~5.300 L).
+    type VentaMesRow = { fecha_pedido: string; nombre_fantasia: string | null; producto: string | null; envase: string | null; litros: number | null }
+    const ventasMes: VentaMesRow[] = []
+    for (let offset = 0; ; offset += PAGE) {
+      const { data, error } = await admin
+        .from('ventas')
+        .select('fecha_pedido, nombre_fantasia, producto, envase, litros')
+        .gte('fecha_pedido', inicioCiclo)
+        .order('id', { ascending: true })
+        .range(offset, offset + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      ventasMes.push(...(data as VentaMesRow[]))
+      if (data.length < PAGE) break
+    }
+    for (const f of ventasMes) {
       if (!f.fecha_pedido || !f.producto) continue
       if (esClienteExcluidoProduccion(f.nombre_fantasia)) continue
       const nombreNormalizado = normalizarProducto(f.producto)
