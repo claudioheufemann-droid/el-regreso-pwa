@@ -5,7 +5,10 @@ import { puedeVerControlComercial } from '@/lib/control-comercial/permisos'
 import {
   periodoActual, periodoPorAncla, comparacionAnioAnterior, comparacionPeriodoAnterior,
 } from '@/lib/control-comercial/periodos'
-import type { FilaVentaAgregada, KpiEjecutivo, ResumenEjecutivoRaw, ResumenEjecutivoResponse } from '@/lib/control-comercial/tipos'
+import type {
+  FilaSerieClientes, FilaSeriePeriodo, FilaVentaAgregada, KpiEjecutivo,
+  ResumenEjecutivoRaw, ResumenEjecutivoResponse,
+} from '@/lib/control-comercial/tipos'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,13 +29,23 @@ export async function GET(req: NextRequest) {
 
   const supabase = await createClient()
 
-  const [actualRes, comparadoRes, territorioRes, cobranzaRes, barrilesRes, periodoRowRes] = await Promise.all([
+  const anioSerie = periodo.anchorYear
+  const anioSerieComparada = comparar === 'anterior' ? anioSerie : anioSerie - 1
+
+  const [
+    actualRes, comparadoRes, territorioRes, cobranzaRes, barrilesRes, periodoRowRes,
+    serieActualRes, serieComparadaRes, serieClientesRes, serieClientesCompRes,
+  ] = await Promise.all([
     supabase.rpc('fn_resumen_ejecutivo', { p_inicio: comparacion.actual.inicio, p_fin: comparacion.actual.fin }),
     supabase.rpc('fn_resumen_ejecutivo', { p_inicio: comparacion.comparado.inicio, p_fin: comparacion.comparado.fin }),
     supabase.rpc('fn_ventas_agregadas', { p_inicio: periodo.inicio, p_fin: comparacion.actual.fin }),
     supabase.rpc('fn_cobranza_kpis', { p_inicio: periodo.inicio, p_fin: comparacion.actual.fin }),
     supabase.rpc('fn_barriles_estado'),
     supabase.from('periodos').select('id').eq('fecha_inicio', periodo.inicio).eq('fecha_fin', periodo.fin).maybeSingle(),
+    supabase.rpc('fn_serie_periodos', { p_anio: anioSerie }),
+    supabase.rpc('fn_serie_periodos', { p_anio: anioSerie - 1 }),
+    supabase.rpc('fn_serie_clientes', { p_anio: anioSerie }),
+    supabase.rpc('fn_serie_clientes', { p_anio: anioSerie - 1 }),
   ])
 
   if (actualRes.error) return NextResponse.json({ error: actualRes.error.message }, { status: 500 })
@@ -134,10 +147,30 @@ export async function GET(req: NextRequest) {
     drillHref: '/control-comercial/barriles',
   })
 
+  // Series por período comercial para los gráficos y sparklines del rediseño.
+  // Se envían crudas (12 períodos, con desglose por categoría) para que el
+  // cliente pueda cambiar entre $/Litros y Total/Cerveza/Kombucha sin refetch.
+  const serie = {
+    anioActual: anioSerie,
+    anioComparado: anioSerieComparada,
+    actual: (serieActualRes.data ?? []) as FilaSeriePeriodo[],
+    comparado: (serieComparadaRes.data ?? []) as FilaSeriePeriodo[],
+  }
+  const serieClientes = {
+    actual: ((serieClientesRes.data ?? []) as FilaSerieClientes[]),
+    comparado: ((serieClientesCompRes.data ?? []) as FilaSerieClientes[]),
+  }
+
   const body: ResumenEjecutivoResponse = {
-    periodo: { nombre: periodo.nombre, inicio: periodo.inicio, fin: comparacion.actual.fin, truncado: comparacion.truncado },
+    periodo: {
+      nombre: periodo.nombre, inicio: periodo.inicio, fin: comparacion.actual.fin,
+      truncado: comparacion.truncado, finPeriodo: periodo.fin, mes: periodo.anchorMonth, anio: periodo.anchorYear,
+    },
     kpis,
     ventasPorTerritorio,
+    serie,
+    serieClientes,
+    metaVentasClp,
   }
 
   return NextResponse.json(body)

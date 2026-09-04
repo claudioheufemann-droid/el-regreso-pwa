@@ -1,9 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { FileDown, Mail, MessageCircle, FileText } from 'lucide-react'
-import AppHeader from '@/components/ui/AppHeader'
-import { formatCLP, formatLitros, formatNumero } from '@/components/control-comercial/KpiCard'
+import {
+  CalendarClock, ClipboardList, Download, Eye, FileText, Layers, Mail, MessageCircle, Share2,
+} from 'lucide-react'
+import CCHeader from '@/components/control-comercial/CCHeader'
+import {
+  CCPage, Card, CardHeader, EmptyState, SegmentedControl, SelectChip,
+  botonPrimario, botonSecundario, formatCLP, formatLitros, formatNumero,
+} from '@/components/control-comercial/ui'
 import { generarReportePDF, type ReporteSnapshot } from '@/lib/control-comercial/reportePdf'
 import { generarResumenNarrativo } from '@/lib/control-comercial/resumenNarrativo'
 
@@ -13,6 +18,9 @@ interface HistorialRow {
   creado_por_nombre: string | null; destinatarios_email: string[] | null
   enviado_email: boolean; enviado_whatsapp: boolean; created_at: string; snapshot: ReporteSnapshot
 }
+
+type Alcance = 'compania' | 'territorio'
+type Comparacion = 'anio_anterior' | 'anterior'
 
 function descargarBase64Pdf(base64: string, filename: string) {
   const bytes = atob(base64)
@@ -29,6 +37,8 @@ function descargarBase64Pdf(base64: string, filename: string) {
 export default function ReportesClient() {
   const [periodos, setPeriodos] = useState<PeriodoRow[]>([])
   const [periodoId, setPeriodoId] = useState<number | null>(null)
+  const [comparacion, setComparacion] = useState<Comparacion>('anio_anterior')
+  const [alcance, setAlcance] = useState<Alcance>('compania')
   const [tipo, setTipo] = useState<'ejecutivo' | 'completo'>('ejecutivo')
   const [generando, setGenerando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +75,7 @@ export default function ReportesClient() {
       // Secuencial a propósito: generar un reporte ya dispara ~6 endpoints que cada uno llama
       // varias RPC — todo en paralelo satura el pool de conexiones y puede superar el
       // statement_timeout. "Generar Reporte" es de uso puntual, no de alta frecuencia.
-      const resumen = await fetch(`/api/control-comercial/resumen?${qs}`).then(r => r.json())
+      const resumen = await fetch(`/api/control-comercial/resumen?${qs}&comparar=${comparacion}`).then(r => r.json())
       const clientes = await fetch(`/api/control-comercial/clientes?${qs}`).then(r => r.json())
       const cobranza = await fetch(`/api/control-comercial/cobranza?${qs}`).then(r => r.json())
       const barriles = await fetch(`/api/control-comercial/barriles?${qs}`).then(r => r.json())
@@ -139,7 +149,7 @@ export default function ReportesClient() {
 
       const guardado = await fetch('/api/control-comercial/reportes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ periodo_id: periodoId, periodo_nombre: periodo.nombre, tipo, filtros: { anio, mes }, snapshot, resumen_texto: resumenTexto }),
+        body: JSON.stringify({ periodo_id: periodoId, periodo_nombre: periodo.nombre, tipo, filtros: { anio, mes, alcance, comparacion }, snapshot, resumen_texto: resumenTexto }),
       }).then(r => r.ok ? r.json() : null).catch(() => null)
 
       setPreview({ snapshot, pdfBase64, reporteId: guardado?.id ?? null })
@@ -189,92 +199,153 @@ export default function ReportesClient() {
     }
   }
 
-  async function reabrirHistorial(row: HistorialRow) {
+  function reabrirHistorial(row: HistorialRow) {
     const pdfBase64 = generarReportePDF(row.snapshot)
     descargarBase64Pdf(pdfBase64, `control-comercial-${row.periodo_nombre.replace(/\s+/g, '-').toLowerCase()}.pdf`)
   }
 
   return (
-    <div style={{ padding: '0 16px 24px', maxWidth: 900, width: '100%', margin: '0 auto' }}>
-      <AppHeader eyebrow="Control Comercial" title="Generar Reporte" />
+    <CCPage>
+      <CCHeader title="Generar Reporte" subtitle="Genera y comparte reportes ejecutivos de tu negocio" />
 
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 18, marginBottom: 20 }}>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-          <select value={periodoId ?? ''} onChange={e => setPeriodoId(Number(e.target.value))}
-            style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 9, padding: '9px 10px', color: 'var(--cream)', fontSize: 13 }}>
-            {periodos.map(p => <option key={p.id} value={p.id}>{p.nombre}{p.activo ? ' · en curso' : ''}</option>)}
-          </select>
-          <div style={{ display: 'flex', gap: 4, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 9, padding: 3 }}>
-            {(['ejecutivo', 'completo'] as const).map(t => (
-              <button key={t} onClick={() => setTipo(t)} style={{
-                padding: '7px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
-                background: tipo === t ? 'var(--gold-dim)' : 'transparent', color: tipo === t ? 'var(--gold)' : 'var(--muted)',
-              }}>{t === 'ejecutivo' ? 'Ejecutivo' : 'Completo'}</button>
-            ))}
+      <Card>
+        <CardHeader icon={ClipboardList} titulo="Configuración del reporte" />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Campo label="Período">
+            <SelectChip
+              icon={CalendarClock}
+              value={periodoId ?? 0}
+              onChange={v => setPeriodoId(Number(v))}
+              options={periodos.map(p => ({ value: p.id, label: `${p.nombre}${p.activo ? ' · en curso' : ''}` }))}
+            />
+          </Campo>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Campo label="Comparación" style={{ flex: 1 }}>
+              <SegmentedControl
+                ancho="full" size="sm" value={comparacion} onChange={setComparacion}
+                options={[{ value: 'anio_anterior', label: 'vs 2025' }, { value: 'anterior', label: 'vs anterior' }]}
+              />
+            </Campo>
+            <Campo label="Alcance" style={{ flex: 1 }}>
+              <SegmentedControl
+                ancho="full" size="sm" value={alcance} onChange={setAlcance}
+                options={[{ value: 'compania', label: 'Empresa' }, { value: 'territorio', label: 'Territorio' }]}
+              />
+            </Campo>
           </div>
-          <button onClick={generar} disabled={generando || !periodoId} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 9,
-            background: 'var(--gold)', color: '#0A0A0A', border: 'none', fontWeight: 800, fontSize: 13, cursor: 'pointer', opacity: generando ? 0.6 : 1,
-          }}>
-            <FileText size={15} /> {generando ? 'Generando…' : 'Generar reporte'}
-          </button>
+
+          <Campo label="Tipo de reporte">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <TarjetaTipo icon={FileText} titulo="Ejecutivo" sub="Resumen clave de indicadores principales" activo={tipo === 'ejecutivo'} onClick={() => setTipo('ejecutivo')} />
+              <TarjetaTipo icon={Layers} titulo="Completo" sub="Análisis detallado con métricas y desglose" activo={tipo === 'completo'} onClick={() => setTipo('completo')} />
+            </div>
+          </Campo>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <button onClick={generar} disabled={generando || !periodoId} style={{ ...botonSecundario({ opacity: generando ? 0.6 : 1 }) }}>
+              <Eye size={15} /> Vista previa
+            </button>
+            <button onClick={generar} disabled={generando || !periodoId} style={{ ...botonPrimario({ opacity: generando ? 0.6 : 1 }) }}>
+              <FileText size={15} /> {generando ? 'Generando…' : 'PDF'}
+            </button>
+            <button onClick={generar} disabled={generando || !periodoId} style={{ ...botonSecundario({ opacity: generando ? 0.6 : 1 }) }}>
+              <Share2 size={15} /> Enviar
+            </button>
+          </div>
+
+          {error && <p style={{ color: 'var(--cc-red)', fontSize: 12.5 }}>{error}</p>}
         </div>
-        {error && <p style={{ color: 'var(--red)', fontSize: 12 }}>{error}</p>}
 
         {preview && (
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
-            <p style={{ fontSize: 13, color: 'var(--cream)', lineHeight: 1.6, marginBottom: 14 }}>{preview.snapshot.resumenTexto}</p>
+          <div style={{ borderTop: '1px solid var(--cc-line)', paddingTop: 16, marginTop: 16 }}>
+            <p style={{ fontSize: 13, color: 'var(--cc-ink)', lineHeight: 1.6, marginBottom: 14 }}>{preview.snapshot.resumenTexto}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-              <button onClick={() => descargar(preview.snapshot, preview.pdfBase64)} style={btnStyle()}>
-                <FileDown size={14} /> Descargar PDF
+              <button onClick={() => descargar(preview.snapshot, preview.pdfBase64)} style={botonSecundario()}>
+                <Download size={14} /> Descargar PDF
               </button>
-              <button onClick={compartirWhatsApp} style={btnStyle()}>
+              <button onClick={compartirWhatsApp} style={botonSecundario()}>
                 <MessageCircle size={14} /> Compartir WhatsApp
               </button>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input placeholder="correo1@ejemplo.com, correo2@ejemplo.com" value={emails} onChange={e => setEmails(e.target.value)}
-                style={{ flex: '1 1 260px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 9, padding: '9px 10px', color: 'var(--cream)', fontSize: 13 }} />
-              <button onClick={enviarCorreo} disabled={enviando || !emails.trim()} style={btnStyle()}>
+              <input
+                placeholder="correo1@ejemplo.com, correo2@ejemplo.com" value={emails} onChange={e => setEmails(e.target.value)}
+                style={{ flex: '1 1 220px', minHeight: 44, background: 'var(--cc-card-2)', border: '1px solid var(--cc-line)', borderRadius: 11, padding: '0 12px', color: 'var(--cc-ink)', fontSize: 13.5 }}
+              />
+              <button onClick={enviarCorreo} disabled={enviando || !emails.trim()} style={botonSecundario({ opacity: enviando ? 0.6 : 1 })}>
                 <Mail size={14} /> {enviando ? 'Enviando…' : 'Enviar por correo'}
               </button>
             </div>
-            {mensajeEnvio && <p style={{ fontSize: 12, color: mensajeEnvio.startsWith('Error') ? 'var(--red)' : 'var(--green)', marginTop: 8 }}>{mensajeEnvio}</p>}
+            {mensajeEnvio && <p style={{ fontSize: 12, color: mensajeEnvio.startsWith('Error') ? 'var(--cc-red)' : 'var(--cc-green)', marginTop: 8, fontWeight: 700 }}>{mensajeEnvio}</p>}
           </div>
         )}
-      </div>
+      </Card>
 
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 18 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 14 }}>Historial de reportes</h2>
+      <Card>
+        <CardHeader
+          icon={ClipboardList}
+          titulo="Historial de reportes"
+          accion={historial.length > 0 ? <span style={{ fontSize: 12, color: 'var(--cc-gold-deep)', fontWeight: 700 }}>Ver todos</span> : undefined}
+        />
         {historial.length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', padding: '20px 0' }}>Sin reportes generados todavía.</p>
+          <EmptyState icon={FileText} titulo="Sin reportes generados todavía" detalle="Genera tu primer reporte ejecutivo desde el panel de arriba." />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {historial.map(h => (
-              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 4px', borderBottom: '1px solid var(--border-subtle)' }}>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{h.periodo_nombre} · {h.tipo === 'ejecutivo' ? 'Ejecutivo' : 'Completo'}</p>
-                  <p style={{ fontSize: 11, color: 'var(--muted)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {historial.map((h, i) => (
+              <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 0', borderTop: i > 0 ? '1px solid var(--cc-line-soft)' : undefined, minWidth: 0 }}>
+                <span style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--cc-gold-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <FileText size={16} color="var(--cc-gold-deep)" strokeWidth={2} />
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--cc-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {h.periodo_nombre} · {h.tipo === 'ejecutivo' ? 'Ejecutivo' : 'Completo'}
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--cc-ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {h.creado_por_nombre} · {new Date(h.created_at).toLocaleDateString('es-CL')}
-                    {h.enviado_email && ' · Enviado por correo'}
-                    {h.enviado_whatsapp && ' · Compartido WhatsApp'}
+                    {h.enviado_email && ' · Correo'}
+                    {h.enviado_whatsapp && ' · WhatsApp'}
                   </p>
                 </div>
-                <button onClick={() => reabrirHistorial(h)} style={{ fontSize: 12, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
-                  Descargar de nuevo
+                <button onClick={() => reabrirHistorial(h)} style={{ background: 'var(--cc-card-2)', border: '1px solid var(--cc-line-soft)', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Download size={14} color="var(--cc-ink-2)" />
                 </button>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </Card>
+    </CCPage>
+  )
+}
+
+function Campo({ label, children, style }: { label: string; children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, ...style }}>
+      <label style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--cc-ink-3)', textTransform: 'uppercase', letterSpacing: 0.3 }}>{label}</label>
+      {children}
     </div>
   )
 }
 
-function btnStyle(): React.CSSProperties {
-  return {
-    display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 9,
-    background: 'var(--surface2)', color: 'var(--cream)', border: '1px solid var(--border)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
-  }
+function TarjetaTipo({ icon: Icon, titulo, sub, activo, onClick }: {
+  icon: typeof FileText; titulo: string; sub: string; activo: boolean; onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="cc-tap"
+      style={{
+        textAlign: 'left', padding: 12, borderRadius: 14, cursor: 'pointer', minWidth: 0,
+        background: activo ? 'var(--cc-gold-soft)' : 'var(--cc-card-2)',
+        border: `1.5px solid ${activo ? 'var(--cc-gold)' : 'var(--cc-line-soft)'}`,
+        display: 'flex', flexDirection: 'column', gap: 6,
+      }}
+    >
+      <Icon size={18} color={activo ? 'var(--cc-gold-deep)' : 'var(--cc-ink-3)'} strokeWidth={2} />
+      <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--cc-ink)' }}>{titulo}</span>
+      <span style={{ fontSize: 10.5, color: 'var(--cc-ink-3)', lineHeight: 1.35 }}>{sub}</span>
+    </button>
+  )
 }

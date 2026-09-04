@@ -30,12 +30,16 @@ export async function GET(req: NextRequest) {
 
   const supabase = await createClient()
 
-  const [serieActualRes, serieComparadaRes, territorioRes] = await Promise.all([
+  const [serieActualRes, serieComparadaRes, territorioRes, territorioCompRes] = await Promise.all([
     supabase.rpc('fn_serie_periodos', { p_anio: anio }),
     supabase.rpc('fn_serie_periodos', { p_anio: anioComparado }),
     supabase.rpc('fn_ventas_agregadas', {
       p_inicio: periodoPorAncla(anio, 1).inicio,
       p_fin: periodoPorAncla(anio, 12).fin,
+    }),
+    supabase.rpc('fn_ventas_agregadas', {
+      p_inicio: periodoPorAncla(anioComparado, 1).inicio,
+      p_fin: periodoPorAncla(anioComparado, 12).fin,
     }),
   ])
 
@@ -49,7 +53,9 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     anio, anioComparado,
+    mesActual: anio === periodoActual().anchorYear ? periodoActual().anchorMonth : 12,
     serieActual, serieComparada,
     ventasPorTerritorio: (territorioRes.data ?? []) as FilaVentaAgregada[],
+    ventasPorTerritorioComparado: (territorioCompRes.data ?? []) as FilaVentaAgregada[],
   })
 }

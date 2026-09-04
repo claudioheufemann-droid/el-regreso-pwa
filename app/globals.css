@@ -125,9 +125,60 @@
    de la app), y esta regla, más específica, sube --bg de beige a blanco
    puro solo dentro de ese módulo. */
 .cc-root[data-theme="light"] {
-  --bg: #FFFFFF;
+  --bg: #FBFAF8;
   --surface2: #F7F6F2;
+
+  /* ── Sistema visual del módulo (rediseño 2026-09) ──
+     Tokens propios con prefijo --cc-*: no reutilizan --cream/--muted porque
+     esos los reescriben las reglas de contraste automáticas de más abajo, y
+     acá se necesita una escala de grises estable y predecible. Todo color de
+     este módulo debe salir de acá, nunca de un literal inline (un literal
+     blanco/crema lo intercepta la auditoría de contraste y cambia solo). */
+  --cc-page: #FBFAF8;
+  --cc-card: #FFFFFF;
+  --cc-card-2: #F7F5F1;
+  --cc-line: rgba(23, 18, 12, 0.08);
+  --cc-line-soft: rgba(23, 18, 12, 0.05);
+  --cc-shadow: 0 1px 2px rgba(23, 18, 12, 0.04), 0 6px 20px rgba(23, 18, 12, 0.045);
+  --cc-shadow-lift: 0 2px 6px rgba(23, 18, 12, 0.06), 0 12px 32px rgba(23, 18, 12, 0.07);
+
+  --cc-ink: #14100C;
+  --cc-ink-2: #575047;
+  --cc-ink-3: #8B8378;
+  --cc-on-gold: #FFFFFF;
+
+  --cc-gold: #C8951C;
+  --cc-gold-deep: #A87A0F;
+  --cc-gold-soft: #FBF1DC;
+  --cc-gold-line: rgba(200, 149, 28, 0.28);
+
+  --cc-green: #17A34A;
+  --cc-green-soft: #E7F6EC;
+  --cc-red: #DC2626;
+  --cc-red-soft: #FDECEC;
+  --cc-amber: #E08C2B;
+  --cc-amber-soft: #FCF1E1;
+  --cc-blue: #4F6BED;
+  --cc-blue-soft: #ECEFFD;
+  --cc-neutral: #C9C3B9;
+  --cc-neutral-soft: #EFEDE8;
 }
+
+/* Fondo real del módulo: el layout pinta var(--bg), pero el ancestro <body>
+   sigue siendo oscuro y se ve en el overscroll de iOS. */
+.cc-root[data-theme="light"] {
+  background: var(--cc-page);
+}
+
+.cc-tap { -webkit-tap-highlight-color: transparent; }
+.cc-scroll-x { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.cc-scroll-x::-webkit-scrollbar { display: none; }
+
+@keyframes cc-shimmer { 0% { opacity: 0.55 } 50% { opacity: 0.9 } 100% { opacity: 0.55 } }
+.cc-skeleton { animation: cc-shimmer 1.4s ease-in-out infinite; }
+
+@keyframes cc-fade-up { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+.cc-enter { animation: cc-fade-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 /* ═══════════════════════════════════════════════════════════
    AUDITORÍA DE CONTRASTE — MODO CLARO (2026-07-23)

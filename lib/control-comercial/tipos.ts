@@ -57,10 +57,64 @@ export interface KpiEjecutivo {
   estado?: 'ok' | 'sin_meta' | 'sin_comparacion' | 'no_disponible'
 }
 
+/** Fila de fn_serie_periodos: un período comercial (24→23) del año pedido. */
+export interface FilaSeriePeriodo {
+  mes: number
+  inicio: string
+  fin: string
+  litros_total: number
+  litros_cerveza: number
+  litros_kombucha: number
+  monto_total: number
+  monto_cerveza: number
+  monto_kombucha: number
+}
+
+/** Fila de fn_serie_clientes — la única serie real de cartera que existe hoy. */
+export interface FilaSerieClientes {
+  mes: number
+  inicio: string
+  fin: string
+  clientes_activos: number
+  clientes_nuevos: number
+}
+
+/** Fila de fn_serie_equipo: venta por territorio y período, para sparklines de Equipo. */
+export interface FilaSerieEquipo {
+  mes: number
+  inicio: string
+  fin: string
+  territorio: string
+  tipo: TipoTerritorio
+  venta_clp: number
+  litros: number
+}
+
+export interface SerieComparada {
+  anioActual: number
+  anioComparado: number
+  actual: FilaSeriePeriodo[]
+  comparado: FilaSeriePeriodo[]
+}
+
 export interface ResumenEjecutivoResponse {
-  periodo: { nombre: string; inicio: string; fin: string; truncado: boolean }
+  periodo: {
+    nombre: string
+    inicio: string
+    /** Fin efectivo del rango consultado (truncado a hoy si el período está en curso). */
+    fin: string
+    truncado: boolean
+    /** Fin calendario del período comercial, sin truncar. */
+    finPeriodo: string
+    mes: number
+    anio: number
+  }
   kpis: KpiEjecutivo[]
   ventasPorTerritorio: FilaVentaAgregada[]
+  serie: SerieComparada
+  serieClientes: { actual: FilaSerieClientes[]; comparado: FilaSerieClientes[] }
+  /** Meta compañía de ventas $ del período, null si no hay ninguna configurada. */
+  metaVentasClp: number | null
 }
 
 export interface Territorio {
