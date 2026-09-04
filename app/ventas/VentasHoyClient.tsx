@@ -1086,9 +1086,8 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega }: {
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{fL(v.litros)}</span>
             <span style={{ fontSize: 12, color: C.muted }}>{share.toFixed(1)}% del total</span>
-            <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <Delta pct={variacion(v.litros, v.litrosPrev)} size={11} />
-              <span style={{ fontSize: 10, color: C.faint }}>vs ant.</span>
+            <span style={{ marginLeft: 'auto' }}>
+              <Delta pct={variacion(v.litros, v.litrosPrev)} size={17} />
             </span>
           </div>
           <p style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>{fPesoFull(v.revenue)}</p>
@@ -1963,9 +1962,16 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
 
         {/* Ranking */}
         <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: '16px 16px 6px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>RANKING DE VENDEDORES</p>
-            <span style={{ fontSize: 12, color: C.muted }}>por litros vendidos</span>
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>RANKING DE VENDEDORES</p>
+              <span style={{ fontSize: 12, color: C.muted }}>por litros vendidos</span>
+            </div>
+            {/* La variación de cada vendedor se compara contra este mismo tramo
+                — no siempre es "el período anterior": en 'año' es el mismo
+                tramo del año pasado. Se aclara una sola vez acá arriba en vez
+                de repetirlo (ambiguo) en cada fila. */}
+            <p style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>Variación {d.etiquetaComparacion}</p>
           </div>
           {d.vendedores.map((v, i) => (
             <FilaVendedor key={v.vendedor} v={v} pos={i} total={actual.litros}
