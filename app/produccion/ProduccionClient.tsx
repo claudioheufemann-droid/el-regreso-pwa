@@ -119,6 +119,13 @@ function fCicloCorto(iso: string) {
 function nombreCamaraCorto(camara: string) {
   return camara.replace(/\s*\([^)]*\)\s*$/, '').trim()
 }
+function fMinutosDesde(min: number) {
+  if (min < 1) return 'recién ahora'
+  if (min < 60) return `hace ${min} min`
+  const horas = Math.round(min / 60)
+  if (horas < 24) return `hace ${horas} h`
+  return `hace ${Math.round(horas / 24)} d`
+}
 
 const navItems = [
   { id: 'resumen', icon: LayoutDashboard, label: 'Resumen General' },
@@ -167,13 +174,19 @@ function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.R
 }
 
 export default function ProduccionClient({
-  series, calidad, stock, stockSeguridad, ultimaCorrida, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
   stock: StockItem[]
   stockSeguridad: StockSeguridadItem[]
   ultimaCorrida: string | null
+  /** Minutos desde la última sincronización de stock del ERP (erp_sync_log),
+   *  calculados server-side. Distinto de `ultimaCorrida` (cuándo corrió el
+   *  forecast mensual) — el "disponible" de Stock de Seguridad se recalcula
+   *  en CADA carga de página contra el stock actual, esto es lo que prueba
+   *  que es así en vez de dejarlo como una afirmación sin respaldo visual. */
+  minutosDesdeSyncStock: number | null
   avanceMes: AvanceMes
   nombreUsuario: string
   inicialesUsuario: string
@@ -383,7 +396,7 @@ export default function ProduccionClient({
      producto, segmentado entre lata y barril 30L/50L, y en qué depósito
      está cada parte (un barril de 30L en Frío Planta no sirve para lo mismo
      que uno en Barrios Bajos si hay que ir a buscarlo). */
-  const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata_354', 'lata_473', 'otros']
+  const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata', 'otros']
   const inventarioAgrupado = useMemo(() => {
     interface FilaCamara { camara: string; cantidad: number; litros: number | null }
     interface GrupoFormato { bucket: EnvaseBucket; cantidad: number; litros: number | null; camaras: FilaCamara[] }
@@ -1286,6 +1299,20 @@ export default function ProduccionClient({
                   </p>
                 </div>
               )}
+
+              {/* Prueba visual de que "disponible" está conectado al stock
+                  actual: el estado crítico/bajo/ok se recalcula en CADA
+                  carga de esta página contra la última foto del ERP — no
+                  sólo cuando corre el forecast mensual. Antes esto era una
+                  afirmación sin respaldo en pantalla; ahora se ve. */}
+              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500">
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: minutosDesdeSyncStock != null && minutosDesdeSyncStock < 180 ? '#34D399' : COLORS.gray }}
+                />
+                Inventario del ERP {minutosDesdeSyncStock != null ? fMinutosDesde(minutosDesdeSyncStock) : 'sin sincronizar aún'}
+                {' '}— el estado de abajo se recalcula contra esto cada vez que abrís esta pantalla.
+              </div>
 
               {/* KPIs de estado */}
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

@@ -6,13 +6,22 @@
  * de envases) tenía que tocarse en dos lugares o se desincronizaban.
  */
 
-export type EnvaseBucket = 'barril_30' | 'barril_50' | 'lata_354' | 'lata_473' | 'otros'
+/**
+ * 'lata' fusiona 354ml y 473ml (decisión del usuario, 4 sep 2026): antes
+ * eran dos buckets separados, con dos series independientes entrenadas en
+ * Prophet cada una. La fusión pasa a ser efectiva DESDE LA AGREGACIÓN (ver
+ * app/api/produccion/datos/route.ts, que llama bucketEnvase() por venta) —
+ * Prophet entrena UN solo modelo sobre la serie ya sumada 354+473, no se
+ * combinan dos forecasts por separado después. Afecta forecast, stock de
+ * seguridad y el inventario agrupado por igual, porque los tres usan este
+ * mismo tipo/función.
+ */
+export type EnvaseBucket = 'barril_30' | 'barril_50' | 'lata' | 'otros'
 
 export const ENVASE_LABEL: Record<EnvaseBucket, string> = {
   barril_30: 'Barril 30L',
   barril_50: 'Barril 50L',
-  lata_354: 'Lata 354ml',
-  lata_473: 'Lata 473ml',
+  lata: 'Lata',
   otros: 'Otros formatos',
 }
 
@@ -20,8 +29,7 @@ export const ENVASE_LABEL: Record<EnvaseBucket, string> = {
  *  son N barriles de 30L en una sola línea; 50L exacto es la otra medida
  *  estándar. El resto (growlers, casos atípicos) va a "otros". */
 export function bucketEnvase(envase: string | null, litros: number): EnvaseBucket {
-  if (envase === 'Lata (354 ml)') return 'lata_354'
-  if (envase === 'Lata (473 ml)') return 'lata_473'
+  if (envase === 'Lata (354 ml)' || envase === 'Lata (473 ml)') return 'lata'
   if (envase === 'Barril') {
     if (litros > 0 && litros % 30 === 0) return 'barril_30'
     if (litros === 50) return 'barril_50'

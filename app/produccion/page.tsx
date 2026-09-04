@@ -133,13 +133,25 @@ export default async function ProduccionPage() {
     if (data.length < PAGE) break
   }
 
-  const [{ data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios }, { data: stockSeguridadRaw }] = await Promise.all([
+  const [{ data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios }, { data: stockSeguridadRaw }, { data: ultimoSyncStockRaw }] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
     admin.from('stock_productos').select('producto, categoria, tipo, camara, cantidad, litros').order('cantidad', { ascending: false }),
     admin.from('costos_precios').select('producto, categoria').not('codigo', 'is', null),
     admin.from('stock_seguridad').select('nivel, producto, envase, categoria, mes, lead_time_semanas, periodo_revision_semanas, demanda_mensual_proyectada, demanda_en_ventana, sigma_semanal, stock_seguridad_litros, punto_reorden_litros, confianza, mape_backtest, meses_historial').order('mes', { ascending: true }),
+    // Cuándo se sincronizó por última vez el stock del ERP — para que el
+    // panel de Stock de Seguridad pueda mostrar que el "disponible" contra
+    // el que compara está vivo (recalculado en cada carga de la página, no
+    // sólo cuando corre el forecast mensual), no una foto vieja.
+    admin.from('erp_sync_log').select('creado_at').eq('fuente', 'stock').eq('ok', true).order('creado_at', { ascending: false }).limit(1).maybeSingle(),
   ])
+  const ultimoSyncStock = (ultimoSyncStockRaw as { creado_at?: string } | null)?.creado_at ?? null
+  // Se calcula server-side (comparado contra la hora del request, no la del
+  // navegador) para no arriesgar un mismatch de hidratación entre SSR y
+  // cliente — mismo patrón que diaActual/diasEnMes más abajo.
+  const minutosDesdeSyncStock = ultimoSyncStock != null
+    ? Math.max(0, Math.round((Date.now() - Date.parse(ultimoSyncStock)) / 60000))
+    : null
 
   const categoriaPorProducto = new Map(
     (costosPrecios ?? []).map(c => [normalizarProducto(c.producto as string), (c.categoria as string | null) ?? null])
@@ -316,9 +328,10 @@ export default async function ProduccionPage() {
       if (capacidad === 50) return 'barril_50'
       return 'otros'
     }
+    // 'lata' fusiona 354ml y 473ml — ver el comentario extenso en
+    // lib/produccion/reglas.ts (EnvaseBucket).
     const ml = producto.match(/Lata \((\d+)\s*ml\)/i)?.[1]
-    if (ml === '354') return 'lata_354'
-    if (ml === '473') return 'lata_473'
+    if (ml === '354' || ml === '473') return 'lata'
     return 'otros'
   }
 
@@ -420,6 +433,7 @@ export default async function ProduccionPage() {
       stock={stock}
       stockSeguridad={stockSeguridad}
       ultimaCorrida={ultimaCorrida}
+      minutosDesdeSyncStock={minutosDesdeSyncStock}
       avanceMes={avanceMes}
       nombreUsuario={user.nombre}
       inicialesUsuario={user.iniciales}
