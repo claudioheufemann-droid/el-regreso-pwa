@@ -35,6 +35,10 @@ interface FilaStockSeguridad {
   confianza: 'alta' | 'media' | 'baja'
   mapeBacktest: number | null
   mesesHistorial: number | null
+  /** 'propio': Prophet entrenado sobre esta serie. 'derivado': se repartió
+   *  el forecast del producto por su proporción reciente de formato (poca
+   *  historia propia o MAPE propio demasiado alto). */
+  metodo?: 'propio' | 'derivado'
 }
 
 /**
@@ -89,6 +93,7 @@ export async function POST(req: Request) {
     sigma_semanal: f.sigmaSemanal, z: f.z,
     stock_seguridad_litros: f.stockSeguridadLitros, punto_reorden_litros: f.puntoReordenLitros,
     confianza: f.confianza, mape_backtest: f.mapeBacktest, meses_historial: f.mesesHistorial,
+    metodo: f.metodo ?? 'propio',
   }))
 
   const { error: delError } = await supabase.from('stock_seguridad').delete().neq('id', 0)

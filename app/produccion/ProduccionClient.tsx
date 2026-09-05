@@ -162,7 +162,7 @@ const DEMO_TABS = new Set<TabId>(['plan', 'insumos', 'presupuesto'])
    mala), no un número roto. Pasa fácil de 100% en series de bajo volumen
    (ej. 30L vendidos en el mes): ahí un error chico en litros absolutos ya es
    un porcentaje enorme. */
-function ChipDesviacion({ mape }: { mape: number | null }) {
+function ChipDesviacion({ mape, derivado = false }: { mape: number | null; derivado?: boolean }) {
   if (mape == null) return <span className="text-xs text-gray-300">—</span>
   const color = mape < 15 ? 'emerald' : mape < 30 ? 'amber' : 'red'
   const clases = {
@@ -173,7 +173,11 @@ function ChipDesviacion({ mape }: { mape: number | null }) {
   return (
     <span
       className={`inline-block rounded-full border px-2 py-0.5 text-xs font-bold ${clases}`}
-      title="Desvío del modelo (MAPE): error porcentual promedio comparando la proyección contra la venta real de los últimos 3 meses. Más alto es peor. En series de bajo volumen puede superar el 100% — un error chico en litros ya es un % grande."
+      title={
+        derivado
+          ? 'Desvío del PRODUCTO (no de este formato puntual): esta fila se derivó del forecast del producto, y escalar una serie por una proporción constante no cambia su error porcentual, así que se reutiliza el mismo MAPE.'
+          : 'Desvío del modelo (MAPE): error porcentual promedio comparando la proyección contra la venta real de los últimos 3 meses. Más alto es peor. En series de bajo volumen puede superar el 100% — un error chico en litros ya es un % grande.'
+      }
     >
       {mape.toFixed(0)}%
     </span>
@@ -1302,7 +1306,19 @@ export default function ProduccionClient({
                                 </span>
                               )}
                             </td>
-                            <td className="px-4 py-2.5 text-gray-600">{ENVASE_LABEL[(serie.envaseBucket ?? 'otros') as EnvaseBucket] ?? serie.envaseBucket}</td>
+                            <td className="px-4 py-2.5 text-gray-600">
+                              <span className="inline-flex items-center gap-2">
+                                {ENVASE_LABEL[(serie.envaseBucket ?? 'otros') as EnvaseBucket] ?? serie.envaseBucket}
+                                {serie.metodo === 'derivado' && (
+                                  <span
+                                    className="inline-block rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-600"
+                                    title="Muy poca historia propia para confiar en un modelo entrenado sólo sobre este formato — se repartió el forecast del producto según qué % de él fue este formato recientemente."
+                                  >
+                                    derivado
+                                  </span>
+                                )}
+                              </span>
+                            </td>
                             <td className="px-4 py-2.5">
                               {serie.categoria && (
                                 <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${
@@ -1319,7 +1335,7 @@ export default function ProduccionClient({
                               {proximo ? `${fNum(proximo.litros)} L` : <span className="text-gray-300">sin datos</span>}
                             </td>
                             <td className="px-6 py-2.5 text-center">
-                              <ChipDesviacion mape={serie.mape} />
+                              <ChipDesviacion mape={serie.mape} derivado={serie.metodo === 'derivado'} />
                             </td>
                           </tr>
                         )
@@ -1492,6 +1508,14 @@ export default function ProduccionClient({
                           <td className="px-4 py-3 text-gray-600">
                             <span className="inline-flex items-center gap-2">
                               {f.envase ? (ENVASE_LABEL[f.envase as keyof typeof ENVASE_LABEL] ?? f.envase) : '—'}
+                              {f.metodo === 'derivado' && (
+                                <span
+                                  className="inline-block rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-600"
+                                  title="Muy poca historia propia (o un modelo propio con demasiado error) para confiar en un forecast entrenado sólo sobre este formato. Se repartió el forecast del producto —que tiene mucha más historia y es más estable— según qué % de ese producto fue este formato en los últimos meses."
+                                >
+                                  derivado
+                                </span>
+                              )}
                               {f.confianza !== 'alta' && (
                                 <span
                                   className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-bold ${

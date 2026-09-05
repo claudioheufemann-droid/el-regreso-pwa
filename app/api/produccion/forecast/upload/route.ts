@@ -23,7 +23,13 @@ interface ForecastFila {
   /** Descomposición del modelo: litros = tendencia + estacionalidad. */
   tendencia?: number | null; estacionalidad?: number | null
 }
-interface ValidacionFila { nivel: string; clave: string | null; mae: number | null; mape: number | null; mesesEvaluados: number; mesesHistorial: number }
+interface ValidacionFila {
+  nivel: string; clave: string | null; mae: number | null; mape: number | null; mesesEvaluados: number; mesesHistorial: number
+  /** 'propio': Prophet entrenado sobre esta serie. 'derivado': se repartió
+   *  el forecast del producto por su proporción reciente (sólo puede pasar
+   *  a nivel producto_envase — ver generar_forecast.py). */
+  metodo?: 'propio' | 'derivado'
+}
 interface CalidadFila { tipo: string; clave: string | null; detalle: string; severidad: 'info' | 'advertencia' }
 
 /**
@@ -75,6 +81,7 @@ export async function POST(req: Request) {
   const validacionRows = (validacion ?? []).map(v => ({
     nivel: v.nivel, clave: v.clave, mae: v.mae, mape: v.mape,
     meses_evaluados: v.mesesEvaluados, meses_historial: v.mesesHistorial,
+    metodo: v.metodo ?? 'propio',
   }))
   const calidadRows = (calidad ?? []).map(c => ({
     tipo: c.tipo, clave: c.clave, detalle: c.detalle, severidad: c.severidad,

@@ -44,6 +44,10 @@ export interface SerieForecast {
   mae: number | null
   mape: number | null
   mesesHistorial: number | null
+  /** 'derivado': producto_envase con poca historia/mal MAPE propio — el
+   *  número sale de repartir el forecast del producto, no de un modelo
+   *  propio. Ver generar_forecast.py. Siempre 'propio' en los demás niveles. */
+  metodo: 'propio' | 'derivado'
   /** Litros vendidos en lo que va del mes en curso (calculado en vivo, no
    *  viene del modelo) — para comparar ritmo real contra lo proyectado. */
   litrosMesEnCurso: number
@@ -95,6 +99,10 @@ export interface StockSeguridadItem {
   confianza: 'alta' | 'media' | 'baja'
   mapeBacktest: number | null
   mesesHistorial: number | null
+  /** 'derivado': se repartió el forecast del producto por su proporción
+   *  reciente de formato (poca historia propia o MAPE propio demasiado
+   *  alto) — ver generar_forecast.py. Siempre 'propio' a nivel producto. */
+  metodo: 'propio' | 'derivado'
   /** Litros en inventario hoy, al mismo nivel que la fila (por producto, o
    *  por producto+formato) — null si no aparece en el informe de stock. */
   stockActualLitros: number | null
@@ -134,11 +142,11 @@ export default async function ProduccionPage() {
   }
 
   const [{ data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios }, { data: stockSeguridadRaw }, { data: ultimoSyncStockRaw }] = await Promise.all([
-    admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial'),
+    admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial, metodo'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
     admin.from('stock_productos').select('producto, categoria, tipo, camara, cantidad, litros').order('cantidad', { ascending: false }),
     admin.from('costos_precios').select('producto, categoria').not('codigo', 'is', null),
-    admin.from('stock_seguridad').select('nivel, producto, envase, categoria, mes, lead_time_semanas, periodo_revision_semanas, demanda_mensual_proyectada, demanda_en_ventana, sigma_semanal, stock_seguridad_litros, punto_reorden_litros, confianza, mape_backtest, meses_historial').order('mes', { ascending: true }),
+    admin.from('stock_seguridad').select('nivel, producto, envase, categoria, mes, lead_time_semanas, periodo_revision_semanas, demanda_mensual_proyectada, demanda_en_ventana, sigma_semanal, stock_seguridad_litros, punto_reorden_litros, confianza, mape_backtest, meses_historial, metodo').order('mes', { ascending: true }),
     // Cuándo se sincronizó por última vez el stock del ERP — para que el
     // panel de Stock de Seguridad pueda mostrar que el "disponible" contra
     // el que compara está vivo (recalculado en cada carga de la página, no
@@ -251,6 +259,7 @@ export default async function ProduccionPage() {
         mae: val?.mae != null ? Number(val.mae) : null,
         mape: val?.mape != null ? Number(val.mape) : null,
         mesesHistorial: val?.meses_historial ?? null,
+        metodo: (val?.metodo as 'propio' | 'derivado' | undefined) ?? 'propio',
         litrosMesEnCurso: Math.round((litrosMtdPorSerie.get(id) ?? 0) * 10) / 10,
       })
     }
@@ -417,6 +426,7 @@ export default async function ProduccionPage() {
       confianza: s.confianza as 'alta' | 'media' | 'baja',
       mapeBacktest: s.mape_backtest != null ? Number(s.mape_backtest) : null,
       mesesHistorial: s.meses_historial != null ? Number(s.meses_historial) : null,
+      metodo: (s.metodo as 'propio' | 'derivado' | null) ?? 'propio',
       stockActualLitros: stockActual,
       // Los lotes se cargan por producto, sin desglose de formato confiable,
       // así que sólo se descuentan en las filas a nivel producto.
