@@ -153,8 +153,16 @@ const GRUPOS_NAV: { titulo: string; items: TabId[] }[] = [
 const DEMO_TABS = new Set<TabId>(['plan', 'insumos', 'presupuesto'])
 
 
-/* ── Chip de confiabilidad, según el desvío (MAPE) del backtest ────────── */
-function ChipConfiabilidad({ mape }: { mape: number | null }) {
+/* ── Chip de desviación del modelo (MAPE del backtest) ──────────────────
+   OJO, esto NO es una "confiabilidad" en el sentido de 0-100% siendo mejor
+   arriba — es el error porcentual absoluto medio: mientras MÁS ALTO, PEOR el
+   modelo. Se llamó "Confiabilidad" hasta que un usuario vio un "450%" y con
+   razón le pareció absurdo ("¿cómo la confiabilidad supera el 100%?") — con
+   el nombre correcto, un desvío de 450% es una afirmación coherente (aunque
+   mala), no un número roto. Pasa fácil de 100% en series de bajo volumen
+   (ej. 30L vendidos en el mes): ahí un error chico en litros absolutos ya es
+   un porcentaje enorme. */
+function ChipDesviacion({ mape }: { mape: number | null }) {
   if (mape == null) return <span className="text-xs text-gray-300">—</span>
   const color = mape < 15 ? 'emerald' : mape < 30 ? 'amber' : 'red'
   const clases = {
@@ -162,7 +170,14 @@ function ChipConfiabilidad({ mape }: { mape: number | null }) {
     amber: 'border-amber-200 bg-amber-50 text-amber-700',
     red: 'border-red-200 bg-red-50 text-red-700',
   }[color]
-  return <span className={`inline-block rounded-full border px-2 py-0.5 text-xs font-bold ${clases}`}>{mape.toFixed(0)}%</span>
+  return (
+    <span
+      className={`inline-block rounded-full border px-2 py-0.5 text-xs font-bold ${clases}`}
+      title="Desvío del modelo (MAPE): error porcentual promedio comparando la proyección contra la venta real de los últimos 3 meses. Más alto es peor. En series de bajo volumen puede superar el 100% — un error chico en litros ya es un % grande."
+    >
+      {mape.toFixed(0)}%
+    </span>
+  )
 }
 
 /* ── Badge para todo lo que todavía es maqueta ─────────────────────────── */
@@ -1262,7 +1277,7 @@ export default function ProduccionClient({
                         <th className="px-4 py-3 font-bold">Categoría</th>
                         <th className="px-4 py-3 text-right font-bold">Vendido este mes</th>
                         <th className="px-4 py-3 text-right font-bold text-amber-700">Próximo mes (proy.)</th>
-                        <th className="px-6 py-3 text-center font-bold">Confiabilidad</th>
+                        <th className="px-6 py-3 text-center font-bold" title="Error del backtest (MAPE) — más alto es peor, no una confiabilidad de 0-100%.">Desviación</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
@@ -1304,7 +1319,7 @@ export default function ProduccionClient({
                               {proximo ? `${fNum(proximo.litros)} L` : <span className="text-gray-300">sin datos</span>}
                             </td>
                             <td className="px-6 py-2.5 text-center">
-                              <ChipConfiabilidad mape={serie.mape} />
+                              <ChipDesviacion mape={serie.mape} />
                             </td>
                           </tr>
                         )
