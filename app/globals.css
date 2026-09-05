@@ -657,8 +657,19 @@ html { height: 100%; }
 ::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.2); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.4); }
 
-/* Global inputs */
-input, select, textarea {
+/* Global inputs
+ *
+ * Excluye .prod-root (mismo motivo que el reset de márgenes más abajo): esta
+ * regla vive fuera de todo @layer, así que gana sobre las utilidades
+ * Tailwind del módulo de Producción (bg-gray-50, text-gray-700...) sin
+ * importar su especificidad. Sin la exclusión, los <select> de Producción
+ * quedaban con `color: var(--cream)` (#F4EEDF, un crema pálido pensado para
+ * texto sobre fondo OSCURO) sobre su propio fondo claro — el valor
+ * seleccionado quedaba casi invisible (bug real reportado: "no hay
+ * contraste, no se sabe qué se está eligiendo"). Producción nunca declara
+ * data-theme="light" (ese override sólo aplica al resto de la app), así que
+ * tampoco heredaba el contraste correcto por ese lado. */
+input:not(.prod-root *), select:not(.prod-root *), textarea:not(.prod-root *) {
   background: var(--input-bg);
   color: var(--cream);
   border: 1px solid var(--input-border);
@@ -671,7 +682,7 @@ input, select, textarea {
   transition: border-color 0.15s, background 0.15s;
   -webkit-appearance: none;
 }
-input:focus, select:focus, textarea:focus {
+input:focus:not(.prod-root *), select:focus:not(.prod-root *), textarea:focus:not(.prod-root *) {
   border-color: rgba(212, 175, 55, 0.5);
   background: rgba(255, 255, 255, 0.07);
 }
