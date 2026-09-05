@@ -210,7 +210,8 @@ export default function ProduccionClient({
     [stockSeguridad]
   )
   const [mesSeguridad, setMesSeguridad] = useState<string>('')
-  const [nivelSeguridad, setNivelSeguridad] = useState<'producto' | 'producto_envase'>('producto')
+  const [filtroCategoriaSeg, setFiltroCategoriaSeg] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
+  const [filtroEnvaseSeg, setFiltroEnvaseSeg] = useState<string>('todos')
   const mesSeguridadActivo = mesSeguridad && mesesSeguridad.includes(mesSeguridad)
     ? mesSeguridad
     : mesesSeguridad[0] ?? ''
@@ -372,9 +373,15 @@ export default function ProduccionClient({
 
      Sin sumar lo que está en fermentación, un producto con la cocción ya
      lanzada aparecía igual como crítico y gatillaba una cocción redundante. */
+  /** Orden fijo de formato — evita que un mismo producto se vea disperso al
+   *  ordenar por otro criterio (ver comentario extenso más abajo). */
+  const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata', 'otros']
+
   const filasStockSeguridad = useMemo(() => {
     return stockSeguridad
-      .filter(s => s.mes === mesSeguridadActivo && s.nivel === nivelSeguridad)
+      .filter(s => s.mes === mesSeguridadActivo && s.nivel === 'producto_envase')
+      .filter(s => filtroCategoriaSeg === 'todas' || s.categoria === filtroCategoriaSeg)
+      .filter(s => filtroEnvaseSeg === 'todos' || s.envase === filtroEnvaseSeg)
       .map(s => {
         const disponible = s.stockActualLitros != null
           ? s.stockActualLitros + s.litrosEnProduccion
@@ -385,12 +392,38 @@ export default function ProduccionClient({
               : disponible < s.puntoReordenLitros ? 'bajo' : 'ok'
         return { ...s, disponible, estado }
       })
-      .sort((a, b) => {
-        const peso = { critico: 0, sin_dato: 1, bajo: 2, ok: 3 }
-        if (peso[a.estado] !== peso[b.estado]) return peso[a.estado] - peso[b.estado]
-        return a.producto.localeCompare(b.producto) || (a.envase ?? '').localeCompare(b.envase ?? '')
-      })
-  }, [stockSeguridad, mesSeguridadActivo, nivelSeguridad])
+  }, [stockSeguridad, mesSeguridadActivo, filtroCategoriaSeg, filtroEnvaseSeg])
+
+  /* ── Agrupado por producto, segmentado por formato ──────────────────────
+     Antes la tabla ordenaba TODAS las filas por estado global, así que los
+     3 formatos de un mismo producto quedaban dispersos en secciones
+     distintas (crítico/bajo/ok) — confundía qué número era de qué envase
+     (bug real reportado: "el barril de West Coast dice 87L", cuando 87L era
+     la fila de Lata, a varias pantallas de las filas de Barril del mismo
+     producto). Ahora se agrupa por producto (con su foto, mismo patrón que
+     Inventario Actual) y cada formato queda SIEMPRE en el mismo orden
+     (Barril 30L, Barril 50L, Lata, Otros) debajo de su producto. */
+  type FilaStockSeguridad = (typeof filasStockSeguridad)[number]
+  const gruposStockSeguridad = useMemo(() => {
+    interface Grupo { producto: string; categoria: 'cerveza' | 'kombucha'; filas: FilaStockSeguridad[] }
+    const porProducto = new Map<string, Grupo>()
+    for (const f of filasStockSeguridad) {
+      if (!porProducto.has(f.producto)) porProducto.set(f.producto, { producto: f.producto, categoria: f.categoria, filas: [] })
+      porProducto.get(f.producto)!.filas.push(f)
+    }
+    const PESO_ESTADO = { critico: 0, sin_dato: 1, bajo: 2, ok: 3 }
+    const resultado = [...porProducto.values()]
+    for (const g of resultado) {
+      g.filas.sort((a, b) => ORDEN_ENVASE.indexOf(a.envase as EnvaseBucket) - ORDEN_ENVASE.indexOf(b.envase as EnvaseBucket))
+    }
+    resultado.sort((a, b) => {
+      const peorA = Math.min(...a.filas.map(f => PESO_ESTADO[f.estado]))
+      const peorB = Math.min(...b.filas.map(f => PESO_ESTADO[f.estado]))
+      if (peorA !== peorB) return peorA - peorB
+      return a.producto.localeCompare(b.producto)
+    })
+    return resultado
+  }, [filasStockSeguridad])
 
   /* ── Inventario actual agrupado: producto → formato → cámara ───────────
      `stock` llega como una fila por (producto, formato, cámara) — se
@@ -398,7 +431,6 @@ export default function ProduccionClient({
      producto, segmentado entre lata y barril 30L/50L, y en qué depósito
      está cada parte (un barril de 30L en Frío Planta no sirve para lo mismo
      que uno en Barrios Bajos si hay que ir a buscarlo). */
-  const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata', 'otros']
   const inventarioAgrupado = useMemo(() => {
     interface FilaCamara { camara: string; cantidad: number; litros: number | null }
     interface GrupoFormato { bucket: EnvaseBucket; cantidad: number; litros: number | null; camaras: FilaCamara[] }
@@ -1351,28 +1383,37 @@ export default function ProduccionClient({
                   <div>
                     <h3 className="font-bold text-gray-800">Stock de Seguridad y Punto de Reorden</h3>
                     <p className="mt-1 text-sm text-gray-500">
-                      {filasStockSeguridad.length} {nivelSeguridad === 'producto' ? 'productos' : 'combinaciones producto × formato'} · comparado contra el inventario actual del ERP.
+                      {gruposStockSeguridad.length} productos · {filasStockSeguridad.length} combinaciones producto × formato · comparado contra el inventario actual del ERP.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Nivel</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Producto</span>
                       <div className="flex overflow-hidden rounded-md border border-gray-200">
-                        {([
-                          { id: 'producto' as const, label: 'Producto' },
-                          { id: 'producto_envase' as const, label: 'Por formato' },
-                        ]).map(op => (
+                        {(['todas', 'cerveza', 'kombucha'] as const).map(c => (
                           <button
-                            key={op.id}
-                            onClick={() => setNivelSeguridad(op.id)}
-                            className={`px-3 py-1.5 text-sm font-semibold transition-colors ${
-                              nivelSeguridad === op.id ? 'bg-[#0F3D2E] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                            key={c}
+                            onClick={() => setFiltroCategoriaSeg(c)}
+                            className={`px-3 py-1.5 text-sm font-semibold capitalize transition-colors ${
+                              filtroCategoriaSeg === c ? 'bg-[#0F3D2E] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
                             }`}
                           >
-                            {op.label}
+                            {c === 'todas' ? 'Todos' : c}
                           </button>
                         ))}
                       </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="envaseSeg" className="text-xs font-bold uppercase tracking-wider text-gray-500">Envase</label>
+                      <select
+                        id="envaseSeg"
+                        value={filtroEnvaseSeg}
+                        onChange={e => setFiltroEnvaseSeg(e.target.value)}
+                        className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      >
+                        <option value="todos">Todos los envases</option>
+                        {ORDEN_ENVASE.map(b => <option key={b} value={b}>{ENVASE_LABEL[b]}</option>)}
+                      </select>
                     </div>
                     <div className="flex items-center gap-2">
                       <label htmlFor="mesSeg" className="text-xs font-bold uppercase tracking-wider text-gray-500">Mes</label>
@@ -1393,8 +1434,8 @@ export default function ProduccionClient({
                     <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
                       <tr>
                         <th className="px-6 py-3 font-bold">Producto</th>
-                        {nivelSeguridad === 'producto_envase' && <th className="px-4 py-3 font-bold">Formato</th>}
                         <th className="px-4 py-3 font-bold">Categoría</th>
+                        <th className="px-4 py-3 font-bold">Formato</th>
                         <th className="px-4 py-3 text-center font-bold">Ventana</th>
                         <th className="px-4 py-3 text-right font-bold">Demanda en ventana</th>
                         <th className="px-4 py-3 text-right font-bold text-amber-700">Stock Seguridad</th>
@@ -1406,48 +1447,50 @@ export default function ProduccionClient({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
-                      {filasStockSeguridad.length === 0 && (
-                        <tr><td colSpan={nivelSeguridad === 'producto_envase' ? 11 : 10} className="px-6 py-10 text-center text-gray-400">Sin datos para este mes.</td></tr>
+                      {gruposStockSeguridad.length === 0 && (
+                        <tr><td colSpan={11} className="px-6 py-10 text-center text-gray-400">Sin datos para este filtro.</td></tr>
                       )}
-                      {filasStockSeguridad.map(f => (
+                      {gruposStockSeguridad.map(grupo => grupo.filas.map((f, i) => (
                         <tr key={`${f.producto}::${f.envase ?? ''}`} className="transition-colors hover:bg-gray-50">
+                          {i === 0 && (
+                            <td rowSpan={grupo.filas.length} className="border-r border-gray-100 px-6 py-3 align-top font-semibold text-gray-800">
+                              <span className="inline-flex items-center gap-2.5">
+                                <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={32} radius={8} />
+                                {grupo.producto}
+                              </span>
+                            </td>
+                          )}
+                          {i === 0 && (
+                            <td rowSpan={grupo.filas.length} className="border-r border-gray-100 px-4 py-3 align-top">
+                              <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${
+                                grupo.categoria === 'cerveza' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
+                              }`}>
+                                {grupo.categoria}
+                              </span>
+                            </td>
+                          )}
                           {/* flex+gap para separar el chip, NO ml-2: el reset
                               global `* { margin:0; padding:0 }` de globals.css
                               gana sobre las utilidades de margin/padding de
                               Tailwind (van en @layer, el reset no), así que
                               ml-* y px-* quedan en 0. gap sí funciona. */}
-                          <td className="px-6 py-3 font-semibold text-gray-800">
-                            <span className="inline-flex items-center gap-2.5">
-                            <ProductImage
-                              nombre={f.producto} categoria={f.categoria}
-                              esBarril={f.envase === 'barril_30' || f.envase === 'barril_50'}
-                              size={32} radius={8}
-                            />
-                            {f.producto}
-                            {f.confianza !== 'alta' && (
-                              <span
-                                className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-bold ${
-                                  f.confianza === 'media' ? 'border-amber-200 bg-amber-50 text-amber-600' : 'border-gray-200 bg-gray-50 text-gray-400'
-                                }`}
-                                title={
-                                  `Confianza ${f.confianza}. ` +
-                                  (f.mapeBacktest != null ? `Error del modelo en el backtest: ${f.mapeBacktest.toFixed(0)}%. ` : 'Sin backtest disponible. ') +
-                                  (f.mesesHistorial != null ? `${f.mesesHistorial} meses de historial.` : '')
-                                }
-                              >
-                                confianza {f.confianza}
-                              </span>
-                            )}
-                            </span>
-                          </td>
-                          {nivelSeguridad === 'producto_envase' && (
-                            <td className="px-4 py-3 text-gray-600">{f.envase ? (ENVASE_LABEL[f.envase as keyof typeof ENVASE_LABEL] ?? f.envase) : '—'}</td>
-                          )}
-                          <td className="px-4 py-3">
-                            <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${
-                              f.categoria === 'cerveza' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
-                            }`}>
-                              {f.categoria}
+                          <td className="px-4 py-3 text-gray-600">
+                            <span className="inline-flex items-center gap-2">
+                              {f.envase ? (ENVASE_LABEL[f.envase as keyof typeof ENVASE_LABEL] ?? f.envase) : '—'}
+                              {f.confianza !== 'alta' && (
+                                <span
+                                  className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-bold ${
+                                    f.confianza === 'media' ? 'border-amber-200 bg-amber-50 text-amber-600' : 'border-gray-200 bg-gray-50 text-gray-400'
+                                  }`}
+                                  title={
+                                    `Confianza ${f.confianza}. ` +
+                                    (f.mapeBacktest != null ? `Error del modelo en el backtest: ${f.mapeBacktest.toFixed(0)}%. ` : 'Sin backtest disponible. ') +
+                                    (f.mesesHistorial != null ? `${f.mesesHistorial} meses de historial.` : '')
+                                  }
+                                >
+                                  confianza {f.confianza}
+                                </span>
+                              )}
                             </span>
                           </td>
                           <td
@@ -1479,7 +1522,7 @@ export default function ProduccionClient({
                             </span>
                           </td>
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
                 </div>
