@@ -2,19 +2,24 @@
 Forecast de Producción (Prophet) — El Regreso PWA
 ====================================================================
 Proyecta litros de demanda a 8 meses: general, por producto y por tipo de
-envase (barril 30L / barril 50L / lata 354ml / lata 473ml / otros). NO toca
-Supabase directo: lee los datos ya limpios desde GET /api/produccion/datos
-(esa ruta aplica la exclusión de clientes internos/mermas y el cruce
-producto→código — la lógica de negocio vive una sola vez, en TypeScript) y
-sube el resultado a POST /api/produccion/forecast/upload.
+envase (barril 30L / barril 50L / lata — "otros" queda excluido del nivel
+producto×envase, ver la nota en main()). NO toca Supabase directo: lee los
+datos ya limpios desde GET /api/produccion/datos (esa ruta aplica la
+exclusión de clientes internos/mermas y el cruce producto→código — la
+lógica de negocio vive una sola vez, en TypeScript) y sube el resultado a
+POST /api/produccion/forecast/upload.
 
 Por cada serie con al menos MIN_MESES_FORECAST meses de historial:
   1. Ajusta Prophet sobre toda la serie → proyecta 8 meses.
-  2. Backtest: entrena sin los últimos MESES_BACKTEST meses, predice esos
-     meses y los compara contra lo real (MAE / MAPE) — así se ve qué tan
-     confiable es cada proyección, no sólo el número.
+  2. Backtest walk-forward: MESES_BACKTEST pliegues de "entrená hasta el mes
+     M-1, predecí el mes M" — valida específicamente la predicción a 1 mes
+     (la misma pregunta que "Próximo mes" muestra en producción), no una
+     tanda de varios meses de una sola pasada.
 Series con menos historial se saltan (ya vienen marcadas como "historial
-corto" en la respuesta de /api/produccion/datos).
+corto" en la respuesta de /api/produccion/datos). Además, producto_envase
+con poca historia PROPIA o mal backtest propio se deriva del forecast del
+producto en vez de forzar un modelo casi sin datos (ver derivar_de_producto
+y MIN_MESES_MODELO_PROPIO/MAPE_MAXIMO_MODELO_PROPIO más abajo).
 
 Ejecución local :  python generar_forecast.py
 En producción   :  GitHub Actions (.github/workflows/forecast-produccion.yml),
@@ -40,7 +45,7 @@ UPLOAD_SECRET = os.getenv("UPLOAD_SECRET_FORECAST")
 
 HORIZONTE_MESES = 8
 MIN_MESES_FORECAST = 6
-MESES_BACKTEST = 3
+MESES_BACKTEST = 6   # pliegues del walk-forward — ver backtest()
 MESES_INACTIVIDAD = 6   # sin ventas por este tiempo ⇒ serie descontinuada, no se proyecta
 HEADERS = {"Authorization": f"Bearer {UPLOAD_SECRET}"}
 
@@ -151,28 +156,60 @@ def ajustar_y_proyectar(df: pd.DataFrame, mes_base: pd.Timestamp) -> tuple[pd.Da
 
 
 def backtest(df: pd.DataFrame) -> dict | None:
-    """Entrena sin los últimos MESES_BACKTEST meses, predice esos meses y
-    compara contra lo real. None si no alcanza el historial para hacerlo."""
+    """Walk-forward de 1 mes, con MESES_BACKTEST pliegues.
+
+    Para cada uno de los últimos MESES_BACKTEST meses: entrena SÓLO con lo
+    anterior a ese mes y predice ÚNICAMENTE ese mes (1 mes adelante) — nunca
+    una tanda de varios meses de una sola pasada.
+
+    Por qué el cambio (versión anterior: una sola tanda prediciendo los
+    últimos 3 meses de una vez, entrenada una sola vez): esa versión mezclaba
+    en un solo número el error a 1, 2 y 3 meses de horizonte, que no es lo
+    mismo — el segundo y tercer mes de cualquier proyección siempre acumulan
+    más incertidumbre que el primero. Pero "Próximo mes (proy.)", el número
+    que más se mira en pantalla, es SIEMPRE una predicción a 1 mes. Validar
+    con un horizonte mixto medía una pregunta distinta de la que se muestra.
+    Ahora cada pliegue es específicamente "entrená con datos hasta el mes
+    M-1, ¿qué tan bien predecís el mes M" — la MISMA pregunta que responde
+    "Próximo mes" en producción, repetida en 6 puntos distintos del
+    historial para que el MAPE resultante sea una medida estable y no el
+    azar de haber acertado o fallado una sola tanda.
+
+    Costo: reentrena Prophet una vez por pliegue (hasta 6 fits en vez de 1)
+    — el timeout del workflow se subió de 30 a 45 min para compensar.
+
+    None si no alcanza el historial para al menos un pliegue completo.
+    """
     if len(df) < MIN_MESES_FORECAST + MESES_BACKTEST:
         return None
-    corte = len(df) - MESES_BACKTEST
-    train, test = df.iloc[:corte], df.iloc[corte:]
-    m = Prophet(yearly_seasonality=len(train) >= 24, weekly_seasonality=False, daily_seasonality=False)
-    m.fit(train)
-    futuro = m.make_future_dataframe(periods=MESES_BACKTEST, freq="MS")
-    pred = m.predict(futuro).tail(MESES_BACKTEST)
-    real = test["y"].to_numpy()
-    estim = pred["yhat"].clip(lower=0).to_numpy()
-    mae = float(abs(real - estim).mean())
+
+    n = len(df)
+    reales: list[float] = []
+    estimados: list[float] = []
+    for corte in range(n - MESES_BACKTEST, n):
+        train = df.iloc[:corte]
+        if len(train) < MIN_MESES_FORECAST:
+            continue  # el primer pliegue puede no alcanzar el mínimo si la serie recién llega a MIN_MESES_FORECAST+MESES_BACKTEST
+        m = Prophet(yearly_seasonality=len(train) >= 24, weekly_seasonality=False, daily_seasonality=False)
+        m.fit(train)
+        futuro = m.make_future_dataframe(periods=1, freq="MS")
+        pred = m.predict(futuro).iloc[-1]
+        reales.append(float(df.iloc[corte]["y"]))
+        estimados.append(max(float(pred["yhat"]), 0.0))
+
+    if not reales:
+        return None
+
+    mae = sum(abs(r - e) for r, e in zip(reales, estimados)) / len(reales)
     # MAPE ignora meses reales en 0 (división por cero no tiene sentido ahí).
     # abs() también en el denominador: algunas series (ej. "otros formatos",
     # que mezcla devoluciones/notas de crédito) pueden tener un mes con litros
     # netos negativos — sin el abs() el signo del error se invertía y mostraba
     # desvíos negativos sin sentido (confirmado con una corrida real: -108%).
-    no_cero = real != 0
-    mape = float((abs(real[no_cero] - estim[no_cero]) / abs(real[no_cero])).mean() * 100) if no_cero.any() else None
+    pares_no_cero = [(r, e) for r, e in zip(reales, estimados) if r != 0]
+    mape = (sum(abs(r - e) / abs(r) for r, e in pares_no_cero) / len(pares_no_cero) * 100) if pares_no_cero else None
     return {"mae": round(mae, 2), "mape": round(mape, 1) if mape is not None else None,
-            "mesesEvaluados": MESES_BACKTEST, "mesesHistorial": len(df)}
+            "mesesEvaluados": len(reales), "mesesHistorial": len(df)}
 
 
 def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], mes_base: pd.Timestamp, silencioso: bool = False) -> dict:
@@ -486,18 +523,19 @@ def main() -> int:
             )
             if derivado:
                 forecast.extend(derivado["forecast"])
-                # mesesHistorial queda el de la combinación (cuánta historia
-                # REAL tiene, aunque el número salga derivado) — es lo que
-                # calcular_stock_seguridad usa para decidir confianza cuando
-                # metodo="propio" no aplica.
+                # El MAPE (y sus pliegues evaluados) del PRODUCTO es la mejor
+                # estimación disponible del error relativo de ESTE número:
+                # escalar una serie por una proporción constante no cambia su
+                # error porcentual. mesesHistorial queda el de la combinación
+                # (cuánta historia REAL tiene, aunque el número salga
+                # derivado) — es lo que calcular_stock_seguridad usa para
+                # decidir confianza cuando metodo="propio" no aplica.
+                bt_producto = next((v for v in validacion if v["nivel"] == "producto" and v.get("clave") == producto), None)
                 validacion.append({
                     "nivel": "producto_envase", "clave": clave, "metodo": "derivado",
                     "mae": None,
-                    # El MAPE del producto es la mejor estimación disponible del
-                    # error relativo de ESTE número: escalar una serie por una
-                    # proporción constante no cambia su error porcentual.
-                    "mape": next((v.get("mape") for v in validacion if v["nivel"] == "producto" and v.get("clave") == producto), None),
-                    "mesesEvaluados": MESES_BACKTEST,
+                    "mape": bt_producto.get("mape") if bt_producto else None,
+                    "mesesEvaluados": bt_producto.get("mesesEvaluados") if bt_producto else MESES_BACKTEST,
                     "mesesHistorial": len(resultado["df"]),
                 })
                 n_derivado += 1

@@ -13,7 +13,7 @@ on:
 jobs:
   forecast:
     runs-on: ubuntu-latest
-    timeout-minutes: 30   # Prophet compila un modelo Stan la primera vez que corre — más lento que el resto de los sync
+    timeout-minutes: 45   # Prophet compila un modelo Stan la primera vez que corre; el backtest ahora es walk-forward (hasta 6 fits por serie en vez de 1), más lento que el resto de los sync
 
     steps:
       - name: Checkout
