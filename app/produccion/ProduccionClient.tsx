@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import ProductImage from '@/components/ui/ProductImage'
 import {
   Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea,
   ResponsiveContainer, ComposedChart, Line, Area,
@@ -1241,7 +1242,18 @@ export default function ProduccionClient({
                         return (
                           <tr key={serie.id} className="transition-colors hover:bg-gray-50">
                             <td className="px-6 py-2.5 font-semibold text-gray-800">
-                              {productoRepetido ? <span className="text-gray-300">″</span> : serie.producto}
+                              {productoRepetido ? (
+                                <span className="pl-[42px] text-gray-300">″</span>
+                              ) : (
+                                <span className="inline-flex items-center gap-2.5">
+                                  <ProductImage
+                                    nombre={serie.producto} categoria={serie.categoria}
+                                    esBarril={serie.envaseBucket === 'barril_30' || serie.envaseBucket === 'barril_50'}
+                                    size={32} radius={8}
+                                  />
+                                  {serie.producto}
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-2.5 text-gray-600">{ENVASE_LABEL[(serie.envaseBucket ?? 'otros') as EnvaseBucket] ?? serie.envaseBucket}</td>
                             <td className="px-4 py-2.5">
@@ -1405,7 +1417,12 @@ export default function ProduccionClient({
                               Tailwind (van en @layer, el reset no), así que
                               ml-* y px-* quedan en 0. gap sí funciona. */}
                           <td className="px-6 py-3 font-semibold text-gray-800">
-                            <span className="inline-flex items-center gap-2">
+                            <span className="inline-flex items-center gap-2.5">
+                            <ProductImage
+                              nombre={f.producto} categoria={f.categoria}
+                              esBarril={f.envase === 'barril_30' || f.envase === 'barril_50'}
+                              size={32} radius={8}
+                            />
                             {f.producto}
                             {f.confianza !== 'alta' && (
                               <span
@@ -1504,7 +1521,10 @@ export default function ProduccionClient({
                                   <tr key={`${grupo.producto}::${formato.bucket}::${fc.camara}`} className="transition-colors hover:bg-gray-50">
                                     {primeraFilaProducto && (
                                       <td rowSpan={filasCamara} className="border-r border-gray-100 px-6 py-2.5 align-top font-semibold text-gray-800">
-                                        {grupo.producto}
+                                        <span className="inline-flex items-center gap-2.5">
+                                          <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={32} radius={8} />
+                                          {grupo.producto}
+                                        </span>
                                       </td>
                                     )}
                                     {primeraFilaProducto && (
