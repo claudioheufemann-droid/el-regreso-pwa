@@ -15,6 +15,10 @@ function puedeGestionar(user: { isAdmin: boolean; macroArea: string | null }) {
   return user.isAdmin || user.macroArea === 'produccion'
 }
 
+// En modo demo `user.id` es el string literal 'demo', no un uuid — la
+// columna creado_por acepta null para ese caso (ver control-comercial/reportes).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function GET() {
   const user = await getServerUser()
   if (!user || !puedeGestionar(user)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -82,7 +86,7 @@ export async function POST(req: Request) {
       origen: body.origen ?? 'manual',
       motivo: body.motivo ?? null,
       observaciones: body.observaciones ?? null,
-      creado_por: user.id,
+      creado_por: UUID_RE.test(user.id) ? user.id : null,
     })
     .select('*')
     .single()
