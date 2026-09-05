@@ -1,0 +1,92 @@
+import { NextResponse } from 'next/server'
+import { getServerUser } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
+
+/**
+ * GET/POST /api/produccion/plan
+ *
+ * Cola priorizada de cocciones planificadas (tabla plan_produccion) — ver el
+ * comentario extenso en la migración. Mismo patrón de auth que el resto de
+ * Producción (getServerUser + service-role): en modo demo no hay sesión real
+ * de Supabase, así que RLS `authenticated` bloquearía cualquier escritura
+ * directa desde el cliente.
+ */
+function puedeGestionar(user: { isAdmin: boolean; macroArea: string | null }) {
+  return user.isAdmin || user.macroArea === 'produccion'
+}
+
+export async function GET() {
+  const user = await getServerUser()
+  if (!user || !puedeGestionar(user)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('plan_produccion')
+    .select('*')
+    .in('estado', ['planificado', 'en_curso'])
+    .order('prioridad', { ascending: true })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
+}
+
+interface CrearLotePlan {
+  producto: string
+  categoria: 'cerveza' | 'kombucha'
+  litrosPlanificados: number
+  fechaPlanificada: string
+  origen?: 'sugerido' | 'manual'
+  motivo?: string | null
+  observaciones?: string | null
+}
+
+export async function POST(req: Request) {
+  const user = await getServerUser()
+  if (!user || !puedeGestionar(user)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+  let body: CrearLotePlan
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
+  }
+  if (!body.producto || !body.categoria || !body.litrosPlanificados || !body.fechaPlanificada) {
+    return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 })
+  }
+  if (body.litrosPlanificados <= 0) {
+    return NextResponse.json({ error: 'Los litros planificados deben ser mayores a 0' }, { status: 400 })
+  }
+
+  const admin = createAdminClient()
+
+  // Nueva fila SIEMPRE al final de la cola activa — el usuario reordena
+  // después si quiere adelantarla. Evita que dos altas simultáneas elijan la
+  // misma prioridad (a diferencia de calcularla en el cliente).
+  const { data: maxRow } = await admin
+    .from('plan_produccion')
+    .select('prioridad')
+    .in('estado', ['planificado', 'en_curso'])
+    .order('prioridad', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const prioridad = (maxRow?.prioridad ?? -1) + 1
+
+  const { data, error } = await admin
+    .from('plan_produccion')
+    .insert({
+      producto: body.producto,
+      categoria: body.categoria,
+      litros_planificados: body.litrosPlanificados,
+      fecha_planificada: body.fechaPlanificada,
+      prioridad,
+      origen: body.origen ?? 'manual',
+      motivo: body.motivo ?? null,
+      observaciones: body.observaciones ?? null,
+      creado_por: user.id,
+    })
+    .select('*')
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data, { status: 201 })
+}

@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import ProductImage from '@/components/ui/ProductImage'
 import {
   Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea,
@@ -12,8 +13,9 @@ import {
   LayoutDashboard, TrendingUp, Package, CalendarDays, ShoppingCart,
   CircleDollarSign, Bell, Plus, AlertTriangle, Calendar as CalendarIcon,
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
+  ArrowUp, ArrowDown, GripVertical, CheckCircle2, XCircle, Trash2, X, Lightbulb,
 } from 'lucide-react'
-import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem } from './page'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan } from './page'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -63,39 +65,6 @@ const DEMO_insumosData = [
   { id: 7, insumo: 'Latas 473ml', categoria: 'Empaque', stock: 1500, consumo: 5000, necesidad: 3500, leadTime: 30, fechaPedido: '01/11/2026', estado: 'critico' },
 ]
 
-const DEMO_calendario = [
-  { dia: 1, cocciones: [] },
-  { dia: 2, cocciones: [{ estilo: 'Doble IPA', tipo: 'cerveza', urgente: false }, { estilo: 'Kombucha Maqui', tipo: 'kombucha', urgente: false }] },
-  { dia: 3, cocciones: [{ estilo: 'Doble IPA', tipo: 'cerveza', urgente: false }] },
-  { dia: 4, cocciones: [{ estilo: 'Doble IPA', tipo: 'cerveza', urgente: false }] },
-  { dia: 5, cocciones: [{ estilo: 'La Barra APA', tipo: 'cerveza', urgente: false }] },
-  { dia: 6, cocciones: [{ estilo: 'Red IPA', tipo: 'cerveza', urgente: false }] },
-  { dia: 7, cocciones: [] },
-  { dia: 8, cocciones: [{ estilo: 'Kombucha Lemon', tipo: 'kombucha', urgente: false }] },
-  { dia: 9, cocciones: [{ estilo: 'Kombucha Lemon', tipo: 'kombucha', urgente: false }] },
-  { dia: 10, cocciones: [{ estilo: 'Kombucha Maqui', tipo: 'kombucha', urgente: false }] },
-  { dia: 11, cocciones: [{ estilo: 'Imperial Stout', tipo: 'cerveza', urgente: false }, { estilo: 'Kombucha Detox', tipo: 'kombucha', urgente: false }] },
-  { dia: 12, cocciones: [{ estilo: 'La Barra APA', tipo: 'cerveza', urgente: false }, { estilo: 'Mocho English', tipo: 'cerveza', urgente: false }] },
-  { dia: 13, cocciones: [{ estilo: 'La Barra APA', tipo: 'cerveza', urgente: false }] },
-  { dia: 14, cocciones: [] },
-  { dia: 15, cocciones: [{ estilo: 'Doble IPA', tipo: 'cerveza', urgente: false }] },
-  { dia: 16, cocciones: [{ estilo: 'Kombucha Berry Menta', tipo: 'kombucha', urgente: false }] },
-  { dia: 17, cocciones: [{ estilo: 'ÁMBAR LAGER', tipo: 'cerveza', urgente: true, detalle: 'Tanque FV-4 | Vol: 1000L' }] },
-  { dia: 18, cocciones: [{ estilo: 'ÁMBAR LAGER', tipo: 'cerveza', urgente: true }] },
-  { dia: 19, cocciones: [{ estilo: 'Imperial Stout', tipo: 'cerveza', urgente: false }] },
-  { dia: 20, cocciones: [{ estilo: 'Fisura', tipo: 'cerveza', urgente: false }] },
-  { dia: 21, cocciones: [] },
-  { dia: 22, cocciones: [{ estilo: 'Doble IPA', tipo: 'cerveza', urgente: false }] },
-  { dia: 23, cocciones: [{ estilo: 'Imperial Stout', tipo: 'cerveza', urgente: false }] },
-  { dia: 24, cocciones: [{ estilo: 'Arboretum', tipo: 'cerveza', urgente: false }] },
-  { dia: 25, cocciones: [] },
-  { dia: 26, cocciones: [] },
-  { dia: 27, cocciones: [{ estilo: 'La Barra APA', tipo: 'cerveza', urgente: false }] },
-  { dia: 28, cocciones: [] },
-  { dia: 29, cocciones: [{ estilo: 'Aguas Blancas', tipo: 'cerveza', urgente: false }] },
-  { dia: 30, cocciones: [{ estilo: 'Kombucha Natural', tipo: 'kombucha', urgente: false }] },
-  { dia: 31, cocciones: [] },
-]
 
 /* ── Utilidades de formato ─────────────────────────────────────────────── */
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -150,7 +119,81 @@ const GRUPOS_NAV: { titulo: string; items: TabId[] }[] = [
 
 /** Secciones que todavía son maqueta (ver DATOS DE DEMOSTRACIÓN arriba). Se
  *  marcan en el propio menú para que nadie entre esperando datos reales. */
-const DEMO_TABS = new Set<TabId>(['plan', 'insumos', 'presupuesto'])
+const DEMO_TABS = new Set<TabId>(['insumos', 'presupuesto'])
+
+/** Alta manual de un lote al Plan Maestro. Estado propio (no vive en el
+ *  padre) porque es puramente del formulario — se descarta al cerrar. */
+function FormNuevoLote({
+  guardando, onCancelar, onGuardar,
+}: {
+  guardando: boolean
+  onCancelar: () => void
+  onGuardar: (datos: { producto: string; categoria: 'cerveza' | 'kombucha'; litrosPlanificados: number; fechaPlanificada: string; origen: 'manual' }) => void
+}) {
+  const [producto, setProducto] = useState('')
+  const [categoria, setCategoria] = useState<'cerveza' | 'kombucha'>('cerveza')
+  const [litros, setLitros] = useState('')
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10))
+
+  const litrosNum = Number(litros)
+  const valido = producto.trim().length > 0 && litrosNum > 0 && fecha.length > 0
+
+  function submit() {
+    if (!valido) return
+    onGuardar({ producto: producto.trim(), categoria, litrosPlanificados: litrosNum, fechaPlanificada: fecha, origen: 'manual' })
+    setProducto(''); setLitros('')
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-3 border-b border-gray-100 bg-gray-50/70 p-5">
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-500">Producto</label>
+        <input
+          value={producto} onChange={e => setProducto(e.target.value)}
+          placeholder="Ej: Doble IPA"
+          className="w-48 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-500">Categoría</label>
+        <select
+          value={categoria} onChange={e => setCategoria(e.target.value as 'cerveza' | 'kombucha')}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+        >
+          <option value="cerveza">Cerveza</option>
+          <option value="kombucha">Kombucha</option>
+        </select>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-500">Litros</label>
+        <input
+          type="number" min={1} value={litros} onChange={e => setLitros(e.target.value)}
+          placeholder="1000"
+          className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-500">Fecha planificada</label>
+        <input
+          type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+        />
+      </div>
+      <div className="flex gap-2">
+        <button
+          disabled={!valido || guardando}
+          onClick={submit}
+          className="rounded-lg bg-[#0F3D2E] px-4 py-2 text-sm font-bold text-white hover:bg-[#1A5441] disabled:opacity-40"
+        >
+          {guardando ? 'Guardando…' : 'Agregar a la cola'}
+        </button>
+        <button onClick={onCancelar} className="rounded-lg px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  )
+}
 
 
 /* ── Chip de desviación del modelo (MAPE del backtest) ──────────────────
@@ -195,10 +238,14 @@ function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.R
 }
 
 export default function ProduccionClient({
-  series, calidad, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, planProduccion, sugerenciasPlan, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
+  /** Cola real del Plan Maestro (tabla plan_produccion), ya ordenada por prioridad. */
+  planProduccion: LotePlan[]
+  /** Sugerencias calculadas en vivo comparando disponible vs. punto de reorden — no persistidas hasta que el usuario las confirma. */
+  sugerenciasPlan: SugerenciaPlan[]
   stock: StockItem[]
   stockSeguridad: StockSeguridadItem[]
   ultimaCorrida: string | null
@@ -214,7 +261,79 @@ export default function ProduccionClient({
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('resumen')
   const [serieId, setSerieId] = useState<string>(series[0]?.id ?? '')
-  const [avisoCoccion, setAvisoCoccion] = useState(false)
+  const router = useRouter()
+  // Estado local del Plan Maestro, sincronizado con la prop del servidor pero
+  // actualizado optimistamente en cada acción (reordenar, agregar, cambiar
+  // estado) para que la UI responda al toque — router.refresh() por detrás
+  // trae el estado real del servidor y lo reconcilia.
+  const [plan, setPlan] = useState<LotePlan[]>(planProduccion)
+  const [guardandoPlan, setGuardandoPlan] = useState(false)
+  const [errorPlan, setErrorPlan] = useState<string | null>(null)
+  const [mostrarFormLote, setMostrarFormLote] = useState(false)
+  React.useEffect(() => { setPlan(planProduccion) }, [planProduccion])
+
+  async function moverLote(id: string, direccion: -1 | 1) {
+    const idx = plan.findIndex(l => l.id === id)
+    const destino = idx + direccion
+    if (idx < 0 || destino < 0 || destino >= plan.length) return
+    const nuevo = [...plan]
+    ;[nuevo[idx], nuevo[destino]] = [nuevo[destino], nuevo[idx]]
+    setPlan(nuevo)
+    setErrorPlan(null)
+    try {
+      const r = await fetch('/api/produccion/plan/reordenar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: nuevo.map(l => l.id) }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo reordenar')
+      router.refresh()
+    } catch (e) {
+      setPlan(plan) // revierte el optimista
+      setErrorPlan(e instanceof Error ? e.message : 'Error al reordenar')
+    }
+  }
+
+  async function cambiarEstadoLote(id: string, estado: LotePlan['estado']) {
+    const previo = plan
+    setPlan(estado === 'cancelado' || estado === 'completado' ? plan.filter(l => l.id !== id) : plan.map(l => l.id === id ? { ...l, estado } : l))
+    setErrorPlan(null)
+    try {
+      const r = await fetch(`/api/produccion/plan/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo actualizar')
+      router.refresh()
+    } catch (e) {
+      setPlan(previo)
+      setErrorPlan(e instanceof Error ? e.message : 'Error al actualizar el estado')
+    }
+  }
+
+  async function agregarLote(datos: { producto: string; categoria: 'cerveza' | 'kombucha'; litrosPlanificados: number; fechaPlanificada: string; motivo?: string | null; origen?: 'sugerido' | 'manual' }) {
+    setGuardandoPlan(true)
+    setErrorPlan(null)
+    try {
+      const r = await fetch('/api/produccion/plan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datos),
+      })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo agregar el lote')
+      const nuevo = await r.json()
+      setPlan(p => [...p, {
+        id: nuevo.id, producto: nuevo.producto, categoria: nuevo.categoria,
+        litrosPlanificados: Number(nuevo.litros_planificados), fechaPlanificada: String(nuevo.fecha_planificada).slice(0, 10),
+        prioridad: Number(nuevo.prioridad), estado: nuevo.estado, origen: nuevo.origen,
+        motivo: nuevo.motivo, observaciones: nuevo.observaciones,
+      }])
+      setMostrarFormLote(false)
+      router.refresh()
+    } catch (e) {
+      setErrorPlan(e instanceof Error ? e.message : 'Error al agregar el lote')
+    } finally {
+      setGuardandoPlan(false)
+    }
+  }
   const [busquedaInsumo, setBusquedaInsumo] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
   const [filtroEnvase, setFiltroEnvase] = useState<string>('todos')
@@ -350,6 +469,34 @@ export default function ProduccionClient({
     () => series.filter(s => s.nivel === 'producto' && (s.mape == null || s.mape > 30)),
     [series]
   )
+
+  /* ── Cronograma de Cocciones (mes calendario real, no ciclo de venta) ───
+     Antes usaba DEMO_calendario (31 días fijos, ni respetaba en qué día de
+     la semana cae el 1). Ahora sale del Plan Maestro real: un lote aparece
+     el día de su fecha planificada, con el grid alineado a los días de la
+     semana de verdad. */
+  const calendarioReal = useMemo(() => {
+    const hoy = new Date()
+    const anio = hoy.getFullYear(), mesIdx = hoy.getMonth()
+    const diasEnMesCal = new Date(anio, mesIdx + 1, 0).getDate()
+    const hoyISO = hoy.toISOString().slice(0, 10)
+    // Lunes=0 ... Domingo=6, para alinear con el header de la grilla.
+    const offsetPrimerDia = (new Date(anio, mesIdx, 1).getDay() + 6) % 7
+
+    const porDia = new Map<number, { estilo: string; tipo: 'cerveza' | 'kombucha'; urgente: boolean; detalle?: string }[]>()
+    for (const l of plan) {
+      const [y, m, d] = l.fechaPlanificada.split('-').map(Number)
+      if (y !== anio || m !== mesIdx + 1) continue
+      const atrasado = l.fechaPlanificada < hoyISO && l.estado === 'planificado'
+      if (!porDia.has(d)) porDia.set(d, [])
+      porDia.get(d)!.push({
+        estilo: l.producto, tipo: l.categoria, urgente: atrasado,
+        detalle: atrasado ? 'Debería haber empezado ya, según la fecha planificada.' : (l.motivo ?? undefined),
+      })
+    }
+    const dias = Array.from({ length: diasEnMesCal }, (_, i) => ({ dia: i + 1, cocciones: porDia.get(i + 1) ?? [] }))
+    return { dias, offsetPrimerDia }
+  }, [plan])
   const desviacionGeneral = serieGeneral?.mape ?? null
   const precisionSerie = serieActual?.mape != null ? Math.max(0, 100 - serieActual.mape) : null
 
@@ -657,7 +804,7 @@ export default function ProduccionClient({
             </div>
 
             <button
-              onClick={() => setAvisoCoccion(v => !v)}
+              onClick={() => { setActiveTab('plan'); setMostrarFormLote(true) }}
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white shadow-sm transition-transform hover:scale-105 lg:px-4"
               style={{ backgroundColor: COLORS.amber }}
             >
@@ -667,14 +814,11 @@ export default function ProduccionClient({
           </div>
         </header>
 
-        {avisoCoccion && (
-          <div className="flex shrink-0 items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 lg:px-8">
+        {errorPlan && (
+          <div className="flex shrink-0 items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800 lg:px-8">
             <Info size={16} className="mt-0.5 shrink-0" />
-            <span>
-              El plan de cocciones todavía no está conectado — no existe una tabla de cocciones en la base.
-              Cuando exista, este botón crea el registro desde acá.
-            </span>
-            <button onClick={() => setAvisoCoccion(false)} className="ml-auto shrink-0 font-bold hover:underline">Cerrar</button>
+            <span>{errorPlan}</span>
+            <button onClick={() => setErrorPlan(null)} className="ml-auto shrink-0 font-bold hover:underline">Cerrar</button>
           </div>
         )}
 
@@ -773,12 +917,16 @@ export default function ProduccionClient({
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-4 lg:px-6">
                     <div className="flex flex-wrap items-center gap-3">
                       <h3 className="font-bold text-gray-800">Cronograma de Cocciones</h3>
-                      <BadgeDemo />
+                      <span className="text-xs font-medium text-gray-400">
+                        {new Date().toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}
+                      </span>
                     </div>
-                    <div className="flex gap-2">
-                      <button className="rounded border border-gray-300 bg-white px-3 py-1 text-sm font-medium shadow-sm">Mes</button>
-                      <button className="rounded px-3 py-1 text-sm font-medium text-gray-500 hover:bg-gray-100">Semana</button>
-                    </div>
+                    <button
+                      onClick={() => setActiveTab('plan')}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                    >
+                      Ver Plan Maestro →
+                    </button>
                   </div>
 
                   <div className="flex-1 overflow-auto p-4">
@@ -789,7 +937,9 @@ export default function ProduccionClient({
                         </div>
                       ))}
 
-                      {DEMO_calendario.map(dia => (
+                      {Array.from({ length: calendarioReal.offsetPrimerDia }, (_, i) => <div key={`vacio-${i}`} />)}
+
+                      {calendarioReal.dias.map(dia => (
                         <div
                           key={dia.dia}
                           className="relative flex min-h-[80px] flex-col gap-1 rounded-md border border-gray-100 bg-gray-50/30 p-1.5 transition-colors hover:bg-gray-50"
@@ -802,9 +952,7 @@ export default function ProduccionClient({
                                 className={`group relative cursor-pointer truncate rounded-sm px-1.5 py-1 text-[10px] font-bold ${
                                   coccion.urgente
                                     ? 'border-[1.5px] border-red-500 bg-red-50 text-red-700 shadow-sm'
-                                    : coccion.tipo === 'kombucha'
-                                      ? 'text-white'
-                                      : 'text-white'
+                                    : 'text-white'
                                 }`}
                                 style={
                                   coccion.urgente
@@ -815,16 +963,25 @@ export default function ProduccionClient({
                                 {coccion.estilo}
                                 {coccion.urgente && (
                                   <div className="absolute -top-12 left-0 z-10 hidden w-40 flex-col rounded bg-gray-900 p-2 text-xs font-normal text-white shadow-xl group-hover:flex">
-                                    <span className="font-bold text-red-400">URGENTE · Reorden</span>
-                                    <span>{('detalle' in coccion && coccion.detalle) || 'Requiere acción'}</span>
+                                    <span className="font-bold text-red-400">ATRASADO</span>
+                                    <span>{coccion.detalle || 'Requiere acción'}</span>
                                   </div>
                                 )}
                               </div>
                             ))}
+                            {dia.cocciones.length === 0 && (
+                              <span className="text-[10px] text-gray-300">—</span>
+                            )}
                           </div>
                         </div>
                       ))}
                     </div>
+                    {plan.length === 0 && (
+                      <p className="mt-4 text-center text-sm text-gray-400">
+                        Todavía no hay cocciones planificadas — agregalas desde{' '}
+                        <button onClick={() => setActiveTab('plan')} className="font-bold underline">Plan Maestro</button>.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1655,22 +1812,193 @@ export default function ProduccionClient({
             </div>
           )}
 
-          {/* ══════════ VISTA 4: PLAN MAESTRO ══════════ */}
+          {/* ══════════ VISTA 4: PLAN MAESTRO ══════════
+              Cola priorizada (estilo kanban/MRP: arriba = próximo a cocer).
+              Combina lo agendado a mano con sugerencias en vivo derivadas del
+              punto de reorden (Stock de Seguridad), para balancear quiebre de
+              stock vs. sobreproducción sin inventar una fórmula nueva. */}
           {activeTab === 'plan' && (
-            <div className="flex h-full items-center justify-center">
-              <div className="flex max-w-md flex-col items-center gap-4 text-center text-gray-400">
-                <Settings size={48} className="opacity-50" />
-                <h3 className="text-xl font-medium text-gray-500">Módulo en construcción</h3>
-                <p className="text-sm">
-                  La asignación de capacidad finita (qué se cuece, en qué tanque y qué día) necesita una tabla de
-                  cocciones y de fermentadores que todavía no existe en la base.
-                </p>
-                <button
-                  onClick={() => setActiveTab('resumen')}
-                  className="mt-2 rounded-lg bg-gray-200 px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-300"
-                >
-                  Volver al Resumen
-                </button>
+            <div className="flex h-full flex-col gap-6">
+              {sugerenciasPlan.length > 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Lightbulb size={18} className="text-amber-600" />
+                    <h3 className="font-bold text-amber-900">Sugerencias basadas en el forecast</h3>
+                    <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-xs font-bold text-amber-800">
+                      {sugerenciasPlan.length}
+                    </span>
+                  </div>
+                  <p className="mb-4 text-sm text-amber-800/80">
+                    Estos productos están (o van a quedar) por debajo del punto de reorden según el disponible actual
+                    y el forecast del próximo ciclo. Agrégalos al plan si corresponde cocerlos.
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {sugerenciasPlan.map((s, i) => (
+                      <div key={`${s.producto}-${i}`} className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-center gap-2.5">
+                          <ProductImage nombre={s.producto} categoria={s.categoria} size={28} radius={7} />
+                          <span className="font-semibold text-gray-800">{s.producto}</span>
+                        </div>
+                        <p className="text-xs text-gray-500">{s.motivo}</p>
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosSugeridos)} L</span>
+                          <button
+                            disabled={guardandoPlan}
+                            onClick={() => agregarLote({
+                              producto: s.producto,
+                              categoria: s.categoria,
+                              litrosPlanificados: Math.round(s.litrosSugeridos),
+                              fechaPlanificada: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+                              origen: 'sugerido',
+                              motivo: s.motivo,
+                            })}
+                            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                          >
+                            Agregar al plan
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+                  <div>
+                    <h3 className="font-bold text-gray-800">Plan Maestro de Producción</h3>
+                    <p className="text-xs text-gray-500">
+                      Cola priorizada — la fila de arriba es la próxima cocción. Usa las flechas para reordenar.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setMostrarFormLote(v => !v)}
+                    className="flex items-center gap-2 rounded-lg bg-[#0F3D2E] px-4 py-2 text-sm font-bold text-white hover:bg-[#1A5441]"
+                  >
+                    {mostrarFormLote ? <X size={16} /> : <Plus size={16} />}
+                    {mostrarFormLote ? 'Cerrar' : 'Agregar lote'}
+                  </button>
+                </div>
+
+                {mostrarFormLote && (
+                  <FormNuevoLote guardando={guardandoPlan} onCancelar={() => setMostrarFormLote(false)} onGuardar={agregarLote} />
+                )}
+
+                <div className="flex-1 overflow-auto">
+                  {plan.length === 0 ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-gray-400">
+                      <CalendarIcon size={40} className="opacity-50" />
+                      <p className="text-sm">
+                        Todavía no hay lotes en el plan. Agrega uno manual o confirma alguna sugerencia de arriba.
+                      </p>
+                    </div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                        <tr>
+                          <th className="w-16 px-4 py-2.5 text-left">Orden</th>
+                          <th className="px-4 py-2.5 text-left">Producto</th>
+                          <th className="px-4 py-2.5 text-right">Litros</th>
+                          <th className="px-4 py-2.5 text-left">Fecha planificada</th>
+                          <th className="px-4 py-2.5 text-left">Origen</th>
+                          <th className="px-4 py-2.5 text-left">Estado</th>
+                          <th className="px-4 py-2.5 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {plan.map((lote, idx) => {
+                          const atrasado = lote.estado === 'planificado' && lote.fechaPlanificada < new Date().toISOString().slice(0, 10)
+                          return (
+                            <tr key={lote.id} className={atrasado ? 'bg-red-50/40' : undefined}>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-1">
+                                  <span className="w-5 text-center font-bold tabular-nums text-gray-400">{idx + 1}</span>
+                                  <div className="flex flex-col">
+                                    <button
+                                      disabled={idx === 0}
+                                      onClick={() => moverLote(lote.id, -1)}
+                                      className="rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-20"
+                                      title="Subir prioridad"
+                                    >
+                                      <ArrowUp size={14} />
+                                    </button>
+                                    <button
+                                      disabled={idx === plan.length - 1}
+                                      onClick={() => moverLote(lote.id, 1)}
+                                      className="rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-20"
+                                      title="Bajar prioridad"
+                                    >
+                                      <ArrowDown size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2.5">
+                                  <ProductImage nombre={lote.producto} categoria={lote.categoria} size={30} radius={7} />
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-gray-800">{lote.producto}</span>
+                                    {lote.motivo && <span className="text-xs text-gray-400">{lote.motivo}</span>}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-700">
+                                {fNum(lote.litrosPlanificados)} L
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={atrasado ? 'font-semibold text-red-600' : 'text-gray-600'}>
+                                  {new Date(lote.fechaPlanificada + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}
+                                  {atrasado && ' · atrasado'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                                  lote.origen === 'sugerido' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {lote.origen === 'sugerido' ? 'Sugerido' : 'Manual'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                                  lote.estado === 'en_curso' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {lote.estado === 'en_curso' ? 'En curso' : 'Planificado'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {lote.estado === 'planificado' && (
+                                    <button
+                                      onClick={() => cambiarEstadoLote(lote.id, 'en_curso')}
+                                      className="rounded-lg px-2 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50"
+                                      title="Marcar en curso"
+                                    >
+                                      Iniciar
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => cambiarEstadoLote(lote.id, 'completado')}
+                                    className="rounded-lg p-1.5 text-green-600 hover:bg-green-50"
+                                    title="Marcar completado"
+                                  >
+                                    <CheckCircle2 size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => cambiarEstadoLote(lote.id, 'cancelado')}
+                                    className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"
+                                    title="Cancelar lote"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               </div>
             </div>
           )}

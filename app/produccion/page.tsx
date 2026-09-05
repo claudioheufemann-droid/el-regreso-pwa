@@ -110,6 +110,43 @@ export interface StockSeguridadItem {
   litrosEnProduccion: number
 }
 
+/**
+ * Una fila de la cola priorizada del Plan Maestro (tabla plan_produccion).
+ * Distinta de `lotes_produccion` (Logística: el ENVÍO/despacho de algo que
+ * ya se produjo) — esto es la planificación previa: qué cocinar, cuánto,
+ * cuándo y en qué orden.
+ */
+export interface LotePlan {
+  id: string
+  producto: string
+  categoria: 'cerveza' | 'kombucha'
+  litrosPlanificados: number
+  /** yyyy-mm-dd */
+  fechaPlanificada: string
+  /** 0 = primero en la cola. Contiguo dentro de planificado/en_curso. */
+  prioridad: number
+  estado: 'planificado' | 'en_curso' | 'completado' | 'cancelado'
+  origen: 'sugerido' | 'manual'
+  /** Por qué se sugirió — sólo tiene contenido cuando origen='sugerido'. */
+  motivo: string | null
+  observaciones: string | null
+}
+
+/**
+ * Una sugerencia de cocción calculada EN VIVO (no persistida) comparando el
+ * disponible actual contra el punto de reorden — el usuario la confirma
+ * (crea la fila real en plan_produccion) o la ignora. Igual que el resto de
+ * Stock de Seguridad, se recalcula en cada carga de página.
+ */
+export interface SugerenciaPlan {
+  producto: string
+  categoria: 'cerveza' | 'kombucha'
+  /** Litros para volver a estar en el punto de reorden = puntoReorden - disponible. */
+  litrosSugeridos: number
+  leadTimeSemanas: number
+  motivo: string
+}
+
 export default async function ProduccionPage() {
   const user = await getServerUser()
   if (!user) redirect('/login')
@@ -436,10 +473,60 @@ export default async function ProduccionPage() {
 
   const avanceMes: AvanceMes = { mes: cicloEnCurso, diaActual, diasEnMes }
 
+  // ── Plan Maestro: cola real de cocciones planificadas ──────────────────
+  const { data: planRaw } = await admin
+    .from('plan_produccion')
+    .select('*')
+    .in('estado', ['planificado', 'en_curso'])
+    .order('prioridad', { ascending: true })
+
+  const planProduccion: LotePlan[] = (planRaw ?? []).map(p => ({
+    id: p.id as string,
+    producto: p.producto as string,
+    categoria: p.categoria as 'cerveza' | 'kombucha',
+    litrosPlanificados: Number(p.litros_planificados),
+    fechaPlanificada: (p.fecha_planificada as string).slice(0, 10),
+    prioridad: Number(p.prioridad),
+    estado: p.estado as LotePlan['estado'],
+    origen: p.origen as 'sugerido' | 'manual',
+    motivo: (p.motivo as string | null) ?? null,
+    observaciones: (p.observaciones as string | null) ?? null,
+  }))
+
+  // Sugerencias: comparan el disponible de HOY (mismo cálculo que Stock de
+  // Seguridad) contra el punto de reorden del PRIMER mes proyectado — no
+  // tiene sentido sugerir cocinar para un mes lejano, la urgencia es sobre
+  // lo que ya está bajo o a punto de estarlo. Se excluyen los productos que
+  // YA tienen un lote activo en el plan, para no duplicar la sugerencia
+  // cocción tras cocción hasta que alguien la marque completada.
+  const productosEnPlan = new Set(planProduccion.map(l => l.producto))
+  const primerMes = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+  const sugerenciasPlan: SugerenciaPlan[] = stockSeguridad
+    .filter(s => s.nivel === 'producto' && s.mes === primerMes && !productosEnPlan.has(s.producto))
+    .map(s => {
+      const disponible = s.stockActualLitros != null ? s.stockActualLitros + s.litrosEnProduccion : null
+      if (disponible == null || disponible >= s.puntoReordenLitros) return null
+      const necesidadNeta = Math.round(Math.max(s.puntoReordenLitros - disponible, 0))
+      if (necesidadNeta <= 0) return null
+      return {
+        producto: s.producto,
+        categoria: s.categoria,
+        litrosSugeridos: necesidadNeta,
+        leadTimeSemanas: s.leadTimeSemanas,
+        motivo: disponible < s.stockSeguridadLitros
+          ? `Crítico: disponible (${Math.round(disponible)} L) por debajo del stock de seguridad (${Math.round(s.stockSeguridadLitros)} L). Lead time ${s.leadTimeSemanas} semanas.`
+          : `Bajo punto de reorden: disponible ${Math.round(disponible)} L, punto de reorden ${Math.round(s.puntoReordenLitros)} L. Lead time ${s.leadTimeSemanas} semanas.`,
+      } as SugerenciaPlan
+    })
+    .filter((s): s is SugerenciaPlan => s !== null)
+    .sort((a, b) => b.litrosSugeridos - a.litrosSugeridos)
+
   return (
     <ProduccionClient
       series={series}
       calidad={calidad}
+      planProduccion={planProduccion}
+      sugerenciasPlan={sugerenciasPlan}
       stock={stock}
       stockSeguridad={stockSeguridad}
       ultimaCorrida={ultimaCorrida}
