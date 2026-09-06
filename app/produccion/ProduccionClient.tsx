@@ -641,6 +641,33 @@ export default function ProduccionClient({
     return { demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, categoria: serie.categoria as 'cerveza' | 'kombucha' | null }
   }, [productoCobertura, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes])
 
+  /* ── Desglose por formato de envasado ────────────────────────────────────
+     Se cuece por PRODUCTO (un solo lote), y ese lote se envasa después en
+     los distintos formatos — no se cuece "para lata" o "para barril" por
+     separado. Por eso, elegido un producto, siempre se muestra cuánto hace
+     falta de CADA formato y el total (= lo que hay que cocer), sin importar
+     qué opción esté elegida en el selector de Formato de arriba (ese sigue
+     sirviendo para mirar un formato puntual en el resumen de 3 números). */
+  const desgloseCoberturaFormatos = useMemo(() => {
+    if (!productoCobertura) return null
+    const hoyISO = hoyLocalISO()
+    if (coberturaFecha <= hoyISO) return null
+
+    const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+    const filas = envasesCoberturaDisponibles.map(envase => {
+      const serie = series.find(s => s.nivel === 'producto_envase' && s.clave === claveProductoEnvase(productoCobertura, envase))
+      const demandaProyectada = serie ? demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha) : 0
+      const filaStock = stockSeguridad.find(s => s.nivel === 'producto_envase' && s.mes === primerMesStock && s.producto === productoCobertura && s.envase === envase)
+      const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
+      const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
+      return { envase, demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta }
+    })
+    if (filas.length === 0) return null
+
+    const totalNecesidad = filas.reduce((acc, f) => acc + (f.necesidadNeta ?? 0), 0)
+    return { filas, totalNecesidad }
+  }, [productoCobertura, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes])
+
   /* ── Serie seleccionada → filas para Recharts ─────────────────────────
      La proyección arranca repitiendo el último mes real, para que las dos
      líneas queden pegadas en el gráfico en vez de mostrar un corte.
@@ -1534,9 +1561,54 @@ export default function ProduccionClient({
                     </div>
                   </div>
                 ) : null}
+
+                {/* Desglose por formato: el lote se cuece completo y después se
+                    envasa en los distintos formatos, así que además del número
+                    del formato elegido arriba, siempre se ve cuánto hace falta
+                    de CADA uno y el total a cocer. */}
+                {desgloseCoberturaFormatos && desgloseCoberturaFormatos.filas.length > 0 && (
+                  <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
+                    <div className="border-b border-gray-100 bg-gray-50/70 px-4 py-2.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                        Desglose por formato — {productoCobertura}
+                      </span>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead className="text-xs uppercase tracking-wide text-gray-400">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-bold">Formato</th>
+                          <th className="px-4 py-2 text-right font-bold">Demanda proyectada</th>
+                          <th className="px-4 py-2 text-right font-bold">Disponible</th>
+                          <th className="px-4 py-2 text-right font-bold">Necesidad neta</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {desgloseCoberturaFormatos.filas.map(f => (
+                          <tr key={f.envase}>
+                            <td className="px-4 py-2.5 font-semibold text-gray-700">{ENVASE_LABEL[f.envase] ?? f.envase}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fNum(f.demandaProyectada)} L</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">{f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-amber-50">
+                          <td colSpan={3} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-amber-700">
+                            Total a cocer (todos los formatos)
+                          </td>
+                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">{fNum(desgloseCoberturaFormatos.totalNecesidad)} L</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
                 <p className="mt-3 text-xs text-gray-400">
                   Suma el forecast mensual por ciclo entre hoy y la fecha elegida (prorateado por días en los ciclos
-                  parciales); el ciclo en curso usa el ritmo de venta real de este ciclo, no el forecast.
+                  parciales); el ciclo en curso usa el ritmo de venta real de este ciclo, no el forecast. El total del
+                  desglose es la suma de la necesidad neta de cada formato — lo que hay que cocer, ya que el lote se
+                  envasa después según ese reparto.
                 </p>
               </div>
 
