@@ -343,6 +343,22 @@ export default function ProduccionClient({
       setGuardandoPlan(false)
     }
   }
+
+  /** Agrupa las alarmas de quiebre por producto — con 46+ combinaciones
+   *  producto×envase, una grilla plana de tarjetas era imposible de barrer
+   *  con la vista. Se agrupa (una foto por producto, formatos en lista
+   *  debajo) conservando el orden de urgencia que ya trae `sugerenciasPlan`
+   *  del servidor: el primer producto en aparecer es el que tiene el
+   *  formato más próximo a quebrar. */
+  const alarmasPorProducto = useMemo(() => {
+    const grupos = new Map<string, { producto: string; categoria: 'cerveza' | 'kombucha'; items: SugerenciaPlan[] }>()
+    for (const s of sugerenciasPlan) {
+      if (!grupos.has(s.producto)) grupos.set(s.producto, { producto: s.producto, categoria: s.categoria, items: [] })
+      grupos.get(s.producto)!.items.push(s)
+    }
+    return [...grupos.values()]
+  }, [sugerenciasPlan])
+
   const [busquedaInsumo, setBusquedaInsumo] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
   const [filtroEnvase, setFiltroEnvase] = useState<string>('todos')
@@ -1844,52 +1860,58 @@ export default function ProduccionClient({
                     sobrado en lata y crítico en barril). Cruza el stock de seguridad, el forecast y el{' '}
                     <strong>ritmo de venta real de este ciclo</strong> para estimar cuándo se agota cada uno.
                   </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {sugerenciasPlan.map((s, i) => {
-                      const urgente = s.diasHastaQuiebre != null && s.diasHastaQuiebre <= s.leadTimeSemanas * 7
-                      return (
-                        <div key={`${s.producto}-${s.envase}-${i}`} className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-white p-4 shadow-sm">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2.5">
-                              <ProductImage nombre={s.producto} categoria={s.categoria} size={28} radius={7} />
-                              <div className="flex flex-col">
-                                <span className="font-semibold leading-tight text-gray-800">{s.producto}</span>
-                                <span className="text-xs font-bold uppercase tracking-wide text-amber-700">{ENVASE_LABEL[s.envase] ?? s.envase}</span>
-                              </div>
-                            </div>
-                          </div>
-                          {s.fechaEstimadaQuiebre ? (
-                            <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold ${urgente ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                              <AlertTriangle size={12} />
-                              Se agota en ~{s.diasHastaQuiebre} días
-                              ({new Date(s.fechaEstimadaQuiebre + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })})
-                            </div>
-                          ) : (
-                            <div className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-500">
-                              Sin ventas este ciclo — no se puede proyectar fecha
-                            </div>
-                          )}
-                          <p className="text-xs text-gray-500">{s.motivo}</p>
-                          <div className="flex items-center justify-between pt-1">
-                            <span className="text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosSugeridos)} L</span>
-                            <button
-                              disabled={guardandoPlan}
-                              onClick={() => agregarLote({
-                                producto: s.producto,
-                                categoria: s.categoria,
-                                litrosPlanificados: Math.round(s.litrosSugeridos),
-                                fechaPlanificada: hoyLocalISO(new Date(Date.now() + 7 * 86400000)),
-                                origen: 'sugerido',
-                                motivo: s.motivo,
-                              })}
-                              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
-                            >
-                              Agregar al plan
-                            </button>
-                          </div>
+                  <div className="flex flex-col gap-3">
+                    {alarmasPorProducto.map(grupo => (
+                      <div key={grupo.producto} className="overflow-hidden rounded-lg border border-amber-200 bg-white shadow-sm">
+                        <div className="flex items-center gap-2.5 border-b border-amber-100 bg-amber-50/60 px-4 py-2.5">
+                          <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={30} radius={7} />
+                          <span className="font-semibold text-gray-800">{grupo.producto}</span>
+                          <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-xs font-bold text-amber-800">
+                            {grupo.items.length} {grupo.items.length === 1 ? 'formato' : 'formatos'} en alerta
+                          </span>
                         </div>
-                      )
-                    })}
+                        <div className="divide-y divide-gray-100">
+                          {grupo.items.map((s, i) => {
+                            const urgente = s.diasHastaQuiebre != null && s.diasHastaQuiebre <= s.leadTimeSemanas * 7
+                            return (
+                              <div key={`${s.envase}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-gray-50" title={s.motivo}>
+                                <span className="w-24 shrink-0 text-xs font-bold uppercase tracking-wide text-amber-700">
+                                  {ENVASE_LABEL[s.envase] ?? s.envase}
+                                </span>
+                                <div className="min-w-[180px] flex-1">
+                                  {s.fechaEstimadaQuiebre ? (
+                                    <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold ${urgente ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                      <AlertTriangle size={12} />
+                                      Se agota en ~{s.diasHastaQuiebre} días
+                                      ({new Date(s.fechaEstimadaQuiebre + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })})
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-500">
+                                      Sin ventas este ciclo — sin fecha estimada
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="w-20 shrink-0 text-right text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosSugeridos)} L</span>
+                                <button
+                                  disabled={guardandoPlan}
+                                  onClick={() => agregarLote({
+                                    producto: s.producto,
+                                    categoria: s.categoria,
+                                    litrosPlanificados: Math.round(s.litrosSugeridos),
+                                    fechaPlanificada: hoyLocalISO(new Date(Date.now() + 7 * 86400000)),
+                                    origen: 'sugerido',
+                                    motivo: s.motivo,
+                                  })}
+                                  className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                                >
+                                  Agregar al plan
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
