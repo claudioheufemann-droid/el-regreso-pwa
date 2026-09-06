@@ -79,6 +79,12 @@ export interface AvanceMes {
   mes: string
   diaActual: number
   diasEnMes: number
+  /** Días hábiles (lunes a viernes) transcurridos y totales del ciclo — el
+   *  reparto no vende fin de semana, así que cualquier proyección de RITMO
+   *  de venta (no de tiempo transcurrido) debe usar estos dos, no
+   *  diaActual/diasEnMes. */
+  diasHabilesTranscurridos: number
+  diasHabilesEnCiclo: number
 }
 
 export interface StockSeguridadItem {
@@ -235,23 +241,27 @@ export default async function ProduccionPage() {
     (Date.parse(`${finCiclo}T00:00:00Z`) - Date.parse(`${inicioCiclo}T00:00:00Z`)) / MS_POR_DIA
   ) + 1
 
-  // ── Días hábiles (lunes a viernes) — sólo para el ritmo de venta de las
-  // alarmas de quiebre más abajo. No se vende de forma pareja los 7 días de
-  // la semana (el reparto no opera fin de semana), así que dividir los
-  // litros vendidos por días CALENDARIO subestimaba el ritmo real: un lote
-  // vendido en 10 días hábiles se repartía entre 14 días calendario y daba
-  // una velocidad más lenta de la real.
+  // ── Días hábiles (lunes a viernes) — para CUALQUIER cálculo de RITMO de
+  // venta (no de tiempo transcurrido). El reparto no vende fin de semana,
+  // así que dividir los litros vendidos por días CALENDARIO subestima el
+  // ritmo real: un lote vendido en 10 días hábiles se repartía entre 14
+  // días calendario y daba una velocidad más lenta de la real. Se usa tanto
+  // para las alarmas de quiebre como para "a este ritmo cerrarías con X L"
+  // en Forecasting — diaActual/diasEnMes (calendario) siguen siendo los
+  // correctos para "en qué día del ciclo estamos".
   const esFinDeSemanaISO = (iso: string) => {
     const dow = new Date(`${iso}T00:00:00Z`).getUTCDay()
     return dow === 0 || dow === 6
   }
-  const diasHabilesTranscurridos = (() => {
+  const contarDiasHabilesISO = (desdeISO: string, hastaISO: string): number => {
     let n = 0
-    for (let t = Date.parse(`${inicioCiclo}T00:00:00Z`); t <= Date.parse(`${hoyISO}T00:00:00Z`); t += MS_POR_DIA) {
+    for (let t = Date.parse(`${desdeISO}T00:00:00Z`); t <= Date.parse(`${hastaISO}T00:00:00Z`); t += MS_POR_DIA) {
       if (!esFinDeSemanaISO(new Date(t).toISOString().slice(0, 10))) n++
     }
     return n
-  })()
+  }
+  const diasHabilesTranscurridos = contarDiasHabilesISO(inicioCiclo, hoyISO)
+  const diasHabilesEnCiclo = contarDiasHabilesISO(inicioCiclo, finCiclo)
   /** Suma `diasHabiles` días hábiles a `desdeISO`, saltando sábado/domingo. */
   const sumarDiasHabilesISO = (desdeISO: string, diasHabiles: number): string => {
     let t = Date.parse(`${desdeISO}T00:00:00Z`)
@@ -514,7 +524,7 @@ export default async function ProduccionPage() {
     }
   }) as StockSeguridadItem[]
 
-  const avanceMes: AvanceMes = { mes: cicloEnCurso, diaActual, diasEnMes }
+  const avanceMes: AvanceMes = { mes: cicloEnCurso, diaActual, diasEnMes, diasHabilesTranscurridos, diasHabilesEnCiclo }
 
   // ── Plan Maestro: cola real de cocciones planificadas ──────────────────
   const { data: planRaw } = await admin

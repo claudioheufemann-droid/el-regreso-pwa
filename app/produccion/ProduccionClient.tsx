@@ -382,11 +382,15 @@ export default function ProduccionClient({
   const serieGeneral = series.find(s => s.nivel === 'general') ?? null
   const serieActual = series.find(s => s.id === serieId) ?? serieGeneral
 
-  // Ritmo del mes en curso: si vendimos X en D días, a ese ritmo el mes
-  // completo cierra en X/D*diasEnMes — la forma más simple de responder
-  // "¿vamos a cumplir lo proyectado?" sin esperar a que termine el mes.
+  // Ritmo del mes en curso: si vendimos X en D días HÁBILES, a ese ritmo el
+  // ciclo completo cierra en X/D*diasHabilesEnCiclo — la forma más simple de
+  // responder "¿vamos a cumplir lo proyectado?" sin esperar a que termine el
+  // ciclo. Días hábiles, no calendario: el reparto no vende fin de semana,
+  // así que dividir por días corridos subestimaba el ritmo real.
   const mtdLitros = serieActual?.litrosMesEnCurso ?? 0
-  const ritmoProyectado = avanceMes.diaActual > 0 ? (mtdLitros / avanceMes.diaActual) * avanceMes.diasEnMes : 0
+  const ritmoProyectado = avanceMes.diasHabilesTranscurridos > 0
+    ? (mtdLitros / avanceMes.diasHabilesTranscurridos) * avanceMes.diasHabilesEnCiclo
+    : 0
 
   /* ── Serie seleccionada → filas para Recharts ─────────────────────────
      La proyección arranca repitiendo el último mes real, para que las dos
