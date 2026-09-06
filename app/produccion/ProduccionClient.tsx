@@ -2541,24 +2541,6 @@ export default function ProduccionClient({
                   )}
                 </div>
               </div>
-
-              {sugerenciaModal && (
-                <ModalConfirmarLote
-                  sugerencia={sugerenciaModal}
-                  guardando={guardandoPlan}
-                  onCancelar={() => setSugerenciaModal(null)}
-                  onConfirmar={({ litrosPlanificados, fechaPlanificada, necesidadCubrir, cubreHasta }) => agregarLote({
-                    producto: sugerenciaModal.producto,
-                    categoria: sugerenciaModal.categoria,
-                    litrosPlanificados,
-                    fechaPlanificada,
-                    origen: 'sugerido',
-                    motivo: sugerenciaModal.motivo,
-                    necesidadCubrir,
-                    cubreHasta,
-                  })}
-                />
-              )}
             </div>
           )}
 
@@ -2724,6 +2706,27 @@ export default function ProduccionClient({
             </div>
           )}
 
+          {/* Popup de confirmación de una alarma/necesidad — se puede abrir
+              desde el Plan Maestro o desde Stock de Seguridad, así que vive
+              fuera de los bloques por tab (si quedara dentro de uno, no
+              renderizaría al abrirlo desde el otro). */}
+          {sugerenciaModal && (
+            <ModalConfirmarLote
+              sugerencia={sugerenciaModal}
+              guardando={guardandoPlan}
+              onCancelar={() => setSugerenciaModal(null)}
+              onConfirmar={({ litrosPlanificados, fechaPlanificada, necesidadCubrir, cubreHasta }) => agregarLote({
+                producto: sugerenciaModal.producto,
+                categoria: sugerenciaModal.categoria,
+                litrosPlanificados,
+                fechaPlanificada,
+                origen: 'sugerido',
+                motivo: sugerenciaModal.motivo,
+                necesidadCubrir,
+                cubreHasta,
+              })}
+            />
+          )}
         </div>
       </main>
     </div>
