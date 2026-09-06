@@ -79,6 +79,28 @@ function hoyLocalISO(d: Date = new Date()): string {
   return `${y}-${m}-${day}`
 }
 
+/** Es fin de semana la fecha yyyy-mm-dd dada (comparación por calendario,
+ *  no huso horario — misma lógica de días hábiles que usa el servidor para
+ *  las alarmas de quiebre). */
+function esFinDeSemanaISO(iso: string): boolean {
+  const dow = new Date(`${iso}T00:00:00Z`).getUTCDay()
+  return dow === 0 || dow === 6
+}
+
+/** Suma `diasHabiles` días hábiles (lunes a viernes) a `desdeISO`, saltando
+ *  sábado/domingo — para proyectar "hasta cuándo alcanza" en el popup de
+ *  confirmación de una alarma. */
+function sumarDiasHabilesISO(desdeISO: string, diasHabiles: number): string {
+  let t = Date.parse(`${desdeISO}T00:00:00Z`)
+  let restantes = Math.max(0, Math.round(diasHabiles))
+  const MS_POR_DIA = 24 * 60 * 60 * 1000
+  while (restantes > 0) {
+    t += MS_POR_DIA
+    if (!esFinDeSemanaISO(new Date(t).toISOString().slice(0, 10))) restantes--
+  }
+  return new Date(t).toISOString().slice(0, 10)
+}
+
 function etiquetaMes(iso: string) {
   const [y, m] = iso.split('-').map(Number)
   return `${MESES_CORTOS[m - 1]} '${String(y).slice(2)}`
@@ -204,6 +226,108 @@ function FormNuevoLote({
   )
 }
 
+/** Popup que se abre al confirmar una alarma de quiebre ("Agregar al plan").
+ *  No agrega con los valores sugeridos a ciegas: deja fijar fecha de inicio
+ *  de la elaboración y cantidad, y muestra en vivo cuánta necesidad cubre
+ *  esa cantidad y hasta cuándo alcanza — todo derivado del ritmo de venta
+ *  real (mismo cálculo que la alarma), para decidir la orden con criterio. */
+function ModalConfirmarLote({
+  sugerencia, guardando, onCancelar, onConfirmar,
+}: {
+  sugerencia: SugerenciaPlan
+  guardando: boolean
+  onCancelar: () => void
+  onConfirmar: (datos: { litrosPlanificados: number; fechaPlanificada: string; necesidadCubrir: number; cubreHasta: string | null }) => void
+}) {
+  const [fecha, setFecha] = useState(() => hoyLocalISO(new Date(Date.now() + 7 * 86400000)))
+  const [litros, setLitros] = useState(String(Math.round(sugerencia.litrosSugeridos)))
+
+  const litrosNum = Number(litros)
+  const valido = litrosNum > 0 && fecha.length > 0
+
+  // Días hábiles que cubre la cantidad ingresada al ritmo de venta actual —
+  // se recalcula en vivo con cada cambio de cantidad, no queda fijo con el
+  // valor sugerido original.
+  const diasCobertura = sugerencia.ritmoDiarioActual > 0 ? litrosNum / sugerencia.ritmoDiarioActual : null
+  const cubreHasta = diasCobertura != null ? sumarDiasHabilesISO(fecha, diasCobertura) : null
+
+  function submit() {
+    if (!valido) return
+    onConfirmar({ litrosPlanificados: litrosNum, fechaPlanificada: fecha, necesidadCubrir: sugerencia.litrosSugeridos, cubreHasta })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancelar}>
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-4 flex items-center gap-3">
+          <ProductImage nombre={sugerencia.producto} categoria={sugerencia.categoria} size={36} radius={9} />
+          <div>
+            <h3 className="font-bold text-gray-800">{sugerencia.producto}</h3>
+            <p className="text-xs font-bold uppercase tracking-wide text-amber-700">{ENVASE_LABEL[sugerencia.envase] ?? sugerencia.envase}</p>
+          </div>
+          <button onClick={onCancelar} className="ml-auto rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Necesidad según el forecast — el dato que responde "cuánto debemos
+            cubrir", fijo (no cambia con lo que el usuario decida producir). */}
+        <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          <p><strong>Necesidad a cubrir:</strong> {fNum(sugerencia.litrosSugeridos)} L, según el forecast y el punto de reorden.</p>
+          {sugerencia.diasHastaQuiebre != null && (
+            <p className="mt-1 text-xs text-amber-700">
+              Al ritmo de venta actual ({fNum(sugerencia.ritmoDiarioActual * 5)} L/semana, lun-vie), quiebra en ~{sugerencia.diasHastaQuiebre} días hábiles.
+            </p>
+          )}
+        </div>
+
+        <div className="mb-4 flex gap-3">
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500">Fecha de inicio de elaboración</label>
+            <input
+              type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500">Cantidad a producir (L)</label>
+            <input
+              type="number" min={1} value={litros} onChange={e => setLitros(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Cobertura — responde "hasta cuándo nos durará esto", en vivo según
+            lo que el usuario haya puesto en Cantidad y Fecha de inicio. */}
+        <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+          {sugerencia.ritmoDiarioActual > 0 && diasCobertura != null && cubreHasta ? (
+            <p className="text-gray-700">
+              Con {fNum(litrosNum)} L, la cobertura dura <strong>~{Math.round(diasCobertura)} días hábiles</strong> al ritmo
+              actual — alcanzaría hasta el <strong>{new Date(cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}</strong>.
+            </p>
+          ) : (
+            <p className="text-gray-500">Sin ventas registradas este ciclo — no se puede estimar hasta cuándo alcanza.</p>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancelar} className="rounded-lg px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100">
+            Cancelar
+          </button>
+          <button
+            disabled={!valido || guardando}
+            onClick={submit}
+            className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-40"
+          >
+            {guardando ? 'Agregando…' : 'Confirmar y agregar al plan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 /* ── Chip de desviación del modelo (MAPE del backtest) ──────────────────
    OJO, esto NO es una "confiabilidad" en el sentido de 0-100% siendo mejor
@@ -279,6 +403,8 @@ export default function ProduccionClient({
   const [guardandoPlan, setGuardandoPlan] = useState(false)
   const [errorPlan, setErrorPlan] = useState<string | null>(null)
   const [mostrarFormLote, setMostrarFormLote] = useState(false)
+  /** Alarma sobre la que se abrió el popup de confirmación — null = cerrado. */
+  const [sugerenciaModal, setSugerenciaModal] = useState<SugerenciaPlan | null>(null)
   React.useEffect(() => { setPlan(planProduccion) }, [planProduccion])
 
   async function moverLote(id: string, direccion: -1 | 1) {
@@ -319,7 +445,12 @@ export default function ProduccionClient({
     }
   }
 
-  async function agregarLote(datos: { producto: string; categoria: 'cerveza' | 'kombucha'; litrosPlanificados: number; fechaPlanificada: string; motivo?: string | null; origen?: 'sugerido' | 'manual' }) {
+  async function agregarLote(datos: {
+    producto: string; categoria: 'cerveza' | 'kombucha'; litrosPlanificados: number; fechaPlanificada: string
+    motivo?: string | null; origen?: 'sugerido' | 'manual'
+    /** Sólo para el detalle del evento de Google Calendar. */
+    necesidadCubrir?: number | null; cubreHasta?: string | null
+  }) {
     setGuardandoPlan(true)
     setErrorPlan(null)
     try {
@@ -336,6 +467,7 @@ export default function ProduccionClient({
         motivo: nuevo.motivo, observaciones: nuevo.observaciones,
       }])
       setMostrarFormLote(false)
+      setSugerenciaModal(null)
       router.refresh()
     } catch (e) {
       setErrorPlan(e instanceof Error ? e.message : 'Error al agregar el lote')
@@ -1900,14 +2032,7 @@ export default function ProduccionClient({
                                 <span className="w-20 shrink-0 text-right text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosSugeridos)} L</span>
                                 <button
                                   disabled={guardandoPlan}
-                                  onClick={() => agregarLote({
-                                    producto: s.producto,
-                                    categoria: s.categoria,
-                                    litrosPlanificados: Math.round(s.litrosSugeridos),
-                                    fechaPlanificada: hoyLocalISO(new Date(Date.now() + 7 * 86400000)),
-                                    origen: 'sugerido',
-                                    motivo: s.motivo,
-                                  })}
+                                  onClick={() => setSugerenciaModal(s)}
                                   className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
                                 >
                                   Agregar al plan
@@ -2059,6 +2184,24 @@ export default function ProduccionClient({
                   )}
                 </div>
               </div>
+
+              {sugerenciaModal && (
+                <ModalConfirmarLote
+                  sugerencia={sugerenciaModal}
+                  guardando={guardandoPlan}
+                  onCancelar={() => setSugerenciaModal(null)}
+                  onConfirmar={({ litrosPlanificados, fechaPlanificada, necesidadCubrir, cubreHasta }) => agregarLote({
+                    producto: sugerenciaModal.producto,
+                    categoria: sugerenciaModal.categoria,
+                    litrosPlanificados,
+                    fechaPlanificada,
+                    origen: 'sugerido',
+                    motivo: sugerenciaModal.motivo,
+                    necesidadCubrir,
+                    cubreHasta,
+                  })}
+                />
+              )}
             </div>
           )}
 

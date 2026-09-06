@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { crearEventoLote } from '@/lib/google-calendar'
 
 /**
  * GET/POST /api/produccion/plan
@@ -42,6 +43,11 @@ interface CrearLotePlan {
   origen?: 'sugerido' | 'manual'
   motivo?: string | null
   observaciones?: string | null
+  /** Sólo para el detalle del evento de Google Calendar — no se persisten
+   *  como columnas propias, son datos derivados del forecast en el momento
+   *  de confirmar la sugerencia. */
+  necesidadCubrir?: number | null
+  cubreHasta?: string | null
 }
 
 export async function POST(req: Request) {
@@ -92,5 +98,20 @@ export async function POST(req: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Sincronización con Google Calendar: mejor esfuerzo — si falla (o no está
+  // configurada la cuenta de servicio) el lote igual queda creado, sólo sin
+  // evento. Nunca debe tumbar el alta del lote.
+  const googleEventId = await crearEventoLote({
+    producto: data.producto, categoria: data.categoria,
+    litrosPlanificados: Number(data.litros_planificados), fechaPlanificada: String(data.fecha_planificada).slice(0, 10),
+    origen: data.origen, motivo: data.motivo,
+    necesidadCubrir: body.necesidadCubrir ?? null, cubreHasta: body.cubreHasta ?? null,
+  })
+  if (googleEventId) {
+    await admin.from('plan_produccion').update({ google_event_id: googleEventId }).eq('id', data.id)
+    data.google_event_id = googleEventId
+  }
+
   return NextResponse.json(data, { status: 201 })
 }
