@@ -235,6 +235,34 @@ export default async function ProduccionPage() {
     (Date.parse(`${finCiclo}T00:00:00Z`) - Date.parse(`${inicioCiclo}T00:00:00Z`)) / MS_POR_DIA
   ) + 1
 
+  // ── Días hábiles (lunes a viernes) — sólo para el ritmo de venta de las
+  // alarmas de quiebre más abajo. No se vende de forma pareja los 7 días de
+  // la semana (el reparto no opera fin de semana), así que dividir los
+  // litros vendidos por días CALENDARIO subestimaba el ritmo real: un lote
+  // vendido en 10 días hábiles se repartía entre 14 días calendario y daba
+  // una velocidad más lenta de la real.
+  const esFinDeSemanaISO = (iso: string) => {
+    const dow = new Date(`${iso}T00:00:00Z`).getUTCDay()
+    return dow === 0 || dow === 6
+  }
+  const diasHabilesTranscurridos = (() => {
+    let n = 0
+    for (let t = Date.parse(`${inicioCiclo}T00:00:00Z`); t <= Date.parse(`${hoyISO}T00:00:00Z`); t += MS_POR_DIA) {
+      if (!esFinDeSemanaISO(new Date(t).toISOString().slice(0, 10))) n++
+    }
+    return n
+  })()
+  /** Suma `diasHabiles` días hábiles a `desdeISO`, saltando sábado/domingo. */
+  const sumarDiasHabilesISO = (desdeISO: string, diasHabiles: number): string => {
+    let t = Date.parse(`${desdeISO}T00:00:00Z`)
+    let restantes = Math.max(0, Math.round(diasHabiles))
+    while (restantes > 0) {
+      t += MS_POR_DIA
+      if (!esFinDeSemanaISO(new Date(t).toISOString().slice(0, 10))) restantes--
+    }
+    return new Date(t).toISOString().slice(0, 10)
+  }
+
   const litrosMtdPorSerie = new Map<string, number>()
   {
     // Paginado — mismo motivo que forecast_produccion arriba: PostgREST corta
@@ -534,20 +562,25 @@ export default async function ProduccionPage() {
       const disponible = s.stockActualLitros != null ? s.stockActualLitros + s.litrosEnProduccion : null
       if (disponible == null) return null
 
-      const ritmoDiarioActual = diaActual > 0
-        ? (litrosMtdPorSerie.get(`producto_envase::${claveProductoEnvase(s.producto, envase)}`) ?? 0) / diaActual
+      // Ritmo en litros por DÍA HÁBIL (lunes a viernes) — no se vende fin de
+      // semana, así que "días" acá y en diasHastaQuiebre/fechaEstimadaQuiebre
+      // más abajo son siempre días hábiles, no días calendario.
+      const ritmoDiarioActual = diasHabilesTranscurridos > 0
+        ? (litrosMtdPorSerie.get(`producto_envase::${claveProductoEnvase(s.producto, envase)}`) ?? 0) / diasHabilesTranscurridos
         : 0
       const diasHastaQuiebre = ritmoDiarioActual > 0 ? disponible / ritmoDiarioActual : null
       const fechaEstimadaQuiebre = diasHastaQuiebre != null
-        ? new Date(hoy.getTime() + diasHastaQuiebre * MS_POR_DIA).toISOString().slice(0, 10)
+        ? sumarDiasHabilesISO(hoyISO, diasHastaQuiebre)
         : null
 
       // Litros que el ritmo actual se comería durante la ventana de riesgo
       // (lead time + hasta la próxima revisión mensual) — mismo concepto de
       // "ventana" que el stock de seguridad, pero con la velocidad real en
-      // vez del promedio del forecast.
-      const ventanaDias = (s.leadTimeSemanas + s.periodoRevisionSemanas) * 7
-      const necesidadRitmo = Math.max(ritmoDiarioActual * ventanaDias - disponible, 0)
+      // vez del promedio del forecast. La ventana la fija el proveedor en
+      // semanas calendario; se pasa a días hábiles (5/7) para que combine
+      // con un ritmo que también es por día hábil.
+      const ventanaDiasHabiles = (s.leadTimeSemanas + s.periodoRevisionSemanas) * 5
+      const necesidadRitmo = Math.max(ritmoDiarioActual * ventanaDiasHabiles - disponible, 0)
       const necesidadReorden = Math.max(s.puntoReordenLitros - disponible, 0)
       const necesidadNeta = Math.round(Math.max(necesidadRitmo, necesidadReorden))
       if (necesidadNeta <= 0) return null
@@ -562,12 +595,12 @@ export default async function ProduccionPage() {
       if (disponible < s.stockSeguridadLitros) {
         motivo = `Crítico en ${envaseLabel}: disponible (${Math.round(disponible)} L) por debajo del stock de seguridad (${Math.round(s.stockSeguridadLitros)} L).`
       } else if (disparadoPorRitmo) {
-        motivo = `Al ritmo de venta actual (${Math.round(ritmoDiarioActual * 7)} L/semana) vas a quebrar ${envaseLabel} antes de que llegue el próximo lote.`
+        motivo = `Al ritmo de venta actual (${Math.round(ritmoDiarioActual * 5)} L/semana, lun-vie) vas a quebrar ${envaseLabel} antes de que llegue el próximo lote.`
       } else {
         motivo = `Bajo punto de reorden en ${envaseLabel}: disponible ${Math.round(disponible)} L, punto de reorden ${Math.round(s.puntoReordenLitros)} L.`
       }
       motivo += fechaLabel
-        ? ` Quiebre estimado: ${fechaLabel} (${Math.max(0, Math.round(diasHastaQuiebre!))} días), al ritmo de venta actual. Lead time ${s.leadTimeSemanas} semanas.`
+        ? ` Quiebre estimado: ${fechaLabel} (${Math.max(0, Math.round(diasHastaQuiebre!))} días hábiles), al ritmo de venta actual (lun-vie). Lead time ${s.leadTimeSemanas} semanas.`
         : ` Sin ventas registradas este ciclo para proyectar fecha. Lead time ${s.leadTimeSemanas} semanas.`
 
       return {

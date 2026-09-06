@@ -1858,7 +1858,7 @@ export default function ProduccionClient({
                   <p className="mb-4 text-sm text-amber-800/80">
                     Por producto y <strong>formato</strong> (no por estilo completo — un mismo producto puede ir
                     sobrado en lata y crítico en barril). Cruza el stock de seguridad, el forecast y el{' '}
-                    <strong>ritmo de venta real de este ciclo</strong> para estimar cuándo se agota cada uno.
+                    <strong>ritmo de venta real de este ciclo (lunes a viernes)</strong> para estimar cuándo se agota cada uno.
                   </p>
                   <div className="flex flex-col gap-3">
                     {alarmasPorProducto.map(grupo => (
@@ -1872,7 +1872,9 @@ export default function ProduccionClient({
                         </div>
                         <div className="divide-y divide-gray-100">
                           {grupo.items.map((s, i) => {
-                            const urgente = s.diasHastaQuiebre != null && s.diasHastaQuiebre <= s.leadTimeSemanas * 7
+                            // diasHastaQuiebre viene en días HÁBILES (lun-vie) — leadTimeSemanas se
+                            // pasa a días hábiles (×5) para comparar en la misma unidad.
+                            const urgente = s.diasHastaQuiebre != null && s.diasHastaQuiebre <= s.leadTimeSemanas * 5
                             return (
                               <div key={`${s.envase}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-gray-50" title={s.motivo}>
                                 <span className="w-24 shrink-0 text-xs font-bold uppercase tracking-wide text-amber-700">
@@ -1882,7 +1884,7 @@ export default function ProduccionClient({
                                   {s.fechaEstimadaQuiebre ? (
                                     <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold ${urgente ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                       <AlertTriangle size={12} />
-                                      Se agota en ~{s.diasHastaQuiebre} días
+                                      Se agota en ~{s.diasHastaQuiebre} días hábiles
                                       ({new Date(s.fechaEstimadaQuiebre + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })})
                                     </span>
                                   ) : (
