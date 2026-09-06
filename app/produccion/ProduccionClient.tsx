@@ -70,6 +70,15 @@ const DEMO_insumosData = [
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const fNum = (n: number) => Math.round(n).toLocaleString('es-CL')
 
+/** Fecha de HOY en yyyy-mm-dd, en huso HORARIO LOCAL del navegador — nunca
+ *  `toISOString()`, que da la fecha en UTC y en Chile (UTC-3/-4) ya marca
+ *  "mañana" desde media tarde, haciendo aparecer como atrasado un lote
+ *  planificado para hoy mismo. */
+function hoyLocalISO(d: Date = new Date()): string {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function etiquetaMes(iso: string) {
   const [y, m] = iso.split('-').map(Number)
   return `${MESES_CORTOS[m - 1]} '${String(y).slice(2)}`
@@ -133,7 +142,7 @@ function FormNuevoLote({
   const [producto, setProducto] = useState('')
   const [categoria, setCategoria] = useState<'cerveza' | 'kombucha'>('cerveza')
   const [litros, setLitros] = useState('')
-  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10))
+  const [fecha, setFecha] = useState(() => hoyLocalISO())
 
   const litrosNum = Number(litros)
   const valido = producto.trim().length > 0 && litrosNum > 0 && fecha.length > 0
@@ -479,7 +488,7 @@ export default function ProduccionClient({
     const hoy = new Date()
     const anio = hoy.getFullYear(), mesIdx = hoy.getMonth()
     const diasEnMesCal = new Date(anio, mesIdx + 1, 0).getDate()
-    const hoyISO = hoy.toISOString().slice(0, 10)
+    const hoyISO = hoyLocalISO(hoy)
     // Lunes=0 ... Domingo=6, para alinear con el header de la grilla.
     const offsetPrimerDia = (new Date(anio, mesIdx, 1).getDay() + 6) % 7
 
@@ -1848,7 +1857,7 @@ export default function ProduccionClient({
                               producto: s.producto,
                               categoria: s.categoria,
                               litrosPlanificados: Math.round(s.litrosSugeridos),
-                              fechaPlanificada: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+                              fechaPlanificada: hoyLocalISO(new Date(Date.now() + 7 * 86400000)),
                               origen: 'sugerido',
                               motivo: s.motivo,
                             })}
@@ -1907,7 +1916,7 @@ export default function ProduccionClient({
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {plan.map((lote, idx) => {
-                          const atrasado = lote.estado === 'planificado' && lote.fechaPlanificada < new Date().toISOString().slice(0, 10)
+                          const atrasado = lote.estado === 'planificado' && lote.fechaPlanificada < hoyLocalISO()
                           return (
                             <tr key={lote.id} className={atrasado ? 'bg-red-50/40' : undefined}>
                               <td className="px-4 py-3">
