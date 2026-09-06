@@ -13,7 +13,7 @@ import {
   LayoutDashboard, TrendingUp, Package, CalendarDays, ShoppingCart,
   CircleDollarSign, Bell, Plus, AlertTriangle, Calendar as CalendarIcon,
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
-  ArrowUp, ArrowDown, GripVertical, CheckCircle2, XCircle, Trash2, X, Lightbulb,
+  ArrowUp, ArrowDown, CheckCircle2, Trash2, X,
 } from 'lucide-react'
 import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan } from './page'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, type EnvaseBucket } from '@/lib/produccion/reglas'
@@ -1823,51 +1823,73 @@ export default function ProduccionClient({
 
           {/* ══════════ VISTA 4: PLAN MAESTRO ══════════
               Cola priorizada (estilo kanban/MRP: arriba = próximo a cocer).
-              Combina lo agendado a mano con sugerencias en vivo derivadas del
-              punto de reorden (Stock de Seguridad), para balancear quiebre de
-              stock vs. sobreproducción sin inventar una fórmula nueva. */}
+              Combina lo agendado a mano con alarmas de quiebre en vivo — por
+              producto×envase, cruzando el punto de reorden (Stock de
+              Seguridad) con el ritmo de venta real del ciclo — para
+              balancear quiebre de stock vs. sobreproducción sin inventar una
+              fórmula nueva. */}
           {activeTab === 'plan' && (
             <div className="flex h-full flex-col gap-6">
               {sugerenciasPlan.length > 0 && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
                   <div className="mb-3 flex items-center gap-2">
-                    <Lightbulb size={18} className="text-amber-600" />
-                    <h3 className="font-bold text-amber-900">Sugerencias basadas en el forecast</h3>
+                    <AlertTriangle size={18} className="text-amber-600" />
+                    <h3 className="font-bold text-amber-900">Alarmas de quiebre de stock</h3>
                     <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-xs font-bold text-amber-800">
                       {sugerenciasPlan.length}
                     </span>
                   </div>
                   <p className="mb-4 text-sm text-amber-800/80">
-                    Estos productos están (o van a quedar) por debajo del punto de reorden según el disponible actual
-                    y el forecast del próximo ciclo. Agrégalos al plan si corresponde cocerlos.
+                    Por producto y <strong>formato</strong> (no por estilo completo — un mismo producto puede ir
+                    sobrado en lata y crítico en barril). Cruza el stock de seguridad, el forecast y el{' '}
+                    <strong>ritmo de venta real de este ciclo</strong> para estimar cuándo se agota cada uno.
                   </p>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {sugerenciasPlan.map((s, i) => (
-                      <div key={`${s.producto}-${i}`} className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-white p-4 shadow-sm">
-                        <div className="flex items-center gap-2.5">
-                          <ProductImage nombre={s.producto} categoria={s.categoria} size={28} radius={7} />
-                          <span className="font-semibold text-gray-800">{s.producto}</span>
+                    {sugerenciasPlan.map((s, i) => {
+                      const urgente = s.diasHastaQuiebre != null && s.diasHastaQuiebre <= s.leadTimeSemanas * 7
+                      return (
+                        <div key={`${s.producto}-${s.envase}-${i}`} className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-white p-4 shadow-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <ProductImage nombre={s.producto} categoria={s.categoria} size={28} radius={7} />
+                              <div className="flex flex-col">
+                                <span className="font-semibold leading-tight text-gray-800">{s.producto}</span>
+                                <span className="text-xs font-bold uppercase tracking-wide text-amber-700">{ENVASE_LABEL[s.envase] ?? s.envase}</span>
+                              </div>
+                            </div>
+                          </div>
+                          {s.fechaEstimadaQuiebre ? (
+                            <div className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold ${urgente ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                              <AlertTriangle size={12} />
+                              Se agota en ~{s.diasHastaQuiebre} días
+                              ({new Date(s.fechaEstimadaQuiebre + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })})
+                            </div>
+                          ) : (
+                            <div className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-500">
+                              Sin ventas este ciclo — no se puede proyectar fecha
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500">{s.motivo}</p>
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosSugeridos)} L</span>
+                            <button
+                              disabled={guardandoPlan}
+                              onClick={() => agregarLote({
+                                producto: s.producto,
+                                categoria: s.categoria,
+                                litrosPlanificados: Math.round(s.litrosSugeridos),
+                                fechaPlanificada: hoyLocalISO(new Date(Date.now() + 7 * 86400000)),
+                                origen: 'sugerido',
+                                motivo: s.motivo,
+                              })}
+                              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                            >
+                              Agregar al plan
+                            </button>
+                          </div>
                         </div>
-                        <p className="text-xs text-gray-500">{s.motivo}</p>
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosSugeridos)} L</span>
-                          <button
-                            disabled={guardandoPlan}
-                            onClick={() => agregarLote({
-                              producto: s.producto,
-                              categoria: s.categoria,
-                              litrosPlanificados: Math.round(s.litrosSugeridos),
-                              fechaPlanificada: hoyLocalISO(new Date(Date.now() + 7 * 86400000)),
-                              origen: 'sugerido',
-                              motivo: s.motivo,
-                            })}
-                            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
-                          >
-                            Agregar al plan
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}

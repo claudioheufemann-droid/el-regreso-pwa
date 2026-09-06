@@ -140,10 +140,25 @@ export interface LotePlan {
  */
 export interface SugerenciaPlan {
   producto: string
+  /** Formato específico que gatilló la alarma — barriles y latas de un mismo
+   *  producto se agotan a ritmos distintos, así que la sugerencia SIEMPRE es
+   *  por producto×envase, nunca por el estilo completo (ver comentario en
+   *  el cálculo más abajo). */
+  envase: EnvaseBucket
   categoria: 'cerveza' | 'kombucha'
-  /** Litros para volver a estar en el punto de reorden = puntoReorden - disponible. */
+  /** Litros para cubrir lo que haga falta: el punto de reorden, o lo que se
+   *  va a consumir durante el lead time al ritmo de venta ACTUAL, lo que
+   *  sea mayor. */
   litrosSugeridos: number
   leadTimeSemanas: number
+  /** Litros/día vendidos en lo que va del ciclo — el ritmo REAL, no el
+   *  promedio proyectado por el forecast. */
+  ritmoDiarioActual: number
+  /** Días hasta agotar el disponible al ritmo actual — null si no hubo
+   *  ventas este ciclo (no se puede proyectar una velocidad). */
+  diasHastaQuiebre: number | null
+  /** yyyy-mm-dd — null si diasHastaQuiebre es null. */
+  fechaEstimadaQuiebre: string | null
   motivo: string
 }
 
@@ -493,33 +508,87 @@ export default async function ProduccionPage() {
     observaciones: (p.observaciones as string | null) ?? null,
   }))
 
-  // Sugerencias: comparan el disponible de HOY (mismo cálculo que Stock de
-  // Seguridad) contra el punto de reorden del PRIMER mes proyectado — no
-  // tiene sentido sugerir cocinar para un mes lejano, la urgencia es sobre
-  // lo que ya está bajo o a punto de estarlo. Se excluyen los productos que
-  // YA tienen un lote activo en el plan, para no duplicar la sugerencia
-  // cocción tras cocción hasta que alguien la marque completada.
+  // Sugerencias / alarmas de quiebre: SIEMPRE por producto×envase, nunca por
+  // el estilo completo — lo que hay que saber no es "¿va bien Doble IPA?"
+  // sino "¿en qué formato específico (barril 30L, lata...) nos vamos a
+  // quedar sin stock, y cuándo?". Un producto puede ir sobrado en lata y
+  // crítico en barril al mismo tiempo; agregarlo a nivel producto escondía
+  // justo el dato que importa para decidir qué envasar.
+  //
+  // Dos señales, no una sola:
+  //  1) Punto de reorden (stock de seguridad, basado en el PROMEDIO
+  //     proyectado por el forecast) — la misma lógica de siempre.
+  //  2) Ritmo de venta REAL de este ciclo (litros vendidos / días
+  //     transcurridos) proyectado hacia adelante — agarra los casos donde
+  //     se está vendiendo más rápido que el promedio y el punto de reorden
+  //     (que mira el promedio) todavía no se dio cuenta.
+  // La sugerencia dispara si CUALQUIERA de las dos dice que hace falta
+  // producir, y siempre muestra la fecha estimada de quiebre calculada con
+  // el ritmo real — es el dato que responde "¿cuándo exactamente?".
   const productosEnPlan = new Set(planProduccion.map(l => l.producto))
   const primerMes = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
   const sugerenciasPlan: SugerenciaPlan[] = stockSeguridad
-    .filter(s => s.nivel === 'producto' && s.mes === primerMes && !productosEnPlan.has(s.producto))
+    .filter(s => s.nivel === 'producto_envase' && s.envase && s.mes === primerMes && !productosEnPlan.has(s.producto))
     .map(s => {
+      const envase = s.envase as EnvaseBucket
       const disponible = s.stockActualLitros != null ? s.stockActualLitros + s.litrosEnProduccion : null
-      if (disponible == null || disponible >= s.puntoReordenLitros) return null
-      const necesidadNeta = Math.round(Math.max(s.puntoReordenLitros - disponible, 0))
+      if (disponible == null) return null
+
+      const ritmoDiarioActual = diaActual > 0
+        ? (litrosMtdPorSerie.get(`producto_envase::${claveProductoEnvase(s.producto, envase)}`) ?? 0) / diaActual
+        : 0
+      const diasHastaQuiebre = ritmoDiarioActual > 0 ? disponible / ritmoDiarioActual : null
+      const fechaEstimadaQuiebre = diasHastaQuiebre != null
+        ? new Date(hoy.getTime() + diasHastaQuiebre * MS_POR_DIA).toISOString().slice(0, 10)
+        : null
+
+      // Litros que el ritmo actual se comería durante la ventana de riesgo
+      // (lead time + hasta la próxima revisión mensual) — mismo concepto de
+      // "ventana" que el stock de seguridad, pero con la velocidad real en
+      // vez del promedio del forecast.
+      const ventanaDias = (s.leadTimeSemanas + s.periodoRevisionSemanas) * 7
+      const necesidadRitmo = Math.max(ritmoDiarioActual * ventanaDias - disponible, 0)
+      const necesidadReorden = Math.max(s.puntoReordenLitros - disponible, 0)
+      const necesidadNeta = Math.round(Math.max(necesidadRitmo, necesidadReorden))
       if (necesidadNeta <= 0) return null
+
+      const disparadoPorRitmo = necesidadRitmo > necesidadReorden
+      const envaseLabel = ENVASE_LABEL[envase] ?? envase
+      const fechaLabel = fechaEstimadaQuiebre != null
+        ? new Date(`${fechaEstimadaQuiebre}T00:00:00Z`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+        : null
+
+      let motivo: string
+      if (disponible < s.stockSeguridadLitros) {
+        motivo = `Crítico en ${envaseLabel}: disponible (${Math.round(disponible)} L) por debajo del stock de seguridad (${Math.round(s.stockSeguridadLitros)} L).`
+      } else if (disparadoPorRitmo) {
+        motivo = `Al ritmo de venta actual (${Math.round(ritmoDiarioActual * 7)} L/semana) vas a quebrar ${envaseLabel} antes de que llegue el próximo lote.`
+      } else {
+        motivo = `Bajo punto de reorden en ${envaseLabel}: disponible ${Math.round(disponible)} L, punto de reorden ${Math.round(s.puntoReordenLitros)} L.`
+      }
+      motivo += fechaLabel
+        ? ` Quiebre estimado: ${fechaLabel} (${Math.max(0, Math.round(diasHastaQuiebre!))} días), al ritmo de venta actual. Lead time ${s.leadTimeSemanas} semanas.`
+        : ` Sin ventas registradas este ciclo para proyectar fecha. Lead time ${s.leadTimeSemanas} semanas.`
+
       return {
         producto: s.producto,
+        envase,
         categoria: s.categoria,
         litrosSugeridos: necesidadNeta,
         leadTimeSemanas: s.leadTimeSemanas,
-        motivo: disponible < s.stockSeguridadLitros
-          ? `Crítico: disponible (${Math.round(disponible)} L) por debajo del stock de seguridad (${Math.round(s.stockSeguridadLitros)} L). Lead time ${s.leadTimeSemanas} semanas.`
-          : `Bajo punto de reorden: disponible ${Math.round(disponible)} L, punto de reorden ${Math.round(s.puntoReordenLitros)} L. Lead time ${s.leadTimeSemanas} semanas.`,
+        ritmoDiarioActual: Math.round(ritmoDiarioActual * 10) / 10,
+        diasHastaQuiebre: diasHastaQuiebre != null ? Math.round(diasHastaQuiebre) : null,
+        fechaEstimadaQuiebre,
+        motivo,
       } as SugerenciaPlan
     })
     .filter((s): s is SugerenciaPlan => s !== null)
-    .sort((a, b) => b.litrosSugeridos - a.litrosSugeridos)
+    .sort((a, b) => {
+      const diasA = a.diasHastaQuiebre ?? Infinity
+      const diasB = b.diasHastaQuiebre ?? Infinity
+      if (diasA !== diasB) return diasA - diasB
+      return b.litrosSugeridos - a.litrosSugeridos
+    })
 
   return (
     <ProduccionClient
