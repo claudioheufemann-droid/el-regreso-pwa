@@ -112,6 +112,11 @@ export interface StockSeguridadItem {
   /** Litros en inventario hoy, al mismo nivel que la fila (por producto, o
    *  por producto+formato) — null si no aparece en el informe de stock. */
   stockActualLitros: number | null
+  /** Unidades físicas en inventario hoy (latas o barriles según el formato)
+   *  — sólo tiene sentido a nivel 'producto_envase' (un "producto" junta
+   *  latas y barriles, que no se pueden sumar como unidad). Null a nivel
+   *  'producto', o si el formato no tiene unidad contable (bucket "otros"). */
+  stockActualUnidades: number | null
   /** Litros declarados en producción y todavía no recibidos en bodega. */
   litrosEnProduccion: number
 }
@@ -158,6 +163,9 @@ export interface SugerenciaPlan {
    *  solo sin etiqueta (así se leyó "1.697 L" como stock disponible cuando
    *  en realidad era la necesidad a cubrir — bug de lectura, no de cálculo). */
   disponibleLitros: number
+  /** Unidades físicas disponibles (latas o barriles) — null si el bucket no
+   *  tiene unidad contable ("otros"). */
+  disponibleUnidades: number | null
   /** Litros para cubrir lo que haga falta: el punto de reorden, o lo que se
    *  va a consumir durante el lead time al ritmo de venta ACTUAL, lo que
    *  sea mayor. */
@@ -442,6 +450,10 @@ export default async function ProduccionPage() {
 
   const stockActualPorProducto = new Map<string, number>()
   const stockActualPorProductoEnvase = new Map<string, number>()
+  // Unidades físicas (latas o barriles) — a diferencia de litros, no tiene
+  // sentido sumarlas a nivel "producto" (mezclaría latas con barriles), así
+  // que sólo se acumula por producto×envase.
+  const stockActualUnidadesPorProductoEnvase = new Map<string, number>()
   // `stock`: una fila por (producto resuelto, formato, cámara) — es lo que
   // consume la tabla "Inventario Actual" del cliente, agrupada visualmente
   // ahí. Se arma en el MISMO loop que ya resolvía nombre/bucket para no
@@ -471,6 +483,7 @@ export default async function ProduccionPage() {
     stockActualPorProducto.set(nombre, (stockActualPorProducto.get(nombre) ?? 0) + litros)
     const clavePE = claveProductoEnvase(nombre, bucket as never)
     stockActualPorProductoEnvase.set(clavePE, (stockActualPorProductoEnvase.get(clavePE) ?? 0) + litros)
+    stockActualUnidadesPorProductoEnvase.set(clavePE, (stockActualUnidadesPorProductoEnvase.get(clavePE) ?? 0) + cantidad)
   }
 
   // Litros en fermentación, que van a llegar a bodega dentro del lead time.
@@ -524,6 +537,9 @@ export default async function ProduccionPage() {
       mesesHistorial: s.meses_historial != null ? Number(s.meses_historial) : null,
       metodo: (s.metodo as 'propio' | 'derivado' | null) ?? 'propio',
       stockActualLitros: stockActual,
+      stockActualUnidades: nivel === 'producto_envase' && envase
+        ? stockActualUnidadesPorProductoEnvase.get(claveProductoEnvase(producto, envase as never)) ?? (stockActual != null ? 0 : null)
+        : null,
       // Los lotes se cargan por producto, sin desglose de formato confiable,
       // así que sólo se descuentan en las filas a nivel producto.
       litrosEnProduccion: nivel === 'producto' ? (litrosEnProduccionPorProducto.get(producto) ?? 0) : 0,
@@ -577,6 +593,10 @@ export default async function ProduccionPage() {
       const envase = s.envase as EnvaseBucket
       const disponible = s.stockActualLitros != null ? s.stockActualLitros + s.litrosEnProduccion : null
       if (disponible == null) return null
+      // Unidades: sólo lo físicamente contado en bodega — lo "en producción"
+      // (fermentando) no tiene todavía un formato asignado, así que no se
+      // sabe cuántas latas/barriles va a dar hasta que se envasa.
+      const disponibleUnidades = s.stockActualUnidades
 
       // Ritmo en litros por DÍA HÁBIL (lunes a viernes) — no se vende fin de
       // semana, así que "días" acá y en diasHastaQuiebre/fechaEstimadaQuiebre
@@ -624,6 +644,7 @@ export default async function ProduccionPage() {
         envase,
         categoria: s.categoria,
         disponibleLitros: Math.round(disponible),
+        disponibleUnidades,
         litrosSugeridos: necesidadNeta,
         leadTimeSemanas: s.leadTimeSemanas,
         ritmoDiarioActual: Math.round(ritmoDiarioActual * 10) / 10,

@@ -74,6 +74,12 @@ const fNum = (n: number) => Math.round(n).toLocaleString('es-CL')
  *  ordenar por otro criterio (Stock de Seguridad, calculadora de cobertura). */
 const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata', 'otros']
 
+/** Nombre de la unidad física de cada formato, para mostrar junto a los
+ *  litros de disponible ("314 L · 888 latas"). */
+const UNIDAD_ENVASE: Record<EnvaseBucket, string> = {
+  barril_30: 'barriles', barril_50: 'barriles', lata: 'latas', otros: 'unidades',
+}
+
 /** Fecha de HOY en yyyy-mm-dd, en huso HORARIO LOCAL del navegador — nunca
  *  `toISOString()`, que da la fecha en UTC y en Chile (UTC-3/-4) ya marca
  *  "mañana" desde media tarde, haciendo aparecer como atrasado un lote
@@ -277,7 +283,10 @@ function ModalConfirmarLote({
         {/* Necesidad según el forecast — el dato que responde "cuánto debemos
             cubrir", fijo (no cambia con lo que el usuario decida producir). */}
         <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-          <p><strong>Disponible ahora:</strong> {fNum(sugerencia.disponibleLitros)} L en {ENVASE_LABEL[sugerencia.envase] ?? sugerencia.envase}.</p>
+          <p>
+            <strong>Disponible ahora:</strong> {fNum(sugerencia.disponibleLitros)} L en {ENVASE_LABEL[sugerencia.envase] ?? sugerencia.envase}
+            {sugerencia.disponibleUnidades != null && ` (${fNum(sugerencia.disponibleUnidades)} ${UNIDAD_ENVASE[sugerencia.envase]})`}.
+          </p>
           <p className="mt-1"><strong>Necesidad a cubrir:</strong> {fNum(sugerencia.litrosSugeridos)} L, según el forecast y el punto de reorden.</p>
           {sugerencia.diasHastaQuiebre != null && (
             <p className="mt-1 text-xs text-amber-700">
@@ -2172,9 +2181,12 @@ export default function ProduccionClient({
                                     "tengo 1.697 L" cuando en realidad es lo que FALTA producir
                                     (el disponible real era 314 L). */}
                                 <div className="flex shrink-0 items-center gap-3 text-right">
-                                  <div className="w-20">
+                                  <div className="w-24">
                                     <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Disponible</p>
                                     <p className="text-sm font-bold tabular-nums text-gray-500">{fNum(s.disponibleLitros)} L</p>
+                                    {s.disponibleUnidades != null && (
+                                      <p className="text-[11px] text-gray-400">{fNum(s.disponibleUnidades)} {UNIDAD_ENVASE[s.envase]}</p>
+                                    )}
                                   </div>
                                   <div className="w-20">
                                     <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-amber-600">A producir</p>
