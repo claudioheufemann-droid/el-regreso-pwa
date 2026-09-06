@@ -111,6 +111,60 @@ function sumarDiasHabilesISO(desdeISO: string, diasHabiles: number): string {
   return new Date(t).toISOString().slice(0, 10)
 }
 
+function diffDiasISO(desdeISO: string, hastaISO: string): number {
+  return Math.round((Date.parse(`${hastaISO}T00:00:00Z`) - Date.parse(`${desdeISO}T00:00:00Z`)) / 86400000)
+}
+
+/** Demanda proyectada (litros) de una serie entre `desdeISO` y `hastaISO` —
+ *  suma el forecast mensual de Prophet ciclo por ciclo, prorateando por días
+ *  calendario los ciclos que quedan cortados a la mitad. El ciclo EN CURSO no
+ *  tiene forecast propio (el modelo lo excluye por estar incompleto), así que
+ *  su tramo usa el ritmo de venta real de este ciclo. Mismo criterio en toda
+ *  la app — Forecasting (calculadora de cobertura) y Stock de Seguridad
+ *  (necesidad de producción anticipada) comparten esta única función para no
+ *  arriesgarse a que las dos vistas den números distintos para la misma
+ *  pregunta. */
+function demandaProyectadaEnPeriodo(serie: SerieForecast, avanceMes: AvanceMes, desdeISO: string, hastaISO: string): number {
+  const ritmoDiarioSerie = avanceMes.diasHabilesTranscurridos > 0 ? serie.litrosMesEnCurso / avanceMes.diasHabilesTranscurridos : 0
+  const litrosCicloActualProyectado = ritmoDiarioSerie * avanceMes.diasHabilesEnCiclo
+
+  const ciclos: { mes: string; litros: number }[] = [
+    { mes: avanceMes.mes, litros: litrosCicloActualProyectado },
+    ...serie.puntos.filter(p => p.tipo === 'forecast').map(p => ({ mes: p.mes, litros: p.litros })),
+  ]
+
+  let demanda = 0
+  for (const c of ciclos) {
+    const ini = inicioDeCiclo(c.mes)
+    const fin = finDeCiclo(c.mes)
+    const solapIni = ini > desdeISO ? ini : desdeISO
+    const solapFin = fin < hastaISO ? fin : hastaISO
+    if (solapIni > solapFin) continue
+    const totalDiasCiclo = diffDiasISO(ini, fin) + 1
+    const diasSolapados = diffDiasISO(solapIni, solapFin) + 1
+    demanda += c.litros * (diasSolapados / totalDiasCiclo)
+  }
+  return demanda
+}
+
+/** ¿Algún ciclo de forecast dentro de [desdeISO, hastaISO] trae un empuje
+ *  ESTACIONAL fuerte? — la señal de "se viene temporada alta" para este
+ *  producto/formato. Reutiliza la propia descomposición de Prophet
+ *  (tendencia + estacionalidad) que ya se grafica en Forecasting, en vez de
+ *  inventar un umbral nuevo comparando promedios: si el modelo ya identificó
+ *  que ese mes rinde bastante más que su tendencia de fondo, ese es el aviso
+ *  a anticipar producción. Umbral: el empuje estacional pesa 15% o más del
+ *  total proyectado de ese ciclo. */
+function vieneAltaDemanda(serie: SerieForecast, desdeISO: string, hastaISO: string): boolean {
+  return serie.puntos.some(p => {
+    if (p.tipo !== 'forecast' || p.estacionalidad == null || p.litros <= 0) return false
+    const ini = inicioDeCiclo(p.mes)
+    const fin = finDeCiclo(p.mes)
+    if (fin < desdeISO || ini > hastaISO) return false
+    return p.estacionalidad > 0 && p.estacionalidad / p.litros >= 0.15
+  })
+}
+
 function etiquetaMes(iso: string) {
   const [y, m] = iso.split('-').map(Number)
   return `${MESES_CORTOS[m - 1]} '${String(y).slice(2)}`
@@ -574,27 +628,7 @@ export default function ProduccionClient({
     const hoyISO = hoyLocalISO()
     if (coberturaFecha <= hoyISO) return { error: 'La fecha objetivo debe ser posterior a hoy.' as const }
 
-    const diffDias = (desde: string, hasta: string) => Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86400000)
-
-    const ritmoDiarioSerie = avanceMes.diasHabilesTranscurridos > 0 ? serie.litrosMesEnCurso / avanceMes.diasHabilesTranscurridos : 0
-    const litrosCicloActualProyectado = ritmoDiarioSerie * avanceMes.diasHabilesEnCiclo
-
-    const ciclos: { mes: string; litros: number }[] = [
-      { mes: avanceMes.mes, litros: litrosCicloActualProyectado },
-      ...serie.puntos.filter(p => p.tipo === 'forecast').map(p => ({ mes: p.mes, litros: p.litros })),
-    ]
-
-    let demandaProyectada = 0
-    for (const c of ciclos) {
-      const ini = inicioDeCiclo(c.mes)
-      const fin = finDeCiclo(c.mes)
-      const solapIni = ini > hoyISO ? ini : hoyISO
-      const solapFin = fin < coberturaFecha ? fin : coberturaFecha
-      if (solapIni > solapFin) continue
-      const totalDiasCiclo = diffDias(ini, fin) + 1
-      const diasSolapados = diffDias(solapIni, solapFin) + 1
-      demandaProyectada += c.litros * (diasSolapados / totalDiasCiclo)
-    }
+    const demandaProyectada = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
 
     const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
     const filaStock = stockSeguridad.find(s =>
@@ -830,6 +864,72 @@ export default function ProduccionClient({
     })
     return resultado
   }, [filasStockSeguridad])
+
+  /* ── Necesidad de producción anticipada ──────────────────────────────────
+     El resto de Stock de Seguridad responde "¿estoy bien HOY?" comparando
+     contra un solo mes. Esto responde la otra pregunta, la que importa para
+     no improvisar: "¿cuánto necesito PRODUCIR para llegar bien hasta tal
+     fecha futura?" — para cualquier producto/formato, no uno a la vez.
+     Reutiliza exactamente el mismo cálculo que la Calculadora de Cobertura
+     de Forecasting (demandaProyectadaEnPeriodo), aplicado a TODAS las
+     combinaciones producto×envase de una vez, y le suma una alerta de
+     "viene alta demanda" basada en la propia estacionalidad que ya calcula
+     Prophet — así se detectan también los casos donde el disponible de hoy
+     alcanza pero se acerca una temporada alta que se lo va a comer rápido. */
+  const [fechaCoberturaSeg, setFechaCoberturaSeg] = useState(() => hoyLocalISO(new Date(Date.now() + 60 * 86400000)))
+
+  const necesidadesAnticipadas = useMemo(() => {
+    const hoyISO = hoyLocalISO()
+    if (fechaCoberturaSeg <= hoyISO) return []
+    const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+    const resultado: (SugerenciaPlan & { altaDemanda: boolean })[] = []
+
+    for (const serie of series) {
+      if (serie.nivel !== 'producto_envase' || !serie.producto || !serie.envaseBucket) continue
+      if (filtroCategoriaSeg !== 'todas' && serie.categoria !== filtroCategoriaSeg) continue
+      if (filtroEnvaseSeg !== 'todos' && serie.envaseBucket !== filtroEnvaseSeg) continue
+      const envase = serie.envaseBucket as EnvaseBucket
+
+      const filaStock = stockSeguridad.find(s =>
+        s.nivel === 'producto_envase' && s.mes === primerMesStock && s.producto === serie.producto && s.envase === envase
+      )
+      if (!filaStock) continue
+
+      const demandaProyectada = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, fechaCoberturaSeg)
+      const disponible = (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion
+      const necesidadNeta = Math.round(Math.max(demandaProyectada - disponible, 0))
+      const altaDemanda = vieneAltaDemanda(serie, hoyISO, fechaCoberturaSeg)
+      if (necesidadNeta <= 0 && !altaDemanda) continue
+
+      const ritmoDiarioActual = avanceMes.diasHabilesTranscurridos > 0 ? serie.litrosMesEnCurso / avanceMes.diasHabilesTranscurridos : 0
+      const diasHastaQuiebre = ritmoDiarioActual > 0 ? disponible / ritmoDiarioActual : null
+      const fechaEstimadaQuiebre = diasHastaQuiebre != null ? sumarDiasHabilesISO(hoyISO, diasHastaQuiebre) : null
+      const fechaLabel = new Date(`${fechaCoberturaSeg}T00:00:00Z`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+
+      let motivo = `Cubrir hasta ${fechaLabel}: demanda proyectada ${Math.round(demandaProyectada)} L, disponible ${Math.round(disponible)} L.`
+      if (altaDemanda) motivo += ' El modelo anticipa una temporada de alta demanda dentro de este período.'
+
+      resultado.push({
+        producto: serie.producto, envase, categoria: (serie.categoria as 'cerveza' | 'kombucha') ?? 'cerveza',
+        disponibleLitros: Math.round(disponible), disponibleUnidades: filaStock.stockActualUnidades,
+        litrosSugeridos: necesidadNeta, leadTimeSemanas: filaStock.leadTimeSemanas,
+        ritmoDiarioActual: Math.round(ritmoDiarioActual * 10) / 10,
+        diasHastaQuiebre: diasHastaQuiebre != null ? Math.round(diasHastaQuiebre) : null,
+        fechaEstimadaQuiebre, motivo, altaDemanda,
+      })
+    }
+
+    return resultado.sort((a, b) => Number(b.altaDemanda) - Number(a.altaDemanda) || b.litrosSugeridos - a.litrosSugeridos)
+  }, [series, stockSeguridad, avanceMes, fechaCoberturaSeg, filtroCategoriaSeg, filtroEnvaseSeg])
+
+  const anticipadasPorProducto = useMemo(() => {
+    const grupos = new Map<string, { producto: string; categoria: 'cerveza' | 'kombucha'; items: typeof necesidadesAnticipadas }>()
+    for (const item of necesidadesAnticipadas) {
+      if (!grupos.has(item.producto)) grupos.set(item.producto, { producto: item.producto, categoria: item.categoria, items: [] })
+      grupos.get(item.producto)!.items.push(item)
+    }
+    return [...grupos.values()]
+  }, [necesidadesAnticipadas])
 
   /* ── Inventario actual agrupado: producto → formato → cámara ───────────
      `stock` llega como una fila por (producto, formato, cámara) — se
@@ -1871,6 +1971,100 @@ export default function ProduccionClient({
                     </p>
                   </div>
                 ))}
+              </div>
+
+              {/* Necesidad de Producción Anticipada — responde "¿cuánto
+                  necesito producir para cubrir hasta tal fecha?" y avisa
+                  cuándo se viene una temporada de alta demanda, no sólo si
+                  hoy está bien. Mismo lenguaje visual que las alarmas de
+                  quiebre del Plan Maestro para que se reconozca de un
+                  vistazo como una lista accionable. */}
+              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <h3 className="font-bold text-gray-800">Necesidad de Producción Anticipada</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Cuánto hay que producir de cada producto y formato para llegar bien hasta una fecha futura —
+                      y qué productos vienen con una temporada de alta demanda por delante.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Cubrir hasta</label>
+                    <input
+                      type="date" value={fechaCoberturaSeg} onChange={e => setFechaCoberturaSeg(e.target.value)}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {anticipadasPorProducto.length === 0 ? (
+                  <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-700">
+                    <CheckCircle2 size={16} />
+                    Con el disponible y lo en producción actual, no hace falta cocer nada más para cubrir hasta esa fecha
+                    (respetando los filtros de categoría/envase de arriba).
+                  </div>
+                ) : (
+                  <div className="mt-4 flex flex-col gap-3">
+                    {anticipadasPorProducto.map(grupo => (
+                      <div key={grupo.producto} className="overflow-hidden rounded-lg border border-amber-200 bg-white">
+                        <div className="flex items-center gap-2.5 border-b border-amber-100 bg-amber-50/60 px-4 py-2.5">
+                          <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={30} radius={7} />
+                          <span className="font-semibold text-gray-800">{grupo.producto}</span>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {grupo.items.map((item, i) => (
+                            <div key={`${item.envase}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-2.5" title={item.motivo}>
+                              <span className="w-24 shrink-0 text-xs font-bold uppercase tracking-wide text-amber-700">
+                                {ENVASE_LABEL[item.envase] ?? item.envase}
+                              </span>
+                              <div className="min-w-[160px] flex-1">
+                                {item.altaDemanda && (
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
+                                    <TrendingUp size={12} />
+                                    Viene alta demanda
+                                  </span>
+                                )}
+                                {/* litrosSugeridos sólo puede ser 0 cuando la fila entró a la lista
+                                    por altaDemanda (el filtro de arriba descarta las que no tienen
+                                    ni necesidad ni alza) — el disponible alcanza hoy, pero avisa
+                                    igual porque se viene la temporada. */}
+                                {item.litrosSugeridos === 0 && (
+                                  <span className="ml-1.5 text-xs text-gray-400">Disponible alcanza por ahora.</span>
+                                )}
+                              </div>
+                              <div className="flex shrink-0 items-center gap-3 text-right">
+                                <div className="w-24">
+                                  <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Disponible</p>
+                                  <p className="text-sm font-bold tabular-nums text-gray-500">{fNum(item.disponibleLitros)} L</p>
+                                  {item.disponibleUnidades != null && (
+                                    <p className="text-[11px] text-gray-400">{fNum(item.disponibleUnidades)} {UNIDAD_ENVASE[item.envase]}</p>
+                                  )}
+                                </div>
+                                <div className="w-20">
+                                  <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-amber-600">A producir</p>
+                                  <p className="text-sm font-bold tabular-nums text-gray-800">{fNum(item.litrosSugeridos)} L</p>
+                                </div>
+                              </div>
+                              <button
+                                disabled={guardandoPlan}
+                                onClick={() => setSugerenciaModal(item)}
+                                className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                              >
+                                Agregar al plan
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-3 text-xs text-gray-400">
+                  Demanda proyectada = forecast de Prophet ciclo a ciclo entre hoy y la fecha elegida (el ciclo en curso
+                  usa el ritmo de venta real, lun-vie). "Viene alta demanda" = el modelo ya identificó un empuje
+                  estacional fuerte en algún mes dentro del período — anticiparse antes de que el punto de reorden lo
+                  marque como crítico.
+                </p>
               </div>
 
               {/* Tabla de stock de seguridad */}
