@@ -16,7 +16,7 @@ import {
   ArrowUp, ArrowDown, CheckCircle2, Trash2, X,
 } from 'lucide-react'
 import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan } from './page'
-import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, type EnvaseBucket } from '@/lib/produccion/reglas'
+import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
    Paleta corporativa. Tailwind cubre el resto; estos tres colores van
@@ -69,6 +69,10 @@ const DEMO_insumosData = [
 /* ── Utilidades de formato ─────────────────────────────────────────────── */
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const fNum = (n: number) => Math.round(n).toLocaleString('es-CL')
+
+/** Orden fijo de formato — evita que un mismo producto se vea disperso al
+ *  ordenar por otro criterio (Stock de Seguridad, calculadora de cobertura). */
+const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata', 'otros']
 
 /** Fecha de HOY en yyyy-mm-dd, en huso HORARIO LOCAL del navegador — nunca
  *  `toISOString()`, que da la fecha en UTC y en Chile (UTC-3/-4) ya marca
@@ -524,6 +528,75 @@ export default function ProduccionClient({
     ? (mtdLitros / avanceMes.diasHabilesTranscurridos) * avanceMes.diasHabilesEnCiclo
     : 0
 
+  /* ── Calculadora de cobertura ("¿cuánto necesito de X para cubrir hasta
+     tal fecha?") ──────────────────────────────────────────────────────────
+     Sirve cualquier producto en cualquier formato (o "todos los formatos").
+     Suma el forecast mensual de Prophet ciclo por ciclo entre HOY y la fecha
+     objetivo, prorateando por días calendario los ciclos que quedan cortados
+     a la mitad (el forecast es de granularidad mensual, no diaria — es la
+     forma estándar de repartirlo dentro de un rango arbitrario). El ciclo EN
+     CURSO no tiene punto de forecast propio (el modelo lo excluye a
+     propósito por estar incompleto — ver generar_forecast.py), así que para
+     su tramo se usa el ritmo de venta real de este ciclo, mismo criterio que
+     "a este ritmo cerrarías con X L" de arriba. */
+  const productosDisponibles = useMemo(
+    () => [...new Set(series.filter(s => s.nivel === 'producto' && s.producto).map(s => s.producto!))].sort((a, b) => a.localeCompare(b)),
+    [series]
+  )
+  const [coberturaProducto, setCoberturaProducto] = useState('')
+  const [coberturaEnvase, setCoberturaEnvase] = useState<'todos' | EnvaseBucket>('todos')
+  const [coberturaFecha, setCoberturaFecha] = useState(() => hoyLocalISO(new Date(Date.now() + 30 * 86400000)))
+  const productoCobertura = coberturaProducto || productosDisponibles[0] || ''
+
+  const envasesCoberturaDisponibles = useMemo(
+    () => ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === productoCobertura && s.envaseBucket === b)),
+    [series, productoCobertura]
+  )
+
+  const resultadoCobertura = useMemo(() => {
+    if (!productoCobertura) return null
+    const envaseSel = coberturaEnvase !== 'todos' && envasesCoberturaDisponibles.includes(coberturaEnvase) ? coberturaEnvase : null
+    const nivelBuscado = envaseSel ? 'producto_envase' : 'producto'
+    const claveBuscada = envaseSel ? claveProductoEnvase(productoCobertura, envaseSel) : productoCobertura
+    const serie = series.find(s => s.nivel === nivelBuscado && s.clave === claveBuscada)
+    if (!serie) return null
+
+    const hoyISO = hoyLocalISO()
+    if (coberturaFecha <= hoyISO) return { error: 'La fecha objetivo debe ser posterior a hoy.' as const }
+
+    const diffDias = (desde: string, hasta: string) => Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86400000)
+
+    const ritmoDiarioSerie = avanceMes.diasHabilesTranscurridos > 0 ? serie.litrosMesEnCurso / avanceMes.diasHabilesTranscurridos : 0
+    const litrosCicloActualProyectado = ritmoDiarioSerie * avanceMes.diasHabilesEnCiclo
+
+    const ciclos: { mes: string; litros: number }[] = [
+      { mes: avanceMes.mes, litros: litrosCicloActualProyectado },
+      ...serie.puntos.filter(p => p.tipo === 'forecast').map(p => ({ mes: p.mes, litros: p.litros })),
+    ]
+
+    let demandaProyectada = 0
+    for (const c of ciclos) {
+      const ini = inicioDeCiclo(c.mes)
+      const fin = finDeCiclo(c.mes)
+      const solapIni = ini > hoyISO ? ini : hoyISO
+      const solapFin = fin < coberturaFecha ? fin : coberturaFecha
+      if (solapIni > solapFin) continue
+      const totalDiasCiclo = diffDias(ini, fin) + 1
+      const diasSolapados = diffDias(solapIni, solapFin) + 1
+      demandaProyectada += c.litros * (diasSolapados / totalDiasCiclo)
+    }
+
+    const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+    const filaStock = stockSeguridad.find(s =>
+      s.nivel === nivelBuscado && s.mes === primerMesStock && s.producto === productoCobertura &&
+      (envaseSel ? s.envase === envaseSel : true)
+    )
+    const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
+    const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
+
+    return { demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, categoria: serie.categoria as 'cerveza' | 'kombucha' | null }
+  }, [productoCobertura, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes])
+
   /* ── Serie seleccionada → filas para Recharts ─────────────────────────
      La proyección arranca repitiendo el último mes real, para que las dos
      líneas queden pegadas en el gráfico en vez de mostrar un corte.
@@ -700,10 +773,6 @@ export default function ProduccionClient({
 
      Sin sumar lo que está en fermentación, un producto con la cocción ya
      lanzada aparecía igual como crítico y gatillaba una cocción redundante. */
-  /** Orden fijo de formato — evita que un mismo producto se vea disperso al
-   *  ordenar por otro criterio (ver comentario extenso más abajo). */
-  const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata', 'otros']
-
   const filasStockSeguridad = useMemo(() => {
     return stockSeguridad
       .filter(s => s.mes === mesSeguridadActivo && s.nivel === 'producto_envase')
@@ -1292,6 +1361,74 @@ export default function ProduccionClient({
                   </div>
                 )
               })()}
+
+              {/* Calculadora de cobertura — responde "¿cuánto necesito de X
+                  producto, en Y formato, para cubrir de aquí a tal fecha?"
+                  para cualquier producto/envase, no sólo el que está
+                  seleccionado arriba en el gráfico. */}
+              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h3 className="font-bold text-gray-800">Calculadora de Cobertura</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Ej.: ¿cuántos litros de Fisura en Lata necesito para cubrir de aquí al 27 de marzo?
+                </p>
+                <div className="mt-4 flex flex-wrap items-end gap-3">
+                  <div className="flex min-w-[180px] flex-1 flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Producto</label>
+                    <select
+                      value={productoCobertura}
+                      onChange={e => { setCoberturaProducto(e.target.value); setCoberturaEnvase('todos') }}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex min-w-[160px] flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Formato</label>
+                    <select
+                      value={coberturaEnvase}
+                      onChange={e => setCoberturaEnvase(e.target.value as 'todos' | EnvaseBucket)}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="todos">Todos los formatos</option>
+                      {envasesCoberturaDisponibles.map(b => <option key={b} value={b}>{ENVASE_LABEL[b]}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex min-w-[160px] flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Cubrir hasta</label>
+                    <input
+                      type="date" value={coberturaFecha} onChange={e => setCoberturaFecha(e.target.value)}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {resultadoCobertura && 'error' in resultadoCobertura ? (
+                  <p className="mt-4 text-sm font-semibold text-red-600">{resultadoCobertura.error}</p>
+                ) : resultadoCobertura ? (
+                  <div className="mt-4 grid grid-cols-1 gap-px overflow-hidden rounded-lg bg-gray-200 sm:grid-cols-3">
+                    <div className="bg-gray-50 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Demanda proyectada en el período</p>
+                      <p className="mt-1 text-2xl font-black tabular-nums text-gray-800">{fNum(resultadoCobertura.demandaProyectada)} L</p>
+                    </div>
+                    <div className="bg-gray-50 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Disponible ahora</p>
+                      <p className="mt-1 text-2xl font-black tabular-nums text-gray-800">
+                        {resultadoCobertura.disponible != null ? `${fNum(resultadoCobertura.disponible)} L` : 'Sin dato'}
+                      </p>
+                    </div>
+                    <div className="bg-amber-50 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Necesidad neta a cubrir</p>
+                      <p className="mt-1 text-2xl font-black tabular-nums text-amber-800">
+                        {resultadoCobertura.necesidadNeta != null ? `${fNum(resultadoCobertura.necesidadNeta)} L` : '—'}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+                <p className="mt-3 text-xs text-gray-400">
+                  Suma el forecast mensual por ciclo entre hoy y la fecha elegida (prorateado por días en los ciclos
+                  parciales); el ciclo en curso usa el ritmo de venta real de este ciclo, no el forecast.
+                </p>
+              </div>
 
               {/* Gráfico */}
               <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
