@@ -152,6 +152,12 @@ export interface SugerenciaPlan {
    *  el cálculo más abajo). */
   envase: EnvaseBucket
   categoria: 'cerveza' | 'kombucha'
+  /** Disponible HOY (stock en bodega de Producción + lo declarado en
+   *  producción) — NO confundir con `litrosSugeridos`: éste es lo que HAY,
+   *  el otro es lo que FALTA. Mostrar ambos lado a lado en la UI, nunca uno
+   *  solo sin etiqueta (así se leyó "1.697 L" como stock disponible cuando
+   *  en realidad era la necesidad a cubrir — bug de lectura, no de cálculo). */
+  disponibleLitros: number
   /** Litros para cubrir lo que haga falta: el punto de reorden, o lo que se
    *  va a consumir durante el lead time al ritmo de venta ACTUAL, lo que
    *  sea mayor. */
@@ -617,6 +623,7 @@ export default async function ProduccionPage() {
         producto: s.producto,
         envase,
         categoria: s.categoria,
+        disponibleLitros: Math.round(disponible),
         litrosSugeridos: necesidadNeta,
         leadTimeSemanas: s.leadTimeSemanas,
         ritmoDiarioActual: Math.round(ritmoDiarioActual * 10) / 10,

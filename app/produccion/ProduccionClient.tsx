@@ -277,7 +277,8 @@ function ModalConfirmarLote({
         {/* Necesidad según el forecast — el dato que responde "cuánto debemos
             cubrir", fijo (no cambia con lo que el usuario decida producir). */}
         <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-          <p><strong>Necesidad a cubrir:</strong> {fNum(sugerencia.litrosSugeridos)} L, según el forecast y el punto de reorden.</p>
+          <p><strong>Disponible ahora:</strong> {fNum(sugerencia.disponibleLitros)} L en {ENVASE_LABEL[sugerencia.envase] ?? sugerencia.envase}.</p>
+          <p className="mt-1"><strong>Necesidad a cubrir:</strong> {fNum(sugerencia.litrosSugeridos)} L, según el forecast y el punto de reorden.</p>
           {sugerencia.diasHastaQuiebre != null && (
             <p className="mt-1 text-xs text-amber-700">
               Al ritmo de venta actual ({fNum(sugerencia.ritmoDiarioActual * 5)} L/semana, lun-vie), quiebra en ~{sugerencia.diasHastaQuiebre} días hábiles.
@@ -2166,7 +2167,20 @@ export default function ProduccionClient({
                                     </span>
                                   )}
                                 </div>
-                                <span className="w-20 shrink-0 text-right text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosSugeridos)} L</span>
+                                {/* Dos números lado a lado, cada uno con su etiqueta — nunca un
+                                    número suelto: "1.697 L" sin contexto se leyó una vez como
+                                    "tengo 1.697 L" cuando en realidad es lo que FALTA producir
+                                    (el disponible real era 314 L). */}
+                                <div className="flex shrink-0 items-center gap-3 text-right">
+                                  <div className="w-20">
+                                    <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Disponible</p>
+                                    <p className="text-sm font-bold tabular-nums text-gray-500">{fNum(s.disponibleLitros)} L</p>
+                                  </div>
+                                  <div className="w-20">
+                                    <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-amber-600">A producir</p>
+                                    <p className="text-sm font-bold tabular-nums text-gray-800">{fNum(s.litrosSugeridos)} L</p>
+                                  </div>
+                                </div>
                                 <button
                                   disabled={guardandoPlan}
                                   onClick={() => setSugerenciaModal(s)}
