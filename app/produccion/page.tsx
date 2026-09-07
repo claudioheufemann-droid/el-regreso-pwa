@@ -361,6 +361,17 @@ export default async function ProduccionPage() {
     // de cerrar (1.756 filas a mitad del ciclo del 4-sep-2026), así que sin
     // paginar la consulta se cortaba a mitad de camino y "vendido este mes"
     // quedaba muy por debajo de lo real (2.969 L en vez de ~5.300 L).
+    //
+    // A PROPÓSITO no filtra por `entregado`/`entrega_informada`: cuenta por
+    // fecha de PEDIDO, no de entrega — a diferencia de Ventas
+    // (ventas_entregas_periodo), que sólo suma lo con entregado=true.
+    // Decisión del usuario (7-sep-2026), tras auditar que ahora mismo un
+    // 16% del ciclo en curso está "pedido, no entregado": Producción
+    // necesita la señal temprana de demanda apenas se toma el pedido, no
+    // recién cuando se despacha — coherente con que la sección se llama
+    // "cómo vamos en el mes", no "cuánto entregamos". Mismo criterio en el
+    // endpoint /api/produccion/datos que entrena el forecast — no cambiar
+    // uno sin el otro, o las dos vistas del módulo dejarían de coincidir.
     type VentaMesRow = { fecha_pedido: string; nombre_fantasia: string | null; producto: string | null; envase: string | null; litros: number | null }
     const ventasMes: VentaMesRow[] = []
     for (let offset = 0; ; offset += PAGE) {

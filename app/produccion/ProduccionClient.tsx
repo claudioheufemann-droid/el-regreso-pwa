@@ -1285,10 +1285,12 @@ export default function ProduccionClient({
                       En Fermentación
                     </span>
                   </div>
-                  <div className="flex items-end justify-between gap-3">
-                    <span className="text-3xl font-bold text-gray-900">{fNum(ocupacionPlanta.litrosEnFermentacion)} L</span>
-                    <span className="mb-1 rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">
-                      {ocupacionPlanta.fermentadoresOcupados} {ocupacionPlanta.fermentadoresOcupados === 1 ? 'tanque' : 'tanques'}
+                  <div className="flex items-baseline gap-2">
+                    <span className="whitespace-nowrap text-3xl font-bold text-gray-900">
+                      {fNum(ocupacionPlanta.litrosEnFermentacion)} L
+                    </span>
+                    <span className="whitespace-nowrap text-xs font-bold text-emerald-700">
+                      en {ocupacionPlanta.fermentadoresOcupados} {ocupacionPlanta.fermentadoresOcupados === 1 ? 'tanque' : 'tanques'}
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-400">
@@ -1745,8 +1747,15 @@ export default function ProduccionClient({
                   <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                     <div className="grid gap-px bg-gray-200 sm:grid-cols-3">
                       <div className="bg-white p-5">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Vendido este mes</p>
+                        <p
+                          className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-gray-400"
+                          title="Cuenta por fecha de pedido, no de entrega — a diferencia de Ventas, que sólo suma lo ya despachado. Producción necesita la señal apenas se toma el pedido, no cuando se despacha."
+                        >
+                          Vendido este mes
+                          <Info size={11} className="text-gray-300" />
+                        </p>
                         <p className="mt-1 text-3xl font-black tabular-nums text-gray-900">{fNum(mtdLitros)} L</p>
+                        <p className="text-[10px] text-gray-400">por fecha de pedido, no de entrega</p>
                         {/* Barra de avance del mes: el número solo no dice si
                             vamos temprano o tarde en el período. */}
                         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">

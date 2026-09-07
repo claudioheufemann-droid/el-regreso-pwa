@@ -101,6 +101,14 @@ export async function GET(req: Request) {
   // demanda y el backtest compara contra un total falso. Confirmado con una
   // corrida real del esquema anterior (mes calendario): metía un desvío de
   // ~550% en "general".
+  //
+  // A PROPÓSITO no filtra por `entregado`/`entrega_informada` — cuenta por
+  // fecha de PEDIDO. Mismo criterio (y misma decisión del usuario,
+  // 7-sep-2026) que app/produccion/page.tsx: ver el comentario extenso ahí.
+  // En el histórico ya cerrado el efecto es marginal (~0,08% del volumen,
+  // devoluciones con litros negativos) porque para cuando un ciclo cierra
+  // casi todo ya se despachó — la diferencia real está en el ciclo en
+  // curso, que este endpoint de todos modos descarta hasta que cierre.
   for (const f of filas) {
     if (!f.fecha_pedido || !f.producto) continue
     // esClienteExcluidoProduccion (no esClienteExcluido): Producción cuenta
