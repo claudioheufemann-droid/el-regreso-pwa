@@ -2421,9 +2421,10 @@ export default function ProduccionClient({
                     </span>
                   </div>
                   <p className="mb-4 text-sm text-blue-800/80">
-                    Lo que está fermentando todavía no tiene envase. El reparto va en cascada:
-                    primero se cubre la <strong>necesidad</strong> de cada formato (lo que le falta para su punto de
-                    reorden), y el excedente se reparte por <strong>demanda proyectada</strong>.
+                    Lo que está fermentando todavía no tiene envase. Cada lote se reparte entre formatos y, dentro de
+                    eso, cumple tres funciones: <strong>reponer el colchón</strong> de stock de seguridad,{' '}
+                    <strong>cubrir la venta</strong> mientras llega la próxima cocción, y el <strong>excedente</strong>,
+                    que estira la cobertura hacia adelante.
                   </p>
 
                   <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -2461,24 +2462,53 @@ export default function ProduccionClient({
                               </span>
                               <span className="w-12 shrink-0 text-right text-sm font-black tabular-nums text-gray-800">{r.porcentaje}%</span>
                               <span className="w-20 shrink-0 text-right text-sm font-bold tabular-nums text-blue-800">{fNum(r.litros)} L</span>
-                              {/* Los dos tramos, para que el número no sea mágico:
-                                  cuánto cubre necesidad y cuánto es excedente. */}
+                              {/* Los tres destinos, para que el número no sea mágico. */}
                               <span className="ml-auto text-right text-[11px] text-gray-400">
-                                {r.litrosNecesidad > 0 && `${fNum(r.litrosNecesidad)} L necesidad`}
-                                {r.litrosNecesidad > 0 && r.litrosExcedente > 0 && ' + '}
-                                {r.litrosExcedente > 0 && `${fNum(r.litrosExcedente)} L excedente`}
+                                {[
+                                  r.litrosColchon > 0 ? `${fNum(r.litrosColchon)} colchón` : null,
+                                  r.litrosVentanaReposicion > 0 ? `${fNum(r.litrosVentanaReposicion)} venta` : null,
+                                  r.litrosExcedente > 0 ? `${fNum(r.litrosExcedente)} excedente` : null,
+                                ].filter(Boolean).join(' + ')} L
                               </span>
                             </div>
                           ))}
+                        </div>
+
+                        {/* ── Destino del lote: para qué sirve, no sólo en qué
+                            envase queda. El colchón no se vende (está para
+                            absorber variabilidad); lo demás sí. ── */}
+                        <div className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Colchón</p>
+                            <p className="mt-1 text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosColchon)} L</p>
+                            <p className="text-[10px] text-gray-400">repone stock de seguridad</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Venta reposición</p>
+                            <p className="mt-1 text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosVentanaReposicion)} L</p>
+                            <p className="text-[10px] text-gray-400">hasta la próxima cocción</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-blue-600">Excedente</p>
+                            <p className="mt-1 text-sm font-bold tabular-nums text-blue-800">{fNum(s.excedente)} L</p>
+                            <p className="text-[10px] text-gray-400">
+                              {s.semanasExcedente != null && s.excedente > 0
+                                ? `≈ ${s.semanasExcedente.toLocaleString('es-CL')} semanas más`
+                                : 'sin excedente'}
+                            </p>
+                          </div>
                         </div>
 
                         {!s.cubreTodaLaNecesidad ? (
                           <p className="mt-2.5 text-[11px] font-semibold text-amber-700">
                             El lote no alcanza a cubrir la necesidad de todos los formatos — se reparte a prorrata de ella.
                           </p>
-                        ) : s.excedente > 0 && (
-                          <p className="mt-2.5 text-[11px] text-gray-400">
-                            Cubre toda la necesidad; los {fNum(s.excedente)} L de excedente van por demanda proyectada.
+                        ) : s.cubreVentaHasta && s.semanasVentaTotal != null && (
+                          <p className="mt-2.5 text-[11px] text-gray-500">
+                            Con este lote la venta queda cubierta <strong>≈ {s.semanasVentaTotal.toLocaleString('es-CL')} semanas</strong>,
+                            hasta cerca del{' '}
+                            {new Date(s.cubreVentaHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
+                            {' '}(estimado con la demanda proyectada).
                           </p>
                         )}
                       </div>

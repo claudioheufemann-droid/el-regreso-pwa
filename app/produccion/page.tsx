@@ -141,18 +141,31 @@ export interface SplitFermentador {
     /** Litros que le faltan a ESE formato para llegar a su punto de reorden,
      *  contando sólo el stock físico en bodega (sin este tanque). */
     necesidad: number
-    /** Total asignado = litrosNecesidad + litrosExcedente. */
+    /** Total asignado = colchón + ventana de reposición + excedente. */
     litros: number
-    /** Tramo 1 de la cascada: lo que cubre necesidad pendiente. */
-    litrosNecesidad: number
-    /** Tramo 2: parte del excedente, repartido por demanda proyectada. */
+    /** Repone el stock de seguridad (colchón que no se vende: está para
+     *  absorber la variabilidad de la demanda). */
+    litrosColchon: number
+    /** Cubre la venta del período de reposición (lead time + revisión). */
+    litrosVentanaReposicion: number
+    /** Venta más allá del período de reposición, repartida por demanda. */
     litrosExcedente: number
     /** 0-100, un decimal. */
     porcentaje: number
   }[]
+  /** Totales del lote, por destino. */
+  litrosColchon: number
+  litrosVentanaReposicion: number
   /** Litros del tanque que sobran después de cubrir toda la necesidad y se
    *  reparten por demanda futura. 0 si el tanque no alcanza a cubrirla. */
   excedente: number
+  /** Semanas de venta que cubre SOLO el excedente, según demanda proyectada.
+   *  Null si el producto no tiene demanda proyectada. Aproximado. */
+  semanasExcedente: number | null
+  /** Semanas que cubre todo lo que no es colchón (ventana + excedente). */
+  semanasVentaTotal: number | null
+  /** yyyy-mm-dd aproximado hasta el que alcanza la venta de este lote. */
+  cubreVentaHasta: string | null
   /** false = el tanque no alcanza ni para cubrir la necesidad de todos los
    *  formatos; se repartió entero a prorrata de ella. */
   cubreTodaLaNecesidad: boolean
@@ -577,6 +590,8 @@ export default async function ProduccionPage() {
           (Aguas Blancas: 3.203 L a lata para cubrir una necesidad de 397 L),
           cuando esos litros igual hay que envasarlos en algo. */
   const primerMesSS = [...new Set((stockSeguridadRaw ?? []).map(s => (s.mes as string).slice(0, 10)))].sort()[0]
+  /** Para pasar demanda mensual a semanal en las estimaciones de horizonte. */
+  const SEMANAS_POR_MES = 4.33
 
   /** clave `producto|envase` → litros del fermentador asignados a ese formato. */
   const splitFermentadorPorFormato = new Map<string, number>()
@@ -593,10 +608,20 @@ export default async function ProduccionPage() {
     const base = filasFormato.map(f => {
       const envase = (f.envase as string) as EnvaseBucket
       const enBodega = stockActualPorProductoEnvase.get(claveProductoEnvase(producto, envase)) ?? 0
+      const colchonObjetivo = Number(f.stock_seguridad_litros)
+      const necesidad = Math.max(Number(f.punto_reorden_litros) - enBodega, 0)
+      // El punto de reorden es colchón + demanda de la ventana de reposición.
+      // Lo que hay en bodega tapa primero la demanda y lo último que queda sin
+      // cubrir es el colchón, así que de la necesidad, la parte de colchón es
+      // lo que falte para llegar al propio stock de seguridad.
+      const litrosColchon = Math.max(Math.min(necesidad, colchonObjetivo - enBodega), 0)
       return {
         envase,
-        necesidad: Math.max(Number(f.punto_reorden_litros) - enBodega, 0),
+        necesidad,
+        litrosColchon,
+        litrosVentanaReposicion: necesidad - litrosColchon,
         demanda: Number(f.demanda_mensual_proyectada),
+        semanasVentana: Number(f.lead_time_semanas) + Number(f.periodo_revision_semanas),
       }
     })
 
@@ -623,11 +648,15 @@ export default async function ProduccionPage() {
           : excedente / base.length
       const litros = litrosNecesidad + litrosExcedente
       splitFermentadorPorFormato.set(`${producto}|${f.envase}`, litros)
+      // La necesidad se reparte proporcionalmente entre sus dos componentes
+      // (colchón y venta de la ventana) cuando el tanque no alcanza a cubrirla.
+      const factorNecesidad = f.necesidad > 0 ? litrosNecesidad / f.necesidad : 0
       return {
         envase: f.envase,
         necesidad: Math.round(f.necesidad),
         litros: Math.round(litros),
-        litrosNecesidad: Math.round(litrosNecesidad),
+        litrosColchon: Math.round(f.litrosColchon * factorNecesidad),
+        litrosVentanaReposicion: Math.round(f.litrosVentanaReposicion * factorNecesidad),
         litrosExcedente: Math.round(litrosExcedente),
         porcentaje: Math.round((litros / litrosTanque) * 1000) / 10,
       }
@@ -636,16 +665,34 @@ export default async function ProduccionPage() {
       .sort((a, b) => b.litros - a.litros)
 
     if (detalle.length > 0) {
-      splitPorProducto.set(producto, detalle)
+      // ── ¿Hasta cuándo alcanza? ──────────────────────────────────────────
+      // Todo lo que NO es colchón es venta: la del período de reposición
+      // (que por definición dura la ventana) más el excedente. Se traduce a
+      // semanas con la demanda proyectada del producto — aproximado a
+      // propósito, es una estimación de horizonte, no una fecha de quiebre.
+      const demandaSemanal = totalDemanda / SEMANAS_POR_MES
+      const litrosColchonTotal = detalle.reduce((a, d) => a + d.litrosColchon, 0)
+      const litrosVentaTotal = litrosTanque - litrosColchonTotal
+      const semanasExcedente = demandaSemanal > 0 ? excedente / demandaSemanal : null
+      const semanasVentaTotal = demandaSemanal > 0 ? litrosVentaTotal / demandaSemanal : null
+
       splitFermentadores.push({
         producto,
         categoria: (categoriaPorProducto.get(producto) ?? null) as 'cerveza' | 'kombucha' | null,
         litrosEnFermentador: Math.round(litrosTanque),
         tanques: tanquesPorProducto.get(producto) ?? [],
         reparto: detalle,
+        litrosColchon: Math.round(litrosColchonTotal),
+        litrosVentanaReposicion: Math.round(detalle.reduce((a, d) => a + d.litrosVentanaReposicion, 0)),
         excedente: Math.round(excedente),
+        semanasExcedente: semanasExcedente != null ? Math.round(semanasExcedente * 10) / 10 : null,
+        semanasVentaTotal: semanasVentaTotal != null ? Math.round(semanasVentaTotal * 10) / 10 : null,
+        cubreVentaHasta: semanasVentaTotal != null
+          ? new Date(hoy.getTime() + semanasVentaTotal * 7 * MS_POR_DIA).toISOString().slice(0, 10)
+          : null,
         cubreTodaLaNecesidad: alcanzaLaNecesidad,
       })
+      splitPorProducto.set(producto, detalle)
     }
   }
   splitFermentadores.sort((a, b) => b.litrosEnFermentador - a.litrosEnFermentador)
