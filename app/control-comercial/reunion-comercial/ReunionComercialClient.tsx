@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Beer, CalendarDays, CircleDollarSign, GlassWater, Maximize,
-  Minimize, Plus, Sparkles, Target, TrendingDown, TrendingUp, Users, Wallet, Layers,
+  Minimize, Plus, Sparkles, Target, TrendingDown, TrendingUp, Users, Wallet, Layers, X,
 } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { BarrasComparativas, Donut } from '@/components/control-comercial/charts'
@@ -58,6 +59,7 @@ function Metric({ icon: Icon, tono, label }: { icon: typeof Users; tono: Tono; l
 }
 
 export default function ReunionComercialClient() {
+  const router = useRouter()
   const { user } = useUser()
   const [resumen, setResumen] = useState<ResumenEjecutivoResponse | null>(null)
   const [equipo, setEquipo] = useState<Equipo | null>(null)
@@ -132,6 +134,11 @@ export default function ReunionComercialClient() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, estado: 'cumplido' }),
     })
+  }
+
+  function volver() {
+    if (document.fullscreenElement) document.exitFullscreen?.()
+    router.push('/control-comercial/resumen')
   }
 
   function toggleFullscreen() {
@@ -561,24 +568,32 @@ export default function ReunionComercialClient() {
         {slides[slide].contenido}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 14, padding: '12px 18px calc(16px + env(safe-area-inset-bottom, 0px))', flexShrink: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '12px 18px calc(16px + env(safe-area-inset-bottom, 0px))', flexShrink: 0 }}>
         <button
-          onClick={() => setSlide(s => Math.max(0, s - 1))} disabled={slide === 0}
-          style={{ width: 42, height: 42, borderRadius: 13, background: 'var(--cc-card)', border: '1px solid var(--cc-line)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: slide === 0 ? 0.35 : 1 }}
+          onClick={volver} className="cc-tap"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 42, padding: '0 14px', borderRadius: 13, background: 'var(--cc-card)', border: '1px solid var(--cc-line)', cursor: 'pointer', color: 'var(--cc-ink-2)', fontSize: 13, fontWeight: 700, flexShrink: 0 }}
         >
-          <ArrowLeft size={17} color="var(--cc-ink)" />
+          <X size={16} /> Volver
         </button>
-        <div style={{ display: 'flex', gap: 5 }}>
-          {slides.map((_, i) => (
-            <button key={i} onClick={() => setSlide(i)} style={{ width: i === slide ? 16 : 6, height: 6, borderRadius: 4, border: 'none', cursor: 'pointer', padding: 0, background: i === slide ? 'var(--cc-gold)' : 'var(--cc-neutral)', transition: 'width 0.2s' }} />
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <button
+            onClick={() => setSlide(s => Math.max(0, s - 1))} disabled={slide === 0}
+            style={{ width: 42, height: 42, borderRadius: 13, background: 'var(--cc-card)', border: '1px solid var(--cc-line)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: slide === 0 ? 0.35 : 1 }}
+          >
+            <ArrowLeft size={17} color="var(--cc-ink)" />
+          </button>
+          <div style={{ display: 'flex', gap: 5 }}>
+            {slides.map((_, i) => (
+              <button key={i} onClick={() => setSlide(i)} style={{ width: i === slide ? 16 : 6, height: 6, borderRadius: 4, border: 'none', cursor: 'pointer', padding: 0, background: i === slide ? 'var(--cc-gold)' : 'var(--cc-neutral)', transition: 'width 0.2s' }} />
+            ))}
+          </div>
+          <button
+            onClick={() => setSlide(s => Math.min(slides.length - 1, s + 1))} disabled={slide === slides.length - 1}
+            style={{ width: 42, height: 42, borderRadius: 13, background: 'var(--cc-gold)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: slide === slides.length - 1 ? 0.35 : 1 }}
+          >
+            <ArrowRight size={17} color="var(--cc-on-gold)" />
+          </button>
         </div>
-        <button
-          onClick={() => setSlide(s => Math.min(slides.length - 1, s + 1))} disabled={slide === slides.length - 1}
-          style={{ width: 42, height: 42, borderRadius: 13, background: 'var(--cc-gold)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: slide === slides.length - 1 ? 0.35 : 1 }}
-        >
-          <ArrowRight size={17} color="var(--cc-on-gold)" />
-        </button>
       </div>
     </div>
   )
