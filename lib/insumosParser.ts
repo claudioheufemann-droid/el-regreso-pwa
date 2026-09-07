@@ -50,16 +50,20 @@ function indiceColumna(headerRow: Fila, alias: string[]): number {
 /**
  * Busca la fila de encabezado dentro de las primeras `maxFilasBusqueda`
  * filas: la primera que tenga a la vez una columna de nombre Y una de
- * cantidad reconocibles.
+ * cantidad reconocibles, EN COLUMNAS DISTINTAS. Esto último es necesario
+ * porque un título de una sola celda como "Listado de stock de insumos..."
+ * puede matchear varios alias a la vez por coincidencia de substring
+ * ("insumos" contiene "insumo" Y "um") — exigir columnas distintas descarta
+ * ese falso positivo y obliga a que sea una fila con columnas reales.
  */
 function buscarEncabezado(filas: Fila[], maxFilasBusqueda = 15): { fila: number; colNombre: number; colCantidad: number; colUnidad: number } | null {
   const tope = Math.min(maxFilasBusqueda, filas.length)
   for (let i = 0; i < tope; i++) {
     const colNombre = indiceColumna(filas[i], ALIAS_NOMBRE)
     const colCantidad = indiceColumna(filas[i], ALIAS_CANTIDAD)
-    if (colNombre >= 0 && colCantidad >= 0) {
+    if (colNombre >= 0 && colCantidad >= 0 && colNombre !== colCantidad) {
       const colUnidad = indiceColumna(filas[i], ALIAS_UNIDAD)
-      return { fila: i, colNombre, colCantidad, colUnidad }
+      return { fila: i, colNombre, colCantidad, colUnidad: colUnidad !== colNombre && colUnidad !== colCantidad ? colUnidad : -1 }
     }
   }
   return null
@@ -105,9 +109,11 @@ export function parseInsumosExcel(buffer: ArrayBuffer): InsumoStockParsed[] {
 
 /** "Kg"/"kg"/"KILOS" → factor 1000 a gr; "gr"/"g"/"GRAMOS" → 1 (ya en gr);
  *  "L"/"lt"/"litros" → 1000 a ml; "ml" → 1 (ya en ml). Devuelve null si la
- *  unidad no se reconoce — mejor marcar para revisión manual que adivinar. */
+ *  unidad no se reconoce — mejor marcar para revisión manual que adivinar.
+ *  El export real de Gestión Cervecera trae la unidad con punto ("kg.",
+ *  "ml.", "lt.", "gr.") — se saca antes de comparar. */
 export function unidadBaseDe(unidadCruda: string): { unidadBase: 'gr' | 'ml'; factor: number } | null {
-  const u = norm(unidadCruda)
+  const u = norm(unidadCruda).replace(/\.$/, '')
   if (['kg', 'kilo', 'kilos', 'kgs'].includes(u)) return { unidadBase: 'gr', factor: 1000 }
   if (['g', 'gr', 'grs', 'gramo', 'gramos'].includes(u)) return { unidadBase: 'gr', factor: 1 }
   if (['l', 'lt', 'lts', 'litro', 'litros'].includes(u)) return { unidadBase: 'ml', factor: 1000 }

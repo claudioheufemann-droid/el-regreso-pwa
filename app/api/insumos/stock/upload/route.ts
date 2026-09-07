@@ -22,6 +22,14 @@ function norm(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
+/** Varios insumos.nombre llevan un sufijo de marca/proveedor entre paréntesis
+ *  ("Caraaroma (Weyermann)", "Safale S-04 (Fermentis)") que el export de
+ *  Gestión Cervecera no trae — el ERP solo trackea stock por nombre genérico.
+ *  Se usa como fallback de matching cuando el nombre exacto no calza. */
+function sinSufijoParentesis(s: string): string {
+  return s.replace(/\s*\([^)]*\)\s*$/, '').trim()
+}
+
 /**
  * POST /api/insumos/stock/upload?preview=true|false
  *
@@ -81,11 +89,25 @@ export async function POST(req: Request) {
 
   const idPorNombreNormalizado = new Map((insumosDb ?? []).map(i => [norm(i.nombre as string), i.id as string]))
 
+  // Fallback sin sufijo de marca — sólo se agrega si el nombre resultante es
+  // único (si dos insumos distintos colapsaran al mismo nombre sin sufijo,
+  // preferimos dejarlos en sinMatch antes que adivinar cuál es).
+  const conteoSinSufijo = new Map<string, number>()
+  for (const i of insumosDb ?? []) {
+    const k = norm(sinSufijoParentesis(i.nombre as string))
+    conteoSinSufijo.set(k, (conteoSinSufijo.get(k) ?? 0) + 1)
+  }
+  const idPorNombreSinSufijo = new Map(
+    (insumosDb ?? [])
+      .map(i => [norm(sinSufijoParentesis(i.nombre as string)), i.id as string] as const)
+      .filter(([k]) => conteoSinSufijo.get(k) === 1)
+  )
+
   const matcheados: { insumoId: string; nombre: string; cantidadBase: number }[] = []
   const sinMatch: { nombreCrudo: string; cantidad: number; unidadCruda: string; motivo: string }[] = []
 
   for (const f of filas) {
-    const insumoId = idPorNombreNormalizado.get(norm(f.nombreCrudo))
+    const insumoId = idPorNombreNormalizado.get(norm(f.nombreCrudo)) ?? idPorNombreSinSufijo.get(norm(f.nombreCrudo))
     if (!insumoId) {
       sinMatch.push({ ...f, motivo: 'No existe ningún insumo con ese nombre en el catálogo (insumos.nombre) — falta crearlo o es un alias que hay que mapear.' })
       continue
