@@ -1453,165 +1453,6 @@ export default function ProduccionClient({
                 </div>
               </div>
 
-              {/* ¿Vamos a cumplir lo proyectado? — comparación simple del mes en curso */}
-              {mtdLitros > 0 && (() => {
-                const objetivo = chartData.find(f => f.mesIso === avanceMes.mes)?.ventaProyectada ?? null
-                const pct = objetivo != null && objetivo > 0 ? (ritmoProyectado / objetivo) * 100 : null
-                const cumple = pct != null && pct >= 95
-                const avancePct = Math.min(100, (avanceMes.diaActual / avanceMes.diasEnMes) * 100)
-                return (
-                  <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="grid gap-px bg-gray-200 sm:grid-cols-3">
-                      <div className="bg-white p-5">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Vendido este mes</p>
-                        <p className="mt-1 text-3xl font-black tabular-nums text-gray-900">{fNum(mtdLitros)} L</p>
-                        {/* Barra de avance del mes: el número solo no dice si
-                            vamos temprano o tarde en el período. */}
-                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                          <div className="h-full rounded-full" style={{ width: `${avancePct}%`, backgroundColor: COLORS.gray }} />
-                        </div>
-                        <p className="mt-1.5 text-xs text-gray-500">día {avanceMes.diaActual} de {avanceMes.diasEnMes}</p>
-                      </div>
-
-                      <div className="bg-white p-5">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">A este ritmo cerrarías con</p>
-                        <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.amber }}>{fNum(ritmoProyectado)} L</p>
-                        <p className="mt-[14px] text-xs text-gray-500">extrapolación lineal de lo vendido</p>
-                      </div>
-
-                      {objetivo != null && pct != null && (
-                        <div className="bg-white p-5">
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">El modelo proyectó</p>
-                          <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.darkGreen }}>{fNum(objetivo)} L</p>
-                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                            <div
-                              className="h-full rounded-full"
-                              style={{ width: `${Math.min(100, pct)}%`, backgroundColor: cumple ? '#059669' : '#EF4444' }}
-                            />
-                          </div>
-                          <p className={`mt-1.5 text-xs font-bold ${cumple ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {cumple ? '✓' : '⚠'} vas al {pct.toFixed(0)}% de lo proyectado
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* Calculadora de cobertura — responde "¿cuánto necesito de X
-                  producto, en Y formato, para cubrir de aquí a tal fecha?"
-                  para cualquier producto/envase, no sólo el que está
-                  seleccionado arriba en el gráfico. */}
-              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                <h3 className="font-bold text-gray-800">Calculadora de Cobertura</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Ej.: ¿cuántos litros de Fisura en Lata necesito para cubrir de aquí al 27 de marzo?
-                </p>
-                <div className="mt-4 flex flex-wrap items-end gap-3">
-                  <div className="flex min-w-[180px] flex-1 flex-col gap-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Producto</label>
-                    <select
-                      value={productoCobertura}
-                      onChange={e => { setCoberturaProducto(e.target.value); setCoberturaEnvase('todos') }}
-                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex min-w-[160px] flex-col gap-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Formato</label>
-                    <select
-                      value={coberturaEnvase}
-                      onChange={e => setCoberturaEnvase(e.target.value as 'todos' | EnvaseBucket)}
-                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="todos">Todos los formatos</option>
-                      {envasesCoberturaDisponibles.map(b => <option key={b} value={b}>{ENVASE_LABEL[b]}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex min-w-[160px] flex-col gap-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Cubrir hasta</label>
-                    <input
-                      type="date" value={coberturaFecha} onChange={e => setCoberturaFecha(e.target.value)}
-                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                </div>
-
-                {resultadoCobertura && 'error' in resultadoCobertura ? (
-                  <p className="mt-4 text-sm font-semibold text-red-600">{resultadoCobertura.error}</p>
-                ) : resultadoCobertura ? (
-                  <div className="mt-4 grid grid-cols-1 gap-px overflow-hidden rounded-lg bg-gray-200 sm:grid-cols-3">
-                    <div className="bg-gray-50 p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Demanda proyectada en el período</p>
-                      <p className="mt-1 text-2xl font-black tabular-nums text-gray-800">{fNum(resultadoCobertura.demandaProyectada)} L</p>
-                    </div>
-                    <div className="bg-gray-50 p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Disponible ahora</p>
-                      <p className="mt-1 text-2xl font-black tabular-nums text-gray-800">
-                        {resultadoCobertura.disponible != null ? `${fNum(resultadoCobertura.disponible)} L` : 'Sin dato'}
-                      </p>
-                    </div>
-                    <div className="bg-amber-50 p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Necesidad neta a cubrir</p>
-                      <p className="mt-1 text-2xl font-black tabular-nums text-amber-800">
-                        {resultadoCobertura.necesidadNeta != null ? `${fNum(resultadoCobertura.necesidadNeta)} L` : '—'}
-                      </p>
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* Desglose por formato: el lote se cuece completo y después se
-                    envasa en los distintos formatos, así que además del número
-                    del formato elegido arriba, siempre se ve cuánto hace falta
-                    de CADA uno y el total a cocer. */}
-                {desgloseCoberturaFormatos && desgloseCoberturaFormatos.filas.length > 0 && (
-                  <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
-                    <div className="border-b border-gray-100 bg-gray-50/70 px-4 py-2.5">
-                      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                        Desglose por formato — {productoCobertura}
-                      </span>
-                    </div>
-                    <table className="w-full text-sm">
-                      <thead className="text-xs uppercase tracking-wide text-gray-400">
-                        <tr>
-                          <th className="px-4 py-2 text-left font-bold">Formato</th>
-                          <th className="px-4 py-2 text-right font-bold">Demanda proyectada</th>
-                          <th className="px-4 py-2 text-right font-bold">Disponible</th>
-                          <th className="px-4 py-2 text-right font-bold">Necesidad neta</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {desgloseCoberturaFormatos.filas.map(f => (
-                          <tr key={f.envase}>
-                            <td className="px-4 py-2.5 font-semibold text-gray-700">{ENVASE_LABEL[f.envase] ?? f.envase}</td>
-                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fNum(f.demandaProyectada)} L</td>
-                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
-                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">{f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-amber-50">
-                          <td colSpan={3} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-amber-700">
-                            Total a cocer (todos los formatos)
-                          </td>
-                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">{fNum(desgloseCoberturaFormatos.totalNecesidad)} L</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                )}
-
-                <p className="mt-3 text-xs text-gray-400">
-                  Suma el forecast mensual por ciclo entre hoy y la fecha elegida (prorateado por días en los ciclos
-                  parciales); el ciclo en curso usa el ritmo de venta real de este ciclo, no el forecast. El total del
-                  desglose es la suma de la necesidad neta de cada formato — lo que hay que cocer, ya que el lote se
-                  envasa después según ese reparto.
-                </p>
-              </div>
-
               {/* Gráfico */}
               <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
                 <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -1872,6 +1713,165 @@ export default function ProduccionClient({
                   </div>
                 </div>
               )}
+
+              {/* ¿Vamos a cumplir lo proyectado? — comparación simple del mes en curso */}
+              {mtdLitros > 0 && (() => {
+                const objetivo = chartData.find(f => f.mesIso === avanceMes.mes)?.ventaProyectada ?? null
+                const pct = objetivo != null && objetivo > 0 ? (ritmoProyectado / objetivo) * 100 : null
+                const cumple = pct != null && pct >= 95
+                const avancePct = Math.min(100, (avanceMes.diaActual / avanceMes.diasEnMes) * 100)
+                return (
+                  <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="grid gap-px bg-gray-200 sm:grid-cols-3">
+                      <div className="bg-white p-5">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Vendido este mes</p>
+                        <p className="mt-1 text-3xl font-black tabular-nums text-gray-900">{fNum(mtdLitros)} L</p>
+                        {/* Barra de avance del mes: el número solo no dice si
+                            vamos temprano o tarde en el período. */}
+                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                          <div className="h-full rounded-full" style={{ width: `${avancePct}%`, backgroundColor: COLORS.gray }} />
+                        </div>
+                        <p className="mt-1.5 text-xs text-gray-500">día {avanceMes.diaActual} de {avanceMes.diasEnMes}</p>
+                      </div>
+
+                      <div className="bg-white p-5">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">A este ritmo cerrarías con</p>
+                        <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.amber }}>{fNum(ritmoProyectado)} L</p>
+                        <p className="mt-[14px] text-xs text-gray-500">extrapolación lineal de lo vendido</p>
+                      </div>
+
+                      {objetivo != null && pct != null && (
+                        <div className="bg-white p-5">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">El modelo proyectó</p>
+                          <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.darkGreen }}>{fNum(objetivo)} L</p>
+                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${Math.min(100, pct)}%`, backgroundColor: cumple ? '#059669' : '#EF4444' }}
+                            />
+                          </div>
+                          <p className={`mt-1.5 text-xs font-bold ${cumple ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {cumple ? '✓' : '⚠'} vas al {pct.toFixed(0)}% de lo proyectado
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Calculadora de cobertura — responde "¿cuánto necesito de X
+                  producto, en Y formato, para cubrir de aquí a tal fecha?"
+                  para cualquier producto/envase, no sólo el que está
+                  seleccionado arriba en el gráfico. */}
+              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h3 className="font-bold text-gray-800">Calculadora de Cobertura</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Ej.: ¿cuántos litros de Fisura en Lata necesito para cubrir de aquí al 27 de marzo?
+                </p>
+                <div className="mt-4 flex flex-wrap items-end gap-3">
+                  <div className="flex min-w-[180px] flex-1 flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Producto</label>
+                    <select
+                      value={productoCobertura}
+                      onChange={e => { setCoberturaProducto(e.target.value); setCoberturaEnvase('todos') }}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex min-w-[160px] flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Formato</label>
+                    <select
+                      value={coberturaEnvase}
+                      onChange={e => setCoberturaEnvase(e.target.value as 'todos' | EnvaseBucket)}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="todos">Todos los formatos</option>
+                      {envasesCoberturaDisponibles.map(b => <option key={b} value={b}>{ENVASE_LABEL[b]}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex min-w-[160px] flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Cubrir hasta</label>
+                    <input
+                      type="date" value={coberturaFecha} onChange={e => setCoberturaFecha(e.target.value)}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {resultadoCobertura && 'error' in resultadoCobertura ? (
+                  <p className="mt-4 text-sm font-semibold text-red-600">{resultadoCobertura.error}</p>
+                ) : resultadoCobertura ? (
+                  <div className="mt-4 grid grid-cols-1 gap-px overflow-hidden rounded-lg bg-gray-200 sm:grid-cols-3">
+                    <div className="bg-gray-50 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Demanda proyectada en el período</p>
+                      <p className="mt-1 text-2xl font-black tabular-nums text-gray-800">{fNum(resultadoCobertura.demandaProyectada)} L</p>
+                    </div>
+                    <div className="bg-gray-50 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Disponible ahora</p>
+                      <p className="mt-1 text-2xl font-black tabular-nums text-gray-800">
+                        {resultadoCobertura.disponible != null ? `${fNum(resultadoCobertura.disponible)} L` : 'Sin dato'}
+                      </p>
+                    </div>
+                    <div className="bg-amber-50 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Necesidad neta a cubrir</p>
+                      <p className="mt-1 text-2xl font-black tabular-nums text-amber-800">
+                        {resultadoCobertura.necesidadNeta != null ? `${fNum(resultadoCobertura.necesidadNeta)} L` : '—'}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Desglose por formato: el lote se cuece completo y después se
+                    envasa en los distintos formatos, así que además del número
+                    del formato elegido arriba, siempre se ve cuánto hace falta
+                    de CADA uno y el total a cocer. */}
+                {desgloseCoberturaFormatos && desgloseCoberturaFormatos.filas.length > 0 && (
+                  <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
+                    <div className="border-b border-gray-100 bg-gray-50/70 px-4 py-2.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                        Desglose por formato — {productoCobertura}
+                      </span>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead className="text-xs uppercase tracking-wide text-gray-400">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-bold">Formato</th>
+                          <th className="px-4 py-2 text-right font-bold">Demanda proyectada</th>
+                          <th className="px-4 py-2 text-right font-bold">Disponible</th>
+                          <th className="px-4 py-2 text-right font-bold">Necesidad neta</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {desgloseCoberturaFormatos.filas.map(f => (
+                          <tr key={f.envase}>
+                            <td className="px-4 py-2.5 font-semibold text-gray-700">{ENVASE_LABEL[f.envase] ?? f.envase}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fNum(f.demandaProyectada)} L</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">{f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-amber-50">
+                          <td colSpan={3} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-amber-700">
+                            Total a cocer (todos los formatos)
+                          </td>
+                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">{fNum(desgloseCoberturaFormatos.totalNecesidad)} L</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
+                <p className="mt-3 text-xs text-gray-400">
+                  Suma el forecast mensual por ciclo entre hoy y la fecha elegida (prorateado por días en los ciclos
+                  parciales); el ciclo en curso usa el ritmo de venta real de este ciclo, no el forecast. El total del
+                  desglose es la suma de la necesidad neta de cada formato — lo que hay que cocer, ya que el lote se
+                  envasa después según ese reparto.
+                </p>
+              </div>
 
               {/* ── Detalle por producto y envase ── */}
               <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
