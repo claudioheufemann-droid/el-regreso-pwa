@@ -504,6 +504,26 @@ export default async function ProduccionPage() {
     litrosEnProduccionPorProducto.set(nombre, (litrosEnProduccionPorProducto.get(nombre) ?? 0) + Number(s.litros))
   }
 
+  // Lo que hay en el tanque no tiene formato asignado todavía (se envasa
+  // después), pero las alarmas SÍ son por formato — si no se reparte, cada
+  // formato se compara contra su punto de reorden como si no hubiera nada en
+  // camino y se pide cocer de nuevo algo que ya está fermentando. Auditoría
+  // del 6-sep-2026: 13.602 L en tanques generaban ~6.900 L de sobrepedido,
+  // con 5 productos (Aguas Blancas, Descenso WC IPA, Kombucha Maracuyá
+  // Cardamomo, Doble Hazy IPA, Doble IPA) pidiendo cocciones enteras que ya
+  // estaban cubiertas por su propio fermentador.
+  //
+  // Se reparte en proporción a la DEMANDA PROYECTADA de cada formato, que es
+  // el mismo criterio con el que el modelo deriva los formatos desde el
+  // producto (ver generar_forecast.py): si el 60% de la demanda del producto
+  // es lata, ese lote va a terminar ~60% en latas.
+  const demandaFormatosPorProductoMes = new Map<string, number>()
+  for (const s of stockSeguridadRaw ?? []) {
+    if (s.nivel !== 'producto_envase') continue
+    const clave = `${normalizarProducto(s.producto as string)}|${(s.mes as string).slice(0, 10)}`
+    demandaFormatosPorProductoMes.set(clave, (demandaFormatosPorProductoMes.get(clave) ?? 0) + Number(s.demanda_mensual_proyectada))
+  }
+
   const stockSeguridad = (stockSeguridadRaw ?? []).map(s => {
     const nivel = s.nivel as 'producto' | 'producto_envase'
     const producto = normalizarProducto(s.producto as string)
@@ -540,9 +560,19 @@ export default async function ProduccionPage() {
       stockActualUnidades: nivel === 'producto_envase' && envase
         ? stockActualUnidadesPorProductoEnvase.get(claveProductoEnvase(producto, envase as never)) ?? (stockActual != null ? 0 : null)
         : null,
-      // Los lotes se cargan por producto, sin desglose de formato confiable,
-      // así que sólo se descuentan en las filas a nivel producto.
-      litrosEnProduccion: nivel === 'producto' ? (litrosEnProduccionPorProducto.get(producto) ?? 0) : 0,
+      // A nivel producto se descuenta entero; a nivel formato se reparte en
+      // proporción a la demanda proyectada de ese formato (ver el comentario
+      // extenso donde se arma demandaFormatosPorProductoMes). Sin
+      // demanda de formatos para ese mes no se reparte nada: preferimos
+      // sobre-avisar antes que inventar una proporción.
+      litrosEnProduccion: (() => {
+        const totalProducto = litrosEnProduccionPorProducto.get(producto) ?? 0
+        if (totalProducto === 0) return 0
+        if (nivel === 'producto') return totalProducto
+        const totalDemandaFormatos = demandaFormatosPorProductoMes.get(`${producto}|${(s.mes as string).slice(0, 10)}`) ?? 0
+        if (totalDemandaFormatos <= 0) return 0
+        return totalProducto * (Number(s.demanda_mensual_proyectada) / totalDemandaFormatos)
+      })(),
     }
   }) as StockSeguridadItem[]
 
