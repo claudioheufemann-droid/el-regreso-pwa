@@ -2421,8 +2421,9 @@ export default function ProduccionClient({
                     </span>
                   </div>
                   <p className="mb-4 text-sm text-blue-800/80">
-                    Lo que está fermentando todavía no tiene envase. Este es el reparto sugerido al momento de envasar:
-                    más litros al formato que está <strong>más lejos de su punto de reorden</strong> según el forecast.
+                    Lo que está fermentando todavía no tiene envase. El reparto va en cascada:
+                    primero se cubre la <strong>necesidad</strong> de cada formato (lo que le falta para su punto de
+                    reorden), y el excedente se reparte por <strong>demanda proyectada</strong>.
                   </p>
 
                   <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -2460,16 +2461,24 @@ export default function ProduccionClient({
                               </span>
                               <span className="w-12 shrink-0 text-right text-sm font-black tabular-nums text-gray-800">{r.porcentaje}%</span>
                               <span className="w-20 shrink-0 text-right text-sm font-bold tabular-nums text-blue-800">{fNum(r.litros)} L</span>
+                              {/* Los dos tramos, para que el número no sea mágico:
+                                  cuánto cubre necesidad y cuánto es excedente. */}
                               <span className="ml-auto text-right text-[11px] text-gray-400">
-                                necesita {fNum(r.necesidad)} L
+                                {r.litrosNecesidad > 0 && `${fNum(r.litrosNecesidad)} L necesidad`}
+                                {r.litrosNecesidad > 0 && r.litrosExcedente > 0 && ' + '}
+                                {r.litrosExcedente > 0 && `${fNum(r.litrosExcedente)} L excedente`}
                               </span>
                             </div>
                           ))}
                         </div>
 
-                        {s.porDemanda && (
+                        {!s.cubreTodaLaNecesidad ? (
+                          <p className="mt-2.5 text-[11px] font-semibold text-amber-700">
+                            El lote no alcanza a cubrir la necesidad de todos los formatos — se reparte a prorrata de ella.
+                          </p>
+                        ) : s.excedente > 0 && (
                           <p className="mt-2.5 text-[11px] text-gray-400">
-                            Ningún formato está bajo su punto de reorden — el reparto sigue la proporción de demanda proyectada.
+                            Cubre toda la necesidad; los {fNum(s.excedente)} L de excedente van por demanda proyectada.
                           </p>
                         )}
                       </div>

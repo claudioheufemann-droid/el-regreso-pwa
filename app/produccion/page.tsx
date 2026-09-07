@@ -141,13 +141,21 @@ export interface SplitFermentador {
     /** Litros que le faltan a ESE formato para llegar a su punto de reorden,
      *  contando sólo el stock físico en bodega (sin este tanque). */
     necesidad: number
+    /** Total asignado = litrosNecesidad + litrosExcedente. */
     litros: number
+    /** Tramo 1 de la cascada: lo que cubre necesidad pendiente. */
+    litrosNecesidad: number
+    /** Tramo 2: parte del excedente, repartido por demanda proyectada. */
+    litrosExcedente: number
     /** 0-100, un decimal. */
     porcentaje: number
   }[]
-  /** true = el reparto salió de la demanda proyectada porque ningún formato
-   *  tenía necesidad pendiente (todos por encima de su punto de reorden). */
-  porDemanda: boolean
+  /** Litros del tanque que sobran después de cubrir toda la necesidad y se
+   *  reparten por demanda futura. 0 si el tanque no alcanza a cubrirla. */
+  excedente: number
+  /** false = el tanque no alcanza ni para cubrir la necesidad de todos los
+   *  formatos; se repartió entero a prorrata de ella. */
+  cubreTodaLaNecesidad: boolean
 }
 
 /**
@@ -558,13 +566,21 @@ export default async function ProduccionPage() {
        2) El panel "Split de Envasado" del Plan Maestro, que muestra el
           reparto para quien envasa.
 
-     Si ningún formato tiene necesidad (todos cubiertos), se cae a la
-     proporción de demanda proyectada — el lote igual hay que envasarlo. */
+     El reparto va EN CASCADA, en dos tramos:
+       1) NECESIDAD — cada formato recibe primero lo que le falta para llegar
+          a su punto de reorden. Si el tanque no alcanza a cubrir todas las
+          necesidades, se reparte entero a prorrata de ellas (nadie llega,
+          pero todos avanzan parejo).
+       2) EXCEDENTE — lo que sobra después de cubrir la necesidad no se queda
+          en el tanque: se reparte por DEMANDA PROYECTADA. Sin esto, un
+          fermentador grande mandaba el 100% al único formato descubierto
+          (Aguas Blancas: 3.203 L a lata para cubrir una necesidad de 397 L),
+          cuando esos litros igual hay que envasarlos en algo. */
   const primerMesSS = [...new Set((stockSeguridadRaw ?? []).map(s => (s.mes as string).slice(0, 10)))].sort()[0]
 
   /** clave `producto|envase` → litros del fermentador asignados a ese formato. */
   const splitFermentadorPorFormato = new Map<string, number>()
-  const splitPorProducto = new Map<string, { envase: EnvaseBucket; necesidad: number; litros: number; porcentaje: number }[]>()
+  const splitPorProducto = new Map<string, SplitFermentador['reparto']>()
   const splitFermentadores: SplitFermentador[] = []
 
   for (const [producto, litrosTanque] of litrosEnProduccionPorProducto) {
@@ -586,18 +602,35 @@ export default async function ProduccionPage() {
 
     const totalNecesidad = base.reduce((a, b) => a + b.necesidad, 0)
     const totalDemanda = base.reduce((a, b) => a + b.demanda, 0)
-    // Con necesidad en algún formato se reparte por necesidad; si están todos
-    // cubiertos, por demanda; si tampoco hay demanda, no se reparte.
-    const peso = (f: typeof base[number]) =>
-      totalNecesidad > 0 ? f.necesidad / totalNecesidad
-        : totalDemanda > 0 ? f.demanda / totalDemanda
-          : 0
+
+    // Tramo 1 — necesidad. Si el tanque no alcanza para todas, se reparte
+    // entero a prorrata de la necesidad y no hay excedente.
+    const alcanzaLaNecesidad = litrosTanque >= totalNecesidad
+    const excedente = Math.max(litrosTanque - totalNecesidad, 0)
 
     const detalle = base.map(f => {
-      const porcentaje = peso(f)
-      const litros = litrosTanque * porcentaje
+      const litrosNecesidad = totalNecesidad <= 0
+        ? 0
+        : alcanzaLaNecesidad
+          ? f.necesidad
+          : litrosTanque * (f.necesidad / totalNecesidad)
+      // Tramo 2 — excedente por demanda proyectada. Sin demanda conocida se
+      // reparte parejo entre los formatos antes que dejarlo sin asignar.
+      const litrosExcedente = excedente <= 0
+        ? 0
+        : totalDemanda > 0
+          ? excedente * (f.demanda / totalDemanda)
+          : excedente / base.length
+      const litros = litrosNecesidad + litrosExcedente
       splitFermentadorPorFormato.set(`${producto}|${f.envase}`, litros)
-      return { envase: f.envase, necesidad: Math.round(f.necesidad), litros: Math.round(litros), porcentaje: Math.round(porcentaje * 1000) / 10 }
+      return {
+        envase: f.envase,
+        necesidad: Math.round(f.necesidad),
+        litros: Math.round(litros),
+        litrosNecesidad: Math.round(litrosNecesidad),
+        litrosExcedente: Math.round(litrosExcedente),
+        porcentaje: Math.round((litros / litrosTanque) * 1000) / 10,
+      }
     })
       .filter(d => d.litros > 0)
       .sort((a, b) => b.litros - a.litros)
@@ -610,7 +643,8 @@ export default async function ProduccionPage() {
         litrosEnFermentador: Math.round(litrosTanque),
         tanques: tanquesPorProducto.get(producto) ?? [],
         reparto: detalle,
-        porDemanda: totalNecesidad <= 0,
+        excedente: Math.round(excedente),
+        cubreTodaLaNecesidad: alcanzaLaNecesidad,
       })
     }
   }
