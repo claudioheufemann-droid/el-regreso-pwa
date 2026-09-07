@@ -1,6 +1,6 @@
 'use client'
 
-import { BarChart2, Users, ListChecks, Package, FileText, TrendingUp, Wallet, CircleDollarSign, Layers, LineChart } from 'lucide-react'
+import { BarChart2, Users, ListChecks, Package, FileText, TrendingUp, Wallet, CircleDollarSign, Layers } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
 // 31-ago-2026: se sacó Misiones (módulo dado de baja) y se agregó Deudores
@@ -16,7 +16,6 @@ const navItems: SidebarNavItem[] = [
   { href: '/ventas/barriles',            icon: Layers,           label: 'Barriles',                  adminOnly: false },
   { href: '/ventas/stock',               icon: Package,          label: 'Stock',                     adminOnly: false },
   { href: '/ventas/clientes',            icon: Users,            label: 'Clientes',                  adminOnly: false },
-  { href: '/ventas/forecast',            icon: LineChart,        label: 'Forecast',                  adminOnly: false },
 ]
 
 export default function Sidebar() {
