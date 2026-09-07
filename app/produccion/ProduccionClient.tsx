@@ -15,7 +15,7 @@ import {
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
   ArrowUp, ArrowDown, CheckCircle2, Trash2, X,
 } from 'lucide-react'
-import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan } from './page'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador } from './page'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -78,6 +78,12 @@ const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata', 'otros']
  *  litros de disponible ("314 L · 888 latas"). */
 const UNIDAD_ENVASE: Record<EnvaseBucket, string> = {
   barril_30: 'barriles', barril_50: 'barriles', lata: 'latas', otros: 'unidades',
+}
+
+/** Color por formato — sólo para la barra apilada del Split de Envasado, donde
+ *  hay que distinguir tres tramos de un mismo lote de un vistazo. */
+const COLOR_ENVASE: Record<EnvaseBucket, string> = {
+  barril_30: '#0F3D2E', barril_50: '#1A5441', lata: '#E5A922', otros: '#9CA3AF',
 }
 
 /** Fecha de HOY en yyyy-mm-dd, en huso HORARIO LOCAL del navegador — nunca
@@ -439,7 +445,7 @@ function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.R
 }
 
 export default function ProduccionClient({
-  series, calidad, planProduccion, sugerenciasPlan, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
@@ -447,6 +453,8 @@ export default function ProduccionClient({
   planProduccion: LotePlan[]
   /** Sugerencias calculadas en vivo comparando disponible vs. punto de reorden — no persistidas hasta que el usuario las confirma. */
   sugerenciasPlan: SugerenciaPlan[]
+  /** Cómo repartir entre formatos lo que está hoy en los fermentadores. */
+  splitFermentadores: SplitFermentador[]
   stock: StockItem[]
   stockSeguridad: StockSeguridadItem[]
   ultimaCorrida: string | null
@@ -2395,6 +2403,81 @@ export default function ProduccionClient({
               fórmula nueva. */}
           {activeTab === 'plan' && (
             <div className="flex h-full flex-col gap-6">
+
+              {/* ── Split de Envasado ──────────────────────────────────────
+                  Lo que está en el fermentador es líquido a granel, sin
+                  envase todavía. Esto responde la pregunta de quien va a
+                  envasar: de estos N litros, ¿cuánto va a cada formato? El
+                  reparto sale de la NECESIDAD de cada formato según el
+                  forecast (qué tan lejos está de su punto de reorden), no de
+                  un porcentaje fijo. */}
+              {splitFermentadores.length > 0 && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <Beaker size={18} className="text-blue-600" />
+                    <h3 className="font-bold text-blue-900">Split de Envasado</h3>
+                    <span className="rounded-full bg-blue-200/70 px-2 py-0.5 text-xs font-bold text-blue-800">
+                      {fNum(splitFermentadores.reduce((a, s) => a + s.litrosEnFermentador, 0))} L en fermentadores
+                    </span>
+                  </div>
+                  <p className="mb-4 text-sm text-blue-800/80">
+                    Lo que está fermentando todavía no tiene envase. Este es el reparto sugerido al momento de envasar:
+                    más litros al formato que está <strong>más lejos de su punto de reorden</strong> según el forecast.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {splitFermentadores.map(s => (
+                      <div key={s.producto} className="rounded-lg border border-blue-200 bg-white p-4">
+                        <div className="flex items-center gap-2.5">
+                          <ProductImage nombre={s.producto} categoria={s.categoria} size={30} radius={7} />
+                          <div className="flex flex-col">
+                            <span className="font-semibold leading-tight text-gray-800">{s.producto}</span>
+                            <span className="text-[11px] text-gray-400">{s.tanques.join(' · ') || 'Sin tanque identificado'}</span>
+                          </div>
+                          <span className="ml-auto text-right">
+                            <span className="block text-lg font-black tabular-nums text-blue-800">{fNum(s.litrosEnFermentador)} L</span>
+                            <span className="block text-[10px] font-bold uppercase tracking-wide text-gray-400">a granel</span>
+                          </span>
+                        </div>
+
+                        {/* Barra apilada: el reparto de un vistazo. */}
+                        <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-gray-100">
+                          {s.reparto.map(r => (
+                            <div
+                              key={r.envase}
+                              title={`${ENVASE_LABEL[r.envase] ?? r.envase}: ${r.porcentaje}%`}
+                              style={{ width: `${r.porcentaje}%`, backgroundColor: COLOR_ENVASE[r.envase] }}
+                            />
+                          ))}
+                        </div>
+
+                        <div className="mt-3 flex flex-col gap-1.5">
+                          {s.reparto.map(r => (
+                            <div key={r.envase} className="flex items-center gap-2 text-sm">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: COLOR_ENVASE[r.envase] }} />
+                              <span className="w-24 shrink-0 text-xs font-bold uppercase tracking-wide text-gray-500">
+                                {ENVASE_LABEL[r.envase] ?? r.envase}
+                              </span>
+                              <span className="w-12 shrink-0 text-right text-sm font-black tabular-nums text-gray-800">{r.porcentaje}%</span>
+                              <span className="w-20 shrink-0 text-right text-sm font-bold tabular-nums text-blue-800">{fNum(r.litros)} L</span>
+                              <span className="ml-auto text-right text-[11px] text-gray-400">
+                                necesita {fNum(r.necesidad)} L
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {s.porDemanda && (
+                          <p className="mt-2.5 text-[11px] text-gray-400">
+                            Ningún formato está bajo su punto de reorden — el reparto sigue la proporción de demanda proyectada.
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {sugerenciasPlan.length > 0 && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
                   <div className="mb-3 flex items-center gap-2">

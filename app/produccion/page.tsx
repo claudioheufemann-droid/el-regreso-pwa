@@ -122,6 +122,35 @@ export interface StockSeguridadItem {
 }
 
 /**
+ * Cómo repartir entre formatos lo que hay en un fermentador. El líquido a
+ * granel todavía no tiene envase: el split responde "de estos N litros,
+ * ¿cuántos van a barril 30L, 50L y lata?" según qué formato está más lejos
+ * de su punto de reorden (necesidad del forecast), no según un porcentaje
+ * fijo. Se calcula en page.tsx y lo consume el Plan Maestro.
+ */
+export interface SplitFermentador {
+  producto: string
+  categoria: 'cerveza' | 'kombucha' | null
+  /** Litros a granel en fermentadores, sumando todos los tanques del producto. */
+  litrosEnFermentador: number
+  /** Nombres de los fermentadores donde está (para poder ir a buscarlo). */
+  tanques: string[]
+  /** Sólo formatos con litros asignados, de mayor a menor. */
+  reparto: {
+    envase: EnvaseBucket
+    /** Litros que le faltan a ESE formato para llegar a su punto de reorden,
+     *  contando sólo el stock físico en bodega (sin este tanque). */
+    necesidad: number
+    litros: number
+    /** 0-100, un decimal. */
+    porcentaje: number
+  }[]
+  /** true = el reparto salió de la demanda proyectada porque ningún formato
+   *  tenía necesidad pendiente (todos por encima de su punto de reorden). */
+  porDemanda: boolean
+}
+
+/**
  * Una fila de la cola priorizada del Plan Maestro (tabla plan_produccion).
  * Distinta de `lotes_produccion` (Logística: el ENVÍO/despacho de algo que
  * ya se produjo) — esto es la planificación previa: qué cocinar, cuánto,
@@ -498,31 +527,94 @@ export default async function ProduccionPage() {
   // No hay doble conteo con el inventario: mientras el producto está en el
   // tanque todavía no se envasó, así que no aparece en ninguna cámara.
   const litrosEnProduccionPorProducto = new Map<string, number>()
+  const tanquesPorProducto = new Map<string, string[]>()
   for (const s of stockRaw ?? []) {
     if (s.tipo !== 'tanque' || s.litros == null) continue
     const nombre = resolverProductoStock(s.producto as string)
     litrosEnProduccionPorProducto.set(nombre, (litrosEnProduccionPorProducto.get(nombre) ?? 0) + Number(s.litros))
+    const tanque = (s.camara as string | null)?.trim()
+    if (tanque) {
+      const lista = tanquesPorProducto.get(nombre) ?? []
+      if (!lista.includes(tanque)) lista.push(tanque)
+      tanquesPorProducto.set(nombre, lista)
+    }
   }
 
-  // Lo que hay en el tanque no tiene formato asignado todavía (se envasa
-  // después), pero las alarmas SÍ son por formato — si no se reparte, cada
-  // formato se compara contra su punto de reorden como si no hubiera nada en
-  // camino y se pide cocer de nuevo algo que ya está fermentando. Auditoría
-  // del 6-sep-2026: 13.602 L en tanques generaban ~6.900 L de sobrepedido,
-  // con 5 productos (Aguas Blancas, Descenso WC IPA, Kombucha Maracuyá
-  // Cardamomo, Doble Hazy IPA, Doble IPA) pidiendo cocciones enteras que ya
-  // estaban cubiertas por su propio fermentador.
-  //
-  // Se reparte en proporción a la DEMANDA PROYECTADA de cada formato, que es
-  // el mismo criterio con el que el modelo deriva los formatos desde el
-  // producto (ver generar_forecast.py): si el 60% de la demanda del producto
-  // es lata, ese lote va a terminar ~60% en latas.
-  const demandaFormatosPorProductoMes = new Map<string, number>()
-  for (const s of stockSeguridadRaw ?? []) {
-    if (s.nivel !== 'producto_envase') continue
-    const clave = `${normalizarProducto(s.producto as string)}|${(s.mes as string).slice(0, 10)}`
-    demandaFormatosPorProductoMes.set(clave, (demandaFormatosPorProductoMes.get(clave) ?? 0) + Number(s.demanda_mensual_proyectada))
+  /* ── SPLIT DE ENVASADO ────────────────────────────────────────────────────
+     Lo que está en el fermentador todavía NO tiene envase: es líquido a
+     granel. La pregunta operativa al sacarlo es "¿qué porcentaje va a barril
+     30L, barril 50L y lata?", y la respuesta la da la NECESIDAD de cada
+     formato según el forecast: se manda más litros al formato que está más
+     lejos de su punto de reorden.
+
+     Se calcula sobre el stock FÍSICO EN BODEGA (sin el propio tanque) a
+     propósito. Usar el "disponible" ya repartido sería circular: el reparto
+     alimentaría la necesidad que define el reparto.
+
+     Este mismo split se usa en dos lugares, para que nunca discrepen:
+       1) `litrosEnProduccion` de cada fila producto_envase — así las alarmas
+          no piden cocer algo que ya está fermentando (auditoría del
+          6-sep-2026: 13.602 L en tanques generaban ~6.900 L de sobrepedido).
+       2) El panel "Split de Envasado" del Plan Maestro, que muestra el
+          reparto para quien envasa.
+
+     Si ningún formato tiene necesidad (todos cubiertos), se cae a la
+     proporción de demanda proyectada — el lote igual hay que envasarlo. */
+  const primerMesSS = [...new Set((stockSeguridadRaw ?? []).map(s => (s.mes as string).slice(0, 10)))].sort()[0]
+
+  /** clave `producto|envase` → litros del fermentador asignados a ese formato. */
+  const splitFermentadorPorFormato = new Map<string, number>()
+  const splitPorProducto = new Map<string, { envase: EnvaseBucket; necesidad: number; litros: number; porcentaje: number }[]>()
+  const splitFermentadores: SplitFermentador[] = []
+
+  for (const [producto, litrosTanque] of litrosEnProduccionPorProducto) {
+    if (litrosTanque <= 0) continue
+    const filasFormato = (stockSeguridadRaw ?? []).filter(
+      s => s.nivel === 'producto_envase' && (s.mes as string).slice(0, 10) === primerMesSS && normalizarProducto(s.producto as string) === producto
+    )
+    if (filasFormato.length === 0) continue
+
+    const base = filasFormato.map(f => {
+      const envase = (f.envase as string) as EnvaseBucket
+      const enBodega = stockActualPorProductoEnvase.get(claveProductoEnvase(producto, envase)) ?? 0
+      return {
+        envase,
+        necesidad: Math.max(Number(f.punto_reorden_litros) - enBodega, 0),
+        demanda: Number(f.demanda_mensual_proyectada),
+      }
+    })
+
+    const totalNecesidad = base.reduce((a, b) => a + b.necesidad, 0)
+    const totalDemanda = base.reduce((a, b) => a + b.demanda, 0)
+    // Con necesidad en algún formato se reparte por necesidad; si están todos
+    // cubiertos, por demanda; si tampoco hay demanda, no se reparte.
+    const peso = (f: typeof base[number]) =>
+      totalNecesidad > 0 ? f.necesidad / totalNecesidad
+        : totalDemanda > 0 ? f.demanda / totalDemanda
+          : 0
+
+    const detalle = base.map(f => {
+      const porcentaje = peso(f)
+      const litros = litrosTanque * porcentaje
+      splitFermentadorPorFormato.set(`${producto}|${f.envase}`, litros)
+      return { envase: f.envase, necesidad: Math.round(f.necesidad), litros: Math.round(litros), porcentaje: Math.round(porcentaje * 1000) / 10 }
+    })
+      .filter(d => d.litros > 0)
+      .sort((a, b) => b.litros - a.litros)
+
+    if (detalle.length > 0) {
+      splitPorProducto.set(producto, detalle)
+      splitFermentadores.push({
+        producto,
+        categoria: (categoriaPorProducto.get(producto) ?? null) as 'cerveza' | 'kombucha' | null,
+        litrosEnFermentador: Math.round(litrosTanque),
+        tanques: tanquesPorProducto.get(producto) ?? [],
+        reparto: detalle,
+        porDemanda: totalNecesidad <= 0,
+      })
+    }
   }
+  splitFermentadores.sort((a, b) => b.litrosEnFermentador - a.litrosEnFermentador)
 
   const stockSeguridad = (stockSeguridadRaw ?? []).map(s => {
     const nivel = s.nivel as 'producto' | 'producto_envase'
@@ -560,19 +652,15 @@ export default async function ProduccionPage() {
       stockActualUnidades: nivel === 'producto_envase' && envase
         ? stockActualUnidadesPorProductoEnvase.get(claveProductoEnvase(producto, envase as never)) ?? (stockActual != null ? 0 : null)
         : null,
-      // A nivel producto se descuenta entero; a nivel formato se reparte en
-      // proporción a la demanda proyectada de ese formato (ver el comentario
-      // extenso donde se arma demandaFormatosPorProductoMes). Sin
-      // demanda de formatos para ese mes no se reparte nada: preferimos
-      // sobre-avisar antes que inventar una proporción.
-      litrosEnProduccion: (() => {
-        const totalProducto = litrosEnProduccionPorProducto.get(producto) ?? 0
-        if (totalProducto === 0) return 0
-        if (nivel === 'producto') return totalProducto
-        const totalDemandaFormatos = demandaFormatosPorProductoMes.get(`${producto}|${(s.mes as string).slice(0, 10)}`) ?? 0
-        if (totalDemandaFormatos <= 0) return 0
-        return totalProducto * (Number(s.demanda_mensual_proyectada) / totalDemandaFormatos)
-      })(),
+      // A nivel producto se descuenta el tanque entero; a nivel formato, la
+      // parte que le asigna el SPLIT DE ENVASADO (ver el comentario extenso
+      // donde se calcula). El split se calcula sobre el primer mes
+      // proyectado, que es contra el que se disparan las alarmas.
+      litrosEnProduccion: nivel === 'producto'
+        ? (litrosEnProduccionPorProducto.get(producto) ?? 0)
+        : (envase && (s.mes as string).slice(0, 10) === primerMesSS
+            ? (splitFermentadorPorFormato.get(`${producto}|${envase}`) ?? 0)
+            : 0),
     }
   }) as StockSeguridadItem[]
 
@@ -697,6 +785,7 @@ export default async function ProduccionPage() {
       calidad={calidad}
       planProduccion={planProduccion}
       sugerenciasPlan={sugerenciasPlan}
+      splitFermentadores={splitFermentadores}
       stock={stock}
       stockSeguridad={stockSeguridad}
       ultimaCorrida={ultimaCorrida}
