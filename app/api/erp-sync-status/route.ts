@@ -13,15 +13,17 @@ export async function GET() {
   }
   const supabase = createClient(url, key)
 
-  const [ultimoClientes, ultimoDeudores, ultimoStock, ultimoBarriles, totalClientes, totalDeudores, totalStock, totalBarriles] = await Promise.all([
+  const [ultimoClientes, ultimoDeudores, ultimoStock, ultimoBarriles, ultimoInsumos, totalClientes, totalDeudores, totalStock, totalBarriles, totalInsumos] = await Promise.all([
     supabase.from('erp_sync_log').select('*').eq('fuente', 'clientes').order('creado_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('erp_sync_log').select('*').eq('fuente', 'deudores').order('creado_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('erp_sync_log').select('*').eq('fuente', 'stock').order('creado_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('erp_sync_log').select('*').eq('fuente', 'barriles').order('creado_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('erp_sync_log').select('*').eq('fuente', 'stock_insumos').order('creado_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('clientes').select('*', { count: 'exact', head: true }),
     supabase.from('deudores').select('*', { count: 'exact', head: true }),
     supabase.from('stock_productos').select('*', { count: 'exact', head: true }),
     supabase.from('barriles_clientes').select('*', { count: 'exact', head: true }),
+    supabase.from('stock_insumos').select('*', { count: 'exact', head: true }),
   ])
 
   return NextResponse.json({
@@ -29,5 +31,6 @@ export async function GET() {
     deudores: { ultimaCorrida: ultimoDeudores.data ?? null, total: totalDeudores.count ?? 0 },
     stock: { ultimaCorrida: ultimoStock.data ?? null, total: totalStock.count ?? 0 },
     barriles: { ultimaCorrida: ultimoBarriles.data ?? null, total: totalBarriles.count ?? 0 },
+    stock_insumos: { ultimaCorrida: ultimoInsumos.data ?? null, total: totalInsumos.count ?? 0 },
   })
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Upload, Users, AlertCircle, Target, BarChart3, UserPlus, TrendingUp, DollarSign, FileText, Route, Package } from 'lucide-react'
+import { Upload, Users, AlertCircle, Target, BarChart3, UserPlus, TrendingUp, DollarSign, FileText, Route, Package, Beaker } from 'lucide-react'
 import AppHeader from '@/components/ui/AppHeader'
 import CargarClient from './cargar/CargarClient'
 import ClientesUploadClient from './clientes-upload/ClientesUploadClient'
@@ -102,6 +102,13 @@ export default function AdminHubClient({ periodos, metas, vendedores, deudores, 
               color: '#A855F7', fontSize: 12, fontWeight: 700, cursor: 'pointer',
             }}>
               <Package size={14} /> Stock
+            </button>
+            <button onClick={() => router.push('/ventas/admin/insumos')} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)',
+              color: '#4ADE80', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <Beaker size={14} /> Insumos
             </button>
           </div>
         }
