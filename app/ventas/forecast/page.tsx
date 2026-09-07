@@ -26,9 +26,23 @@ export default async function VentasForecastPage() {
   const supabase = await createClient()
   const user = await getServerUser()
 
-  const { data: filasRaw } = await supabase.rpc('ventas_mensual_cliente_vendedor')
+  // PostgREST devuelve máximo 1000 filas por defecto — con ~5.9k filas en
+  // este RPC hay que paginar explícito o se pierden ~5 de cada 6 filas en
+  // silencio (mismo problema ya resuelto así en app/ventas/clientes/page.tsx).
+  type FilaRpc = { nombre_fantasia: string; vendedor_actual: string | null; mes: string; litros: number; monto: number }
+  const filasRaw: FilaRpc[] = []
+  {
+    let offset = 0
+    while (true) {
+      const { data } = await supabase.rpc('ventas_mensual_cliente_vendedor').range(offset, offset + 999)
+      if (!data || data.length === 0) break
+      filasRaw.push(...data)
+      if (data.length < 1000) break
+      offset += 1000
+    }
+  }
 
-  const filasTodas: FilaVentaMensual[] = (filasRaw ?? []).map((f: { nombre_fantasia: string; vendedor_actual: string | null; mes: string; litros: number; monto: number }) => ({
+  const filasTodas: FilaVentaMensual[] = filasRaw.map((f) => ({
     cliente: f.nombre_fantasia,
     region: vendedorCanonico(f.vendedor_actual ?? '') || 'Sin asignar',
     mes: f.mes,
