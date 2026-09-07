@@ -189,6 +189,36 @@ export interface SplitFermentador {
 }
 
 /**
+ * Cuánto insumo hace falta para cubrir el Plan Maestro (cola activa) —
+ * escalando cada receta linealmente al volumen real del lote (decisión del
+ * usuario, 7-sep-2026). `precioUnitario`/`costoNecesidad` son null hasta que
+ * exista una lista de precios — se pidió a propósito ver la necesidad en
+ * CANTIDAD primero, valorizar después.
+ */
+export interface NecesidadInsumo {
+  insumo: string
+  categoria: 'malta' | 'lupulo' | 'levadura' | 'otros'
+  /** 'gr' o 'ml' — unidad base del insumo, misma en necesidad y disponible. */
+  unidadBase: 'gr' | 'ml'
+  necesidadBruta: number
+  /** Del último snapshot de stock_insumos — null si no hay ninguno cargado todavía. */
+  disponible: number | null
+  necesidadNeta: number
+  precioUnitario: number | null
+  costoNecesidad: number | null
+  /** Productos del plan que aportan a esta necesidad, con su litraje. */
+  lotes: { producto: string; litrosPlanificados: number }[]
+}
+
+/** Un lote del Plan Maestro cuyo producto no tiene receta cargada todavía —
+ *  su necesidad de insumos no se puede calcular y hay que decirlo, no
+ *  omitirlo en silencio. */
+export interface LoteSinReceta {
+  producto: string
+  litrosPlanificados: number
+}
+
+/**
  * Una fila de la cola priorizada del Plan Maestro (tabla plan_produccion).
  * Distinta de `lotes_produccion` (Logística: el ENVÍO/despacho de algo que
  * ya se produjo) — esto es la planificación previa: qué cocinar, cuánto,
@@ -280,7 +310,11 @@ export default async function ProduccionPage() {
     if (data.length < PAGE) break
   }
 
-  const [{ data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios }, { data: stockSeguridadRaw }, { data: ultimoSyncStockRaw }] = await Promise.all([
+  const [
+    { data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios },
+    { data: stockSeguridadRaw }, { data: ultimoSyncStockRaw },
+    { data: recetasRaw }, { data: recetaInsumosRaw }, { data: stockInsumosRaw },
+  ] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial, metodo'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
     admin.from('stock_productos').select('producto, categoria, tipo, camara, cantidad, litros').order('cantidad', { ascending: false }),
@@ -291,6 +325,13 @@ export default async function ProduccionPage() {
     // el que compara está vivo (recalculado en cada carga de la página, no
     // sólo cuando corre el forecast mensual), no una foto vieja.
     admin.from('erp_sync_log').select('creado_at').eq('fuente', 'stock').eq('ok', true).order('creado_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('recetas').select('id, producto, litros_base'),
+    admin.from('receta_insumos').select('receta_id, cantidad, insumos(id, nombre, categoria, unidad_base, precio_unitario)'),
+    // Último snapshot de stock de insumos — puede no haber ninguno todavía
+    // (la automatización de carga está pendiente, 7-sep-2026); sin datos acá
+    // la necesidad neta de la proyección de compra es simplemente toda la
+    // necesidad bruta, no un error.
+    admin.from('stock_insumos').select('insumo_id, cantidad, fecha_informe').order('fecha_informe', { ascending: false }),
   ])
   const ultimoSyncStock = (ultimoSyncStockRaw as { creado_at?: string } | null)?.creado_at ?? null
   // Se calcula server-side (comparado contra la hora del request, no la del
@@ -857,6 +898,86 @@ export default async function ProduccionPage() {
     observaciones: (p.observaciones as string | null) ?? null,
   }))
 
+  /* ── Proyección de necesidad de insumos ──────────────────────────────────
+     Cruza el Plan Maestro (cola activa) con las recetas: cada receta está
+     escrita para un volumen de referencia (litros_base) — se escala
+     LINEALMENTE al litraje real de cada lote (decisión del usuario,
+     7-sep-2026, sin excepciones por insumo) y se suma entre todos los lotes
+     activos que usan ese insumo.
+
+     El "disponible" sale del último snapshot de stock_insumos, que hoy está
+     vacío (la automatización de carga está pendiente) — sin datos ahí,
+     necesidadNeta = necesidadBruta, no un error ni un cero engañoso.
+
+     precioUnitario/costoNecesidad quedan en null hasta que exista una lista
+     de precios — el usuario pidió ver la necesidad en CANTIDAD primero. */
+  const recetaPorProducto = new Map(
+    (recetasRaw ?? []).map(r => [r.producto as string, { id: r.id as string, litrosBase: Number(r.litros_base) }])
+  )
+
+  type InsumoRel = { id: string; nombre: string; categoria: string; unidad_base: string; precio_unitario: number | null }
+  const recetaInsumosPorRecetaId = new Map<string, { insumo: InsumoRel; cantidad: number }[]>()
+  for (const ri of recetaInsumosRaw ?? []) {
+    const insumoRel = (Array.isArray(ri.insumos) ? ri.insumos[0] : ri.insumos) as InsumoRel | null
+    if (!insumoRel) continue
+    const lista = recetaInsumosPorRecetaId.get(ri.receta_id as string) ?? []
+    lista.push({ insumo: insumoRel, cantidad: Number(ri.cantidad) })
+    recetaInsumosPorRecetaId.set(ri.receta_id as string, lista)
+  }
+
+  // Último snapshot por insumo — stock_insumos ya viene ordenado por
+  // fecha_informe desc, así que la primera fila de cada insumo_id es la más
+  // reciente; se ignoran las filas de fechas anteriores.
+  const disponiblePorInsumoId = new Map<string, number>()
+  for (const s of stockInsumosRaw ?? []) {
+    const id = s.insumo_id as string
+    if (!disponiblePorInsumoId.has(id)) disponiblePorInsumoId.set(id, Number(s.cantidad))
+  }
+
+  const necesidadPorInsumo = new Map<string, {
+    insumoId: string; categoria: string; unidadBase: string; precioUnitario: number | null; bruta: number
+    lotes: { producto: string; litrosPlanificados: number }[]
+  }>()
+  const lotesSinReceta: LoteSinReceta[] = []
+
+  for (const lote of planProduccion) {
+    if (lote.estado !== 'planificado' && lote.estado !== 'en_curso') continue
+    const receta = recetaPorProducto.get(lote.producto)
+    if (!receta) {
+      lotesSinReceta.push({ producto: lote.producto, litrosPlanificados: lote.litrosPlanificados })
+      continue
+    }
+    const factor = lote.litrosPlanificados / receta.litrosBase
+    for (const { insumo, cantidad } of recetaInsumosPorRecetaId.get(receta.id) ?? []) {
+      const acc = necesidadPorInsumo.get(insumo.nombre) ?? {
+        insumoId: insumo.id, categoria: insumo.categoria, unidadBase: insumo.unidad_base,
+        precioUnitario: insumo.precio_unitario, bruta: 0, lotes: [],
+      }
+      acc.bruta += cantidad * factor
+      acc.lotes.push({ producto: lote.producto, litrosPlanificados: lote.litrosPlanificados })
+      necesidadPorInsumo.set(insumo.nombre, acc)
+    }
+  }
+
+  const necesidadInsumos: NecesidadInsumo[] = [...necesidadPorInsumo.entries()]
+    .map(([nombre, n]) => {
+      const bruta = Math.round(n.bruta)
+      const disponible = disponiblePorInsumoId.get(n.insumoId) ?? null
+      const necesidadNeta = disponible != null ? Math.max(bruta - disponible, 0) : bruta
+      return {
+        insumo: nombre,
+        categoria: n.categoria as NecesidadInsumo['categoria'],
+        unidadBase: n.unidadBase as NecesidadInsumo['unidadBase'],
+        necesidadBruta: bruta,
+        disponible,
+        necesidadNeta,
+        precioUnitario: n.precioUnitario,
+        costoNecesidad: n.precioUnitario != null ? Math.round(n.precioUnitario * necesidadNeta) : null,
+        lotes: n.lotes,
+      }
+    })
+    .sort((a, b) => a.categoria.localeCompare(b.categoria) || b.necesidadBruta - a.necesidadBruta)
+
   // Sugerencias / alarmas de quiebre: SIEMPRE por producto×envase, nunca por
   // el estilo completo — lo que hay que saber no es "¿va bien Doble IPA?"
   // sino "¿en qué formato específico (barril 30L, lata...) nos vamos a
@@ -958,6 +1079,8 @@ export default async function ProduccionPage() {
       sugerenciasPlan={sugerenciasPlan}
       splitFermentadores={splitFermentadores}
       ocupacionPlanta={ocupacionPlanta}
+      necesidadInsumos={necesidadInsumos}
+      lotesSinReceta={lotesSinReceta}
       stock={stock}
       stockSeguridad={stockSeguridad}
       ultimaCorrida={ultimaCorrida}

@@ -15,7 +15,7 @@ import {
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
   ArrowUp, ArrowDown, CheckCircle2, Trash2, X,
 } from 'lucide-react'
-import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta } from './page'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, LoteSinReceta } from './page'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -55,20 +55,27 @@ const DEMO_budgetData = [
   { month: 'Dic', cerveza: 55000, kombucha: 30000, tendencia: 85000 },
 ]
 
-const DEMO_insumosData = [
-  { id: 1, insumo: 'Malta Pale Ale', categoria: 'Malta', stock: 420, consumo: 850, necesidad: 430, leadTime: 15, fechaPedido: '15/11/2026', estado: 'critico' },
-  { id: 2, insumo: 'Lúpulo Citra', categoria: 'Lúpulo', stock: 15, consumo: 45, necesidad: 30, leadTime: 20, fechaPedido: '10/11/2026', estado: 'bajo' },
-  { id: 3, insumo: 'Levadura US-05', categoria: 'Levadura', stock: 12, consumo: 10, necesidad: 0, leadTime: 7, fechaPedido: '-', estado: 'ok' },
-  { id: 4, insumo: 'Té Negro (Orgánico)', categoria: 'Kombucha Base', stock: 45, consumo: 40, necesidad: 0, leadTime: 10, fechaPedido: '-', estado: 'ok' },
-  { id: 5, insumo: 'Jengibre Fresco', categoria: 'Adjuntos', stock: 8, consumo: 30, necesidad: 22, leadTime: 3, fechaPedido: '27/11/2026', estado: 'bajo' },
-  { id: 6, insumo: 'Lúpulo Mosaic', categoria: 'Lúpulo', stock: 5, consumo: 25, necesidad: 20, leadTime: 20, fechaPedido: '05/11/2026', estado: 'critico' },
-  { id: 7, insumo: 'Latas 473ml', categoria: 'Empaque', stock: 1500, consumo: 5000, necesidad: 3500, leadTime: 30, fechaPedido: '01/11/2026', estado: 'critico' },
-]
-
+/** Etiqueta + color por categoría de insumo — mismas 4 del Excel de recetas
+ *  (malta/lúpulo/levadura/otros), reutilizado en la tabla de Insumos y Compras. */
+const CATEGORIA_INSUMO: Record<string, { label: string; badge: string }> = {
+  malta: { label: 'Malta', badge: 'border-amber-200 bg-amber-50 text-amber-700' },
+  lupulo: { label: 'Lúpulo', badge: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+  levadura: { label: 'Levadura', badge: 'border-purple-200 bg-purple-50 text-purple-700' },
+  otros: { label: 'Otros', badge: 'border-gray-200 bg-gray-50 text-gray-600' },
+}
 
 /* ── Utilidades de formato ─────────────────────────────────────────────── */
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const fNum = (n: number) => Math.round(n).toLocaleString('es-CL')
+
+/** Cantidad de insumo en su unidad base (gr/ml) → texto legible, subiendo a
+ *  kg/L cuando conviene (≥1000) — la base sigue siendo gr/ml para que el
+ *  descuento de stock nunca mezcle unidades, esto es sólo de presentación. */
+function fCantidadInsumo(cantidad: number, unidadBase: 'gr' | 'ml'): string {
+  const unidadGrande = unidadBase === 'gr' ? 'kg' : 'L'
+  if (Math.abs(cantidad) >= 1000) return `${(cantidad / 1000).toLocaleString('es-CL', { maximumFractionDigits: 2 })} ${unidadGrande}`
+  return `${fNum(cantidad)} ${unidadBase}`
+}
 
 /** Orden fijo de formato — evita que un mismo producto se vea disperso al
  *  ordenar por otro criterio (Stock de Seguridad, calculadora de cobertura). */
@@ -220,7 +227,7 @@ const GRUPOS_NAV: { titulo: string; items: TabId[] }[] = [
 
 /** Secciones que todavía son maqueta (ver DATOS DE DEMOSTRACIÓN arriba). Se
  *  marcan en el propio menú para que nadie entre esperando datos reales. */
-const DEMO_TABS = new Set<TabId>(['insumos', 'presupuesto'])
+const DEMO_TABS = new Set<TabId>(['presupuesto'])
 
 /** Alta manual de un lote al Plan Maestro. Estado propio (no vive en el
  *  padre) porque es puramente del formulario — se descarta al cerrar. */
@@ -445,7 +452,7 @@ function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.R
 }
 
 export default function ProduccionClient({
-  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, ocupacionPlanta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, ocupacionPlanta, necesidadInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
@@ -457,6 +464,10 @@ export default function ProduccionClient({
   splitFermentadores: SplitFermentador[]
   /** Litros y tanques ocupados en la sala de fermentación. */
   ocupacionPlanta: OcupacionPlanta
+  /** Insumos que hacen falta para cubrir la cola activa del Plan Maestro, escalando cada receta al litraje real de cada lote. */
+  necesidadInsumos: NecesidadInsumo[]
+  /** Lotes del plan cuyo producto no tiene receta cargada — su necesidad de insumos no se pudo calcular. */
+  lotesSinReceta: LoteSinReceta[]
   stock: StockItem[]
   stockSeguridad: StockSeguridadItem[]
   ultimaCorrida: string | null
@@ -1025,7 +1036,8 @@ export default function ProduccionClient({
     seguridad: filasStockSeguridad.filter(f => f.estado === 'critico' || f.estado === 'bajo').length,
   }), [advertencias.length, filasStockSeguridad])
 
-  const insumosFiltrados = DEMO_insumosData.filter(i =>
+  const stockInsumosVacio = necesidadInsumos.every(i => i.disponible == null)
+  const insumosFiltrados = necesidadInsumos.filter(i =>
     i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
     i.categoria.toLowerCase().includes(busquedaInsumo.toLowerCase())
   )
@@ -2786,19 +2798,38 @@ export default function ProduccionClient({
             </div>
           )}
 
-          {/* ══════════ VISTA 5: INSUMOS Y COMPRAS (MRP) ══════════ */}
+          {/* ══════════ VISTA 5: INSUMOS Y COMPRAS ══════════
+              Cruza el Plan Maestro con las recetas cargadas: cada receta
+              escala linealmente al litraje real de cada lote, y se suma
+              entre todos los lotes activos que usan el mismo insumo. El
+              precio queda pendiente (columna "Costo" vacía) hasta que exista
+              una lista de precios — decisión del usuario, 7-sep-2026: ver
+              la necesidad en CANTIDAD primero, valorizar después. */}
           {activeTab === 'insumos' && (
             <div className="flex h-full flex-col gap-6">
+
+              {lotesSinReceta.length > 0 && (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+                  <div>
+                    <p className="font-bold">
+                      {lotesSinReceta.length} {lotesSinReceta.length === 1 ? 'lote' : 'lotes'} del Plan Maestro sin receta cargada
+                    </p>
+                    <p className="mt-1 text-amber-700">
+                      No se puede calcular su necesidad de insumos: {lotesSinReceta.map(l => `${l.producto} (${fNum(l.litrosPlanificados)} L)`).join(', ')}.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 
                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
                   <div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="font-bold text-gray-800">Planificación de Requerimiento de Materiales (MRP)</h3>
-                      <BadgeDemo />
-                    </div>
+                    <h3 className="font-bold text-gray-800">Necesidad de Insumos — Plan Maestro</h3>
                     <p className="mt-1 text-sm text-gray-500">
-                      No hay tablas de recetas ni de insumos en la base todavía — esta vista es una maqueta del formato.
+                      {necesidadInsumos.length} insumos, escalados desde {planProduccion.filter(l => l.estado === 'planificado' || l.estado === 'en_curso').length} lotes activos de la cola.
+                      {' '}El disponible sale del último inventario de insumos cargado{stockInsumosVacio ? ' — todavía no hay ninguno.' : '.'}
                     </p>
                   </div>
                   <div className="relative">
@@ -2821,51 +2852,46 @@ export default function ProduccionClient({
                       <tr>
                         <th className="px-6 py-4 font-bold">Insumo</th>
                         <th className="px-6 py-4 font-bold">Categoría</th>
-                        <th className="px-6 py-4 text-right font-bold">Stock Actual</th>
-                        <th className="px-6 py-4 text-right font-bold">Consumo Proyectado</th>
+                        <th className="px-6 py-4 text-right font-bold">Necesidad Bruta</th>
+                        <th className="px-6 py-4 text-right font-bold">Disponible</th>
                         <th className="px-6 py-4 text-right font-bold text-amber-700">Necesidad Neta</th>
-                        <th className="px-6 py-4 text-center font-bold">Lead Time (días)</th>
-                        <th className="px-6 py-4 text-center font-bold text-green-700">Fecha Ideal Pedido</th>
-                        <th className="px-6 py-4 text-center font-bold">Estado</th>
+                        <th className="px-6 py-4 text-right font-bold">Costo Estimado</th>
+                        <th className="px-6 py-4 font-bold">Lotes que lo usan</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
                       {insumosFiltrados.length === 0 && (
-                        <tr><td colSpan={8} className="px-6 py-10 text-center text-gray-400">Sin resultados para “{busquedaInsumo}”.</td></tr>
+                        <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">
+                          {necesidadInsumos.length === 0
+                            ? 'No hay lotes activos en el Plan Maestro que necesiten insumos ahora mismo.'
+                            : `Sin resultados para "${busquedaInsumo}".`}
+                        </td></tr>
                       )}
-                      {insumosFiltrados.map(row => (
-                        <tr key={row.id} className="transition-colors hover:bg-gray-50">
-                          <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
-                          <td className="px-6 py-3 text-gray-500">{row.categoria}</td>
-                          <td className="px-6 py-3 text-right font-medium tabular-nums">
-                            {fNum(row.stock)} <span className="text-xs text-gray-400">kg/un</span>
-                          </td>
-                          <td className="px-6 py-3 text-right tabular-nums text-gray-600">
-                            {fNum(row.consumo)} <span className="text-xs text-gray-400">kg/un</span>
-                          </td>
-                          <td className={`px-6 py-3 text-right font-bold tabular-nums text-gray-900 ${row.necesidad > 0 ? 'bg-amber-50' : ''}`}>
-                            {row.necesidad > 0 ? <>{fNum(row.necesidad)} <span className="text-xs text-gray-400">kg/un</span></> : <span className="text-gray-300">—</span>}
-                          </td>
-                          <td className="px-6 py-3 text-center tabular-nums text-gray-500">{row.leadTime}</td>
-                          <td className="px-6 py-3 text-center">
-                            {row.fechaPedido !== '-' ? (
-                              <div className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-200 bg-gray-100 px-2 py-1 font-bold text-gray-800">
-                                <CalendarIcon size={14} className="text-gray-500" />
-                                {row.fechaPedido}
-                              </div>
-                            ) : <span className="text-gray-300">—</span>}
-                          </td>
-                          <td className="px-6 py-3 text-center">
-                            <div className={`inline-flex w-24 items-center justify-center rounded-full border px-2 py-1 text-xs font-bold ${
-                              row.estado === 'critico' ? 'border-red-200 bg-red-50 text-red-600'
-                                : row.estado === 'bajo' ? 'border-amber-200 bg-amber-50 text-amber-600'
-                                  : 'border-green-200 bg-green-50 text-green-600'
-                            }`}>
-                              {row.estado === 'critico' ? 'CRÍTICO' : row.estado === 'bajo' ? 'BAJO' : 'OK'}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {insumosFiltrados.map(row => {
+                        const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
+                        const lotesResumen = [...new Map(row.lotes.map(l => [l.producto, l])).values()]
+                        return (
+                          <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
+                            <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
+                            <td className="px-6 py-3">
+                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
+                            </td>
+                            <td className="px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
+                            <td className="px-6 py-3 text-right tabular-nums text-gray-500">
+                              {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
+                            </td>
+                            <td className={`px-6 py-3 text-right font-bold tabular-nums text-gray-900 ${row.necesidadNeta > 0 ? 'bg-amber-50' : ''}`}>
+                              {row.necesidadNeta > 0 ? fCantidadInsumo(row.necesidadNeta, row.unidadBase) : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-6 py-3 text-right tabular-nums text-gray-400">
+                              {row.costoNecesidad != null ? `$${fNum(row.costoNecesidad)}` : <span title="Sin precio cargado todavía">—</span>}
+                            </td>
+                            <td className="px-6 py-3 text-xs text-gray-500">
+                              {lotesResumen.map(l => l.producto).join(', ')}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
