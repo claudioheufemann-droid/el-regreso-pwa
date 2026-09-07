@@ -2420,11 +2420,19 @@ export default function ProduccionClient({
                       {fNum(splitFermentadores.reduce((a, s) => a + s.litrosEnFermentador, 0))} L en fermentadores
                     </span>
                   </div>
-                  <p className="mb-4 text-sm text-blue-800/80">
+                  <p className="mb-2 text-sm text-blue-800/80">
                     Lo que está fermentando todavía no tiene envase. Cada lote se reparte entre formatos y, dentro de
                     eso, cumple tres funciones: <strong>reponer el colchón</strong> de stock de seguridad,{' '}
                     <strong>cubrir la venta</strong> mientras llega la próxima cocción, y el <strong>excedente</strong>,
                     que estira la cobertura hacia adelante.
+                  </p>
+                  {/* Un lote pasa 3+ semanas en el tanque: el reparto no es una
+                      decisión de una sola vez, se recalcula con cada sync. */}
+                  <p className="mb-4 flex flex-wrap items-center gap-1.5 text-xs text-blue-700/70">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                    El reparto se recalcula con cada entrada de ventas — si un formato se acelera, el split se corrige
+                    solo, sin esperar la corrida mensual del forecast.
+                    {minutosDesdeSyncStock != null && <span>· Inventario {fMinutosDesde(minutosDesdeSyncStock)}</span>}
                   </p>
 
                   <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -2442,6 +2450,15 @@ export default function ProduccionClient({
                           </span>
                         </div>
 
+                        {/* Lote sin forecast por formato: se muestra igual —
+                            hay que envasarlo — pero sin inventar un reparto. */}
+                        {s.reparto.length === 0 ? (
+                          <div className="mt-3 rounded-lg bg-gray-50 p-3 text-xs text-gray-500">
+                            Sin forecast por formato para este producto todavía, así que no hay con qué calcular el
+                            reparto. El lote igual hay que envasarlo: defínelo a mano al sacarlo del tanque.
+                          </div>
+                        ) : (
+                        <>
                         {/* Barra apilada: el reparto de un vistazo. */}
                         <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-gray-100">
                           {s.reparto.map(r => (
@@ -2510,6 +2527,15 @@ export default function ProduccionClient({
                             {new Date(s.cubreVentaHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
                             {' '}(estimado con la demanda proyectada).
                           </p>
+                        )}
+
+                        {s.ajustadoPorVentas && (
+                          <p className="mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                            <TrendingUp size={11} />
+                            Reparto ya corregido: algún formato se está vendiendo más rápido de lo que proyectaba el forecast.
+                          </p>
+                        )}
+                        </>
                         )}
                       </div>
                     ))}

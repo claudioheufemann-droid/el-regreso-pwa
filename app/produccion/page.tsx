@@ -169,6 +169,10 @@ export interface SplitFermentador {
   /** false = el tanque no alcanza ni para cubrir la necesidad de todos los
    *  formatos; se repartió entero a prorrata de ella. */
   cubreTodaLaNecesidad: boolean
+  /** true = en algún formato mandó el ritmo de venta REAL de este ciclo por
+   *  encima del forecast, así que el split ya se corrigió con las ventas que
+   *  entraron mientras el lote está en el fermentador. */
+  ajustadoPorVentas: boolean
 }
 
 /**
@@ -603,25 +607,64 @@ export default async function ProduccionPage() {
     const filasFormato = (stockSeguridadRaw ?? []).filter(
       s => s.nivel === 'producto_envase' && (s.mes as string).slice(0, 10) === primerMesSS && normalizarProducto(s.producto as string) === producto
     )
-    if (filasFormato.length === 0) continue
+
+    // TODO lote en fermentador entra al panel, sin excepción — aunque no haya
+    // con qué repartirlo (producto nuevo, sin forecast por formato todavía).
+    // Antes se hacía `continue` y el lote desaparecía en silencio: peor que
+    // mostrarlo sin reparto, porque nadie se entera de que hay que envasarlo.
+    if (filasFormato.length === 0) {
+      splitFermentadores.push({
+        producto,
+        categoria: (categoriaPorProducto.get(producto) ?? null) as 'cerveza' | 'kombucha' | null,
+        litrosEnFermentador: Math.round(litrosTanque),
+        tanques: tanquesPorProducto.get(producto) ?? [],
+        reparto: [],
+        litrosColchon: 0, litrosVentanaReposicion: 0, excedente: Math.round(litrosTanque),
+        semanasExcedente: null, semanasVentaTotal: null, cubreVentaHasta: null,
+        cubreTodaLaNecesidad: true, ajustadoPorVentas: false,
+      })
+      continue
+    }
 
     const base = filasFormato.map(f => {
       const envase = (f.envase as string) as EnvaseBucket
       const enBodega = stockActualPorProductoEnvase.get(claveProductoEnvase(producto, envase)) ?? 0
       const colchonObjetivo = Number(f.stock_seguridad_litros)
-      const necesidad = Math.max(Number(f.punto_reorden_litros) - enBodega, 0)
+
+      // Un lote pasa 3+ semanas en el fermentador, así que el split no puede
+      // quedar congelado con la foto del día que entró: el forecast por
+      // formato se recalcula una vez al mes, pero las VENTAS entran cada 15
+      // min. Igual que las alarmas de quiebre, se toma la señal más exigente
+      // entre el punto de reorden (forecast, mensual) y el ritmo de venta
+      // REAL de este ciclo proyectado sobre la ventana de reposición. Así, si
+      // un formato empieza a venderse más rápido de lo previsto, el split se
+      // corrige solo en el siguiente sync, sin esperar la corrida mensual.
+      const ventanaDiasHabiles = (Number(f.lead_time_semanas) + Number(f.periodo_revision_semanas)) * 5
+      const ritmoDiarioReal = diasHabilesTranscurridos > 0
+        ? (litrosMtdPorSerie.get(`producto_envase::${claveProductoEnvase(producto, envase)}`) ?? 0) / diasHabilesTranscurridos
+        : 0
+
+      const necesidadForecast = Math.max(Number(f.punto_reorden_litros) - enBodega, 0)
+      const necesidadRitmo = Math.max(ritmoDiarioReal * ventanaDiasHabiles - enBodega, 0)
+      const necesidad = Math.max(necesidadForecast, necesidadRitmo)
+
       // El punto de reorden es colchón + demanda de la ventana de reposición.
       // Lo que hay en bodega tapa primero la demanda y lo último que queda sin
       // cubrir es el colchón, así que de la necesidad, la parte de colchón es
       // lo que falte para llegar al propio stock de seguridad.
       const litrosColchon = Math.max(Math.min(necesidad, colchonObjetivo - enBodega), 0)
+
+      // El excedente se reparte por la demanda que de verdad se está viendo:
+      // la proyectada, o la del ritmo real si va por encima.
+      const demandaForecast = Number(f.demanda_mensual_proyectada)
+      const demandaRitmo = ritmoDiarioReal * diasHabilesEnCiclo
       return {
         envase,
         necesidad,
         litrosColchon,
         litrosVentanaReposicion: necesidad - litrosColchon,
-        demanda: Number(f.demanda_mensual_proyectada),
-        semanasVentana: Number(f.lead_time_semanas) + Number(f.periodo_revision_semanas),
+        demanda: Math.max(demandaForecast, demandaRitmo),
+        porRitmo: necesidadRitmo > necesidadForecast || demandaRitmo > demandaForecast,
       }
     })
 
@@ -691,6 +734,7 @@ export default async function ProduccionPage() {
           ? new Date(hoy.getTime() + semanasVentaTotal * 7 * MS_POR_DIA).toISOString().slice(0, 10)
           : null,
         cubreTodaLaNecesidad: alcanzaLaNecesidad,
+        ajustadoPorVentas: base.some(f => f.porRitmo),
       })
       splitPorProducto.set(producto, detalle)
     }
