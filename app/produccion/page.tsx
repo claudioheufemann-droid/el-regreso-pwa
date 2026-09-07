@@ -122,6 +122,19 @@ export interface StockSeguridadItem {
 }
 
 /**
+ * Ocupación de la sala de fermentación. Hoy sólo puede decir cuánto hay y en
+ * cuántos tanques: el informe del ERP no trae la capacidad nominal de cada
+ * fermentador ni lista los vacíos, así que un % de ocupación sería inventado.
+ * Cuando exista ese listado (capacidad por tanque), acá se agrega
+ * `capacidadTotal` y el porcentaje pasa a ser real.
+ */
+export interface OcupacionPlanta {
+  litrosEnFermentacion: number
+  fermentadoresOcupados: number
+  tanques: { tanque: string; litros: number }[]
+}
+
+/**
  * Cómo repartir entre formatos lo que hay en un fermentador. El líquido a
  * granel todavía no tiene envase: el split responde "de estos N litros,
  * ¿cuántos van a barril 30L, 50L y lata?" según qué formato está más lejos
@@ -551,6 +564,28 @@ export default async function ProduccionPage() {
   //
   // No hay doble conteo con el inventario: mientras el producto está en el
   // tanque todavía no se envasó, así que no aparece en ninguna cámara.
+  /* ── Ocupación de fermentadores ──────────────────────────────────────────
+     El informe del ERP lista SÓLO los fermentadores con contenido, con sus
+     litros — no trae la capacidad nominal de cada uno ni los que están
+     vacíos, y stock_productos guarda una sola foto (sin histórico), así que
+     tampoco se puede inferir la capacidad del máximo visto. Sin ese dato no
+     hay porcentaje de ocupación honesto: se muestra lo que sí se sabe
+     (litros a granel y cuántos tanques están ocupados). Para convertirlo en
+     un % real hace falta el listado de fermentadores con su capacidad. */
+  const fermentadoresOcupados = new Map<string, number>()
+  for (const s of stockRaw ?? []) {
+    if (s.tipo !== 'tanque' || s.litros == null) continue
+    const tanque = ((s.camara as string | null) ?? 'Sin tanque').trim()
+    fermentadoresOcupados.set(tanque, (fermentadoresOcupados.get(tanque) ?? 0) + Number(s.litros))
+  }
+  const ocupacionPlanta: OcupacionPlanta = {
+    litrosEnFermentacion: Math.round([...fermentadoresOcupados.values()].reduce((a, b) => a + b, 0)),
+    fermentadoresOcupados: fermentadoresOcupados.size,
+    tanques: [...fermentadoresOcupados.entries()]
+      .map(([tanque, litros]) => ({ tanque, litros: Math.round(litros) }))
+      .sort((a, b) => b.litros - a.litros),
+  }
+
   const litrosEnProduccionPorProducto = new Map<string, number>()
   const tanquesPorProducto = new Map<string, string[]>()
   for (const s of stockRaw ?? []) {
@@ -911,6 +946,7 @@ export default async function ProduccionPage() {
       planProduccion={planProduccion}
       sugerenciasPlan={sugerenciasPlan}
       splitFermentadores={splitFermentadores}
+      ocupacionPlanta={ocupacionPlanta}
       stock={stock}
       stockSeguridad={stockSeguridad}
       ultimaCorrida={ultimaCorrida}

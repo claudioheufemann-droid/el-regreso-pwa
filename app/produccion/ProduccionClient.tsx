@@ -15,7 +15,7 @@ import {
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
   ArrowUp, ArrowDown, CheckCircle2, Trash2, X,
 } from 'lucide-react'
-import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador } from './page'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta } from './page'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -445,7 +445,7 @@ function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.R
 }
 
 export default function ProduccionClient({
-  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, ocupacionPlanta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
@@ -455,6 +455,8 @@ export default function ProduccionClient({
   sugerenciasPlan: SugerenciaPlan[]
   /** Cómo repartir entre formatos lo que está hoy en los fermentadores. */
   splitFermentadores: SplitFermentador[]
+  /** Litros y tanques ocupados en la sala de fermentación. */
+  ocupacionPlanta: OcupacionPlanta
   stock: StockItem[]
   stockSeguridad: StockSeguridadItem[]
   ultimaCorrida: string | null
@@ -1269,18 +1271,29 @@ export default function ProduccionClient({
                   <p className="text-[11px] text-gray-400">Error medio vs. venta real</p>
                 </div>
 
-                <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                {/* En Fermentación — reemplaza al "78% Capacidad Planta" que era
+                    demo. El informe del ERP no trae la capacidad nominal de cada
+                    fermentador ni lista los vacíos, así que un % de ocupación
+                    sería inventado: se muestra lo que sí se sabe. */}
+                <div
+                  className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+                  title={ocupacionPlanta.tanques.map(t => `${t.tanque}: ${fNum(t.litros)} L`).join('\n')}
+                >
                   <div className="flex items-center justify-between gap-2 text-sm font-medium text-gray-500">
                     <span className="flex items-center gap-2">
                       <Beaker size={18} style={{ color: COLORS.darkGreen }} />
-                      Capacidad Planta
+                      En Fermentación
                     </span>
                   </div>
                   <div className="flex items-end justify-between gap-3">
-                    <span className="text-3xl font-bold text-gray-900">78%</span>
-                    <span className="mb-1 rounded-md bg-green-100 px-2 py-1 text-xs font-bold text-green-600">Operativa</span>
+                    <span className="text-3xl font-bold text-gray-900">{fNum(ocupacionPlanta.litrosEnFermentacion)} L</span>
+                    <span className="mb-1 rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">
+                      {ocupacionPlanta.fermentadoresOcupados} {ocupacionPlanta.fermentadoresOcupados === 1 ? 'tanque' : 'tanques'}
+                    </span>
                   </div>
-                  <BadgeDemo>Demo</BadgeDemo>
+                  <p className="text-[11px] text-gray-400">
+                    A granel, sin envasar — ver el split en Plan Maestro
+                  </p>
                 </div>
               </div>
 
