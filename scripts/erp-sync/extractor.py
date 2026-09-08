@@ -303,14 +303,24 @@ _MENSAJES_SIN_DATOS = (
 )
 
 
-def subir_a_pwa(filepath: Path) -> dict:
-    """Sube el Excel al endpoint de la PWA (misma logica que la carga manual)."""
+def subir_a_pwa(filepath: Path, desde: date, hasta: date) -> dict:
+    """Sube el Excel al endpoint de la PWA (misma logica que la carga manual).
+
+    Manda (desde, hasta) — la MISMA ventana que se le pidio al ERP (filtro por
+    fecha de ENTREGA, ver navegar_y_descargar) — para que el endpoint pueda
+    reconciliar pedidos huerfanos (cancelados/eliminados en el ERP) de forma
+    segura, acotada exactamente a esa ventana. Sin estos campos el endpoint
+    no reconcilia nada (ver /api/upload-ventas)."""
     print(f"[4/4] Subiendo {filepath.name} a {UPLOAD_URL}")
     with open(filepath, "rb") as f:
         r = requests.post(
             UPLOAD_URL,
             headers={"Authorization": f"Bearer {UPLOAD_SECRET}"},
             files={"file": (filepath.name, f, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            data={
+                "fecha_entrega_desde": desde.isoformat(),
+                "fecha_entrega_hasta": hasta.isoformat(),
+            },
             timeout=300,
         )
     try:
@@ -337,6 +347,7 @@ def main() -> int:
     print(f"=== ERP SYNC | {len(tramos)} tramo(s) === {tramos}")
 
     huerfanos_total = 0
+    omitidos_total = 0
     con_error = 0
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=HEADLESS)
@@ -357,7 +368,7 @@ def main() -> int:
                 continue
 
             try:
-                resultado = subir_a_pwa(archivo)
+                resultado = subir_a_pwa(archivo, desde, hasta)
             except SinDatosAun as e:
                 print(f"   sin datos todavia ({e}) — normal")
                 continue
@@ -368,14 +379,19 @@ def main() -> int:
 
             huerfanos = resultado.get("pedidosHuerfanosBorrados") or 0
             huerfanos_total += huerfanos
+            omitidos = resultado.get("huerfanosOmitidosPorSeguridad") or 0
+            omitidos_total += omitidos
             print(f"   insertadas={resultado.get('insertadas')} "
                   f"rango={resultado.get('fechaMin')}->{resultado.get('fechaMax')} "
-                  f"huerfanos_borrados={huerfanos}")
+                  f"huerfanos_borrados={huerfanos}"
+                  + (f" ⚠ OMITIDOS_POR_SEGURIDAD={omitidos} (revisar manualmente)" if omitidos else ""))
         browser.close()
 
     print("=== RESUMEN ===")
     print(f"  Tramos con error  : {con_error}/{len(tramos)}")
     print(f"  Pedidos huerfanos borrados (reconciliacion): {huerfanos_total}")
+    if omitidos_total:
+        print(f"  ⚠ Pedidos huerfanos OMITIDOS por tope de seguridad: {omitidos_total} — revisar manualmente")
     return 1 if con_error == len(tramos) else 0
 
 

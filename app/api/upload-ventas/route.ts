@@ -269,6 +269,26 @@ export async function POST(req: NextRequest) {
   const file = formData.get('file') as File
   if (!file) return NextResponse.json({ error: 'No se recibió archivo' }, { status: 400 })
 
+  // ── Ventana de reconciliación (opcional) ────────────────────────────────
+  // El cron manda la MISMA ventana [desde, hasta] que le pidió al ERP para
+  // este tramo (filtro por FECHA DE ENTREGA, ver extractor.py). Es la única
+  // fuente confiable de "qué rango cubre este archivo" — NO se debe volver a
+  // inferir del contenido del archivo (fechaMin/fechaMax de fecha_pedido):
+  // eso fue exactamente lo que causó el incidente del 27-ago-2026 (borró
+  // 1.938 filas), porque un tramo angosto de entrega puede traer pedidos con
+  // fecha_pedido de semanas atrás. Si no viene la ventana (carga manual desde
+  // el admin, o un extractor viejo), simplemente no se reconcilia — no se
+  // adivina el rango.
+  const fechaEntregaDesde = (formData.get('fecha_entrega_desde') as string | null)?.trim() || null
+  const fechaEntregaHasta = (formData.get('fecha_entrega_hasta') as string | null)?.trim() || null
+  const fechaISO = /^\d{4}-\d{2}-\d{2}$/
+  const ventanaReconciliacionValida =
+    !!fechaEntregaDesde &&
+    !!fechaEntregaHasta &&
+    fechaISO.test(fechaEntregaDesde) &&
+    fechaISO.test(fechaEntregaHasta) &&
+    fechaEntregaDesde <= fechaEntregaHasta
+
   const buffer = await file.arrayBuffer()
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
 
@@ -417,28 +437,87 @@ export async function POST(req: NextRequest) {
     insertadas += data?.length ?? batch.length
   }
 
-  // ── Reconciliación de pedidos huérfanos: DESACTIVADA (28-ago-2026) ─────────
-  // INCIDENTE REAL: esta reconciliación borró 1.938 filas de `ventas` de un
-  // solo golpe en la corrida del 27-ago 20:01 UTC (ver git blame / historial
-  // de este bloque para el código exacto que lo causó).
+  // ── Reconciliación de pedidos huérfanos (rediseñada 08-sep-2026) ─────────
+  // Objetivo: cuando un pedido se cancela/elimina en el ERP, deja de venir en
+  // TODOS los archivos futuros — no llega marcado como "cancelado", simplemente
+  // desaparece. El upsert por pedido de arriba solo corrige pedidos que SÍ
+  // vienen en el archivo; esto limpia los que ya no vienen en ninguno.
   //
-  // Causa: el informe del ERP filtra por FECHA DE ENTREGA, no por fecha de
-  // pedido — un archivo pedido para un rango de entrega angosto (ej. últimos
-  // 5 días) puede traer pedidos con fecha_pedido de semanas atrás (entregas
-  // tardías). El código usaba fechaMin/fechaMax de las FECHAS DE PEDIDO
-  // encontradas en ese archivo angosto como si fuera "el rango que cubre este
-  // archivo", y borraba como huérfano todo pedido real fuera de ese archivo
-  // pero DENTRO de ese rango amplio — que la mayoría de las veces es casi
-  // todo el historial reciente, porque el archivo angosto solo trae los
-  // pocos pedidos que calzan con ENTREGARSE en la ventana pedida.
+  // Ver INCIDENTE 27-ago-2026 (git blame de este bloque para el código que lo
+  // causó): la versión anterior borró 1.938 filas porque infería el
+  // "rango cubierto por el archivo" desde las fechas de PEDIDO que traía —
+  // un archivo angosto de entrega puede traer pedidos con fecha_pedido de
+  // semanas atrás, así que ese rango inferido terminaba siendo casi todo el
+  // historial.
   //
-  // No se reactiva hasta rediseñarlo bien (la única forma segura sería
-  // reconciliar por fecha de ENTREGA, no de pedido, y sólo cuando se pidió
-  // explícitamente un rango ancho y confiable — no en cada sync de 15 min).
-  // Mientras tanto: el upsert por pedido de arriba sigue corrigiendo pedidos
-  // que SÍ vienen en cada archivo; un pedido borrado por completo en el ERP
-  // simplemente queda en la BD hasta que se audite/limpie a mano.
-  const pedidosHuerfanosBorrados = 0
+  // Fix real: usar la ventana [fechaEntregaDesde, fechaEntregaHasta] que el
+  // cron efectivamente le pidió al ERP (mismo filtro que usa el ERP: FECHA DE
+  // ENTREGA — ver extractor.py), nunca inferida del contenido del archivo.
+  // Sólo se borra un pedido si:
+  //   1) tiene fecha_entrega NO nula y DENTRO de esa ventana exacta (nunca se
+  //      toca un pedido pendiente de entrega ni uno fuera de la ventana pedida),
+  //   2) su número de pedido es real (formato numérico del ERP — nunca
+  //      "Devolución" ni cargas manuales antiguas), y
+  //   3) no aparece en NINGUNA fila de este archivo.
+  // Si no vino la ventana (carga manual, extractor viejo) no se reconcilia.
+  //
+  // Circuit breaker: si el candidato a huérfanos supera MAX_HUERFANOS_POR_SYNC,
+  // se aborta el borrado y se reporta para revisión manual — un sync cada 15
+  // min no debería cancelar decenas de pedidos de golpe; si eso pasa, es más
+  // probable un bug (o un ERP devolviendo un archivo vacío/incompleto) que
+  // cancelaciones reales, y el costo de esperar revisión manual es mucho
+  // menor que el de repetir el incidente de agosto.
+  const MAX_HUERFANOS_POR_SYNC = 50
+  let pedidosHuerfanosBorrados = 0
+  let huerfanosOmitidosPorSeguridad = 0
+
+  if (ventanaReconciliacionValida) {
+    const pedidosEnArchivoSet = new Set(pedidosEnArchivo)
+    const candidatosPedidos = new Set<string>()
+
+    // Paginar por si la ventana tiene muchas filas (ventas por pedido = varias
+    // líneas cada uno, así que el conteo de filas es mayor al de pedidos).
+    const PAGE = 1000
+    for (let offset = 0; ; offset += PAGE) {
+      const { data: filas, error: selError } = await supabase
+        .from('ventas')
+        .select('pedido')
+        .not('pedido', 'is', null)
+        .gte('fecha_entrega', fechaEntregaDesde)
+        .lte('fecha_entrega', fechaEntregaHasta)
+        .range(offset, offset + PAGE - 1)
+
+      if (selError) {
+        console.error('[upload-ventas] error leyendo candidatos a huérfano:', selError.message)
+        break
+      }
+      for (const f of filas ?? []) {
+        const p = f.pedido as string
+        if (esPedidoReal(p) && !pedidosEnArchivoSet.has(p)) candidatosPedidos.add(p)
+      }
+      if (!filas || filas.length < PAGE) break
+    }
+
+    if (candidatosPedidos.size > MAX_HUERFANOS_POR_SYNC) {
+      huerfanosOmitidosPorSeguridad = candidatosPedidos.size
+      console.error(
+        `[upload-ventas] Reconciliación abortada por seguridad: ${candidatosPedidos.size} ` +
+        `pedidos candidatos a huérfano en ventana ${fechaEntregaDesde}..${fechaEntregaHasta} ` +
+        `(tope ${MAX_HUERFANOS_POR_SYNC}). Revisar manualmente antes de subir el tope.`
+      )
+    } else if (candidatosPedidos.size > 0) {
+      const lista = [...candidatosPedidos]
+      for (let i = 0; i < lista.length; i += 500) {
+        const lote = lista.slice(i, i + 500)
+        const { error: deleteHuerfanoError } = await supabase.from('ventas').delete().in('pedido', lote)
+        if (deleteHuerfanoError) {
+          console.error('[upload-ventas] error borrando huérfanos:', deleteHuerfanoError.message)
+          break
+        }
+        pedidosHuerfanosBorrados += lote.length
+      }
+    }
+  }
 
   // ── Refrescar el caché de métricas de cliente ───────────────────────────
   // `client_metrics_cache` (ver supabase/migrations/client_metrics_cache_
@@ -506,6 +585,8 @@ export async function POST(req: NextRequest) {
     entregadas: insertadas - sinEntregar,
     pendientesDeEntrega: sinEntregar,
     pedidosHuerfanosBorrados,
+    huerfanosOmitidosPorSeguridad,
+    reconciliacionActiva: ventanaReconciliacionValida,
     prediccionesNuevas,
     prediccionesCerradas,
     recalibracion,
