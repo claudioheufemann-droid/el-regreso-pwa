@@ -8,7 +8,11 @@ import { getServerUser } from '@/lib/auth'
 // demo actual no la hay. Ya está gateado por esAdminReal.
 export async function GET() {
   const user = await getServerUser()
-  if (!user?.esAdminReal) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+  // esAdminReal && sesionReal: mientras LOGIN_DESACTIVADO_TEMPORAL esté
+  // activo (lib/auth.ts) el "Invitado" del bypass también tiene
+  // esAdminReal=true — sin sesionReal, cualquiera sin cuenta podría listar
+  // vendedores y usarlos para impersonar a cualquiera vía /api/admin/impersonar.
+  if (!user?.esAdminReal || !user.sesionReal) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_KEY

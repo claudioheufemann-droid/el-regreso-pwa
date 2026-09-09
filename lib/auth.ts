@@ -44,6 +44,19 @@ export interface AppUser {
    *  decidir si mostrarse — `isAdmin` de arriba no sirve para eso, se apaga
    *  a propósito mientras se está impersonando. */
   esAdminReal: boolean
+  /**
+   * true sólo si hay una sesión real de Supabase Auth detrás — false para el
+   * "Invitado" que fabrica el bypass de LOGIN_DESACTIVADO_TEMPORAL más abajo
+   * (ese branch pone `esAdminReal: true` para todo el mundo, así que por sí
+   * solo YA NO alcanza para gatear nada sensible). Los endpoints de "Ver como
+   * vendedor" (app/api/admin/impersonar, app/api/admin/vendedores-lista)
+   * deben exigir `esAdminReal && sesionReal`, no sólo `esAdminReal` — si no,
+   * cualquiera con el link (sin cuenta) puede impersonar a cualquier
+   * vendedor sin restricción, incluida su comisión. Ver /identificarse para
+   * la vía pensada para que un vendedor se identifique a sí mismo mientras
+   * el login esté apagado.
+   */
+  sesionReal: boolean
 }
 
 type VistaComo = {
@@ -117,6 +130,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
         puedeVerControlComercial: false,
         veComisionGerente: false,
         esAdminReal: true,
+        sesionReal: false,
         impersonando: vistaComo?.nombre ?? null,
       }
     }
@@ -170,6 +184,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
       puedeVerControlComercial: vistaComo ? false : !!profile.puede_ver_control_comercial,
       veComisionGerente: vistaComo ? false : !!profile.ve_comision_gerente,
       esAdminReal,
+      sesionReal: true,
       impersonando: vistaComo?.nombre ?? null,
     }
   } catch {

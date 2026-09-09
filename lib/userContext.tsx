@@ -26,6 +26,8 @@ interface UserContextType {
   /** Admin real de la cuenta, sin importar si está "viendo como vendedor"
    *  ahora mismo — ver AppUser.esAdminReal en lib/auth.ts. */
   esAdminReal: boolean
+  /** true sólo con sesión real de Supabase Auth — ver AppUser.sesionReal. */
+  sesionReal: boolean
   /** Nombre del vendedor simulado, o null en vista normal. */
   impersonando: string | null
   logout: () => Promise<void>
@@ -40,6 +42,7 @@ const UserContext = createContext<UserContextType>({
   veComisiones: false,
   puedeVerProduccion: false,
   esAdminReal: false,
+  sesionReal: false,
   impersonando: null,
   logout: async () => {},
 })
@@ -76,6 +79,7 @@ export function UserProvider({
         veComisiones: initialUser && !initialUser.impersonando ? puedeVerComisionesEquipo(initialUser) : false,
         puedeVerProduccion: !!initialUser && (initialUser.isAdmin || initialUser.macroArea === 'produccion'),
         esAdminReal: initialUser?.esAdminReal ?? false,
+        sesionReal: initialUser?.sesionReal ?? false,
         impersonando: initialUser?.impersonando ?? null,
         logout,
       }}
