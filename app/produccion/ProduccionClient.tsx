@@ -809,14 +809,14 @@ export default function ProduccionClient({
     // Lunes=0 ... Domingo=6, para alinear con el header de la grilla.
     const offsetPrimerDia = (new Date(anio, mesIdx, 1).getDay() + 6) % 7
 
-    const porDia = new Map<number, { estilo: string; tipo: 'cerveza' | 'kombucha'; urgente: boolean; detalle?: string }[]>()
+    const porDia = new Map<number, { id: string; estilo: string; tipo: 'cerveza' | 'kombucha'; urgente: boolean; detalle?: string }[]>()
     for (const l of plan) {
       const [y, m, d] = l.fechaPlanificada.split('-').map(Number)
       if (y !== anio || m !== mesIdx + 1) continue
       const atrasado = l.fechaPlanificada < hoyISO && l.estado === 'planificado'
       if (!porDia.has(d)) porDia.set(d, [])
       porDia.get(d)!.push({
-        estilo: l.producto, tipo: l.categoria, urgente: atrasado,
+        id: l.id, estilo: l.producto, tipo: l.categoria, urgente: atrasado,
         detalle: atrasado ? 'Debería haber empezado ya, según la fecha planificada.' : (l.motivo ?? undefined),
       })
     }
@@ -1351,7 +1351,7 @@ export default function ProduccionClient({
                             {dia.cocciones.map((coccion, cIdx) => (
                               <div
                                 key={cIdx}
-                                className={`group relative cursor-pointer truncate rounded-sm px-1.5 py-1 text-[10px] font-bold ${
+                                className={`group relative truncate rounded-sm py-1 pl-1.5 pr-4 text-[10px] font-bold ${
                                   coccion.urgente
                                     ? 'border-[1.5px] border-red-500 bg-red-50 text-red-700 shadow-sm'
                                     : 'text-white'
@@ -1369,6 +1369,19 @@ export default function ProduccionClient({
                                     <span>{coccion.detalle || 'Requiere acción'}</span>
                                   </div>
                                 )}
+                                {/* Quitar del plan directo desde el calendario — sin
+                                    esto había que ir a la tabla del Plan Maestro para
+                                    cancelar un lote. Al cancelar, el producto sale de
+                                    productosEnPlan (page.tsx) y su alarma de quiebre
+                                    de stock reaparece sola en Plan Maestro, si sigue
+                                    aplicando. */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); cambiarEstadoLote(coccion.id, 'cancelado') }}
+                                  title="Quitar del plan — reaparece en Alarmas de quiebre de stock si sigue aplicando"
+                                  className="absolute right-0.5 top-0.5 hidden rounded-sm p-0.5 text-current opacity-70 hover:bg-black/20 hover:opacity-100 group-hover:block"
+                                >
+                                  <X size={9} strokeWidth={3} />
+                                </button>
                               </div>
                             ))}
                             {dia.cocciones.length === 0 && (
