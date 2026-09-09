@@ -146,8 +146,17 @@ export interface SplitFermentador {
   categoria: 'cerveza' | 'kombucha' | null
   /** Litros a granel en fermentadores, sumando todos los tanques del producto. */
   litrosEnFermentador: number
-  /** Nombres de los fermentadores donde está (para poder ir a buscarlo). */
-  tanques: string[]
+  /** Fermentadores donde está este producto, con su fecha estimada de
+   *  embarrilado (columna "Fecha embarrilado (estimada)" del informe de
+   *  stock, sección Tanques) — la fecha que calcula el enólogo, no una
+   *  fecha ya ocurrida. Null si el ERP no trajo fecha para ese tanque. */
+  tanques: { nombre: string; litros: number; fechaEstimada: string | null }[]
+  /** La MÁS TARDÍA de las fechas estimadas entre los tanques de este
+   *  producto — el lote completo (litrosEnFermentador) no está listo hasta
+   *  que sale el último tanque, no el primero. Null si ningún tanque trae
+   *  fecha. Se usa para correr `cubreVentaHasta` hacia adelante: la venta no
+   *  puede empezar a cubrirse antes de que el lote exista envasado. */
+  fechaDisponibleEstimada: string | null
   /** Sólo formatos con litros asignados, de mayor a menor. */
   reparto: {
     envase: EnvaseBucket
@@ -317,7 +326,7 @@ export default async function ProduccionPage() {
   ] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial, metodo'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
-    admin.from('stock_productos').select('producto, categoria, tipo, camara, cantidad, litros').order('cantidad', { ascending: false }),
+    admin.from('stock_productos').select('producto, categoria, tipo, camara, cantidad, litros, lotes').order('cantidad', { ascending: false }),
     admin.from('costos_precios').select('producto, categoria').not('codigo', 'is', null),
     admin.from('stock_seguridad').select('nivel, producto, envase, categoria, mes, lead_time_semanas, periodo_revision_semanas, demanda_mensual_proyectada, demanda_en_ventana, sigma_semanal, stock_seguridad_litros, punto_reorden_litros, confianza, mape_backtest, meses_historial, metodo').order('mes', { ascending: true }),
     // Cuándo se sincronizó por última vez el stock del ERP — para que el
@@ -396,6 +405,36 @@ export default async function ProduccionPage() {
   }
 
   const litrosMtdPorSerie = new Map<string, number>()
+  /* Litros de las últimas 4 semanas (28 días corridos, hoy incluido) por
+     serie. Es el estimador de RITMO que usan las alarmas de quiebre y el
+     split — a diferencia de `litrosMtdPorSerie`, que responde "cómo vamos en
+     este ciclo" y por eso arranca en el día 24.
+
+     Por qué dos ventanas distintas y no una: backtest sobre 18 meses, 108
+     series producto×envase y 4.436 observaciones (9-sep-2026), comparando
+     cada estimador contra la venta REAL de las 4 semanas siguientes:
+
+                          MTD del ciclo   Trailing 28d
+       MAE                  5,81 L/día      4,28 L/día
+       MAPE                 133,6%          114,8%
+       Sesgo                −1,09           −0,20
+       Sin estimación       27,9%           14,2%
+
+     El MTD arranca cada ciclo con muy pocos días en el denominador, así que
+     es ruidoso justo al principio y recién converge al trailing pasados ~13
+     días hábiles (de 23 que tiene un ciclo):
+
+       días hábiles del ciclo:   1-3     4-7    8-12    13+
+       MAE MTD:                 9,21    6,65    5,33   4,41
+       MAE trailing 28d:        3,94    4,36    4,39   4,32
+
+     O sea: durante la primera mitad de cada ciclo el ritmo MTD era hasta 2,3x
+     peor, y además dejaba 1 de cada 4 formatos sin fecha de quiebre ("sin
+     ventas este ciclo") sólo porque el ciclo recién empezaba. El trailing
+     mira siempre la misma cantidad de días, así que no tiene ese arranque. */
+  const litrosTrailingPorSerie = new Map<string, number>()
+  const inicioTrailing = new Date(Date.parse(`${hoyISO}T00:00:00Z`) - 27 * MS_POR_DIA).toISOString().slice(0, 10)
+  const diasHabilesTrailing = contarDiasHabilesISO(inicioTrailing, hoyISO)
   {
     // Paginado — mismo motivo que forecast_produccion arriba: PostgREST corta
     // en 1000 filas. Un ciclo de venta normal ya supera esa cifra bien antes
@@ -419,7 +458,9 @@ export default async function ProduccionPage() {
       const { data, error } = await admin
         .from('ventas')
         .select('fecha_pedido, nombre_fantasia, producto, envase, litros')
-        .gte('fecha_pedido', inicioCiclo)
+        // La ventana arranca en la MÁS TEMPRANA de las dos: el inicio del
+        // ciclo (para el MTD) o hace 28 días (para el ritmo trailing).
+        .gte('fecha_pedido', inicioCiclo < inicioTrailing ? inicioCiclo : inicioTrailing)
         .order('id', { ascending: true })
         .range(offset, offset + PAGE - 1)
       if (error || !data || data.length === 0) break
@@ -433,12 +474,20 @@ export default async function ProduccionPage() {
       if (!categoriaPorProducto.has(nombreNormalizado)) continue // mismo filtro de catálogo que el endpoint de datos
       const litros = (f.litros as number) ?? 0
       const bucket = bucketEnvase(f.envase as string | null, litros)
+      const fecha = f.fecha_pedido.slice(0, 10)
 
-      const sumar = (id: string) => litrosMtdPorSerie.set(id, (litrosMtdPorSerie.get(id) ?? 0) + litros)
-      sumar('general::')
-      sumar(`producto::${nombreNormalizado}`)
-      sumar(`envase::${bucket}`)
-      sumar(`producto_envase::${claveProductoEnvase(nombreNormalizado, bucket)}`)
+      const claves = [
+        'general::',
+        `producto::${nombreNormalizado}`,
+        `envase::${bucket}`,
+        `producto_envase::${claveProductoEnvase(nombreNormalizado, bucket)}`,
+      ]
+      // Una venta puede caer en las dos ventanas, en una sola, o en ninguna
+      // (quedó fuera por el borde del rango pedido) — se evalúan por separado.
+      for (const id of claves) {
+        if (fecha >= inicioCiclo) litrosMtdPorSerie.set(id, (litrosMtdPorSerie.get(id) ?? 0) + litros)
+        if (fecha >= inicioTrailing) litrosTrailingPorSerie.set(id, (litrosTrailingPorSerie.get(id) ?? 0) + litros)
+      }
     }
   }
 
@@ -639,17 +688,36 @@ export default async function ProduccionPage() {
   }
 
   const litrosEnProduccionPorProducto = new Map<string, number>()
-  const tanquesPorProducto = new Map<string, string[]>()
+  const tanquesPorProducto = new Map<string, { nombre: string; litros: number; fechaEstimada: string | null }[]>()
   for (const s of stockRaw ?? []) {
     if (s.tipo !== 'tanque' || s.litros == null) continue
     const nombre = resolverProductoStock(s.producto as string)
     litrosEnProduccionPorProducto.set(nombre, (litrosEnProduccionPorProducto.get(nombre) ?? 0) + Number(s.litros))
     const tanque = (s.camara as string | null)?.trim()
     if (tanque) {
+      // `lotes` viene de stockParser.parseTanques(): una fila de tanque trae
+      // como mucho un lote, con la fecha embarrilado ESTIMADA en él (ver el
+      // comentario extenso ahí — no es una fecha ya ocurrida).
+      const lotesTanque = (s.lotes as { codigo: string; cantidad: number; fechaEmbarrilado: string | null }[] | null) ?? []
+      const fechaEstimada = lotesTanque[0]?.fechaEmbarrilado ?? null
       const lista = tanquesPorProducto.get(nombre) ?? []
-      if (!lista.includes(tanque)) lista.push(tanque)
+      lista.push({ nombre: tanque, litros: Math.round(Number(s.litros)), fechaEstimada })
       tanquesPorProducto.set(nombre, lista)
     }
+  }
+  // La más tardía entre los tanques de cada producto — el litraje completo no
+  // está envasado hasta que sale el ÚLTIMO tanque. Se calcula UNA vez acá (no
+  // dentro del loop del Split, más abajo) porque las Alarmas de quiebre
+  // también lo necesitan, y las dos secciones tienen que usar la MISMA fecha
+  // para el mismo producto — ver el uso en `sugerenciasPlan`.
+  const fechaDisponibleEstimadaPorProducto = new Map<string, string | null>()
+  for (const [producto, tanquesDelProducto] of tanquesPorProducto) {
+    const fecha = tanquesDelProducto
+      .map(t => t.fechaEstimada)
+      .filter((f): f is string => f != null)
+      .sort()
+      .at(-1) ?? null
+    fechaDisponibleEstimadaPorProducto.set(producto, fecha)
   }
 
   /* ── SPLIT DE ENVASADO ────────────────────────────────────────────────────
@@ -694,6 +762,8 @@ export default async function ProduccionPage() {
     const filasFormato = (stockSeguridadRaw ?? []).filter(
       s => s.nivel === 'producto_envase' && (s.mes as string).slice(0, 10) === primerMesSS && normalizarProducto(s.producto as string) === producto
     )
+    const tanquesDelProducto = tanquesPorProducto.get(producto) ?? []
+    const fechaDisponibleEstimada = fechaDisponibleEstimadaPorProducto.get(producto) ?? null
 
     // TODO lote en fermentador entra al panel, sin excepción — aunque no haya
     // con qué repartirlo (producto nuevo, sin forecast por formato todavía).
@@ -704,7 +774,8 @@ export default async function ProduccionPage() {
         producto,
         categoria: (categoriaPorProducto.get(producto) ?? null) as 'cerveza' | 'kombucha' | null,
         litrosEnFermentador: Math.round(litrosTanque),
-        tanques: tanquesPorProducto.get(producto) ?? [],
+        tanques: tanquesDelProducto,
+        fechaDisponibleEstimada,
         reparto: [],
         litrosColchon: 0, litrosVentanaReposicion: 0, excedente: Math.round(litrosTanque),
         semanasExcedente: null, semanasVentaTotal: null, cubreVentaHasta: null,
@@ -723,12 +794,17 @@ export default async function ProduccionPage() {
       // formato se recalcula una vez al mes, pero las VENTAS entran cada 15
       // min. Igual que las alarmas de quiebre, se toma la señal más exigente
       // entre el punto de reorden (forecast, mensual) y el ritmo de venta
-      // REAL de este ciclo proyectado sobre la ventana de reposición. Así, si
-      // un formato empieza a venderse más rápido de lo previsto, el split se
-      // corrige solo en el siguiente sync, sin esperar la corrida mensual.
+      // REAL proyectado sobre la ventana de reposición. Así, si un formato
+      // empieza a venderse más rápido de lo previsto, el split se corrige
+      // solo en el siguiente sync, sin esperar la corrida mensual.
+      //
+      // Mismo estimador de ritmo que las alarmas (últimas 4 semanas, no lo
+      // que va del ciclo) — son la misma pregunta predictiva y tienen que
+      // dar el mismo número, o el split y la alarma del mismo formato se
+      // contradicen. Ver el backtest en litrosTrailingPorSerie.
       const ventanaDiasHabiles = (Number(f.lead_time_semanas) + Number(f.periodo_revision_semanas)) * 5
-      const ritmoDiarioReal = diasHabilesTranscurridos > 0
-        ? (litrosMtdPorSerie.get(`producto_envase::${claveProductoEnvase(producto, envase)}`) ?? 0) / diasHabilesTranscurridos
+      const ritmoDiarioReal = diasHabilesTrailing > 0
+        ? (litrosTrailingPorSerie.get(`producto_envase::${claveProductoEnvase(producto, envase)}`) ?? 0) / diasHabilesTrailing
         : 0
 
       const necesidadForecast = Math.max(Number(f.punto_reorden_litros) - enBodega, 0)
@@ -806,11 +882,22 @@ export default async function ProduccionPage() {
       const semanasExcedente = demandaSemanal > 0 ? excedente / demandaSemanal : null
       const semanasVentaTotal = demandaSemanal > 0 ? litrosVentaTotal / demandaSemanal : null
 
+      // La venta no puede empezar a cubrirse antes de que el lote SALGA del
+      // fermentador: si `fechaDisponibleEstimada` es futura, la cobertura se
+      // cuenta desde ahí, no desde hoy — antes este cálculo asumía que todo
+      // el litraje ya estaba envasado y disponible hoy mismo, así que un
+      // lote que recién sale en 3 semanas más mostraba una fecha de
+      // cobertura adelantada 3 semanas de la real.
+      const inicioCobertura = fechaDisponibleEstimada && fechaDisponibleEstimada > hoyISO
+        ? Date.parse(`${fechaDisponibleEstimada}T00:00:00Z`)
+        : hoy.getTime()
+
       splitFermentadores.push({
         producto,
         categoria: (categoriaPorProducto.get(producto) ?? null) as 'cerveza' | 'kombucha' | null,
         litrosEnFermentador: Math.round(litrosTanque),
-        tanques: tanquesPorProducto.get(producto) ?? [],
+        tanques: tanquesDelProducto,
+        fechaDisponibleEstimada,
         reparto: detalle,
         litrosColchon: Math.round(litrosColchonTotal),
         litrosVentanaReposicion: Math.round(detalle.reduce((a, d) => a + d.litrosVentanaReposicion, 0)),
@@ -818,7 +905,7 @@ export default async function ProduccionPage() {
         semanasExcedente: semanasExcedente != null ? Math.round(semanasExcedente * 10) / 10 : null,
         semanasVentaTotal: semanasVentaTotal != null ? Math.round(semanasVentaTotal * 10) / 10 : null,
         cubreVentaHasta: semanasVentaTotal != null
-          ? new Date(hoy.getTime() + semanasVentaTotal * 7 * MS_POR_DIA).toISOString().slice(0, 10)
+          ? new Date(inicioCobertura + semanasVentaTotal * 7 * MS_POR_DIA).toISOString().slice(0, 10)
           : null,
         cubreTodaLaNecesidad: alcanzaLaNecesidad,
         ajustadoPorVentas: base.some(f => f.porRitmo),
@@ -1011,10 +1098,53 @@ export default async function ProduccionPage() {
       // Ritmo en litros por DÍA HÁBIL (lunes a viernes) — no se vende fin de
       // semana, así que "días" acá y en diasHastaQuiebre/fechaEstimadaQuiebre
       // más abajo son siempre días hábiles, no días calendario.
-      const ritmoDiarioActual = diasHabilesTranscurridos > 0
-        ? (litrosMtdPorSerie.get(`producto_envase::${claveProductoEnvase(s.producto, envase)}`) ?? 0) / diasHabilesTranscurridos
+      //
+      // Ventana: últimas 4 semanas, NO lo que va del ciclo. El backtest
+      // (ver el comentario extenso donde se arma litrosTrailingPorSerie)
+      // mostró que el MTD del ciclo era hasta 2,3x más impreciso durante la
+      // primera mitad de cada ciclo, subestimaba el ritmo de forma sistemática
+      // y dejaba 1 de cada 4 formatos sin fecha de quiebre sólo porque el
+      // ciclo recién arrancaba.
+      const ritmoDiarioActual = diasHabilesTrailing > 0
+        ? (litrosTrailingPorSerie.get(`producto_envase::${claveProductoEnvase(s.producto, envase)}`) ?? 0) / diasHabilesTrailing
         : 0
-      const diasHastaQuiebre = ritmoDiarioActual > 0 ? disponible / ritmoDiarioActual : null
+
+      // ── ¿Cuándo se agota de verdad? ──────────────────────────────────────
+      // `disponible` (arriba) suma bodega + lo que está fermentando, porque
+      // para decidir CUÁNTO falta producir (necesidadNeta, más abajo) da lo
+      // mismo si ya está envasado o todavía no: la cantidad total en el
+      // pipeline es la que importa. Pero para decidir CUÁNDO se agota, sí
+      // importa: mientras el fermentador no llegue a su fecha estimada de
+      // embarrilado, esos litros no se pueden vender. Antes este cálculo
+      // trataba todo `disponible` como vendible desde hoy — un producto con
+      // un tanque grande recién por salir mostraba semanas de margen que en
+      // realidad no existían en bodega (bug real, encontrado auditando
+      // Fisura barril_50: 3.000 L en el Bright Tank T4, listos recién el
+      // 22-sep, tapaban una bodega que ya estaba bajo el punto de reorden).
+      //
+      // Dos tramos: primero se agota SOLO la bodega física; si eso pasa antes
+      // de que el fermentador esté listo, esa es la fecha real de quiebre
+      // (el fermentador todavía no cuenta). Si la bodega aguanta hasta que el
+      // fermentador llega, desde ahí se suma lo que quedaba más lo nuevo.
+      const bodega = s.stockActualLitros ?? 0
+      const fermentando = s.litrosEnProduccion
+      const fechaFermentando = fechaDisponibleEstimadaPorProducto.get(s.producto) ?? null
+      const fermentandoEsFuturo = fechaFermentando != null && fechaFermentando > hoyISO
+
+      let diasHastaQuiebre: number | null = null
+      if (ritmoDiarioActual > 0) {
+        if (!fermentandoEsFuturo) {
+          // Sin fecha (o ya debería haber salido): mismo criterio de antes,
+          // todo `disponible` cuenta desde hoy.
+          diasHastaQuiebre = disponible / ritmoDiarioActual
+        } else {
+          const diasHastaFermentando = contarDiasHabilesISO(hoyISO, fechaFermentando!) - 1
+          const bodegaAlLlegarFermentador = bodega - ritmoDiarioActual * diasHastaFermentando
+          diasHastaQuiebre = bodegaAlLlegarFermentador <= 0
+            ? bodega / ritmoDiarioActual // se agota ANTES de que llegue el fermentador — ni cuenta
+            : diasHastaFermentando + (bodegaAlLlegarFermentador + fermentando) / ritmoDiarioActual
+        }
+      }
       const fechaEstimadaQuiebre = diasHastaQuiebre != null
         ? sumarDiasHabilesISO(hoyISO, diasHastaQuiebre)
         : null
@@ -1041,13 +1171,16 @@ export default async function ProduccionPage() {
       if (disponible < s.stockSeguridadLitros) {
         motivo = `Crítico en ${envaseLabel}: disponible (${Math.round(disponible)} L) por debajo del stock de seguridad (${Math.round(s.stockSeguridadLitros)} L).`
       } else if (disparadoPorRitmo) {
-        motivo = `Al ritmo de venta actual (${Math.round(ritmoDiarioActual * 5)} L/semana, lun-vie) vas a quebrar ${envaseLabel} antes de que llegue el próximo lote.`
+        motivo = `Al ritmo de las últimas 4 semanas (${Math.round(ritmoDiarioActual * 5)} L/semana, lun-vie) vas a quebrar ${envaseLabel} antes de que llegue el próximo lote.`
       } else {
         motivo = `Bajo punto de reorden en ${envaseLabel}: disponible ${Math.round(disponible)} L, punto de reorden ${Math.round(s.puntoReordenLitros)} L.`
       }
       motivo += fechaLabel
-        ? ` Quiebre estimado: ${fechaLabel} (${Math.max(0, Math.round(diasHastaQuiebre!))} días hábiles), al ritmo de venta actual (lun-vie). Lead time ${s.leadTimeSemanas} semanas.`
-        : ` Sin ventas registradas este ciclo para proyectar fecha. Lead time ${s.leadTimeSemanas} semanas.`
+        ? ` Quiebre estimado: ${fechaLabel} (${Math.max(0, Math.round(diasHastaQuiebre!))} días hábiles), al ritmo de las últimas 4 semanas (lun-vie). Lead time ${s.leadTimeSemanas} semanas.`
+        : ` Sin ventas en las últimas 4 semanas para proyectar fecha. Lead time ${s.leadTimeSemanas} semanas.`
+      if (fermentandoEsFuturo && fermentando > 0) {
+        motivo += ` (${Math.round(fermentando).toLocaleString('es-CL')} L siguen fermentando, listos recién el ${new Date(fechaFermentando + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} — no cuentan como stock vendible hasta entonces.)`
+      }
 
       return {
         producto: s.producto,

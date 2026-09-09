@@ -278,10 +278,21 @@ function parseEnvases(filas: Fila[], inicio: number, camara: string, mapaFechas:
 /**
  * Sección "Stock de producto en tanques": tabla plana, una fila por
  * fermentador, con el producto en la columna A.
- *   [producto, codigo, tanque, litros]
+ *   [producto, codigo, tanque, litros, lote, fechaEmbarriladoEstimada]
  * Termina en la fila "Total". Cada fila es su propio "lote" en curso, así que
  * no se agrupa por producto acá: el fermentador va en `camara` para poder
  * mostrar de dónde sale cada litro.
+ *
+ * "Fecha embarrilado (estimada)" (columna F, 6-sep-2026): a diferencia de la
+ * fecha de embarrilado real que se cruza más arriba (un hecho ya ocurrido,
+ * para barriles/latas que ya salieron del tanque), esta es una ESTIMACIÓN de
+ * cuándo el ENÓLOGO calcula que este lote va a salir del fermentador — el
+ * lote todavía no existe como producto envasado. Se guarda en el mismo campo
+ * `lotes[0].fechaEmbarrilado` (mismo shape, incluso si el significado
+ * temporal es distinto: "cuándo pasó" vs. "cuándo se estima que pase") para
+ * no duplicar el tipo — ningún otro código lee `lotes` de una fila tipo
+ * 'tanque' todavía, así que no hay riesgo de que alguien la confunda con una
+ * fecha ya ocurrida.
  */
 function parseTanques(filas: Fila[], inicio: number): StockProductoParsed[] {
   const productos: StockProductoParsed[] = []
@@ -291,10 +302,13 @@ function parseTanques(filas: Fila[], inicio: number): StockProductoParsed[] {
     if (a == null || String(a).trim() === '') continue
     const producto = String(a).trim()
     if (norm(producto) === FIN_SECCION) break
-    // La fila de encabezado ("Producto | Código producto | Tanque | Litros")
-    // se salta sola: sus litros no son numéricos.
+    // La fila de encabezado ("Producto | Código producto | Tanque | Litros |
+    // Lote | Fecha embarrilado (estimada)") se salta sola: sus litros no son
+    // numéricos.
     const litros = Number(f[3])
     if (!Number.isFinite(litros) || litros <= 0) continue
+    const lote = f[4] != null ? String(f[4]).trim() : null
+    const fechaEstimada = typeof f[5] === 'number' ? serialAFechaISO(f[5]) : null
     productos.push({
       tipo: 'tanque',
       camara: f[2] != null ? String(f[2]).trim() : 'Sin tanque',
@@ -303,7 +317,7 @@ function parseTanques(filas: Fila[], inicio: number): StockProductoParsed[] {
       categoria: categoriaDe(producto),
       cantidad: 1,
       litros,
-      lotes: [],
+      lotes: lote ? [{ codigo: lote, cantidad: 1, fechaEmbarrilado: fechaEstimada }] : [],
     })
   }
   return productos

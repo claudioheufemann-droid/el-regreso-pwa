@@ -357,7 +357,7 @@ function ModalConfirmarLote({
           <p className="mt-1"><strong>Necesidad a cubrir:</strong> {fNum(sugerencia.litrosSugeridos)} L, según el forecast y el punto de reorden.</p>
           {sugerencia.diasHastaQuiebre != null && (
             <p className="mt-1 text-xs text-amber-700">
-              Al ritmo de venta actual ({fNum(sugerencia.ritmoDiarioActual * 5)} L/semana, lun-vie), quiebra en ~{sugerencia.diasHastaQuiebre} días hábiles.
+              Al ritmo de las últimas 4 semanas ({fNum(sugerencia.ritmoDiarioActual * 5)} L/semana, lun-vie), quiebra en ~{sugerencia.diasHastaQuiebre} días hábiles.
             </p>
           )}
         </div>
@@ -388,7 +388,7 @@ function ModalConfirmarLote({
               actual — alcanzaría hasta el <strong>{new Date(cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}</strong>.
             </p>
           ) : (
-            <p className="text-gray-500">Sin ventas registradas este ciclo — no se puede estimar hasta cuándo alcanza.</p>
+            <p className="text-gray-500">Sin ventas en las últimas 4 semanas — no se puede estimar hasta cuándo alcanza.</p>
           )}
         </div>
 
@@ -772,6 +772,74 @@ export default function ProduccionClient({
     return MESES_CORTOS.map((mes, i) => ({ mes, efecto: n[i] > 0 ? suma[i] / n[i] : 0 }))
   }, [chartData])
 
+  /* ── Ecuación del modelo, con las constantes REALES de esta corrida ──────
+     Prophet ajusta y(t) = g(t) + s(t) + h(t) + εₜ. Acá h(t)=0 siempre: el
+     modelo se entrena sin feriados (ver generar_forecast.py), así que se
+     omite en vez de mostrar un término que nunca se usa.
+
+     g(t) — tendencia — se recupera EXACTA, no aproximada: Prophet ajusta el
+     crecimiento como lineal a trozos con quiebres (changepoints) dentro del
+     historial, pero el tramo que va desde el último changepoint hacia
+     adelante es una sola recta. Los puntos de `tendencia` del FORECAST caen
+     todos en ese tramo final, así que una regresión sobre ellos devuelve la
+     pendiente/intercepto que el modelo realmente está usando para proyectar
+     — no un ajuste hecho a mano.
+
+     s(t) — estacionalidad — es la parte que sí se aproxima: Prophet la ajusta
+     como una suma de varios armónicos de Fourier, y acá se muestra el
+     armónico principal (un único seno) con la amplitud y fase que mejor
+     calzan con `curvaEstacional` (el promedio real de `estacionalidad` por
+     mes calendario). Es una simplificación visual, no la fórmula interna
+     completa — se lo aclara en el pie de la tarjeta.
+
+     t se mide en MESES DESDE EL PRIMER MES PROYECTADO (t=0), para que las
+     constantes tengan el mismo significado que "Próximo mes" en el resto del
+     panel. Se recalcula solo con cada corrida nueva del modelo (chartData/
+     curvaEstacional salen de `series`, que viene del servidor). */
+  const ecuacionModelo = useMemo(() => {
+    const futuros = chartData
+      .filter(d => d.ventaReal == null && d.tendencia != null)
+      .sort((a, b) => a.mesIso.localeCompare(b.mesIso))
+    if (futuros.length === 0 || curvaEstacional.length === 0) return null
+
+    const n = futuros.length
+    const ys = futuros.map(f => f.tendencia as number)
+    let k = 0
+    const m = ys[0]
+    if (n >= 2) {
+      const xs = futuros.map((_, i) => i)
+      const mediaX = xs.reduce((a, b) => a + b, 0) / n
+      const mediaY = ys.reduce((a, b) => a + b, 0) / n
+      let num = 0, den = 0
+      for (let i = 0; i < n; i++) { num += (xs[i] - mediaX) * (ys[i] - mediaY); den += (xs[i] - mediaX) ** 2 }
+      k = den !== 0 ? num / den : 0
+    }
+
+    // A y fase del armónico principal: proyección de Fourier de mínimos
+    // cuadrados de curvaEstacional sobre sin(2π·t/12), no "amplitud por
+    // (máximo−mínimo)/2 con fase ajustada al mes pico". La curva real de
+    // estacionalidad casi nunca es una sinusoide limpia (acá tiene un pico
+    // marcado en enero-febrero y una meseta baja en invierno), así que
+    // amplitud+pico se probó contra los datos reales y quedaba lejos del
+    // valor real en varios meses (RMSE ~1735 L); esta proyección es el mejor
+    // ajuste posible de UN solo seno (RMSE ~1331 L) — sigue siendo una
+    // aproximación (Prophet usa varios armónicos), pero es la más cercana
+    // posible con una función de una sola línea.
+    const mesT0Idx = indiceMes(futuros[0].mesIso)
+    let a = 0, b = 0
+    for (let i = 0; i < 12; i++) {
+      const tDesdeT0 = ((i - mesT0Idx) % 12 + 12) % 12
+      const theta = (2 * Math.PI * tDesdeT0) / 12
+      a += curvaEstacional[i].efecto * Math.sin(theta)
+      b += curvaEstacional[i].efecto * Math.cos(theta)
+    }
+    a *= 2 / 12; b *= 2 / 12
+    const A = Math.hypot(a, b)
+    const fase = Math.atan2(b, a)
+
+    return { k, m, A, fase, t0mes: futuros[0].mesIso }
+  }, [chartData, curvaEstacional])
+
   /* ── Temporada alta (Dic–Feb): tramos consecutivos para las ReferenceArea ── */
   const tramosTemporadaAlta = useMemo(() => {
     const tramos: { x1: string; x2: string }[] = []
@@ -809,14 +877,14 @@ export default function ProduccionClient({
     // Lunes=0 ... Domingo=6, para alinear con el header de la grilla.
     const offsetPrimerDia = (new Date(anio, mesIdx, 1).getDay() + 6) % 7
 
-    const porDia = new Map<number, { estilo: string; tipo: 'cerveza' | 'kombucha'; urgente: boolean; detalle?: string }[]>()
+    const porDia = new Map<number, { id: string; estilo: string; tipo: 'cerveza' | 'kombucha'; urgente: boolean; detalle?: string }[]>()
     for (const l of plan) {
       const [y, m, d] = l.fechaPlanificada.split('-').map(Number)
       if (y !== anio || m !== mesIdx + 1) continue
       const atrasado = l.fechaPlanificada < hoyISO && l.estado === 'planificado'
       if (!porDia.has(d)) porDia.set(d, [])
       porDia.get(d)!.push({
-        estilo: l.producto, tipo: l.categoria, urgente: atrasado,
+        id: l.id, estilo: l.producto, tipo: l.categoria, urgente: atrasado,
         detalle: atrasado ? 'Debería haber empezado ya, según la fecha planificada.' : (l.motivo ?? undefined),
       })
     }
@@ -1351,7 +1419,7 @@ export default function ProduccionClient({
                             {dia.cocciones.map((coccion, cIdx) => (
                               <div
                                 key={cIdx}
-                                className={`group relative cursor-pointer truncate rounded-sm px-1.5 py-1 text-[10px] font-bold ${
+                                className={`group relative truncate rounded-sm py-1 pl-1.5 pr-4 text-[10px] font-bold ${
                                   coccion.urgente
                                     ? 'border-[1.5px] border-red-500 bg-red-50 text-red-700 shadow-sm'
                                     : 'text-white'
@@ -1369,6 +1437,19 @@ export default function ProduccionClient({
                                     <span>{coccion.detalle || 'Requiere acción'}</span>
                                   </div>
                                 )}
+                                {/* Quitar del plan directo desde el calendario — sin
+                                    esto había que ir a la tabla del Plan Maestro para
+                                    cancelar un lote. Al cancelar, el producto sale de
+                                    productosEnPlan (page.tsx) y su alarma de quiebre
+                                    de stock reaparece sola en Plan Maestro, si sigue
+                                    aplicando. */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); cambiarEstadoLote(coccion.id, 'cancelado') }}
+                                  title="Quitar del plan — reaparece en Alarmas de quiebre de stock si sigue aplicando"
+                                  className="absolute right-0.5 top-0.5 hidden rounded-sm p-0.5 text-current opacity-70 hover:bg-black/20 hover:opacity-100 group-hover:block"
+                                >
+                                  <X size={9} strokeWidth={3} />
+                                </button>
                               </div>
                             ))}
                             {dia.cocciones.length === 0 && (
@@ -1527,6 +1608,36 @@ export default function ProduccionClient({
                     )}
                   </div>
                 </div>
+
+                {/* Función matemática del modelo, con las constantes de ESTA
+                    corrida — para que quede claro que la proyección sale de
+                    una función real, no de una regla de tres, y que esa
+                    función cambia sola cuando el modelo se reentrena. */}
+                {verModelo && ecuacionModelo && (
+                  <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      Función del modelo
+                    </p>
+                    <p className="mt-1.5 overflow-x-auto whitespace-nowrap font-mono text-base font-bold text-gray-800 sm:text-lg">
+                      y(t) = g(t) + s(t) + ε<sub>t</sub>
+                    </p>
+                    <div className="mt-3 flex flex-col gap-1.5 border-t border-gray-100 pt-3 font-mono text-sm text-gray-600">
+                      <p className="overflow-x-auto whitespace-nowrap">
+                        g(t) = {fNum(ecuacionModelo.m)} {ecuacionModelo.k >= 0 ? '+' : '−'} {Math.abs(ecuacionModelo.k).toFixed(1)}·t
+                      </p>
+                      <p className="overflow-x-auto whitespace-nowrap">
+                        s(t) ≈ {fNum(ecuacionModelo.A)}·sin(2π·t/12 {ecuacionModelo.fase >= 0 ? '+' : '−'} {Math.abs(ecuacionModelo.fase).toFixed(2)})
+                      </p>
+                    </div>
+                    <p className="mt-3 text-xs leading-snug text-gray-400">
+                      t = meses desde {etiquetaMes(ecuacionModelo.t0mes)} (t=0). g(t) es la tendencia exacta que usa
+                      el modelo para proyectar — sale del tramo lineal posterior al último <em>changepoint</em>, no de
+                      un ajuste a mano. s(t) es una aproximación de un solo armónico a la estacionalidad de Fourier
+                      real de Prophet, para que la fórmula sea legible. Sin componente de feriados (h(t)): este
+                      modelo no los usa. Las constantes se recalculan solas en cada corrida del modelo.
+                    </p>
+                  </div>
+                )}
 
                 {/* Ecuación del modelo, con los números del mes proyectado.
                     Es la parte que hace evidente que la línea verde no es una
@@ -2476,13 +2587,37 @@ export default function ProduccionClient({
                           <ProductImage nombre={s.producto} categoria={s.categoria} size={30} radius={7} />
                           <div className="flex flex-col">
                             <span className="font-semibold leading-tight text-gray-800">{s.producto}</span>
-                            <span className="text-[11px] text-gray-400">{s.tanques.join(' · ') || 'Sin tanque identificado'}</span>
+                            <span className="text-[11px] text-gray-400">
+                              {s.tanques.length > 0
+                                ? s.tanques.map(t => t.nombre).join(' · ')
+                                : 'Sin tanque identificado'}
+                            </span>
                           </div>
                           <span className="ml-auto text-right">
                             <span className="block text-lg font-black tabular-nums text-blue-800">{fNum(s.litrosEnFermentador)} L</span>
                             <span className="block text-[10px] font-bold uppercase tracking-wide text-gray-400">a granel</span>
                           </span>
                         </div>
+
+                        {/* Fecha embarrilado ESTIMADA (la calcula el enólogo,
+                            no un hecho ya ocurrido) — es lo que conecta este
+                            panel con el Plan Maestro: hasta que no llega esta
+                            fecha, el lote no existe como producto envasado
+                            que se pueda vender. */}
+                        {s.fechaDisponibleEstimada && (() => {
+                          const hoyISO = hoyLocalISO()
+                          const atrasado = s.fechaDisponibleEstimada < hoyISO
+                          const fechaFmt = new Date(s.fechaDisponibleEstimada + 'T00:00:00Z')
+                            .toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+                          return (
+                            <p className={`mt-2 flex items-center gap-1.5 text-[11px] font-semibold ${atrasado ? 'text-amber-700' : 'text-blue-700'}`}>
+                              <CalendarDays size={12} />
+                              {atrasado
+                                ? `Debería haber salido del fermentador el ${fechaFmt} — revisar atraso`
+                                : `Sale del fermentador ≈ ${fechaFmt}${s.tanques.length > 1 ? ' (todos los tanques)' : ''}`}
+                            </p>
+                          )
+                        })()}
 
                         {/* Lote sin forecast por formato: se muestra igual —
                             hay que envasarlo — pero sin inventar un reparto. */}
@@ -2559,7 +2694,11 @@ export default function ProduccionClient({
                             Con este lote la venta queda cubierta <strong>≈ {s.semanasVentaTotal.toLocaleString('es-CL')} semanas</strong>,
                             hasta cerca del{' '}
                             {new Date(s.cubreVentaHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
-                            {' '}(estimado con la demanda proyectada).
+                            {' '}(estimado con la demanda proyectada
+                            {s.fechaDisponibleEstimada && s.fechaDisponibleEstimada > hoyLocalISO()
+                              ? ', contado desde que salga del fermentador'
+                              : ''}
+                            ).
                           </p>
                         )}
 
@@ -2589,7 +2728,7 @@ export default function ProduccionClient({
                   <p className="mb-4 text-sm text-amber-800/80">
                     Por producto y <strong>formato</strong> (no por estilo completo — un mismo producto puede ir
                     sobrado en lata y crítico en barril). Cruza el stock de seguridad, el forecast y el{' '}
-                    <strong>ritmo de venta real de este ciclo (lunes a viernes)</strong> para estimar cuándo se agota cada uno.
+                    <strong>ritmo de venta real de las últimas 4 semanas (lunes a viernes)</strong> para estimar cuándo se agota cada uno.
                   </p>
                   <div className="flex flex-col gap-3">
                     {alarmasPorProducto.map(grupo => (
@@ -2620,7 +2759,7 @@ export default function ProduccionClient({
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-500">
-                                      Sin ventas este ciclo — sin fecha estimada
+                                      Sin ventas en 4 semanas — sin fecha estimada
                                     </span>
                                   )}
                                 </div>

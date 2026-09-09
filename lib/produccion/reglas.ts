@@ -26,13 +26,24 @@ export const ENVASE_LABEL: Record<EnvaseBucket, string> = {
 }
 
 /** Litros de un barril → familia de tamaño. Múltiplos de 30 (30/60/90/120…)
- *  son N barriles de 30L en una sola línea; 50L exacto es la otra medida
- *  estándar. El resto (growlers, casos atípicos) va a "otros". */
+ *  son N barriles de 30L en una sola línea; múltiplos de 50 (50/100/150…) son
+ *  N de 50L. El resto (growlers, casos atípicos) va a "otros".
+ *
+ * Antes sólo se aceptaba 50 exacto para barril_50 (no sus múltiplos) — no
+ * generó números mal en la práctica porque hasta ahora cada fila de venta
+ * viene con UN barril por línea (litros=30 o litros=50, nunca la suma de
+ * varios), pero si algún día el ERP agrupa 2+ barriles de 50L en una sola
+ * fila (como ya hace con los de 30L), esa venta se hubiera perdido en
+ * "otros" en vez de sumar al ritmo real de barril_50 — silencioso y directo
+ * a las alarmas de quiebre de stock. Corregido preventivamente, mismo
+ * criterio que ya se usaba para 30L. 150 (múltiplo de ambos) se resuelve a
+ * favor de 30L, igual que antes — no hay forma de distinguir 5×30L de 3×50L
+ * sólo con el total. */
 export function bucketEnvase(envase: string | null, litros: number): EnvaseBucket {
   if (envase === 'Lata (354 ml)' || envase === 'Lata (473 ml)') return 'lata'
   if (envase === 'Barril') {
     if (litros > 0 && litros % 30 === 0) return 'barril_30'
-    if (litros === 50) return 'barril_50'
+    if (litros > 0 && litros % 50 === 0) return 'barril_50'
   }
   return 'otros'
 }
