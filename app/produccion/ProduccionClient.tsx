@@ -772,6 +772,63 @@ export default function ProduccionClient({
     return MESES_CORTOS.map((mes, i) => ({ mes, efecto: n[i] > 0 ? suma[i] / n[i] : 0 }))
   }, [chartData])
 
+  /* ── Ecuación del modelo, con las constantes REALES de esta corrida ──────
+     Prophet ajusta y(t) = g(t) + s(t) + h(t) + εₜ. Acá h(t)=0 siempre: el
+     modelo se entrena sin feriados (ver generar_forecast.py), así que se
+     omite en vez de mostrar un término que nunca se usa.
+
+     g(t) — tendencia — se recupera EXACTA, no aproximada: Prophet ajusta el
+     crecimiento como lineal a trozos con quiebres (changepoints) dentro del
+     historial, pero el tramo que va desde el último changepoint hacia
+     adelante es una sola recta. Los puntos de `tendencia` del FORECAST caen
+     todos en ese tramo final, así que una regresión sobre ellos devuelve la
+     pendiente/intercepto que el modelo realmente está usando para proyectar
+     — no un ajuste hecho a mano.
+
+     s(t) — estacionalidad — es la parte que sí se aproxima: Prophet la ajusta
+     como una suma de varios armónicos de Fourier, y acá se muestra el
+     armónico principal (un único seno) con la amplitud y fase que mejor
+     calzan con `curvaEstacional` (el promedio real de `estacionalidad` por
+     mes calendario). Es una simplificación visual, no la fórmula interna
+     completa — se lo aclara en el pie de la tarjeta.
+
+     t se mide en MESES DESDE EL PRIMER MES PROYECTADO (t=0), para que las
+     constantes tengan el mismo significado que "Próximo mes" en el resto del
+     panel. Se recalcula solo con cada corrida nueva del modelo (chartData/
+     curvaEstacional salen de `series`, que viene del servidor). */
+  const ecuacionModelo = useMemo(() => {
+    const futuros = chartData
+      .filter(d => d.ventaReal == null && d.tendencia != null)
+      .sort((a, b) => a.mesIso.localeCompare(b.mesIso))
+    if (futuros.length === 0 || curvaEstacional.length === 0) return null
+
+    const n = futuros.length
+    const ys = futuros.map(f => f.tendencia as number)
+    let k = 0
+    const m = ys[0]
+    if (n >= 2) {
+      const xs = futuros.map((_, i) => i)
+      const mediaX = xs.reduce((a, b) => a + b, 0) / n
+      const mediaY = ys.reduce((a, b) => a + b, 0) / n
+      let num = 0, den = 0
+      for (let i = 0; i < n; i++) { num += (xs[i] - mediaX) * (ys[i] - mediaY); den += (xs[i] - mediaX) ** 2 }
+      k = den !== 0 ? num / den : 0
+    }
+
+    const efectos = curvaEstacional.map(c => c.efecto)
+    const maxEfecto = Math.max(...efectos)
+    const minEfecto = Math.min(...efectos)
+    const A = (maxEfecto - minEfecto) / 2
+    const mesPicoIdx = efectos.indexOf(maxEfecto)
+    const mesT0Idx = indiceMes(futuros[0].mesIso)
+    // Fase tal que sin(2π·t/12 + fase) sea máximo cuando el mes calendario
+    // coincide con el mes pico real (delta = distancia en meses desde t=0).
+    const delta = ((mesPicoIdx - mesT0Idx) % 12 + 12) % 12
+    const fase = Math.PI / 2 - (2 * Math.PI / 12) * delta
+
+    return { k, m, A, fase, t0mes: futuros[0].mesIso }
+  }, [chartData, curvaEstacional])
+
   /* ── Temporada alta (Dic–Feb): tramos consecutivos para las ReferenceArea ── */
   const tramosTemporadaAlta = useMemo(() => {
     const tramos: { x1: string; x2: string }[] = []
@@ -1540,6 +1597,36 @@ export default function ProduccionClient({
                     )}
                   </div>
                 </div>
+
+                {/* Función matemática del modelo, con las constantes de ESTA
+                    corrida — para que quede claro que la proyección sale de
+                    una función real, no de una regla de tres, y que esa
+                    función cambia sola cuando el modelo se reentrena. */}
+                {verModelo && ecuacionModelo && (
+                  <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      Función del modelo
+                    </p>
+                    <p className="mt-1.5 overflow-x-auto whitespace-nowrap font-mono text-base font-bold text-gray-800 sm:text-lg">
+                      y(t) = g(t) + s(t) + ε<sub>t</sub>
+                    </p>
+                    <div className="mt-3 flex flex-col gap-1.5 border-t border-gray-100 pt-3 font-mono text-sm text-gray-600">
+                      <p className="overflow-x-auto whitespace-nowrap">
+                        g(t) = {fNum(ecuacionModelo.m)} {ecuacionModelo.k >= 0 ? '+' : '−'} {Math.abs(ecuacionModelo.k).toFixed(1)}·t
+                      </p>
+                      <p className="overflow-x-auto whitespace-nowrap">
+                        s(t) ≈ {fNum(ecuacionModelo.A)}·sin(2π·t/12 {ecuacionModelo.fase >= 0 ? '+' : '−'} {Math.abs(ecuacionModelo.fase).toFixed(2)})
+                      </p>
+                    </div>
+                    <p className="mt-3 text-xs leading-snug text-gray-400">
+                      t = meses desde {etiquetaMes(ecuacionModelo.t0mes)} (t=0). g(t) es la tendencia exacta que usa
+                      el modelo para proyectar — sale del tramo lineal posterior al último <em>changepoint</em>, no de
+                      un ajuste a mano. s(t) es una aproximación de un solo armónico a la estacionalidad de Fourier
+                      real de Prophet, para que la fórmula sea legible. Sin componente de feriados (h(t)): este
+                      modelo no los usa. Las constantes se recalculan solas en cada corrida del modelo.
+                    </p>
+                  </div>
+                )}
 
                 {/* Ecuación del modelo, con los números del mes proyectado.
                     Es la parte que hace evidente que la línea verde no es una
