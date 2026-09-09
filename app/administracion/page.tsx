@@ -67,7 +67,7 @@ function contarDiasHabilesISO(desdeISO: string, hastaISO: string): number {
 }
 
 /**
- * Módulo Administración — finanzas de la empresa. Solo administradores.
+ * Módulo Administración y Finanzas — página "Finanzas". Solo administradores.
  *
  * Responde dos preguntas que el resto de la app no responde:
  *   · ¿Cuánta PLATA vamos a facturar? (mismo modelo Prophet que Producción,

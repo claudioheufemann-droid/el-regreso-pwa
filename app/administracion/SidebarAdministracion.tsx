@@ -3,19 +3,18 @@
 import { LineChart, Wallet } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from '@/components/SidebarShell'
 
-// Una sola entrada por ahora: el módulo vive en una pantalla con pestañas
-// internas (Ingresos / Flujo de caja), mismo patrón que Producción. Cuando
-// aparezcan secciones que merezcan URL propia (ej. costos, resultados), se
-// agregan acá.
+// Cobranza vive nativa en el módulo (antes era un link de salida a
+// /ventas/deudores) — mismo dato y misma reconstrucción de facturas
+// (lib/cobranza.ts), con un dashboard propio pensado para escritorio.
 const navItems: SidebarNavItem[] = [
   { href: '/administracion', icon: LineChart, label: 'Finanzas', exact: true },
-  { href: '/ventas/deudores', icon: Wallet, label: 'Cobranza' },
+  { href: '/administracion/cobranza', icon: Wallet, label: 'Cobranza' },
 ]
 
 export default function SidebarAdministracion() {
   return (
     <SidebarShell
-      moduleName="Administración"
+      moduleName="Administración y Finanzas"
       sectionLabel="Panel"
       navItems={navItems}
     />

@@ -135,7 +135,7 @@ export default function AdministracionClient({
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 22 }}>
         <div>
           <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)' }}>
-            Administración
+            Administración y Finanzas
           </p>
           <h1 style={{ fontSize: 30, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px', lineHeight: 1.1, marginTop: 2 }}>
             Finanzas
