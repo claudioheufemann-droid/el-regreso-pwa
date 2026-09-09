@@ -19,6 +19,9 @@ interface Props {
   deuda: ResumenDeuda
   ultimaCorrida: string | null
   clientesSinPlazo: number
+  /** Viene del servidor, no de `new Date()` acá: el mismo valor en render de
+   *  servidor y de cliente evita un desajuste de hidratación. */
+  hoyISO: string
 }
 
 const MESES_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -68,7 +71,7 @@ function Etiqueta({ children, title }: { children: React.ReactNode; title?: stri
 }
 
 export default function AdministracionClient({
-  series, avance, mtd, caja, deuda, ultimaCorrida, clientesSinPlazo,
+  series, avance, mtd, caja, deuda, ultimaCorrida, clientesSinPlazo, hoyISO,
 }: Props) {
   const [tab, setTab] = useState<'ingresos' | 'caja'>('ingresos')
   const [serieId, setSerieId] = useState('general::')
@@ -469,7 +472,7 @@ export default function AdministracionClient({
                     <tr style={{ background: 'var(--surface2)' }}>
                       <th style={{ textAlign: 'left', padding: '10px 14px', color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Cliente</th>
                       <th style={{ textAlign: 'right', padding: '10px 14px', color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Plazo</th>
-                      <th style={{ textAlign: 'right', padding: '10px 14px', color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Próximo cobro</th>
+                      <th style={{ textAlign: 'right', padding: '10px 14px', color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Cobro estimado</th>
                       <th style={{ textAlign: 'right', padding: '10px 14px', color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Entra al banco</th>
                     </tr>
                   </thead>
@@ -478,7 +481,15 @@ export default function AdministracionClient({
                       <tr key={c.cliente} style={{ borderTop: i === 0 ? 'none' : '1px solid var(--border)' }}>
                         <td style={{ padding: '10px 14px', color: 'var(--cream)', fontWeight: 600, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.cliente}</td>
                         <td style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--muted)' }}>{c.diasPago} días</td>
-                        <td style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fDia(c.proximoCobro)}</td>
+                        {/* En rojo cuando la fecha ya pasó: es plata que
+                            debería estar cobrada, no un cobro por venir. */}
+                        <td style={{
+                          padding: '10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+                          color: c.proximoCobro < hoyISO ? '#F87171' : 'var(--muted)',
+                          fontWeight: c.proximoCobro < hoyISO ? 700 : 400,
+                        }}>
+                          {fDia(c.proximoCobro)}{c.proximoCobro < hoyISO ? ' · vencido' : ''}
+                        </td>
                         <td style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--gold)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fMoney(c.bruto)}</td>
                       </tr>
                     ))}

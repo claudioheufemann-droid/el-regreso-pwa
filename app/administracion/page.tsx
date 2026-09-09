@@ -242,6 +242,7 @@ export default async function AdministracionPage() {
       deuda={deuda}
       ultimaCorrida={ultimaCorridaRaw?.creado_at ?? null}
       clientesSinPlazo={[...diasPagoPorCliente.values()].filter(v => v == null).length}
+      hoyISO={hoyISO}
     />
   )
 }
