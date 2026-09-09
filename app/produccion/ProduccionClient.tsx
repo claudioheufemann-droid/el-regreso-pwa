@@ -357,7 +357,7 @@ function ModalConfirmarLote({
           <p className="mt-1"><strong>Necesidad a cubrir:</strong> {fNum(sugerencia.litrosSugeridos)} L, según el forecast y el punto de reorden.</p>
           {sugerencia.diasHastaQuiebre != null && (
             <p className="mt-1 text-xs text-amber-700">
-              Al ritmo de venta actual ({fNum(sugerencia.ritmoDiarioActual * 5)} L/semana, lun-vie), quiebra en ~{sugerencia.diasHastaQuiebre} días hábiles.
+              Al ritmo de las últimas 4 semanas ({fNum(sugerencia.ritmoDiarioActual * 5)} L/semana, lun-vie), quiebra en ~{sugerencia.diasHastaQuiebre} días hábiles.
             </p>
           )}
         </div>
@@ -388,7 +388,7 @@ function ModalConfirmarLote({
               actual — alcanzaría hasta el <strong>{new Date(cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}</strong>.
             </p>
           ) : (
-            <p className="text-gray-500">Sin ventas registradas este ciclo — no se puede estimar hasta cuándo alcanza.</p>
+            <p className="text-gray-500">Sin ventas en las últimas 4 semanas — no se puede estimar hasta cuándo alcanza.</p>
           )}
         </div>
 
@@ -2728,7 +2728,7 @@ export default function ProduccionClient({
                   <p className="mb-4 text-sm text-amber-800/80">
                     Por producto y <strong>formato</strong> (no por estilo completo — un mismo producto puede ir
                     sobrado en lata y crítico en barril). Cruza el stock de seguridad, el forecast y el{' '}
-                    <strong>ritmo de venta real de este ciclo (lunes a viernes)</strong> para estimar cuándo se agota cada uno.
+                    <strong>ritmo de venta real de las últimas 4 semanas (lunes a viernes)</strong> para estimar cuándo se agota cada uno.
                   </p>
                   <div className="flex flex-col gap-3">
                     {alarmasPorProducto.map(grupo => (
@@ -2759,7 +2759,7 @@ export default function ProduccionClient({
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-500">
-                                      Sin ventas este ciclo — sin fecha estimada
+                                      Sin ventas en 4 semanas — sin fecha estimada
                                     </span>
                                   )}
                                 </div>

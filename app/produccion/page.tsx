@@ -405,6 +405,36 @@ export default async function ProduccionPage() {
   }
 
   const litrosMtdPorSerie = new Map<string, number>()
+  /* Litros de las últimas 4 semanas (28 días corridos, hoy incluido) por
+     serie. Es el estimador de RITMO que usan las alarmas de quiebre y el
+     split — a diferencia de `litrosMtdPorSerie`, que responde "cómo vamos en
+     este ciclo" y por eso arranca en el día 24.
+
+     Por qué dos ventanas distintas y no una: backtest sobre 18 meses, 108
+     series producto×envase y 4.436 observaciones (9-sep-2026), comparando
+     cada estimador contra la venta REAL de las 4 semanas siguientes:
+
+                          MTD del ciclo   Trailing 28d
+       MAE                  5,81 L/día      4,28 L/día
+       MAPE                 133,6%          114,8%
+       Sesgo                −1,09           −0,20
+       Sin estimación       27,9%           14,2%
+
+     El MTD arranca cada ciclo con muy pocos días en el denominador, así que
+     es ruidoso justo al principio y recién converge al trailing pasados ~13
+     días hábiles (de 23 que tiene un ciclo):
+
+       días hábiles del ciclo:   1-3     4-7    8-12    13+
+       MAE MTD:                 9,21    6,65    5,33   4,41
+       MAE trailing 28d:        3,94    4,36    4,39   4,32
+
+     O sea: durante la primera mitad de cada ciclo el ritmo MTD era hasta 2,3x
+     peor, y además dejaba 1 de cada 4 formatos sin fecha de quiebre ("sin
+     ventas este ciclo") sólo porque el ciclo recién empezaba. El trailing
+     mira siempre la misma cantidad de días, así que no tiene ese arranque. */
+  const litrosTrailingPorSerie = new Map<string, number>()
+  const inicioTrailing = new Date(Date.parse(`${hoyISO}T00:00:00Z`) - 27 * MS_POR_DIA).toISOString().slice(0, 10)
+  const diasHabilesTrailing = contarDiasHabilesISO(inicioTrailing, hoyISO)
   {
     // Paginado — mismo motivo que forecast_produccion arriba: PostgREST corta
     // en 1000 filas. Un ciclo de venta normal ya supera esa cifra bien antes
@@ -428,7 +458,9 @@ export default async function ProduccionPage() {
       const { data, error } = await admin
         .from('ventas')
         .select('fecha_pedido, nombre_fantasia, producto, envase, litros')
-        .gte('fecha_pedido', inicioCiclo)
+        // La ventana arranca en la MÁS TEMPRANA de las dos: el inicio del
+        // ciclo (para el MTD) o hace 28 días (para el ritmo trailing).
+        .gte('fecha_pedido', inicioCiclo < inicioTrailing ? inicioCiclo : inicioTrailing)
         .order('id', { ascending: true })
         .range(offset, offset + PAGE - 1)
       if (error || !data || data.length === 0) break
@@ -442,12 +474,20 @@ export default async function ProduccionPage() {
       if (!categoriaPorProducto.has(nombreNormalizado)) continue // mismo filtro de catálogo que el endpoint de datos
       const litros = (f.litros as number) ?? 0
       const bucket = bucketEnvase(f.envase as string | null, litros)
+      const fecha = f.fecha_pedido.slice(0, 10)
 
-      const sumar = (id: string) => litrosMtdPorSerie.set(id, (litrosMtdPorSerie.get(id) ?? 0) + litros)
-      sumar('general::')
-      sumar(`producto::${nombreNormalizado}`)
-      sumar(`envase::${bucket}`)
-      sumar(`producto_envase::${claveProductoEnvase(nombreNormalizado, bucket)}`)
+      const claves = [
+        'general::',
+        `producto::${nombreNormalizado}`,
+        `envase::${bucket}`,
+        `producto_envase::${claveProductoEnvase(nombreNormalizado, bucket)}`,
+      ]
+      // Una venta puede caer en las dos ventanas, en una sola, o en ninguna
+      // (quedó fuera por el borde del rango pedido) — se evalúan por separado.
+      for (const id of claves) {
+        if (fecha >= inicioCiclo) litrosMtdPorSerie.set(id, (litrosMtdPorSerie.get(id) ?? 0) + litros)
+        if (fecha >= inicioTrailing) litrosTrailingPorSerie.set(id, (litrosTrailingPorSerie.get(id) ?? 0) + litros)
+      }
     }
   }
 
@@ -754,12 +794,17 @@ export default async function ProduccionPage() {
       // formato se recalcula una vez al mes, pero las VENTAS entran cada 15
       // min. Igual que las alarmas de quiebre, se toma la señal más exigente
       // entre el punto de reorden (forecast, mensual) y el ritmo de venta
-      // REAL de este ciclo proyectado sobre la ventana de reposición. Así, si
-      // un formato empieza a venderse más rápido de lo previsto, el split se
-      // corrige solo en el siguiente sync, sin esperar la corrida mensual.
+      // REAL proyectado sobre la ventana de reposición. Así, si un formato
+      // empieza a venderse más rápido de lo previsto, el split se corrige
+      // solo en el siguiente sync, sin esperar la corrida mensual.
+      //
+      // Mismo estimador de ritmo que las alarmas (últimas 4 semanas, no lo
+      // que va del ciclo) — son la misma pregunta predictiva y tienen que
+      // dar el mismo número, o el split y la alarma del mismo formato se
+      // contradicen. Ver el backtest en litrosTrailingPorSerie.
       const ventanaDiasHabiles = (Number(f.lead_time_semanas) + Number(f.periodo_revision_semanas)) * 5
-      const ritmoDiarioReal = diasHabilesTranscurridos > 0
-        ? (litrosMtdPorSerie.get(`producto_envase::${claveProductoEnvase(producto, envase)}`) ?? 0) / diasHabilesTranscurridos
+      const ritmoDiarioReal = diasHabilesTrailing > 0
+        ? (litrosTrailingPorSerie.get(`producto_envase::${claveProductoEnvase(producto, envase)}`) ?? 0) / diasHabilesTrailing
         : 0
 
       const necesidadForecast = Math.max(Number(f.punto_reorden_litros) - enBodega, 0)
@@ -1053,8 +1098,15 @@ export default async function ProduccionPage() {
       // Ritmo en litros por DÍA HÁBIL (lunes a viernes) — no se vende fin de
       // semana, así que "días" acá y en diasHastaQuiebre/fechaEstimadaQuiebre
       // más abajo son siempre días hábiles, no días calendario.
-      const ritmoDiarioActual = diasHabilesTranscurridos > 0
-        ? (litrosMtdPorSerie.get(`producto_envase::${claveProductoEnvase(s.producto, envase)}`) ?? 0) / diasHabilesTranscurridos
+      //
+      // Ventana: últimas 4 semanas, NO lo que va del ciclo. El backtest
+      // (ver el comentario extenso donde se arma litrosTrailingPorSerie)
+      // mostró que el MTD del ciclo era hasta 2,3x más impreciso durante la
+      // primera mitad de cada ciclo, subestimaba el ritmo de forma sistemática
+      // y dejaba 1 de cada 4 formatos sin fecha de quiebre sólo porque el
+      // ciclo recién arrancaba.
+      const ritmoDiarioActual = diasHabilesTrailing > 0
+        ? (litrosTrailingPorSerie.get(`producto_envase::${claveProductoEnvase(s.producto, envase)}`) ?? 0) / diasHabilesTrailing
         : 0
 
       // ── ¿Cuándo se agota de verdad? ──────────────────────────────────────
@@ -1119,13 +1171,13 @@ export default async function ProduccionPage() {
       if (disponible < s.stockSeguridadLitros) {
         motivo = `Crítico en ${envaseLabel}: disponible (${Math.round(disponible)} L) por debajo del stock de seguridad (${Math.round(s.stockSeguridadLitros)} L).`
       } else if (disparadoPorRitmo) {
-        motivo = `Al ritmo de venta actual (${Math.round(ritmoDiarioActual * 5)} L/semana, lun-vie) vas a quebrar ${envaseLabel} antes de que llegue el próximo lote.`
+        motivo = `Al ritmo de las últimas 4 semanas (${Math.round(ritmoDiarioActual * 5)} L/semana, lun-vie) vas a quebrar ${envaseLabel} antes de que llegue el próximo lote.`
       } else {
         motivo = `Bajo punto de reorden en ${envaseLabel}: disponible ${Math.round(disponible)} L, punto de reorden ${Math.round(s.puntoReordenLitros)} L.`
       }
       motivo += fechaLabel
-        ? ` Quiebre estimado: ${fechaLabel} (${Math.max(0, Math.round(diasHastaQuiebre!))} días hábiles), al ritmo de venta actual (lun-vie). Lead time ${s.leadTimeSemanas} semanas.`
-        : ` Sin ventas registradas este ciclo para proyectar fecha. Lead time ${s.leadTimeSemanas} semanas.`
+        ? ` Quiebre estimado: ${fechaLabel} (${Math.max(0, Math.round(diasHastaQuiebre!))} días hábiles), al ritmo de las últimas 4 semanas (lun-vie). Lead time ${s.leadTimeSemanas} semanas.`
+        : ` Sin ventas en las últimas 4 semanas para proyectar fecha. Lead time ${s.leadTimeSemanas} semanas.`
       if (fermentandoEsFuturo && fermentando > 0) {
         motivo += ` (${Math.round(fermentando).toLocaleString('es-CL')} L siguen fermentando, listos recién el ${new Date(fechaFermentando + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} — no cuentan como stock vendible hasta entonces.)`
       }
