@@ -79,11 +79,20 @@ export default function AdministracionClient({
 
   const serieActual = series.find(s => s.id === serieId) ?? series.find(s => s.nivel === 'general') ?? null
 
+  // "Facturado este ciclo" tiene que moverse con la serie elegida (Total
+  // empresa / Cerveza / Kombucha / Otros) — si no, "El modelo proyectó" de
+  // abajo compara el objetivo de UNA categoría contra el MTD de TODA la
+  // empresa y el % de cumplimiento sale sin sentido (confirmado con una
+  // corrida real: 232% al mirar Cerveza, porque el MTD seguía siendo el
+  // total). `mtd` (prop, fijo) es sólo el fallback antes de que carguen las
+  // series con su propio montoCicloEnCurso.
+  const mtdSerie = serieActual ? { neto: serieActual.montoCicloEnCurso } : mtd
+
   // Extrapolación lineal del ciclo en curso, en días HÁBILES: no se factura
   // fin de semana, así que dividir por días corridos subestima el ritmo.
   // Mismo criterio que "a este ritmo cerrarías con X L" en Producción.
   const ritmoProyectado = avance.diasHabilesTranscurridos > 0
-    ? (mtd.neto / avance.diasHabilesTranscurridos) * avance.diasHabilesEnCiclo
+    ? (mtdSerie.neto / avance.diasHabilesTranscurridos) * avance.diasHabilesEnCiclo
     : 0
 
   const datosGrafico = useMemo(() => {
@@ -171,14 +180,18 @@ export default function AdministracionClient({
               modelo — mismo trío que Producción, en $ en vez de litros. */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
             <Card>
-              <Etiqueta title="Cuenta por fecha de pedido, no de entrega ni de factura — misma señal temprana que el forecast de litros de Producción.">
-                Facturado este ciclo
+              <Etiqueta title="Cuenta por fecha de pedido, no de entrega ni de factura — misma señal temprana que el forecast de litros de Producción. Se mueve con la categoría elegida abajo.">
+                Facturado este ciclo{serieActual && serieActual.nivel !== 'general' ? ` — ${serieActual.clave}` : ''}
               </Etiqueta>
               <p style={{ fontSize: 30, fontWeight: 900, color: 'var(--cream)', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-                {fMoney(mtd.neto)}
+                {fMoney(mtdSerie.neto)}
               </p>
               <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                neto · {fMoney(mtd.bruto)} con impuestos
+                {/* El bruto (con IVA/ILA) sólo está calculado para el total de
+                    la empresa — desglosarlo por categoría necesitaría repetir
+                    brutoLinea() por fila en el servidor, no vale la pena para
+                    un dato secundario acá. */}
+                {serieActual && serieActual.nivel !== 'general' ? 'neto' : `neto · ${fMoney(mtd.bruto)} con impuestos`}
               </p>
               <div style={{ marginTop: 10, height: 5, borderRadius: 999, background: 'var(--surface2)', overflow: 'hidden' }}>
                 <div style={{ width: `${avancePct}%`, height: '100%', background: 'var(--muted)', borderRadius: 999 }} />
