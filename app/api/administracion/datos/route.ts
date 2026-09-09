@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { ciclosDe, cicloEstaCerrado, DIA_INICIO_CICLO, DIA_FIN_CICLO } from '@/lib/produccion/reglas'
-import { categoriaNormalizada, esIngresoReal, type FilaVentaFinanzas } from '@/lib/administracion/finanzas'
+import { DIA_INICIO_CICLO, DIA_FIN_CICLO } from '@/lib/produccion/reglas'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -13,21 +12,21 @@ function getAdminClient() {
 /**
  * GET /api/administracion/datos
  *
- * Serie histórica de INGRESOS en $ (venta neta, "Total s/imp $") agregada por
- * ciclo interno, para que el script de forecast corra Prophet sobre dinero
- * igual que ya lo corre sobre litros. Gemelo de /api/produccion/datos, con dos
- * diferencias que importan:
+ * Serie histórica de INGRESOS en $ (venta neta, "Total s/imp $") por ciclo
+ * interno y categoría, para que el script de forecast corra Prophet sobre
+ * dinero igual que ya lo corre sobre litros.
  *
- *   · Unidad: `monto` (neto) en vez de litros.
- *   · Población: usa la exclusión de VENTAS, no la de Producción. El consumo
- *     interno (PDV, BaseCamp, feria, mermas, muestras) son litros que hay que
- *     producir, pero NO son plata que alguien vaya a pagar — meterlos inflaría
- *     el forecast de ingresos con venta que no existe.
+ * El agregado lo hace la función `ingresos_por_ciclo()` en Postgres, no este
+ * endpoint: la primera versión paginaba la tabla `ventas` entera (100k+ filas,
+ * 100+ viajes encadenados a PostgREST) y se pasaba del timeout de la función
+ * serverless. Además, al vivir en SQL reutiliza _excluir_cliente /
+ * _excluir_producto / _categoria_normalizada — las MISMAS que usan los RPC del
+ * dashboard de Ventas —, así que el histórico de ingresos no puede
+ * desalinearse de lo que Ventas reporta.
  *
- * Cuenta por fecha de PEDIDO, igual que el forecast de litros: es la señal más
- * temprana y mantiene "vendido este mes" significando lo mismo en los dos
- * módulos. Cuándo se COBRA esa venta es otra pregunta, y se resuelve aparte en
- * lib/administracion/finanzas.ts (fecha de entrega + días de pago).
+ * Ojo con la población: excluye el consumo interno (PDV, BaseCamp, feria,
+ * mermas). Son litros que Producción sí tiene que fabricar, pero nadie los
+ * paga: contarlos acá inflaría el forecast de ingresos con venta inexistente.
  *
  * Autenticación dual, mismo patrón que /api/produccion/datos.
  */
@@ -50,51 +49,22 @@ export async function GET(req: Request) {
     if (!user.isAdmin) return NextResponse.json({ error: 'Solo administradores' }, { status: 403 })
   }
 
-  // PostgREST corta en 1000 filas por página.
-  const PAGE = 1000
-  const filas: FilaVentaFinanzas[] = []
-  for (let offset = 0; ; offset += PAGE) {
-    const { data, error } = await supabase
-      .from('ventas')
-      .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado')
-      .order('id', { ascending: true })
-      .range(offset, offset + PAGE - 1)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (!data || data.length === 0) break
-    filas.push(...(data as FilaVentaFinanzas[]))
-    if (data.length < PAGE) break
-  }
+  const { data, error } = await supabase.rpc('ingresos_por_ciclo')
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const filas = (data ?? []) as { ciclo: string; categoria: string; monto: number }[]
 
   const general = new Map<string, number>()
   const porCategoria = new Map<string, Map<string, number>>()
-  const mesesConVenta = new Set<string>()
-  let excluidasCliente = 0
-  let excluidasCicloAbierto = 0
-  let montoSinCategoria = 0
+  let montoOtros = 0
 
   for (const f of filas) {
-    if (!f.fecha_pedido) continue
-    if (!esIngresoReal(f)) { excluidasCliente++; continue }
-    const monto = Number(f.total_sin_impuesto) || 0
-    if (monto === 0) continue
-
-    const categoria = categoriaNormalizada(f.producto, f.categoria_producto)
-    if (categoria === 'Otros') montoSinCategoria += monto
-
-    let entroAlgunCiclo = false
-    for (const ciclo of ciclosDe(f.fecha_pedido)) {
-      // Un ciclo abierto entra incompleto y Prophet lo lee como una caída real
-      // de ingresos — mismo motivo que en /api/produccion/datos.
-      if (!cicloEstaCerrado(ciclo)) continue
-      entroAlgunCiclo = true
-      mesesConVenta.add(ciclo)
-      general.set(ciclo, (general.get(ciclo) ?? 0) + monto)
-
-      if (!porCategoria.has(categoria)) porCategoria.set(categoria, new Map())
-      const serie = porCategoria.get(categoria)!
-      serie.set(ciclo, (serie.get(ciclo) ?? 0) + monto)
-    }
-    if (!entroAlgunCiclo) excluidasCicloAbierto++
+    const mes = String(f.ciclo).slice(0, 10)
+    const monto = Number(f.monto) || 0
+    general.set(mes, (general.get(mes) ?? 0) + monto)
+    if (!porCategoria.has(f.categoria)) porCategoria.set(f.categoria, new Map())
+    porCategoria.get(f.categoria)!.set(mes, monto)
+    if (f.categoria === 'Otros') montoOtros += monto
   }
 
   const toArray = (m: Map<string, number>) =>
@@ -102,6 +72,8 @@ export async function GET(req: Request) {
 
   const categoriaObj: Record<string, { mes: string; monto: number }[]> = {}
   for (const [cat, serie] of porCategoria) categoriaObj[cat] = toArray(serie)
+
+  const serieGeneral = toArray(general)
 
   const calidad: { tipo: string; clave: string | null; detalle: string; severidad: 'info' | 'advertencia' }[] = [
     {
@@ -111,7 +83,7 @@ export async function GET(req: Request) {
     },
     {
       tipo: 'ciclo_interno', clave: null,
-      detalle: `Los "meses" son ciclos internos: cada uno junta ventas del día ${DIA_INICIO_CICLO} del mes anterior al día ${DIA_FIN_CICLO} del mes que le da nombre. Mismo corte que usa Producción y la tabla de períodos.`,
+      detalle: `Los "meses" son ciclos internos: cada uno junta ventas del día ${DIA_INICIO_CICLO} del mes anterior al día ${DIA_FIN_CICLO} del mes que le da nombre. Mismo corte que Producción y la tabla de períodos.`,
       severidad: 'info',
     },
     {
@@ -119,22 +91,19 @@ export async function GET(req: Request) {
       detalle: 'El ingreso se cuenta por fecha de PEDIDO, no de entrega ni de factura — misma señal temprana que el forecast de litros. Cuándo se cobra se calcula aparte, anclando los días de pago del cliente a la fecha de entrega.',
       severidad: 'info',
     },
-  ]
-  if (excluidasCliente > 0) {
-    calidad.push({
+    {
       tipo: 'excluido_cliente', clave: null,
-      detalle: `${excluidasCliente} filas excluidas por ser consumo interno (PDV, BaseCamp, mermas, muestras, feria) o tours/degustaciones: son litros reales, pero nadie los paga, así que no son ingreso.`,
+      detalle: 'Se excluye el consumo interno (PDV, BaseCamp, mermas, muestras, feria) y los tours/degustaciones: son litros reales, pero nadie los paga, así que no son ingreso.',
       severidad: 'info',
-    })
-  }
-  if (montoSinCategoria > 0) {
+    },
+  ]
+  if (montoOtros > 0) {
     calidad.push({
       tipo: 'categoria_otros', clave: null,
-      detalle: `$${Math.round(montoSinCategoria).toLocaleString('es-CL')} de venta histórica cae en "Otros" (empaque y distribución, fletes, merch, maquila). Es ingreso real y suma al total, pero no es ni cerveza ni kombucha.`,
+      detalle: `$${Math.round(montoOtros).toLocaleString('es-CL')} de venta histórica cae en "Otros" (empaque y distribución, fletes, merch, maquila). Es ingreso real y suma al total, pero no es ni cerveza ni kombucha.`,
       severidad: 'info',
     })
   }
-  const serieGeneral = toArray(general)
   if (serieGeneral.length < 6) {
     calidad.push({
       tipo: 'historial_corto', clave: null,
@@ -146,9 +115,6 @@ export async function GET(req: Request) {
   return NextResponse.json({
     series: { general: serieGeneral, categoria: categoriaObj },
     calidadDatos: calidad,
-    meta: {
-      totalFilas: filas.length, excluidasCliente, excluidasCicloAbierto,
-      ciclosConVenta: mesesConVenta.size,
-    },
+    meta: { ciclosConVenta: serieGeneral.length, categorias: Object.keys(categoriaObj) },
   })
 }
