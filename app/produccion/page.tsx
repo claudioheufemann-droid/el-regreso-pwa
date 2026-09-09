@@ -146,8 +146,17 @@ export interface SplitFermentador {
   categoria: 'cerveza' | 'kombucha' | null
   /** Litros a granel en fermentadores, sumando todos los tanques del producto. */
   litrosEnFermentador: number
-  /** Nombres de los fermentadores donde está (para poder ir a buscarlo). */
-  tanques: string[]
+  /** Fermentadores donde está este producto, con su fecha estimada de
+   *  embarrilado (columna "Fecha embarrilado (estimada)" del informe de
+   *  stock, sección Tanques) — la fecha que calcula el enólogo, no una
+   *  fecha ya ocurrida. Null si el ERP no trajo fecha para ese tanque. */
+  tanques: { nombre: string; litros: number; fechaEstimada: string | null }[]
+  /** La MÁS TARDÍA de las fechas estimadas entre los tanques de este
+   *  producto — el lote completo (litrosEnFermentador) no está listo hasta
+   *  que sale el último tanque, no el primero. Null si ningún tanque trae
+   *  fecha. Se usa para correr `cubreVentaHasta` hacia adelante: la venta no
+   *  puede empezar a cubrirse antes de que el lote exista envasado. */
+  fechaDisponibleEstimada: string | null
   /** Sólo formatos con litros asignados, de mayor a menor. */
   reparto: {
     envase: EnvaseBucket
@@ -317,7 +326,7 @@ export default async function ProduccionPage() {
   ] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial, metodo'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
-    admin.from('stock_productos').select('producto, categoria, tipo, camara, cantidad, litros').order('cantidad', { ascending: false }),
+    admin.from('stock_productos').select('producto, categoria, tipo, camara, cantidad, litros, lotes').order('cantidad', { ascending: false }),
     admin.from('costos_precios').select('producto, categoria').not('codigo', 'is', null),
     admin.from('stock_seguridad').select('nivel, producto, envase, categoria, mes, lead_time_semanas, periodo_revision_semanas, demanda_mensual_proyectada, demanda_en_ventana, sigma_semanal, stock_seguridad_litros, punto_reorden_litros, confianza, mape_backtest, meses_historial, metodo').order('mes', { ascending: true }),
     // Cuándo se sincronizó por última vez el stock del ERP — para que el
@@ -639,15 +648,20 @@ export default async function ProduccionPage() {
   }
 
   const litrosEnProduccionPorProducto = new Map<string, number>()
-  const tanquesPorProducto = new Map<string, string[]>()
+  const tanquesPorProducto = new Map<string, { nombre: string; litros: number; fechaEstimada: string | null }[]>()
   for (const s of stockRaw ?? []) {
     if (s.tipo !== 'tanque' || s.litros == null) continue
     const nombre = resolverProductoStock(s.producto as string)
     litrosEnProduccionPorProducto.set(nombre, (litrosEnProduccionPorProducto.get(nombre) ?? 0) + Number(s.litros))
     const tanque = (s.camara as string | null)?.trim()
     if (tanque) {
+      // `lotes` viene de stockParser.parseTanques(): una fila de tanque trae
+      // como mucho un lote, con la fecha embarrilado ESTIMADA en él (ver el
+      // comentario extenso ahí — no es una fecha ya ocurrida).
+      const lotesTanque = (s.lotes as { codigo: string; cantidad: number; fechaEmbarrilado: string | null }[] | null) ?? []
+      const fechaEstimada = lotesTanque[0]?.fechaEmbarrilado ?? null
       const lista = tanquesPorProducto.get(nombre) ?? []
-      if (!lista.includes(tanque)) lista.push(tanque)
+      lista.push({ nombre: tanque, litros: Math.round(Number(s.litros)), fechaEstimada })
       tanquesPorProducto.set(nombre, lista)
     }
   }
@@ -694,6 +708,14 @@ export default async function ProduccionPage() {
     const filasFormato = (stockSeguridadRaw ?? []).filter(
       s => s.nivel === 'producto_envase' && (s.mes as string).slice(0, 10) === primerMesSS && normalizarProducto(s.producto as string) === producto
     )
+    const tanquesDelProducto = tanquesPorProducto.get(producto) ?? []
+    // La más tardía entre los tanques: el lote completo no está envasado
+    // hasta que sale el ÚLTIMO tanque, no el primero.
+    const fechaDisponibleEstimada = tanquesDelProducto
+      .map(t => t.fechaEstimada)
+      .filter((f): f is string => f != null)
+      .sort()
+      .at(-1) ?? null
 
     // TODO lote en fermentador entra al panel, sin excepción — aunque no haya
     // con qué repartirlo (producto nuevo, sin forecast por formato todavía).
@@ -704,7 +726,8 @@ export default async function ProduccionPage() {
         producto,
         categoria: (categoriaPorProducto.get(producto) ?? null) as 'cerveza' | 'kombucha' | null,
         litrosEnFermentador: Math.round(litrosTanque),
-        tanques: tanquesPorProducto.get(producto) ?? [],
+        tanques: tanquesDelProducto,
+        fechaDisponibleEstimada,
         reparto: [],
         litrosColchon: 0, litrosVentanaReposicion: 0, excedente: Math.round(litrosTanque),
         semanasExcedente: null, semanasVentaTotal: null, cubreVentaHasta: null,
@@ -806,11 +829,22 @@ export default async function ProduccionPage() {
       const semanasExcedente = demandaSemanal > 0 ? excedente / demandaSemanal : null
       const semanasVentaTotal = demandaSemanal > 0 ? litrosVentaTotal / demandaSemanal : null
 
+      // La venta no puede empezar a cubrirse antes de que el lote SALGA del
+      // fermentador: si `fechaDisponibleEstimada` es futura, la cobertura se
+      // cuenta desde ahí, no desde hoy — antes este cálculo asumía que todo
+      // el litraje ya estaba envasado y disponible hoy mismo, así que un
+      // lote que recién sale en 3 semanas más mostraba una fecha de
+      // cobertura adelantada 3 semanas de la real.
+      const inicioCobertura = fechaDisponibleEstimada && fechaDisponibleEstimada > hoyISO
+        ? Date.parse(`${fechaDisponibleEstimada}T00:00:00Z`)
+        : hoy.getTime()
+
       splitFermentadores.push({
         producto,
         categoria: (categoriaPorProducto.get(producto) ?? null) as 'cerveza' | 'kombucha' | null,
         litrosEnFermentador: Math.round(litrosTanque),
-        tanques: tanquesPorProducto.get(producto) ?? [],
+        tanques: tanquesDelProducto,
+        fechaDisponibleEstimada,
         reparto: detalle,
         litrosColchon: Math.round(litrosColchonTotal),
         litrosVentanaReposicion: Math.round(detalle.reduce((a, d) => a + d.litrosVentanaReposicion, 0)),
@@ -818,7 +852,7 @@ export default async function ProduccionPage() {
         semanasExcedente: semanasExcedente != null ? Math.round(semanasExcedente * 10) / 10 : null,
         semanasVentaTotal: semanasVentaTotal != null ? Math.round(semanasVentaTotal * 10) / 10 : null,
         cubreVentaHasta: semanasVentaTotal != null
-          ? new Date(hoy.getTime() + semanasVentaTotal * 7 * MS_POR_DIA).toISOString().slice(0, 10)
+          ? new Date(inicioCobertura + semanasVentaTotal * 7 * MS_POR_DIA).toISOString().slice(0, 10)
           : null,
         cubreTodaLaNecesidad: alcanzaLaNecesidad,
         ajustadoPorVentas: base.some(f => f.porRitmo),

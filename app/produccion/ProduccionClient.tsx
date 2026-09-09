@@ -2587,13 +2587,37 @@ export default function ProduccionClient({
                           <ProductImage nombre={s.producto} categoria={s.categoria} size={30} radius={7} />
                           <div className="flex flex-col">
                             <span className="font-semibold leading-tight text-gray-800">{s.producto}</span>
-                            <span className="text-[11px] text-gray-400">{s.tanques.join(' · ') || 'Sin tanque identificado'}</span>
+                            <span className="text-[11px] text-gray-400">
+                              {s.tanques.length > 0
+                                ? s.tanques.map(t => t.nombre).join(' · ')
+                                : 'Sin tanque identificado'}
+                            </span>
                           </div>
                           <span className="ml-auto text-right">
                             <span className="block text-lg font-black tabular-nums text-blue-800">{fNum(s.litrosEnFermentador)} L</span>
                             <span className="block text-[10px] font-bold uppercase tracking-wide text-gray-400">a granel</span>
                           </span>
                         </div>
+
+                        {/* Fecha embarrilado ESTIMADA (la calcula el enólogo,
+                            no un hecho ya ocurrido) — es lo que conecta este
+                            panel con el Plan Maestro: hasta que no llega esta
+                            fecha, el lote no existe como producto envasado
+                            que se pueda vender. */}
+                        {s.fechaDisponibleEstimada && (() => {
+                          const hoyISO = hoyLocalISO()
+                          const atrasado = s.fechaDisponibleEstimada < hoyISO
+                          const fechaFmt = new Date(s.fechaDisponibleEstimada + 'T00:00:00Z')
+                            .toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+                          return (
+                            <p className={`mt-2 flex items-center gap-1.5 text-[11px] font-semibold ${atrasado ? 'text-amber-700' : 'text-blue-700'}`}>
+                              <CalendarDays size={12} />
+                              {atrasado
+                                ? `Debería haber salido del fermentador el ${fechaFmt} — revisar atraso`
+                                : `Sale del fermentador ≈ ${fechaFmt}${s.tanques.length > 1 ? ' (todos los tanques)' : ''}`}
+                            </p>
+                          )
+                        })()}
 
                         {/* Lote sin forecast por formato: se muestra igual —
                             hay que envasarlo — pero sin inventar un reparto. */}
@@ -2670,7 +2694,11 @@ export default function ProduccionClient({
                             Con este lote la venta queda cubierta <strong>≈ {s.semanasVentaTotal.toLocaleString('es-CL')} semanas</strong>,
                             hasta cerca del{' '}
                             {new Date(s.cubreVentaHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
-                            {' '}(estimado con la demanda proyectada).
+                            {' '}(estimado con la demanda proyectada
+                            {s.fechaDisponibleEstimada && s.fechaDisponibleEstimada > hoyLocalISO()
+                              ? ', contado desde que salga del fermentador'
+                              : ''}
+                            ).
                           </p>
                         )}
 
