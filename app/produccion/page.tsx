@@ -665,6 +665,20 @@ export default async function ProduccionPage() {
       tanquesPorProducto.set(nombre, lista)
     }
   }
+  // La más tardía entre los tanques de cada producto — el litraje completo no
+  // está envasado hasta que sale el ÚLTIMO tanque. Se calcula UNA vez acá (no
+  // dentro del loop del Split, más abajo) porque las Alarmas de quiebre
+  // también lo necesitan, y las dos secciones tienen que usar la MISMA fecha
+  // para el mismo producto — ver el uso en `sugerenciasPlan`.
+  const fechaDisponibleEstimadaPorProducto = new Map<string, string | null>()
+  for (const [producto, tanquesDelProducto] of tanquesPorProducto) {
+    const fecha = tanquesDelProducto
+      .map(t => t.fechaEstimada)
+      .filter((f): f is string => f != null)
+      .sort()
+      .at(-1) ?? null
+    fechaDisponibleEstimadaPorProducto.set(producto, fecha)
+  }
 
   /* ── SPLIT DE ENVASADO ────────────────────────────────────────────────────
      Lo que está en el fermentador todavía NO tiene envase: es líquido a
@@ -709,13 +723,7 @@ export default async function ProduccionPage() {
       s => s.nivel === 'producto_envase' && (s.mes as string).slice(0, 10) === primerMesSS && normalizarProducto(s.producto as string) === producto
     )
     const tanquesDelProducto = tanquesPorProducto.get(producto) ?? []
-    // La más tardía entre los tanques: el lote completo no está envasado
-    // hasta que sale el ÚLTIMO tanque, no el primero.
-    const fechaDisponibleEstimada = tanquesDelProducto
-      .map(t => t.fechaEstimada)
-      .filter((f): f is string => f != null)
-      .sort()
-      .at(-1) ?? null
+    const fechaDisponibleEstimada = fechaDisponibleEstimadaPorProducto.get(producto) ?? null
 
     // TODO lote en fermentador entra al panel, sin excepción — aunque no haya
     // con qué repartirlo (producto nuevo, sin forecast por formato todavía).
@@ -1048,7 +1056,43 @@ export default async function ProduccionPage() {
       const ritmoDiarioActual = diasHabilesTranscurridos > 0
         ? (litrosMtdPorSerie.get(`producto_envase::${claveProductoEnvase(s.producto, envase)}`) ?? 0) / diasHabilesTranscurridos
         : 0
-      const diasHastaQuiebre = ritmoDiarioActual > 0 ? disponible / ritmoDiarioActual : null
+
+      // ── ¿Cuándo se agota de verdad? ──────────────────────────────────────
+      // `disponible` (arriba) suma bodega + lo que está fermentando, porque
+      // para decidir CUÁNTO falta producir (necesidadNeta, más abajo) da lo
+      // mismo si ya está envasado o todavía no: la cantidad total en el
+      // pipeline es la que importa. Pero para decidir CUÁNDO se agota, sí
+      // importa: mientras el fermentador no llegue a su fecha estimada de
+      // embarrilado, esos litros no se pueden vender. Antes este cálculo
+      // trataba todo `disponible` como vendible desde hoy — un producto con
+      // un tanque grande recién por salir mostraba semanas de margen que en
+      // realidad no existían en bodega (bug real, encontrado auditando
+      // Fisura barril_50: 3.000 L en el Bright Tank T4, listos recién el
+      // 22-sep, tapaban una bodega que ya estaba bajo el punto de reorden).
+      //
+      // Dos tramos: primero se agota SOLO la bodega física; si eso pasa antes
+      // de que el fermentador esté listo, esa es la fecha real de quiebre
+      // (el fermentador todavía no cuenta). Si la bodega aguanta hasta que el
+      // fermentador llega, desde ahí se suma lo que quedaba más lo nuevo.
+      const bodega = s.stockActualLitros ?? 0
+      const fermentando = s.litrosEnProduccion
+      const fechaFermentando = fechaDisponibleEstimadaPorProducto.get(s.producto) ?? null
+      const fermentandoEsFuturo = fechaFermentando != null && fechaFermentando > hoyISO
+
+      let diasHastaQuiebre: number | null = null
+      if (ritmoDiarioActual > 0) {
+        if (!fermentandoEsFuturo) {
+          // Sin fecha (o ya debería haber salido): mismo criterio de antes,
+          // todo `disponible` cuenta desde hoy.
+          diasHastaQuiebre = disponible / ritmoDiarioActual
+        } else {
+          const diasHastaFermentando = contarDiasHabilesISO(hoyISO, fechaFermentando!) - 1
+          const bodegaAlLlegarFermentador = bodega - ritmoDiarioActual * diasHastaFermentando
+          diasHastaQuiebre = bodegaAlLlegarFermentador <= 0
+            ? bodega / ritmoDiarioActual // se agota ANTES de que llegue el fermentador — ni cuenta
+            : diasHastaFermentando + (bodegaAlLlegarFermentador + fermentando) / ritmoDiarioActual
+        }
+      }
       const fechaEstimadaQuiebre = diasHastaQuiebre != null
         ? sumarDiasHabilesISO(hoyISO, diasHastaQuiebre)
         : null
@@ -1082,6 +1126,9 @@ export default async function ProduccionPage() {
       motivo += fechaLabel
         ? ` Quiebre estimado: ${fechaLabel} (${Math.max(0, Math.round(diasHastaQuiebre!))} días hábiles), al ritmo de venta actual (lun-vie). Lead time ${s.leadTimeSemanas} semanas.`
         : ` Sin ventas registradas este ciclo para proyectar fecha. Lead time ${s.leadTimeSemanas} semanas.`
+      if (fermentandoEsFuturo && fermentando > 0) {
+        motivo += ` (${Math.round(fermentando).toLocaleString('es-CL')} L siguen fermentando, listos recién el ${new Date(fechaFermentando + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} — no cuentan como stock vendible hasta entonces.)`
+      }
 
       return {
         producto: s.producto,
