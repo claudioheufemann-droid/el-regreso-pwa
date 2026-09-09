@@ -470,6 +470,20 @@ export default function HubClient({ isAdmin, nombre, macroArea }: {
             locked={!puedeVerProduccion}
           />
 
+          {/* Administración: finanzas de la empresa (facturación proyectada y
+              flujo de caja). Solo administradores — acá se ve la plata de toda
+              la empresa, no la cartera de un vendedor. */}
+          {isAdmin && (
+            <ModuleCard
+              href="/administracion"
+              color="#22C55E"
+              rgb="34,197,94"
+              title="Administración"
+              subtitle="Finanzas, facturación y flujo de caja"
+              img="/hub-control-comercial.svg"
+            />
+          )}
+
         </div>
 
         {/* ── LOGOUT ── */}

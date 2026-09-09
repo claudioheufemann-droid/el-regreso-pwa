@@ -95,6 +95,13 @@ def obtener_datos() -> dict:
     return r.json()
 
 
+def obtener_datos_finanzas() -> dict:
+    print(f"Descargando serie de ingresos desde {UPLOAD_URL_BASE}/api/administracion/datos ...")
+    r = requests.get(f"{UPLOAD_URL_BASE}/api/administracion/datos", headers=HEADERS, timeout=120)
+    r.raise_for_status()
+    return r.json()
+
+
 def a_dataframe(puntos: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(puntos)
     df["ds"] = pd.to_datetime(df["mes"])
@@ -450,6 +457,69 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
     return filas
 
 
+def correr_finanzas(mes_base: pd.Timestamp) -> int:
+    """Forecast de INGRESOS en $ para el módulo Administración.
+
+    Reutiliza tal cual la maquinaria de arriba (procesar_serie → Prophet +
+    backtest walk-forward): es exactamente el mismo problema estadístico, sólo
+    cambia la unidad. Las series llegan como {mes, monto} y se renombran a
+    "litros" antes de entrar, porque procesar_serie lee esa clave; al salir se
+    renombran de vuelta a monto. Es un rename de 2 líneas contra duplicar 200
+    de modelo.
+
+    La POBLACIÓN sí es distinta y por eso vive en otro endpoint: /api/
+    administracion/datos excluye el consumo interno (PDV, BaseCamp, feria) que
+    Producción sí cuenta — son litros a producir, pero no plata a cobrar.
+    """
+    datos = obtener_datos_finanzas()
+    series = datos["series"]
+    if not series.get("general"):
+        print("  Finanzas: sin ciclos cerrados con venta — no se proyecta nada.")
+        return 0
+
+    forecast: list[dict] = []
+    validacion: list[dict] = []
+
+    def a_puntos(serie: list[dict]) -> list[dict]:
+        return [{"mes": p["mes"], "litros": p["monto"]} for p in serie]
+
+    print(f"\n[Finanzas] General: {len(series['general'])} ciclos")
+    comprometer_serie(
+        procesar_serie("general", None, a_puntos(series["general"]), mes_base),
+        forecast, validacion, [],
+    )
+
+    categorias = series.get("categoria", {})
+    print(f"[Finanzas] Por categoría: {len(categorias)} series")
+    for categoria, puntos in categorias.items():
+        comprometer_serie(
+            procesar_serie("categoria", categoria, a_puntos(puntos), mes_base),
+            forecast, validacion, [],
+        )
+
+    # De vuelta a la unidad real: el endpoint de carga espera monto/montoMin/montoMax.
+    filas = [
+        {
+            "nivel": f["nivel"], "clave": f["clave"], "mes": f["mes"], "tipo": f["tipo"],
+            "monto": f["litros"],
+            "montoMin": f.get("litrosMin"), "montoMax": f.get("litrosMax"),
+            "tendencia": f.get("tendencia"), "estacionalidad": f.get("estacionalidad"),
+        }
+        for f in forecast
+    ]
+
+    print(f"[Finanzas] Subiendo {len(filas)} filas, {len(validacion)} validaciones ...")
+    r = requests.post(
+        f"{UPLOAD_URL_BASE}/api/administracion/forecast/upload",
+        headers=HEADERS, json={"forecast": filas, "validacion": validacion}, timeout=120,
+    )
+    if r.status_code != 200:
+        print(f"ERROR al subir forecast de finanzas ({r.status_code}): {r.text}")
+        return 1
+    print("OK:", r.json())
+    return 0
+
+
 def main() -> int:
     if not UPLOAD_SECRET:
         print("ERROR: falta UPLOAD_SECRET_FORECAST")
@@ -573,7 +643,14 @@ def main() -> int:
         print(f"ERROR al subir stock de seguridad ({r2.status_code}): {r2.text}")
         return 1
     print("OK:", r2.json())
-    return 0
+
+    # Forecast de ingresos ($) para el módulo Administración. Va al final y con
+    # su propio código de salida: si falla, el forecast de litros y el stock de
+    # seguridad YA quedaron cargados y son válidos — no hay que revertirlos,
+    # pero el workflow igual tiene que salir en rojo para que alguien mire.
+    # Mismo mes_base a propósito: las dos series salen de la misma tabla de
+    # ventas, así que comparten el último ciclo cerrado y quedan alineadas.
+    return correr_finanzas(mes_base)
 
 
 if __name__ == "__main__":
