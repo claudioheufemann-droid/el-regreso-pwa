@@ -81,6 +81,11 @@ function fCantidadInsumo(cantidad: number, unidadBase: 'gr' | 'ml'): string {
  *  ordenar por otro criterio (Stock de Seguridad, calculadora de cobertura). */
 const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata', 'otros']
 
+/** Valor sentinela del selector de Producto en la Calculadora de Cobertura
+ *  para la opción agregada "Todos los productos" (compras necesita el total
+ *  de latas a comprar de todo el catálogo, no producto por producto). */
+const TODOS_PRODUCTOS = '__todos__'
+
 /** Nombre de la unidad física de cada formato, para mostrar junto a los
  *  litros de disponible ("314 L · 888 latas"). */
 const UNIDAD_ENVASE: Record<EnvaseBucket, string> = {
@@ -651,20 +656,72 @@ export default function ProduccionClient({
   }, [stock])
 
   const envasesCoberturaDisponibles = useMemo(
-    () => ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === productoCobertura && s.envaseBucket === b)),
+    () => productoCobertura === TODOS_PRODUCTOS
+      ? ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.envaseBucket === b))
+      : ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === productoCobertura && s.envaseBucket === b)),
     [series, productoCobertura]
   )
 
   const resultadoCobertura = useMemo(() => {
     if (!productoCobertura) return null
+    const hoyISO = hoyLocalISO()
+    if (coberturaFecha <= hoyISO) return { error: 'La fecha objetivo debe ser posterior a hoy.' as const }
+
+    // "Todos los productos": suma los números de CADA producto (no resta
+    // el sobrante de uno contra el faltante de otro — cada necesidad neta
+    // se calcula por producto y después se suman, mismo criterio que ya
+    // usa el desglose por formato de abajo). Las latas a comprar se calculan
+    // siempre sobre el formato lata de cada producto, sin importar qué
+    // Formato esté elegido arriba — compras necesita ese total igual.
+    if (productoCobertura === TODOS_PRODUCTOS) {
+      const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+      let demandaProyectada = 0
+      let disponibleTotal = 0
+      let hayDisponible = false
+      let necesidadNeta = 0
+      let latasACubrir = 0
+      for (const producto of productosDisponibles) {
+        const envasesProducto = ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === producto && s.envaseBucket === b))
+        if (coberturaEnvase !== 'todos' && !envasesProducto.includes(coberturaEnvase)) continue
+
+        const envaseSel = coberturaEnvase !== 'todos' ? coberturaEnvase : null
+        const nivelBuscado = envaseSel ? 'producto_envase' : 'producto'
+        const claveBuscada = envaseSel ? claveProductoEnvase(producto, envaseSel) : producto
+        const serie = series.find(s => s.nivel === nivelBuscado && s.clave === claveBuscada)
+        if (!serie) continue
+
+        const demandaProducto = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
+        const filaStock = stockSeguridad.find(s => s.nivel === nivelBuscado && s.mes === primerMesStock && s.producto === producto && (envaseSel ? s.envase === envaseSel : true))
+        const disponibleProducto = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
+        demandaProyectada += demandaProducto
+        if (disponibleProducto != null) { disponibleTotal += disponibleProducto; hayDisponible = true }
+        necesidadNeta += disponibleProducto != null ? Math.max(demandaProducto - disponibleProducto, 0) : 0
+
+        const litrosPorLata = litrosPorLataPorProducto.get(producto) ?? null
+        if (litrosPorLata != null && envasesProducto.includes('lata')) {
+          const serieLata = envaseSel === 'lata' ? serie : series.find(s => s.nivel === 'producto_envase' && s.clave === claveProductoEnvase(producto, 'lata'))
+          const demandaLata = serieLata ? demandaProyectadaEnPeriodo(serieLata, avanceMes, hoyISO, coberturaFecha) : 0
+          const filaStockLata = envaseSel === 'lata' ? filaStock : stockSeguridad.find(s => s.nivel === 'producto_envase' && s.mes === primerMesStock && s.producto === producto && s.envase === 'lata')
+          const disponibleLata = filaStockLata ? (filaStockLata.stockActualLitros ?? 0) + filaStockLata.litrosEnProduccion : null
+          const necesidadLata = disponibleLata != null ? Math.max(demandaLata - disponibleLata, 0) : 0
+          latasACubrir += Math.ceil(necesidadLata / litrosPorLata)
+        }
+      }
+      return {
+        demandaProyectada: Math.round(demandaProyectada),
+        disponible: hayDisponible ? disponibleTotal : null,
+        necesidadNeta,
+        categoria: null,
+        latasACubrir: latasACubrir > 0 ? latasACubrir : null,
+        litrosPorLata: null,
+      }
+    }
+
     const envaseSel = coberturaEnvase !== 'todos' && envasesCoberturaDisponibles.includes(coberturaEnvase) ? coberturaEnvase : null
     const nivelBuscado = envaseSel ? 'producto_envase' : 'producto'
     const claveBuscada = envaseSel ? claveProductoEnvase(productoCobertura, envaseSel) : productoCobertura
     const serie = series.find(s => s.nivel === nivelBuscado && s.clave === claveBuscada)
     if (!serie) return null
-
-    const hoyISO = hoyLocalISO()
-    if (coberturaFecha <= hoyISO) return { error: 'La fecha objetivo debe ser posterior a hoy.' as const }
 
     const demandaProyectada = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
 
@@ -680,7 +737,7 @@ export default function ProduccionClient({
     const latasACubrir = litrosPorLata != null && necesidadNeta != null ? Math.ceil(necesidadNeta / litrosPorLata) : null
 
     return { demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, categoria: serie.categoria as 'cerveza' | 'kombucha' | null, latasACubrir, litrosPorLata }
-  }, [productoCobertura, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
+  }, [productoCobertura, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, productosDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
 
   /* ── Desglose por formato de envasado ────────────────────────────────────
      Se cuece por PRODUCTO (un solo lote), y ese lote se envasa después en
@@ -690,7 +747,7 @@ export default function ProduccionClient({
      qué opción esté elegida en el selector de Formato de arriba (ese sigue
      sirviendo para mirar un formato puntual en el resumen de 3 números). */
   const desgloseCoberturaFormatos = useMemo(() => {
-    if (!productoCobertura) return null
+    if (!productoCobertura || productoCobertura === TODOS_PRODUCTOS) return null
     const hoyISO = hoyLocalISO()
     if (coberturaFecha <= hoyISO) return null
 
@@ -710,6 +767,53 @@ export default function ProduccionClient({
     const totalNecesidad = filas.reduce((acc, f) => acc + (f.necesidadNeta ?? 0), 0)
     return { filas, totalNecesidad }
   }, [productoCobertura, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
+
+  /* ── Desglose por producto (sólo con "Todos los productos" elegido) ─────
+     El equivalente al desglose por formato, pero cuando se está mirando el
+     agregado: acá cada fila es un producto (respetando el Formato elegido
+     arriba), con su propia columna de latas a comprar — así compras no
+     tiene que ir producto por producto para armar la lista de compra. */
+  const desgloseCoberturaProductos = useMemo(() => {
+    if (productoCobertura !== TODOS_PRODUCTOS) return null
+    const hoyISO = hoyLocalISO()
+    if (coberturaFecha <= hoyISO) return null
+
+    const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+    const filas = productosDisponibles.flatMap(producto => {
+      const envasesProducto = ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === producto && s.envaseBucket === b))
+      if (coberturaEnvase !== 'todos' && !envasesProducto.includes(coberturaEnvase)) return []
+
+      const envaseSel = coberturaEnvase !== 'todos' ? coberturaEnvase : null
+      const nivelBuscado = envaseSel ? 'producto_envase' : 'producto'
+      const claveBuscada = envaseSel ? claveProductoEnvase(producto, envaseSel) : producto
+      const serie = series.find(s => s.nivel === nivelBuscado && s.clave === claveBuscada)
+      if (!serie) return []
+
+      const demandaProyectada = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
+      const filaStock = stockSeguridad.find(s => s.nivel === nivelBuscado && s.mes === primerMesStock && s.producto === producto && (envaseSel ? s.envase === envaseSel : true))
+      const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
+      const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
+
+      const litrosPorLata = litrosPorLataPorProducto.get(producto) ?? null
+      let latasACubrir: number | null = null
+      if (litrosPorLata != null && envasesProducto.includes('lata')) {
+        const serieLata = envaseSel === 'lata' ? serie : series.find(s => s.nivel === 'producto_envase' && s.clave === claveProductoEnvase(producto, 'lata'))
+        const demandaLata = serieLata ? demandaProyectadaEnPeriodo(serieLata, avanceMes, hoyISO, coberturaFecha) : 0
+        const filaStockLata = envaseSel === 'lata' ? filaStock : stockSeguridad.find(s => s.nivel === 'producto_envase' && s.mes === primerMesStock && s.producto === producto && s.envase === 'lata')
+        const disponibleLata = filaStockLata ? (filaStockLata.stockActualLitros ?? 0) + filaStockLata.litrosEnProduccion : null
+        const necesidadLata = disponibleLata != null ? Math.max(demandaLata - disponibleLata, 0) : 0
+        latasACubrir = Math.ceil(necesidadLata / litrosPorLata)
+      }
+
+      return [{ producto, demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, latasACubrir }]
+    })
+    if (filas.length === 0) return null
+
+    filas.sort((a, b) => (b.necesidadNeta ?? 0) - (a.necesidadNeta ?? 0))
+    const totalNecesidad = filas.reduce((acc, f) => acc + (f.necesidadNeta ?? 0), 0)
+    const totalLatas = filas.reduce((acc, f) => acc + (f.latasACubrir ?? 0), 0)
+    return { filas, totalNecesidad, totalLatas }
+  }, [productoCobertura, coberturaEnvase, coberturaFecha, productosDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
 
   /* ── Serie seleccionada → filas para Recharts ─────────────────────────
      La proyección arranca repitiendo el último mes real, para que las dos
@@ -1952,6 +2056,7 @@ export default function ProduccionClient({
                       onChange={e => { setCoberturaProducto(e.target.value); setCoberturaEnvase('todos') }}
                       className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     >
+                      <option value={TODOS_PRODUCTOS}>Todos los productos</option>
                       {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
@@ -1996,7 +2101,7 @@ export default function ProduccionClient({
                       </p>
                       {resultadoCobertura.latasACubrir != null && (
                         <p className="mt-1 text-xs font-bold text-amber-700">
-                          ≈ {fNum(resultadoCobertura.latasACubrir)} latas de {Math.round((resultadoCobertura.litrosPorLata ?? 0) * 1000)} ml a comprar
+                          ≈ {fNum(resultadoCobertura.latasACubrir)} latas{resultadoCobertura.litrosPorLata != null ? ` de ${Math.round(resultadoCobertura.litrosPorLata * 1000)} ml` : ''} a comprar
                         </p>
                       )}
                     </div>
@@ -2042,6 +2147,52 @@ export default function ProduccionClient({
                           </td>
                           <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">{fNum(desgloseCoberturaFormatos.totalNecesidad)} L</td>
                           <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
+                {/* Desglose por producto: sólo con "Todos los productos" elegido —
+                    el equivalente de arriba pero para armar de un vistazo la lista
+                    de compra de latas de todo el catálogo. */}
+                {desgloseCoberturaProductos && desgloseCoberturaProductos.filas.length > 0 && (
+                  <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
+                    <div className="border-b border-gray-100 bg-gray-50/70 px-4 py-2.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                        Desglose por producto — {coberturaEnvase === 'todos' ? 'todos los formatos' : ENVASE_LABEL[coberturaEnvase]}
+                      </span>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead className="text-xs uppercase tracking-wide text-gray-400">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-bold">Producto</th>
+                          <th className="px-4 py-2 text-right font-bold">Demanda proyectada</th>
+                          <th className="px-4 py-2 text-right font-bold">Disponible</th>
+                          <th className="px-4 py-2 text-right font-bold">Necesidad neta</th>
+                          <th className="px-4 py-2 text-right font-bold">Latas a comprar</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {desgloseCoberturaProductos.filas.map(f => (
+                          <tr key={f.producto}>
+                            <td className="px-4 py-2.5 font-semibold text-gray-700">{f.producto}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fNum(f.demandaProyectada)} L</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">{f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-700">{f.latasACubrir != null ? fNum(f.latasACubrir) : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-amber-50">
+                          <td colSpan={3} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-amber-700">
+                            Total ({desgloseCoberturaProductos.filas.length} productos)
+                          </td>
+                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">{fNum(desgloseCoberturaProductos.totalNecesidad)} L</td>
+                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">
+                            {desgloseCoberturaProductos.totalLatas > 0 ? fNum(desgloseCoberturaProductos.totalLatas) : '—'}
+                          </td>
                         </tr>
                       </tfoot>
                     </table>
