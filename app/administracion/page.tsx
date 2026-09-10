@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { cicloEnCursoISO, inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import {
   proyectarCaja, esIngresoReal, normalizarNombreCliente, brutoDeFila,
-  categoriaNormalizada, type FilaVentaFinanzas, type ProyeccionCaja,
+  categoriaNormalizada, calcularPrecisionCobro, type FilaVentaFinanzas, type ProyeccionCaja, type PrecisionCobro,
 } from '@/lib/administracion/finanzas'
 import AdministracionClient from './AdministracionClient'
 
@@ -151,7 +151,7 @@ export default async function AdministracionPage() {
       }
       return filas
     })(),
-    admin.from('deudores').select('deuda_vencida, updated_at').then(r => r.data ?? []),
+    admin.from('deudores').select('nombre_fantasia, deuda_vencida, updated_at').then(r => r.data ?? []),
     admin.from('erp_sync_log').select('creado_at').eq('fuente', 'forecast_finanzas').eq('ok', true)
       .order('creado_at', { ascending: false }).limit(1).maybeSingle().then(r => r.data),
   ])
@@ -233,6 +233,22 @@ export default async function AdministracionPage() {
     }, null),
   }
 
+  // ── Precisión de cobro ──────────────────────────────────────────────────────
+  // Cruza lo que ESTE módulo esperaba cobrar en los últimos 60 días contra el
+  // dato duro del ERP (Deudores): ¿el cliente sigue con deuda vencida, o no?
+  // Es la única forma de calibrar la proyección sin una tabla de pagos real —
+  // ver el comentario extenso en calcularPrecisionCobro().
+  const deudaVencidaPorCliente = new Map<string, number>()
+  for (const d of deudoresRaw) {
+    const k = normalizarNombreCliente(d.nombre_fantasia as string | null)
+    if (!k) continue
+    deudaVencidaPorCliente.set(k, (deudaVencidaPorCliente.get(k) ?? 0) + (Number(d.deuda_vencida) || 0))
+  }
+  const ventana60d = new Date(Date.now() - 60 * MS_POR_DIA).toISOString().slice(0, 10)
+  const precisionCobro: PrecisionCobro = calcularPrecisionCobro(
+    ventasRaw, diasPagoPorCliente, deudaVencidaPorCliente, hoyISO, ventana60d
+  )
+
   return (
     <AdministracionClient
       series={series}
@@ -240,6 +256,7 @@ export default async function AdministracionPage() {
       mtd={mtdGeneral}
       caja={caja}
       deuda={deuda}
+      precisionCobro={precisionCobro}
       ultimaCorrida={ultimaCorridaRaw?.creado_at ?? null}
       clientesSinPlazo={[...diasPagoPorCliente.values()].filter(v => v == null).length}
       hoyISO={hoyISO}

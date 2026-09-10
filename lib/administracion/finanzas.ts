@@ -209,3 +209,113 @@ export function proyectarCaja(
     },
   }
 }
+
+// ── Precisión de cobro ───────────────────────────────────────────────────────
+// Responde la pregunta que `proyectarCaja` NO responde: de lo que en el
+// pasado se esperaba cobrar, ¿cuánto se cobró de verdad? `ventas` no tiene
+// marca de pago (no hay tabla de recibos ni de movimientos de cuenta
+// corriente sincronizada todavía — sólo el saldo/deuda ACTUAL del cliente,
+// vía el informe de Deudores del ERP). Así que la única forma de calibrar es
+// indirecta: para cada cliente cuya fecha de cobro esperada (fecha_entrega +
+// dias_pago) ya pasó, se mira si ese cliente sigue figurando con deuda
+// vencida > 0 en el snapshot MÁS RECIENTE de `deudores` (dato duro del ERP,
+// no una proyección nuestra).
+//
+// Es una aproximación, no una conciliación contable: `deuda_vencida` es la
+// deuda vencida TOTAL del cliente hoy, no "esta venta puntual" — si el
+// cliente pagó ESTA venta pero se atrasó en otra más vieja, igual cuenta como
+// "incumplido" acá. Se documenta así en vez de aparentar precisión que no
+// existe. Lo que SÍ es sólido: el % resultante es la mejor estimación posible
+// hoy de "cuántos clientes realmente están pagando cuando dijeron que iban a
+// pagar", construida enteramente con datos que el ERP ya nos da — sin
+// inventar nada.
+export interface ClienteIncumplido {
+  cliente: string
+  /** Lo que ESTE análisis esperaba cobrarle en la ventana evaluada. */
+  brutoEsperado: number
+  /** La fecha de cobro esperada más antigua entre sus ventas vencidas —
+   *  para ordenar por "hace cuánto que debería haber entrado". */
+  fechaEsperadaMasAntigua: string
+  /** Deuda vencida TOTAL del cliente según el ERP ahora mismo — puede ser
+   *  mayor, menor o igual a `brutoEsperado` (ver nota arriba). */
+  deudaVencidaReal: number
+}
+
+export interface PrecisionCobro {
+  ventanaDesdeISO: string
+  totalEsperado: { bruto: number; clientes: number }
+  totalConfirmadoPagado: { bruto: number; clientes: number }
+  totalIncumplido: { bruto: number; clientes: number }
+  /** % de PLATA esperada que efectivamente se cobró (no % de clientes: un
+   *  cliente grande incumplido pesa distinto que uno chico). Null si no
+   *  hubo nada que evaluar en la ventana (recién arrancando el negocio). */
+  pctCumplimiento: number | null
+  /** Clientes incumplidos, de mayor a menor bruto esperado. */
+  clientesIncumplidos: ClienteIncumplido[]
+}
+
+export function calcularPrecisionCobro(
+  ventas: FilaVentaFinanzas[],
+  diasPagoPorCliente: Map<string, number | null>,
+  /** clave = nombre normalizado → deuda_vencida real, del snapshot más
+   *  reciente de `deudores`. Un cliente ausente de este mapa (no aparece en
+   *  Deudores) se interpreta como sin deuda vencida — el ERP sólo lista
+   *  clientes con saldo, así que "no está" ya es la señal de "está al día". */
+  deudaVencidaPorCliente: Map<string, number>,
+  hoyISO: string,
+  ventanaDesdeISO: string,
+): PrecisionCobro {
+  const porCliente = new Map<string, { bruto: number; fechaMasAntigua: string; nombreOriginal: string }>()
+
+  for (const f of ventas) {
+    if (!esIngresoReal(f)) continue
+    if (!f.fecha_entrega) continue
+    const neto = Number(f.total_sin_impuesto) || 0
+    if (neto === 0) continue
+
+    const clave = normalizarNombreCliente(f.nombre_fantasia)
+    const dias = diasPagoPorCliente.get(clave)
+    if (dias == null) continue
+
+    const fechaCobro = sumarDias(f.fecha_entrega.slice(0, 10), dias)
+    // Sólo ventas cuyo cobro YA debería haber llegado (fechaCobro < hoy),
+    // dentro de la ventana de evaluación — más viejo que eso es harina de
+    // otro costal (mora estructural, no algo que esta corrida deba juzgar).
+    if (fechaCobro >= hoyISO || fechaCobro < ventanaDesdeISO) continue
+
+    const bruto = brutoDeFila(f)
+    const acc = porCliente.get(clave) ?? { bruto: 0, fechaMasAntigua: fechaCobro, nombreOriginal: f.nombre_fantasia ?? clave }
+    acc.bruto += bruto
+    if (fechaCobro < acc.fechaMasAntigua) acc.fechaMasAntigua = fechaCobro
+    porCliente.set(clave, acc)
+  }
+
+  const clientesIncumplidos: ClienteIncumplido[] = []
+  let brutoConfirmado = 0, clientesConfirmados = 0
+  let brutoIncumplido = 0
+
+  for (const [clave, v] of porCliente) {
+    const deudaVencida = deudaVencidaPorCliente.get(clave) ?? 0
+    if (deudaVencida > 0) {
+      brutoIncumplido += v.bruto
+      clientesIncumplidos.push({
+        cliente: v.nombreOriginal, brutoEsperado: Math.round(v.bruto),
+        fechaEsperadaMasAntigua: v.fechaMasAntigua, deudaVencidaReal: Math.round(deudaVencida),
+      })
+    } else {
+      brutoConfirmado += v.bruto
+      clientesConfirmados++
+    }
+  }
+  clientesIncumplidos.sort((a, b) => b.brutoEsperado - a.brutoEsperado)
+
+  const brutoEsperado = brutoConfirmado + brutoIncumplido
+  return {
+    ventanaDesdeISO,
+    totalEsperado: { bruto: Math.round(brutoEsperado), clientes: porCliente.size },
+    totalConfirmadoPagado: { bruto: Math.round(brutoConfirmado), clientes: clientesConfirmados },
+    totalIncumplido: { bruto: Math.round(brutoIncumplido), clientes: clientesIncumplidos.length },
+    pctCumplimiento: brutoEsperado > 0 ? Math.round((brutoConfirmado / brutoEsperado) * 1000) / 10 : null,
+    clientesIncumplidos,
+  }
+}

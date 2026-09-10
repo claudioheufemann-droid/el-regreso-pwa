@@ -7,10 +7,10 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import {
-  TrendingUp, Wallet, AlertTriangle, Info, CalendarClock, Truck, HelpCircle, ChevronLeft,
+  TrendingUp, Wallet, AlertTriangle, Info, CalendarClock, Truck, HelpCircle, ChevronLeft, Target, UserX,
 } from 'lucide-react'
 import type { SerieFinanzas, AvanceCiclo, ResumenDeuda } from './page'
-import type { ProyeccionCaja } from '@/lib/administracion/finanzas'
+import type { ProyeccionCaja, PrecisionCobro } from '@/lib/administracion/finanzas'
 
 interface Props {
   series: SerieFinanzas[]
@@ -18,6 +18,7 @@ interface Props {
   mtd: { neto: number; bruto: number }
   caja: ProyeccionCaja
   deuda: ResumenDeuda
+  precisionCobro: PrecisionCobro
   ultimaCorrida: string | null
   clientesSinPlazo: number
   /** Viene del servidor, no de `new Date()` acá: el mismo valor en render de
@@ -135,7 +136,7 @@ function Etiqueta({ children, title }: { children: React.ReactNode; title?: stri
 }
 
 export default function AdministracionClient({
-  series, avance, mtd, caja, deuda, ultimaCorrida, clientesSinPlazo, hoyISO,
+  series, avance, mtd, caja, deuda, precisionCobro, ultimaCorrida, clientesSinPlazo, hoyISO,
 }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<'ingresos' | 'caja'>('ingresos')
@@ -418,6 +419,79 @@ export default function AdministracionClient({
         {/* ══════════════ FLUJO DE CAJA ══════════════ */}
         {tab === 'caja' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+            {/* Precisión de cobro — calibra la proyección contra la realidad:
+                de lo que en el pasado esperábamos cobrar, ¿cuánto entró de
+                verdad? No hay tabla de pagos/recibos sincronizada todavía, así
+                que se infiere cruzando contra Deudores del ERP (dato duro):
+                si el cliente sigue con deuda vencida, no pagó cuando debía. */}
+            <Card acento={precisionCobro.pctCumplimiento != null && precisionCobro.pctCumplimiento < 70 ? C.redBorder : undefined}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <span style={{
+                    width: 52, height: 52, borderRadius: 16, flexShrink: 0,
+                    background: precisionCobro.pctCumplimiento != null && precisionCobro.pctCumplimiento >= 85 ? C.greenSoft : C.amberSoft,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Target size={24} color={precisionCobro.pctCumplimiento != null && precisionCobro.pctCumplimiento >= 85 ? C.green : C.amber} />
+                  </span>
+                  <div>
+                    <Etiqueta title="De las ventas cuya fecha de cobro esperada (fecha de entrega + días de pago del cliente) cayó en los últimos 60 días, qué porcentaje del monto NO tiene hoy deuda vencida en el ERP — la mejor aproximación posible sin una tabla de pagos real. No es exacto a nivel de factura: mide si el CLIENTE está al día, no si pagó exactamente esta venta.">
+                      Precisión de cobro — últimos 60 días
+                    </Etiqueta>
+                    <p style={{ fontSize: 30, fontWeight: 900, marginTop: 4, fontVariantNumeric: 'tabular-nums', color: precisionCobro.pctCumplimiento == null ? C.muted : precisionCobro.pctCumplimiento >= 85 ? C.green : precisionCobro.pctCumplimiento >= 70 ? C.amber : C.red }}>
+                      {precisionCobro.pctCumplimiento != null ? `${precisionCobro.pctCumplimiento}%` : '—'}
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                  <div>
+                    <p style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '.04em' }}>Esperado</p>
+                    <p style={{ fontSize: 17, fontWeight: 800, color: C.text, marginTop: 2 }}>{fMoney(precisionCobro.totalEsperado.bruto)}</p>
+                    <p style={{ fontSize: 11, color: C.muted }}>{precisionCobro.totalEsperado.clientes} clientes</p>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '.04em' }}>Confirmado al día</p>
+                    <p style={{ fontSize: 17, fontWeight: 800, color: C.green, marginTop: 2 }}>{fMoney(precisionCobro.totalConfirmadoPagado.bruto)}</p>
+                    <p style={{ fontSize: 11, color: C.muted }}>{precisionCobro.totalConfirmadoPagado.clientes} clientes</p>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '.04em' }}>Sigue vencido</p>
+                    <p style={{ fontSize: 17, fontWeight: 800, color: C.red, marginTop: 2 }}>{fMoney(precisionCobro.totalIncumplido.bruto)}</p>
+                    <p style={{ fontSize: 11, color: C.muted }}>{precisionCobro.totalIncumplido.clientes} clientes</p>
+                  </div>
+                </div>
+              </div>
+
+              {precisionCobro.clientesIncumplidos.length > 0 && (
+                <div style={{ marginTop: 16, borderTop: `1px solid ${C.line}`, paddingTop: 14 }}>
+                  <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+                    <UserX size={14} color={C.red} />
+                    Clientes que no pagaron cuando correspondía
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {precisionCobro.clientesIncumplidos.slice(0, 8).map(c => (
+                      <div key={c.cliente} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: C.bg, borderRadius: 10, padding: '9px 12px' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.cliente}</p>
+                          <p style={{ fontSize: 11, color: C.muted }}>Debería haber pagado desde el {fDia(c.fechaEsperadaMasAntigua)}</p>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: C.red }}>{fMoney(c.brutoEsperado)}</p>
+                          <p style={{ fontSize: 11, color: C.muted }}>deuda total: {fMoney(c.deudaVencidaReal)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {precisionCobro.clientesIncumplidos.length > 8 && (
+                    <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8 }}>
+                      +{precisionCobro.clientesIncumplidos.length - 8} clientes más — el detalle completo está en Cobranza.
+                    </p>
+                  )}
+                </div>
+              )}
+            </Card>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
               <Card>
                 <Etiqueta title="Suma de las ventas ya despachadas cuyo plazo de pago vence de hoy en adelante.">
