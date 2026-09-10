@@ -33,6 +33,18 @@
  * (Los Ríos) quedan con su email, `nicol.delgado@elregresobeer.com` (773
  * filas). Con 'Los Rios' su venta nunca sumó a la comisión de Claudio; no se
  * sabe desde cuándo. Ver [[project_modulo_comisiones_acceso]].
+ *
+ * Corrección 2026-09-10: mismo bug, esta vez con la cartera de Marion Meza
+ * (Los Lagos). Claudio reportó que "Venta neta entregada del equipo" daba
+ * $15.884.066 cuando el área comercial completa entregó ~$20M en el período
+ * — se verificó con datos reales: la diferencia con CERVECERÍA ($14.004.136,
+ * otro canal, fuera del contrato a propósito) y cuentas internas como
+ * Rodrigo Solis ($2.409.381, 1 pedido) cuadraba, PERO 45 filas por $251.100
+ * quedaban bajo `vendedor_actual = 'Marion'` (sin apellido, ver alias en
+ * lib/types.ts) y no sumaban porque el arreglo sólo tenía 'Los Lagos'. Se
+ * agrega 'Marion' acá. VER TAMBIÉN: si el ERP vuelve a renombrar esta
+ * cartera, agregar el nuevo nombre crudo acá (no basta con VENDEDOR_ALIAS,
+ * que sólo unifica el ranking — este arreglo filtra qué SUMA a la comisión).
  */
 export const VENDEDORES_COMISIONABLES = [
   'Yadro Fabijancic',
@@ -40,6 +52,7 @@ export const VENDEDORES_COMISIONABLES = [
   'Claudio Heufemann',
   'nicol.delgado@elregresobeer.com',
   'Los Lagos',
+  'Marion',
   'OnLine',
   'Transición 1',
   'Transición 2',
