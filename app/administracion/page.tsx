@@ -140,10 +140,10 @@ export default async function AdministracionPage() {
       return lotes.flat()
     })(),
     (async () => {
-      const filas: { nombre_fantasia: string | null; dias_pago: number | null }[] = []
+      const filas: { nombre_fantasia: string | null; dias_pago: number | null; dias_pago_real_mediana: number | null; dias_pago_real_muestras: number | null }[] = []
       for (let offset = 0; ; offset += PAGE) {
         const { data } = await admin.from('clientes')
-          .select('nombre_fantasia, dias_pago')
+          .select('nombre_fantasia, dias_pago, dias_pago_real_mediana, dias_pago_real_muestras')
           .order('id', { ascending: true }).range(offset, offset + PAGE - 1)
         if (!data || data.length === 0) break
         filas.push(...data)
@@ -210,12 +210,22 @@ export default async function AdministracionPage() {
   // El maestro puede traer el mismo nombre más de una vez; gana el que tenga
   // plazo cargado, para no perder el dato por culpa de una ficha duplicada
   // incompleta.
+  //
+  // Prioridad: plazo REAL observado (mediana de días entre remito y pago,
+  // calculado desde "Movimientos Cta. Cte." del ERP — 10-sep-2026) por sobre
+  // el plazo DECLARADO en el ERP, cuando hay al menos 3 facturas matcheadas
+  // para confiar en la mediana. La brecha entre ambos es real: mediana
+  // declarada global 7 días vs. mediana real observada 13-14 — los clientes
+  // en promedio pagan más lento de lo que el ERP dice que deberían.
   const diasPagoPorCliente = new Map<string, number | null>()
   for (const c of clientesRaw) {
     const k = normalizarNombreCliente(c.nombre_fantasia)
     if (!k) continue
     const previo = diasPagoPorCliente.get(k)
-    if (previo == null) diasPagoPorCliente.set(k, c.dias_pago)
+    const dias = c.dias_pago_real_muestras != null && c.dias_pago_real_muestras >= 3
+      ? c.dias_pago_real_mediana
+      : c.dias_pago
+    if (previo == null) diasPagoPorCliente.set(k, dias)
   }
 
   // Se descartan los cobros esperados de hace más de 14 días: `ventas` no dice
