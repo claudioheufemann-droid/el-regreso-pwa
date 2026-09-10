@@ -132,26 +132,25 @@ export async function POST(req: Request) {
 
   const fechaInforme = new Date().toISOString().split('T')[0]
 
-  // Reemplazo completo del snapshot — mismo criterio que stock_productos.
-  const { error: delError } = await supabase.from('stock_insumos').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-  if (delError) {
-    await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: `Error al limpiar stock de insumos anterior: ${delError.message}` })
-    return NextResponse.json({ error: `Error al limpiar stock de insumos anterior: ${delError.message}` }, { status: 500 })
-  }
-
   const filasInsert = matcheados.map(m => ({
-    fecha_informe: fechaInforme,
     insumo_id: m.insumoId,
     cantidad: m.cantidadBase,
   }))
 
-  const { error: insError, data } = await supabase.from('stock_insumos').insert(filasInsert).select('id')
-  if (insError) {
-    await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: insError.message })
-    return NextResponse.json({ error: insError.message }, { status: 500 })
+  // Reemplazo completo del snapshot (mismo criterio que stock_productos),
+  // pero como UNA transacción vía RPC — si el insert falla, el delete
+  // también se revierte, así una fila mala nunca deja la tabla vacía (ver
+  // migración fix_stock_insumos_negativos_y_reemplazo_atomico).
+  const { error: rpcError, data: insertados } = await supabase.rpc('reemplazar_stock_insumos', {
+    p_fecha: fechaInforme,
+    p_filas: filasInsert,
+  })
+  if (rpcError) {
+    await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: rpcError.message })
+    return NextResponse.json({ error: rpcError.message }, { status: 500 })
   }
 
-  await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: true, total: filas.length, insertados: data?.length ?? 0 })
+  await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: true, total: filas.length, insertados: insertados ?? 0 })
 
-  return NextResponse.json({ insertados: data?.length ?? 0, sinMatch: sinMatch.length, fechaInforme, resumen, sinMatchDetalle: sinMatch })
+  return NextResponse.json({ insertados: insertados ?? 0, sinMatch: sinMatch.length, fechaInforme, resumen, sinMatchDetalle: sinMatch })
 }
