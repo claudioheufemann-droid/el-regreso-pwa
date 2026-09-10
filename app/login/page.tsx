@@ -144,7 +144,7 @@ export default function LoginPage() {
           <div style={{
             position:'absolute', inset:0,
             display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start',
-            paddingTop:'max(env(safe-area-inset-top),12px)',
+            paddingTop:'max(var(--safe-top),12px)',
             gap: 6,
             zIndex: 2,
           }}>

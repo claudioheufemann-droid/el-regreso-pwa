@@ -301,7 +301,7 @@ export default function HubClient({ isAdmin, nombre, macroArea }: {
       minHeight: '100svh',
       background: '#07070D',
       display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
-      padding: 'max(env(safe-area-inset-top), 16px) 18px 20px',
+      padding: 'max(var(--safe-top), 16px) 18px 20px',
       fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
       <div style={{ width: '100%', maxWidth: 420, position: 'relative' }}>

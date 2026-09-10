@@ -613,7 +613,31 @@ body {
 /* HTML necesita height: 100% para que safe-area funcione en PWA standalone */
 html { height: 100%; }
 
-.mobile-safe-top  { padding-top:    env(safe-area-inset-top,    0px); }
+/* Alto a reservar arriba para no quedar bajo la barra de estado.
+   En un navegador normal es 0 y así debe quedar: el sistema ya deja la barra
+   fuera del viewport, sumar espacio ahí sería un hueco injustificado. */
+:root { --safe-top: env(safe-area-inset-top, 0px); }
+
+/* PWA instalada en iOS — el caso que hay que forzar a mano.
+   Con `apple-mobile-web-app-status-bar-style: black-translucent` (ver
+   app/layout.tsx) iOS dibuja la app DEBAJO del reloj, pero en esa misma
+   situación reporta env(safe-area-inset-top) = 0. Resultado: todo padding que
+   dependa sólo de env() reserva cero y el reloj queda encima del primer
+   control de la pantalla — reportado el 2026-09-10, el botón "Volver" de
+   /ventas no se podía tocar porque el reloj se comía el toque.
+   El piso de 52px cubre la barra de estado de los iPhone con notch y con
+   Dynamic Island. Si env() SÍ trae el valor real, max() se queda con ese, así
+   que esto es correcto tanto si iOS reporta el inset como si miente.
+   @supports (-webkit-touch-callout) acota esto a WebKit/iOS: en una PWA
+   instalada en Android el sistema NO dibuja bajo la barra y este piso sería
+   espacio perdido. */
+@supports (-webkit-touch-callout: none) {
+  @media all and (display-mode: standalone) {
+    :root { --safe-top: max(env(safe-area-inset-top, 0px), 52px); }
+  }
+}
+
+.mobile-safe-top  { padding-top:    var(--safe-top); }
 .mobile-safe-bot  { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .mobile-safe-left { padding-left:   env(safe-area-inset-left,   0px); }
 .mobile-safe-x    { padding-left:   env(safe-area-inset-left,   0px);
@@ -921,7 +945,7 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
 .rg-page {
   background: var(--rg-carbon-2);
   min-height: 100vh;
-  padding: max(env(safe-area-inset-top), 18px) 16px 100px;
+  padding: max(var(--safe-top), 18px) 16px 100px;
 }
 .rg-page-inner { max-width: 600px; margin: 0 auto; width: 100%; }
 

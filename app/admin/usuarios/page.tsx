@@ -237,7 +237,7 @@ export default function UsuariosAdminPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#07070D', color: '#F4EEDF' }}>
+    <div className="mobile-safe-top" style={{ minHeight: '100vh', background: '#07070D', color: '#F4EEDF' }}>
 
       {/* Top nav */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 28px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(15,15,24,0.95)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 10 }}>

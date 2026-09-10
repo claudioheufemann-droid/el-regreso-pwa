@@ -95,7 +95,7 @@ export default function HistoricoClient({ mensualInicial, paretoInicial, canales
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100 }}>
       <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 16px' }}>
-        <div style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))' }}>
+        <div style={{ paddingTop: 16 }}>
           <AppHeader eyebrow={isAdmin ? 'Inteligencia de ventas' : 'Tu región'} title="Histórico" />
         </div>
 

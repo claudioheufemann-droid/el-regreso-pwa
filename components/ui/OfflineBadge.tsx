@@ -43,7 +43,7 @@ export default function OfflineBadge() {
 
   return (
     <div style={{
-      position: 'fixed', top: 'max(10px, env(safe-area-inset-top, 10px))', left: '50%',
+      position: 'fixed', top: 'max(10px, var(--safe-top))', left: '50%',
       transform: 'translateX(-50%)', zIndex: 9500,
       display: 'flex', alignItems: 'center', gap: 7,
       padding: '7px 14px', borderRadius: 20,

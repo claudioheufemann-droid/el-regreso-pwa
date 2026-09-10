@@ -321,8 +321,8 @@ function FotoLightbox({ fotos, startIdx, onClose }: { fotos: FotoEntry[]; startI
   const foto = fotos[idx]
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.96)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <button onClick={onClose} style={{ position: 'absolute', top: 'max(16px,env(safe-area-inset-top,16px))', right: 16, width: 36, height: 36, borderRadius: '50%', background: '#E2E8F0', border: '1px solid #E2E8F0', color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-      <div style={{ position: 'absolute', top: 'max(16px,env(safe-area-inset-top,16px))', left: 16, fontSize: 11, fontWeight: 700, color: '#64748B', background: 'rgba(0,0,0,0.5)', padding: '4px 10px', borderRadius: 20 }}>{idx + 1} / {fotos.length}</div>
+      <button onClick={onClose} style={{ position: 'absolute', top: 'max(16px, var(--safe-top))', right: 16, width: 36, height: 36, borderRadius: '50%', background: '#E2E8F0', border: '1px solid #E2E8F0', color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+      <div style={{ position: 'absolute', top: 'max(16px, var(--safe-top))', left: 16, fontSize: 11, fontWeight: 700, color: '#64748B', background: 'rgba(0,0,0,0.5)', padding: '4px 10px', borderRadius: 20 }}>{idx + 1} / {fotos.length}</div>
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, padding: '0 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={foto.src} alt={foto.label} style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 14, border: '1px solid #E2E8F0' }} />

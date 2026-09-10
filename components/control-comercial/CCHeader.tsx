@@ -34,7 +34,10 @@ export default function CCHeader({ eyebrow = 'Control Comercial', title, subtitl
 
   return (
     <>
-      <header style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 10px)', paddingBottom: 14 }}>
+      {/* Sin env(safe-area-inset-top) acá: el <main> del layout de
+          control-comercial ya lo aplica con .mobile-safe-top (globals.css).
+          Sumarlo también acá lo duplicaría. */}
+      <header style={{ paddingTop: 10, paddingBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, minWidth: 0 }}>
           <button
             onClick={() => router.push(backHref)}

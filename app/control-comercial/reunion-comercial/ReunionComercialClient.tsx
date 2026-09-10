@@ -533,7 +533,9 @@ export default function ReunionComercialClient() {
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}
     >
-      <div style={{ padding: 'calc(env(safe-area-inset-top, 0px) + 12px) 18px 10px', flexShrink: 0 }}>
+      {/* Sólo 12px: el <main> del layout de control-comercial ya reserva el
+          área segura con .mobile-safe-top (globals.css). */}
+      <div style={{ padding: '12px 18px 10px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={toggleFullscreen} className="cc-tap" style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--cc-line)', background: 'var(--cc-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>

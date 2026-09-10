@@ -1238,7 +1238,7 @@ export default function ProduccionClient({
       <main className="flex h-full flex-1 flex-col overflow-hidden bg-gray-100">
 
         {/* ── Barra superior ── */}
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 lg:h-16 lg:px-8 lg:py-0">
+        <header className="mobile-safe-top flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 lg:h-16 lg:px-8 lg:py-0">
           <div className="flex min-w-0 items-center gap-3">
             <Link href="/" aria-label="Volver al inicio" className="shrink-0 rounded-md p-1.5 text-gray-500 hover:bg-gray-100 lg:hidden">
               <Home size={18} />
