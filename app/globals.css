@@ -637,14 +637,29 @@ html { height: 100%; }
   }
 }
 
-.mobile-safe-top  { padding-top:    var(--safe-top); }
+/* Clase duplicada a propósito (`.x.x`), no es un typo.
+   El reset global de la línea ~522 —`*:not(.prod-root):not(.prod-root *)`—
+   declara `padding: 0` sin cascade layer y con especificidad (0,2,0), así que
+   le gana a cualquier regla de UNA sola clase. Consecuencia: `.mobile-safe-top`
+   a secas nunca aplicó nada. Medido en producción el 2026-09-10: un div con la
+   clase reportaba padding-top 0px aun con --safe-top ya resuelto en 52px. Por
+   eso el área segura "estaba puesta" en los 7 layouts y aun así el reloj tapaba
+   el botón Volver. Duplicar la clase sube la especificidad a (0,2,0) y, al venir
+   después en el archivo, gana el desempate.
+   (El arreglo de raíz es mover ese reset a `@layer base`, pero eso activaría el
+   spacing de Tailwind en TODAS las pantallas de golpe — ver el comentario de la
+   línea 512.) */
+.mobile-safe-top.mobile-safe-top { padding-top: var(--safe-top); }
 .mobile-safe-bot  { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .mobile-safe-left { padding-left:   env(safe-area-inset-left,   0px); }
 .mobile-safe-x    { padding-left:   env(safe-area-inset-left,   0px);
                     padding-right:  env(safe-area-inset-right,  0px); }
 
 @media (min-width: 1024px) {
-  .mobile-safe-top  { padding-top:    0; }
+  /* Duplicada por el mismo motivo que arriba: si acá quedara con una sola
+     clase, perdería contra la regla duplicada y el escritorio se llevaría el
+     padding del celular. */
+  .mobile-safe-top.mobile-safe-top { padding-top: 0; }
   .mobile-safe-bot  { padding-bottom: 0; }
   .mobile-safe-left { padding-left:   0; }
   .mobile-safe-x    { padding-left:   0; padding-right: 0; }
