@@ -106,9 +106,21 @@ export const FILTRO_LABEL: Record<FiltroStock, string> = {
  */
 const StockShareImage = forwardRef<HTMLDivElement, {
   barriles: StockProductoRow[]; envases: StockProductoRow[]; fechaInforme: string | null; filtro: FiltroStock
-}>(function StockShareImage({ barriles, envases, fechaInforme, filtro }, ref) {
+  /** Litros vendidos por codigo_producto (período actual + anterior) —
+   * ordena la imagen que ve el cliente de lo más pedido a lo menos pedido,
+   * en vez de alfabético. Se cruza por código (no por nombre: el texto de
+   * `producto` no calza igual entre ventas y stock_productos — ver
+   * app/ventas/stock/page.tsx). Sin ventas en la ventana queda al final. */
+  ventaPorCodigo: Record<string, number>
+}>(function StockShareImage({ barriles, envases, fechaInforme, filtro, ventaPorCodigo }, ref) {
   const porCategoria = (lista: StockProductoRow[], cat: string) =>
-    lista.filter(f => (f.categoria ?? 'Otros') === cat).sort((a, b) => a.producto.localeCompare(b.producto))
+    lista.filter(f => (f.categoria ?? 'Otros') === cat)
+      .sort((a, b) => {
+        const va = (a.codigo_producto && ventaPorCodigo[a.codigo_producto]) || 0
+        const vb = (b.codigo_producto && ventaPorCodigo[b.codigo_producto]) || 0
+        if (vb !== va) return vb - va
+        return a.producto.localeCompare(b.producto)
+      })
 
   const todasLasSecciones: { key: FiltroStock; g: Grupo; esLata: boolean }[] = [
     { key: 'barril-cerveza', g: { titulo: '🍺 Barriles · Cerveza', tint: IC.cerveza, tintSoft: IC.cervezaSoft, items: porCategoria(barriles, 'Cerveza') }, esLata: false },

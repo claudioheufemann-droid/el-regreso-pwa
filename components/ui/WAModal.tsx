@@ -10,6 +10,9 @@ export type AlertTipo  = 'rojo' | 'amarillo' | 'verde' | 'morado' | 'gris' | 'rm
 /** Un documento vencido, tal como se lista en el mensaje de cobranza. */
 export interface WADocumento {
   pedido: string
+  /** N° de factura del ERP — es lo que el cliente reconoce y lo que va en el
+   *  mensaje; null cuando el pedido aún no se ha facturado. */
+  numeroFactura: string | null
   fechaEmision: string
   fechaVencimiento: string
   diasMora: number
@@ -71,7 +74,7 @@ function mensajeCobranza(t: WATarget): string {
   const resto = (t.documentos?.length ?? 0) - docs.length
   const detalle = docs.length
     ? '\n\n' + docs
-        .map(d => `• N° ${d.pedido.replace(/^0+/, '')} del ${fFecha(d.fechaEmision)} — venció el ${fFecha(d.fechaVencimiento)} (${d.diasMora} ${d.diasMora === 1 ? 'día' : 'días'}) — ${CLP.format(d.monto)}`)
+        .map(d => `• Factura N° ${d.numeroFactura ? d.numeroFactura.replace(/^0+/, '') : `(pedido ${d.pedido.replace(/^0+/, '')}, sin facturar aún)`} del ${fFecha(d.fechaEmision)} — venció el ${fFecha(d.fechaVencimiento)} (${d.diasMora} ${d.diasMora === 1 ? 'día' : 'días'}) — ${CLP.format(d.monto)}`)
         .join('\n') +
       (resto > 0 ? `\n• y ${resto} documento${resto === 1 ? '' : 's'} más` : '')
     : ''

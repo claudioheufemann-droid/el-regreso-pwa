@@ -92,6 +92,39 @@ export function nombresErpDe(vigente: string): string[] {
   return [...new Set([vigente, ...raws])]
 }
 
+/** Nombres crudos del ERP de TODOS los canónicos dados — para pasar a los RPC
+ *  de Supabase, que filtran sobre el valor crudo de `vendedor_actual` (no
+ *  conocen `vendedorCanonico`). Reutiliza `nombresErpDe` por cada uno, así
+ *  que si el ERP vuelve a renombrar una cartera basta con agregar el alias
+ *  nuevo a VENDEDOR_ALIAS una sola vez — no hay que tocar cada RPC de nuevo
+ *  (bug real, dos veces: "Los Rios" 28-ago-2026 y "Marion" sin apellido
+ *  10-sep-2026, ambos con listas de nombres crudos hardcodeadas a mano). */
+export function erpNamesDeGrupo(canonicos: readonly string[]): string[] {
+  return [...new Set(canonicos.flatMap(nombresErpDe))]
+}
+
+/**
+ * Vendedores cuya venta cuenta en el módulo /ventas (dashboard, "Venta área
+ * comercial", listados de clientes/pedidos/productos, gráficos) — decisión de
+ * Claudio, 2026-09-10: sólo su equipo de terreno + él + el canal OnLine.
+ * Fuera a propósito: CERVECERÍA (canal del salón de degustación, no de un
+ * vendedor de terreno), Rodrigo Solis (cuenta interna), Incobrable/No indica.
+ *
+ * Nombres CANÓNICOS — se resuelven a los valores crudos del ERP con
+ * `erpNamesDeGrupo` (arriba) antes de pasarlos a un RPC.
+ */
+export const VENDEDORES_AREA_VENTAS = [
+  'Yadro Fabijancic',
+  'Marcelo Diaz',
+  'Marion Meza',
+  'Nicol Delgado',
+  'Claudio Heufemann',
+  'OnLine',
+] as const
+
+/** Listo para pasar como `p_vendedores` a los RPC de /ventas. */
+export const VENDEDORES_AREA_VENTAS_ERP: string[] = erpNamesDeGrupo(VENDEDORES_AREA_VENTAS)
+
 // Scope completo: todos los nombres de BD aceptados en consultas y reportes
 export const VENDEDORES_SCOPE: string[] = Object.values(VENDEDOR_GRUPOS).flat()
 
@@ -200,6 +233,45 @@ export function esClienteExcluido(nombre: string | null | undefined): boolean {
   if (!nombre) return false
   const n = nombre.toLowerCase().trim()
   return CLIENTES_EXCLUIR.some(ex => n.includes(ex))
+}
+
+/**
+ * Clientes que Ventas EXCLUYE pero que el forecast de Producción SÍ cuenta.
+ *
+ * Comercial no los reporta como venta porque no son venta a terceros, pero
+ * son litros que igual hay que producir: el punto de venta propio, el
+ * BaseCamp y las ferias consumen cerveza real. Para planificar producción,
+ * dejarlos fuera es subestimar la demanda.
+ *
+ * Es una re-inclusión sobre CLIENTES_EXCLUIR, no una lista aparte: sacar un
+ * nombre de acá lo devuelve al comportamiento de Ventas.
+ *
+ * OJO con el historial: estos clientes recién se empezaron a guardar en
+ * `ventas` en jun-2026 (antes los filtraba CLIENTES_NO_GUARDAR), así que los
+ * meses anteriores subestiman el volumen real. /api/produccion/datos detecta
+ * ese salto y lo avisa en el panel de calidad de datos.
+ *
+ * Mismo criterio de comparación que CLIENTES_EXCLUIR: minúsculas e includes(),
+ * así que basta un fragmento distintivo para cubrir variantes del ERP.
+ */
+export const CLIENTES_INCLUIR_PRODUCCION: string[] = [
+  'cliente pdv',          // punto de venta propio
+  'basecamp el regreso',  // consumo en el BaseCamp
+  'cliente feria',        // ferias y eventos
+]
+
+/**
+ * Cliente que no debe entrar al forecast de Producción.
+ *
+ * Parte de la exclusión de Ventas, pero las re-inclusiones de Producción
+ * mandan: se evalúan primero, así un cliente de CLIENTES_INCLUIR_PRODUCCION
+ * entra al forecast aunque figure en CLIENTES_EXCLUIR.
+ */
+export function esClienteExcluidoProduccion(nombre: string | null | undefined): boolean {
+  if (!nombre) return false
+  const n = nombre.toLowerCase().trim()
+  if (CLIENTES_INCLUIR_PRODUCCION.some(inc => n.includes(inc))) return false
+  return esClienteExcluido(nombre)
 }
 
 /**

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { vendedorCanonico } from '@/lib/types'
+import { vendedorCanonico, VENDEDORES_AREA_VENTAS_ERP } from '@/lib/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { type RangoKey, type KpisRango, type VendedorRango,
          type PuntoSerie, type DatosRango, type PeriodoOpcion, type PeriodoLigero, type EnvaseRango, type EntregasRango,
@@ -59,6 +59,12 @@ const KPIS_CERO: KpisRango = {
 
 export const iso = (d: Date) => d.toISOString().split('T')[0]
 export const addDias = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
+/** Misma fecha, un año antes (para la comparación "vs año anterior" del ranking). */
+const haceUnAnio = (fechaISO: string) => {
+  const x = new Date(fechaISO + 'T12:00:00')
+  x.setFullYear(x.getFullYear() - 1)
+  return iso(x)
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapKpis(row: any): KpisRango {
@@ -90,6 +96,7 @@ function armarVendedores(
   rows: Record<string, unknown>[] | null,
   prevRows: Record<string, unknown>[] | null,
   porEntregarRows: Record<string, unknown>[] | null,
+  prevAnioRows: Record<string, unknown>[] | null,
 ): VendedorRango[] {
   const prev = new Map<string, number>()
   for (const r of prevRows ?? []) {
@@ -98,6 +105,14 @@ function armarVendedores(
     const n = vendedorCanonico(bruto)
     if (!n) continue
     prev.set(n, (prev.get(n) ?? 0) + Number(r.litros ?? 0))
+  }
+  const prevAnio = new Map<string, number>()
+  for (const r of prevAnioRows ?? []) {
+    const bruto = String(r.vendedor ?? '')
+    if (VENDEDORES_FUERA_RANKING.has(bruto)) continue
+    const n = vendedorCanonico(bruto)
+    if (!n) continue
+    prevAnio.set(n, (prevAnio.get(n) ?? 0) + Number(r.litros ?? 0))
   }
   // Por fecha de PEDIDO (no de entrega): lo que este vendedor cerró en el
   // período y todavía no se despachó. Población distinta a `litros`, que ya
@@ -121,6 +136,7 @@ function armarVendedores(
     const cur = acc.get(n) ?? {
       vendedor: n, litros: 0, revenue: 0, clientes: 0,
       litrosPrev: prev.get(n) ?? 0,
+      litrosPrevAnio: prevAnio.get(n) ?? 0,
       litrosPorEntregar: porEntregar.get(n)?.litros ?? 0,
       revenuePorEntregar: porEntregar.get(n)?.revenue ?? 0,
     }
@@ -135,7 +151,7 @@ function armarVendedores(
   for (const [n, litrosPrev] of prev) {
     if (!acc.has(n) && litrosPrev > 0)
       acc.set(n, {
-        vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev,
+        vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev, litrosPrevAnio: prevAnio.get(n) ?? 0,
         litrosPorEntregar: porEntregar.get(n)?.litros ?? 0, revenuePorEntregar: porEntregar.get(n)?.revenue ?? 0,
       })
   }
@@ -144,7 +160,8 @@ function armarVendedores(
   for (const [n, pend] of porEntregar) {
     if (!acc.has(n) && pend.litros > 0)
       acc.set(n, {
-        vendedor: n, litros: 0, revenue: 0, clientes: 0, litrosPrev: prev.get(n) ?? 0,
+        vendedor: n, litros: 0, revenue: 0, clientes: 0,
+        litrosPrev: prev.get(n) ?? 0, litrosPrevAnio: prevAnio.get(n) ?? 0,
         litrosPorEntregar: pend.litros, revenuePorEntregar: pend.revenue,
       })
   }
@@ -276,35 +293,49 @@ export async function calcularUnRango(
   previo: { desde: string; hasta: string; porEntrega: boolean } | null,
   etiquetaComparacion: string,
 ): Promise<DatosRango> {
+  // Comparación "vs año anterior" del ranking: mismo tramo de fechas, un año
+  // antes — independiente del `previo` de arriba (que para la mayoría de las
+  // pestañas es el tramo INMEDIATAMENTE anterior, no el de hace un año).
+  const prevAnio = { desde: haceUnAnio(actual.desde), hasta: haceUnAnio(actual.hasta) }
+  const prevAnioPorEntrega = porEntregaPeriodo(prevAnio.hasta)
+  // Pedido de Claudio (10-sep-2026): "en el área de ventas solo hay que ver
+  // la venta de los vendedores Yadro, Marcelo, Marion, Nicol y Claudio" (+
+  // OnLine, confirmado aparte) — CERVECERÍA, Rodrigo Solis, Incobrables y "No
+  // indica" quedan fuera de TODO /ventas, no sólo de la comisión. Se pasa a
+  // cada RPC que participa de los totales/listas del dashboard.
+  const p_vend = VENDEDORES_AREA_VENTAS_ERP
   const [
     kpisAct, kpisPrev,
-    vendAct, vendPrev,
+    vendAct, vendPrev, vendPrevAnio,
     envAct, envPrev,
     entAct, origenAct, porEntregarVendAct, consumoAct,
     serieRes,
   ] = await Promise.all([
-    supabase.rpc('ventas_dashboard_kpis', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega }),
+    supabase.rpc('ventas_dashboard_kpis', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega, p_vendedores: p_vend }),
     previo
-      ? supabase.rpc('ventas_dashboard_kpis', { p_ini: previo.desde, p_fin: previo.hasta, p_provincias: p_prov, p_por_entrega: previo.porEntrega })
+      ? supabase.rpc('ventas_dashboard_kpis', { p_ini: previo.desde, p_fin: previo.hasta, p_provincias: p_prov, p_por_entrega: previo.porEntrega, p_vendedores: p_vend })
       : Promise.resolve({ data: null }),
-    supabase.rpc('ventas_agg_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: actual.porEntrega }),
+    supabase.rpc('ventas_agg_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: actual.porEntrega, p_vendedores: p_vend }),
     previo
-      ? supabase.rpc('ventas_agg_periodo', { p_ini: previo.desde, p_fin: previo.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: previo.porEntrega })
+      ? supabase.rpc('ventas_agg_periodo', { p_ini: previo.desde, p_fin: previo.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: previo.porEntrega, p_vendedores: p_vend })
       : Promise.resolve({ data: null }),
-    supabase.rpc('ventas_envases_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega }),
+    supabase.rpc('ventas_agg_periodo', { p_ini: prevAnio.desde, p_fin: prevAnio.hasta, p_vendedor: null, p_provincias: p_prov, p_por_entrega: prevAnioPorEntrega, p_vendedores: p_vend }),
+    supabase.rpc('ventas_envases_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega, p_vendedores: p_vend }),
     previo
-      ? supabase.rpc('ventas_envases_periodo', { p_ini: previo.desde, p_fin: previo.hasta, p_provincias: p_prov, p_por_entrega: previo.porEntrega })
+      ? supabase.rpc('ventas_envases_periodo', { p_ini: previo.desde, p_fin: previo.hasta, p_provincias: p_prov, p_por_entrega: previo.porEntrega, p_vendedores: p_vend })
       : Promise.resolve({ data: null }),
-    supabase.rpc('ventas_entregas_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov }),
-    supabase.rpc('ventas_entregado_origen_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega }),
-    supabase.rpc('ventas_entregas_por_vendedor', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov }),
+    supabase.rpc('ventas_entregas_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_vendedores: p_vend }),
+    supabase.rpc('ventas_entregado_origen_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega, p_vendedores: p_vend }),
+    supabase.rpc('ventas_entregas_por_vendedor', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_vendedores: p_vend }),
+    // Consumo interno (PDV/Ferias/BaseCamp) queda SIN filtrar por vendedor a
+    // propósito: es regalos/degustación, no venta de un vendedor de terreno.
     supabase.rpc('ventas_consumo_interno_periodo', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: actual.porEntrega }),
     // Serie acotada a este rango — antes se pedía una serie ANCHA compartida
     // (desde el 1-ene) y se recortaba en memoria; acá alcanza con pedir
     // exactamente la ventana que este rango necesita. Mismo criterio
     // (fecha_pedido, p_por_entrega=false) que usaba el recorte de la serie
     // ancha, así que el resultado es idéntico fila por fila.
-    supabase.rpc('ventas_serie_diaria', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: false }),
+    supabase.rpc('ventas_serie_diaria', { p_ini: actual.desde, p_fin: actual.hasta, p_provincias: p_prov, p_por_entrega: false, p_vendedores: p_vend }),
   ])
 
   const serie: PuntoSerie[] = ((serieRes.data ?? []) as Record<string, unknown>[]).map(r => ({
@@ -319,6 +350,7 @@ export async function calcularUnRango(
     desde: actual.desde,
     hasta: actual.hasta,
     etiquetaComparacion,
+    anioComparacion: new Date(prevAnio.hasta + 'T12:00:00').getFullYear(),
     porEntrega: actual.porEntrega,
     actual: mapKpis((kpisAct.data as unknown[])?.[0]),
     previo: mapKpis((kpisPrev.data as unknown[])?.[0]),
@@ -326,6 +358,7 @@ export async function calcularUnRango(
       vendAct.data as Record<string, unknown>[] | null,
       vendPrev.data as Record<string, unknown>[] | null,
       porEntregarVendAct.data as Record<string, unknown>[] | null,
+      vendPrevAnio.data as Record<string, unknown>[] | null,
     ),
     envases: armarEnvases(envAct.data as Record<string, unknown>[] | null, envPrev.data as Record<string, unknown>[] | null),
     entregas: mapEntregas((entAct.data as unknown[])?.[0]),

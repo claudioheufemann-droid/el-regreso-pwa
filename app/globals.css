@@ -118,6 +118,68 @@
   --rg-card-border: rgba(0, 0, 0, 0.08);
 }
 
+/* ── Control Comercial: forzado a modo claro, fondo blanco puro ──
+   Independiente del theme global de la app (que sigue oscuro en el resto
+   de los módulos) — data-theme="light" en el layout de /control-comercial
+   activa TODAS las reglas de contraste de abajo (ya probadas en el resto
+   de la app), y esta regla, más específica, sube --bg de beige a blanco
+   puro solo dentro de ese módulo. */
+.cc-root[data-theme="light"] {
+  --bg: #FBFAF8;
+  --surface2: #F7F6F2;
+
+  /* ── Sistema visual del módulo (rediseño 2026-09) ──
+     Tokens propios con prefijo --cc-*: no reutilizan --cream/--muted porque
+     esos los reescriben las reglas de contraste automáticas de más abajo, y
+     acá se necesita una escala de grises estable y predecible. Todo color de
+     este módulo debe salir de acá, nunca de un literal inline (un literal
+     blanco/crema lo intercepta la auditoría de contraste y cambia solo). */
+  --cc-page: #FBFAF8;
+  --cc-card: #FFFFFF;
+  --cc-card-2: #F7F5F1;
+  --cc-line: rgba(23, 18, 12, 0.08);
+  --cc-line-soft: rgba(23, 18, 12, 0.05);
+  --cc-shadow: 0 1px 2px rgba(23, 18, 12, 0.04), 0 6px 20px rgba(23, 18, 12, 0.045);
+  --cc-shadow-lift: 0 2px 6px rgba(23, 18, 12, 0.06), 0 12px 32px rgba(23, 18, 12, 0.07);
+
+  --cc-ink: #14100C;
+  --cc-ink-2: #575047;
+  --cc-ink-3: #8B8378;
+  --cc-on-gold: #FFFFFF;
+
+  --cc-gold: #C8951C;
+  --cc-gold-deep: #A87A0F;
+  --cc-gold-soft: #FBF1DC;
+  --cc-gold-line: rgba(200, 149, 28, 0.28);
+
+  --cc-green: #17A34A;
+  --cc-green-soft: #E7F6EC;
+  --cc-red: #DC2626;
+  --cc-red-soft: #FDECEC;
+  --cc-amber: #E08C2B;
+  --cc-amber-soft: #FCF1E1;
+  --cc-blue: #4F6BED;
+  --cc-blue-soft: #ECEFFD;
+  --cc-neutral: #C9C3B9;
+  --cc-neutral-soft: #EFEDE8;
+}
+
+/* Fondo real del módulo: el layout pinta var(--bg), pero el ancestro <body>
+   sigue siendo oscuro y se ve en el overscroll de iOS. */
+.cc-root[data-theme="light"] {
+  background: var(--cc-page);
+}
+
+.cc-tap { -webkit-tap-highlight-color: transparent; }
+.cc-scroll-x { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.cc-scroll-x::-webkit-scrollbar { display: none; }
+
+@keyframes cc-shimmer { 0% { opacity: 0.55 } 50% { opacity: 0.9 } 100% { opacity: 0.55 } }
+.cc-skeleton { animation: cc-shimmer 1.4s ease-in-out infinite; }
+
+@keyframes cc-fade-up { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+.cc-enter { animation: cc-fade-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
 /* ═══════════════════════════════════════════════════════════
    AUDITORÍA DE CONTRASTE — MODO CLARO (2026-07-23)
    Generado por scripts/gen-light-mode-fixes.mjs — no editar a mano.
@@ -442,11 +504,39 @@
 [data-theme="light"] .topbar { background: #FFFDF8 !important; border-bottom-color: rgba(168, 135, 15, 0.2) !important; }
 [data-theme="light"] .content-area { background: #F2EDE4 !important; }
 
-* {
+/* Reset histórico (mayo 2026).
+ *
+ * OJO — esta regla está FUERA de todo `@layer`, y las utilidades de Tailwind v4
+ * viven DENTRO de `@layer utilities`. En la cascada, lo que no está en un layer
+ * gana sobre lo que sí, sin importar la especificidad: por eso `px-4`, `py-3`,
+ * `ml-2`, `p-6` y todo el spacing de Tailwind quedan en 0 en la app entera
+ * (verificado en producción: un `<div class="px-4">` reporta paddingLeft 0px).
+ * `gap-*` sí funciona, porque el reset no toca `gap`.
+ *
+ * Sacarla de golpe activaría el espaciado en TODAS las pantallas a la vez, que
+ * es un cambio visual grande y sin revisar. Así que se deja como está, pero se
+ * excluye el módulo de Producción (`.prod-root`), que se diseñó asumiendo que
+ * Tailwind funciona. Cuando se quiera arreglar de raíz: mover este bloque a
+ * `@layer base`, borrar la excepción, y revisar pantalla por pantalla.
+ */
+*:not(.prod-root):not(.prod-root *) {
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* Mismo reset para el módulo de Producción, pero dentro de `@layer base` para
+ * que las utilidades de Tailwind puedan pisarlo (es el orden que Tailwind
+ * espera: base < components < utilities). */
+@layer base {
+  .prod-root,
+  .prod-root * {
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 html { -webkit-text-size-adjust: 100%; }
@@ -523,14 +613,53 @@ body {
 /* HTML necesita height: 100% para que safe-area funcione en PWA standalone */
 html { height: 100%; }
 
-.mobile-safe-top  { padding-top:    env(safe-area-inset-top,    0px); }
+/* Alto a reservar arriba para no quedar bajo la barra de estado.
+   En un navegador normal es 0 y así debe quedar: el sistema ya deja la barra
+   fuera del viewport, sumar espacio ahí sería un hueco injustificado. */
+:root { --safe-top: env(safe-area-inset-top, 0px); }
+
+/* PWA instalada en iOS — el caso que hay que forzar a mano.
+   Con `apple-mobile-web-app-status-bar-style: black-translucent` (ver
+   app/layout.tsx) iOS dibuja la app DEBAJO del reloj, pero en esa misma
+   situación reporta env(safe-area-inset-top) = 0. Resultado: todo padding que
+   dependa sólo de env() reserva cero y el reloj queda encima del primer
+   control de la pantalla — reportado el 2026-09-10, el botón "Volver" de
+   /ventas no se podía tocar porque el reloj se comía el toque.
+   El piso de 52px cubre la barra de estado de los iPhone con notch y con
+   Dynamic Island. Si env() SÍ trae el valor real, max() se queda con ese, así
+   que esto es correcto tanto si iOS reporta el inset como si miente.
+   @supports (-webkit-touch-callout) acota esto a WebKit/iOS: en una PWA
+   instalada en Android el sistema NO dibuja bajo la barra y este piso sería
+   espacio perdido. */
+@supports (-webkit-touch-callout: none) {
+  @media all and (display-mode: standalone) {
+    :root { --safe-top: max(env(safe-area-inset-top, 0px), 52px); }
+  }
+}
+
+/* Clase duplicada a propósito (`.x.x`), no es un typo.
+   El reset global de la línea ~522 —`*:not(.prod-root):not(.prod-root *)`—
+   declara `padding: 0` sin cascade layer y con especificidad (0,2,0), así que
+   le gana a cualquier regla de UNA sola clase. Consecuencia: `.mobile-safe-top`
+   a secas nunca aplicó nada. Medido en producción el 2026-09-10: un div con la
+   clase reportaba padding-top 0px aun con --safe-top ya resuelto en 52px. Por
+   eso el área segura "estaba puesta" en los 7 layouts y aun así el reloj tapaba
+   el botón Volver. Duplicar la clase sube la especificidad a (0,2,0) y, al venir
+   después en el archivo, gana el desempate.
+   (El arreglo de raíz es mover ese reset a `@layer base`, pero eso activaría el
+   spacing de Tailwind en TODAS las pantallas de golpe — ver el comentario de la
+   línea 512.) */
+.mobile-safe-top.mobile-safe-top { padding-top: var(--safe-top); }
 .mobile-safe-bot  { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .mobile-safe-left { padding-left:   env(safe-area-inset-left,   0px); }
 .mobile-safe-x    { padding-left:   env(safe-area-inset-left,   0px);
                     padding-right:  env(safe-area-inset-right,  0px); }
 
 @media (min-width: 1024px) {
-  .mobile-safe-top  { padding-top:    0; }
+  /* Duplicada por el mismo motivo que arriba: si acá quedara con una sola
+     clase, perdería contra la regla duplicada y el escritorio se llevaría el
+     padding del celular. */
+  .mobile-safe-top.mobile-safe-top { padding-top: 0; }
   .mobile-safe-bot  { padding-bottom: 0; }
   .mobile-safe-left { padding-left:   0; }
   .mobile-safe-x    { padding-left:   0; padding-right: 0; }
@@ -567,8 +696,19 @@ html { height: 100%; }
 ::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.2); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.4); }
 
-/* Global inputs */
-input, select, textarea {
+/* Global inputs
+ *
+ * Excluye .prod-root (mismo motivo que el reset de márgenes más abajo): esta
+ * regla vive fuera de todo @layer, así que gana sobre las utilidades
+ * Tailwind del módulo de Producción (bg-gray-50, text-gray-700...) sin
+ * importar su especificidad. Sin la exclusión, los <select> de Producción
+ * quedaban con `color: var(--cream)` (#F4EEDF, un crema pálido pensado para
+ * texto sobre fondo OSCURO) sobre su propio fondo claro — el valor
+ * seleccionado quedaba casi invisible (bug real reportado: "no hay
+ * contraste, no se sabe qué se está eligiendo"). Producción nunca declara
+ * data-theme="light" (ese override sólo aplica al resto de la app), así que
+ * tampoco heredaba el contraste correcto por ese lado. */
+input:not(.prod-root *), select:not(.prod-root *), textarea:not(.prod-root *) {
   background: var(--input-bg);
   color: var(--cream);
   border: 1px solid var(--input-border);
@@ -581,7 +721,7 @@ input, select, textarea {
   transition: border-color 0.15s, background 0.15s;
   -webkit-appearance: none;
 }
-input:focus, select:focus, textarea:focus {
+input:focus:not(.prod-root *), select:focus:not(.prod-root *), textarea:focus:not(.prod-root *) {
   border-color: rgba(212, 175, 55, 0.5);
   background: rgba(255, 255, 255, 0.07);
 }
@@ -820,7 +960,7 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
 .rg-page {
   background: var(--rg-carbon-2);
   min-height: 100vh;
-  padding: max(env(safe-area-inset-top), 18px) 16px 100px;
+  padding: max(var(--safe-top), 18px) 16px 100px;
 }
 .rg-page-inner { max-width: 600px; margin: 0 auto; width: 100%; }
 

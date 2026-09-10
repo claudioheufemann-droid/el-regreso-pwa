@@ -24,7 +24,10 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 15 min alcanza de sobra para el sync normal (~2 min). Una recarga
+    # histórica con fechas a mano se trocea en tramos de 18 días, así que un
+    # año son ~20 descargas seguidas y necesita mucho más margen.
+    timeout-minutes: ${{ inputs.fecha_desde && 60 || 15 }}
 
     steps:
       - name: Checkout

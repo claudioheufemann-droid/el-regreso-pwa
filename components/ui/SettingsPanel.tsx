@@ -17,7 +17,11 @@ interface VendedorOpcion { id: string; nombre: string; region: string | null }
 
 export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl: initialAvatarUrl }: Props) {
   const router = useRouter()
-  const { esAdminReal, impersonando } = useUser()
+  const { esAdminReal, sesionReal, impersonando } = useUser()
+  // Sólo admins con sesión real ven "Ver como vendedor". Cada quien entra
+  // con su propia cuenta: un vendedor ve lo suyo por su login, no simulando
+  // a otro.
+  const puedeImpersonar = esAdminReal && sesionReal
   const [section, setSection] = useState<Section>('main')
 
   // "Ver como vendedor" (sólo admins reales) ──────────────────────────────
@@ -266,8 +270,8 @@ export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl:
                 </button>
               </div>
 
-              {/* Ver como vendedor (sólo admins reales) */}
-              {esAdminReal && (
+              {/* Ver como vendedor (sólo admins con sesión real) */}
+              {puedeImpersonar && (
                 impersonando ? (
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 14,

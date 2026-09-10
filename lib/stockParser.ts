@@ -9,9 +9,15 @@
  * Estructura de la sección BARRILES (a partir de la fila de la cámara):
  *   [camara, totalDeclarado]                                    ← header de cámara
  *   [_, _, producto, codigo, cantidadDeclarada]                  ← nuevo producto
- *   [_, _, _, _, "30.00 Lts"]                                    ← tamaño (se ignora, se infiere de litros/barril)
+ *   [_, _, _, _, "30.00 Lts"]                                    ← tamaño declarado del bloque que sigue
  *   [_, _, _, _, _, loteBarril, lote, litros]                    ← 1 fila por barril físico
- *   ... (se repite loteBarril hasta el siguiente producto)
+ *   ... (se repite loteBarril hasta el siguiente producto o marcador de tamaño)
+ *
+ * OJO: un mismo producto puede repetir el bloque "tamaño + barriles" más de
+ * una vez dentro de la misma cámara (ej. 16 barriles de 30L seguidos de 8 de
+ * 50L, ambos bajo el mismo nombre de producto) — parseBarriles() separa cada
+ * tamaño declarado en su propia fila de salida, ver el comentario extenso
+ * ahí abajo.
  *
  * Estructura de la sección ENVASES:
  *   [camara, _, _, _, _, _, totalDeclarado]                      ← header de cámara
@@ -24,6 +30,21 @@
  * parseo NO usa números de fila fijos: son frágiles a que el informe traiga
  * más o menos productos la próxima vez. En cambio, busca los textos de
  * sección/cámara y se guía por las transiciones de columnas vacías.
+ *
+ * TODAS las cámaras se parsean y se guardan con su nombre en `camara`
+ * (4 sep 2026). Antes se leía únicamente "Camara General Barrios Bajos" y el
+ * resto se descartaba en silencio: se estaba viendo el 53% de los barriles
+ * (327 de 616) y el 46% de las latas (17.826 de 39.070), lo que hacía que el
+ * stock de seguridad comparara el punto de reorden contra medio inventario.
+ * Qué cámaras cuentan es ahora una decisión de negocio que vive en
+ * lib/camaras.ts (dos listas: una para Ventas, otra para Producción), no una
+ * condición escondida en el parseo — así se puede cambiar sin volver a
+ * descargar nada del ERP.
+ *
+ * La sección "Stock de producto en tanques" (producto en fermentación, con
+ * litros por fermentador) también se parsea, como tipo 'tanque'. Es el mismo
+ * dato que intenta capturar `lotes_produccion` a mano, pero completo y
+ * actualizado en cada carga.
  *
  * Fecha de embarrilado por lote:
  * Ni "Barriles en Depósitos" ni "Envases en Depósitos" (las secciones de
@@ -46,7 +67,9 @@ export interface LoteParsed {
 }
 
 export interface StockProductoParsed {
-  tipo: 'barril' | 'envase'
+  tipo: 'barril' | 'envase' | 'tanque'
+  /** Depósito/cámara de donde sale la línea. Para 'tanque', el fermentador. */
+  camara: string
   producto: string
   codigoProducto: string | null
   categoria: 'Cerveza' | 'Kombucha' | 'Otros'
@@ -55,10 +78,11 @@ export interface StockProductoParsed {
   lotes: LoteParsed[]
 }
 
-const CAMARA_OBJETIVO = 'camara general barrios bajos'
+const SECCION_TANQUES = 'stock de producto en tanques'
 const SECCION_STOCK_BARRILES_PLANO = 'stock de producto en barriles'
 const SECCION_BARRILES = 'barriles en depositos'
 const SECCION_ENVASES = 'envases en depositos'
+const FIN_SECCION = 'total'
 
 function norm(v: unknown): string {
   if (v === null || v === undefined) return ''
@@ -132,50 +156,113 @@ function lotesDeMapa(mapa: Map<string, number>, mapaFechas: Map<string, string>)
   }))
 }
 
-function parseBarriles(filas: Fila[], inicio: number, mapaFechas: Map<string, string>): StockProductoParsed[] {
+/** Nombres de cámara dentro de una sección: toda fila con contenido en la
+ *  columna A, hasta la fila "Total" que cierra la sección. */
+function camarasDeSeccion(filas: Fila[], inicio: number, fin: number): { nombre: string; fila: number }[] {
+  const out: { nombre: string; fila: number }[] = []
+  for (let i = inicio + 1; i < fin; i++) {
+    const a = filas[i]?.[0]
+    if (a == null || String(a).trim() === '') continue
+    const nombre = String(a).trim()
+    if (norm(nombre) === FIN_SECCION) break
+    out.push({ nombre, fila: i })
+  }
+  return out
+}
+
+/** "30.00 Lts" / "50.00 Lts" → 30 / 50. Null si la celda no matchea el patrón
+ *  (fila de otra cosa, o el informe cambió de formato). */
+function tamanioDeclaradoDe(celda: unknown): number | null {
+  const m = String(celda ?? '').trim().match(/^(\d+(?:[.,]\d+)?)\s*lts?\.?$/i)
+  return m ? Number(m[1].replace(',', '.')) : null
+}
+
+/**
+ * Un mismo producto puede traer VARIOS bloques de tamaño dentro de la misma
+ * cámara — ej. 16 barriles de 30L seguidos de 8 de 50L, todos bajo "Aguas
+ * Blancas (Hazy IPA)". El informe separa cada bloque con una fila
+ * "[_, _, _, _, "NN.NN Lts"]" ANTES de sus barriles.
+ *
+ * Bug real que esto corrigió (4 sep 2026): la versión anterior ignoraba esa
+ * fila (no matcheaba ninguna de las dos condiciones del loop) y promediaba
+ * TODO el bloque junto — 16×30L + 8×50L = 880L / 24 barriles = 36,7L/barril,
+ * que no redondea a 30 ni a 50, así que el bucketing de aguas abajo
+ * (bucketDeStock en app/produccion/page.tsx) mandaba el bloque MEZCLADO
+ * entero a "Otros formatos" en vez de separarlo en 16×30L + 8×50L reales.
+ * Confirmado contra un informe real: 16 de 114 bloques producto×cámara de
+ * ese informe mezclan tamaños — no es un caso raro.
+ *
+ * Ahora se emite UNA fila por (producto, tamaño declarado, cámara) en vez de
+ * una por (producto, cámara): se agrupa por el tamaño que el propio informe
+ * declara (no por litros/cantidad promediados después), así que cada fila
+ * resultante ya viene limpia — litros/cantidad da 30 o 50 exacto, sin
+ * depender de que el bucketing adivine bien un promedio.
+ */
+function parseBarriles(filas: Fila[], inicio: number, camara: string, mapaFechas: Map<string, string>): StockProductoParsed[] {
   const productos: StockProductoParsed[] = []
-  let actual: { producto: string; codigo: string | null; barriles: number; litros: number; lotes: Map<string, number> } | null = null
+  let productoActual: { producto: string; codigo: string | null } | null = null
+  let tamanioDeclarado: number | null = null
+  let porTamanio = new Map<number, { barriles: number; litros: number; lotes: Map<string, number> }>()
+
+  const cerrar = () => {
+    if (!productoActual) return
+    for (const datos of porTamanio.values()) {
+      productos.push({
+        tipo: 'barril', camara, producto: productoActual.producto, codigoProducto: productoActual.codigo,
+        categoria: categoriaDe(productoActual.producto), cantidad: datos.barriles, litros: datos.litros,
+        lotes: lotesDeMapa(datos.lotes, mapaFechas),
+      })
+    }
+    porTamanio = new Map()
+    tamanioDeclarado = null
+  }
 
   for (let i = inicio + 1; i < filas.length; i++) {
     const f = filas[i]
     if (f[0] != null && String(f[0]).trim() !== '') break // siguiente cámara/sección
 
     if (f[2] != null && String(f[2]).trim() !== '') {
-      if (actual) productos.push({
-        tipo: 'barril', producto: actual.producto, codigoProducto: actual.codigo,
-        categoria: categoriaDe(actual.producto), cantidad: actual.barriles, litros: actual.litros,
-        lotes: lotesDeMapa(actual.lotes, mapaFechas),
-      })
-      actual = { producto: String(f[2]).trim(), codigo: f[3] != null ? String(f[3]).trim() : null, barriles: 0, litros: 0, lotes: new Map() }
-    } else if (actual && f[5] != null && String(f[5]).trim() !== '') {
-      actual.barriles += 1
-      actual.litros += Number(f[7]) || 0
+      cerrar()
+      productoActual = { producto: String(f[2]).trim(), codigo: f[3] != null ? String(f[3]).trim() : null }
+    } else if (f[4] != null && String(f[4]).trim() !== '') {
+      const tam = tamanioDeclaradoDe(f[4])
+      if (tam != null) tamanioDeclarado = tam
+    } else if (productoActual && f[5] != null && String(f[5]).trim() !== '') {
+      const litrosBarril = Number(f[7]) || 0
+      // Sin marcador de tamaño (informe cambió de formato, o falta la fila):
+      // no se pierde el barril — se agrupa por su propio litraje individual
+      // en vez de descartarlo.
+      const clave = tamanioDeclarado ?? litrosBarril
+      if (!porTamanio.has(clave)) porTamanio.set(clave, { barriles: 0, litros: 0, lotes: new Map() })
+      const grupo = porTamanio.get(clave)!
+      grupo.barriles += 1
+      grupo.litros += litrosBarril
       const lote = f[6] != null ? String(f[6]).trim() : 'Sin lote'
-      actual.lotes.set(lote, (actual.lotes.get(lote) ?? 0) + 1)
+      grupo.lotes.set(lote, (grupo.lotes.get(lote) ?? 0) + 1)
     }
   }
-  if (actual) productos.push({
-    tipo: 'barril', producto: actual.producto, codigoProducto: actual.codigo,
-    categoria: categoriaDe(actual.producto), cantidad: actual.barriles, litros: actual.litros,
-    lotes: lotesDeMapa(actual.lotes, mapaFechas),
-  })
+  cerrar()
   return productos
 }
 
-function parseEnvases(filas: Fila[], inicio: number, mapaFechas: Map<string, string>): StockProductoParsed[] {
+function parseEnvases(filas: Fila[], inicio: number, camara: string, mapaFechas: Map<string, string>): StockProductoParsed[] {
   const productos: StockProductoParsed[] = []
   let actual: { producto: string; codigo: string | null; unidades: number; lotes: Map<string, number> } | null = null
+  const cerrar = () => {
+    if (!actual) return
+    productos.push({
+      tipo: 'envase', camara, producto: actual.producto, codigoProducto: actual.codigo,
+      categoria: categoriaDe(actual.producto), cantidad: actual.unidades, litros: null,
+      lotes: lotesDeMapa(actual.lotes, mapaFechas),
+    })
+  }
 
   for (let i = inicio + 1; i < filas.length; i++) {
     const f = filas[i]
     if (f[0] != null && String(f[0]).trim() !== '') break
 
     if (f[1] != null && String(f[1]).trim() !== '') {
-      if (actual) productos.push({
-        tipo: 'envase', producto: actual.producto, codigoProducto: actual.codigo,
-        categoria: categoriaDe(actual.producto), cantidad: actual.unidades, litros: null,
-        lotes: lotesDeMapa(actual.lotes, mapaFechas),
-      })
+      cerrar()
       actual = { producto: String(f[1]).trim(), codigo: f[2] != null ? String(f[2]).trim() : null, unidades: 0, lotes: new Map() }
     } else if (actual && f[5] != null && f[6] != null) {
       const cant = Number(f[6]) || 0
@@ -184,11 +271,55 @@ function parseEnvases(filas: Fila[], inicio: number, mapaFechas: Map<string, str
       actual.lotes.set(lote, (actual.lotes.get(lote) ?? 0) + cant)
     }
   }
-  if (actual) productos.push({
-    tipo: 'envase', producto: actual.producto, codigoProducto: actual.codigo,
-    categoria: categoriaDe(actual.producto), cantidad: actual.unidades, litros: null,
-    lotes: lotesDeMapa(actual.lotes, mapaFechas),
-  })
+  cerrar()
+  return productos
+}
+
+/**
+ * Sección "Stock de producto en tanques": tabla plana, una fila por
+ * fermentador, con el producto en la columna A.
+ *   [producto, codigo, tanque, litros, lote, fechaEmbarriladoEstimada]
+ * Termina en la fila "Total". Cada fila es su propio "lote" en curso, así que
+ * no se agrupa por producto acá: el fermentador va en `camara` para poder
+ * mostrar de dónde sale cada litro.
+ *
+ * "Fecha embarrilado (estimada)" (columna F, 6-sep-2026): a diferencia de la
+ * fecha de embarrilado real que se cruza más arriba (un hecho ya ocurrido,
+ * para barriles/latas que ya salieron del tanque), esta es una ESTIMACIÓN de
+ * cuándo el ENÓLOGO calcula que este lote va a salir del fermentador — el
+ * lote todavía no existe como producto envasado. Se guarda en el mismo campo
+ * `lotes[0].fechaEmbarrilado` (mismo shape, incluso si el significado
+ * temporal es distinto: "cuándo pasó" vs. "cuándo se estima que pase") para
+ * no duplicar el tipo — ningún otro código lee `lotes` de una fila tipo
+ * 'tanque' todavía, así que no hay riesgo de que alguien la confunda con una
+ * fecha ya ocurrida.
+ */
+function parseTanques(filas: Fila[], inicio: number): StockProductoParsed[] {
+  const productos: StockProductoParsed[] = []
+  for (let i = inicio + 1; i < filas.length; i++) {
+    const f = filas[i]
+    const a = f[0]
+    if (a == null || String(a).trim() === '') continue
+    const producto = String(a).trim()
+    if (norm(producto) === FIN_SECCION) break
+    // La fila de encabezado ("Producto | Código producto | Tanque | Litros |
+    // Lote | Fecha embarrilado (estimada)") se salta sola: sus litros no son
+    // numéricos.
+    const litros = Number(f[3])
+    if (!Number.isFinite(litros) || litros <= 0) continue
+    const lote = f[4] != null ? String(f[4]).trim() : null
+    const fechaEstimada = typeof f[5] === 'number' ? serialAFechaISO(f[5]) : null
+    productos.push({
+      tipo: 'tanque',
+      camara: f[2] != null ? String(f[2]).trim() : 'Sin tanque',
+      producto,
+      codigoProducto: f[1] != null ? String(f[1]).trim() : null,
+      categoria: categoriaDe(producto),
+      cantidad: 1,
+      litros,
+      lotes: lote ? [{ codigo: lote, cantidad: 1, fechaEmbarrilado: fechaEstimada }] : [],
+    })
+  }
   return productos
 }
 
@@ -212,18 +343,23 @@ export function parseStockExcel(buffer: ArrayBuffer): StockProductoParsed[] {
     ? construirMapaFechasPorLote(filas, idxStockBarrilesPlano, idxSeccionBarriles)
     : new Map<string, string>()
 
-  const idxCamaraBarril = buscarFila(filas, CAMARA_OBJETIVO, idxSeccionBarriles + 1)
-  const idxCamaraEnvase = buscarFila(filas, CAMARA_OBJETIVO, idxSeccionEnvases + 1)
+  const productos: StockProductoParsed[] = []
 
-  if (idxCamaraBarril < 0 || idxCamaraBarril >= idxSeccionEnvases) {
-    throw new Error('No se encontró "Camara General Barrios Bajos" dentro de la sección de Barriles.')
+  for (const { nombre, fila } of camarasDeSeccion(filas, idxSeccionBarriles, idxSeccionEnvases)) {
+    productos.push(...parseBarriles(filas, fila, nombre, mapaFechas))
   }
-  if (idxCamaraEnvase < 0) {
-    throw new Error('No se encontró "Camara General Barrios Bajos" dentro de la sección de Envases.')
+  for (const { nombre, fila } of camarasDeSeccion(filas, idxSeccionEnvases, filas.length)) {
+    productos.push(...parseEnvases(filas, fila, nombre, mapaFechas))
   }
 
-  return [
-    ...parseBarriles(filas, idxCamaraBarril, mapaFechas),
-    ...parseEnvases(filas, idxCamaraEnvase, mapaFechas),
-  ]
+  // Los tanques son opcionales: si el informe cambia y la sección no está, se
+  // sigue cargando el resto en vez de bloquear toda la carga de stock.
+  const idxTanques = buscarFila(filas, SECCION_TANQUES, 0)
+  if (idxTanques >= 0) productos.push(...parseTanques(filas, idxTanques))
+
+  if (!productos.some(p => norm(p.camara).includes('barrios bajos'))) {
+    throw new Error('No se encontró "Camara General Barrios Bajos" en el informe — ¿es el archivo correcto?')
+  }
+
+  return productos
 }

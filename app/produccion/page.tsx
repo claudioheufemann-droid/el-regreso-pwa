@@ -1,0 +1,1226 @@
+import { redirect } from 'next/navigation'
+import { getServerUser } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { esClienteExcluidoProduccion } from '@/lib/types'
+import { esCamaraProduccion } from '@/lib/camaras'
+import {
+  bucketEnvase, normalizarProducto,
+  claveProductoEnvase, partirClaveProductoEnvase, ENVASE_LABEL,
+  cicloEnCursoISO, inicioDeCiclo, finDeCiclo, type EnvaseBucket,
+} from '@/lib/produccion/reglas'
+import ProduccionClient from './ProduccionClient'
+
+export const dynamic = 'force-dynamic'
+
+export interface PuntoForecast {
+  mes: string
+  tipo: 'historico' | 'forecast'
+  litros: number
+  litrosMin: number | null
+  litrosMax: number | null
+  /** Descomposición de Prophet: litros ≈ tendencia + estacionalidad.
+   *  `tendencia` es hacia dónde va el negocio sin el efecto del mes del año;
+   *  `estacionalidad` es cuántos litros suma o resta ese mes en particular.
+   *  Null cuando la serie no se proyectó (historial corto o descontinuada). */
+  tendencia: number | null
+  estacionalidad: number | null
+}
+
+/** Una serie lista para graficar: sus puntos + qué tan confiable resultó en
+ *  el backtest. El cliente sólo elige cuál mostrar, no vuelve a cruzar nada. */
+export interface SerieForecast {
+  id: string
+  nivel: 'general' | 'producto' | 'envase' | 'producto_envase'
+  clave: string | null
+  label: string
+  /** Sólo para 'producto' y 'producto_envase' — null en 'general'/'envase'. */
+  producto: string | null
+  /** Sólo para 'envase' y 'producto_envase' — null en 'general'/'producto'. */
+  envaseBucket: string | null
+  /** 'cerveza' | 'kombucha' | null — viene de costos_precios.categoria. Nulo
+   *  cuando la serie no es de un producto puntual (general/envase). */
+  categoria: string | null
+  puntos: PuntoForecast[]
+  mae: number | null
+  mape: number | null
+  mesesHistorial: number | null
+  /** 'derivado': producto_envase con poca historia/mal MAPE propio — el
+   *  número sale de repartir el forecast del producto, no de un modelo
+   *  propio. Ver generar_forecast.py. Siempre 'propio' en los demás niveles. */
+  metodo: 'propio' | 'derivado'
+  /** Litros vendidos en lo que va del mes en curso (calculado en vivo, no
+   *  viene del modelo) — para comparar ritmo real contra lo proyectado. */
+  litrosMesEnCurso: number
+}
+
+export interface CalidadItem {
+  tipo: string
+  clave: string | null
+  detalle: string
+  severidad: 'info' | 'advertencia'
+}
+
+export interface StockItem {
+  /** Nombre canónico (resuelto contra el catálogo), no el crudo del ERP —
+   *  necesario para agrupar barriles y latas del MISMO producto, que llegan
+   *  con nombres distintos desde stock_productos (ver resolverProductoStock). */
+  producto: string
+  categoria: string | null
+  envaseBucket: EnvaseBucket
+  /** Depósito de origen en el informe del ERP. */
+  camara: string | null
+  cantidad: number
+  litros: number | null
+}
+
+export interface AvanceMes {
+  /** yyyy-mm-01 del CICLO interno en curso (no mes calendario — ver
+   *  lib/produccion/reglas.ts). */
+  mes: string
+  diaActual: number
+  diasEnMes: number
+  /** Días hábiles (lunes a viernes) transcurridos y totales del ciclo — el
+   *  reparto no vende fin de semana, así que cualquier proyección de RITMO
+   *  de venta (no de tiempo transcurrido) debe usar estos dos, no
+   *  diaActual/diasEnMes. */
+  diasHabilesTranscurridos: number
+  diasHabilesEnCiclo: number
+}
+
+export interface StockSeguridadItem {
+  nivel: 'producto' | 'producto_envase'
+  producto: string
+  /** Bucket de envase; null cuando nivel='producto' (todos los formatos). */
+  envase: string | null
+  categoria: 'cerveza' | 'kombucha'
+  /** Mes concreto proyectado (yyyy-mm-01), no un mes calendario 1-12. */
+  mes: string
+  leadTimeSemanas: number
+  periodoRevisionSemanas: number
+  demandaMensualProyectada: number
+  demandaEnVentana: number
+  sigmaSemanal: number
+  stockSeguridadLitros: number
+  puntoReordenLitros: number
+  confianza: 'alta' | 'media' | 'baja'
+  mapeBacktest: number | null
+  mesesHistorial: number | null
+  /** 'derivado': se repartió el forecast del producto por su proporción
+   *  reciente de formato (poca historia propia o MAPE propio demasiado
+   *  alto) — ver generar_forecast.py. Siempre 'propio' a nivel producto. */
+  metodo: 'propio' | 'derivado'
+  /** Litros en inventario hoy, al mismo nivel que la fila (por producto, o
+   *  por producto+formato) — null si no aparece en el informe de stock. */
+  stockActualLitros: number | null
+  /** Unidades físicas en inventario hoy (latas o barriles según el formato)
+   *  — sólo tiene sentido a nivel 'producto_envase' (un "producto" junta
+   *  latas y barriles, que no se pueden sumar como unidad). Null a nivel
+   *  'producto', o si el formato no tiene unidad contable (bucket "otros"). */
+  stockActualUnidades: number | null
+  /** Litros declarados en producción y todavía no recibidos en bodega. */
+  litrosEnProduccion: number
+}
+
+/**
+ * Ocupación de la sala de fermentación. Hoy sólo puede decir cuánto hay y en
+ * cuántos tanques: el informe del ERP no trae la capacidad nominal de cada
+ * fermentador ni lista los vacíos, así que un % de ocupación sería inventado.
+ * Cuando exista ese listado (capacidad por tanque), acá se agrega
+ * `capacidadTotal` y el porcentaje pasa a ser real.
+ */
+export interface OcupacionPlanta {
+  litrosEnFermentacion: number
+  fermentadoresOcupados: number
+  tanques: { tanque: string; litros: number }[]
+}
+
+/**
+ * Cómo repartir entre formatos lo que hay en un fermentador. El líquido a
+ * granel todavía no tiene envase: el split responde "de estos N litros,
+ * ¿cuántos van a barril 30L, 50L y lata?" según qué formato está más lejos
+ * de su punto de reorden (necesidad del forecast), no según un porcentaje
+ * fijo. Se calcula en page.tsx y lo consume el Plan Maestro.
+ */
+export interface SplitFermentador {
+  producto: string
+  categoria: 'cerveza' | 'kombucha' | null
+  /** Litros a granel en fermentadores, sumando todos los tanques del producto. */
+  litrosEnFermentador: number
+  /** Fermentadores donde está este producto, con su fecha estimada de
+   *  embarrilado (columna "Fecha embarrilado (estimada)" del informe de
+   *  stock, sección Tanques) — la fecha que calcula el enólogo, no una
+   *  fecha ya ocurrida. Null si el ERP no trajo fecha para ese tanque. */
+  tanques: { nombre: string; litros: number; fechaEstimada: string | null }[]
+  /** La MÁS TARDÍA de las fechas estimadas entre los tanques de este
+   *  producto — el lote completo (litrosEnFermentador) no está listo hasta
+   *  que sale el último tanque, no el primero. Null si ningún tanque trae
+   *  fecha. Se usa para correr `cubreVentaHasta` hacia adelante: la venta no
+   *  puede empezar a cubrirse antes de que el lote exista envasado. */
+  fechaDisponibleEstimada: string | null
+  /** Sólo formatos con litros asignados, de mayor a menor. */
+  reparto: {
+    envase: EnvaseBucket
+    /** Litros que le faltan a ESE formato para llegar a su punto de reorden,
+     *  contando sólo el stock físico en bodega (sin este tanque). */
+    necesidad: number
+    /** Total asignado = colchón + ventana de reposición + excedente. */
+    litros: number
+    /** Repone el stock de seguridad (colchón que no se vende: está para
+     *  absorber la variabilidad de la demanda). */
+    litrosColchon: number
+    /** Cubre la venta del período de reposición (lead time + revisión). */
+    litrosVentanaReposicion: number
+    /** Venta más allá del período de reposición, repartida por demanda. */
+    litrosExcedente: number
+    /** 0-100, un decimal. */
+    porcentaje: number
+  }[]
+  /** Totales del lote, por destino. */
+  litrosColchon: number
+  litrosVentanaReposicion: number
+  /** Litros del tanque que sobran después de cubrir toda la necesidad y se
+   *  reparten por demanda futura. 0 si el tanque no alcanza a cubrirla. */
+  excedente: number
+  /** Semanas de venta que cubre SOLO el excedente, según demanda proyectada.
+   *  Null si el producto no tiene demanda proyectada. Aproximado. */
+  semanasExcedente: number | null
+  /** Semanas que cubre todo lo que no es colchón (ventana + excedente). */
+  semanasVentaTotal: number | null
+  /** yyyy-mm-dd aproximado hasta el que alcanza la venta de este lote. */
+  cubreVentaHasta: string | null
+  /** false = el tanque no alcanza ni para cubrir la necesidad de todos los
+   *  formatos; se repartió entero a prorrata de ella. */
+  cubreTodaLaNecesidad: boolean
+  /** true = en algún formato mandó el ritmo de venta REAL de este ciclo por
+   *  encima del forecast, así que el split ya se corrigió con las ventas que
+   *  entraron mientras el lote está en el fermentador. */
+  ajustadoPorVentas: boolean
+}
+
+/**
+ * Cuánto insumo hace falta para cubrir el Plan Maestro (cola activa) —
+ * escalando cada receta linealmente al volumen real del lote (decisión del
+ * usuario, 7-sep-2026). `precioUnitario`/`costoNecesidad` son null hasta que
+ * exista una lista de precios — se pidió a propósito ver la necesidad en
+ * CANTIDAD primero, valorizar después.
+ */
+export interface NecesidadInsumo {
+  insumo: string
+  categoria: 'malta' | 'lupulo' | 'levadura' | 'otros'
+  /** 'gr' o 'ml' — unidad base del insumo, misma en necesidad y disponible. */
+  unidadBase: 'gr' | 'ml'
+  necesidadBruta: number
+  /** Del último snapshot de stock_insumos — null si no hay ninguno cargado todavía. */
+  disponible: number | null
+  necesidadNeta: number
+  precioUnitario: number | null
+  costoNecesidad: number | null
+  /** Productos del plan que aportan a esta necesidad, con su litraje. */
+  lotes: { producto: string; litrosPlanificados: number }[]
+}
+
+/** Un lote del Plan Maestro cuyo producto no tiene receta cargada todavía —
+ *  su necesidad de insumos no se puede calcular y hay que decirlo, no
+ *  omitirlo en silencio. */
+export interface LoteSinReceta {
+  producto: string
+  litrosPlanificados: number
+}
+
+/**
+ * Una fila de la cola priorizada del Plan Maestro (tabla plan_produccion).
+ * Distinta de `lotes_produccion` (Logística: el ENVÍO/despacho de algo que
+ * ya se produjo) — esto es la planificación previa: qué cocinar, cuánto,
+ * cuándo y en qué orden.
+ */
+export interface LotePlan {
+  id: string
+  producto: string
+  categoria: 'cerveza' | 'kombucha'
+  litrosPlanificados: number
+  /** yyyy-mm-dd */
+  fechaPlanificada: string
+  /** 0 = primero en la cola. Contiguo dentro de planificado/en_curso. */
+  prioridad: number
+  estado: 'planificado' | 'en_curso' | 'completado' | 'cancelado'
+  origen: 'sugerido' | 'manual'
+  /** Por qué se sugirió — sólo tiene contenido cuando origen='sugerido'. */
+  motivo: string | null
+  observaciones: string | null
+}
+
+/**
+ * Una sugerencia de cocción calculada EN VIVO (no persistida) comparando el
+ * disponible actual contra el punto de reorden — el usuario la confirma
+ * (crea la fila real en plan_produccion) o la ignora. Igual que el resto de
+ * Stock de Seguridad, se recalcula en cada carga de página.
+ */
+export interface SugerenciaPlan {
+  producto: string
+  /** Formato específico que gatilló la alarma — barriles y latas de un mismo
+   *  producto se agotan a ritmos distintos, así que la sugerencia SIEMPRE es
+   *  por producto×envase, nunca por el estilo completo (ver comentario en
+   *  el cálculo más abajo). */
+  envase: EnvaseBucket
+  categoria: 'cerveza' | 'kombucha'
+  /** Disponible HOY (stock en bodega de Producción + lo declarado en
+   *  producción) — NO confundir con `litrosSugeridos`: éste es lo que HAY,
+   *  el otro es lo que FALTA. Mostrar ambos lado a lado en la UI, nunca uno
+   *  solo sin etiqueta (así se leyó "1.697 L" como stock disponible cuando
+   *  en realidad era la necesidad a cubrir — bug de lectura, no de cálculo). */
+  disponibleLitros: number
+  /** Unidades físicas disponibles (latas o barriles) — null si el bucket no
+   *  tiene unidad contable ("otros"). */
+  disponibleUnidades: number | null
+  /** Litros para cubrir lo que haga falta: el punto de reorden, o lo que se
+   *  va a consumir durante el lead time al ritmo de venta ACTUAL, lo que
+   *  sea mayor. */
+  litrosSugeridos: number
+  leadTimeSemanas: number
+  /** Litros/día vendidos en lo que va del ciclo — el ritmo REAL, no el
+   *  promedio proyectado por el forecast. */
+  ritmoDiarioActual: number
+  /** Días hasta agotar el disponible al ritmo actual — null si no hubo
+   *  ventas este ciclo (no se puede proyectar una velocidad). */
+  diasHastaQuiebre: number | null
+  /** yyyy-mm-dd — null si diasHastaQuiebre es null. */
+  fechaEstimadaQuiebre: string | null
+  motivo: string
+}
+
+export default async function ProduccionPage() {
+  const user = await getServerUser()
+  if (!user) redirect('/login')
+  // Mismo criterio que Rentabilidad: si no tiene acceso rebota al Hub sin
+  // revelar que la ruta existe. Admins + equipo de Producción.
+  if (!user.isAdmin && user.macroArea !== 'produccion') redirect('/')
+
+  // Service-role a propósito (lib/supabase/admin.ts): las tablas forecast_*
+  // exigen RLS authenticated y en modo demo no hay sesión real — mismo gap ya
+  // resuelto para stock_productos/deudores/users.
+  const admin = createAdminClient()
+
+  // forecast_produccion se pagina: PostgREST corta en 1000 filas y, ordenado
+  // por mes, las del forecast son las ÚLTIMAS — con el historial completo
+  // (miles de filas entre general/producto/envase/producto_envase) la
+  // proyección quedaba entera fuera de la respuesta y el gráfico salía sin
+  // la línea verde. Las otras tablas tienen decenas de filas, no hace falta.
+  const PAGE = 1000
+  type ForecastRow = { nivel: string; clave: string | null; mes: string; tipo: string; litros: number; litros_min: number | null; litros_max: number | null; tendencia: number | null; estacionalidad: number | null }
+  const forecastRaw: ForecastRow[] = []
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await admin
+      .from('forecast_produccion')
+      .select('nivel, clave, mes, tipo, litros, litros_min, litros_max, tendencia, estacionalidad')
+      .order('mes', { ascending: true })
+      .range(offset, offset + PAGE - 1)
+    if (error || !data || data.length === 0) break
+    forecastRaw.push(...(data as ForecastRow[]))
+    if (data.length < PAGE) break
+  }
+
+  const [
+    { data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios },
+    { data: stockSeguridadRaw }, { data: ultimoSyncStockRaw },
+    { data: recetasRaw }, { data: recetaInsumosRaw }, { data: stockInsumosRaw },
+  ] = await Promise.all([
+    admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial, metodo'),
+    admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
+    admin.from('stock_productos').select('producto, categoria, tipo, camara, cantidad, litros, lotes').order('cantidad', { ascending: false }),
+    admin.from('costos_precios').select('producto, categoria').not('codigo', 'is', null),
+    admin.from('stock_seguridad').select('nivel, producto, envase, categoria, mes, lead_time_semanas, periodo_revision_semanas, demanda_mensual_proyectada, demanda_en_ventana, sigma_semanal, stock_seguridad_litros, punto_reorden_litros, confianza, mape_backtest, meses_historial, metodo').order('mes', { ascending: true }),
+    // Cuándo se sincronizó por última vez el stock del ERP — para que el
+    // panel de Stock de Seguridad pueda mostrar que el "disponible" contra
+    // el que compara está vivo (recalculado en cada carga de la página, no
+    // sólo cuando corre el forecast mensual), no una foto vieja.
+    admin.from('erp_sync_log').select('creado_at').eq('fuente', 'stock').eq('ok', true).order('creado_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('recetas').select('id, producto, litros_base'),
+    admin.from('receta_insumos').select('receta_id, cantidad, insumos(id, nombre, categoria, unidad_base, precio_unitario)'),
+    // Último snapshot de stock de insumos — puede no haber ninguno todavía
+    // (la automatización de carga está pendiente, 7-sep-2026); sin datos acá
+    // la necesidad neta de la proyección de compra es simplemente toda la
+    // necesidad bruta, no un error.
+    admin.from('stock_insumos').select('insumo_id, cantidad, fecha_informe').order('fecha_informe', { ascending: false }),
+  ])
+  const ultimoSyncStock = (ultimoSyncStockRaw as { creado_at?: string } | null)?.creado_at ?? null
+  // Se calcula server-side (comparado contra la hora del request, no la del
+  // navegador) para no arriesgar un mismatch de hidratación entre SSR y
+  // cliente — mismo patrón que diaActual/diasEnMes más abajo.
+  const minutosDesdeSyncStock = ultimoSyncStock != null
+    ? Math.max(0, Math.round((Date.now() - Date.parse(ultimoSyncStock)) / 60000))
+    : null
+
+  const categoriaPorProducto = new Map(
+    (costosPrecios ?? []).map(c => [normalizarProducto(c.producto as string), (c.categoria as string | null) ?? null])
+  )
+
+  // ── Avance del ciclo en curso, calculado en vivo (no viene del modelo:
+  // el modelo excluye el ciclo en curso a propósito porque está incompleto).
+  // "Ciclo", no mes calendario — ver el comentario extenso en
+  // lib/produccion/reglas.ts: arranca el 24 del mes anterior y cierra el 23
+  // del mes que le da nombre.
+  const cicloEnCurso = cicloEnCursoISO()
+  const inicioCiclo = inicioDeCiclo(cicloEnCurso)
+  const finCiclo = finDeCiclo(cicloEnCurso)
+  const MS_POR_DIA = 24 * 60 * 60 * 1000
+  const hoy = new Date()
+  const hoyISO = hoy.toISOString().slice(0, 10)
+  const diaActual = Math.floor(
+    (Date.parse(`${hoyISO}T00:00:00Z`) - Date.parse(`${inicioCiclo}T00:00:00Z`)) / MS_POR_DIA
+  ) + 1
+  const diasEnMes = Math.floor(
+    (Date.parse(`${finCiclo}T00:00:00Z`) - Date.parse(`${inicioCiclo}T00:00:00Z`)) / MS_POR_DIA
+  ) + 1
+
+  // ── Días hábiles (lunes a viernes) — para CUALQUIER cálculo de RITMO de
+  // venta (no de tiempo transcurrido). El reparto no vende fin de semana,
+  // así que dividir los litros vendidos por días CALENDARIO subestima el
+  // ritmo real: un lote vendido en 10 días hábiles se repartía entre 14
+  // días calendario y daba una velocidad más lenta de la real. Se usa tanto
+  // para las alarmas de quiebre como para "a este ritmo cerrarías con X L"
+  // en Forecasting — diaActual/diasEnMes (calendario) siguen siendo los
+  // correctos para "en qué día del ciclo estamos".
+  const esFinDeSemanaISO = (iso: string) => {
+    const dow = new Date(`${iso}T00:00:00Z`).getUTCDay()
+    return dow === 0 || dow === 6
+  }
+  const contarDiasHabilesISO = (desdeISO: string, hastaISO: string): number => {
+    let n = 0
+    for (let t = Date.parse(`${desdeISO}T00:00:00Z`); t <= Date.parse(`${hastaISO}T00:00:00Z`); t += MS_POR_DIA) {
+      if (!esFinDeSemanaISO(new Date(t).toISOString().slice(0, 10))) n++
+    }
+    return n
+  }
+  const diasHabilesTranscurridos = contarDiasHabilesISO(inicioCiclo, hoyISO)
+  const diasHabilesEnCiclo = contarDiasHabilesISO(inicioCiclo, finCiclo)
+  /** Suma `diasHabiles` días hábiles a `desdeISO`, saltando sábado/domingo. */
+  const sumarDiasHabilesISO = (desdeISO: string, diasHabiles: number): string => {
+    let t = Date.parse(`${desdeISO}T00:00:00Z`)
+    let restantes = Math.max(0, Math.round(diasHabiles))
+    while (restantes > 0) {
+      t += MS_POR_DIA
+      if (!esFinDeSemanaISO(new Date(t).toISOString().slice(0, 10))) restantes--
+    }
+    return new Date(t).toISOString().slice(0, 10)
+  }
+
+  const litrosMtdPorSerie = new Map<string, number>()
+  /* Litros de las últimas 4 semanas (28 días corridos, hoy incluido) por
+     serie. Es el estimador de RITMO que usan las alarmas de quiebre y el
+     split — a diferencia de `litrosMtdPorSerie`, que responde "cómo vamos en
+     este ciclo" y por eso arranca en el día 24.
+
+     Por qué dos ventanas distintas y no una: backtest sobre 18 meses, 108
+     series producto×envase y 4.436 observaciones (9-sep-2026), comparando
+     cada estimador contra la venta REAL de las 4 semanas siguientes:
+
+                          MTD del ciclo   Trailing 28d
+       MAE                  5,81 L/día      4,28 L/día
+       MAPE                 133,6%          114,8%
+       Sesgo                −1,09           −0,20
+       Sin estimación       27,9%           14,2%
+
+     El MTD arranca cada ciclo con muy pocos días en el denominador, así que
+     es ruidoso justo al principio y recién converge al trailing pasados ~13
+     días hábiles (de 23 que tiene un ciclo):
+
+       días hábiles del ciclo:   1-3     4-7    8-12    13+
+       MAE MTD:                 9,21    6,65    5,33   4,41
+       MAE trailing 28d:        3,94    4,36    4,39   4,32
+
+     O sea: durante la primera mitad de cada ciclo el ritmo MTD era hasta 2,3x
+     peor, y además dejaba 1 de cada 4 formatos sin fecha de quiebre ("sin
+     ventas este ciclo") sólo porque el ciclo recién empezaba. El trailing
+     mira siempre la misma cantidad de días, así que no tiene ese arranque. */
+  const litrosTrailingPorSerie = new Map<string, number>()
+  const inicioTrailing = new Date(Date.parse(`${hoyISO}T00:00:00Z`) - 27 * MS_POR_DIA).toISOString().slice(0, 10)
+  const diasHabilesTrailing = contarDiasHabilesISO(inicioTrailing, hoyISO)
+  {
+    // Paginado — mismo motivo que forecast_produccion arriba: PostgREST corta
+    // en 1000 filas. Un ciclo de venta normal ya supera esa cifra bien antes
+    // de cerrar (1.756 filas a mitad del ciclo del 4-sep-2026), así que sin
+    // paginar la consulta se cortaba a mitad de camino y "vendido este mes"
+    // quedaba muy por debajo de lo real (2.969 L en vez de ~5.300 L).
+    //
+    // A PROPÓSITO no filtra por `entregado`/`entrega_informada`: cuenta por
+    // fecha de PEDIDO, no de entrega — a diferencia de Ventas
+    // (ventas_entregas_periodo), que sólo suma lo con entregado=true.
+    // Decisión del usuario (7-sep-2026), tras auditar que ahora mismo un
+    // 16% del ciclo en curso está "pedido, no entregado": Producción
+    // necesita la señal temprana de demanda apenas se toma el pedido, no
+    // recién cuando se despacha — coherente con que la sección se llama
+    // "cómo vamos en el mes", no "cuánto entregamos". Mismo criterio en el
+    // endpoint /api/produccion/datos que entrena el forecast — no cambiar
+    // uno sin el otro, o las dos vistas del módulo dejarían de coincidir.
+    type VentaMesRow = { fecha_pedido: string; nombre_fantasia: string | null; producto: string | null; envase: string | null; litros: number | null }
+    const ventasMes: VentaMesRow[] = []
+    for (let offset = 0; ; offset += PAGE) {
+      const { data, error } = await admin
+        .from('ventas')
+        .select('fecha_pedido, nombre_fantasia, producto, envase, litros')
+        // La ventana arranca en la MÁS TEMPRANA de las dos: el inicio del
+        // ciclo (para el MTD) o hace 28 días (para el ritmo trailing).
+        .gte('fecha_pedido', inicioCiclo < inicioTrailing ? inicioCiclo : inicioTrailing)
+        .order('id', { ascending: true })
+        .range(offset, offset + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      ventasMes.push(...(data as VentaMesRow[]))
+      if (data.length < PAGE) break
+    }
+    for (const f of ventasMes) {
+      if (!f.fecha_pedido || !f.producto) continue
+      if (esClienteExcluidoProduccion(f.nombre_fantasia)) continue
+      const nombreNormalizado = normalizarProducto(f.producto)
+      if (!categoriaPorProducto.has(nombreNormalizado)) continue // mismo filtro de catálogo que el endpoint de datos
+      const litros = (f.litros as number) ?? 0
+      const bucket = bucketEnvase(f.envase as string | null, litros)
+      const fecha = f.fecha_pedido.slice(0, 10)
+
+      const claves = [
+        'general::',
+        `producto::${nombreNormalizado}`,
+        `envase::${bucket}`,
+        `producto_envase::${claveProductoEnvase(nombreNormalizado, bucket)}`,
+      ]
+      // Una venta puede caer en las dos ventanas, en una sola, o en ninguna
+      // (quedó fuera por el borde del rango pedido) — se evalúan por separado.
+      for (const id of claves) {
+        if (fecha >= inicioCiclo) litrosMtdPorSerie.set(id, (litrosMtdPorSerie.get(id) ?? 0) + litros)
+        if (fecha >= inicioTrailing) litrosTrailingPorSerie.set(id, (litrosTrailingPorSerie.get(id) ?? 0) + litros)
+      }
+    }
+  }
+
+  // Índice de validación por serie, para colgarle su MAPE a cada una.
+  const validacionPorSerie = new Map(
+    (validacionRaw ?? []).map(v => [`${v.nivel}::${v.clave ?? ''}`, v])
+  )
+
+  const seriesMap = new Map<string, SerieForecast>()
+  for (const f of forecastRaw) {
+    const id = `${f.nivel}::${f.clave ?? ''}`
+    if (!seriesMap.has(id)) {
+      const val = validacionPorSerie.get(id)
+      const nivel = f.nivel as SerieForecast['nivel']
+
+      let label = f.clave ?? ''
+      let producto: string | null = null
+      let envaseBucket: string | null = null
+      let categoria: string | null = null
+
+      if (nivel === 'general') {
+        label = 'Todos los productos (consolidado)'
+      } else if (nivel === 'envase') {
+        envaseBucket = f.clave
+        label = ENVASE_LABEL[(f.clave ?? 'otros') as keyof typeof ENVASE_LABEL] ?? f.clave ?? ''
+      } else if (nivel === 'producto') {
+        producto = f.clave
+        categoria = categoriaPorProducto.get(f.clave ?? '') ?? null
+        label = f.clave ?? ''
+      } else if (nivel === 'producto_envase') {
+        const partido = partirClaveProductoEnvase(f.clave ?? '')
+        producto = partido.producto
+        envaseBucket = partido.bucket
+        categoria = categoriaPorProducto.get(partido.producto) ?? null
+        label = `${partido.producto} — ${ENVASE_LABEL[partido.bucket] ?? partido.bucket}`
+      }
+
+      seriesMap.set(id, {
+        id, nivel, clave: f.clave, label, producto, envaseBucket, categoria,
+        puntos: [],
+        mae: val?.mae != null ? Number(val.mae) : null,
+        mape: val?.mape != null ? Number(val.mape) : null,
+        mesesHistorial: val?.meses_historial ?? null,
+        metodo: (val?.metodo as 'propio' | 'derivado' | undefined) ?? 'propio',
+        litrosMesEnCurso: Math.round((litrosMtdPorSerie.get(id) ?? 0) * 10) / 10,
+      })
+    }
+    seriesMap.get(id)!.puntos.push({
+      mes: f.mes,
+      tipo: f.tipo as 'historico' | 'forecast',
+      litros: Number(f.litros),
+      litrosMin: f.litros_min != null ? Number(f.litros_min) : null,
+      litrosMax: f.litros_max != null ? Number(f.litros_max) : null,
+      tendencia: f.tendencia != null ? Number(f.tendencia) : null,
+      estacionalidad: f.estacionalidad != null ? Number(f.estacionalidad) : null,
+    })
+  }
+
+  // Orden: general primero, después productos, envases, y al final los
+  // combos producto×envase — cada grupo ordenado por volumen histórico.
+  const volumen = (s: SerieForecast) => s.puntos.filter(p => p.tipo === 'historico').reduce((a, p) => a + p.litros, 0)
+  const series = [...seriesMap.values()].sort((a, b) => {
+    const peso = { general: 0, producto: 1, envase: 2, producto_envase: 3 }
+    if (peso[a.nivel] !== peso[b.nivel]) return peso[a.nivel] - peso[b.nivel]
+    return volumen(b) - volumen(a)
+  })
+
+  const calidad = (calidadRaw ?? []).map(c => ({
+    tipo: c.tipo, clave: c.clave, detalle: c.detalle, severidad: c.severidad,
+  })) as CalidadItem[]
+
+  const ultimaCorrida = (calidadRaw?.[0] as { generado_at?: string } | undefined)?.generado_at ?? null
+
+  // Producción usa una lista de cámaras MÁS AMPLIA que Ventas: acá la
+  // pregunta es "¿cuánto producto terminado tenemos?" (para no lanzar una
+  // cocción redundante), no "¿qué puedo prometerle a un cliente hoy?". Por eso
+  // entran también Frío Planta y Latas FIFO. Ver CAMARAS_PRODUCCION en
+  // lib/camaras.ts — definición de negocio, no del parseo.
+  const stockDisponibleRaw = (stockRaw ?? []).filter(
+    s => s.tipo !== 'tanque' && esCamaraProduccion(s.camara as string | null)
+  )
+
+  // Inventario actual por producto, sumado entre barril+envase.
+  //
+  // stock_productos.litros SOLO viene poblado para tipo='barril' — está así
+  // en TODA la app (confirmado: 19/19 barriles con litros, 0/21 envases), el
+  // módulo de Stock también lo trata como null para latas. Acá sí hace falta
+  // el litraje real de las latas para comparar contra el stock de seguridad
+  // (que está en litros), así que se deriva del tamaño de envase que ya
+  // viene en el propio nombre del producto ("Lata (354 ml) de X").
+  const litrosLata = (producto: string, cantidad: number): number | null => {
+    const match = producto.match(/Lata \((\d+)\s*ml\)/i)
+    return match ? cantidad * (Number(match[1]) / 1000) : null
+  }
+  // normalizarProducto saca el prefijo de lata y un descriptor final ENTRE
+  // PARÉNTESIS ("Mocho English (Red Ale)" → "Mocho English") — eso alcanza
+  // para los barriles, pero stock_productos repite el estilo en las latas
+  // SIN paréntesis y pegado al nombre ("Lata (473 ml) de Mocho English Red
+  // Ale" → sin el prefijo queda "Mocho English Red Ale", que no es igual a
+  // "Mocho English"). Se resuelve buscando cuál producto conocido (mismo
+  // catálogo que ya usa el forecast) es prefijo de lo que queda — más
+  // robusto que tratar de adivinar dónde termina el nombre y empieza el
+  // estilo con puro recorte de texto.
+  const productosConocidos = [...categoriaPorProducto.keys()].sort((a, b) => b.length - a.length)
+  function resolverProductoStock(nombreCrudo: string): string {
+    const limpio = normalizarProducto(nombreCrudo)
+    if (categoriaPorProducto.has(limpio)) return limpio
+    const prefijo = productosConocidos.find(p => limpio === p || limpio.startsWith(p + ' '))
+    return prefijo ?? limpio
+  }
+  // El colchón ahora se calcula también por formato, así que el inventario
+  // tiene que quedar clasificado igual: no se puede servir un pedido de
+  // barril con latas. En los barriles el tamaño se deduce del propio
+  // informe (litros/cantidad = capacidad del barril; hoy son todos de 30L).
+  const bucketDeStock = (producto: string, tipo: string, cantidad: number, litros: number | null): EnvaseBucket => {
+    if (tipo === 'barril') {
+      const capacidad = litros != null && cantidad > 0 ? Math.round(litros / cantidad) : null
+      if (capacidad === 30) return 'barril_30'
+      if (capacidad === 50) return 'barril_50'
+      return 'otros'
+    }
+    // 'lata' fusiona 354ml y 473ml — ver el comentario extenso en
+    // lib/produccion/reglas.ts (EnvaseBucket).
+    const ml = producto.match(/Lata \((\d+)\s*ml\)/i)?.[1]
+    if (ml === '354' || ml === '473') return 'lata'
+    return 'otros'
+  }
+
+  const stockActualPorProducto = new Map<string, number>()
+  const stockActualPorProductoEnvase = new Map<string, number>()
+  // Unidades físicas (latas o barriles) — a diferencia de litros, no tiene
+  // sentido sumarlas a nivel "producto" (mezclaría latas con barriles), así
+  // que sólo se acumula por producto×envase.
+  const stockActualUnidadesPorProductoEnvase = new Map<string, number>()
+  // `stock`: una fila por (producto resuelto, formato, cámara) — es lo que
+  // consume la tabla "Inventario Actual" del cliente, agrupada visualmente
+  // ahí. Se arma en el MISMO loop que ya resolvía nombre/bucket para no
+  // repetir el cálculo dos veces.
+  const stock: StockItem[] = []
+  for (const s of stockDisponibleRaw) {
+    if (!s.producto) continue
+    const cantidad = Number(s.cantidad)
+    const litrosCrudos = s.litros != null ? Number(s.litros) : null
+    const litros = litrosCrudos ?? litrosLata(s.producto as string, cantidad)
+    const nombre = resolverProductoStock(s.producto as string)
+    const bucket = bucketDeStock(s.producto as string, s.tipo as string, cantidad, litrosCrudos)
+
+    stock.push({
+      producto: nombre,
+      categoria: categoriaPorProducto.get(nombre) ?? null,
+      envaseBucket: bucket,
+      camara: (s.camara as string | null) ?? null,
+      cantidad,
+      litros,
+    })
+
+    // Las siguientes dos sumas SÍ necesitan litros reales — se saltan acá
+    // (no en el push de arriba) para no perder la fila en la tabla de
+    // referencia cuando el formato no tiene litraje derivable (ej. "otros").
+    if (litros == null) continue
+    stockActualPorProducto.set(nombre, (stockActualPorProducto.get(nombre) ?? 0) + litros)
+    const clavePE = claveProductoEnvase(nombre, bucket as never)
+    stockActualPorProductoEnvase.set(clavePE, (stockActualPorProductoEnvase.get(clavePE) ?? 0) + litros)
+    stockActualUnidadesPorProductoEnvase.set(clavePE, (stockActualUnidadesPorProductoEnvase.get(clavePE) ?? 0) + cantidad)
+  }
+
+  // Litros en fermentación, que van a llegar a bodega dentro del lead time.
+  // Sin esto, un producto con una cocción en curso aparece igual como
+  // "crítico" y gatillaría una cocción redundante.
+  //
+  // Fuente: la sección "Stock de producto en tanques" del mismo informe del
+  // ERP (tipo='tanque'), no lotes_produccion. Esa tabla se llena a mano desde
+  // el módulo de Logística y tenía 2 lotes cargados en total, mientras que el
+  // ERP trae los ~11 fermentadores completos y actualizados en cada sync.
+  //
+  // No hay doble conteo con el inventario: mientras el producto está en el
+  // tanque todavía no se envasó, así que no aparece en ninguna cámara.
+  /* ── Ocupación de fermentadores ──────────────────────────────────────────
+     El informe del ERP lista SÓLO los fermentadores con contenido, con sus
+     litros — no trae la capacidad nominal de cada uno ni los que están
+     vacíos, y stock_productos guarda una sola foto (sin histórico), así que
+     tampoco se puede inferir la capacidad del máximo visto. Sin ese dato no
+     hay porcentaje de ocupación honesto: se muestra lo que sí se sabe
+     (litros a granel y cuántos tanques están ocupados). Para convertirlo en
+     un % real hace falta el listado de fermentadores con su capacidad. */
+  const fermentadoresOcupados = new Map<string, number>()
+  for (const s of stockRaw ?? []) {
+    if (s.tipo !== 'tanque' || s.litros == null) continue
+    const tanque = ((s.camara as string | null) ?? 'Sin tanque').trim()
+    fermentadoresOcupados.set(tanque, (fermentadoresOcupados.get(tanque) ?? 0) + Number(s.litros))
+  }
+  const ocupacionPlanta: OcupacionPlanta = {
+    litrosEnFermentacion: Math.round([...fermentadoresOcupados.values()].reduce((a, b) => a + b, 0)),
+    fermentadoresOcupados: fermentadoresOcupados.size,
+    tanques: [...fermentadoresOcupados.entries()]
+      .map(([tanque, litros]) => ({ tanque, litros: Math.round(litros) }))
+      .sort((a, b) => b.litros - a.litros),
+  }
+
+  const litrosEnProduccionPorProducto = new Map<string, number>()
+  const tanquesPorProducto = new Map<string, { nombre: string; litros: number; fechaEstimada: string | null }[]>()
+  for (const s of stockRaw ?? []) {
+    if (s.tipo !== 'tanque' || s.litros == null) continue
+    const nombre = resolverProductoStock(s.producto as string)
+    litrosEnProduccionPorProducto.set(nombre, (litrosEnProduccionPorProducto.get(nombre) ?? 0) + Number(s.litros))
+    const tanque = (s.camara as string | null)?.trim()
+    if (tanque) {
+      // `lotes` viene de stockParser.parseTanques(): una fila de tanque trae
+      // como mucho un lote, con la fecha embarrilado ESTIMADA en él (ver el
+      // comentario extenso ahí — no es una fecha ya ocurrida).
+      const lotesTanque = (s.lotes as { codigo: string; cantidad: number; fechaEmbarrilado: string | null }[] | null) ?? []
+      const fechaEstimada = lotesTanque[0]?.fechaEmbarrilado ?? null
+      const lista = tanquesPorProducto.get(nombre) ?? []
+      lista.push({ nombre: tanque, litros: Math.round(Number(s.litros)), fechaEstimada })
+      tanquesPorProducto.set(nombre, lista)
+    }
+  }
+  // La más tardía entre los tanques de cada producto — el litraje completo no
+  // está envasado hasta que sale el ÚLTIMO tanque. Se calcula UNA vez acá (no
+  // dentro del loop del Split, más abajo) porque las Alarmas de quiebre
+  // también lo necesitan, y las dos secciones tienen que usar la MISMA fecha
+  // para el mismo producto — ver el uso en `sugerenciasPlan`.
+  const fechaDisponibleEstimadaPorProducto = new Map<string, string | null>()
+  for (const [producto, tanquesDelProducto] of tanquesPorProducto) {
+    const fecha = tanquesDelProducto
+      .map(t => t.fechaEstimada)
+      .filter((f): f is string => f != null)
+      .sort()
+      .at(-1) ?? null
+    fechaDisponibleEstimadaPorProducto.set(producto, fecha)
+  }
+
+  /* ── SPLIT DE ENVASADO ────────────────────────────────────────────────────
+     Lo que está en el fermentador todavía NO tiene envase: es líquido a
+     granel. La pregunta operativa al sacarlo es "¿qué porcentaje va a barril
+     30L, barril 50L y lata?", y la respuesta la da la NECESIDAD de cada
+     formato según el forecast: se manda más litros al formato que está más
+     lejos de su punto de reorden.
+
+     Se calcula sobre el stock FÍSICO EN BODEGA (sin el propio tanque) a
+     propósito. Usar el "disponible" ya repartido sería circular: el reparto
+     alimentaría la necesidad que define el reparto.
+
+     Este mismo split se usa en dos lugares, para que nunca discrepen:
+       1) `litrosEnProduccion` de cada fila producto_envase — así las alarmas
+          no piden cocer algo que ya está fermentando (auditoría del
+          6-sep-2026: 13.602 L en tanques generaban ~6.900 L de sobrepedido).
+       2) El panel "Split de Envasado" del Plan Maestro, que muestra el
+          reparto para quien envasa.
+
+     El reparto va EN CASCADA, en dos tramos:
+       1) NECESIDAD — cada formato recibe primero lo que le falta para llegar
+          a su punto de reorden. Si el tanque no alcanza a cubrir todas las
+          necesidades, se reparte entero a prorrata de ellas (nadie llega,
+          pero todos avanzan parejo).
+       2) EXCEDENTE — lo que sobra después de cubrir la necesidad no se queda
+          en el tanque: se reparte por DEMANDA PROYECTADA. Sin esto, un
+          fermentador grande mandaba el 100% al único formato descubierto
+          (Aguas Blancas: 3.203 L a lata para cubrir una necesidad de 397 L),
+          cuando esos litros igual hay que envasarlos en algo. */
+  const primerMesSS = [...new Set((stockSeguridadRaw ?? []).map(s => (s.mes as string).slice(0, 10)))].sort()[0]
+  /** Para pasar demanda mensual a semanal en las estimaciones de horizonte. */
+  const SEMANAS_POR_MES = 4.33
+
+  /** clave `producto|envase` → litros del fermentador asignados a ese formato. */
+  const splitFermentadorPorFormato = new Map<string, number>()
+  const splitPorProducto = new Map<string, SplitFermentador['reparto']>()
+  const splitFermentadores: SplitFermentador[] = []
+
+  for (const [producto, litrosTanque] of litrosEnProduccionPorProducto) {
+    if (litrosTanque <= 0) continue
+    const filasFormato = (stockSeguridadRaw ?? []).filter(
+      s => s.nivel === 'producto_envase' && (s.mes as string).slice(0, 10) === primerMesSS && normalizarProducto(s.producto as string) === producto
+    )
+    const tanquesDelProducto = tanquesPorProducto.get(producto) ?? []
+    const fechaDisponibleEstimada = fechaDisponibleEstimadaPorProducto.get(producto) ?? null
+
+    // TODO lote en fermentador entra al panel, sin excepción — aunque no haya
+    // con qué repartirlo (producto nuevo, sin forecast por formato todavía).
+    // Antes se hacía `continue` y el lote desaparecía en silencio: peor que
+    // mostrarlo sin reparto, porque nadie se entera de que hay que envasarlo.
+    if (filasFormato.length === 0) {
+      splitFermentadores.push({
+        producto,
+        categoria: (categoriaPorProducto.get(producto) ?? null) as 'cerveza' | 'kombucha' | null,
+        litrosEnFermentador: Math.round(litrosTanque),
+        tanques: tanquesDelProducto,
+        fechaDisponibleEstimada,
+        reparto: [],
+        litrosColchon: 0, litrosVentanaReposicion: 0, excedente: Math.round(litrosTanque),
+        semanasExcedente: null, semanasVentaTotal: null, cubreVentaHasta: null,
+        cubreTodaLaNecesidad: true, ajustadoPorVentas: false,
+      })
+      continue
+    }
+
+    const base = filasFormato.map(f => {
+      const envase = (f.envase as string) as EnvaseBucket
+      const enBodega = stockActualPorProductoEnvase.get(claveProductoEnvase(producto, envase)) ?? 0
+      const colchonObjetivo = Number(f.stock_seguridad_litros)
+
+      // Un lote pasa 3+ semanas en el fermentador, así que el split no puede
+      // quedar congelado con la foto del día que entró: el forecast por
+      // formato se recalcula una vez al mes, pero las VENTAS entran cada 15
+      // min. Igual que las alarmas de quiebre, se toma la señal más exigente
+      // entre el punto de reorden (forecast, mensual) y el ritmo de venta
+      // REAL proyectado sobre la ventana de reposición. Así, si un formato
+      // empieza a venderse más rápido de lo previsto, el split se corrige
+      // solo en el siguiente sync, sin esperar la corrida mensual.
+      //
+      // Mismo estimador de ritmo que las alarmas (últimas 4 semanas, no lo
+      // que va del ciclo) — son la misma pregunta predictiva y tienen que
+      // dar el mismo número, o el split y la alarma del mismo formato se
+      // contradicen. Ver el backtest en litrosTrailingPorSerie.
+      const ventanaDiasHabiles = (Number(f.lead_time_semanas) + Number(f.periodo_revision_semanas)) * 5
+      const ritmoDiarioReal = diasHabilesTrailing > 0
+        ? (litrosTrailingPorSerie.get(`producto_envase::${claveProductoEnvase(producto, envase)}`) ?? 0) / diasHabilesTrailing
+        : 0
+
+      const necesidadForecast = Math.max(Number(f.punto_reorden_litros) - enBodega, 0)
+      const necesidadRitmo = Math.max(ritmoDiarioReal * ventanaDiasHabiles - enBodega, 0)
+      const necesidad = Math.max(necesidadForecast, necesidadRitmo)
+
+      // El punto de reorden es colchón + demanda de la ventana de reposición.
+      // Lo que hay en bodega tapa primero la demanda y lo último que queda sin
+      // cubrir es el colchón, así que de la necesidad, la parte de colchón es
+      // lo que falte para llegar al propio stock de seguridad.
+      const litrosColchon = Math.max(Math.min(necesidad, colchonObjetivo - enBodega), 0)
+
+      // El excedente se reparte por la demanda que de verdad se está viendo:
+      // la proyectada, o la del ritmo real si va por encima.
+      const demandaForecast = Number(f.demanda_mensual_proyectada)
+      const demandaRitmo = ritmoDiarioReal * diasHabilesEnCiclo
+      return {
+        envase,
+        necesidad,
+        litrosColchon,
+        litrosVentanaReposicion: necesidad - litrosColchon,
+        demanda: Math.max(demandaForecast, demandaRitmo),
+        porRitmo: necesidadRitmo > necesidadForecast || demandaRitmo > demandaForecast,
+      }
+    })
+
+    const totalNecesidad = base.reduce((a, b) => a + b.necesidad, 0)
+    const totalDemanda = base.reduce((a, b) => a + b.demanda, 0)
+
+    // Tramo 1 — necesidad. Si el tanque no alcanza para todas, se reparte
+    // entero a prorrata de la necesidad y no hay excedente.
+    const alcanzaLaNecesidad = litrosTanque >= totalNecesidad
+    const excedente = Math.max(litrosTanque - totalNecesidad, 0)
+
+    const detalle = base.map(f => {
+      const litrosNecesidad = totalNecesidad <= 0
+        ? 0
+        : alcanzaLaNecesidad
+          ? f.necesidad
+          : litrosTanque * (f.necesidad / totalNecesidad)
+      // Tramo 2 — excedente por demanda proyectada. Sin demanda conocida se
+      // reparte parejo entre los formatos antes que dejarlo sin asignar.
+      const litrosExcedente = excedente <= 0
+        ? 0
+        : totalDemanda > 0
+          ? excedente * (f.demanda / totalDemanda)
+          : excedente / base.length
+      const litros = litrosNecesidad + litrosExcedente
+      splitFermentadorPorFormato.set(`${producto}|${f.envase}`, litros)
+      // La necesidad se reparte proporcionalmente entre sus dos componentes
+      // (colchón y venta de la ventana) cuando el tanque no alcanza a cubrirla.
+      const factorNecesidad = f.necesidad > 0 ? litrosNecesidad / f.necesidad : 0
+      return {
+        envase: f.envase,
+        necesidad: Math.round(f.necesidad),
+        litros: Math.round(litros),
+        litrosColchon: Math.round(f.litrosColchon * factorNecesidad),
+        litrosVentanaReposicion: Math.round(f.litrosVentanaReposicion * factorNecesidad),
+        litrosExcedente: Math.round(litrosExcedente),
+        porcentaje: Math.round((litros / litrosTanque) * 1000) / 10,
+      }
+    })
+      .filter(d => d.litros > 0)
+      .sort((a, b) => b.litros - a.litros)
+
+    if (detalle.length > 0) {
+      // ── ¿Hasta cuándo alcanza? ──────────────────────────────────────────
+      // Todo lo que NO es colchón es venta: la del período de reposición
+      // (que por definición dura la ventana) más el excedente. Se traduce a
+      // semanas con la demanda proyectada del producto — aproximado a
+      // propósito, es una estimación de horizonte, no una fecha de quiebre.
+      const demandaSemanal = totalDemanda / SEMANAS_POR_MES
+      const litrosColchonTotal = detalle.reduce((a, d) => a + d.litrosColchon, 0)
+      const litrosVentaTotal = litrosTanque - litrosColchonTotal
+      const semanasExcedente = demandaSemanal > 0 ? excedente / demandaSemanal : null
+      const semanasVentaTotal = demandaSemanal > 0 ? litrosVentaTotal / demandaSemanal : null
+
+      // La venta no puede empezar a cubrirse antes de que el lote SALGA del
+      // fermentador: si `fechaDisponibleEstimada` es futura, la cobertura se
+      // cuenta desde ahí, no desde hoy — antes este cálculo asumía que todo
+      // el litraje ya estaba envasado y disponible hoy mismo, así que un
+      // lote que recién sale en 3 semanas más mostraba una fecha de
+      // cobertura adelantada 3 semanas de la real.
+      const inicioCobertura = fechaDisponibleEstimada && fechaDisponibleEstimada > hoyISO
+        ? Date.parse(`${fechaDisponibleEstimada}T00:00:00Z`)
+        : hoy.getTime()
+
+      splitFermentadores.push({
+        producto,
+        categoria: (categoriaPorProducto.get(producto) ?? null) as 'cerveza' | 'kombucha' | null,
+        litrosEnFermentador: Math.round(litrosTanque),
+        tanques: tanquesDelProducto,
+        fechaDisponibleEstimada,
+        reparto: detalle,
+        litrosColchon: Math.round(litrosColchonTotal),
+        litrosVentanaReposicion: Math.round(detalle.reduce((a, d) => a + d.litrosVentanaReposicion, 0)),
+        excedente: Math.round(excedente),
+        semanasExcedente: semanasExcedente != null ? Math.round(semanasExcedente * 10) / 10 : null,
+        semanasVentaTotal: semanasVentaTotal != null ? Math.round(semanasVentaTotal * 10) / 10 : null,
+        cubreVentaHasta: semanasVentaTotal != null
+          ? new Date(inicioCobertura + semanasVentaTotal * 7 * MS_POR_DIA).toISOString().slice(0, 10)
+          : null,
+        cubreTodaLaNecesidad: alcanzaLaNecesidad,
+        ajustadoPorVentas: base.some(f => f.porRitmo),
+      })
+      splitPorProducto.set(producto, detalle)
+    }
+  }
+  splitFermentadores.sort((a, b) => b.litrosEnFermentador - a.litrosEnFermentador)
+
+  const stockSeguridad = (stockSeguridadRaw ?? []).map(s => {
+    const nivel = s.nivel as 'producto' | 'producto_envase'
+    const producto = normalizarProducto(s.producto as string)
+    const envase = (s.envase as string | null) ?? null
+    // El inventario se compara al mismo nivel que la fila: una fila de
+    // "Mocho English en barril 30L" contra los barriles de 30L que hay,
+    // no contra el total del producto en todos los formatos.
+    // A nivel formato, que no haya línea para ese envase NO es falta de dato:
+    // si el producto aparece en el informe de stock, el ERP lo está
+    // reportando y la ausencia de ese formato significa cero real, o sea
+    // quiebre total. Tratarlo como "sin dato" escondía las roturas de stock
+    // más graves (44 filas en la primera corrida) en la casilla gris.
+    // "Sin dato" queda sólo para productos que el informe no menciona.
+    const stockActual = nivel === 'producto_envase' && envase
+      ? stockActualPorProductoEnvase.get(claveProductoEnvase(producto, envase as never))
+        ?? (stockActualPorProducto.has(producto) ? 0 : null)
+      : stockActualPorProducto.get(producto) ?? null
+    return {
+      nivel, producto, envase,
+      categoria: s.categoria as 'cerveza' | 'kombucha',
+      mes: (s.mes as string).slice(0, 10),
+      leadTimeSemanas: Number(s.lead_time_semanas),
+      periodoRevisionSemanas: Number(s.periodo_revision_semanas),
+      demandaMensualProyectada: Number(s.demanda_mensual_proyectada),
+      demandaEnVentana: Number(s.demanda_en_ventana),
+      sigmaSemanal: Number(s.sigma_semanal),
+      stockSeguridadLitros: Number(s.stock_seguridad_litros),
+      puntoReordenLitros: Number(s.punto_reorden_litros),
+      confianza: s.confianza as 'alta' | 'media' | 'baja',
+      mapeBacktest: s.mape_backtest != null ? Number(s.mape_backtest) : null,
+      mesesHistorial: s.meses_historial != null ? Number(s.meses_historial) : null,
+      metodo: (s.metodo as 'propio' | 'derivado' | null) ?? 'propio',
+      stockActualLitros: stockActual,
+      stockActualUnidades: nivel === 'producto_envase' && envase
+        ? stockActualUnidadesPorProductoEnvase.get(claveProductoEnvase(producto, envase as never)) ?? (stockActual != null ? 0 : null)
+        : null,
+      // A nivel producto se descuenta el tanque entero; a nivel formato, la
+      // parte que le asigna el SPLIT DE ENVASADO (ver el comentario extenso
+      // donde se calcula). El split se calcula sobre el primer mes
+      // proyectado, que es contra el que se disparan las alarmas.
+      litrosEnProduccion: nivel === 'producto'
+        ? (litrosEnProduccionPorProducto.get(producto) ?? 0)
+        : (envase && (s.mes as string).slice(0, 10) === primerMesSS
+            ? (splitFermentadorPorFormato.get(`${producto}|${envase}`) ?? 0)
+            : 0),
+    }
+  }) as StockSeguridadItem[]
+
+  const avanceMes: AvanceMes = { mes: cicloEnCurso, diaActual, diasEnMes, diasHabilesTranscurridos, diasHabilesEnCiclo }
+
+  // ── Plan Maestro: cola real de cocciones planificadas ──────────────────
+  const { data: planRaw } = await admin
+    .from('plan_produccion')
+    .select('*')
+    .in('estado', ['planificado', 'en_curso'])
+    .order('prioridad', { ascending: true })
+
+  const planProduccion: LotePlan[] = (planRaw ?? []).map(p => ({
+    id: p.id as string,
+    producto: p.producto as string,
+    categoria: p.categoria as 'cerveza' | 'kombucha',
+    litrosPlanificados: Number(p.litros_planificados),
+    fechaPlanificada: (p.fecha_planificada as string).slice(0, 10),
+    prioridad: Number(p.prioridad),
+    estado: p.estado as LotePlan['estado'],
+    origen: p.origen as 'sugerido' | 'manual',
+    motivo: (p.motivo as string | null) ?? null,
+    observaciones: (p.observaciones as string | null) ?? null,
+  }))
+
+  /* ── Proyección de necesidad de insumos ──────────────────────────────────
+     Cruza el Plan Maestro (cola activa) con las recetas: cada receta está
+     escrita para un volumen de referencia (litros_base) — se escala
+     LINEALMENTE al litraje real de cada lote (decisión del usuario,
+     7-sep-2026, sin excepciones por insumo) y se suma entre todos los lotes
+     activos que usan ese insumo.
+
+     El "disponible" sale del último snapshot de stock_insumos, que hoy está
+     vacío (la automatización de carga está pendiente) — sin datos ahí,
+     necesidadNeta = necesidadBruta, no un error ni un cero engañoso.
+
+     precioUnitario/costoNecesidad quedan en null hasta que exista una lista
+     de precios — el usuario pidió ver la necesidad en CANTIDAD primero. */
+  const recetaPorProducto = new Map(
+    (recetasRaw ?? []).map(r => [r.producto as string, { id: r.id as string, litrosBase: Number(r.litros_base) }])
+  )
+
+  type InsumoRel = { id: string; nombre: string; categoria: string; unidad_base: string; precio_unitario: number | null }
+  const recetaInsumosPorRecetaId = new Map<string, { insumo: InsumoRel; cantidad: number }[]>()
+  for (const ri of recetaInsumosRaw ?? []) {
+    const insumoRel = (Array.isArray(ri.insumos) ? ri.insumos[0] : ri.insumos) as InsumoRel | null
+    if (!insumoRel) continue
+    const lista = recetaInsumosPorRecetaId.get(ri.receta_id as string) ?? []
+    lista.push({ insumo: insumoRel, cantidad: Number(ri.cantidad) })
+    recetaInsumosPorRecetaId.set(ri.receta_id as string, lista)
+  }
+
+  // Último snapshot por insumo — stock_insumos ya viene ordenado por
+  // fecha_informe desc, así que la primera fila de cada insumo_id es la más
+  // reciente; se ignoran las filas de fechas anteriores.
+  const disponiblePorInsumoId = new Map<string, number>()
+  for (const s of stockInsumosRaw ?? []) {
+    const id = s.insumo_id as string
+    if (!disponiblePorInsumoId.has(id)) disponiblePorInsumoId.set(id, Number(s.cantidad))
+  }
+
+  const necesidadPorInsumo = new Map<string, {
+    insumoId: string; categoria: string; unidadBase: string; precioUnitario: number | null; bruta: number
+    lotes: { producto: string; litrosPlanificados: number }[]
+  }>()
+  const lotesSinReceta: LoteSinReceta[] = []
+
+  for (const lote of planProduccion) {
+    if (lote.estado !== 'planificado' && lote.estado !== 'en_curso') continue
+    const receta = recetaPorProducto.get(lote.producto)
+    if (!receta) {
+      lotesSinReceta.push({ producto: lote.producto, litrosPlanificados: lote.litrosPlanificados })
+      continue
+    }
+    const factor = lote.litrosPlanificados / receta.litrosBase
+    for (const { insumo, cantidad } of recetaInsumosPorRecetaId.get(receta.id) ?? []) {
+      const acc = necesidadPorInsumo.get(insumo.nombre) ?? {
+        insumoId: insumo.id, categoria: insumo.categoria, unidadBase: insumo.unidad_base,
+        precioUnitario: insumo.precio_unitario, bruta: 0, lotes: [],
+      }
+      acc.bruta += cantidad * factor
+      acc.lotes.push({ producto: lote.producto, litrosPlanificados: lote.litrosPlanificados })
+      necesidadPorInsumo.set(insumo.nombre, acc)
+    }
+  }
+
+  const necesidadInsumos: NecesidadInsumo[] = [...necesidadPorInsumo.entries()]
+    .map(([nombre, n]) => {
+      const bruta = Math.round(n.bruta)
+      const disponible = disponiblePorInsumoId.get(n.insumoId) ?? null
+      const necesidadNeta = disponible != null ? Math.max(bruta - disponible, 0) : bruta
+      return {
+        insumo: nombre,
+        categoria: n.categoria as NecesidadInsumo['categoria'],
+        unidadBase: n.unidadBase as NecesidadInsumo['unidadBase'],
+        necesidadBruta: bruta,
+        disponible,
+        necesidadNeta,
+        precioUnitario: n.precioUnitario,
+        costoNecesidad: n.precioUnitario != null ? Math.round(n.precioUnitario * necesidadNeta) : null,
+        lotes: n.lotes,
+      }
+    })
+    .sort((a, b) => a.categoria.localeCompare(b.categoria) || b.necesidadBruta - a.necesidadBruta)
+
+  // Sugerencias / alarmas de quiebre: SIEMPRE por producto×envase, nunca por
+  // el estilo completo — lo que hay que saber no es "¿va bien Doble IPA?"
+  // sino "¿en qué formato específico (barril 30L, lata...) nos vamos a
+  // quedar sin stock, y cuándo?". Un producto puede ir sobrado en lata y
+  // crítico en barril al mismo tiempo; agregarlo a nivel producto escondía
+  // justo el dato que importa para decidir qué envasar.
+  //
+  // Dos señales, no una sola:
+  //  1) Punto de reorden (stock de seguridad, basado en el PROMEDIO
+  //     proyectado por el forecast) — la misma lógica de siempre.
+  //  2) Ritmo de venta REAL de este ciclo (litros vendidos / días
+  //     transcurridos) proyectado hacia adelante — agarra los casos donde
+  //     se está vendiendo más rápido que el promedio y el punto de reorden
+  //     (que mira el promedio) todavía no se dio cuenta.
+  // La sugerencia dispara si CUALQUIERA de las dos dice que hace falta
+  // producir, y siempre muestra la fecha estimada de quiebre calculada con
+  // el ritmo real — es el dato que responde "¿cuándo exactamente?".
+  const productosEnPlan = new Set(planProduccion.map(l => l.producto))
+  const primerMes = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+  const sugerenciasPlan: SugerenciaPlan[] = stockSeguridad
+    .filter(s => s.nivel === 'producto_envase' && s.envase && s.mes === primerMes && !productosEnPlan.has(s.producto))
+    .map(s => {
+      const envase = s.envase as EnvaseBucket
+      const disponible = s.stockActualLitros != null ? s.stockActualLitros + s.litrosEnProduccion : null
+      if (disponible == null) return null
+      // Unidades: sólo lo físicamente contado en bodega — lo "en producción"
+      // (fermentando) no tiene todavía un formato asignado, así que no se
+      // sabe cuántas latas/barriles va a dar hasta que se envasa.
+      const disponibleUnidades = s.stockActualUnidades
+
+      // Ritmo en litros por DÍA HÁBIL (lunes a viernes) — no se vende fin de
+      // semana, así que "días" acá y en diasHastaQuiebre/fechaEstimadaQuiebre
+      // más abajo son siempre días hábiles, no días calendario.
+      //
+      // Ventana: últimas 4 semanas, NO lo que va del ciclo. El backtest
+      // (ver el comentario extenso donde se arma litrosTrailingPorSerie)
+      // mostró que el MTD del ciclo era hasta 2,3x más impreciso durante la
+      // primera mitad de cada ciclo, subestimaba el ritmo de forma sistemática
+      // y dejaba 1 de cada 4 formatos sin fecha de quiebre sólo porque el
+      // ciclo recién arrancaba.
+      const ritmoDiarioActual = diasHabilesTrailing > 0
+        ? (litrosTrailingPorSerie.get(`producto_envase::${claveProductoEnvase(s.producto, envase)}`) ?? 0) / diasHabilesTrailing
+        : 0
+
+      // ── ¿Cuándo se agota de verdad? ──────────────────────────────────────
+      // `disponible` (arriba) suma bodega + lo que está fermentando, porque
+      // para decidir CUÁNTO falta producir (necesidadNeta, más abajo) da lo
+      // mismo si ya está envasado o todavía no: la cantidad total en el
+      // pipeline es la que importa. Pero para decidir CUÁNDO se agota, sí
+      // importa: mientras el fermentador no llegue a su fecha estimada de
+      // embarrilado, esos litros no se pueden vender. Antes este cálculo
+      // trataba todo `disponible` como vendible desde hoy — un producto con
+      // un tanque grande recién por salir mostraba semanas de margen que en
+      // realidad no existían en bodega (bug real, encontrado auditando
+      // Fisura barril_50: 3.000 L en el Bright Tank T4, listos recién el
+      // 22-sep, tapaban una bodega que ya estaba bajo el punto de reorden).
+      //
+      // Dos tramos: primero se agota SOLO la bodega física; si eso pasa antes
+      // de que el fermentador esté listo, esa es la fecha real de quiebre
+      // (el fermentador todavía no cuenta). Si la bodega aguanta hasta que el
+      // fermentador llega, desde ahí se suma lo que quedaba más lo nuevo.
+      const bodega = s.stockActualLitros ?? 0
+      const fermentando = s.litrosEnProduccion
+      const fechaFermentando = fechaDisponibleEstimadaPorProducto.get(s.producto) ?? null
+      const fermentandoEsFuturo = fechaFermentando != null && fechaFermentando > hoyISO
+
+      let diasHastaQuiebre: number | null = null
+      if (ritmoDiarioActual > 0) {
+        if (!fermentandoEsFuturo) {
+          // Sin fecha (o ya debería haber salido): mismo criterio de antes,
+          // todo `disponible` cuenta desde hoy.
+          diasHastaQuiebre = disponible / ritmoDiarioActual
+        } else {
+          const diasHastaFermentando = contarDiasHabilesISO(hoyISO, fechaFermentando!) - 1
+          const bodegaAlLlegarFermentador = bodega - ritmoDiarioActual * diasHastaFermentando
+          diasHastaQuiebre = bodegaAlLlegarFermentador <= 0
+            ? bodega / ritmoDiarioActual // se agota ANTES de que llegue el fermentador — ni cuenta
+            : diasHastaFermentando + (bodegaAlLlegarFermentador + fermentando) / ritmoDiarioActual
+        }
+      }
+      const fechaEstimadaQuiebre = diasHastaQuiebre != null
+        ? sumarDiasHabilesISO(hoyISO, diasHastaQuiebre)
+        : null
+
+      // Litros que el ritmo actual se comería durante la ventana de riesgo
+      // (lead time + hasta la próxima revisión mensual) — mismo concepto de
+      // "ventana" que el stock de seguridad, pero con la velocidad real en
+      // vez del promedio del forecast. La ventana la fija el proveedor en
+      // semanas calendario; se pasa a días hábiles (5/7) para que combine
+      // con un ritmo que también es por día hábil.
+      const ventanaDiasHabiles = (s.leadTimeSemanas + s.periodoRevisionSemanas) * 5
+      const necesidadRitmo = Math.max(ritmoDiarioActual * ventanaDiasHabiles - disponible, 0)
+      const necesidadReorden = Math.max(s.puntoReordenLitros - disponible, 0)
+      const necesidadNeta = Math.round(Math.max(necesidadRitmo, necesidadReorden))
+      if (necesidadNeta <= 0) return null
+
+      const disparadoPorRitmo = necesidadRitmo > necesidadReorden
+      const envaseLabel = ENVASE_LABEL[envase] ?? envase
+      const fechaLabel = fechaEstimadaQuiebre != null
+        ? new Date(`${fechaEstimadaQuiebre}T00:00:00Z`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+        : null
+
+      let motivo: string
+      if (disponible < s.stockSeguridadLitros) {
+        motivo = `Crítico en ${envaseLabel}: disponible (${Math.round(disponible)} L) por debajo del stock de seguridad (${Math.round(s.stockSeguridadLitros)} L).`
+      } else if (disparadoPorRitmo) {
+        motivo = `Al ritmo de las últimas 4 semanas (${Math.round(ritmoDiarioActual * 5)} L/semana, lun-vie) vas a quebrar ${envaseLabel} antes de que llegue el próximo lote.`
+      } else {
+        motivo = `Bajo punto de reorden en ${envaseLabel}: disponible ${Math.round(disponible)} L, punto de reorden ${Math.round(s.puntoReordenLitros)} L.`
+      }
+      motivo += fechaLabel
+        ? ` Quiebre estimado: ${fechaLabel} (${Math.max(0, Math.round(diasHastaQuiebre!))} días hábiles), al ritmo de las últimas 4 semanas (lun-vie). Lead time ${s.leadTimeSemanas} semanas.`
+        : ` Sin ventas en las últimas 4 semanas para proyectar fecha. Lead time ${s.leadTimeSemanas} semanas.`
+      if (fermentandoEsFuturo && fermentando > 0) {
+        motivo += ` (${Math.round(fermentando).toLocaleString('es-CL')} L siguen fermentando, listos recién el ${new Date(fechaFermentando + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} — no cuentan como stock vendible hasta entonces.)`
+      }
+
+      return {
+        producto: s.producto,
+        envase,
+        categoria: s.categoria,
+        disponibleLitros: Math.round(disponible),
+        disponibleUnidades,
+        litrosSugeridos: necesidadNeta,
+        leadTimeSemanas: s.leadTimeSemanas,
+        ritmoDiarioActual: Math.round(ritmoDiarioActual * 10) / 10,
+        diasHastaQuiebre: diasHastaQuiebre != null ? Math.round(diasHastaQuiebre) : null,
+        fechaEstimadaQuiebre,
+        motivo,
+      } as SugerenciaPlan
+    })
+    .filter((s): s is SugerenciaPlan => s !== null)
+    .sort((a, b) => {
+      const diasA = a.diasHastaQuiebre ?? Infinity
+      const diasB = b.diasHastaQuiebre ?? Infinity
+      if (diasA !== diasB) return diasA - diasB
+      return b.litrosSugeridos - a.litrosSugeridos
+    })
+
+  return (
+    <ProduccionClient
+      series={series}
+      calidad={calidad}
+      planProduccion={planProduccion}
+      sugerenciasPlan={sugerenciasPlan}
+      splitFermentadores={splitFermentadores}
+      ocupacionPlanta={ocupacionPlanta}
+      necesidadInsumos={necesidadInsumos}
+      lotesSinReceta={lotesSinReceta}
+      stock={stock}
+      stockSeguridad={stockSeguridad}
+      ultimaCorrida={ultimaCorrida}
+      minutosDesdeSyncStock={minutosDesdeSyncStock}
+      avanceMes={avanceMes}
+      nombreUsuario={user.nombre}
+      inicialesUsuario={user.iniciales}
+    />
+  )
+}

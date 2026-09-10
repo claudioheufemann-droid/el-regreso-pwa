@@ -74,7 +74,9 @@ export default function ActividadClient({ eventos, isAdmin }: { eventos: EventoA
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100 }}>
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 16px' }}>
-        <div style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))' }}>
+        {/* Sólo 16px: el <main> del layout de ventas ya reserva el área
+            segura con .mobile-safe-top (globals.css). */}
+        <div style={{ paddingTop: 16 }}>
           <AppHeader eyebrow={isAdmin ? 'Todas las regiones' : 'Tu región'} title="Actividad" />
         </div>
 

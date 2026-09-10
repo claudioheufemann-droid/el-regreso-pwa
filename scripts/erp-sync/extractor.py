@@ -97,12 +97,19 @@ def chunks_seguros(desde: date, hasta: date) -> list[tuple[date, date]]:
 
 def tramos_a_pedir() -> list[tuple[date, date]]:
     """Tramos a descargar en esta corrida. FECHA_DESDE/FECHA_HASTA (solo via
-    workflow_dispatch, para diagnostico manual) piden un unico rango exacto
-    sin trocear. Por defecto: el periodo completo vigente, en tramos seguros."""
+    workflow_dispatch) acotan la ventana; por defecto se usa el periodo
+    vigente completo. En ambos casos se trocea con chunks_seguros.
+
+    El rango manual ANTES se pedia entero, sin trocear: con eso cualquier
+    ventana de mas de MAX_DIAS_RANGO dias fallaba siempre, porque el ERP deja
+    de descargar y responde 'se enviara por email'. Eso hacia imposible
+    recargar historia (ej. el backfill del consumo propio de PDV/BaseCamp).
+    Trocear no cambia el caso de diagnostico: un rango corto sigue dando un
+    unico tramo."""
     if FECHA_DESDE or FECHA_HASTA:
         desde = _parse_ddmmyyyy(FECHA_DESDE) if FECHA_DESDE else periodo_actual()[0]
         hasta = _parse_ddmmyyyy(FECHA_HASTA) if FECHA_HASTA else date.today()
-        return [(desde, hasta)]
+        return chunks_seguros(desde, hasta)
     return chunks_seguros(*periodo_actual())
 
 
@@ -296,14 +303,24 @@ _MENSAJES_SIN_DATOS = (
 )
 
 
-def subir_a_pwa(filepath: Path) -> dict:
-    """Sube el Excel al endpoint de la PWA (misma logica que la carga manual)."""
+def subir_a_pwa(filepath: Path, desde: date, hasta: date) -> dict:
+    """Sube el Excel al endpoint de la PWA (misma logica que la carga manual).
+
+    Manda (desde, hasta) — la MISMA ventana que se le pidio al ERP (filtro por
+    fecha de ENTREGA, ver navegar_y_descargar) — para que el endpoint pueda
+    reconciliar pedidos huerfanos (cancelados/eliminados en el ERP) de forma
+    segura, acotada exactamente a esa ventana. Sin estos campos el endpoint
+    no reconcilia nada (ver /api/upload-ventas)."""
     print(f"[4/4] Subiendo {filepath.name} a {UPLOAD_URL}")
     with open(filepath, "rb") as f:
         r = requests.post(
             UPLOAD_URL,
             headers={"Authorization": f"Bearer {UPLOAD_SECRET}"},
             files={"file": (filepath.name, f, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            data={
+                "fecha_entrega_desde": desde.isoformat(),
+                "fecha_entrega_hasta": hasta.isoformat(),
+            },
             timeout=300,
         )
     try:
@@ -315,6 +332,33 @@ def subir_a_pwa(filepath: Path) -> dict:
         raise SinDatosAun(str(body.get("error")))
     if r.status_code != 200:
         raise RuntimeError(f"Upload fallo (HTTP {r.status_code}): {body}")
+    return body
+
+
+def reconciliar_pendientes(pedidos_pendientes_vistos: set[str]) -> dict:
+    """Llama UNA vez, al final de la corrida (todos los tramos ya subidos sin
+    error), para borrar de inmediato cualquier pedido pendiente ("sin
+    facturar aun") que ya no aparecio en NINGUN tramo de esta corrida -es
+    decir, el vendedor lo elimino en el ERP. Pedido explicito de Claudio: no
+    esperar ningun umbral de tiempo, borrar apenas se confirma que desaparecio
+    del informe.
+
+    Por que junta TODOS los tramos antes de llamar (ver PUT en
+    /api/upload-ventas): el periodo activo se pide en 1-2 tramos separados;
+    un pendiente puede caer en cualquiera, asi que comparar contra uno solo
+    daria falsos huerfanos."""
+    r = requests.put(
+        UPLOAD_URL,
+        headers={"Authorization": f"Bearer {UPLOAD_SECRET}", "Content-Type": "application/json"},
+        json={"pedidosPendientesVistos": sorted(pedidos_pendientes_vistos)},
+        timeout=120,
+    )
+    try:
+        body = r.json()
+    except Exception:
+        body = {"raw": r.text[:500]}
+    if r.status_code != 200:
+        raise RuntimeError(f"Reconciliacion de pendientes fallo (HTTP {r.status_code}): {body}")
     return body
 
 
@@ -330,7 +374,10 @@ def main() -> int:
     print(f"=== ERP SYNC | {len(tramos)} tramo(s) === {tramos}")
 
     huerfanos_total = 0
+    omitidos_total = 0
     con_error = 0
+    tramos_subidos = 0
+    pedidos_pendientes_vistos: set[str] = set()
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=HEADLESS)
         context = browser.new_context(accept_downloads=True)
@@ -350,7 +397,7 @@ def main() -> int:
                 continue
 
             try:
-                resultado = subir_a_pwa(archivo)
+                resultado = subir_a_pwa(archivo, desde, hasta)
             except SinDatosAun as e:
                 print(f"   sin datos todavia ({e}) — normal")
                 continue
@@ -361,14 +408,43 @@ def main() -> int:
 
             huerfanos = resultado.get("pedidosHuerfanosBorrados") or 0
             huerfanos_total += huerfanos
+            omitidos = resultado.get("huerfanosOmitidosPorSeguridad") or 0
+            omitidos_total += omitidos
+            tramos_subidos += 1
+            pedidos_pendientes_vistos.update(resultado.get("pedidosPendientesVistos") or [])
             print(f"   insertadas={resultado.get('insertadas')} "
                   f"rango={resultado.get('fechaMin')}->{resultado.get('fechaMax')} "
-                  f"huerfanos_borrados={huerfanos}")
+                  f"huerfanos_borrados={huerfanos}"
+                  + (f" ⚠ OMITIDOS_POR_SEGURIDAD={omitidos} (revisar manualmente)" if omitidos else ""))
         browser.close()
+
+    # Reconciliacion INMEDIATA de pendientes huerfanos — solo si se subieron
+    # todos los tramos sin error: si alguno fallo, el cuadro de "pendientes
+    # vistos" esta incompleto y compararlo borraria pedidos validos que
+    # simplemente cayeron en el tramo que fallo. La corrida siguiente (~15
+    # min despues, horario comercial) vuelve a tener el cuadro completo.
+    huerfanos_pend = 0
+    omitidos_pend = 0
+    if con_error == 0 and tramos_subidos > 0 and not SOLO_DESCARGAR:
+        try:
+            resultado_pend = reconciliar_pendientes(pedidos_pendientes_vistos)
+            huerfanos_pend = resultado_pend.get("pedidosPendientesHuerfanosBorrados") or 0
+            omitidos_pend = resultado_pend.get("huerfanosOmitidosPorSeguridad") or 0
+            huerfanos_total += huerfanos_pend
+            omitidos_total += omitidos_pend
+            print(f"[reconciliacion pendientes] vistos={len(pedidos_pendientes_vistos)} "
+                  f"borrados={huerfanos_pend}"
+                  + (f" ⚠ OMITIDOS_POR_SEGURIDAD={omitidos_pend}" if omitidos_pend else ""))
+        except Exception as e:
+            print(f"   ERROR en reconciliacion de pendientes: {e}")
+    else:
+        print("[reconciliacion pendientes] omitida (hubo tramos con error o sin subidas)")
 
     print("=== RESUMEN ===")
     print(f"  Tramos con error  : {con_error}/{len(tramos)}")
-    print(f"  Pedidos huerfanos borrados (reconciliacion): {huerfanos_total}")
+    print(f"  Pedidos huerfanos borrados (entregados + pendientes): {huerfanos_total}")
+    if omitidos_total:
+        print(f"  ⚠ Pedidos huerfanos OMITIDOS por tope de seguridad: {omitidos_total} — revisar manualmente")
     return 1 if con_error == len(tramos) else 0
 
 

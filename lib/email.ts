@@ -475,3 +475,37 @@ export async function emailCotizacion(params: {
   logResultado('cotización', [params.toEmail], result)
   return result
 }
+
+function reporteComercialHtml(params: { periodoNombre: string; resumenTexto: string }): string {
+  const content = `
+    <div style="padding:32px 28px;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1px;color:${COLOR.gold};text-transform:uppercase;">Control Comercial</p>
+      <h1 style="margin:0 0 18px;font-size:20px;color:${COLOR.text};">Informe Comercial — ${params.periodoNombre}</h1>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:${COLOR.text};">${params.resumenTexto}</p>
+      <p style="margin:0;font-size:13px;color:${COLOR.muted};">Informe completo adjunto en PDF.</p>
+    </div>`
+  return baseTemplate(content, COLOR.gold)
+}
+
+export async function emailReporteComercial(params: {
+  destinatarios: string[]
+  periodoNombre: string
+  resumenTexto: string
+  pdfBase64: string
+}) {
+  const resend = getResend()
+  if (!resend) { console.error('emailReporteComercial: RESEND_API_KEY no configurada'); return { error: 'RESEND_API_KEY no configurada' } }
+
+  const result = await resend.emails.send({
+    from: `El Regreso Beer Co. <${FROM}>`,
+    to: params.destinatarios,
+    subject: `Informe Comercial El Regreso | ${params.periodoNombre}`,
+    html: reporteComercialHtml({ periodoNombre: params.periodoNombre, resumenTexto: params.resumenTexto }),
+    attachments: [{
+      filename: `control-comercial-${params.periodoNombre.replace(/\s+/g, '-').toLowerCase()}.pdf`,
+      content: params.pdfBase64,
+    }],
+  }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
+  logResultado('informe comercial', params.destinatarios, result)
+  return result
+}

@@ -11,6 +11,33 @@ function getAdminClient() {
 
 // Registro de cada corrida (automática o manual) para que el admin vea el
 // estado de la sincronización dentro de la app, sin ir a GitHub Actions.
+// Snapshot diario para Control Comercial (lib/control-comercial): `deudores` se
+// reemplaza en cada carga, así que sin esto no hay forma de calcular "monto
+// recuperado" ni "cuentas regularizadas" en un período — ver deudores_historial.
+// No debe tumbar el sync real si falla: se ignora el error, igual que logSync.
+async function snapshotDeudores(supabase: ReturnType<typeof getAdminClient>, registros: Record<string, unknown>[]) {
+  try {
+    const hoy = new Date().toISOString().slice(0, 10)
+    const filas = registros.map(d => ({
+      snapshot_date: hoy,
+      nombre_fantasia: d.nombre_fantasia,
+      vendedor: d.vendedor ?? null,
+      saldo_total: d.saldo_total ?? null,
+      deuda_vencida: d.deuda_vencida ?? null,
+      deuda_menor_14_dias: d.deuda_menor_14_dias ?? null,
+      deuda_entre_15_29_dias: d.deuda_entre_15_29_dias ?? null,
+      deuda_entre_30_44_dias: d.deuda_entre_30_44_dias ?? null,
+      deuda_entre_45_59_dias: d.deuda_entre_45_59_dias ?? null,
+      deuda_entre_60_89_dias: d.deuda_entre_60_89_dias ?? null,
+      deuda_mas_90_dias: d.deuda_mas_90_dias ?? null,
+      barriles_adeudados: d.barriles_adeudados ?? null,
+    }))
+    await supabase.from('deudores_historial').upsert(filas, { onConflict: 'snapshot_date,nombre_fantasia' })
+  } catch {
+    // informativo — nunca debe tumbar el sync real
+  }
+}
+
 async function logSync(supabase: ReturnType<typeof getAdminClient>, params: {
   origen: 'automatico' | 'manual'; ok: boolean; mensaje?: string
   total?: number; insertados?: number; actualizados?: number; eliminados?: number
@@ -195,6 +222,8 @@ export async function POST(req: Request) {
 
     const nuevos = nombresFantasia.filter(n => !nombresExistentes.has(n)).length
     const actualizados = nombresFantasia.filter(n => nombresExistentes.has(n)).length
+
+    await snapshotDeudores(supabase, recordsToInsert as Record<string, unknown>[])
 
     await logSync(supabase, {
       origen: esCron ? 'automatico' : 'manual', ok: true,

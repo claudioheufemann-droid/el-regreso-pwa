@@ -14,12 +14,20 @@ interface UserContextType {
   isAdmin: boolean
   region: string | null      // scope geográfico del vendedor (null = sin scope)
   puedeVerMargenes: boolean  // acceso a Rentabilidad (costos/márgenes internos)
+  /** Acceso al módulo /control-comercial (Gerente General/Comercial + Analista Control de Gestión). */
+  puedeVerControlComercial: boolean
   /** Acceso al módulo /ventas/comisiones (Claudio/Douglas/Benjamín/Mariel) —
    *  aparte de puedeVerMargenes, ver lib/comisiones.ts. */
   veComisiones: boolean
+  /** Acceso al módulo /produccion (forecast) — admins + equipo de Producción
+   *  (macroArea='produccion', el mismo grupo que ve el kanban en
+   *  /gestion/produccion). */
+  puedeVerProduccion: boolean
   /** Admin real de la cuenta, sin importar si está "viendo como vendedor"
    *  ahora mismo — ver AppUser.esAdminReal en lib/auth.ts. */
   esAdminReal: boolean
+  /** true sólo con sesión real de Supabase Auth — ver AppUser.sesionReal. */
+  sesionReal: boolean
   /** Nombre del vendedor simulado, o null en vista normal. */
   impersonando: string | null
   logout: () => Promise<void>
@@ -30,8 +38,11 @@ const UserContext = createContext<UserContextType>({
   isAdmin: false,
   region: null,
   puedeVerMargenes: false,
+  puedeVerControlComercial: false,
   veComisiones: false,
+  puedeVerProduccion: false,
   esAdminReal: false,
+  sesionReal: false,
   impersonando: null,
   logout: async () => {},
 })
@@ -59,13 +70,16 @@ export function UserProvider({
         isAdmin: initialUser?.isAdmin ?? false,
         region: initialUser?.region ?? null,
         puedeVerMargenes: initialUser?.puedeVerMargenes ?? false,
+        puedeVerControlComercial: initialUser?.puedeVerControlComercial ?? false,
         // Mientras se impersona un vendedor, email sigue siendo el del admin
         // real (a propósito — password/reauth no puede apuntar a otro
         // usuario), así que puedeVerComisionesEquipo() lo seguiría
         // reconociendo. Se apaga acá explícitamente para que la vista sea
         // fiel a la del vendedor simulado.
         veComisiones: initialUser && !initialUser.impersonando ? puedeVerComisionesEquipo(initialUser) : false,
+        puedeVerProduccion: !!initialUser && (initialUser.isAdmin || initialUser.macroArea === 'produccion'),
         esAdminReal: initialUser?.esAdminReal ?? false,
+        sesionReal: initialUser?.sesionReal ?? false,
         impersonando: initialUser?.impersonando ?? null,
         logout,
       }}

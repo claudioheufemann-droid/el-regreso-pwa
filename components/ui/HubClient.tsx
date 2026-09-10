@@ -285,7 +285,7 @@ export default function HubClient({ isAdmin, nombre, macroArea }: {
 }) {
   const firstName = nombre.split(' ')[0]
   const router = useRouter()
-  const { user } = useUser()
+  const { user, puedeVerProduccion } = useUser()
   const { openSearch } = useGlobalSearch()
   const [showSettings, setShowSettings] = useState(false)
   const initials = user?.iniciales ?? (nombre.slice(0, 2).toUpperCase())
@@ -301,7 +301,7 @@ export default function HubClient({ isAdmin, nombre, macroArea }: {
       minHeight: '100svh',
       background: '#07070D',
       display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
-      padding: 'max(env(safe-area-inset-top), 16px) 18px 20px',
+      padding: 'max(var(--safe-top), 16px) 18px 20px',
       fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
       <div style={{ width: '100%', maxWidth: 420, position: 'relative' }}>
@@ -404,6 +404,18 @@ export default function HubClient({ isAdmin, nombre, macroArea }: {
             img="/hub-ventas.webp"
           />
 
+          {/* Control Comercial: analítica gerencial, solo Gerente General/Comercial + Analista Control de Gestión. */}
+          {user?.puedeVerControlComercial && (
+            <ModuleCard
+              href="/control-comercial"
+              color="#F0D584"
+              rgb="240,213,132"
+              title="Control Comercial"
+              subtitle="Resultados, metas y decisiones comerciales"
+              img="/hub-control-comercial.svg"
+            />
+          )}
+
           {/* Gestión: accesible para vendedor y admin */}
           <ModuleCard
             href="/gestion"
@@ -444,6 +456,33 @@ export default function HubClient({ isAdmin, nombre, macroArea }: {
             subtitle="Declaración y recepción de lotes"
             img="/gestion-produccion.webp"
           />
+
+          {/* Forecast de producción (Prophet): proyección de litros a 8 meses
+              por producto y tipo de envase, para planificar producción.
+              Admins + equipo de Producción (macroArea='produccion'). */}
+          <ModuleCard
+            href="/produccion"
+            color="#A855F7"
+            rgb="168,85,247"
+            title="Producción"
+            subtitle="Forecast de demanda a 8 meses"
+            img="/hub-gestion.webp"
+            locked={!puedeVerProduccion}
+          />
+
+          {/* Administración y Finanzas: facturación proyectada, flujo de caja
+              y cobranza de toda la empresa. Solo administradores — acá vive
+              la plata de la empresa completa, no la cartera de un vendedor. */}
+          {isAdmin && (
+            <ModuleCard
+              href="/administracion"
+              color="#22C55E"
+              rgb="34,197,94"
+              title="Administración y Finanzas"
+              subtitle="Facturación, flujo de caja y cobranza"
+              img="/hub-control-comercial.svg"
+            />
+          )}
 
         </div>
 

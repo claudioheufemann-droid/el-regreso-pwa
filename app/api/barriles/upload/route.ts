@@ -9,6 +9,29 @@ function getAdminClient() {
   return createSupabaseClient(url, key)
 }
 
+// Snapshot diario para Control Comercial: barriles_clientes se reemplaza
+// completo en cada carga (un barril devuelto simplemente deja de aparecer),
+// así que sin esto no hay forma de calcular "barriles recuperados" en un
+// período — ver barriles_historial. No debe tumbar el sync real si falla.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function snapshotBarriles(supabase: any, registros: ReturnType<typeof parseBarrilesExcel>) {
+  try {
+    const hoy = new Date().toISOString().slice(0, 10)
+    const filas = registros.map(b => ({
+      snapshot_date: hoy,
+      nombre_fantasia: b.nombre_fantasia,
+      codigo: b.codigo,
+      vendedor: b.vendedor ?? null,
+      litros: b.litros ?? null,
+      producto: b.producto ?? null,
+      fecha_entrega: b.fecha_entrega ?? null,
+    }))
+    await supabase.from('barriles_historial').upsert(filas, { onConflict: 'snapshot_date,codigo' })
+  } catch {
+    // informativo — nunca debe tumbar el sync real
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function logSync(supabase: any, params: {
   origen: 'automatico' | 'manual'; ok: boolean; mensaje?: string; total?: number
@@ -123,6 +146,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: insError.message }, { status: 500 })
   }
 
+  await snapshotBarriles(supabase, filas)
   await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: true, total: filas.length })
 
   return NextResponse.json({ insertadas: data?.length ?? 0, total: filas.length })

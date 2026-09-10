@@ -53,5 +53,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(`${origin}${next}`)
+  const res = NextResponse.redirect(`${origin}${next}`)
+  // Iniciar sesión afirma una identidad: se descarta cualquier "ver como
+  // vendedor" que hubiera quedado de antes. Si no, un admin entra con su
+  // cuenta y sigue viendo la app como otra persona sin entender por qué.
+  res.cookies.set('impersonar_vendedor', '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0 })
+  return res
 }

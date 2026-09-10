@@ -161,6 +161,9 @@ interface FilaPedido {
   fechaEntregaHora?: string | null
   entregado?: boolean
   localidad?: string | null
+  /** N° de factura del ERP — null hasta que el pedido se facture. Es lo que
+   *  de verdad se busca al cobrar o reclamar, el pedido queda de referencia. */
+  numeroFactura?: string | null
 }
 /** "24 latas" / "2 barriles" — singular/plural según el envase. */
 function fUnidades(unidades: number, envase: string): string {
@@ -285,6 +288,7 @@ interface FilaPedidoCliente {
   estado: 'entregado' | 'pendiente' | 'sin_informar'
   fechaEntrega: string | null; fechaEntregaHora: string | null
   litros: number; revenue: number
+  numeroFactura: string | null
 }
 
 /** Todos los pedidos de UN cliente en el rango, pendientes y entregados
@@ -344,16 +348,19 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
           pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
           estado: 'pendiente', fechaEntrega: null, fechaEntregaHora: null,
           litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
+          numeroFactura: (p.numeroFactura as string) ?? null,
         }))
         const entregados: FilaPedidoCliente[] = (Array.isArray(ent) ? ent : []).map((p: Record<string, unknown>) => ({
           pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
           estado: 'entregado', fechaEntrega: (p.fechaEntrega as string) ?? null, fechaEntregaHora: (p.fechaEntregaHora as string) ?? null,
           litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
+          numeroFactura: (p.numeroFactura as string) ?? null,
         }))
         const sinInformarFilas: FilaPedidoCliente[] = (Array.isArray(sinInformar) ? sinInformar : []).map((p: Record<string, unknown>) => ({
           pedido: String(p.pedido ?? ''), fechaPedido: (p.fechaPedido as string) ?? null,
           estado: 'sin_informar', fechaEntrega: null, fechaEntregaHora: null,
           litros: Number(p.litros ?? 0), revenue: Number(p.revenue ?? 0),
+          numeroFactura: (p.numeroFactura as string) ?? null,
         }))
         setPedidos([...pendientes, ...entregados, ...sinInformarFilas])
       })
@@ -384,9 +391,13 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: colorEstado }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>#{ped.pedido}</p>
+                {/* La factura es lo que se busca en el ERP — va primero y más
+                    grande. El pedido queda de referencia abajo. */}
+                <p style={{ fontSize: 13, fontWeight: ped.numeroFactura ? 700 : 400, color: ped.numeroFactura ? C.text : C.faint, lineHeight: 1.3 }}>
+                  {ped.numeroFactura ? `Factura N° ${ped.numeroFactura}` : 'Sin facturar aún'}
+                </p>
                 <p style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-                  {ped.fechaPedido ? `Pedido el ${fFechaCorta(ped.fechaPedido)}` : 'Sin fecha de pedido'}
+                  Pedido #{ped.pedido} · {ped.fechaPedido ? fFechaCorta(ped.fechaPedido) : 'sin fecha'}
                 </p>
                 <p style={{ fontSize: 11, fontWeight: 600, marginTop: 1, color: colorEstado }}>
                   {ped.estado === 'entregado'
@@ -709,7 +720,9 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                             : ped
                             ? (
                               <>
-                                {[`#${ped.pedido}`, ped.vendedor, ped.localidad].filter(Boolean).join(' · ')}
+                                {/* Factura primero — es lo que se busca en el ERP; el N° de
+                                    pedido queda de referencia entre paréntesis. */}
+                                {[ped.numeroFactura ? `Factura ${ped.numeroFactura} (Ped. ${ped.pedido})` : `Pedido #${ped.pedido} · sin facturar`, ped.vendedor, ped.localidad].filter(Boolean).join(' · ')}
                                 {ped.fechaPedido && (
                                   <>
                                     {' · '}
@@ -1037,8 +1050,8 @@ function DetalleClientesProducto({ producto, envase, desde, hasta, porEntrega }:
  * Se toca para desplegar los locales de esa cartera (antes navegaba a
  * /ventas/ranking; ahora es in-situ, igual que "Clientes que compraron").
  */
-function FilaVendedor({ v, pos, total, desde, hasta, porEntrega }: {
-  v: VendedorRango; pos: number; total: number; desde: string; hasta: string; porEntrega: boolean
+function FilaVendedor({ v, pos, total, desde, hasta, porEntrega, mostrarAnio }: {
+  v: VendedorRango; pos: number; total: number; desde: string; hasta: string; porEntrega: boolean; mostrarAnio: boolean
 }) {
   const [abierto, setAbierto] = useState(false)
   const share = total > 0 ? (v.litros / total) * 100 : 0
@@ -1070,13 +1083,24 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega }: {
 
         {/* Métricas, alineadas bajo el nombre */}
         <div style={{ paddingLeft: 58 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{fL(v.litros)}</span>
             <span style={{ fontSize: 12, color: C.muted }}>{share.toFixed(1)}% del total</span>
-            <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <Delta pct={variacion(v.litros, v.litrosPrev)} size={11} />
-              <span style={{ fontSize: 10, color: C.faint }}>vs ant.</span>
+          </div>
+          {/* Dos bases de comparación: el tramo inmediatamente anterior
+              ("mes") y el mismo tramo hace un año ("año") — ver etiqueta
+              completa de cada una en el encabezado de la tarjeta. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 6 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '0.03em' }}>MES</span>
+              <Delta pct={variacion(v.litros, v.litrosPrev)} size={15} />
             </span>
+            {mostrarAnio && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '0.03em' }}>AÑO</span>
+                <Delta pct={variacion(v.litros, v.litrosPrevAnio)} size={15} />
+              </span>
+            )}
           </div>
           <p style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>{fPesoFull(v.revenue)}</p>
           <div style={{ height: 6, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
@@ -1950,13 +1974,24 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
 
         {/* Ranking */}
         <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: '16px 16px 6px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>RANKING DE VENDEDORES</p>
-            <span style={{ fontSize: 12, color: C.muted }}>por litros vendidos</span>
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>RANKING DE VENDEDORES</p>
+              <span style={{ fontSize: 12, color: C.muted }}>por litros vendidos</span>
+            </div>
+            {/* Cada fila trae DOS comparaciones (MES/AÑO); acá se explica una
+                sola vez contra qué tramo exacto es cada una, en vez de
+                repetirlo (ambiguo) en cada fila. En la pestaña 'Año' la
+                comparación ya es año contra año, así que "MES" y "AÑO"
+                serían lo mismo — se oculta la segunda. */}
+            <p style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>
+              MES = {d.etiquetaComparacion}
+              {rango !== 'anio' && ` · AÑO = vs mismo tramo ${d.anioComparacion}`}
+            </p>
           </div>
           {d.vendedores.map((v, i) => (
             <FilaVendedor key={v.vendedor} v={v} pos={i} total={actual.litros}
-              desde={d.desde} hasta={d.hasta} porEntrega={d.porEntrega} />
+              desde={d.desde} hasta={d.hasta} porEntrega={d.porEntrega} mostrarAnio={rango !== 'anio'} />
           ))}
         </div>
 

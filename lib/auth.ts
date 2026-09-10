@@ -14,6 +14,8 @@ export interface AppUser {
   region: string | null      // null = sin scope geográfico (admin); ej: 'Los Ríos'
   /** Acceso al módulo Rentabilidad (costos/márgenes internos) — separado de isAdmin, solo Claudio/Benja/Douglas. */
   puedeVerMargenes: boolean
+  /** Acceso al módulo Control Comercial (analítica gerencial) — separado de puedeVerMargenes: da acceso al módulo, no a los costos dentro de él. Solo Gerente General/Comercial + Analista Control de Gestión. */
+  puedeVerControlComercial: boolean
   /** Acceso a su propia remuneración variable (contrato). Ver lib/comisiones.ts. */
   veComisionGerente: boolean
   /**
@@ -42,6 +44,16 @@ export interface AppUser {
    *  decidir si mostrarse — `isAdmin` de arriba no sirve para eso, se apaga
    *  a propósito mientras se está impersonando. */
   esAdminReal: boolean
+  /**
+   * true sólo si hay una sesión real de Supabase Auth detrás. Nació para
+   * distinguir al "Invitado" que fabricaba el bypass de login (2026-08-26 a
+   * 2026-09-10, ya eliminado), que se daba `esAdminReal: true` a sí mismo.
+   * Hoy no hay forma de llegar acá sin sesión, así que es siempre true; se
+   * mantiene como red de seguridad en los endpoints de "Ver como vendedor"
+   * (app/api/admin/impersonar, app/api/admin/vendedores-lista), que exigen
+   * `esAdminReal && sesionReal`.
+   */
+  sesionReal: boolean
 }
 
 type VistaComo = {
@@ -95,34 +107,12 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     const cookieStore = await cookies()
     const impersonarId = cookieStore.get('impersonar_vendedor')?.value
 
-    // 🔓 TEMPORAL (pedido de Claudio, 2026-08-26): login desactivado para
-    // dejar la app abierta durante una prueba. Poner en `false` cuando
-    // Claudio avise que hay que restaurar el login.
-    const LOGIN_DESACTIVADO_TEMPORAL = true
-    if (!user && LOGIN_DESACTIVADO_TEMPORAL) {
-      const vistaComo = await resolverImpersonacion(impersonarId)
-      return {
-        id: 'demo',
-        nombre: vistaComo?.nombre ?? 'Invitado',
-        email: '',
-        isAdmin: vistaComo ? false : true,
-        iniciales: vistaComo?.iniciales ?? 'IN',
-        macroArea: vistaComo?.macroArea ?? null,
-        avatarUrl: vistaComo?.avatarUrl ?? null,
-        region: vistaComo?.region ?? null,
-        vendedoresErp: vistaComo?.vendedoresErp ?? [],
-        puedeVerMargenes: false,
-        veComisionGerente: false,
-        esAdminReal: true,
-        impersonando: vistaComo?.nombre ?? null,
-      }
-    }
     if (!user) return null
 
     // Primary lookup: by auth UUID
     let { data: profile } = await supabase
       .from('users')
-      .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, ve_comision_gerente')
+      .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -134,7 +124,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     if (!profile && user.email) {
       const res = await supabase
         .from('users')
-        .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, ve_comision_gerente')
+        .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente')
         .eq('email', user.email)
         .maybeSingle()
       profile = res.data
@@ -164,8 +154,10 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
       region: vistaComo?.region ?? profile.region ?? null,
       vendedoresErp: vistaComo?.vendedoresErp ?? profile.vendedores_erp ?? [],
       puedeVerMargenes: vistaComo ? false : !!profile.puede_ver_margenes,
+      puedeVerControlComercial: vistaComo ? false : !!profile.puede_ver_control_comercial,
       veComisionGerente: vistaComo ? false : !!profile.ve_comision_gerente,
       esAdminReal,
+      sesionReal: true,
       impersonando: vistaComo?.nombre ?? null,
     }
   } catch {

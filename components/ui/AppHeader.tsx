@@ -38,8 +38,11 @@ export default function AppHeader({ eyebrow, title, extraAction, hideBack, backH
 
   return (
     <>
+      {/* Sin padding de área segura acá: el <main> de cada layout de módulo ya
+          lo aplica con .mobile-safe-top (ver globals.css). Sumarlo también en
+          este componente lo duplicaría en cuanto iOS reporte el inset real. */}
       {!hideBack && (
-        <div style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <div>
           <button
             onClick={() => router.push(backHref)}
             aria-label="Volver"
@@ -56,7 +59,7 @@ export default function AppHeader({ eyebrow, title, extraAction, hideBack, backH
           </button>
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, paddingTop: hideBack ? 'env(safe-area-inset-top, 0px)' : 0, marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
         <div style={{ minWidth: 0, overflow: 'hidden' }}>
           {eyebrow && (
             <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.4px', marginBottom: 4, textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

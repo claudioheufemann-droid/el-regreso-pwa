@@ -155,7 +155,7 @@ export default function JornadaDetailClient({ jornadaId }: { jornadaId: string }
   const fueraGeofence = visitas.filter(v => v.dentro_geofence === false)
 
   return (
-    <div style={{ minHeight: '100vh', background: '#07070D', color: '#F4EEDF' }}>
+    <div className="mobile-safe-top" style={{ minHeight: '100vh', background: '#07070D', color: '#F4EEDF' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 28px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(15,15,24,0.95)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 10 }}>
         <Logo size={28} />
         <Link href="/admin/jornadas" style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>

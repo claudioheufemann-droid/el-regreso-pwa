@@ -1,0 +1,43 @@
+name: Forecast de Producción (Prophet + Stock de Seguridad)
+
+on:
+  schedule:
+    # Día 24 de cada mes, 08:00 UTC (~05:00 Chile invierno). Mensual porque el
+    # forecast agrega ventas por CICLO INTERNO, no mes calendario — cada ciclo
+    # cierra el día 23 (ver lib/produccion/reglas.ts), y correr cada 15 min no
+    # aporta nada nuevo hasta que cierra. Día 24 (no el 23) le da un día de
+    # margen al sync de ventas para terminar de cargar ese último día.
+    - cron: '0 8 24 * *'
+  workflow_dispatch:
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # Prophet compila un modelo Stan la primera vez que corre; el backtest ahora es walk-forward (hasta 6 fits por serie en vez de 1), más lento que el resto de los sync
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: scripts/forecast/requirements.txt
+
+      - name: Instalar dependencias
+        working-directory: scripts/forecast
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # El stock de seguridad se calcula dentro del mismo script: se deriva
+      # por completo del forecast, así que separarlo sólo abría la puerta a
+      # que quedara calculado sobre una corrida vieja del modelo.
+      - name: Generar forecast y stock de seguridad
+        working-directory: scripts/forecast
+        env:
+          UPLOAD_URL_BASE: ${{ secrets.UPLOAD_URL_BASE }}
+          UPLOAD_SECRET_FORECAST: ${{ secrets.UPLOAD_SECRET_FORECAST }}
+        run: python generar_forecast.py

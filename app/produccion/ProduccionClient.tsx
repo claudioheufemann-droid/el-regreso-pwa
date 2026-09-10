@@ -1,0 +1,3322 @@
+'use client'
+
+import React, { useMemo, useState } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import ProductImage from '@/components/ui/ProductImage'
+import {
+  Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea,
+  ResponsiveContainer, ComposedChart, Line, Area,
+} from 'recharts'
+import {
+  LayoutDashboard, TrendingUp, Package, CalendarDays, ShoppingCart,
+  CircleDollarSign, Bell, Plus, AlertTriangle, Calendar as CalendarIcon,
+  TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
+  ArrowUp, ArrowDown, CheckCircle2, Trash2, X,
+} from 'lucide-react'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, LoteSinReceta } from './page'
+import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, type EnvaseBucket } from '@/lib/produccion/reglas'
+
+/* ────────────────────────────────────────────────────────────────────────
+   Paleta corporativa. Tailwind cubre el resto; estos tres colores van
+   inline porque no existen como tokens del tema.
+   ──────────────────────────────────────────────────────────────────────── */
+const COLORS = {
+  darkGreen: '#0F3D2E',
+  lightGreen: '#1A5441',
+  amber: '#E5A922',
+  lightAmber: '#FDE68A',
+  kombucha: '#B45309',
+  gray: '#9CA3AF',
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   DATOS DE DEMOSTRACIÓN
+   Estas tres secciones (cocciones, insumos/MRP, presupuesto) NO tienen
+   respaldo en la base todavía: no existen tablas de recetas, insumos ni
+   plan de cocción. Se dejan como maqueta para validar el diseño, y van
+   marcadas en pantalla con el badge <BadgeDemo/> para que nadie tome una
+   decisión de compra con estos números. Reemplazar por datos reales
+   cuando existan las tablas.
+   ──────────────────────────────────────────────────────────────────────── */
+const DEMO_budgetData = [
+  { month: 'Ene', cerveza: 45000, kombucha: 20000, tendencia: 65000 },
+  { month: 'Feb', cerveza: 48000, kombucha: 22000, tendencia: 70000 },
+  { month: 'Mar', cerveza: 35000, kombucha: 18000, tendencia: 53000 },
+  { month: 'Abr', cerveza: 34000, kombucha: 19000, tendencia: 53000 },
+  { month: 'May', cerveza: 36000, kombucha: 20000, tendencia: 56000 },
+  { month: 'Jun', cerveza: 35000, kombucha: 21000, tendencia: 56000 },
+  { month: 'Jul', cerveza: 32000, kombucha: 17000, tendencia: 49000 },
+  { month: 'Ago', cerveza: 33000, kombucha: 18000, tendencia: 51000 },
+  { month: 'Sep', cerveza: 40000, kombucha: 22000, tendencia: 62000 },
+  { month: 'Oct', cerveza: 42000, kombucha: 24000, tendencia: 66000 },
+  { month: 'Nov', cerveza: 47000, kombucha: 26000, tendencia: 73000 },
+  { month: 'Dic', cerveza: 55000, kombucha: 30000, tendencia: 85000 },
+]
+
+/** Etiqueta + color por categoría de insumo — mismas 4 del Excel de recetas
+ *  (malta/lúpulo/levadura/otros), reutilizado en la tabla de Insumos y Compras. */
+const CATEGORIA_INSUMO: Record<string, { label: string; badge: string }> = {
+  malta: { label: 'Malta', badge: 'border-amber-200 bg-amber-50 text-amber-700' },
+  lupulo: { label: 'Lúpulo', badge: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+  levadura: { label: 'Levadura', badge: 'border-purple-200 bg-purple-50 text-purple-700' },
+  otros: { label: 'Otros', badge: 'border-gray-200 bg-gray-50 text-gray-600' },
+}
+
+/* ── Utilidades de formato ─────────────────────────────────────────────── */
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+const fNum = (n: number) => Math.round(n).toLocaleString('es-CL')
+
+/** Cantidad de insumo en su unidad base (gr/ml) → texto legible, subiendo a
+ *  kg/L cuando conviene (≥1000) — la base sigue siendo gr/ml para que el
+ *  descuento de stock nunca mezcle unidades, esto es sólo de presentación. */
+function fCantidadInsumo(cantidad: number, unidadBase: 'gr' | 'ml'): string {
+  const unidadGrande = unidadBase === 'gr' ? 'kg' : 'L'
+  if (Math.abs(cantidad) >= 1000) return `${(cantidad / 1000).toLocaleString('es-CL', { maximumFractionDigits: 2 })} ${unidadGrande}`
+  return `${fNum(cantidad)} ${unidadBase}`
+}
+
+/** Orden fijo de formato — evita que un mismo producto se vea disperso al
+ *  ordenar por otro criterio (Stock de Seguridad, calculadora de cobertura). */
+const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata', 'otros']
+
+/** Valor sentinela del selector de Producto en la Calculadora de Cobertura
+ *  para la opción agregada "Todos los productos" (compras necesita el total
+ *  de latas a comprar de todo el catálogo, no producto por producto). */
+const TODOS_PRODUCTOS = '__todos__'
+
+/** Nombre de la unidad física de cada formato, para mostrar junto a los
+ *  litros de disponible ("314 L · 888 latas"). */
+const UNIDAD_ENVASE: Record<EnvaseBucket, string> = {
+  barril_30: 'barriles', barril_50: 'barriles', lata: 'latas', otros: 'unidades',
+}
+
+/** Color por formato — sólo para la barra apilada del Split de Envasado, donde
+ *  hay que distinguir tres tramos de un mismo lote de un vistazo. */
+const COLOR_ENVASE: Record<EnvaseBucket, string> = {
+  barril_30: '#0F3D2E', barril_50: '#1A5441', lata: '#E5A922', otros: '#9CA3AF',
+}
+
+/** Fecha de HOY en yyyy-mm-dd, en huso HORARIO LOCAL del navegador — nunca
+ *  `toISOString()`, que da la fecha en UTC y en Chile (UTC-3/-4) ya marca
+ *  "mañana" desde media tarde, haciendo aparecer como atrasado un lote
+ *  planificado para hoy mismo. */
+function hoyLocalISO(d: Date = new Date()): string {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** Es fin de semana la fecha yyyy-mm-dd dada (comparación por calendario,
+ *  no huso horario — misma lógica de días hábiles que usa el servidor para
+ *  las alarmas de quiebre). */
+function esFinDeSemanaISO(iso: string): boolean {
+  const dow = new Date(`${iso}T00:00:00Z`).getUTCDay()
+  return dow === 0 || dow === 6
+}
+
+/** Suma `diasHabiles` días hábiles (lunes a viernes) a `desdeISO`, saltando
+ *  sábado/domingo — para proyectar "hasta cuándo alcanza" en el popup de
+ *  confirmación de una alarma. */
+function sumarDiasHabilesISO(desdeISO: string, diasHabiles: number): string {
+  let t = Date.parse(`${desdeISO}T00:00:00Z`)
+  let restantes = Math.max(0, Math.round(diasHabiles))
+  const MS_POR_DIA = 24 * 60 * 60 * 1000
+  while (restantes > 0) {
+    t += MS_POR_DIA
+    if (!esFinDeSemanaISO(new Date(t).toISOString().slice(0, 10))) restantes--
+  }
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+function diffDiasISO(desdeISO: string, hastaISO: string): number {
+  return Math.round((Date.parse(`${hastaISO}T00:00:00Z`) - Date.parse(`${desdeISO}T00:00:00Z`)) / 86400000)
+}
+
+/** Demanda proyectada (litros) de una serie entre `desdeISO` y `hastaISO` —
+ *  suma el forecast mensual de Prophet ciclo por ciclo, prorateando por días
+ *  calendario los ciclos que quedan cortados a la mitad. El ciclo EN CURSO no
+ *  tiene forecast propio (el modelo lo excluye por estar incompleto), así que
+ *  su tramo usa el ritmo de venta real de este ciclo. Mismo criterio en toda
+ *  la app — Forecasting (calculadora de cobertura) y Stock de Seguridad
+ *  (necesidad de producción anticipada) comparten esta única función para no
+ *  arriesgarse a que las dos vistas den números distintos para la misma
+ *  pregunta. */
+function demandaProyectadaEnPeriodo(serie: SerieForecast, avanceMes: AvanceMes, desdeISO: string, hastaISO: string): number {
+  const ritmoDiarioSerie = avanceMes.diasHabilesTranscurridos > 0 ? serie.litrosMesEnCurso / avanceMes.diasHabilesTranscurridos : 0
+  const litrosCicloActualProyectado = ritmoDiarioSerie * avanceMes.diasHabilesEnCiclo
+
+  const ciclos: { mes: string; litros: number }[] = [
+    { mes: avanceMes.mes, litros: litrosCicloActualProyectado },
+    ...serie.puntos.filter(p => p.tipo === 'forecast').map(p => ({ mes: p.mes, litros: p.litros })),
+  ]
+
+  let demanda = 0
+  for (const c of ciclos) {
+    const ini = inicioDeCiclo(c.mes)
+    const fin = finDeCiclo(c.mes)
+    const solapIni = ini > desdeISO ? ini : desdeISO
+    const solapFin = fin < hastaISO ? fin : hastaISO
+    if (solapIni > solapFin) continue
+    const totalDiasCiclo = diffDiasISO(ini, fin) + 1
+    const diasSolapados = diffDiasISO(solapIni, solapFin) + 1
+    demanda += c.litros * (diasSolapados / totalDiasCiclo)
+  }
+  return demanda
+}
+
+/** ¿Algún ciclo de forecast dentro de [desdeISO, hastaISO] trae un empuje
+ *  ESTACIONAL fuerte? — la señal de "se viene temporada alta" para este
+ *  producto/formato. Reutiliza la propia descomposición de Prophet
+ *  (tendencia + estacionalidad) que ya se grafica en Forecasting, en vez de
+ *  inventar un umbral nuevo comparando promedios: si el modelo ya identificó
+ *  que ese mes rinde bastante más que su tendencia de fondo, ese es el aviso
+ *  a anticipar producción. Umbral: el empuje estacional pesa 15% o más del
+ *  total proyectado de ese ciclo. */
+function vieneAltaDemanda(serie: SerieForecast, desdeISO: string, hastaISO: string): boolean {
+  return serie.puntos.some(p => {
+    if (p.tipo !== 'forecast' || p.estacionalidad == null || p.litros <= 0) return false
+    const ini = inicioDeCiclo(p.mes)
+    const fin = finDeCiclo(p.mes)
+    if (fin < desdeISO || ini > hastaISO) return false
+    return p.estacionalidad > 0 && p.estacionalidad / p.litros >= 0.15
+  })
+}
+
+function etiquetaMes(iso: string) {
+  const [y, m] = iso.split('-').map(Number)
+  return `${MESES_CORTOS[m - 1]} '${String(y).slice(2)}`
+}
+function indiceMes(iso: string) {
+  return Number(iso.split('-')[1]) - 1
+}
+/** "23 jul" a partir de yyyy-mm-dd — para mostrar el rango real de un ciclo
+ *  interno (24→23) en el tooltip, y así no confundir el AÑO de la etiqueta
+ *  del mes ("Ago '26") con un día del mes. */
+function fCicloCorto(iso: string) {
+  const [, m, d] = iso.split('-').map(Number)
+  return `${d} ${MESES_CORTOS[m - 1].toLowerCase()}`
+}
+/** "Camara General Barrios Bajos (Frío)" → "Camara General Barrios Bajos" —
+ *  el ERP le agrega el tipo de depósito entre paréntesis a toda cámara, no
+ *  aporta nada distinguir eso en la tabla de inventario. */
+function nombreCamaraCorto(camara: string) {
+  return camara.replace(/\s*\([^)]*\)\s*$/, '').trim()
+}
+function fMinutosDesde(min: number) {
+  if (min < 1) return 'recién ahora'
+  if (min < 60) return `hace ${min} min`
+  const horas = Math.round(min / 60)
+  if (horas < 24) return `hace ${horas} h`
+  return `hace ${Math.round(horas / 24)} d`
+}
+
+const navItems = [
+  { id: 'resumen', icon: LayoutDashboard, label: 'Resumen General' },
+  { id: 'forecasting', icon: TrendingUp, label: 'Forecasting' },
+  { id: 'seguridad', icon: Package, label: 'Stock de Seguridad' },
+  { id: 'plan', icon: CalendarDays, label: 'Plan Maestro' },
+  { id: 'insumos', icon: ShoppingCart, label: 'Insumos y Compras' },
+  { id: 'presupuesto', icon: CircleDollarSign, label: 'Presupuesto' },
+] as const
+
+type TabId = (typeof navItems)[number]['id']
+
+/** Agrupación del menú: primero entender la demanda, después decidir qué
+ *  producir y comprar. Una lista plana de seis ítems no comunicaba ese orden. */
+const GRUPOS_NAV: { titulo: string; items: TabId[] }[] = [
+  { titulo: 'Demanda', items: ['resumen', 'forecasting'] },
+  { titulo: 'Planificación', items: ['seguridad', 'plan'] },
+  { titulo: 'Abastecimiento', items: ['insumos', 'presupuesto'] },
+]
+
+/** Secciones que todavía son maqueta (ver DATOS DE DEMOSTRACIÓN arriba). Se
+ *  marcan en el propio menú para que nadie entre esperando datos reales. */
+const DEMO_TABS = new Set<TabId>(['presupuesto'])
+
+/** Alta manual de un lote al Plan Maestro. Estado propio (no vive en el
+ *  padre) porque es puramente del formulario — se descarta al cerrar. */
+function FormNuevoLote({
+  guardando, onCancelar, onGuardar,
+}: {
+  guardando: boolean
+  onCancelar: () => void
+  onGuardar: (datos: { producto: string; categoria: 'cerveza' | 'kombucha'; litrosPlanificados: number; fechaPlanificada: string; origen: 'manual' }) => void
+}) {
+  const [producto, setProducto] = useState('')
+  const [categoria, setCategoria] = useState<'cerveza' | 'kombucha'>('cerveza')
+  const [litros, setLitros] = useState('')
+  const [fecha, setFecha] = useState(() => hoyLocalISO())
+
+  const litrosNum = Number(litros)
+  const valido = producto.trim().length > 0 && litrosNum > 0 && fecha.length > 0
+
+  function submit() {
+    if (!valido) return
+    onGuardar({ producto: producto.trim(), categoria, litrosPlanificados: litrosNum, fechaPlanificada: fecha, origen: 'manual' })
+    setProducto(''); setLitros('')
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-3 border-b border-gray-100 bg-gray-50/70 p-5">
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-500">Producto</label>
+        <input
+          value={producto} onChange={e => setProducto(e.target.value)}
+          placeholder="Ej: Doble IPA"
+          className="w-48 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-500">Categoría</label>
+        <select
+          value={categoria} onChange={e => setCategoria(e.target.value as 'cerveza' | 'kombucha')}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+        >
+          <option value="cerveza">Cerveza</option>
+          <option value="kombucha">Kombucha</option>
+        </select>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-500">Litros</label>
+        <input
+          type="number" min={1} value={litros} onChange={e => setLitros(e.target.value)}
+          placeholder="1000"
+          className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-500">Fecha planificada</label>
+        <input
+          type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+        />
+      </div>
+      <div className="flex gap-2">
+        <button
+          disabled={!valido || guardando}
+          onClick={submit}
+          className="rounded-lg bg-[#0F3D2E] px-4 py-2 text-sm font-bold text-white hover:bg-[#1A5441] disabled:opacity-40"
+        >
+          {guardando ? 'Guardando…' : 'Agregar a la cola'}
+        </button>
+        <button onClick={onCancelar} className="rounded-lg px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Popup que se abre al confirmar una alarma de quiebre ("Agregar al plan").
+ *  No agrega con los valores sugeridos a ciegas: deja fijar fecha de inicio
+ *  de la elaboración y cantidad, y muestra en vivo cuánta necesidad cubre
+ *  esa cantidad y hasta cuándo alcanza — todo derivado del ritmo de venta
+ *  real (mismo cálculo que la alarma), para decidir la orden con criterio. */
+function ModalConfirmarLote({
+  sugerencia, guardando, onCancelar, onConfirmar,
+}: {
+  sugerencia: SugerenciaPlan
+  guardando: boolean
+  onCancelar: () => void
+  onConfirmar: (datos: { litrosPlanificados: number; fechaPlanificada: string; necesidadCubrir: number; cubreHasta: string | null }) => void
+}) {
+  const [fecha, setFecha] = useState(() => hoyLocalISO(new Date(Date.now() + 7 * 86400000)))
+  const [litros, setLitros] = useState(String(Math.round(sugerencia.litrosSugeridos)))
+
+  const litrosNum = Number(litros)
+  const valido = litrosNum > 0 && fecha.length > 0
+
+  // Días hábiles que cubre la cantidad ingresada al ritmo de venta actual —
+  // se recalcula en vivo con cada cambio de cantidad, no queda fijo con el
+  // valor sugerido original.
+  const diasCobertura = sugerencia.ritmoDiarioActual > 0 ? litrosNum / sugerencia.ritmoDiarioActual : null
+  const cubreHasta = diasCobertura != null ? sumarDiasHabilesISO(fecha, diasCobertura) : null
+
+  function submit() {
+    if (!valido) return
+    onConfirmar({ litrosPlanificados: litrosNum, fechaPlanificada: fecha, necesidadCubrir: sugerencia.litrosSugeridos, cubreHasta })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancelar}>
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-4 flex items-center gap-3">
+          <ProductImage nombre={sugerencia.producto} categoria={sugerencia.categoria} size={36} radius={9} />
+          <div>
+            <h3 className="font-bold text-gray-800">{sugerencia.producto}</h3>
+            <p className="text-xs font-bold uppercase tracking-wide text-amber-700">{ENVASE_LABEL[sugerencia.envase] ?? sugerencia.envase}</p>
+          </div>
+          <button onClick={onCancelar} className="ml-auto rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Necesidad según el forecast — el dato que responde "cuánto debemos
+            cubrir", fijo (no cambia con lo que el usuario decida producir). */}
+        <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          <p>
+            <strong>Disponible ahora:</strong> {fNum(sugerencia.disponibleLitros)} L en {ENVASE_LABEL[sugerencia.envase] ?? sugerencia.envase}
+            {sugerencia.disponibleUnidades != null && ` (${fNum(sugerencia.disponibleUnidades)} ${UNIDAD_ENVASE[sugerencia.envase]})`}.
+          </p>
+          <p className="mt-1"><strong>Necesidad a cubrir:</strong> {fNum(sugerencia.litrosSugeridos)} L, según el forecast y el punto de reorden.</p>
+          {sugerencia.diasHastaQuiebre != null && (
+            <p className="mt-1 text-xs text-amber-700">
+              Al ritmo de las últimas 4 semanas ({fNum(sugerencia.ritmoDiarioActual * 5)} L/semana, lun-vie), quiebra en ~{sugerencia.diasHastaQuiebre} días hábiles.
+            </p>
+          )}
+        </div>
+
+        <div className="mb-4 flex gap-3">
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500">Fecha de inicio de elaboración</label>
+            <input
+              type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500">Cantidad a producir (L)</label>
+            <input
+              type="number" min={1} value={litros} onChange={e => setLitros(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Cobertura — responde "hasta cuándo nos durará esto", en vivo según
+            lo que el usuario haya puesto en Cantidad y Fecha de inicio. */}
+        <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+          {sugerencia.ritmoDiarioActual > 0 && diasCobertura != null && cubreHasta ? (
+            <p className="text-gray-700">
+              Con {fNum(litrosNum)} L, la cobertura dura <strong>~{Math.round(diasCobertura)} días hábiles</strong> al ritmo
+              actual — alcanzaría hasta el <strong>{new Date(cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}</strong>.
+            </p>
+          ) : (
+            <p className="text-gray-500">Sin ventas en las últimas 4 semanas — no se puede estimar hasta cuándo alcanza.</p>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancelar} className="rounded-lg px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100">
+            Cancelar
+          </button>
+          <button
+            disabled={!valido || guardando}
+            onClick={submit}
+            className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-40"
+          >
+            {guardando ? 'Agregando…' : 'Confirmar y agregar al plan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+/* ── Chip de desviación del modelo (MAPE del backtest) ──────────────────
+   OJO, esto NO es una "confiabilidad" en el sentido de 0-100% siendo mejor
+   arriba — es el error porcentual absoluto medio: mientras MÁS ALTO, PEOR el
+   modelo. Se llamó "Confiabilidad" hasta que un usuario vio un "450%" y con
+   razón le pareció absurdo ("¿cómo la confiabilidad supera el 100%?") — con
+   el nombre correcto, un desvío de 450% es una afirmación coherente (aunque
+   mala), no un número roto. Pasa fácil de 100% en series de bajo volumen
+   (ej. 30L vendidos en el mes): ahí un error chico en litros absolutos ya es
+   un porcentaje enorme. */
+function ChipDesviacion({ mape, derivado = false }: { mape: number | null; derivado?: boolean }) {
+  if (mape == null) return <span className="text-xs text-gray-300">—</span>
+  const color = mape < 15 ? 'emerald' : mape < 30 ? 'amber' : 'red'
+  const clases = {
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    red: 'border-red-200 bg-red-50 text-red-700',
+  }[color]
+  return (
+    <span
+      className={`inline-block rounded-full border px-2 py-0.5 text-xs font-bold ${clases}`}
+      title={
+        derivado
+          ? 'Desvío del PRODUCTO (no de este formato puntual): esta fila se derivó del forecast del producto, y escalar una serie por una proporción constante no cambia su error porcentual, así que se reutiliza el mismo MAPE.'
+          : 'Desvío del modelo (MAPE): error porcentual promedio comparando la proyección contra la venta real de los últimos 3 meses. Más alto es peor. En series de bajo volumen puede superar el 100% — un error chico en litros ya es un % grande.'
+      }
+    >
+      {mape.toFixed(0)}%
+    </span>
+  )
+}
+
+/* ── Badge para todo lo que todavía es maqueta ─────────────────────────── */
+function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-700">
+      <Info size={12} />
+      {children}
+    </span>
+  )
+}
+
+export default function ProduccionClient({
+  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, ocupacionPlanta, necesidadInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
+}: {
+  series: SerieForecast[]
+  calidad: CalidadItem[]
+  /** Cola real del Plan Maestro (tabla plan_produccion), ya ordenada por prioridad. */
+  planProduccion: LotePlan[]
+  /** Sugerencias calculadas en vivo comparando disponible vs. punto de reorden — no persistidas hasta que el usuario las confirma. */
+  sugerenciasPlan: SugerenciaPlan[]
+  /** Cómo repartir entre formatos lo que está hoy en los fermentadores. */
+  splitFermentadores: SplitFermentador[]
+  /** Litros y tanques ocupados en la sala de fermentación. */
+  ocupacionPlanta: OcupacionPlanta
+  /** Insumos que hacen falta para cubrir la cola activa del Plan Maestro, escalando cada receta al litraje real de cada lote. */
+  necesidadInsumos: NecesidadInsumo[]
+  /** Lotes del plan cuyo producto no tiene receta cargada — su necesidad de insumos no se pudo calcular. */
+  lotesSinReceta: LoteSinReceta[]
+  stock: StockItem[]
+  stockSeguridad: StockSeguridadItem[]
+  ultimaCorrida: string | null
+  /** Minutos desde la última sincronización de stock del ERP (erp_sync_log),
+   *  calculados server-side. Distinto de `ultimaCorrida` (cuándo corrió el
+   *  forecast mensual) — el "disponible" de Stock de Seguridad se recalcula
+   *  en CADA carga de página contra el stock actual, esto es lo que prueba
+   *  que es así en vez de dejarlo como una afirmación sin respaldo visual. */
+  minutosDesdeSyncStock: number | null
+  avanceMes: AvanceMes
+  nombreUsuario: string
+  inicialesUsuario: string
+}) {
+  const [activeTab, setActiveTab] = useState<TabId>('resumen')
+  const [serieId, setSerieId] = useState<string>(series[0]?.id ?? '')
+  const router = useRouter()
+  // Estado local del Plan Maestro, sincronizado con la prop del servidor pero
+  // actualizado optimistamente en cada acción (reordenar, agregar, cambiar
+  // estado) para que la UI responda al toque — router.refresh() por detrás
+  // trae el estado real del servidor y lo reconcilia.
+  const [plan, setPlan] = useState<LotePlan[]>(planProduccion)
+  const [guardandoPlan, setGuardandoPlan] = useState(false)
+  const [errorPlan, setErrorPlan] = useState<string | null>(null)
+  const [mostrarFormLote, setMostrarFormLote] = useState(false)
+  /** Alarma sobre la que se abrió el popup de confirmación — null = cerrado. */
+  const [sugerenciaModal, setSugerenciaModal] = useState<SugerenciaPlan | null>(null)
+  React.useEffect(() => { setPlan(planProduccion) }, [planProduccion])
+
+  async function moverLote(id: string, direccion: -1 | 1) {
+    const idx = plan.findIndex(l => l.id === id)
+    const destino = idx + direccion
+    if (idx < 0 || destino < 0 || destino >= plan.length) return
+    const nuevo = [...plan]
+    ;[nuevo[idx], nuevo[destino]] = [nuevo[destino], nuevo[idx]]
+    setPlan(nuevo)
+    setErrorPlan(null)
+    try {
+      const r = await fetch('/api/produccion/plan/reordenar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: nuevo.map(l => l.id) }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo reordenar')
+      router.refresh()
+    } catch (e) {
+      setPlan(plan) // revierte el optimista
+      setErrorPlan(e instanceof Error ? e.message : 'Error al reordenar')
+    }
+  }
+
+  async function cambiarEstadoLote(id: string, estado: LotePlan['estado']) {
+    const previo = plan
+    setPlan(estado === 'cancelado' || estado === 'completado' ? plan.filter(l => l.id !== id) : plan.map(l => l.id === id ? { ...l, estado } : l))
+    setErrorPlan(null)
+    try {
+      const r = await fetch(`/api/produccion/plan/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo actualizar')
+      router.refresh()
+    } catch (e) {
+      setPlan(previo)
+      setErrorPlan(e instanceof Error ? e.message : 'Error al actualizar el estado')
+    }
+  }
+
+  async function agregarLote(datos: {
+    producto: string; categoria: 'cerveza' | 'kombucha'; litrosPlanificados: number; fechaPlanificada: string
+    motivo?: string | null; origen?: 'sugerido' | 'manual'
+    /** Sólo para el detalle del evento de Google Calendar. */
+    necesidadCubrir?: number | null; cubreHasta?: string | null
+  }) {
+    setGuardandoPlan(true)
+    setErrorPlan(null)
+    try {
+      const r = await fetch('/api/produccion/plan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datos),
+      })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo agregar el lote')
+      const nuevo = await r.json()
+      setPlan(p => [...p, {
+        id: nuevo.id, producto: nuevo.producto, categoria: nuevo.categoria,
+        litrosPlanificados: Number(nuevo.litros_planificados), fechaPlanificada: String(nuevo.fecha_planificada).slice(0, 10),
+        prioridad: Number(nuevo.prioridad), estado: nuevo.estado, origen: nuevo.origen,
+        motivo: nuevo.motivo, observaciones: nuevo.observaciones,
+      }])
+      setMostrarFormLote(false)
+      setSugerenciaModal(null)
+      router.refresh()
+    } catch (e) {
+      setErrorPlan(e instanceof Error ? e.message : 'Error al agregar el lote')
+    } finally {
+      setGuardandoPlan(false)
+    }
+  }
+
+  /** Agrupa las alarmas de quiebre por producto — con 46+ combinaciones
+   *  producto×envase, una grilla plana de tarjetas era imposible de barrer
+   *  con la vista. Se agrupa (una foto por producto, formatos en lista
+   *  debajo) conservando el orden de urgencia que ya trae `sugerenciasPlan`
+   *  del servidor: el primer producto en aparecer es el que tiene el
+   *  formato más próximo a quebrar. */
+  const alarmasPorProducto = useMemo(() => {
+    const grupos = new Map<string, { producto: string; categoria: 'cerveza' | 'kombucha'; items: SugerenciaPlan[] }>()
+    for (const s of sugerenciasPlan) {
+      if (!grupos.has(s.producto)) grupos.set(s.producto, { producto: s.producto, categoria: s.categoria, items: [] })
+      grupos.get(s.producto)!.items.push(s)
+    }
+    return [...grupos.values()]
+  }, [sugerenciasPlan])
+
+  const [busquedaInsumo, setBusquedaInsumo] = useState('')
+  const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
+  const [filtroEnvase, setFiltroEnvase] = useState<string>('todos')
+  /** Muestra la descomposición del modelo (tendencia + estacionalidad). */
+  const [verModelo, setVerModelo] = useState(false)
+  // Meses reales proyectados (yyyy-mm-01), no meses calendario 1-12: el
+  // cálculo ahora sale del forecast, así que cada fila corresponde a un mes
+  // concreto del horizonte y no tiene sentido ofrecer "Ene" si el forecast
+  // no llega hasta enero.
+  const mesesSeguridad = useMemo(
+    () => [...new Set(stockSeguridad.map(s => s.mes))].sort(),
+    [stockSeguridad]
+  )
+  const [mesSeguridad, setMesSeguridad] = useState<string>('')
+  const [filtroCategoriaSeg, setFiltroCategoriaSeg] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
+  const [filtroEnvaseSeg, setFiltroEnvaseSeg] = useState<string>('todos')
+  const mesSeguridadActivo = mesSeguridad && mesesSeguridad.includes(mesSeguridad)
+    ? mesSeguridad
+    : mesesSeguridad[0] ?? ''
+
+  const serieGeneral = series.find(s => s.nivel === 'general') ?? null
+  const serieActual = series.find(s => s.id === serieId) ?? serieGeneral
+
+  // Ritmo del mes en curso: si vendimos X en D días HÁBILES, a ese ritmo el
+  // ciclo completo cierra en X/D*diasHabilesEnCiclo — la forma más simple de
+  // responder "¿vamos a cumplir lo proyectado?" sin esperar a que termine el
+  // ciclo. Días hábiles, no calendario: el reparto no vende fin de semana,
+  // así que dividir por días corridos subestimaba el ritmo real.
+  const mtdLitros = serieActual?.litrosMesEnCurso ?? 0
+  const ritmoProyectado = avanceMes.diasHabilesTranscurridos > 0
+    ? (mtdLitros / avanceMes.diasHabilesTranscurridos) * avanceMes.diasHabilesEnCiclo
+    : 0
+
+  /* ── Calculadora de cobertura ("¿cuánto necesito de X para cubrir hasta
+     tal fecha?") ──────────────────────────────────────────────────────────
+     Sirve cualquier producto en cualquier formato (o "todos los formatos").
+     Suma el forecast mensual de Prophet ciclo por ciclo entre HOY y la fecha
+     objetivo, prorateando por días calendario los ciclos que quedan cortados
+     a la mitad (el forecast es de granularidad mensual, no diaria — es la
+     forma estándar de repartirlo dentro de un rango arbitrario). El ciclo EN
+     CURSO no tiene punto de forecast propio (el modelo lo excluye a
+     propósito por estar incompleto — ver generar_forecast.py), así que para
+     su tramo se usa el ritmo de venta real de este ciclo, mismo criterio que
+     "a este ritmo cerrarías con X L" de arriba. */
+  const productosDisponibles = useMemo(
+    () => [...new Set(series.filter(s => s.nivel === 'producto' && s.producto).map(s => s.producto!))].sort((a, b) => a.localeCompare(b)),
+    [series]
+  )
+  const [coberturaProducto, setCoberturaProducto] = useState('')
+  const [coberturaEnvase, setCoberturaEnvase] = useState<'todos' | EnvaseBucket>('todos')
+  const [coberturaFecha, setCoberturaFecha] = useState(() => hoyLocalISO(new Date(Date.now() + 30 * 86400000)))
+  const productoCobertura = coberturaProducto || productosDisponibles[0] || ''
+
+  /* ── Litros por lata, por producto ───────────────────────────────────────
+     El bucket 'lata' fusiona 354ml y 473ml (ver EnvaseBucket en reglas.ts),
+     así que no hay una conversión litros→latas fija: hay que sacarla del
+     propio stock, donde el nombre crudo del ERP trae el tamaño ("Lata (473
+     ml) de X"). En la práctica cada producto usa SIEMPRE un solo tamaño
+     (verificado contra datos reales), así que basta con tomar el litraje de
+     cualquier fila de stock en lata de ese producto y dividirlo por su
+     cantidad de unidades. */
+  const litrosPorLataPorProducto = useMemo(() => {
+    const mapa = new Map<string, number>()
+    for (const s of stock) {
+      if (s.envaseBucket !== 'lata' || mapa.has(s.producto) || s.litros == null || s.cantidad <= 0) continue
+      mapa.set(s.producto, s.litros / s.cantidad)
+    }
+    return mapa
+  }, [stock])
+
+  const envasesCoberturaDisponibles = useMemo(
+    () => productoCobertura === TODOS_PRODUCTOS
+      ? ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.envaseBucket === b))
+      : ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === productoCobertura && s.envaseBucket === b)),
+    [series, productoCobertura]
+  )
+
+  const resultadoCobertura = useMemo(() => {
+    if (!productoCobertura) return null
+    const hoyISO = hoyLocalISO()
+    if (coberturaFecha <= hoyISO) return { error: 'La fecha objetivo debe ser posterior a hoy.' as const }
+
+    // "Todos los productos": suma los números de CADA producto (no resta
+    // el sobrante de uno contra el faltante de otro — cada necesidad neta
+    // se calcula por producto y después se suman, mismo criterio que ya
+    // usa el desglose por formato de abajo). Las latas a comprar se calculan
+    // siempre sobre el formato lata de cada producto, sin importar qué
+    // Formato esté elegido arriba — compras necesita ese total igual.
+    if (productoCobertura === TODOS_PRODUCTOS) {
+      const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+      let demandaProyectada = 0
+      let disponibleTotal = 0
+      let hayDisponible = false
+      let necesidadNeta = 0
+      let latasACubrir = 0
+      for (const producto of productosDisponibles) {
+        const envasesProducto = ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === producto && s.envaseBucket === b))
+        if (coberturaEnvase !== 'todos' && !envasesProducto.includes(coberturaEnvase)) continue
+
+        const envaseSel = coberturaEnvase !== 'todos' ? coberturaEnvase : null
+        const nivelBuscado = envaseSel ? 'producto_envase' : 'producto'
+        const claveBuscada = envaseSel ? claveProductoEnvase(producto, envaseSel) : producto
+        const serie = series.find(s => s.nivel === nivelBuscado && s.clave === claveBuscada)
+        if (!serie) continue
+
+        const demandaProducto = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
+        const filaStock = stockSeguridad.find(s => s.nivel === nivelBuscado && s.mes === primerMesStock && s.producto === producto && (envaseSel ? s.envase === envaseSel : true))
+        const disponibleProducto = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
+        demandaProyectada += demandaProducto
+        if (disponibleProducto != null) { disponibleTotal += disponibleProducto; hayDisponible = true }
+        necesidadNeta += disponibleProducto != null ? Math.max(demandaProducto - disponibleProducto, 0) : 0
+
+        const litrosPorLata = litrosPorLataPorProducto.get(producto) ?? null
+        if (litrosPorLata != null && envasesProducto.includes('lata')) {
+          const serieLata = envaseSel === 'lata' ? serie : series.find(s => s.nivel === 'producto_envase' && s.clave === claveProductoEnvase(producto, 'lata'))
+          const demandaLata = serieLata ? demandaProyectadaEnPeriodo(serieLata, avanceMes, hoyISO, coberturaFecha) : 0
+          const filaStockLata = envaseSel === 'lata' ? filaStock : stockSeguridad.find(s => s.nivel === 'producto_envase' && s.mes === primerMesStock && s.producto === producto && s.envase === 'lata')
+          const disponibleLata = filaStockLata ? (filaStockLata.stockActualLitros ?? 0) + filaStockLata.litrosEnProduccion : null
+          const necesidadLata = disponibleLata != null ? Math.max(demandaLata - disponibleLata, 0) : 0
+          latasACubrir += Math.ceil(necesidadLata / litrosPorLata)
+        }
+      }
+      return {
+        demandaProyectada: Math.round(demandaProyectada),
+        disponible: hayDisponible ? disponibleTotal : null,
+        necesidadNeta,
+        categoria: null,
+        latasACubrir: latasACubrir > 0 ? latasACubrir : null,
+        litrosPorLata: null,
+      }
+    }
+
+    const envaseSel = coberturaEnvase !== 'todos' && envasesCoberturaDisponibles.includes(coberturaEnvase) ? coberturaEnvase : null
+    const nivelBuscado = envaseSel ? 'producto_envase' : 'producto'
+    const claveBuscada = envaseSel ? claveProductoEnvase(productoCobertura, envaseSel) : productoCobertura
+    const serie = series.find(s => s.nivel === nivelBuscado && s.clave === claveBuscada)
+    if (!serie) return null
+
+    const demandaProyectada = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
+
+    const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+    const filaStock = stockSeguridad.find(s =>
+      s.nivel === nivelBuscado && s.mes === primerMesStock && s.producto === productoCobertura &&
+      (envaseSel ? s.envase === envaseSel : true)
+    )
+    const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
+    const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
+
+    const litrosPorLata = envaseSel === 'lata' ? litrosPorLataPorProducto.get(productoCobertura) ?? null : null
+    const latasACubrir = litrosPorLata != null && necesidadNeta != null ? Math.ceil(necesidadNeta / litrosPorLata) : null
+
+    return { demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, categoria: serie.categoria as 'cerveza' | 'kombucha' | null, latasACubrir, litrosPorLata }
+  }, [productoCobertura, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, productosDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
+
+  /* ── Desglose por formato de envasado ────────────────────────────────────
+     Se cuece por PRODUCTO (un solo lote), y ese lote se envasa después en
+     los distintos formatos — no se cuece "para lata" o "para barril" por
+     separado. Por eso, elegido un producto, siempre se muestra cuánto hace
+     falta de CADA formato y el total (= lo que hay que cocer), sin importar
+     qué opción esté elegida en el selector de Formato de arriba (ese sigue
+     sirviendo para mirar un formato puntual en el resumen de 3 números). */
+  const desgloseCoberturaFormatos = useMemo(() => {
+    if (!productoCobertura || productoCobertura === TODOS_PRODUCTOS) return null
+    const hoyISO = hoyLocalISO()
+    if (coberturaFecha <= hoyISO) return null
+
+    const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+    const filas = envasesCoberturaDisponibles.map(envase => {
+      const serie = series.find(s => s.nivel === 'producto_envase' && s.clave === claveProductoEnvase(productoCobertura, envase))
+      const demandaProyectada = serie ? demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha) : 0
+      const filaStock = stockSeguridad.find(s => s.nivel === 'producto_envase' && s.mes === primerMesStock && s.producto === productoCobertura && s.envase === envase)
+      const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
+      const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
+      const litrosPorLata = envase === 'lata' ? litrosPorLataPorProducto.get(productoCobertura) ?? null : null
+      const latasACubrir = litrosPorLata != null && necesidadNeta != null ? Math.ceil(necesidadNeta / litrosPorLata) : null
+      return { envase, demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, latasACubrir }
+    })
+    if (filas.length === 0) return null
+
+    const totalNecesidad = filas.reduce((acc, f) => acc + (f.necesidadNeta ?? 0), 0)
+    return { filas, totalNecesidad }
+  }, [productoCobertura, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
+
+  /* ── Desglose por producto (sólo con "Todos los productos" elegido) ─────
+     El equivalente al desglose por formato, pero cuando se está mirando el
+     agregado: acá cada fila es un producto (respetando el Formato elegido
+     arriba), con su propia columna de latas a comprar — así compras no
+     tiene que ir producto por producto para armar la lista de compra. */
+  const desgloseCoberturaProductos = useMemo(() => {
+    if (productoCobertura !== TODOS_PRODUCTOS) return null
+    const hoyISO = hoyLocalISO()
+    if (coberturaFecha <= hoyISO) return null
+
+    const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+    const filas = productosDisponibles.flatMap(producto => {
+      const envasesProducto = ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === producto && s.envaseBucket === b))
+      if (coberturaEnvase !== 'todos' && !envasesProducto.includes(coberturaEnvase)) return []
+
+      const envaseSel = coberturaEnvase !== 'todos' ? coberturaEnvase : null
+      const nivelBuscado = envaseSel ? 'producto_envase' : 'producto'
+      const claveBuscada = envaseSel ? claveProductoEnvase(producto, envaseSel) : producto
+      const serie = series.find(s => s.nivel === nivelBuscado && s.clave === claveBuscada)
+      if (!serie) return []
+
+      const demandaProyectada = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
+      const filaStock = stockSeguridad.find(s => s.nivel === nivelBuscado && s.mes === primerMesStock && s.producto === producto && (envaseSel ? s.envase === envaseSel : true))
+      const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
+      const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
+
+      const litrosPorLata = litrosPorLataPorProducto.get(producto) ?? null
+      let latasACubrir: number | null = null
+      if (litrosPorLata != null && envasesProducto.includes('lata')) {
+        const serieLata = envaseSel === 'lata' ? serie : series.find(s => s.nivel === 'producto_envase' && s.clave === claveProductoEnvase(producto, 'lata'))
+        const demandaLata = serieLata ? demandaProyectadaEnPeriodo(serieLata, avanceMes, hoyISO, coberturaFecha) : 0
+        const filaStockLata = envaseSel === 'lata' ? filaStock : stockSeguridad.find(s => s.nivel === 'producto_envase' && s.mes === primerMesStock && s.producto === producto && s.envase === 'lata')
+        const disponibleLata = filaStockLata ? (filaStockLata.stockActualLitros ?? 0) + filaStockLata.litrosEnProduccion : null
+        const necesidadLata = disponibleLata != null ? Math.max(demandaLata - disponibleLata, 0) : 0
+        latasACubrir = Math.ceil(necesidadLata / litrosPorLata)
+      }
+
+      return [{ producto, demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, latasACubrir }]
+    })
+    if (filas.length === 0) return null
+
+    filas.sort((a, b) => (b.necesidadNeta ?? 0) - (a.necesidadNeta ?? 0))
+    const totalNecesidad = filas.reduce((acc, f) => acc + (f.necesidadNeta ?? 0), 0)
+    const totalLatas = filas.reduce((acc, f) => acc + (f.latasACubrir ?? 0), 0)
+    return { filas, totalNecesidad, totalLatas }
+  }, [productoCobertura, coberturaEnvase, coberturaFecha, productosDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
+
+  /* ── Serie seleccionada → filas para Recharts ─────────────────────────
+     La proyección arranca repitiendo el último mes real, para que las dos
+     líneas queden pegadas en el gráfico en vez de mostrar un corte.
+
+     El ritmo del mes en curso (litros hasta hoy extrapolados a mes
+     completo) se dibuja como una línea PROPIA que también arranca del
+     último mes real — igual que la verde — para que corra al lado de la
+     proyección del modelo en la misma columna y se compare de un vistazo:
+     ¿el ritmo actual queda arriba o abajo de lo que el modelo esperaba?
+     Antes se probó conectar la venta real cruda (litros del mes a medias)
+     directo a la línea de "Venta Real": comparada contra meses completos
+     se veía como una caída al vacío, no como una proyección — engañoso.
+     Extrapolar a mes completo es la comparación correcta. */
+  const chartData = useMemo(() => {
+    if (!serieActual) return []
+    const puntos = [...serieActual.puntos].sort((a, b) => a.mes.localeCompare(b.mes))
+    const idxCorte = puntos.findIndex(p => p.tipo === 'forecast')
+    const idxUltimoReal = idxCorte > 0 ? idxCorte - 1 : puntos.length - 1
+    const filas = puntos.map((p, i) => {
+      const esUltimoReal = idxCorte > 0 && i === idxCorte - 1
+      return {
+        month: etiquetaMes(p.mes),
+        mesIso: p.mes,
+        ventaReal: p.tipo === 'historico' ? p.litros : null,
+        ventaProyectada: p.tipo === 'forecast' || esUltimoReal ? p.litros : null,
+        rango: p.litrosMin != null && p.litrosMax != null ? [p.litrosMin, p.litrosMax] : null,
+        ritmo: i === idxUltimoReal ? p.litros : null,
+        // Descomposición del modelo. `tendencia` se dibuja como línea sobre
+        // toda la serie —incluido el historial— porque ahí es donde se ve que
+        // el modelo la ajustó a los datos y no la inventó para el futuro.
+        tendencia: p.tendencia,
+        estacionalidad: p.estacionalidad,
+      }
+    })
+    // El mes en curso puede no venir en `puntos` (el modelo lo excluyó del
+    // historial y todavía no corrió con él como forecast, ej. recién
+    // empezó el mes) — si falta, se agrega igual para no perder el ritmo.
+    const yaEsta = filas.some(f => f.mesIso === avanceMes.mes)
+    if (!yaEsta) {
+      filas.push({
+        month: etiquetaMes(avanceMes.mes), mesIso: avanceMes.mes,
+        ventaReal: null, ventaProyectada: null, rango: null, ritmo: null,
+        tendencia: null, estacionalidad: null,
+      })
+      filas.sort((a, b) => a.mesIso.localeCompare(b.mesIso))
+    }
+    const idxMesEnCurso = filas.findIndex(f => f.mesIso === avanceMes.mes)
+    if (idxMesEnCurso >= 0) filas[idxMesEnCurso].ritmo = ritmoProyectado
+    return filas
+  }, [serieActual, avanceMes.mes, ritmoProyectado])
+
+  /* ── Descomposición del modelo ─────────────────────────────────────────
+     Sólo existe si la serie llegó a proyectarse (historial suficiente y no
+     descontinuada); si no, el botón "Ver el modelo" ni se ofrece. */
+  const hayDescomposicion = useMemo(
+    () => chartData.some(d => d.tendencia != null),
+    [chartData]
+  )
+
+  /** Primer mes proyectado, para poner números concretos en la ecuación. */
+  const descomposicionProximo = useMemo(() => {
+    const f = chartData.find(d => d.ventaReal == null && d.tendencia != null && d.estacionalidad != null)
+    if (!f) return null
+    return { mesIso: f.mesIso, tendencia: f.tendencia as number, estacionalidad: f.estacionalidad as number }
+  }, [chartData])
+
+  /** Curva estacional del año, promediando la componente `yearly` por mes
+   *  calendario. Es la forma más directa de mostrar qué aprendió el modelo:
+   *  no "diciembre vende más" dicho por alguien, sino cuántos litros estima
+   *  que aporta cada mes por encima o debajo de la tendencia. */
+  const curvaEstacional = useMemo(() => {
+    const suma = new Array(12).fill(0)
+    const n = new Array(12).fill(0)
+    for (const d of chartData) {
+      if (d.estacionalidad == null) continue
+      const i = indiceMes(d.mesIso)
+      suma[i] += d.estacionalidad
+      n[i] += 1
+    }
+    if (!n.some(c => c > 0)) return []
+    return MESES_CORTOS.map((mes, i) => ({ mes, efecto: n[i] > 0 ? suma[i] / n[i] : 0 }))
+  }, [chartData])
+
+  /* ── Ecuación del modelo, con las constantes REALES de esta corrida ──────
+     Prophet ajusta y(t) = g(t) + s(t) + h(t) + εₜ. Acá h(t)=0 siempre: el
+     modelo se entrena sin feriados (ver generar_forecast.py), así que se
+     omite en vez de mostrar un término que nunca se usa.
+
+     g(t) — tendencia — se recupera EXACTA, no aproximada: Prophet ajusta el
+     crecimiento como lineal a trozos con quiebres (changepoints) dentro del
+     historial, pero el tramo que va desde el último changepoint hacia
+     adelante es una sola recta. Los puntos de `tendencia` del FORECAST caen
+     todos en ese tramo final, así que una regresión sobre ellos devuelve la
+     pendiente/intercepto que el modelo realmente está usando para proyectar
+     — no un ajuste hecho a mano.
+
+     s(t) — estacionalidad — es la parte que sí se aproxima: Prophet la ajusta
+     como una suma de varios armónicos de Fourier, y acá se muestra el
+     armónico principal (un único seno) con la amplitud y fase que mejor
+     calzan con `curvaEstacional` (el promedio real de `estacionalidad` por
+     mes calendario). Es una simplificación visual, no la fórmula interna
+     completa — se lo aclara en el pie de la tarjeta.
+
+     t se mide en MESES DESDE EL PRIMER MES PROYECTADO (t=0), para que las
+     constantes tengan el mismo significado que "Próximo mes" en el resto del
+     panel. Se recalcula solo con cada corrida nueva del modelo (chartData/
+     curvaEstacional salen de `series`, que viene del servidor). */
+  const ecuacionModelo = useMemo(() => {
+    const futuros = chartData
+      .filter(d => d.ventaReal == null && d.tendencia != null)
+      .sort((a, b) => a.mesIso.localeCompare(b.mesIso))
+    if (futuros.length === 0 || curvaEstacional.length === 0) return null
+
+    const n = futuros.length
+    const ys = futuros.map(f => f.tendencia as number)
+    let k = 0
+    const m = ys[0]
+    if (n >= 2) {
+      const xs = futuros.map((_, i) => i)
+      const mediaX = xs.reduce((a, b) => a + b, 0) / n
+      const mediaY = ys.reduce((a, b) => a + b, 0) / n
+      let num = 0, den = 0
+      for (let i = 0; i < n; i++) { num += (xs[i] - mediaX) * (ys[i] - mediaY); den += (xs[i] - mediaX) ** 2 }
+      k = den !== 0 ? num / den : 0
+    }
+
+    // A y fase del armónico principal: proyección de Fourier de mínimos
+    // cuadrados de curvaEstacional sobre sin(2π·t/12), no "amplitud por
+    // (máximo−mínimo)/2 con fase ajustada al mes pico". La curva real de
+    // estacionalidad casi nunca es una sinusoide limpia (acá tiene un pico
+    // marcado en enero-febrero y una meseta baja en invierno), así que
+    // amplitud+pico se probó contra los datos reales y quedaba lejos del
+    // valor real en varios meses (RMSE ~1735 L); esta proyección es el mejor
+    // ajuste posible de UN solo seno (RMSE ~1331 L) — sigue siendo una
+    // aproximación (Prophet usa varios armónicos), pero es la más cercana
+    // posible con una función de una sola línea.
+    const mesT0Idx = indiceMes(futuros[0].mesIso)
+    let a = 0, b = 0
+    for (let i = 0; i < 12; i++) {
+      const tDesdeT0 = ((i - mesT0Idx) % 12 + 12) % 12
+      const theta = (2 * Math.PI * tDesdeT0) / 12
+      a += curvaEstacional[i].efecto * Math.sin(theta)
+      b += curvaEstacional[i].efecto * Math.cos(theta)
+    }
+    a *= 2 / 12; b *= 2 / 12
+    const A = Math.hypot(a, b)
+    const fase = Math.atan2(b, a)
+
+    return { k, m, A, fase, t0mes: futuros[0].mesIso }
+  }, [chartData, curvaEstacional])
+
+  /* ── Temporada alta (Dic–Feb): tramos consecutivos para las ReferenceArea ── */
+  const tramosTemporadaAlta = useMemo(() => {
+    const tramos: { x1: string; x2: string }[] = []
+    let inicio: string | null = null
+    let previo: string | null = null
+    for (const fila of chartData) {
+      const alta = [11, 0, 1].includes(indiceMes(fila.mesIso))
+      if (alta && inicio === null) inicio = fila.month
+      if (!alta && inicio !== null && previo !== null) {
+        tramos.push({ x1: inicio, x2: previo })
+        inicio = null
+      }
+      previo = fila.month
+    }
+    if (inicio !== null && previo !== null) tramos.push({ x1: inicio, x2: previo })
+    return tramos
+  }, [chartData])
+
+  /* ── KPIs reales ──────────────────────────────────────────────────────── */
+  const productosEnRiesgo = useMemo(
+    () => series.filter(s => s.nivel === 'producto' && (s.mape == null || s.mape > 30)),
+    [series]
+  )
+
+  /* ── Cronograma de Cocciones (mes calendario real, no ciclo de venta) ───
+     Antes usaba DEMO_calendario (31 días fijos, ni respetaba en qué día de
+     la semana cae el 1). Ahora sale del Plan Maestro real: un lote aparece
+     el día de su fecha planificada, con el grid alineado a los días de la
+     semana de verdad. */
+  const calendarioReal = useMemo(() => {
+    const hoy = new Date()
+    const anio = hoy.getFullYear(), mesIdx = hoy.getMonth()
+    const diasEnMesCal = new Date(anio, mesIdx + 1, 0).getDate()
+    const hoyISO = hoyLocalISO(hoy)
+    // Lunes=0 ... Domingo=6, para alinear con el header de la grilla.
+    const offsetPrimerDia = (new Date(anio, mesIdx, 1).getDay() + 6) % 7
+
+    const porDia = new Map<number, { id: string; estilo: string; tipo: 'cerveza' | 'kombucha'; urgente: boolean; detalle?: string }[]>()
+    for (const l of plan) {
+      const [y, m, d] = l.fechaPlanificada.split('-').map(Number)
+      if (y !== anio || m !== mesIdx + 1) continue
+      const atrasado = l.fechaPlanificada < hoyISO && l.estado === 'planificado'
+      if (!porDia.has(d)) porDia.set(d, [])
+      porDia.get(d)!.push({
+        id: l.id, estilo: l.producto, tipo: l.categoria, urgente: atrasado,
+        detalle: atrasado ? 'Debería haber empezado ya, según la fecha planificada.' : (l.motivo ?? undefined),
+      })
+    }
+    const dias = Array.from({ length: diasEnMesCal }, (_, i) => ({ dia: i + 1, cocciones: porDia.get(i + 1) ?? [] }))
+    return { dias, offsetPrimerDia }
+  }, [plan])
+  const desviacionGeneral = serieGeneral?.mape ?? null
+  const precisionSerie = serieActual?.mape != null ? Math.max(0, 100 - serieActual.mape) : null
+
+  const proximosMeses = useMemo(
+    () => (serieGeneral?.puntos ?? []).filter(p => p.tipo === 'forecast').slice(0, 3),
+    [serieGeneral]
+  )
+  const litrosProximoMes = proximosMeses[0]?.litros ?? null
+
+  const advertencias = calidad.filter(c => c.severidad === 'advertencia')
+
+  /* ── Tabla de detalle producto × envase, debajo del gráfico ────────────
+     Cada fila es una combinación real (ej. "Doble IPA — Barril 30L").
+     Filtrable por categoría (cerveza/kombucha) y por tipo de envase;
+     agrupada visualmente por producto para no repetir el nombre en cada
+     línea de envase. */
+  const envasesDisponibles = useMemo(() => {
+    const set = new Set(series.filter(s => s.nivel === 'producto_envase' && s.envaseBucket).map(s => s.envaseBucket as string))
+    return [...set]
+  }, [series])
+
+  const filasTablaDetalle = useMemo(() => {
+    return series
+      .filter(s => s.nivel === 'producto_envase')
+      .filter(s => filtroCategoria === 'todas' || s.categoria === filtroCategoria)
+      .filter(s => filtroEnvase === 'todos' || s.envaseBucket === filtroEnvase)
+      .map(s => {
+        const proximo = s.puntos.filter(p => p.tipo === 'forecast').sort((a, b) => a.mes.localeCompare(b.mes))[0] ?? null
+        return { serie: s, proximo }
+      })
+      .sort((a, b) => (a.serie.producto ?? '').localeCompare(b.serie.producto ?? '') || (a.serie.envaseBucket ?? '').localeCompare(b.serie.envaseBucket ?? ''))
+  }, [series, filtroCategoria, filtroEnvase])
+
+  /* ── Stock de seguridad del mes elegido ─────────────────────────────────
+     Estado se define comparando el DISPONIBLE (inventario en bodega + lo ya
+     declarado en producción, que va a llegar dentro del lead time) contra
+     dos umbrales: por debajo del stock de seguridad = crítico (ni el colchón
+     alcanza); entre el colchón y el punto de reorden = bajo (ya toca
+     reponer); por encima del punto de reorden = ok.
+
+     Sin sumar lo que está en fermentación, un producto con la cocción ya
+     lanzada aparecía igual como crítico y gatillaba una cocción redundante. */
+  const filasStockSeguridad = useMemo(() => {
+    return stockSeguridad
+      .filter(s => s.mes === mesSeguridadActivo && s.nivel === 'producto_envase')
+      .filter(s => filtroCategoriaSeg === 'todas' || s.categoria === filtroCategoriaSeg)
+      .filter(s => filtroEnvaseSeg === 'todos' || s.envase === filtroEnvaseSeg)
+      .map(s => {
+        const disponible = s.stockActualLitros != null
+          ? s.stockActualLitros + s.litrosEnProduccion
+          : null
+        const estado: 'critico' | 'bajo' | 'ok' | 'sin_dato' =
+          disponible == null ? 'sin_dato'
+            : disponible < s.stockSeguridadLitros ? 'critico'
+              : disponible < s.puntoReordenLitros ? 'bajo' : 'ok'
+        return { ...s, disponible, estado }
+      })
+  }, [stockSeguridad, mesSeguridadActivo, filtroCategoriaSeg, filtroEnvaseSeg])
+
+  /* ── Agrupado por producto, segmentado por formato ──────────────────────
+     Antes la tabla ordenaba TODAS las filas por estado global, así que los
+     3 formatos de un mismo producto quedaban dispersos en secciones
+     distintas (crítico/bajo/ok) — confundía qué número era de qué envase
+     (bug real reportado: "el barril de West Coast dice 87L", cuando 87L era
+     la fila de Lata, a varias pantallas de las filas de Barril del mismo
+     producto). Ahora se agrupa por producto (con su foto, mismo patrón que
+     Inventario Actual) y cada formato queda SIEMPRE en el mismo orden
+     (Barril 30L, Barril 50L, Lata, Otros) debajo de su producto. */
+  type FilaStockSeguridad = (typeof filasStockSeguridad)[number]
+  const gruposStockSeguridad = useMemo(() => {
+    interface Grupo { producto: string; categoria: 'cerveza' | 'kombucha'; filas: FilaStockSeguridad[] }
+    const porProducto = new Map<string, Grupo>()
+    for (const f of filasStockSeguridad) {
+      if (!porProducto.has(f.producto)) porProducto.set(f.producto, { producto: f.producto, categoria: f.categoria, filas: [] })
+      porProducto.get(f.producto)!.filas.push(f)
+    }
+    const PESO_ESTADO = { critico: 0, sin_dato: 1, bajo: 2, ok: 3 }
+    const resultado = [...porProducto.values()]
+    for (const g of resultado) {
+      g.filas.sort((a, b) => ORDEN_ENVASE.indexOf(a.envase as EnvaseBucket) - ORDEN_ENVASE.indexOf(b.envase as EnvaseBucket))
+    }
+    resultado.sort((a, b) => {
+      const peorA = Math.min(...a.filas.map(f => PESO_ESTADO[f.estado]))
+      const peorB = Math.min(...b.filas.map(f => PESO_ESTADO[f.estado]))
+      if (peorA !== peorB) return peorA - peorB
+      return a.producto.localeCompare(b.producto)
+    })
+    return resultado
+  }, [filasStockSeguridad])
+
+  /* ── Necesidad de producción anticipada ──────────────────────────────────
+     El resto de Stock de Seguridad responde "¿estoy bien HOY?" comparando
+     contra un solo mes. Esto responde la otra pregunta, la que importa para
+     no improvisar: "¿cuánto necesito PRODUCIR para llegar bien hasta tal
+     fecha futura?" — para cualquier producto/formato, no uno a la vez.
+     Reutiliza exactamente el mismo cálculo que la Calculadora de Cobertura
+     de Forecasting (demandaProyectadaEnPeriodo), aplicado a TODAS las
+     combinaciones producto×envase de una vez, y le suma una alerta de
+     "viene alta demanda" basada en la propia estacionalidad que ya calcula
+     Prophet — así se detectan también los casos donde el disponible de hoy
+     alcanza pero se acerca una temporada alta que se lo va a comer rápido. */
+  const [fechaCoberturaSeg, setFechaCoberturaSeg] = useState(() => hoyLocalISO(new Date(Date.now() + 60 * 86400000)))
+
+  const necesidadesAnticipadas = useMemo(() => {
+    const hoyISO = hoyLocalISO()
+    if (fechaCoberturaSeg <= hoyISO) return []
+    const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
+    const resultado: (SugerenciaPlan & { altaDemanda: boolean })[] = []
+
+    for (const serie of series) {
+      if (serie.nivel !== 'producto_envase' || !serie.producto || !serie.envaseBucket) continue
+      if (filtroCategoriaSeg !== 'todas' && serie.categoria !== filtroCategoriaSeg) continue
+      if (filtroEnvaseSeg !== 'todos' && serie.envaseBucket !== filtroEnvaseSeg) continue
+      const envase = serie.envaseBucket as EnvaseBucket
+
+      const filaStock = stockSeguridad.find(s =>
+        s.nivel === 'producto_envase' && s.mes === primerMesStock && s.producto === serie.producto && s.envase === envase
+      )
+      if (!filaStock) continue
+
+      const demandaProyectada = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, fechaCoberturaSeg)
+      const disponible = (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion
+      const necesidadNeta = Math.round(Math.max(demandaProyectada - disponible, 0))
+      const altaDemanda = vieneAltaDemanda(serie, hoyISO, fechaCoberturaSeg)
+      if (necesidadNeta <= 0 && !altaDemanda) continue
+
+      const ritmoDiarioActual = avanceMes.diasHabilesTranscurridos > 0 ? serie.litrosMesEnCurso / avanceMes.diasHabilesTranscurridos : 0
+      const diasHastaQuiebre = ritmoDiarioActual > 0 ? disponible / ritmoDiarioActual : null
+      const fechaEstimadaQuiebre = diasHastaQuiebre != null ? sumarDiasHabilesISO(hoyISO, diasHastaQuiebre) : null
+      const fechaLabel = new Date(`${fechaCoberturaSeg}T00:00:00Z`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+
+      let motivo = `Cubrir hasta ${fechaLabel}: demanda proyectada ${Math.round(demandaProyectada)} L, disponible ${Math.round(disponible)} L.`
+      if (altaDemanda) motivo += ' El modelo anticipa una temporada de alta demanda dentro de este período.'
+
+      resultado.push({
+        producto: serie.producto, envase, categoria: (serie.categoria as 'cerveza' | 'kombucha') ?? 'cerveza',
+        disponibleLitros: Math.round(disponible), disponibleUnidades: filaStock.stockActualUnidades,
+        litrosSugeridos: necesidadNeta, leadTimeSemanas: filaStock.leadTimeSemanas,
+        ritmoDiarioActual: Math.round(ritmoDiarioActual * 10) / 10,
+        diasHastaQuiebre: diasHastaQuiebre != null ? Math.round(diasHastaQuiebre) : null,
+        fechaEstimadaQuiebre, motivo, altaDemanda,
+      })
+    }
+
+    return resultado.sort((a, b) => Number(b.altaDemanda) - Number(a.altaDemanda) || b.litrosSugeridos - a.litrosSugeridos)
+  }, [series, stockSeguridad, avanceMes, fechaCoberturaSeg, filtroCategoriaSeg, filtroEnvaseSeg])
+
+  const anticipadasPorProducto = useMemo(() => {
+    const grupos = new Map<string, { producto: string; categoria: 'cerveza' | 'kombucha'; items: typeof necesidadesAnticipadas }>()
+    for (const item of necesidadesAnticipadas) {
+      if (!grupos.has(item.producto)) grupos.set(item.producto, { producto: item.producto, categoria: item.categoria, items: [] })
+      grupos.get(item.producto)!.items.push(item)
+    }
+    return [...grupos.values()]
+  }, [necesidadesAnticipadas])
+
+  /* ── Inventario actual agrupado: producto → formato → cámara ───────────
+     `stock` llega como una fila por (producto, formato, cámara) — se
+     reagrupa acá para que la tabla muestre de un vistazo cuánto hay de cada
+     producto, segmentado entre lata y barril 30L/50L, y en qué depósito
+     está cada parte (un barril de 30L en Frío Planta no sirve para lo mismo
+     que uno en Barrios Bajos si hay que ir a buscarlo). */
+  const inventarioAgrupado = useMemo(() => {
+    interface FilaCamara { camara: string; cantidad: number; litros: number | null }
+    interface GrupoFormato { bucket: EnvaseBucket; cantidad: number; litros: number | null; camaras: FilaCamara[] }
+    interface GrupoProducto { producto: string; categoria: string | null; cantidad: number; litros: number | null; formatos: GrupoFormato[] }
+
+    const porProducto = new Map<string, GrupoProducto>()
+    for (const s of stock) {
+      let grupo = porProducto.get(s.producto)
+      if (!grupo) {
+        grupo = { producto: s.producto, categoria: s.categoria, cantidad: 0, litros: null, formatos: [] }
+        porProducto.set(s.producto, grupo)
+      }
+      grupo.cantidad += s.cantidad
+      if (s.litros != null) grupo.litros = (grupo.litros ?? 0) + s.litros
+
+      let formato = grupo.formatos.find(f => f.bucket === s.envaseBucket)
+      if (!formato) {
+        formato = { bucket: s.envaseBucket, cantidad: 0, litros: null, camaras: [] }
+        grupo.formatos.push(formato)
+      }
+      formato.cantidad += s.cantidad
+      if (s.litros != null) formato.litros = (formato.litros ?? 0) + s.litros
+
+      const nombreCamara = s.camara ?? 'Sin cámara'
+      let filaCamara = formato.camaras.find(c => c.camara === nombreCamara)
+      if (!filaCamara) {
+        filaCamara = { camara: nombreCamara, cantidad: 0, litros: null }
+        formato.camaras.push(filaCamara)
+      }
+      filaCamara.cantidad += s.cantidad
+      if (s.litros != null) filaCamara.litros = (filaCamara.litros ?? 0) + s.litros
+    }
+
+    const resultado = [...porProducto.values()]
+    for (const g of resultado) {
+      g.formatos.sort((a, b) => ORDEN_ENVASE.indexOf(a.bucket) - ORDEN_ENVASE.indexOf(b.bucket))
+      for (const f of g.formatos) f.camaras.sort((a, b) => b.cantidad - a.cantidad)
+    }
+    resultado.sort((a, b) => (b.litros ?? 0) - (a.litros ?? 0) || b.cantidad - a.cantidad)
+    return resultado
+  }, [stock])
+
+  /* ── Contadores del menú ───────────────────────────────────────────────
+     Sólo los que se pueden calcular de verdad: advertencias del modelo y
+     productos en o bajo su punto de reorden. Las secciones de maqueta no
+     llevan número — inventar uno ahí sería peor que no mostrarlo. */
+  const alertasPorTab = useMemo<Partial<Record<TabId, number>>>(() => ({
+    forecasting: advertencias.length,
+    seguridad: filasStockSeguridad.filter(f => f.estado === 'critico' || f.estado === 'bajo').length,
+  }), [advertencias.length, filasStockSeguridad])
+
+  const stockInsumosVacio = necesidadInsumos.every(i => i.disponible == null)
+  const insumosFiltrados = necesidadInsumos.filter(i =>
+    i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
+    i.categoria.toLowerCase().includes(busquedaInsumo.toLowerCase())
+  )
+
+  const tituloActual = navItems.find(i => i.id === activeTab)?.label ?? ''
+
+  return (
+    // prod-root: excluye a este módulo del reset global `* { padding: 0 }` de
+    // globals.css, que anulaba todas las utilidades de spacing de Tailwind.
+    // Ver el comentario extenso en app/globals.css.
+    <div className="prod-root flex h-[100dvh] w-full flex-col overflow-hidden bg-gray-100 font-sans text-gray-800 lg:flex-row">
+
+      {/* ══ BARRA LATERAL (escritorio) ══ */}
+      <aside
+        className="hidden w-64 shrink-0 flex-col justify-between lg:flex"
+        style={{
+          // Degradado sutil en vez de un plano: da profundidad sin introducir
+          // un color nuevo — es el mismo verde corporativo, apenas más oscuro
+          // abajo, así el bloque del usuario se asienta visualmente.
+          backgroundImage: `linear-gradient(180deg, ${COLORS.darkGreen} 0%, #0B2E22 100%)`,
+        }}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex items-center gap-3 px-5 py-6 text-white">
+            {/* Logo real de la marca (badge circular gold-on-black, ya viene
+                con su propio borde) — reemplaza el ícono genérico. */}
+            <div className="relative h-11 w-11 shrink-0">
+              <Image src="/logo-icon-1024.png" alt="El Regreso Beer Co." fill sizes="44px" style={{ objectFit: 'contain' }} priority />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-lg font-black leading-tight tracking-tight">EL REGRESO</h1>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Beer &amp; Kombucha</p>
+            </div>
+          </div>
+
+          {/* Los ítems se agrupan por para qué sirven: primero entender la
+              demanda, después decidir qué producir y comprar. Antes era una
+              lista plana de seis y no se leía ningún orden. */}
+          <nav className="flex flex-col gap-6 px-3 pb-4">
+            {GRUPOS_NAV.map(grupo => (
+              <div key={grupo.titulo} className="flex flex-col gap-1">
+                <p className="px-4 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/30">
+                  {grupo.titulo}
+                </p>
+                {grupo.items.map(id => {
+                  const item = navItems.find(n => n.id === id)!
+                  const activo = activeTab === id
+                  const alertas = alertasPorTab[id] ?? 0
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => setActiveTab(id)}
+                      aria-current={activo ? 'page' : undefined}
+                      className={`group relative flex items-center gap-3 rounded-lg py-2.5 pl-4 pr-3 text-left text-sm transition-all ${
+                        activo ? 'font-bold text-white' : 'font-medium text-white/60 hover:bg-white/5 hover:text-white'
+                      }`}
+                      style={{ backgroundColor: activo ? COLORS.lightGreen : 'transparent' }}
+                    >
+                      {/* Marca dorada del ítem activo: el cambio de fondo solo
+                          era poco contraste sobre el verde. */}
+                      <span
+                        className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full transition-opacity"
+                        style={{ backgroundColor: COLORS.amber, opacity: activo ? 1 : 0 }}
+                      />
+                      <item.icon size={18} className="shrink-0" style={{ color: activo ? COLORS.amber : undefined }} />
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {alertas > 0 && (
+                        <span
+                          className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-black tabular-nums"
+                          style={{ backgroundColor: 'rgba(239,68,68,0.18)', color: '#FCA5A5' }}
+                          title={`${alertas} ${alertas === 1 ? 'punto' : 'puntos'} que requieren atención`}
+                        >
+                          {alertas}
+                        </span>
+                      )}
+                      {DEMO_TABS.has(id) && (
+                        <span
+                          className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide"
+                          style={{ backgroundColor: 'rgba(229,169,34,0.16)', color: COLORS.amber }}
+                          title="Sección de maqueta: todavía sin datos reales"
+                        >
+                          demo
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+          </nav>
+        </div>
+
+        {/* Estado del modelo: dato operativo que antes sólo vivía en la barra
+            superior, donde competía con el título de la sección. */}
+        <div className="shrink-0 px-3 pb-3">
+          <div className="mb-2 rounded-lg px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.22)' }}>
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/35">Último cálculo</p>
+            <div className="mt-1 flex items-center gap-2">
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: ultimaCorrida ? '#34D399' : COLORS.gray }}
+              />
+              <span className="truncate text-xs font-semibold text-white/80">
+                {ultimaCorrida ? ultimaCorrida.slice(0, 10) : 'Sin corrida'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg p-3 text-white" style={{ backgroundColor: 'rgba(0,0,0,0.22)' }}>
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black"
+                style={{ backgroundColor: COLORS.amber, color: COLORS.darkGreen }}
+              >
+                {inicialesUsuario || '··'}
+              </div>
+              <div className="flex min-w-0 flex-col text-left">
+                <span className="truncate text-sm font-semibold">{nombreUsuario}</span>
+                <span className="text-[11px] text-white/40">Producción</span>
+              </div>
+            </div>
+            <Link href="/" aria-label="Volver al inicio" className="shrink-0 rounded-md p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white">
+              <Home size={15} />
+            </Link>
+          </div>
+        </div>
+      </aside>
+
+      {/* ══ ÁREA PRINCIPAL ══ */}
+      <main className="flex h-full flex-1 flex-col overflow-hidden bg-gray-100">
+
+        {/* ── Barra superior ── */}
+        <header className="mobile-safe-top flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 lg:h-16 lg:px-8 lg:py-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link href="/" aria-label="Volver al inicio" className="shrink-0 rounded-md p-1.5 text-gray-500 hover:bg-gray-100 lg:hidden">
+              <Home size={18} />
+            </Link>
+            <h2 className="truncate text-base font-bold text-gray-800 lg:text-xl">{tituloActual}</h2>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-3 lg:gap-6">
+            <div className="hidden items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-600 xl:flex">
+              <CalendarIcon size={16} />
+              <span>{ultimaCorrida ? `Modelo: ${ultimaCorrida.slice(0, 10)}` : 'Sin corrida'}</span>
+              <ChevronDown size={14} />
+            </div>
+
+            <div className="relative cursor-pointer" title={`${advertencias.length} advertencias del modelo`}>
+              <Bell size={20} className="text-gray-600" />
+              {advertencias.length > 0 && (
+                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500" />
+              )}
+            </div>
+
+            <button
+              onClick={() => { setActiveTab('plan'); setMostrarFormLote(true) }}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white shadow-sm transition-transform hover:scale-105 lg:px-4"
+              style={{ backgroundColor: COLORS.amber }}
+            >
+              <Plus size={18} />
+              <span className="hidden sm:inline">Nueva Cocción</span>
+            </button>
+          </div>
+        </header>
+
+        {errorPlan && (
+          <div className="flex shrink-0 items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800 lg:px-8">
+            <Info size={16} className="mt-0.5 shrink-0" />
+            <span>{errorPlan}</span>
+            <button onClick={() => setErrorPlan(null)} className="ml-auto shrink-0 font-bold hover:underline">Cerrar</button>
+          </div>
+        )}
+
+        {/* ── Tabs (móvil) ── */}
+        <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-gray-200 bg-white px-3 py-2 lg:hidden">
+          {navItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                activeTab === item.id ? 'text-white' : 'bg-gray-100 text-gray-600'
+              }`}
+              style={{ backgroundColor: activeTab === item.id ? COLORS.darkGreen : undefined }}
+            >
+              <item.icon size={14} />
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Contenido ── */}
+        <div className="flex-1 overflow-auto p-4 lg:p-8">
+
+          {/* ══════════ VISTA 1: RESUMEN GENERAL ══════════ */}
+          {activeTab === 'resumen' && (
+            <div className="flex flex-col gap-6">
+
+              {/* KPIs */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 lg:gap-6">
+
+                <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+                    <AlertTriangle size={18} style={{ color: COLORS.amber }} />
+                    Productos en Riesgo
+                  </div>
+                  <div className="flex items-end justify-between gap-3">
+                    <span className="text-4xl font-bold text-gray-900">{productosEnRiesgo.length}</span>
+                    <div className="text-right text-xs font-medium leading-tight text-red-600">
+                      {productosEnRiesgo.slice(0, 2).map(p => <div key={p.id}>• {p.label}</div>)}
+                      {productosEnRiesgo.length > 2 && <div className="text-gray-400">+{productosEnRiesgo.length - 2} más</div>}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400">Forecast poco confiable (desvío &gt; 30%)</p>
+                </div>
+
+                <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+                    <CalendarDays size={18} className="text-green-600" />
+                    Demanda Próximo Mes
+                  </div>
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="flex flex-col">
+                      <span className="text-3xl font-bold text-gray-900">
+                        {litrosProximoMes != null ? fNum(litrosProximoMes) : '—'}
+                      </span>
+                      <span className="text-sm font-semibold text-gray-700">litros proyectados</span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400">Consolidado, todos los productos</p>
+                </div>
+
+                <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+                    <TrendingDown size={18} className="text-red-500" />
+                    Desviación del Modelo
+                  </div>
+                  <div className="flex items-end justify-between gap-3">
+                    <span className={`text-3xl font-bold ${desviacionGeneral != null && desviacionGeneral > 30 ? 'text-red-600' : 'text-gray-900'}`}>
+                      {desviacionGeneral != null ? `${desviacionGeneral.toFixed(0)}%` : '—'}
+                    </span>
+                    <span className="mb-1 text-xs font-medium text-gray-500">backtest 3 meses</span>
+                  </div>
+                  <p className="text-[11px] text-gray-400">Error medio vs. venta real</p>
+                </div>
+
+                {/* En Fermentación — reemplaza al "78% Capacidad Planta" que era
+                    demo. El informe del ERP no trae la capacidad nominal de cada
+                    fermentador ni lista los vacíos, así que un % de ocupación
+                    sería inventado: se muestra lo que sí se sabe. */}
+                <div
+                  className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+                  title={ocupacionPlanta.tanques.map(t => `${t.tanque}: ${fNum(t.litros)} L`).join('\n')}
+                >
+                  <div className="flex items-center justify-between gap-2 text-sm font-medium text-gray-500">
+                    <span className="flex items-center gap-2">
+                      <Beaker size={18} style={{ color: COLORS.darkGreen }} />
+                      En Fermentación
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="whitespace-nowrap text-3xl font-bold text-gray-900">
+                      {fNum(ocupacionPlanta.litrosEnFermentacion)} L
+                    </span>
+                    <span className="whitespace-nowrap text-xs font-bold text-emerald-700">
+                      en {ocupacionPlanta.fermentadoresOcupados} {ocupacionPlanta.fermentadoresOcupados === 1 ? 'tanque' : 'tanques'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    A granel, sin envasar — ver el split en Plan Maestro
+                  </p>
+                </div>
+              </div>
+
+              {/* Calendario + Alertas */}
+              <div className="flex flex-col gap-6 xl:h-[600px] xl:flex-row">
+
+                {/* Calendario */}
+                <div className="flex flex-[3] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-4 lg:px-6">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="font-bold text-gray-800">Cronograma de Cocciones</h3>
+                      <span className="text-xs font-medium text-gray-400">
+                        {new Date().toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('plan')}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                    >
+                      Ver Plan Maestro →
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-auto p-4">
+                    <div className="grid min-w-[620px] grid-cols-7 gap-2">
+                      {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(dia => (
+                        <div key={dia} className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-gray-400">
+                          {dia}
+                        </div>
+                      ))}
+
+                      {Array.from({ length: calendarioReal.offsetPrimerDia }, (_, i) => <div key={`vacio-${i}`} />)}
+
+                      {calendarioReal.dias.map(dia => (
+                        <div
+                          key={dia.dia}
+                          className="relative flex min-h-[80px] flex-col gap-1 rounded-md border border-gray-100 bg-gray-50/30 p-1.5 transition-colors hover:bg-gray-50"
+                        >
+                          <span className="absolute right-2 top-1.5 text-xs font-medium text-gray-400">{dia.dia}</span>
+                          <div className="mt-4 flex flex-col gap-1">
+                            {dia.cocciones.map((coccion, cIdx) => (
+                              <div
+                                key={cIdx}
+                                className={`group relative truncate rounded-sm py-1 pl-1.5 pr-4 text-[10px] font-bold ${
+                                  coccion.urgente
+                                    ? 'border-[1.5px] border-red-500 bg-red-50 text-red-700 shadow-sm'
+                                    : 'text-white'
+                                }`}
+                                style={
+                                  coccion.urgente
+                                    ? undefined
+                                    : { backgroundColor: coccion.tipo === 'kombucha' ? COLORS.kombucha : COLORS.lightGreen }
+                                }
+                              >
+                                {coccion.estilo}
+                                {coccion.urgente && (
+                                  <div className="absolute -top-12 left-0 z-10 hidden w-40 flex-col rounded bg-gray-900 p-2 text-xs font-normal text-white shadow-xl group-hover:flex">
+                                    <span className="font-bold text-red-400">ATRASADO</span>
+                                    <span>{coccion.detalle || 'Requiere acción'}</span>
+                                  </div>
+                                )}
+                                {/* Quitar del plan directo desde el calendario — sin
+                                    esto había que ir a la tabla del Plan Maestro para
+                                    cancelar un lote. Al cancelar, el producto sale de
+                                    productosEnPlan (page.tsx) y su alarma de quiebre
+                                    de stock reaparece sola en Plan Maestro, si sigue
+                                    aplicando. */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); cambiarEstadoLote(coccion.id, 'cancelado') }}
+                                  title="Quitar del plan — reaparece en Alarmas de quiebre de stock si sigue aplicando"
+                                  className="absolute right-0.5 top-0.5 hidden rounded-sm p-0.5 text-current opacity-70 hover:bg-black/20 hover:opacity-100 group-hover:block"
+                                >
+                                  <X size={9} strokeWidth={3} />
+                                </button>
+                              </div>
+                            ))}
+                            {dia.cocciones.length === 0 && (
+                              <span className="text-[10px] text-gray-300">—</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {plan.length === 0 && (
+                      <p className="mt-4 text-center text-sm text-gray-400">
+                        Todavía no hay cocciones planificadas — agregalas desde{' '}
+                        <button onClick={() => setActiveTab('plan')} className="font-bold underline">Plan Maestro</button>.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Alertas — REALES, salen de forecast_calidad_datos */}
+                <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm xl:max-w-sm">
+                  <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                    <h3 className="text-sm font-bold text-gray-800">Alertas del Modelo</h3>
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-600">{calidad.length}</span>
+                  </div>
+                  <div className="flex flex-col gap-2 overflow-y-auto p-2">
+                    {calidad.length === 0 && (
+                      <p className="p-4 text-center text-sm text-gray-400">Sin alertas. El modelo no encontró problemas de datos.</p>
+                    )}
+                    {calidad.map((alerta, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-start gap-3 rounded-lg border p-3 ${
+                          alerta.severidad === 'advertencia' ? 'border-amber-100 bg-amber-50/50' : 'border-gray-100 bg-gray-50'
+                        }`}
+                      >
+                        <div className={`mt-0.5 shrink-0 ${alerta.severidad === 'advertencia' ? 'text-amber-500' : 'text-gray-400'}`}>
+                          {alerta.severidad === 'advertencia' ? <AlertTriangle size={16} /> : <Info size={16} />}
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <span className="text-sm font-medium leading-snug text-gray-800">{alerta.detalle}</span>
+                          {alerta.clave && <span className="text-xs font-medium text-gray-400">{alerta.clave}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ VISTA 2: FORECASTING (datos reales) ══════════ */}
+          {activeTab === 'forecasting' && (
+            // h-full (no min-h-full) forzaba esta columna a la altura exacta
+            // del viewport: con sólo filtros+gráfico entraba justo, pero al
+            // agregar la tabla de detalle abajo, flexbox la comprimía a 0px
+            // en vez de dejar crecer la columna y que el contenedor de más
+            // arriba (flex-1 overflow-auto) scrolleara — confirmado con el
+            // computed height de la tarjeta de la tabla: 35px de alto,
+            // wrapper interno en 0px pese a tener 94 filas en el DOM.
+            <div className="flex min-h-full flex-col gap-6">
+
+              {/* Filtros */}
+              <div className="flex flex-wrap items-end gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
+                  <label htmlFor="serie" className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                    Línea de Producto / Envase
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="serie"
+                      value={serieActual?.id ?? ''}
+                      onChange={e => setSerieId(e.target.value)}
+                      className="w-full appearance-none rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      {series.some(s => s.nivel === 'general') && (
+                        <optgroup label="Consolidado">
+                          {series.filter(s => s.nivel === 'general').map(s => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {series.some(s => s.nivel === 'producto') && (
+                        <optgroup label="Por producto">
+                          {series.filter(s => s.nivel === 'producto').map(s => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {series.some(s => s.nivel === 'envase') && (
+                        <optgroup label="Por envase">
+                          {series.filter(s => s.nivel === 'envase').map(s => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {series.some(s => s.nivel === 'producto_envase') && (
+                        <optgroup label="Por producto y envase">
+                          {series.filter(s => s.nivel === 'producto_envase').map(s => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    <ChevronDown size={16} className="pointer-events-none absolute right-3 top-2.5 text-gray-400" />
+                  </div>
+                </div>
+
+                <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Historial disponible</label>
+                  <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-600">
+                    <Filter size={16} className="text-gray-400" />
+                    {serieActual?.mesesHistorial != null
+                      ? `${serieActual.mesesHistorial} meses de ventas reales`
+                      : `${chartData.filter(d => d.ventaReal != null).length} meses de ventas reales`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Gráfico */}
+              <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
+                <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold text-gray-800">
+                      Proyección de Demanda (Litros) vs. Venta Real
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {serieActual?.label ?? '—'} · el área ámbar marca la temporada alta (Dic–Feb).
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Interruptor de la descomposición: por defecto apagado
+                        para no sobrecargar la lectura rápida, pero a un clic
+                        de mostrar de qué está hecha la proyección. */}
+                    {hayDescomposicion && (
+                      <button
+                        onClick={() => setVerModelo(v => !v)}
+                        aria-pressed={verModelo}
+                        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-bold transition-colors ${
+                          verModelo ? 'text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                        style={verModelo ? { backgroundColor: COLORS.darkGreen, borderColor: COLORS.darkGreen } : undefined}
+                      >
+                        <Sigma size={15} />
+                        Ver el modelo
+                      </button>
+                    )}
+                    {precisionSerie != null && (
+                      <div className={`rounded-lg border px-3 py-1.5 text-sm font-bold ${
+                        precisionSerie >= 85 ? 'border-green-200 bg-green-50 text-green-700'
+                          : precisionSerie >= 70 ? 'border-amber-200 bg-amber-50 text-amber-700'
+                            : 'border-red-200 bg-red-50 text-red-700'
+                      }`}>
+                        Precisión Histórica: {precisionSerie.toFixed(0)}%
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Función matemática del modelo, con las constantes de ESTA
+                    corrida — para que quede claro que la proyección sale de
+                    una función real, no de una regla de tres, y que esa
+                    función cambia sola cuando el modelo se reentrena. */}
+                {verModelo && ecuacionModelo && (
+                  <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      Función del modelo
+                    </p>
+                    <p className="mt-1.5 overflow-x-auto whitespace-nowrap font-mono text-base font-bold text-gray-800 sm:text-lg">
+                      y(t) = g(t) + s(t) + ε<sub>t</sub>
+                    </p>
+                    <div className="mt-3 flex flex-col gap-1.5 border-t border-gray-100 pt-3 font-mono text-sm text-gray-600">
+                      <p className="overflow-x-auto whitespace-nowrap">
+                        g(t) = {fNum(ecuacionModelo.m)} {ecuacionModelo.k >= 0 ? '+' : '−'} {Math.abs(ecuacionModelo.k).toFixed(1)}·t
+                      </p>
+                      <p className="overflow-x-auto whitespace-nowrap">
+                        s(t) ≈ {fNum(ecuacionModelo.A)}·sin(2π·t/12 {ecuacionModelo.fase >= 0 ? '+' : '−'} {Math.abs(ecuacionModelo.fase).toFixed(2)})
+                      </p>
+                    </div>
+                    <p className="mt-3 text-xs leading-snug text-gray-400">
+                      t = meses desde {etiquetaMes(ecuacionModelo.t0mes)} (t=0). g(t) es la tendencia exacta que usa
+                      el modelo para proyectar — sale del tramo lineal posterior al último <em>changepoint</em>, no de
+                      un ajuste a mano. s(t) es una aproximación de un solo armónico a la estacionalidad de Fourier
+                      real de Prophet, para que la fórmula sea legible. Sin componente de feriados (h(t)): este
+                      modelo no los usa. Las constantes se recalculan solas en cada corrida del modelo.
+                    </p>
+                  </div>
+                )}
+
+                {/* Ecuación del modelo, con los números del mes proyectado.
+                    Es la parte que hace evidente que la línea verde no es una
+                    regla de tres: sale de dos componentes que Prophet estima
+                    por separado sobre el historial y después suma. */}
+                {verModelo && descomposicionProximo && (
+                  <div className="mb-5 flex flex-wrap items-stretch gap-3 rounded-xl border border-gray-200 bg-gray-50/70 p-4">
+                    <div className="min-w-[190px] flex-1">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Tendencia</p>
+                      <p className="text-xl font-black tabular-nums" style={{ color: COLORS.lightGreen }}>
+                        {fNum(descomposicionProximo.tendencia)} L
+                      </p>
+                      <p className="mt-0.5 text-xs leading-snug text-gray-500">
+                        Hacia dónde va el negocio, sin el efecto del mes. Se ajusta con
+                        <em> changepoints</em>: quiebres de pendiente detectados en los datos.
+                      </p>
+                    </div>
+                    <div className="flex items-center text-2xl font-light text-gray-300">+</div>
+                    <div className="min-w-[190px] flex-1">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Estacionalidad de {etiquetaMes(descomposicionProximo.mesIso)}</p>
+                      <p className="text-xl font-black tabular-nums" style={{ color: descomposicionProximo.estacionalidad >= 0 ? COLORS.amber : '#EF4444' }}>
+                        {descomposicionProximo.estacionalidad >= 0 ? '+' : '−'}{fNum(Math.abs(descomposicionProximo.estacionalidad))} L
+                      </p>
+                      <p className="mt-0.5 text-xs leading-snug text-gray-500">
+                        Cuánto se aparta ese mes del año respecto de la tendencia. Curva de Fourier
+                        ajustada sobre {serieActual?.mesesHistorial ?? chartData.filter(d => d.ventaReal != null).length} meses.
+                      </p>
+                    </div>
+                    <div className="flex items-center text-2xl font-light text-gray-300">=</div>
+                    <div className="min-w-[150px] flex-1">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Proyección</p>
+                      <p className="text-xl font-black tabular-nums" style={{ color: COLORS.darkGreen }}>
+                        {fNum(descomposicionProximo.tendencia + descomposicionProximo.estacionalidad)} L
+                      </p>
+                      <p className="mt-0.5 text-xs leading-snug text-gray-500">
+                        El rango sombreado es el intervalo de predicción al 80%: 4 de cada 5 meses
+                        deberían caer dentro.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Altura fija en vez de heredada por flex/min-height: Recharts
+                    necesita que ALGÚN ancestro tenga una altura resuelta en
+                    píxeles para poder calcular su height="100%" — una cadena
+                    de flex-1/min-height no se lo garantiza (se rompió al
+                    cambiar el wrapper de la pestaña de h-full a min-h-full
+                    para la tabla de abajo: el SVG dejó de dibujarse, 0px). */}
+                <div className="relative h-[360px] w-full">
+                  {chartData.length === 0 ? (
+                    <div className="flex h-full items-center justify-center text-sm text-gray-400">
+                      Todavía no hay una corrida del modelo. Se genera automáticamente el día 2 de cada mes.
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData} margin={{ top: 20, right: 20, left: 10, bottom: 5 }}>
+                        <defs>
+                          {/* El intervalo se desvanece hacia abajo en vez de
+                              ser un bloque plano: se lee como incertidumbre,
+                              no como una segunda serie de datos. */}
+                          <linearGradient id="gradRango" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={COLORS.darkGreen} stopOpacity={0.22} />
+                            <stop offset="100%" stopColor={COLORS.darkGreen} stopOpacity={0.04} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                        <XAxis
+                          dataKey="month" axisLine={false} tickLine={false} minTickGap={24}
+                          tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 600 }} dy={10}
+                        />
+                        <YAxis
+                          axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dx={-6}
+                          tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
+                        />
+                        {/* Tooltip a medida: en el mes ancla (el último real,
+                            donde arranca la línea de proyección) "Venta Real",
+                            "Venta Proyectada" y "Ritmo proyectado" quedan con
+                            el MISMO número a propósito, sólo para que esas
+                            tres líneas conecten visualmente ahí — mostrar los
+                            tres en el tooltip como si fueran datos distintos
+                            confunde (se ve como si el modelo hubiera
+                            "proyectado" un mes que ya cerró). Se ocultan las
+                            dos entradas redundantes en ese punto puntual. */}
+                        {/* La etiqueta "Ago '26" es el mes Y AÑO (Agosto,
+                            2026) — el '26 es el año abreviado, no un día del
+                            mes. Como el ciclo real corre 24→23 y no calendario
+                            (ver lib/produccion/reglas.ts), eso generó
+                            confusión real ("¿por qué a veces aparece 25 o 26
+                            del mes?", cuando en realidad eran años distintos
+                            en distintos puntos del historial). Se agrega el
+                            rango de fechas exacto del ciclo debajo del mes
+                            para que no quede ambigüedad. */}
+                        <Tooltip
+                          content={({ active, payload, label }) => {
+                            if (!active || !payload || payload.length === 0) return null
+                            const fila = payload[0]?.payload as (typeof chartData)[number] | undefined
+                            const esAncla = !!fila && fila.ventaReal != null && fila.ventaProyectada != null && fila.mesIso !== avanceMes.mes
+                            const visibles = payload.filter(entrada => {
+                              if (entrada.value == null) return false
+                              if (esAncla && (entrada.dataKey === 'ventaProyectada' || entrada.dataKey === 'ritmo')) return false
+                              return true
+                            })
+                            if (visibles.length === 0) return null
+                            return (
+                              <div className="rounded-lg bg-white px-3.5 py-2.5 text-xs shadow-lg">
+                                <p className="font-bold text-gray-700">{label}</p>
+                                {fila && (
+                                  <p className="mb-1.5 text-[11px] text-gray-400">
+                                    {fCicloCorto(inicioDeCiclo(fila.mesIso))} – {fCicloCorto(finDeCiclo(fila.mesIso))}
+                                  </p>
+                                )}
+                                {visibles.map(entrada => {
+                                  const valor = entrada.value
+                                  const texto = Array.isArray(valor)
+                                    ? `${fNum(Number(valor[0]))} – ${fNum(Number(valor[1]))} L`
+                                    : `${fNum(Number(valor))} L`
+                                  return (
+                                    <p key={String(entrada.dataKey)} style={{ color: entrada.color }} className="font-semibold">
+                                      {entrada.name}: {texto}
+                                    </p>
+                                  )
+                                })}
+                              </div>
+                            )
+                          }}
+                        />
+                        <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#374151' }} />
+
+                        {tramosTemporadaAlta.map((t, i) => (
+                          <ReferenceArea key={i} x1={t.x1} x2={t.x2} fill={COLORS.lightAmber} fillOpacity={0.4} />
+                        ))}
+
+                        <Area
+                          dataKey="rango" name="Rango estimado (80%)" stroke="none"
+                          fill="url(#gradRango)" connectNulls
+                        />
+                        {/* Tendencia del modelo sobre TODA la serie, historial
+                            incluido: ahí se ve que está ajustada a los datos
+                            reales y no dibujada sólo hacia el futuro. */}
+                        {verModelo && (
+                          <Line
+                            type="monotone" dataKey="tendencia" name="Tendencia (sin estacionalidad)"
+                            stroke={COLORS.lightGreen} strokeWidth={2} strokeDasharray="6 4"
+                            dot={false} activeDot={false} connectNulls isAnimationActive={false}
+                          />
+                        )}
+                        <Line
+                          type="monotone" dataKey="ventaProyectada" name="Venta Proyectada"
+                          stroke={COLORS.darkGreen} strokeWidth={3} connectNulls
+                          dot={{ r: 3, fill: COLORS.darkGreen, strokeWidth: 0 }} activeDot={{ r: 6 }}
+                        />
+                        <Line
+                          type="monotone" dataKey="ventaReal" name="Venta Real"
+                          stroke={COLORS.amber} strokeWidth={3} strokeDasharray="5 5" connectNulls={false}
+                          dot={false} activeDot={{ r: 6 }}
+                        />
+                        {/* Ritmo proyectado: arranca del mismo último mes real
+                            que la línea verde (no del dato crudo del mes a
+                            medias, que comparado contra meses completos se
+                            veía como una caída al vacío) y corre AL LADO de
+                            la proyección del modelo hasta el mes en curso —
+                            así se compara directo: ¿vendiendo al ritmo de
+                            estos días, cerramos arriba o abajo de lo que el
+                            modelo esperaba? */}
+                        <Line
+                          type="monotone" dataKey="ritmo" name="Ritmo proyectado a fin de mes"
+                          stroke={COLORS.amber} strokeWidth={2.5} strokeDasharray="2 3" connectNulls
+                          dot={(props: { cx?: number; cy?: number; index?: number; payload?: { mesIso?: string } }) => {
+                            const { cx, cy, index, payload } = props
+                            // Sólo un punto visible, en el mes en curso — el
+                            // ancla (último mes real) ya tiene su propio dot
+                            // de "Venta Proyectada"/"Venta Real" ahí mismo.
+                            if (payload?.mesIso !== avanceMes.mes || cx == null || cy == null) return <React.Fragment key={index} />
+                            return <circle key={index} cx={cx} cy={cy} r={5} fill="#fff" stroke={COLORS.amber} strokeWidth={2.5} />
+                          }}
+                          isAnimationActive={false}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Curva estacional aprendida por el modelo ── */}
+              {verModelo && curvaEstacional.length > 0 && (
+                <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
+                  <div className="mb-4">
+                    <h3 className="text-lg font-bold text-gray-800">Estacionalidad aprendida por el modelo</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Litros que cada mes del año suma o resta respecto de la tendencia. No es una regla
+                      escrita a mano: es la curva de Fourier que Prophet ajustó sobre el historial de esta serie.
+                    </p>
+                  </div>
+                  <div className="h-[200px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={curvaEstacional} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                        <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 600 }} dy={8} />
+                        <YAxis
+                          axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dx={-6}
+                          tickFormatter={(v: number) => (Math.abs(v) >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)))}
+                        />
+                        <Tooltip
+                          contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                          formatter={(value) => {
+                            const n = Number(value)
+                            return [`${n >= 0 ? '+' : '−'}${fNum(Math.abs(n))} L`, n >= 0 ? 'Sobre la tendencia' : 'Bajo la tendencia']
+                          }}
+                        />
+                        {/* Una barra por mes, verde arriba de la tendencia y
+                            ámbar abajo — el signo se lee sin mirar el eje. */}
+                        <Bar dataKey="efecto" name="Efecto del mes" radius={[3, 3, 3, 3]} isAnimationActive={false}>
+                          {curvaEstacional.map(d => (
+                            <Cell key={d.mes} fill={d.efecto >= 0 ? COLORS.lightGreen : COLORS.amber} />
+                          ))}
+                        </Bar>
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* ¿Vamos a cumplir lo proyectado? — comparación simple del mes en curso */}
+              {mtdLitros > 0 && (() => {
+                const objetivo = chartData.find(f => f.mesIso === avanceMes.mes)?.ventaProyectada ?? null
+                const pct = objetivo != null && objetivo > 0 ? (ritmoProyectado / objetivo) * 100 : null
+                const cumple = pct != null && pct >= 95
+                const avancePct = Math.min(100, (avanceMes.diaActual / avanceMes.diasEnMes) * 100)
+                return (
+                  <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="grid gap-px bg-gray-200 sm:grid-cols-3">
+                      <div className="bg-white p-5">
+                        <p
+                          className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-gray-400"
+                          title="Cuenta por fecha de pedido, no de entrega — a diferencia de Ventas, que sólo suma lo ya despachado. Producción necesita la señal apenas se toma el pedido, no cuando se despacha."
+                        >
+                          Vendido este mes
+                          <Info size={11} className="text-gray-300" />
+                        </p>
+                        <p className="mt-1 text-3xl font-black tabular-nums text-gray-900">{fNum(mtdLitros)} L</p>
+                        <p className="text-[10px] text-gray-400">por fecha de pedido, no de entrega</p>
+                        {/* Barra de avance del mes: el número solo no dice si
+                            vamos temprano o tarde en el período. */}
+                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                          <div className="h-full rounded-full" style={{ width: `${avancePct}%`, backgroundColor: COLORS.gray }} />
+                        </div>
+                        <p className="mt-1.5 text-xs text-gray-500">día {avanceMes.diaActual} de {avanceMes.diasEnMes}</p>
+                      </div>
+
+                      <div className="bg-white p-5">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">A este ritmo cerrarías con</p>
+                        <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.amber }}>{fNum(ritmoProyectado)} L</p>
+                        <p className="mt-[14px] text-xs text-gray-500">extrapolación lineal de lo vendido</p>
+                      </div>
+
+                      {objetivo != null && pct != null && (
+                        <div className="bg-white p-5">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">El modelo proyectó</p>
+                          <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.darkGreen }}>{fNum(objetivo)} L</p>
+                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${Math.min(100, pct)}%`, backgroundColor: cumple ? '#059669' : '#EF4444' }}
+                            />
+                          </div>
+                          <p className={`mt-1.5 text-xs font-bold ${cumple ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {cumple ? '✓' : '⚠'} vas al {pct.toFixed(0)}% de lo proyectado
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Calculadora de cobertura — responde "¿cuánto necesito de X
+                  producto, en Y formato, para cubrir de aquí a tal fecha?"
+                  para cualquier producto/envase, no sólo el que está
+                  seleccionado arriba en el gráfico. */}
+              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h3 className="font-bold text-gray-800">Calculadora de Cobertura</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Ej.: ¿cuántos litros de Fisura en Lata necesito para cubrir de aquí al 27 de marzo?
+                </p>
+                <div className="mt-4 flex flex-wrap items-end gap-3">
+                  <div className="flex min-w-[180px] flex-1 flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Producto</label>
+                    <select
+                      value={productoCobertura}
+                      onChange={e => { setCoberturaProducto(e.target.value); setCoberturaEnvase('todos') }}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value={TODOS_PRODUCTOS}>Todos los productos</option>
+                      {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex min-w-[160px] flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Formato</label>
+                    <select
+                      value={coberturaEnvase}
+                      onChange={e => setCoberturaEnvase(e.target.value as 'todos' | EnvaseBucket)}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="todos">Todos los formatos</option>
+                      {envasesCoberturaDisponibles.map(b => <option key={b} value={b}>{ENVASE_LABEL[b]}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex min-w-[160px] flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Cubrir hasta</label>
+                    <input
+                      type="date" value={coberturaFecha} onChange={e => setCoberturaFecha(e.target.value)}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {resultadoCobertura && 'error' in resultadoCobertura ? (
+                  <p className="mt-4 text-sm font-semibold text-red-600">{resultadoCobertura.error}</p>
+                ) : resultadoCobertura ? (
+                  <div className="mt-4 grid grid-cols-1 gap-px overflow-hidden rounded-lg bg-gray-200 sm:grid-cols-3">
+                    <div className="bg-gray-50 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Demanda proyectada en el período</p>
+                      <p className="mt-1 text-2xl font-black tabular-nums text-gray-800">{fNum(resultadoCobertura.demandaProyectada)} L</p>
+                    </div>
+                    <div className="bg-gray-50 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Disponible ahora</p>
+                      <p className="mt-1 text-2xl font-black tabular-nums text-gray-800">
+                        {resultadoCobertura.disponible != null ? `${fNum(resultadoCobertura.disponible)} L` : 'Sin dato'}
+                      </p>
+                    </div>
+                    <div className="bg-amber-50 p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Necesidad neta a cubrir</p>
+                      <p className="mt-1 text-2xl font-black tabular-nums text-amber-800">
+                        {resultadoCobertura.necesidadNeta != null ? `${fNum(resultadoCobertura.necesidadNeta)} L` : '—'}
+                      </p>
+                      {resultadoCobertura.latasACubrir != null && (
+                        <p className="mt-1 text-xs font-bold text-amber-700">
+                          ≈ {fNum(resultadoCobertura.latasACubrir)} latas{resultadoCobertura.litrosPorLata != null ? ` de ${Math.round(resultadoCobertura.litrosPorLata * 1000)} ml` : ''} a comprar
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Desglose por formato: el lote se cuece completo y después se
+                    envasa en los distintos formatos, así que además del número
+                    del formato elegido arriba, siempre se ve cuánto hace falta
+                    de CADA uno y el total a cocer. */}
+                {desgloseCoberturaFormatos && desgloseCoberturaFormatos.filas.length > 0 && (
+                  <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
+                    <div className="border-b border-gray-100 bg-gray-50/70 px-4 py-2.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                        Desglose por formato — {productoCobertura}
+                      </span>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead className="text-xs uppercase tracking-wide text-gray-400">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-bold">Formato</th>
+                          <th className="px-4 py-2 text-right font-bold">Demanda proyectada</th>
+                          <th className="px-4 py-2 text-right font-bold">Disponible</th>
+                          <th className="px-4 py-2 text-right font-bold">Necesidad neta</th>
+                          <th className="px-4 py-2 text-right font-bold">Latas a comprar</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {desgloseCoberturaFormatos.filas.map(f => (
+                          <tr key={f.envase}>
+                            <td className="px-4 py-2.5 font-semibold text-gray-700">{ENVASE_LABEL[f.envase] ?? f.envase}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fNum(f.demandaProyectada)} L</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">{f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-700">{f.latasACubrir != null ? fNum(f.latasACubrir) : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-amber-50">
+                          <td colSpan={3} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-amber-700">
+                            Total a cocer (todos los formatos)
+                          </td>
+                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">{fNum(desgloseCoberturaFormatos.totalNecesidad)} L</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
+                {/* Desglose por producto: sólo con "Todos los productos" elegido —
+                    el equivalente de arriba pero para armar de un vistazo la lista
+                    de compra de latas de todo el catálogo. */}
+                {desgloseCoberturaProductos && desgloseCoberturaProductos.filas.length > 0 && (
+                  <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
+                    <div className="border-b border-gray-100 bg-gray-50/70 px-4 py-2.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                        Desglose por producto — {coberturaEnvase === 'todos' ? 'todos los formatos' : ENVASE_LABEL[coberturaEnvase]}
+                      </span>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead className="text-xs uppercase tracking-wide text-gray-400">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-bold">Producto</th>
+                          <th className="px-4 py-2 text-right font-bold">Demanda proyectada</th>
+                          <th className="px-4 py-2 text-right font-bold">Disponible</th>
+                          <th className="px-4 py-2 text-right font-bold">Necesidad neta</th>
+                          <th className="px-4 py-2 text-right font-bold">Latas a comprar</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {desgloseCoberturaProductos.filas.map(f => (
+                          <tr key={f.producto}>
+                            <td className="px-4 py-2.5 font-semibold text-gray-700">{f.producto}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fNum(f.demandaProyectada)} L</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">{f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-700">{f.latasACubrir != null ? fNum(f.latasACubrir) : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-amber-50">
+                          <td colSpan={3} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-amber-700">
+                            Total ({desgloseCoberturaProductos.filas.length} productos)
+                          </td>
+                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">{fNum(desgloseCoberturaProductos.totalNecesidad)} L</td>
+                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">
+                            {desgloseCoberturaProductos.totalLatas > 0 ? fNum(desgloseCoberturaProductos.totalLatas) : '—'}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
+                <p className="mt-3 text-xs text-gray-400">
+                  Suma el forecast mensual por ciclo entre hoy y la fecha elegida (prorateado por días en los ciclos
+                  parciales); el ciclo en curso usa el ritmo de venta real de este ciclo, no el forecast. El total del
+                  desglose es la suma de la necesidad neta de cada formato — lo que hay que cocer, ya que el lote se
+                  envasa después según ese reparto.
+                </p>
+              </div>
+
+              {/* ── Detalle por producto y envase ── */}
+              <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+                  <div>
+                    <h3 className="font-bold text-gray-800">Detalle por producto y envase</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {filasTablaDetalle.length} combinaciones · litros vendidos en lo que va del mes y proyección del próximo mes cerrado.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(['todas', 'cerveza', 'kombucha'] as const).map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setFiltroCategoria(c)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-bold capitalize transition-colors ${
+                          filtroCategoria === c
+                            ? 'text-white'
+                            : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                        }`}
+                        style={{ backgroundColor: filtroCategoria === c ? COLORS.darkGreen : undefined, borderColor: filtroCategoria === c ? COLORS.darkGreen : undefined }}
+                      >
+                        {c === 'todas' ? 'Todas' : c}
+                      </button>
+                    ))}
+                    <span className="mx-1 self-center text-gray-300">|</span>
+                    <select
+                      value={filtroEnvase}
+                      onChange={e => setFiltroEnvase(e.target.value)}
+                      className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="todos">Todos los envases</option>
+                      {envasesDisponibles.map(b => <option key={b} value={b}>{ENVASE_LABEL[b as EnvaseBucket] ?? b}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="max-h-[520px] overflow-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-3 font-bold">Producto</th>
+                        <th className="px-4 py-3 font-bold">Envase</th>
+                        <th className="px-4 py-3 font-bold">Categoría</th>
+                        <th className="px-4 py-3 text-right font-bold">Vendido este mes</th>
+                        <th className="px-4 py-3 text-right font-bold text-amber-700">Próximo mes (proy.)</th>
+                        <th className="px-6 py-3 text-center font-bold" title="Error del backtest (MAPE) — más alto es peor, no una confiabilidad de 0-100%.">Desviación</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {filasTablaDetalle.length === 0 && (
+                        <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-400">Sin combinaciones para este filtro.</td></tr>
+                      )}
+                      {filasTablaDetalle.map(({ serie, proximo }, i) => {
+                        const productoRepetido = i > 0 && filasTablaDetalle[i - 1].serie.producto === serie.producto
+                        return (
+                          <tr key={serie.id} className="transition-colors hover:bg-gray-50">
+                            <td className="px-6 py-2.5 font-semibold text-gray-800">
+                              {productoRepetido ? (
+                                <span className="pl-[42px] text-gray-300">″</span>
+                              ) : (
+                                <span className="inline-flex items-center gap-2.5">
+                                  <ProductImage
+                                    nombre={serie.producto} categoria={serie.categoria}
+                                    esBarril={serie.envaseBucket === 'barril_30' || serie.envaseBucket === 'barril_50'}
+                                    size={32} radius={8}
+                                  />
+                                  {serie.producto}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-gray-600">
+                              <span className="inline-flex items-center gap-2">
+                                {ENVASE_LABEL[(serie.envaseBucket ?? 'otros') as EnvaseBucket] ?? serie.envaseBucket}
+                                {serie.metodo === 'derivado' && (
+                                  <span
+                                    className="inline-block rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-600"
+                                    title="Muy poca historia propia para confiar en un modelo entrenado sólo sobre este formato — se repartió el forecast del producto según qué % de él fue este formato recientemente."
+                                  >
+                                    derivado
+                                  </span>
+                                )}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              {serie.categoria && (
+                                <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${
+                                  serie.categoria === 'cerveza' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
+                                }`}>
+                                  {serie.categoria}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
+                              {serie.litrosMesEnCurso > 0 ? `${fNum(serie.litrosMesEnCurso)} L` : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-bold tabular-nums text-gray-900">
+                              {proximo ? `${fNum(proximo.litros)} L` : <span className="text-gray-300">sin datos</span>}
+                            </td>
+                            <td className="px-6 py-2.5 text-center">
+                              <ChipDesviacion mape={serie.mape} derivado={serie.metodo === 'derivado'} />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ VISTA 3: STOCK DE SEGURIDAD ══════════ */}
+          {activeTab === 'seguridad' && (
+            <div className="flex flex-col gap-6">
+
+              {stockSeguridad.length === 0 ? (
+                <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                  <Info size={18} className="mt-0.5 shrink-0" />
+                  <p>
+                    Todavía no hay una corrida del cálculo de stock de seguridad. Se genera junto con el forecast,
+                    el día 2 de cada mes.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600 shadow-sm">
+                  <Info size={18} className="mt-0.5 shrink-0 text-gray-400" />
+                  <p>
+                    Stock de seguridad = <strong>Z · √(ventana · σ<sub>semanal</sub>² + demanda<sub>semanal</sub>² · σ<sub>LT</sub>²)</strong>,
+                    con Z=1,645 (95% de nivel de servicio). Tanto la demanda como su dispersión salen del
+                    <strong> mismo forecast de Prophet</strong> que ves en el gráfico —σ se deriva del ancho de
+                    su intervalo de predicción, así que ya incorpora la estacionalidad y la tendencia del mes
+                    proyectado en vez de estimarse aparte. La ventana es{' '}
+                    <strong>lead time + período de revisión</strong> (reponemos una vez al mes, así que el
+                    riesgo corre hasta la siguiente oportunidad de pedir, no sólo hasta que llega el lote).
+                    Lead time: <strong>4 semanas cerveza</strong>, <strong>3 semanas kombucha</strong>.
+                  </p>
+                </div>
+              )}
+
+              {/* Prueba visual de que "disponible" está conectado al stock
+                  actual: el estado crítico/bajo/ok se recalcula en CADA
+                  carga de esta página contra la última foto del ERP — no
+                  sólo cuando corre el forecast mensual. Antes esto era una
+                  afirmación sin respaldo en pantalla; ahora se ve. */}
+              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500">
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: minutosDesdeSyncStock != null && minutosDesdeSyncStock < 180 ? '#34D399' : COLORS.gray }}
+                />
+                Inventario del ERP {minutosDesdeSyncStock != null ? fMinutosDesde(minutosDesdeSyncStock) : 'sin sincronizar aún'}
+                {' '}— el estado de abajo se recalcula contra esto cada vez que abrís esta pantalla.
+              </div>
+
+              {/* KPIs de estado */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                {([
+                  { estado: 'critico' as const, label: 'Crítico', color: 'red' },
+                  { estado: 'bajo' as const, label: 'Bajo (reponer)', color: 'amber' },
+                  { estado: 'ok' as const, label: 'OK', color: 'emerald' },
+                  { estado: 'sin_dato' as const, label: 'Sin dato de stock', color: 'gray' },
+                ]).map(({ estado, label, color }) => (
+                  <div key={estado} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</p>
+                    <p className={`text-3xl font-black ${
+                      color === 'red' ? 'text-red-600' : color === 'amber' ? 'text-amber-600' : color === 'emerald' ? 'text-emerald-600' : 'text-gray-400'
+                    }`}>
+                      {filasStockSeguridad.filter(f => f.estado === estado).length}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Necesidad de Producción Anticipada — responde "¿cuánto
+                  necesito producir para cubrir hasta tal fecha?" y avisa
+                  cuándo se viene una temporada de alta demanda, no sólo si
+                  hoy está bien. Mismo lenguaje visual que las alarmas de
+                  quiebre del Plan Maestro para que se reconozca de un
+                  vistazo como una lista accionable. */}
+              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <h3 className="font-bold text-gray-800">Necesidad de Producción Anticipada</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Cuánto hay que producir de cada producto y formato para llegar bien hasta una fecha futura —
+                      y qué productos vienen con una temporada de alta demanda por delante.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Cubrir hasta</label>
+                    <input
+                      type="date" value={fechaCoberturaSeg} onChange={e => setFechaCoberturaSeg(e.target.value)}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {anticipadasPorProducto.length === 0 ? (
+                  <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-700">
+                    <CheckCircle2 size={16} />
+                    Con el disponible y lo en producción actual, no hace falta cocer nada más para cubrir hasta esa fecha
+                    (respetando los filtros de categoría/envase de arriba).
+                  </div>
+                ) : (
+                  <div className="mt-4 flex flex-col gap-3">
+                    {anticipadasPorProducto.map(grupo => (
+                      <div key={grupo.producto} className="overflow-hidden rounded-lg border border-amber-200 bg-white">
+                        <div className="flex items-center gap-2.5 border-b border-amber-100 bg-amber-50/60 px-4 py-2.5">
+                          <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={30} radius={7} />
+                          <span className="font-semibold text-gray-800">{grupo.producto}</span>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {grupo.items.map((item, i) => (
+                            <div key={`${item.envase}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-2.5" title={item.motivo}>
+                              <span className="w-24 shrink-0 text-xs font-bold uppercase tracking-wide text-amber-700">
+                                {ENVASE_LABEL[item.envase] ?? item.envase}
+                              </span>
+                              <div className="min-w-[160px] flex-1">
+                                {item.altaDemanda && (
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
+                                    <TrendingUp size={12} />
+                                    Viene alta demanda
+                                  </span>
+                                )}
+                                {/* litrosSugeridos sólo puede ser 0 cuando la fila entró a la lista
+                                    por altaDemanda (el filtro de arriba descarta las que no tienen
+                                    ni necesidad ni alza) — el disponible alcanza hoy, pero avisa
+                                    igual porque se viene la temporada. */}
+                                {item.litrosSugeridos === 0 && (
+                                  <span className="ml-1.5 text-xs text-gray-400">Disponible alcanza por ahora.</span>
+                                )}
+                              </div>
+                              <div className="flex shrink-0 items-center gap-3 text-right">
+                                <div className="w-24">
+                                  <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Disponible</p>
+                                  <p className="text-sm font-bold tabular-nums text-gray-500">{fNum(item.disponibleLitros)} L</p>
+                                  {item.disponibleUnidades != null && (
+                                    <p className="text-[11px] text-gray-400">{fNum(item.disponibleUnidades)} {UNIDAD_ENVASE[item.envase]}</p>
+                                  )}
+                                </div>
+                                <div className="w-20">
+                                  <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-amber-600">A producir</p>
+                                  <p className="text-sm font-bold tabular-nums text-gray-800">{fNum(item.litrosSugeridos)} L</p>
+                                </div>
+                              </div>
+                              <button
+                                disabled={guardandoPlan}
+                                onClick={() => setSugerenciaModal(item)}
+                                className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                              >
+                                Agregar al plan
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-3 text-xs text-gray-400">
+                  Demanda proyectada = forecast de Prophet ciclo a ciclo entre hoy y la fecha elegida (el ciclo en curso
+                  usa el ritmo de venta real, lun-vie). "Viene alta demanda" = el modelo ya identificó un empuje
+                  estacional fuerte en algún mes dentro del período — anticiparse antes de que el punto de reorden lo
+                  marque como crítico.
+                </p>
+              </div>
+
+              {/* Tabla de stock de seguridad */}
+              <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+                  <div>
+                    <h3 className="font-bold text-gray-800">Stock de Seguridad y Punto de Reorden</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {gruposStockSeguridad.length} productos · {filasStockSeguridad.length} combinaciones producto × formato · comparado contra el inventario actual del ERP.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Producto</span>
+                      <div className="flex overflow-hidden rounded-md border border-gray-200">
+                        {(['todas', 'cerveza', 'kombucha'] as const).map(c => (
+                          <button
+                            key={c}
+                            onClick={() => setFiltroCategoriaSeg(c)}
+                            className={`px-3 py-1.5 text-sm font-semibold capitalize transition-colors ${
+                              filtroCategoriaSeg === c ? 'bg-[#0F3D2E] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            {c === 'todas' ? 'Todos' : c}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="envaseSeg" className="text-xs font-bold uppercase tracking-wider text-gray-500">Envase</label>
+                      <select
+                        id="envaseSeg"
+                        value={filtroEnvaseSeg}
+                        onChange={e => setFiltroEnvaseSeg(e.target.value)}
+                        className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      >
+                        <option value="todos">Todos los envases</option>
+                        {ORDEN_ENVASE.map(b => <option key={b} value={b}>{ENVASE_LABEL[b]}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="mesSeg" className="text-xs font-bold uppercase tracking-wider text-gray-500">Mes</label>
+                      <select
+                        id="mesSeg"
+                        value={mesSeguridadActivo}
+                        onChange={e => setMesSeguridad(e.target.value)}
+                        className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      >
+                        {mesesSeguridad.map(m => <option key={m} value={m}>{etiquetaMes(m)}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="max-h-[560px] overflow-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-3 font-bold">Producto</th>
+                        <th className="px-4 py-3 font-bold">Categoría</th>
+                        <th className="px-4 py-3 font-bold">Formato</th>
+                        <th className="px-4 py-3 text-center font-bold">Ventana</th>
+                        <th className="px-4 py-3 text-right font-bold">Demanda en ventana</th>
+                        <th className="px-4 py-3 text-right font-bold text-amber-700">Stock Seguridad</th>
+                        <th className="px-4 py-3 text-right font-bold text-amber-700">Punto Reorden</th>
+                        <th className="px-4 py-3 text-right font-bold">En bodega</th>
+                        <th className="px-4 py-3 text-right font-bold">En producción</th>
+                        <th className="px-4 py-3 text-right font-bold">Disponible</th>
+                        <th className="px-6 py-3 text-center font-bold">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {gruposStockSeguridad.length === 0 && (
+                        <tr><td colSpan={11} className="px-6 py-10 text-center text-gray-400">Sin datos para este filtro.</td></tr>
+                      )}
+                      {gruposStockSeguridad.map(grupo => grupo.filas.map((f, i) => (
+                        <tr key={`${f.producto}::${f.envase ?? ''}`} className="transition-colors hover:bg-gray-50">
+                          {i === 0 && (
+                            <td rowSpan={grupo.filas.length} className="border-r border-gray-100 px-6 py-3 align-top font-semibold text-gray-800">
+                              <span className="inline-flex items-center gap-2.5">
+                                <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={32} radius={8} />
+                                {grupo.producto}
+                              </span>
+                            </td>
+                          )}
+                          {i === 0 && (
+                            <td rowSpan={grupo.filas.length} className="border-r border-gray-100 px-4 py-3 align-top">
+                              <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${
+                                grupo.categoria === 'cerveza' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
+                              }`}>
+                                {grupo.categoria}
+                              </span>
+                            </td>
+                          )}
+                          {/* flex+gap para separar el chip, NO ml-2: el reset
+                              global `* { margin:0; padding:0 }` de globals.css
+                              gana sobre las utilidades de margin/padding de
+                              Tailwind (van en @layer, el reset no), así que
+                              ml-* y px-* quedan en 0. gap sí funciona. */}
+                          <td className="px-4 py-3 text-gray-600">
+                            <span className="inline-flex items-center gap-2">
+                              {f.envase ? (ENVASE_LABEL[f.envase as keyof typeof ENVASE_LABEL] ?? f.envase) : '—'}
+                              {f.metodo === 'derivado' && (
+                                <span
+                                  className="inline-block rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-600"
+                                  title="Muy poca historia propia (o un modelo propio con demasiado error) para confiar en un forecast entrenado sólo sobre este formato. Se repartió el forecast del producto —que tiene mucha más historia y es más estable— según qué % de ese producto fue este formato en los últimos meses."
+                                >
+                                  derivado
+                                </span>
+                              )}
+                              {f.confianza !== 'alta' && (
+                                <span
+                                  className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-bold ${
+                                    f.confianza === 'media' ? 'border-amber-200 bg-amber-50 text-amber-600' : 'border-gray-200 bg-gray-50 text-gray-400'
+                                  }`}
+                                  title={
+                                    `Confianza ${f.confianza}. ` +
+                                    (f.mapeBacktest != null ? `Error del modelo en el backtest: ${f.mapeBacktest.toFixed(0)}%. ` : 'Sin backtest disponible. ') +
+                                    (f.mesesHistorial != null ? `${f.mesesHistorial} meses de historial.` : '')
+                                  }
+                                >
+                                  confianza {f.confianza}
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                          <td
+                            className="px-4 py-3 text-center tabular-nums text-gray-600"
+                            title={`Lead time ${f.leadTimeSemanas} sem. + revisión mensual ${f.periodoRevisionSemanas.toFixed(1)} sem.`}
+                          >
+                            {(f.leadTimeSemanas + f.periodoRevisionSemanas).toFixed(1)} sem.
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fNum(f.demandaEnVentana)} L</td>
+                          <td className="px-4 py-3 text-right font-bold tabular-nums text-amber-700">{fNum(f.stockSeguridadLitros)} L</td>
+                          <td className="px-4 py-3 text-right font-bold tabular-nums text-gray-900">{fNum(f.puntoReordenLitros)} L</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                            {f.stockActualLitros != null ? `${fNum(f.stockActualLitros)} L` : <span className="text-gray-300">sin dato</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-500">
+                            {f.litrosEnProduccion > 0 ? `+${fNum(f.litrosEnProduccion)} L` : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-gray-800">
+                            {f.disponible != null ? `${fNum(f.disponible)} L` : <span className="text-gray-300">sin dato</span>}
+                          </td>
+                          <td className="px-6 py-3 text-center">
+                            <span className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 text-xs font-bold ${
+                              f.estado === 'critico' ? 'border-red-200 bg-red-50 text-red-600'
+                                : f.estado === 'bajo' ? 'border-amber-200 bg-amber-50 text-amber-600'
+                                  : f.estado === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                                    : 'border-gray-200 bg-gray-50 text-gray-400'
+                            }`}>
+                              {f.estado === 'critico' ? 'CRÍTICO' : f.estado === 'bajo' ? 'BAJO' : f.estado === 'ok' ? 'OK' : 'SIN DATO'}
+                            </span>
+                          </td>
+                        </tr>
+                      )))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Inventario actual, agrupado producto → formato → cámara */}
+              <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+                  <h3 className="font-bold text-gray-800">Inventario Actual</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Foto del último informe de stock del ERP · {inventarioAgrupado.length} productos, {stock.length} líneas.
+                  </p>
+                </div>
+                <div className="max-h-[560px] overflow-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-3 font-bold">Producto</th>
+                        <th className="px-4 py-3 font-bold">Categoría</th>
+                        <th className="px-4 py-3 font-bold">Formato</th>
+                        <th className="px-4 py-3 font-bold">Cámara</th>
+                        <th className="px-4 py-3 text-right font-bold">Cantidad</th>
+                        <th className="px-6 py-3 text-right font-bold">Litros</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {inventarioAgrupado.length === 0 && (
+                        <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-400">Sin informe de stock cargado.</td></tr>
+                      )}
+                      {inventarioAgrupado.map(grupo => {
+                        const filasCamara = grupo.formatos.reduce((n, f) => n + f.camaras.length, 0)
+                        let primeraFilaProducto = true
+                        return (
+                          <React.Fragment key={grupo.producto}>
+                            {grupo.formatos.map(formato => {
+                              let primeraFilaFormato = true
+                              return formato.camaras.map(fc => {
+                                const fila = (
+                                  <tr key={`${grupo.producto}::${formato.bucket}::${fc.camara}`} className="transition-colors hover:bg-gray-50">
+                                    {primeraFilaProducto && (
+                                      <td rowSpan={filasCamara} className="border-r border-gray-100 px-6 py-2.5 align-top font-semibold text-gray-800">
+                                        <span className="inline-flex items-center gap-2.5">
+                                          <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={32} radius={8} />
+                                          {grupo.producto}
+                                        </span>
+                                      </td>
+                                    )}
+                                    {primeraFilaProducto && (
+                                      <td rowSpan={filasCamara} className="border-r border-gray-100 px-4 py-2.5 align-top">
+                                        {grupo.categoria && (
+                                          <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${
+                                            grupo.categoria === 'cerveza' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
+                                          }`}>
+                                            {grupo.categoria}
+                                          </span>
+                                        )}
+                                      </td>
+                                    )}
+                                    {primeraFilaFormato && (
+                                      <td rowSpan={formato.camaras.length} className="border-r border-gray-100 px-4 py-2.5 align-top font-semibold text-gray-700">
+                                        {ENVASE_LABEL[formato.bucket]}
+                                      </td>
+                                    )}
+                                    <td className="px-4 py-2.5 text-gray-600">{nombreCamaraCorto(fc.camara)}</td>
+                                    <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{fNum(fc.cantidad)}</td>
+                                    <td className="px-6 py-2.5 text-right tabular-nums text-gray-600">{fc.litros != null ? `${fNum(fc.litros)} L` : '—'}</td>
+                                  </tr>
+                                )
+                                primeraFilaProducto = false
+                                primeraFilaFormato = false
+                                return fila
+                              })
+                            })}
+                            {/* Subtotal del producto: lo que pide la vista agrupada —
+                                cuánto hay en total, sin tener que sumar a mano las
+                                filas de formato×cámara de arriba. */}
+                            <tr className="bg-gray-50/70 font-bold text-gray-700">
+                              <td colSpan={4} className="px-6 py-2 text-right text-xs uppercase tracking-wide text-gray-500">
+                                Total {grupo.producto}
+                              </td>
+                              <td className="px-4 py-2 text-right tabular-nums">{fNum(grupo.cantidad)}</td>
+                              <td className="px-6 py-2 text-right tabular-nums">{grupo.litros != null ? `${fNum(grupo.litros)} L` : '—'}</td>
+                            </tr>
+                          </React.Fragment>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ VISTA 4: PLAN MAESTRO ══════════
+              Cola priorizada (estilo kanban/MRP: arriba = próximo a cocer).
+              Combina lo agendado a mano con alarmas de quiebre en vivo — por
+              producto×envase, cruzando el punto de reorden (Stock de
+              Seguridad) con el ritmo de venta real del ciclo — para
+              balancear quiebre de stock vs. sobreproducción sin inventar una
+              fórmula nueva. */}
+          {activeTab === 'plan' && (
+            <div className="flex h-full flex-col gap-6">
+
+              {/* ── Split de Envasado ──────────────────────────────────────
+                  Lo que está en el fermentador es líquido a granel, sin
+                  envase todavía. Esto responde la pregunta de quien va a
+                  envasar: de estos N litros, ¿cuánto va a cada formato? El
+                  reparto sale de la NECESIDAD de cada formato según el
+                  forecast (qué tan lejos está de su punto de reorden), no de
+                  un porcentaje fijo. */}
+              {splitFermentadores.length > 0 && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <Beaker size={18} className="text-blue-600" />
+                    <h3 className="font-bold text-blue-900">Split de Envasado</h3>
+                    <span className="rounded-full bg-blue-200/70 px-2 py-0.5 text-xs font-bold text-blue-800">
+                      {fNum(splitFermentadores.reduce((a, s) => a + s.litrosEnFermentador, 0))} L en fermentadores
+                    </span>
+                  </div>
+                  <p className="mb-2 text-sm text-blue-800/80">
+                    Lo que está fermentando todavía no tiene envase. Cada lote se reparte entre formatos y, dentro de
+                    eso, cumple tres funciones: <strong>reponer el colchón</strong> de stock de seguridad,{' '}
+                    <strong>cubrir la venta</strong> mientras llega la próxima cocción, y el <strong>excedente</strong>,
+                    que estira la cobertura hacia adelante.
+                  </p>
+                  {/* Un lote pasa 3+ semanas en el tanque: el reparto no es una
+                      decisión de una sola vez, se recalcula con cada sync. */}
+                  <p className="mb-4 flex flex-wrap items-center gap-1.5 text-xs text-blue-700/70">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                    El reparto se recalcula con cada entrada de ventas — si un formato se acelera, el split se corrige
+                    solo, sin esperar la corrida mensual del forecast.
+                    {minutosDesdeSyncStock != null && <span>· Inventario {fMinutosDesde(minutosDesdeSyncStock)}</span>}
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {splitFermentadores.map(s => (
+                      <div key={s.producto} className="rounded-lg border border-blue-200 bg-white p-4">
+                        <div className="flex items-center gap-2.5">
+                          <ProductImage nombre={s.producto} categoria={s.categoria} size={30} radius={7} />
+                          <div className="flex flex-col">
+                            <span className="font-semibold leading-tight text-gray-800">{s.producto}</span>
+                            <span className="text-[11px] text-gray-400">
+                              {s.tanques.length > 0
+                                ? s.tanques.map(t => t.nombre).join(' · ')
+                                : 'Sin tanque identificado'}
+                            </span>
+                          </div>
+                          <span className="ml-auto text-right">
+                            <span className="block text-lg font-black tabular-nums text-blue-800">{fNum(s.litrosEnFermentador)} L</span>
+                            <span className="block text-[10px] font-bold uppercase tracking-wide text-gray-400">a granel</span>
+                          </span>
+                        </div>
+
+                        {/* Fecha embarrilado ESTIMADA (la calcula el enólogo,
+                            no un hecho ya ocurrido) — es lo que conecta este
+                            panel con el Plan Maestro: hasta que no llega esta
+                            fecha, el lote no existe como producto envasado
+                            que se pueda vender. */}
+                        {s.fechaDisponibleEstimada && (() => {
+                          const hoyISO = hoyLocalISO()
+                          const atrasado = s.fechaDisponibleEstimada < hoyISO
+                          const fechaFmt = new Date(s.fechaDisponibleEstimada + 'T00:00:00Z')
+                            .toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+                          return (
+                            <p className={`mt-2 flex items-center gap-1.5 text-[11px] font-semibold ${atrasado ? 'text-amber-700' : 'text-blue-700'}`}>
+                              <CalendarDays size={12} />
+                              {atrasado
+                                ? `Debería haber salido del fermentador el ${fechaFmt} — revisar atraso`
+                                : `Sale del fermentador ≈ ${fechaFmt}${s.tanques.length > 1 ? ' (todos los tanques)' : ''}`}
+                            </p>
+                          )
+                        })()}
+
+                        {/* Lote sin forecast por formato: se muestra igual —
+                            hay que envasarlo — pero sin inventar un reparto. */}
+                        {s.reparto.length === 0 ? (
+                          <div className="mt-3 rounded-lg bg-gray-50 p-3 text-xs text-gray-500">
+                            Sin forecast por formato para este producto todavía, así que no hay con qué calcular el
+                            reparto. El lote igual hay que envasarlo: defínelo a mano al sacarlo del tanque.
+                          </div>
+                        ) : (
+                        <>
+                        {/* Barra apilada: el reparto de un vistazo. */}
+                        <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-gray-100">
+                          {s.reparto.map(r => (
+                            <div
+                              key={r.envase}
+                              title={`${ENVASE_LABEL[r.envase] ?? r.envase}: ${r.porcentaje}%`}
+                              style={{ width: `${r.porcentaje}%`, backgroundColor: COLOR_ENVASE[r.envase] }}
+                            />
+                          ))}
+                        </div>
+
+                        <div className="mt-3 flex flex-col gap-1.5">
+                          {s.reparto.map(r => (
+                            <div key={r.envase} className="flex items-center gap-2 text-sm">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: COLOR_ENVASE[r.envase] }} />
+                              <span className="w-24 shrink-0 text-xs font-bold uppercase tracking-wide text-gray-500">
+                                {ENVASE_LABEL[r.envase] ?? r.envase}
+                              </span>
+                              <span className="w-12 shrink-0 text-right text-sm font-black tabular-nums text-gray-800">{r.porcentaje}%</span>
+                              <span className="w-20 shrink-0 text-right text-sm font-bold tabular-nums text-blue-800">{fNum(r.litros)} L</span>
+                              {/* Los tres destinos, para que el número no sea mágico. */}
+                              <span className="ml-auto text-right text-[11px] text-gray-400">
+                                {[
+                                  r.litrosColchon > 0 ? `${fNum(r.litrosColchon)} colchón` : null,
+                                  r.litrosVentanaReposicion > 0 ? `${fNum(r.litrosVentanaReposicion)} venta` : null,
+                                  r.litrosExcedente > 0 ? `${fNum(r.litrosExcedente)} excedente` : null,
+                                ].filter(Boolean).join(' + ')} L
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* ── Destino del lote: para qué sirve, no sólo en qué
+                            envase queda. El colchón no se vende (está para
+                            absorber variabilidad); lo demás sí. ── */}
+                        <div className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Colchón</p>
+                            <p className="mt-1 text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosColchon)} L</p>
+                            <p className="text-[10px] text-gray-400">repone stock de seguridad</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Venta reposición</p>
+                            <p className="mt-1 text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosVentanaReposicion)} L</p>
+                            <p className="text-[10px] text-gray-400">hasta la próxima cocción</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-blue-600">Excedente</p>
+                            <p className="mt-1 text-sm font-bold tabular-nums text-blue-800">{fNum(s.excedente)} L</p>
+                            <p className="text-[10px] text-gray-400">
+                              {s.semanasExcedente != null && s.excedente > 0
+                                ? `≈ ${s.semanasExcedente.toLocaleString('es-CL')} semanas más`
+                                : 'sin excedente'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {!s.cubreTodaLaNecesidad ? (
+                          <p className="mt-2.5 text-[11px] font-semibold text-amber-700">
+                            El lote no alcanza a cubrir la necesidad de todos los formatos — se reparte a prorrata de ella.
+                          </p>
+                        ) : s.cubreVentaHasta && s.semanasVentaTotal != null && (
+                          <p className="mt-2.5 text-[11px] text-gray-500">
+                            Con este lote la venta queda cubierta <strong>≈ {s.semanasVentaTotal.toLocaleString('es-CL')} semanas</strong>,
+                            hasta cerca del{' '}
+                            {new Date(s.cubreVentaHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
+                            {' '}(estimado con la demanda proyectada
+                            {s.fechaDisponibleEstimada && s.fechaDisponibleEstimada > hoyLocalISO()
+                              ? ', contado desde que salga del fermentador'
+                              : ''}
+                            ).
+                          </p>
+                        )}
+
+                        {s.ajustadoPorVentas && (
+                          <p className="mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                            <TrendingUp size={11} />
+                            Reparto ya corregido: algún formato se está vendiendo más rápido de lo que proyectaba el forecast.
+                          </p>
+                        )}
+                        </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {sugerenciasPlan.length > 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <AlertTriangle size={18} className="text-amber-600" />
+                    <h3 className="font-bold text-amber-900">Alarmas de quiebre de stock</h3>
+                    <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-xs font-bold text-amber-800">
+                      {sugerenciasPlan.length}
+                    </span>
+                  </div>
+                  <p className="mb-4 text-sm text-amber-800/80">
+                    Por producto y <strong>formato</strong> (no por estilo completo — un mismo producto puede ir
+                    sobrado en lata y crítico en barril). Cruza el stock de seguridad, el forecast y el{' '}
+                    <strong>ritmo de venta real de las últimas 4 semanas (lunes a viernes)</strong> para estimar cuándo se agota cada uno.
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    {alarmasPorProducto.map(grupo => (
+                      <div key={grupo.producto} className="overflow-hidden rounded-lg border border-amber-200 bg-white shadow-sm">
+                        <div className="flex items-center gap-2.5 border-b border-amber-100 bg-amber-50/60 px-4 py-2.5">
+                          <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={30} radius={7} />
+                          <span className="font-semibold text-gray-800">{grupo.producto}</span>
+                          <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-xs font-bold text-amber-800">
+                            {grupo.items.length} {grupo.items.length === 1 ? 'formato' : 'formatos'} en alerta
+                          </span>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {grupo.items.map((s, i) => {
+                            // diasHastaQuiebre viene en días HÁBILES (lun-vie) — leadTimeSemanas se
+                            // pasa a días hábiles (×5) para comparar en la misma unidad.
+                            const urgente = s.diasHastaQuiebre != null && s.diasHastaQuiebre <= s.leadTimeSemanas * 5
+                            return (
+                              <div key={`${s.envase}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-gray-50" title={s.motivo}>
+                                <span className="w-24 shrink-0 text-xs font-bold uppercase tracking-wide text-amber-700">
+                                  {ENVASE_LABEL[s.envase] ?? s.envase}
+                                </span>
+                                <div className="min-w-[180px] flex-1">
+                                  {s.fechaEstimadaQuiebre ? (
+                                    <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold ${urgente ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                      <AlertTriangle size={12} />
+                                      Se agota en ~{s.diasHastaQuiebre} días hábiles
+                                      ({new Date(s.fechaEstimadaQuiebre + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })})
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-500">
+                                      Sin ventas en 4 semanas — sin fecha estimada
+                                    </span>
+                                  )}
+                                </div>
+                                {/* Dos números lado a lado, cada uno con su etiqueta — nunca un
+                                    número suelto: "1.697 L" sin contexto se leyó una vez como
+                                    "tengo 1.697 L" cuando en realidad es lo que FALTA producir
+                                    (el disponible real era 314 L). */}
+                                <div className="flex shrink-0 items-center gap-3 text-right">
+                                  <div className="w-24">
+                                    <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Disponible</p>
+                                    <p className="text-sm font-bold tabular-nums text-gray-500">{fNum(s.disponibleLitros)} L</p>
+                                    {s.disponibleUnidades != null && (
+                                      <p className="text-[11px] text-gray-400">{fNum(s.disponibleUnidades)} {UNIDAD_ENVASE[s.envase]}</p>
+                                    )}
+                                  </div>
+                                  <div className="w-20">
+                                    <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-amber-600">A producir</p>
+                                    <p className="text-sm font-bold tabular-nums text-gray-800">{fNum(s.litrosSugeridos)} L</p>
+                                  </div>
+                                </div>
+                                <button
+                                  disabled={guardandoPlan}
+                                  onClick={() => setSugerenciaModal(s)}
+                                  className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                                >
+                                  Agregar al plan
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+                  <div>
+                    <h3 className="font-bold text-gray-800">Plan Maestro de Producción</h3>
+                    <p className="text-xs text-gray-500">
+                      Cola priorizada — la fila de arriba es la próxima cocción. Usa las flechas para reordenar.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setMostrarFormLote(v => !v)}
+                    className="flex items-center gap-2 rounded-lg bg-[#0F3D2E] px-4 py-2 text-sm font-bold text-white hover:bg-[#1A5441]"
+                  >
+                    {mostrarFormLote ? <X size={16} /> : <Plus size={16} />}
+                    {mostrarFormLote ? 'Cerrar' : 'Agregar lote'}
+                  </button>
+                </div>
+
+                {mostrarFormLote && (
+                  <FormNuevoLote guardando={guardandoPlan} onCancelar={() => setMostrarFormLote(false)} onGuardar={agregarLote} />
+                )}
+
+                <div className="flex-1 overflow-auto">
+                  {plan.length === 0 ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-gray-400">
+                      <CalendarIcon size={40} className="opacity-50" />
+                      <p className="text-sm">
+                        Todavía no hay lotes en el plan. Agrega uno manual o confirma alguna sugerencia de arriba.
+                      </p>
+                    </div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                        <tr>
+                          <th className="w-16 px-4 py-2.5 text-left">Orden</th>
+                          <th className="px-4 py-2.5 text-left">Producto</th>
+                          <th className="px-4 py-2.5 text-right">Litros</th>
+                          <th className="px-4 py-2.5 text-left">Fecha planificada</th>
+                          <th className="px-4 py-2.5 text-left">Origen</th>
+                          <th className="px-4 py-2.5 text-left">Estado</th>
+                          <th className="px-4 py-2.5 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {plan.map((lote, idx) => {
+                          const atrasado = lote.estado === 'planificado' && lote.fechaPlanificada < hoyLocalISO()
+                          return (
+                            <tr key={lote.id} className={atrasado ? 'bg-red-50/40' : undefined}>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-1">
+                                  <span className="w-5 text-center font-bold tabular-nums text-gray-400">{idx + 1}</span>
+                                  <div className="flex flex-col">
+                                    <button
+                                      disabled={idx === 0}
+                                      onClick={() => moverLote(lote.id, -1)}
+                                      className="rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-20"
+                                      title="Subir prioridad"
+                                    >
+                                      <ArrowUp size={14} />
+                                    </button>
+                                    <button
+                                      disabled={idx === plan.length - 1}
+                                      onClick={() => moverLote(lote.id, 1)}
+                                      className="rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-20"
+                                      title="Bajar prioridad"
+                                    >
+                                      <ArrowDown size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2.5">
+                                  <ProductImage nombre={lote.producto} categoria={lote.categoria} size={30} radius={7} />
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-gray-800">{lote.producto}</span>
+                                    {lote.motivo && <span className="text-xs text-gray-400">{lote.motivo}</span>}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-700">
+                                {fNum(lote.litrosPlanificados)} L
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={atrasado ? 'font-semibold text-red-600' : 'text-gray-600'}>
+                                  {new Date(lote.fechaPlanificada + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}
+                                  {atrasado && ' · atrasado'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                                  lote.origen === 'sugerido' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {lote.origen === 'sugerido' ? 'Sugerido' : 'Manual'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                                  lote.estado === 'en_curso' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {lote.estado === 'en_curso' ? 'En curso' : 'Planificado'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {lote.estado === 'planificado' && (
+                                    <button
+                                      onClick={() => cambiarEstadoLote(lote.id, 'en_curso')}
+                                      className="rounded-lg px-2 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50"
+                                      title="Marcar en curso"
+                                    >
+                                      Iniciar
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => cambiarEstadoLote(lote.id, 'completado')}
+                                    className="rounded-lg p-1.5 text-green-600 hover:bg-green-50"
+                                    title="Marcar completado"
+                                  >
+                                    <CheckCircle2 size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => cambiarEstadoLote(lote.id, 'cancelado')}
+                                    className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"
+                                    title="Cancelar lote"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ VISTA 5: INSUMOS Y COMPRAS ══════════
+              Cruza el Plan Maestro con las recetas cargadas: cada receta
+              escala linealmente al litraje real de cada lote, y se suma
+              entre todos los lotes activos que usan el mismo insumo. El
+              precio queda pendiente (columna "Costo" vacía) hasta que exista
+              una lista de precios — decisión del usuario, 7-sep-2026: ver
+              la necesidad en CANTIDAD primero, valorizar después. */}
+          {activeTab === 'insumos' && (
+            <div className="flex h-full flex-col gap-6">
+
+              {lotesSinReceta.length > 0 && (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+                  <div>
+                    <p className="font-bold">
+                      {lotesSinReceta.length} {lotesSinReceta.length === 1 ? 'lote' : 'lotes'} del Plan Maestro sin receta cargada
+                    </p>
+                    <p className="mt-1 text-amber-700">
+                      No se puede calcular su necesidad de insumos: {lotesSinReceta.map(l => `${l.producto} (${fNum(l.litrosPlanificados)} L)`).join(', ')}.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+                  <div>
+                    <h3 className="font-bold text-gray-800">Necesidad de Insumos — Plan Maestro</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {necesidadInsumos.length} insumos, escalados desde {planProduccion.filter(l => l.estado === 'planificado' || l.estado === 'en_curso').length} lotes activos de la cola.
+                      {' '}El disponible sale del último inventario de insumos cargado{stockInsumosVacio ? ' — todavía no hay ninguno.' : '.'}
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={busquedaInsumo}
+                      onChange={e => setBusquedaInsumo(e.target.value)}
+                      placeholder="Buscar insumo o categoría..."
+                      className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 sm:w-64"
+                    />
+                    <svg className="absolute left-3 top-3 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-4 font-bold">Insumo</th>
+                        <th className="px-6 py-4 font-bold">Categoría</th>
+                        <th className="px-6 py-4 text-right font-bold">Necesidad Bruta</th>
+                        <th className="px-6 py-4 text-right font-bold">Disponible</th>
+                        <th className="px-6 py-4 text-right font-bold text-amber-700">Necesidad Neta</th>
+                        <th className="px-6 py-4 text-right font-bold">Costo Estimado</th>
+                        <th className="px-6 py-4 font-bold">Lotes que lo usan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {insumosFiltrados.length === 0 && (
+                        <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">
+                          {necesidadInsumos.length === 0
+                            ? 'No hay lotes activos en el Plan Maestro que necesiten insumos ahora mismo.'
+                            : `Sin resultados para "${busquedaInsumo}".`}
+                        </td></tr>
+                      )}
+                      {insumosFiltrados.map(row => {
+                        const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
+                        const lotesResumen = [...new Map(row.lotes.map(l => [l.producto, l])).values()]
+                        return (
+                          <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
+                            <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
+                            <td className="px-6 py-3">
+                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
+                            </td>
+                            <td className="px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
+                            <td className="px-6 py-3 text-right tabular-nums text-gray-500">
+                              {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
+                            </td>
+                            <td className={`px-6 py-3 text-right font-bold tabular-nums text-gray-900 ${row.necesidadNeta > 0 ? 'bg-amber-50' : ''}`}>
+                              {row.necesidadNeta > 0 ? fCantidadInsumo(row.necesidadNeta, row.unidadBase) : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-6 py-3 text-right tabular-nums text-gray-400">
+                              {row.costoNecesidad != null ? `$${fNum(row.costoNecesidad)}` : <span title="Sin precio cargado todavía">—</span>}
+                            </td>
+                            <td className="px-6 py-3 text-xs text-gray-500">
+                              {lotesResumen.map(l => l.producto).join(', ')}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════ VISTA 6: PRESUPUESTO ══════════ */}
+          {activeTab === 'presupuesto' && (
+            <div className="flex flex-col gap-6 xl:h-full xl:flex-row">
+
+              <div className="flex flex-[3] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
+                <div className="mb-6">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-lg font-bold text-gray-800">Gasto Proyectado en Insumos Productivos</h3>
+                    <BadgeDemo />
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Presupuesto mensual separado por línea de negocio (Cerveza y Kombucha).
+                  </p>
+                </div>
+
+                <div className="relative min-h-[360px] w-full flex-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={DEMO_budgetData} margin={{ top: 20, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 600 }} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dx={-6} tickFormatter={(val: number) => `$${val / 1000}k`} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        formatter={(value, name) => [`$${Number(value).toLocaleString('es-CL')}`, name]}
+                      />
+                      <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#374151' }} />
+
+                      <Bar dataKey="cerveza" name="Insumos Cerveza" stackId="a" fill={COLORS.darkGreen} />
+                      <Bar dataKey="kombucha" name="Insumos Kombucha" stackId="a" fill={COLORS.amber} radius={[4, 4, 0, 0]} />
+                      <Line type="monotone" dataKey="tendencia" name="Tendencia Total" stroke={COLORS.gray} strokeWidth={2} strokeDasharray="4 4" dot={false} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="flex flex-1 flex-col gap-6 xl:max-w-sm">
+                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">Resumen Gasto Anual</h3>
+                  <div className="mb-1 text-sm text-gray-500">Total Proyectado (Insumos)</div>
+                  <div className="mb-6 text-4xl font-black text-gray-900">$978.000</div>
+
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                      <div>
+                        <div className="text-sm font-bold text-gray-800">Cerveza Artesanal</div>
+                        <div className="text-xs text-gray-500">Malta, lúpulo, levadura, etc.</div>
+                      </div>
+                      <div className="font-bold text-gray-900">$645.000</div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50/50 p-3">
+                      <div>
+                        <div className="text-sm font-bold text-gray-800">Kombucha (La Ida)</div>
+                        <div className="text-xs text-gray-500">Té, frutas, scoby, etc.</div>
+                      </div>
+                      <div className="font-bold text-amber-900">$333.000</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 rounded-xl border border-green-200 bg-green-50 p-6 shadow-sm">
+                  <div className="flex items-center gap-2 font-bold text-green-800">
+                    <CircleDollarSign size={20} />
+                    Flujo de Caja Estimado
+                  </div>
+                  <p className="text-sm leading-relaxed text-green-700">
+                    La cobranza esperada a 3 meses cubre el <strong>145%</strong> del gasto proyectado en insumos para
+                    el mismo período, asumiendo un 70% de cartera sin deuda. Flujo neto positivo.
+                  </p>
+                  <BadgeDemo />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Popup de confirmación de una alarma/necesidad — se puede abrir
+              desde el Plan Maestro o desde Stock de Seguridad, así que vive
+              fuera de los bloques por tab (si quedara dentro de uno, no
+              renderizaría al abrirlo desde el otro). */}
+          {sugerenciaModal && (
+            <ModalConfirmarLote
+              sugerencia={sugerenciaModal}
+              guardando={guardandoPlan}
+              onCancelar={() => setSugerenciaModal(null)}
+              onConfirmar={({ litrosPlanificados, fechaPlanificada, necesidadCubrir, cubreHasta }) => agregarLote({
+                producto: sugerenciaModal.producto,
+                categoria: sugerenciaModal.categoria,
+                litrosPlanificados,
+                fechaPlanificada,
+                origen: 'sugerido',
+                motivo: sugerenciaModal.motivo,
+                necesidadCubrir,
+                cubreHasta,
+              })}
+            />
+          )}
+        </div>
+      </main>
+    </div>
+  )
+}

@@ -181,6 +181,12 @@ export interface DocumentoVencido {
   /** Documento de co-packing a terceros: no es deuda del área comercial. */
   esMaquila: boolean
   items: ItemDocumento[]
+  /**
+   * N° de factura del ERP (columna "Factura" del informe de ventas, viaja en
+   * `ventas.numero_factura`). null cuando el pedido todavía no se facturó o
+   * es anterior a que se empezara a guardar esta columna.
+   */
+  numeroFactura: string | null
 }
 
 /** Plata vencida en un tramo que ninguna factura del informe de ventas explica. */
@@ -208,6 +214,8 @@ export interface DeudorEntrada {
 export interface FilaVenta extends LineaVenta {
   pedido: string | null
   fecha_pedido: string
+  /** N° de factura del ERP (columna "Factura" del informe de ventas). */
+  numero_factura: string | null
 }
 
 export interface DetalleCobranza {
@@ -347,6 +355,10 @@ function armarDocumentos(ventas: FilaVenta[], diasPago: number, hoy: string): Do
       abonoParcial: false,
       esMaquila: filas.every(f => esLineaMaquila(f.producto)),
       items,
+      // Debería ser la misma para todas las líneas del pedido (una factura
+      // por documento); si alguna línea no la trae (nota de crédito, fila
+      // vieja del histórico) se toma la primera que sí la tenga.
+      numeroFactura: filas.find(f => f.numero_factura)?.numero_factura ?? null,
     })
   }
   return docs.sort((a, b) => b.diasMora - a.diasMora)
