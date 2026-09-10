@@ -378,12 +378,13 @@ def main() -> int:
                 continue
 
             huerfanos = resultado.get("pedidosHuerfanosBorrados") or 0
-            huerfanos_total += huerfanos
+            huerfanos_pend = resultado.get("pedidosPendientesHuerfanosBorrados") or 0
+            huerfanos_total += huerfanos + huerfanos_pend
             omitidos = resultado.get("huerfanosOmitidosPorSeguridad") or 0
             omitidos_total += omitidos
             print(f"   insertadas={resultado.get('insertadas')} "
                   f"rango={resultado.get('fechaMin')}->{resultado.get('fechaMax')} "
-                  f"huerfanos_borrados={huerfanos}"
+                  f"huerfanos_borrados={huerfanos} huerfanos_pendientes_borrados={huerfanos_pend}"
                   + (f" ⚠ OMITIDOS_POR_SEGURIDAD={omitidos} (revisar manualmente)" if omitidos else ""))
         browser.close()
 

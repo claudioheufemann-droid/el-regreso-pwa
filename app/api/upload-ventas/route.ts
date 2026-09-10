@@ -469,6 +469,7 @@ export async function POST(req: NextRequest) {
   // menor que el de repetir el incidente de agosto.
   const MAX_HUERFANOS_POR_SYNC = 50
   let pedidosHuerfanosBorrados = 0
+  let pedidosPendientesHuerfanosBorrados = 0
   let huerfanosOmitidosPorSeguridad = 0
 
   if (ventanaReconciliacionValida) {
@@ -515,6 +516,76 @@ export async function POST(req: NextRequest) {
           break
         }
         pedidosHuerfanosBorrados += lote.length
+      }
+    }
+
+    // ── Reconciliación de pedidos PENDIENTES huérfanos ─────────────────────
+    // El bloque de arriba nunca toca un pedido con fecha_entrega NULL (no hay
+    // fecha de entrega contra la cual acotar una ventana segura). Pero un
+    // pedido "Sin facturar aún" que el ERP cancela/reemplaza tampoco avisa:
+    // simplemente deja de aparecer, igual que uno entregado — y sin este
+    // bloque queda huérfano para siempre, sumando de más en el cliente (caso
+    // real: Rausch Restobar, pedido #00054390, sep-2026).
+    //
+    // Señal segura sin inferir ninguna ventana de fechas: el sync borra e
+    // reinserta la fila completa de cada pedido en CADA corrida (nunca hace
+    // UPDATE) — created_at es entonces "última vez que este pedido apareció
+    // en un archivo del ERP", no la fecha del pedido (ver migración
+    // revierte_creado_en_de_pedidos_cliente_no_confiable.sql, que rechazó
+    // usar created_at como fecha visible por esto mismo — pero es exactamente
+    // la señal correcta para "¿lo sigue devolviendo el ERP?"). El cron pide
+    // el período activo completo con "incluir pendientes" cada 15 min en
+    // horario comercial, así que un pendiente vivo se refresca seguido; uno
+    // con más de UMBRAL_HORAS sin refrescarse ya no viene en ningún archivo.
+    // Umbral generoso para absorber fines de semana/fuera de horario sin
+    // falsos positivos. Mismo circuit breaker que arriba, mismo criterio de
+    // "sólo pedidos con formato numérico real".
+    const UMBRAL_HORAS_PENDIENTE_HUERFANO = 48
+    const limitePendiente = new Date(
+      Date.now() - UMBRAL_HORAS_PENDIENTE_HUERFANO * 3600 * 1000
+    ).toISOString()
+
+    const candidatosPendientes = new Set<string>()
+    let selPendError: { message: string } | null = null
+    for (let offset = 0; ; offset += PAGE) {
+      const { data: filas, error } = await supabase
+        .from('ventas')
+        .select('pedido')
+        .is('fecha_entrega', null)
+        .not('pedido', 'is', null)
+        .lt('created_at', limitePendiente)
+        .range(offset, offset + PAGE - 1)
+
+      if (error) {
+        selPendError = error
+        console.error('[upload-ventas] error leyendo candidatos a pendiente huérfano:', error.message)
+        break
+      }
+      for (const f of filas ?? []) {
+        const p = f.pedido as string
+        if (esPedidoReal(p) && !pedidosEnArchivoSet.has(p)) candidatosPendientes.add(p)
+      }
+      if (!filas || filas.length < PAGE) break
+    }
+
+    if (!selPendError) {
+      if (candidatosPendientes.size > MAX_HUERFANOS_POR_SYNC) {
+        huerfanosOmitidosPorSeguridad += candidatosPendientes.size
+        console.error(
+          `[upload-ventas] Reconciliación de pendientes abortada por seguridad: ` +
+          `${candidatosPendientes.size} candidatos (tope ${MAX_HUERFANOS_POR_SYNC}). Revisar manualmente.`
+        )
+      } else if (candidatosPendientes.size > 0) {
+        const lista = [...candidatosPendientes]
+        for (let i = 0; i < lista.length; i += 500) {
+          const lote = lista.slice(i, i + 500)
+          const { error: deletePendHuerfanoError } = await supabase.from('ventas').delete().in('pedido', lote)
+          if (deletePendHuerfanoError) {
+            console.error('[upload-ventas] error borrando pendientes huérfanos:', deletePendHuerfanoError.message)
+            break
+          }
+          pedidosPendientesHuerfanosBorrados += lote.length
+        }
       }
     }
   }
@@ -585,6 +656,7 @@ export async function POST(req: NextRequest) {
     entregadas: insertadas - sinEntregar,
     pendientesDeEntrega: sinEntregar,
     pedidosHuerfanosBorrados,
+    pedidosPendientesHuerfanosBorrados,
     huerfanosOmitidosPorSeguridad,
     reconciliacionActiva: ventanaReconciliacionValida,
     prediccionesNuevas,
