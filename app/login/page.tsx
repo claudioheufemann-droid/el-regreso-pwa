@@ -13,8 +13,30 @@ export default function LoginPage() {
   const [error, setError]             = useState('')
   const [loading, setLoading]         = useState(false)
   const [googleLoading, setGLoading]  = useState(false)
+  /** "¿Olvidaste tu contraseña?" reemplaza el form de login por uno de sólo
+   *  email en vez de navegar a otra página — evita perder el contexto visual
+   *  de la pantalla de login por un flujo tan corto. */
+  const [modo, setModo] = useState<'login' | 'olvide'>('login')
+  const [resetEnviado, setResetEnviado] = useState(false)
   const router   = useRouter()
   const supabase = createClient()
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+    })
+    setLoading(false)
+    // No se distingue "email no existe" de "sí existe" en el mensaje — evita
+    // que este formulario sirva para confirmar qué correos están registrados.
+    if (resetError && resetError.status !== 400) {
+      setError('No se pudo enviar el correo. Intenta de nuevo en un momento.')
+      return
+    }
+    setResetEnviado(true)
+  }
 
   async function handleGoogleLogin() {
     setGLoading(true)
@@ -209,13 +231,64 @@ export default function LoginPage() {
                 </svg>
               </div>
               <div>
-                <h2 style={{ fontSize:16, fontWeight:700, color:'#F0E8D4', margin:0, lineHeight:1.2 }}>Bienvenido</h2>
+                <h2 style={{ fontSize:16, fontWeight:700, color:'#F0E8D4', margin:0, lineHeight:1.2 }}>
+                  {modo === 'login' ? 'Bienvenido' : 'Recuperar contraseña'}
+                </h2>
                 <p style={{ fontSize:12, color:'rgba(255,255,255,0.28)', margin:'1px 0 0', fontWeight:400 }}>
-                  Ingresa tus credenciales para continuar.
+                  {modo === 'login' ? 'Ingresa tus credenciales para continuar.' : 'Te enviaremos un link para elegir una nueva.'}
                 </p>
               </div>
             </div>
 
+            {modo === 'olvide' ? (
+              <form onSubmit={handleReset} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {resetEnviado ? (
+                  <p style={{ fontSize:13, color:'#C8BEA4', textAlign:'center', padding:'8px 0 4px' }}>
+                    Si <strong>{email}</strong> tiene una cuenta, le llegará un correo con el link para elegir una
+                    contraseña nueva.
+                  </p>
+                ) : (
+                  <>
+                    <div>
+                      <label style={{ display:'block', fontSize:9, fontWeight:700, color:'rgba(212,175,55,0.55)',
+                        letterSpacing:'2.5px', textTransform:'uppercase', marginBottom:6 }}>
+                        Correo Corporativo
+                      </label>
+                      <div style={{ position:'relative' }}>
+                        <Mail size={13} style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)',
+                          color:'rgba(255,255,255,0.22)', pointerEvents:'none' }}/>
+                        <input className="lr-input" type="email" value={email}
+                          onChange={e=>setEmail(e.target.value)}
+                          placeholder="tu@elregresobeer.com" required autoComplete="email"
+                          style={{ width:'100%', padding:'11px 14px 11px 38px', background:'#0E0C09',
+                            border:'1px solid rgba(255,255,255,0.08)', borderRadius:11,
+                            fontSize:14, color:'#E8DFC8', boxSizing:'border-box',
+                            fontFamily:'inherit' }}/>
+                      </div>
+                    </div>
+                    {error && (
+                      <p style={{ fontSize:11.5, color:'#FF7575', textAlign:'center',
+                        background:'rgba(255,107,107,0.06)', padding:'8px 12px', borderRadius:9, margin:0,
+                        border:'1px solid rgba(255,107,107,0.14)' }}>{error}</p>
+                    )}
+                    <button type="submit" disabled={loading} className="lr-submit"
+                      style={{ width:'100%', padding:'13px 20px',
+                        background: loading?'rgba(212,175,55,0.4)':'#D4AF37',
+                        border:'none', borderRadius:11, fontSize:12, fontWeight:700,
+                        letterSpacing:'1.5px', textTransform:'uppercase', color:'#0A0700',
+                        cursor: loading?'not-allowed':'pointer', marginTop:2 }}>
+                      {loading ? 'Enviando...' : 'Enviar link de recuperación'}
+                    </button>
+                  </>
+                )}
+                <button type="button" className="lr-forgot" onClick={() => { setModo('login'); setResetEnviado(false); setError('') }}
+                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:11.5,
+                    color:'rgba(255,255,255,0.35)', fontWeight:500, padding:0, fontFamily:'inherit',
+                    alignSelf:'center', marginTop:4 }}>
+                  ← Volver a iniciar sesión
+                </button>
+              </form>
+            ) : (
             <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', gap:10 }}>
 
               {/* Email */}
@@ -265,6 +338,7 @@ export default function LoginPage() {
               {/* Forgot */}
               <div style={{ display:'flex', justifyContent:'flex-end', marginTop:-4 }}>
                 <button type="button" className="lr-forgot"
+                  onClick={() => { setModo('olvide'); setError('') }}
                   style={{ background:'none', border:'none', cursor:'pointer',
                     fontSize:11, color:'rgba(212,175,55,0.42)', fontWeight:500,
                     padding:0, fontFamily:'inherit', transition:'color 0.15s' }}>
@@ -334,6 +408,7 @@ export default function LoginPage() {
               </button>
 
             </form>
+            )}
           </div>
 
           {/* ── FOOTER (afuera de la card, sobre fondo negro) ── */}
