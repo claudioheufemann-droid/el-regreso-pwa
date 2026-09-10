@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getServerUser } from '@/lib/auth'
 
 // Estado de las sincronizaciones automáticas (Clientes/Deudores/Stock/Barriles)
 // para mostrar en el admin dentro de la app, sin tener que ir a GitHub Actions
 // a revisar. Lee `erp_sync_log`, que escriben los endpoints /api/*/upload en
 // cada corrida (automática vía el workflow de GitHub, o manual desde acá).
 export async function GET() {
+  if (!await getServerUser()) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_KEY
   if (!url || !key) {

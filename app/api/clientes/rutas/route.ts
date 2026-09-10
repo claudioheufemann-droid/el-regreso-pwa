@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { getServerUser } from '@/lib/auth'
+
+// Todo este archivo usa service role (bypassa RLS): GET devuelve la cartera
+// completa con contacto, y PATCH/PUT/DELETE reescriben las rutas de despacho
+// de cualquier cliente. Sin sesión no se toca nada de esto.
+async function sinSesion() {
+  return !await getServerUser()
+}
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -10,6 +18,8 @@ function getAdminClient() {
 
 // GET: lista de rutas con conteo y clientes
 export async function GET() {
+  if (await sinSesion()) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
   let supabase: ReturnType<typeof getAdminClient>
   try { supabase = getAdminClient() } catch (e: unknown) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
@@ -54,6 +64,8 @@ export async function GET() {
 
 // PATCH: renombrar una ruta (actualiza ruta_despacho en todos los clientes)
 export async function PATCH(req: Request) {
+  if (await sinSesion()) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
   const { old_ruta, new_ruta } = await req.json()
 
   if (!old_ruta || !new_ruta) {
@@ -76,6 +88,8 @@ export async function PATCH(req: Request) {
 
 // PUT: asignar clientes a una ruta (puede ser null para quitar la ruta)
 export async function PUT(req: Request) {
+  if (await sinSesion()) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
   const { cliente_ids, ruta } = await req.json()
 
   if (!Array.isArray(cliente_ids) || cliente_ids.length === 0) {
@@ -98,6 +112,8 @@ export async function PUT(req: Request) {
 
 // DELETE: eliminar una ruta (pone ruta_despacho en null para todos sus clientes)
 export async function DELETE(req: Request) {
+  if (await sinSesion()) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
   const { ruta } = await req.json()
 
   if (!ruta) return NextResponse.json({ error: 'Falta parámetro ruta' }, { status: 400 })

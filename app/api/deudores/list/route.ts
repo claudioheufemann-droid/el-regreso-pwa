@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { getServerUser } from '@/lib/auth'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -9,6 +10,11 @@ function getAdminClient() {
 }
 
 export async function GET() {
+  // Este endpoint usa service role (bypassa RLS) y devuelve la cartera
+  // completa: razón social, contacto y deuda de cada cliente. Sin este gate
+  // queda expuesta a cualquiera que sepa la URL.
+  if (!await getServerUser()) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
   try {
     let supabase: ReturnType<typeof getAdminClient>
     try {

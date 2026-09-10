@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getServerUser } from '@/lib/auth'
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -48,6 +49,8 @@ function buildQuery(c: { direccion_google_maps: string | null; direccion: string
 }
 
 export async function POST() {
+  if (!await getServerUser()) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_KEY
   if (!url || !key) {
@@ -100,6 +103,8 @@ export async function POST() {
 }
 
 export async function GET() {
+  if (!await getServerUser()) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_KEY
   if (!url || !key) return NextResponse.json({ error: 'No configurado' }, { status: 500 })
