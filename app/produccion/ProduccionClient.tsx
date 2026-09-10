@@ -633,6 +633,23 @@ export default function ProduccionClient({
   const [coberturaFecha, setCoberturaFecha] = useState(() => hoyLocalISO(new Date(Date.now() + 30 * 86400000)))
   const productoCobertura = coberturaProducto || productosDisponibles[0] || ''
 
+  /* ── Litros por lata, por producto ───────────────────────────────────────
+     El bucket 'lata' fusiona 354ml y 473ml (ver EnvaseBucket en reglas.ts),
+     así que no hay una conversión litros→latas fija: hay que sacarla del
+     propio stock, donde el nombre crudo del ERP trae el tamaño ("Lata (473
+     ml) de X"). En la práctica cada producto usa SIEMPRE un solo tamaño
+     (verificado contra datos reales), así que basta con tomar el litraje de
+     cualquier fila de stock en lata de ese producto y dividirlo por su
+     cantidad de unidades. */
+  const litrosPorLataPorProducto = useMemo(() => {
+    const mapa = new Map<string, number>()
+    for (const s of stock) {
+      if (s.envaseBucket !== 'lata' || mapa.has(s.producto) || s.litros == null || s.cantidad <= 0) continue
+      mapa.set(s.producto, s.litros / s.cantidad)
+    }
+    return mapa
+  }, [stock])
+
   const envasesCoberturaDisponibles = useMemo(
     () => ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === productoCobertura && s.envaseBucket === b)),
     [series, productoCobertura]
@@ -659,8 +676,11 @@ export default function ProduccionClient({
     const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
     const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
 
-    return { demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, categoria: serie.categoria as 'cerveza' | 'kombucha' | null }
-  }, [productoCobertura, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes])
+    const litrosPorLata = envaseSel === 'lata' ? litrosPorLataPorProducto.get(productoCobertura) ?? null : null
+    const latasACubrir = litrosPorLata != null && necesidadNeta != null ? Math.ceil(necesidadNeta / litrosPorLata) : null
+
+    return { demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, categoria: serie.categoria as 'cerveza' | 'kombucha' | null, latasACubrir, litrosPorLata }
+  }, [productoCobertura, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
 
   /* ── Desglose por formato de envasado ────────────────────────────────────
      Se cuece por PRODUCTO (un solo lote), y ese lote se envasa después en
@@ -681,13 +701,15 @@ export default function ProduccionClient({
       const filaStock = stockSeguridad.find(s => s.nivel === 'producto_envase' && s.mes === primerMesStock && s.producto === productoCobertura && s.envase === envase)
       const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
       const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
-      return { envase, demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta }
+      const litrosPorLata = envase === 'lata' ? litrosPorLataPorProducto.get(productoCobertura) ?? null : null
+      const latasACubrir = litrosPorLata != null && necesidadNeta != null ? Math.ceil(necesidadNeta / litrosPorLata) : null
+      return { envase, demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, latasACubrir }
     })
     if (filas.length === 0) return null
 
     const totalNecesidad = filas.reduce((acc, f) => acc + (f.necesidadNeta ?? 0), 0)
     return { filas, totalNecesidad }
-  }, [productoCobertura, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes])
+  }, [productoCobertura, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
 
   /* ── Serie seleccionada → filas para Recharts ─────────────────────────
      La proyección arranca repitiendo el último mes real, para que las dos
@@ -1972,6 +1994,11 @@ export default function ProduccionClient({
                       <p className="mt-1 text-2xl font-black tabular-nums text-amber-800">
                         {resultadoCobertura.necesidadNeta != null ? `${fNum(resultadoCobertura.necesidadNeta)} L` : '—'}
                       </p>
+                      {resultadoCobertura.latasACubrir != null && (
+                        <p className="mt-1 text-xs font-bold text-amber-700">
+                          ≈ {fNum(resultadoCobertura.latasACubrir)} latas de {Math.round((resultadoCobertura.litrosPorLata ?? 0) * 1000)} ml a comprar
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : null}
@@ -1994,6 +2021,7 @@ export default function ProduccionClient({
                           <th className="px-4 py-2 text-right font-bold">Demanda proyectada</th>
                           <th className="px-4 py-2 text-right font-bold">Disponible</th>
                           <th className="px-4 py-2 text-right font-bold">Necesidad neta</th>
+                          <th className="px-4 py-2 text-right font-bold">Latas a comprar</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -2003,6 +2031,7 @@ export default function ProduccionClient({
                             <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fNum(f.demandaProyectada)} L</td>
                             <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
                             <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">{f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-700">{f.latasACubrir != null ? fNum(f.latasACubrir) : '—'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2012,6 +2041,7 @@ export default function ProduccionClient({
                             Total a cocer (todos los formatos)
                           </td>
                           <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">{fNum(desgloseCoberturaFormatos.totalNecesidad)} L</td>
+                          <td></td>
                         </tr>
                       </tfoot>
                     </table>
