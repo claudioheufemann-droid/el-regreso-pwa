@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { provinciasDeRegion } from '@/lib/regiones'
-import { vendedorCanonico, nombresErpDe } from '@/lib/types'
+import { vendedorCanonico, nombresErpDe, VENDEDORES_AREA_VENTAS_ERP } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -120,6 +120,7 @@ export async function GET(req: Request) {
   if (tipo === 'pedidos-origen') {
     const { data, error } = await supabase.rpc('ventas_pedidos_por_origen', {
       p_ini: desde, p_fin: hasta, p_backlog: origen === 'backlog', p_provincias, p_por_entrega: porEntrega,
+      p_vendedores: VENDEDORES_AREA_VENTAS_ERP,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
@@ -137,6 +138,7 @@ export async function GET(req: Request) {
   if (tipo === 'pedidos-periodo') {
     const { data, error } = await supabase.rpc('ventas_pedidos_periodo', {
       p_ini: desde, p_fin: hasta, p_provincias, p_por_entrega: porEntrega,
+      p_vendedores: VENDEDORES_AREA_VENTAS_ERP,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
@@ -188,7 +190,7 @@ export async function GET(req: Request) {
 
   if (tipo === 'clientes-por-entregar') {
     const { data, error } = await supabase.rpc('ventas_clientes_por_entregar', {
-      p_ini: desde, p_fin: hasta, p_provincias,
+      p_ini: desde, p_fin: hasta, p_provincias, p_vendedores: VENDEDORES_AREA_VENTAS_ERP,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(((data ?? []) as Record<string, unknown>[]).map(r => ({
@@ -265,7 +267,10 @@ export async function GET(req: Request) {
   }
 
   const fn = tipo === 'clientes' ? 'ventas_detalle_clientes' : 'ventas_detalle_productos'
-  const { data, error } = await supabase.rpc(fn, { p_ini: desde, p_fin: hasta, p_provincias, p_por_entrega: porEntrega })
+  const { data, error } = await supabase.rpc(fn, {
+    p_ini: desde, p_fin: hasta, p_provincias, p_por_entrega: porEntrega,
+    p_vendedores: VENDEDORES_AREA_VENTAS_ERP,
+  })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { provinciasDeRegion } from '@/lib/regiones'
+import { VENDEDORES_AREA_VENTAS_ERP } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +43,7 @@ export async function GET() {
 
   const kpis = await Promise.all(filas.map(p => supabase.rpc('ventas_dashboard_kpis', {
     p_ini: p.fecha_inicio, p_fin: p.fecha_fin, p_provincias, p_por_entrega: porEntregaPeriodo(p.fecha_fin),
+    p_vendedores: VENDEDORES_AREA_VENTAS_ERP,
   })))
 
   return NextResponse.json(filas.map((p, i) => {
