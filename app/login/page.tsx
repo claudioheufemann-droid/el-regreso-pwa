@@ -42,6 +42,12 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
+    // Iniciar sesión afirma una identidad: se descarta cualquier "ver como
+    // vendedor" que hubiera quedado de antes. Si no, un admin entra con su
+    // cuenta y sigue viendo la app como otra persona sin entender por qué.
+    // La cookie es httpOnly, así que sólo el servidor puede borrarla.
+    await fetch('/api/admin/impersonar', { method: 'DELETE' }).catch(() => {})
+
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const { data: profile } = await supabase

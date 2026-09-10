@@ -110,30 +110,6 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     const cookieStore = await cookies()
     const impersonarId = cookieStore.get('impersonar_vendedor')?.value
 
-    // 🔓 TEMPORAL (pedido de Claudio, 2026-08-26): login desactivado para
-    // dejar la app abierta durante una prueba. Poner en `false` cuando
-    // Claudio avise que hay que restaurar el login.
-    const LOGIN_DESACTIVADO_TEMPORAL = true
-    if (!user && LOGIN_DESACTIVADO_TEMPORAL) {
-      const vistaComo = await resolverImpersonacion(impersonarId)
-      return {
-        id: 'demo',
-        nombre: vistaComo?.nombre ?? 'Invitado',
-        email: '',
-        isAdmin: vistaComo ? false : true,
-        iniciales: vistaComo?.iniciales ?? 'IN',
-        macroArea: vistaComo?.macroArea ?? null,
-        avatarUrl: vistaComo?.avatarUrl ?? null,
-        region: vistaComo?.region ?? null,
-        vendedoresErp: vistaComo?.vendedoresErp ?? [],
-        puedeVerMargenes: false,
-        puedeVerControlComercial: false,
-        veComisionGerente: false,
-        esAdminReal: true,
-        sesionReal: false,
-        impersonando: vistaComo?.nombre ?? null,
-      }
-    }
     if (!user) return null
 
     // Primary lookup: by auth UUID
