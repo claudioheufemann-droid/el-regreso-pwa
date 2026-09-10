@@ -335,6 +335,33 @@ def subir_a_pwa(filepath: Path, desde: date, hasta: date) -> dict:
     return body
 
 
+def reconciliar_pendientes(pedidos_pendientes_vistos: set[str]) -> dict:
+    """Llama UNA vez, al final de la corrida (todos los tramos ya subidos sin
+    error), para borrar de inmediato cualquier pedido pendiente ("sin
+    facturar aun") que ya no aparecio en NINGUN tramo de esta corrida -es
+    decir, el vendedor lo elimino en el ERP. Pedido explicito de Claudio: no
+    esperar ningun umbral de tiempo, borrar apenas se confirma que desaparecio
+    del informe.
+
+    Por que junta TODOS los tramos antes de llamar (ver PUT en
+    /api/upload-ventas): el periodo activo se pide en 1-2 tramos separados;
+    un pendiente puede caer en cualquiera, asi que comparar contra uno solo
+    daria falsos huerfanos."""
+    r = requests.put(
+        UPLOAD_URL,
+        headers={"Authorization": f"Bearer {UPLOAD_SECRET}", "Content-Type": "application/json"},
+        json={"pedidosPendientesVistos": sorted(pedidos_pendientes_vistos)},
+        timeout=120,
+    )
+    try:
+        body = r.json()
+    except Exception:
+        body = {"raw": r.text[:500]}
+    if r.status_code != 200:
+        raise RuntimeError(f"Reconciliacion de pendientes fallo (HTTP {r.status_code}): {body}")
+    return body
+
+
 def main() -> int:
     faltan = [k for k, v in {
         "ERP_USERNAME": ERP_USERNAME, "ERP_PASSWORD": ERP_PASSWORD, "UPLOAD_SECRET": UPLOAD_SECRET,
@@ -349,6 +376,8 @@ def main() -> int:
     huerfanos_total = 0
     omitidos_total = 0
     con_error = 0
+    tramos_subidos = 0
+    pedidos_pendientes_vistos: set[str] = set()
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=HEADLESS)
         context = browser.new_context(accept_downloads=True)
@@ -378,19 +407,42 @@ def main() -> int:
                 continue
 
             huerfanos = resultado.get("pedidosHuerfanosBorrados") or 0
-            huerfanos_pend = resultado.get("pedidosPendientesHuerfanosBorrados") or 0
-            huerfanos_total += huerfanos + huerfanos_pend
+            huerfanos_total += huerfanos
             omitidos = resultado.get("huerfanosOmitidosPorSeguridad") or 0
             omitidos_total += omitidos
+            tramos_subidos += 1
+            pedidos_pendientes_vistos.update(resultado.get("pedidosPendientesVistos") or [])
             print(f"   insertadas={resultado.get('insertadas')} "
                   f"rango={resultado.get('fechaMin')}->{resultado.get('fechaMax')} "
-                  f"huerfanos_borrados={huerfanos} huerfanos_pendientes_borrados={huerfanos_pend}"
+                  f"huerfanos_borrados={huerfanos}"
                   + (f" ⚠ OMITIDOS_POR_SEGURIDAD={omitidos} (revisar manualmente)" if omitidos else ""))
         browser.close()
 
+    # Reconciliacion INMEDIATA de pendientes huerfanos — solo si se subieron
+    # todos los tramos sin error: si alguno fallo, el cuadro de "pendientes
+    # vistos" esta incompleto y compararlo borraria pedidos validos que
+    # simplemente cayeron en el tramo que fallo. La corrida siguiente (~15
+    # min despues, horario comercial) vuelve a tener el cuadro completo.
+    huerfanos_pend = 0
+    omitidos_pend = 0
+    if con_error == 0 and tramos_subidos > 0 and not SOLO_DESCARGAR:
+        try:
+            resultado_pend = reconciliar_pendientes(pedidos_pendientes_vistos)
+            huerfanos_pend = resultado_pend.get("pedidosPendientesHuerfanosBorrados") or 0
+            omitidos_pend = resultado_pend.get("huerfanosOmitidosPorSeguridad") or 0
+            huerfanos_total += huerfanos_pend
+            omitidos_total += omitidos_pend
+            print(f"[reconciliacion pendientes] vistos={len(pedidos_pendientes_vistos)} "
+                  f"borrados={huerfanos_pend}"
+                  + (f" ⚠ OMITIDOS_POR_SEGURIDAD={omitidos_pend}" if omitidos_pend else ""))
+        except Exception as e:
+            print(f"   ERROR en reconciliacion de pendientes: {e}")
+    else:
+        print("[reconciliacion pendientes] omitida (hubo tramos con error o sin subidas)")
+
     print("=== RESUMEN ===")
     print(f"  Tramos con error  : {con_error}/{len(tramos)}")
-    print(f"  Pedidos huerfanos borrados (reconciliacion): {huerfanos_total}")
+    print(f"  Pedidos huerfanos borrados (entregados + pendientes): {huerfanos_total}")
     if omitidos_total:
         print(f"  ⚠ Pedidos huerfanos OMITIDOS por tope de seguridad: {omitidos_total} — revisar manualmente")
     return 1 if con_error == len(tramos) else 0
