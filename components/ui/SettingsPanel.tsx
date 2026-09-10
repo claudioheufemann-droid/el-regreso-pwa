@@ -18,10 +18,9 @@ interface VendedorOpcion { id: string; nombre: string; region: string | null }
 export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl: initialAvatarUrl }: Props) {
   const router = useRouter()
   const { esAdminReal, sesionReal, impersonando } = useUser()
-  // esAdminReal solo no alcanza mientras LOGIN_DESACTIVADO_TEMPORAL esté
-  // activo (lib/auth.ts): el "Invitado" del bypass también lo tiene en true.
-  // sesionReal filtra eso — sólo admins con sesión real de verdad ven este
-  // panel. Un vendedor se identifica a sí mismo en /identificarse (con PIN).
+  // Sólo admins con sesión real ven "Ver como vendedor". Cada quien entra
+  // con su propia cuenta: un vendedor ve lo suyo por su login, no simulando
+  // a otro.
   const puedeImpersonar = esAdminReal && sesionReal
   const [section, setSection] = useState<Section>('main')
 

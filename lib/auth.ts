@@ -45,16 +45,13 @@ export interface AppUser {
    *  a propósito mientras se está impersonando. */
   esAdminReal: boolean
   /**
-   * true sólo si hay una sesión real de Supabase Auth detrás — false para el
-   * "Invitado" que fabrica el bypass de LOGIN_DESACTIVADO_TEMPORAL más abajo
-   * (ese branch pone `esAdminReal: true` para todo el mundo, así que por sí
-   * solo YA NO alcanza para gatear nada sensible). Los endpoints de "Ver como
-   * vendedor" (app/api/admin/impersonar, app/api/admin/vendedores-lista)
-   * deben exigir `esAdminReal && sesionReal`, no sólo `esAdminReal` — si no,
-   * cualquiera con el link (sin cuenta) puede impersonar a cualquier
-   * vendedor sin restricción, incluida su comisión. Ver /identificarse para
-   * la vía pensada para que un vendedor se identifique a sí mismo mientras
-   * el login esté apagado.
+   * true sólo si hay una sesión real de Supabase Auth detrás. Nació para
+   * distinguir al "Invitado" que fabricaba el bypass de login (2026-08-26 a
+   * 2026-09-10, ya eliminado), que se daba `esAdminReal: true` a sí mismo.
+   * Hoy no hay forma de llegar acá sin sesión, así que es siempre true; se
+   * mantiene como red de seguridad en los endpoints de "Ver como vendedor"
+   * (app/api/admin/impersonar, app/api/admin/vendedores-lista), que exigen
+   * `esAdminReal && sesionReal`.
    */
   sesionReal: boolean
 }
