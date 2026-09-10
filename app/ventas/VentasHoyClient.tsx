@@ -326,6 +326,10 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
   const [pedidos, setPedidos] = useState<FilaPedidoCliente[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reintento, setReintento] = useState(0)
+  // Pedido de Claudio (10-sep-2026): con 3-4 pedidos por cliente se
+  // desplegaban TODOS los detalles de producto a la vez — mismo acordeón
+  // (abrir uno) que ya usan LOCALES y DetalleClientesProducto más abajo.
+  const [pedidoAbierto, setPedidoAbierto] = useState<string | null>(null)
 
   useEffect(() => {
     let vivo = true
@@ -386,9 +390,17 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
       {ordenados.map(ped => {
         const horaEntrega = ped.fechaEntregaHora ? fHoraLiteral(ped.fechaEntregaHora) : null
         const colorEstado = ped.estado === 'entregado' ? C.green : ped.estado === 'pendiente' ? C.amber : C.faint
+        const abiertoAqui = pedidoAbierto === ped.pedido
         return (
           <div key={ped.pedido}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <button
+              onClick={() => setPedidoAbierto(prev => prev === ped.pedido ? null : ped.pedido)}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%', textAlign: 'left',
+                background: 'transparent', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer',
+                minHeight: 44,
+              }}
+            >
               <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: colorEstado }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 {/* La factura es lo que se busca en el ERP — va primero y más
@@ -411,8 +423,12 @@ function DetallePedidosCliente({ cliente, desde, hasta, porEntrega }: {
                 <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(ped.litros)}</p>
                 <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(ped.revenue)}</p>
               </div>
-            </div>
-            <DetallePedidoProductosInline pedido={ped.pedido} />
+              <ChevronDown size={14} color={abiertoAqui ? C.blue : C.faint} style={{
+                flexShrink: 0, marginTop: 2,
+                transform: abiertoAqui ? 'rotate(180deg)' : undefined, transition: 'transform .15s',
+              }} />
+            </button>
+            {abiertoAqui && <DetallePedidoProductosInline pedido={ped.pedido} />}
           </div>
         )
       })}
