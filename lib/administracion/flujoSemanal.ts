@@ -100,6 +100,11 @@ interface ArgsFlujo {
    *  que efectivamente llega a la cuenta). */
   factorBruto: number
   compras: EntradaCompra[]
+  /** Promedio semanal de compras reales de los últimos 90 días (excluyendo
+   *  notas de crédito/ajustes negativos) — se usa como estimado de compras
+   *  para semanas FUTURAS sin ningún pago cargado a mano, en vez de dejarlas
+   *  en cero. null si no hay histórico suficiente. */
+  promedioSemanalHistorico: number | null
   /** Saldo bancario de partida y su fecha. null = no hay saldo cargado. */
   saldoInicial: number | null
   /** Días que tarda en promedio un cliente en pagar — desplaza el forecast
@@ -178,7 +183,16 @@ export function construirFlujoSemanal(a: ArgsFlujo): SemanaFlujo[] {
     const ingresosConfirmados = confirmados.get(inicio) ?? 0
     const ingresosProyectados = proyectados.get(inicio) ?? 0
     const comprasReales = reales.get(inicio) ?? 0
-    const comprasProyectadas = estimadas.get(inicio) ?? 0
+    // Semana futura sin ningún pago cargado (ni real ni estimado): se usa el
+    // promedio histórico como estimado en vez de dejarla en cero, que
+    // subestimaría sistemáticamente el gasto próximo. Semanas pasadas NO
+    // reciben este relleno — ahí lo que pasó, pasó, y si no hay registro es
+    // mejor mostrarlo en cero que inventar retroactivamente.
+    const sinDatosCargados = comprasReales === 0 && (estimadas.get(inicio) ?? 0) === 0
+    const usaPromedioHistorico = inicio > semanaActual && sinDatosCargados && a.promedioSemanalHistorico != null
+    const comprasProyectadas = usaPromedioHistorico
+      ? a.promedioSemanalHistorico!
+      : (estimadas.get(inicio) ?? 0)
     const flujoNeto = ingresosConfirmados + ingresosProyectados - comprasReales - comprasProyectadas
     saldo += flujoNeto
     return {

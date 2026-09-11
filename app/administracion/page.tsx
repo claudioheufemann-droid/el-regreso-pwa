@@ -384,6 +384,17 @@ export default async function AdministracionPage() {
   const saldoActual = saldosRaw[0] ? { fecha: String(saldosRaw[0].fecha), saldo: Number(saldosRaw[0].saldo) } : null
   const saldoPrevio = saldosRaw[1] ? { fecha: String(saldosRaw[1].fecha), saldo: Number(saldosRaw[1].saldo) } : null
 
+  // Promedio semanal de gasto real de los últimos 90 días — sirve de estimado
+  // por defecto para semanas futuras sin ningún pago cargado a mano (ver
+  // construirFlujoSemanal). Se excluyen los montos negativos (notas de
+  // crédito/ajustes contables): son correcciones puntuales, no gasto
+  // recurrente, y promediarlas de vuelta subestimaría el gasto típico.
+  const hace90 = correrDias(hoyISO, -90)
+  const gastoUltimos90 = compras
+    .filter(c => c.estado !== 'estimada' && c.fecha_pago >= hace90 && c.fecha_pago <= hoyISO && Number(c.monto) > 0)
+    .reduce((s, c) => s + Number(c.monto), 0)
+  const promedioSemanalHistorico = gastoUltimos90 > 0 ? (gastoUltimos90 / 90) * 7 : null
+
   const semanasFlujo = construirFlujoSemanal({
     cobrosConfirmados: caja.periodos.map(p => ({ inicio: p.inicio, bruto: p.bruto })),
     backlog: [...backlogPorCliente.values()],
@@ -393,6 +404,7 @@ export default async function AdministracionPage() {
     ventaRegistradaPorMes: ventaNetaPorMes,
     factorBruto,
     compras,
+    promedioSemanalHistorico,
     saldoInicial: saldoActual?.saldo ?? null,
     diasCobroPromedio,
     hoyISO,

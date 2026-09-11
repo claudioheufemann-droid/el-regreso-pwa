@@ -542,7 +542,8 @@ export default function FlujoCajaDashboard({ flujo, hoyISO }: Props) {
           <h3 style={{ fontSize: 15, fontWeight: 700, color: P.text }}>Detalle semanal</h3>
           <p style={{ fontSize: 12, color: P.muted, marginTop: 2 }}>
             Los valores <span style={{ color: P.amber, fontWeight: 700 }}>en naranjo</span> son proyectados; los
-            oscuros ya están confirmados.
+            oscuros ya están confirmados. Las compras de semanas futuras sin ningún pago cargado a mano usan el
+            promedio semanal real de los últimos 90 días como estimado.
           </p>
         </div>
         <div style={{ overflowX: 'auto' }}>
