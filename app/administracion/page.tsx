@@ -6,6 +6,13 @@ import {
   proyectarCaja, esIngresoReal, normalizarNombreCliente, brutoDeFila,
   categoriaNormalizada, calcularPrecisionCobro, type FilaVentaFinanzas, type ProyeccionCaja, type PrecisionCobro,
 } from '@/lib/administracion/finanzas'
+import {
+  construirFlujoSemanal, semanasRodantes, calcularAging, semaforoClientes,
+  cicloConversionEfectivo, calcularDiasPagoProveedores,
+  type SemanaFlujo, type EntradaCompra, type FilaDeudorAging, type TramoAging,
+  type ClienteRiesgo, type CicloConversion,
+} from '@/lib/administracion/flujoSemanal'
+import { esCamaraProduccion } from '@/lib/camaras'
 import AdministracionClient from './AdministracionClient'
 
 export const dynamic = 'force-dynamic'
@@ -51,11 +58,39 @@ export interface ResumenDeuda {
   ultimaCarga: string | null
 }
 
+/** Todo lo que consume el dashboard de flujo de caja semanal. */
+export interface DatosFlujo {
+  semanas: SemanaFlujo[]
+  /** Saldo bancario cargado a mano (null = todavía no se carga ninguno). */
+  saldoActual: { fecha: string; saldo: number } | null
+  /** El anterior, para la variación % de la tarjeta. */
+  saldoPrevio: { fecha: string; saldo: number } | null
+  aging: { tramos: TramoAging[]; total: number }
+  riesgo: ClienteRiesgo[]
+  ciclo: CicloConversion
+  /** Clientes que aparecen en la proyección, para el filtro. */
+  clientesFiltro: string[]
+  /** `${lunes}|${cliente}` → bruto. Permite filtrar por cliente en el
+   *  navegador sin volver al servidor. Sólo cubre la parte ATRIBUIBLE a un
+   *  cliente: lo confirmado (venta despachada) y el backlog. El forecast del
+   *  modelo es agregado y no se puede repartir por cliente, así que al filtrar
+   *  por uno se excluye — la UI lo dice explícitamente. */
+  confirmadoPorClienteSemana: Record<string, number>
+  backlogPorClienteSemana: Record<string, number>
+  hayCompras: boolean
+}
+
 const MS_POR_DIA = 86_400_000
 
 function esFinDeSemanaISO(iso: string): boolean {
   const dow = new Date(`${iso}T00:00:00Z`).getUTCDay()
   return dow === 0 || dow === 6
+}
+
+/** Corre una fecha ISO `n` días corridos. Pura a propósito (no lee el reloj):
+ *  todo el módulo parte de `hoyISO`, que se calcula una sola vez. */
+function correrDias(iso: string, n: number): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + n * MS_POR_DIA).toISOString().slice(0, 10)
 }
 
 function contarDiasHabilesISO(desdeISO: string, hastaISO: string): number {
@@ -104,6 +139,7 @@ export default async function AdministracionPage() {
 
   const [
     forecastRaw, validacionRaw, ventasRaw, clientesRaw, deudoresRaw, ultimaCorridaRaw,
+    saldosRaw, comprasRaw, stockRaw,
   ] = await Promise.all([
     (async () => {
       const filas: Record<string, unknown>[] = []
@@ -151,9 +187,17 @@ export default async function AdministracionPage() {
       }
       return filas
     })(),
-    admin.from('deudores').select('nombre_fantasia, deuda_vencida, updated_at').then(r => r.data ?? []),
+    admin.from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total, updated_at, ultimo_pago, deuda_menor_14_dias, deuda_entre_15_29_dias, deuda_entre_30_44_dias, deuda_entre_45_59_dias, deuda_entre_60_89_dias, deuda_mas_90_dias').then(r => r.data ?? []),
     admin.from('erp_sync_log').select('creado_at').eq('fuente', 'forecast_finanzas').eq('ok', true)
       .order('creado_at', { ascending: false }).limit(1).maybeSingle().then(r => r.data),
+    admin.from('caja_saldos').select('fecha, saldo')
+      .order('fecha', { ascending: false }).limit(2).then(r => r.data ?? []),
+    admin.from('compras_comprometidas').select('monto, fecha_pago, fecha_documento, estado')
+      .then(r => r.data ?? []),
+    // Litros de producto terminado propio, para los días de inventario del
+    // ciclo de conversión. Mismo criterio de cámaras que usa Producción.
+    admin.from('stock_productos').select('camara, litros, tipo')
+      .then(r => r.data ?? []),
   ])
 
   // ── Series del modelo ──────────────────────────────────────────────────────
@@ -259,6 +303,145 @@ export default async function AdministracionPage() {
     ventasRaw, diasPagoPorCliente, deudaVencidaPorCliente, hoyISO, ventana60d
   )
 
+  // ── Dashboard de flujo de caja semanal ──────────────────────────────────────
+  // 13 semanas hacia adelante (el horizonte que pidió el usuario) más 4 hacia
+  // atrás, para que el gráfico muestre de dónde viene la curva y no arranque
+  // en el aire.
+  const semanas = semanasRodantes(hoyISO, 4, 12)
+
+  // Factor neto→bruto real del período: el forecast del modelo está en NETO y
+  // todo el resto del dashboard va en BRUTO (la plata que llega a la cuenta).
+  let netoPeriodo = 0
+  let brutoPeriodo = 0
+  const ventaNetaPorMes = new Map<string, number>()
+  let litrosUltimos28 = 0
+  const hace28 = correrDias(hoyISO, -28)
+  for (const v of ventasRaw) {
+    if (!esIngresoReal(v)) continue
+    const neto = Number(v.total_sin_impuesto) || 0
+    if (neto === 0) continue
+    netoPeriodo += neto
+    brutoPeriodo += brutoDeFila(v)
+    if (v.fecha_pedido) {
+      const mes = `${v.fecha_pedido.slice(0, 7)}-01`
+      ventaNetaPorMes.set(mes, (ventaNetaPorMes.get(mes) ?? 0) + neto)
+      if (v.fecha_pedido.slice(0, 10) >= hace28) litrosUltimos28 += Number(v.litros) || 0
+    }
+  }
+  const factorBruto = netoPeriodo > 0 ? brutoPeriodo / netoPeriodo : 1.19
+
+  // Plazo de cobro típico: mediana de los plazos efectivamente en uso (que ya
+  // son el real observado cuando existe — ver el bloque de arriba).
+  const plazos = [...diasPagoPorCliente.values()].filter((d): d is number => d != null).sort((a, b) => a - b)
+  const diasCobroPromedio = plazos.length > 0 ? plazos[Math.floor(plazos.length / 2)] : 14
+
+  // Backlog: vendido y sin despachar, por cliente (el plazo recién arranca
+  // cuando salga, así que va del lado proyectado, nunca del confirmado).
+  const backlogPorCliente = new Map<string, { bruto: number; diasPago: number | null }>()
+  for (const v of ventasRaw) {
+    if (!esIngresoReal(v)) continue
+    if (v.fecha_entrega) continue
+    const neto = Number(v.total_sin_impuesto) || 0
+    if (neto === 0) continue
+    const nombre = v.nombre_fantasia ?? '(sin nombre)'
+    const acc = backlogPorCliente.get(nombre)
+      ?? { bruto: 0, diasPago: diasPagoPorCliente.get(normalizarNombreCliente(v.nombre_fantasia)) ?? null }
+    acc.bruto += brutoDeFila(v)
+    backlogPorCliente.set(nombre, acc)
+  }
+
+  // Desglose por cliente y semana, para el filtro por cliente del dashboard.
+  const confirmadoPorClienteSemana: Record<string, number> = {}
+  const backlogPorClienteSemana: Record<string, number> = {}
+  const lunesDeFecha = (iso: string) => {
+    const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    const dow = dt.getUTCDay()
+    return new Date(dt.getTime() + (dow === 0 ? -6 : 1 - dow) * MS_POR_DIA).toISOString().slice(0, 10)
+  }
+  for (const v of ventasRaw) {
+    if (!esIngresoReal(v) || !v.fecha_entrega) continue
+    const neto = Number(v.total_sin_impuesto) || 0
+    if (neto === 0) continue
+    const dias = diasPagoPorCliente.get(normalizarNombreCliente(v.nombre_fantasia))
+    if (dias == null) continue
+    const fechaCobro = new Date(
+      Date.parse(`${v.fecha_entrega.slice(0, 10)}T00:00:00Z`) + dias * MS_POR_DIA
+    ).toISOString().slice(0, 10)
+    if (fechaCobro < desdeCobro) continue
+    const clave = `${lunesDeFecha(fechaCobro)}|${v.nombre_fantasia ?? '(sin nombre)'}`
+    confirmadoPorClienteSemana[clave] = (confirmadoPorClienteSemana[clave] ?? 0) + brutoDeFila(v)
+  }
+  const entregaSupuesta = correrDias(hoyISO, 7)
+  for (const [nombre, b] of backlogPorCliente) {
+    const dias = b.diasPago ?? diasCobroPromedio
+    const cobro = new Date(Date.parse(`${entregaSupuesta}T00:00:00Z`) + dias * MS_POR_DIA).toISOString().slice(0, 10)
+    const clave = `${lunesDeFecha(cobro)}|${nombre}`
+    backlogPorClienteSemana[clave] = (backlogPorClienteSemana[clave] ?? 0) + b.bruto
+  }
+
+  const compras = comprasRaw as unknown as EntradaCompra[]
+  const saldoActual = saldosRaw[0] ? { fecha: String(saldosRaw[0].fecha), saldo: Number(saldosRaw[0].saldo) } : null
+  const saldoPrevio = saldosRaw[1] ? { fecha: String(saldosRaw[1].fecha), saldo: Number(saldosRaw[1].saldo) } : null
+
+  const semanasFlujo = construirFlujoSemanal({
+    cobrosConfirmados: caja.periodos.map(p => ({ inicio: p.inicio, bruto: p.bruto })),
+    backlog: [...backlogPorCliente.values()],
+    forecastMensual: forecastRaw
+      .filter(f => f.nivel === 'general' && f.tipo === 'forecast')
+      .map(f => ({ mes: String(f.mes).slice(0, 10), monto: Number(f.monto) })),
+    ventaRegistradaPorMes: ventaNetaPorMes,
+    factorBruto,
+    compras,
+    saldoInicial: saldoActual?.saldo ?? null,
+    diasCobroPromedio,
+    hoyISO,
+    semanas,
+  })
+
+  // Aging y semáforo: sólo clientes reales (los internos tipo PDV/BaseCamp
+  // arrastran saldos artificiales de millones que distorsionarían todo).
+  const deudoresReales = (deudoresRaw as unknown as FilaDeudorAging[])
+    .filter(d => esIngresoReal({ nombre_fantasia: d.nombre_fantasia, producto: null }))
+
+  const plazosPorCliente = new Map<string, { real: number | null; declarado: number | null }>()
+  for (const c of clientesRaw) {
+    const k = normalizarNombreCliente(c.nombre_fantasia)
+    if (!k || plazosPorCliente.has(k)) continue
+    plazosPorCliente.set(k, {
+      real: c.dias_pago_real_muestras != null && c.dias_pago_real_muestras >= 3 ? c.dias_pago_real_mediana : null,
+      declarado: c.dias_pago,
+    })
+  }
+
+  // Días de inventario: litros de producto terminado propio dividido por los
+  // litros que salen al día (venta real de las últimas 4 semanas).
+  const litrosStock = (stockRaw as { camara: string | null; litros: number | null; tipo: string | null }[])
+    .filter(s => s.tipo !== 'tanque' && esCamaraProduccion(s.camara))
+    .reduce((s, r) => s + (Number(r.litros) || 0), 0)
+  const litrosPorDia = litrosUltimos28 / 28
+  const diasInventario = litrosPorDia > 0 && litrosStock > 0 ? Math.round(litrosStock / litrosPorDia) : null
+
+  const datosFlujo: DatosFlujo = {
+    semanas: semanasFlujo,
+    saldoActual,
+    saldoPrevio,
+    aging: calcularAging(deudoresReales),
+    riesgo: semaforoClientes(deudoresReales, plazosPorCliente, normalizarNombreCliente),
+    ciclo: cicloConversionEfectivo(
+      diasInventario,
+      plazos.length > 0 ? diasCobroPromedio : null,
+      calcularDiasPagoProveedores(compras),
+    ),
+    clientesFiltro: [...new Set([
+      ...Object.keys(confirmadoPorClienteSemana).map(k => k.split('|')[1]),
+      ...Object.keys(backlogPorClienteSemana).map(k => k.split('|')[1]),
+    ])].sort((a, b) => a.localeCompare(b)),
+    confirmadoPorClienteSemana,
+    backlogPorClienteSemana,
+    hayCompras: compras.length > 0,
+  }
+
   return (
     <AdministracionClient
       series={series}
@@ -267,6 +450,7 @@ export default async function AdministracionPage() {
       caja={caja}
       deuda={deuda}
       precisionCobro={precisionCobro}
+      flujo={datosFlujo}
       ultimaCorrida={ultimaCorridaRaw?.creado_at ?? null}
       clientesSinPlazo={[...diasPagoPorCliente.values()].filter(v => v == null).length}
       hoyISO={hoyISO}

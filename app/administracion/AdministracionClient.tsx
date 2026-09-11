@@ -10,8 +10,9 @@ import {
   TrendingUp, Wallet, AlertTriangle, Info, CalendarClock, Truck, HelpCircle, ChevronLeft, ChevronDown,
   ChevronRight, Target, UserX,
 } from 'lucide-react'
-import type { SerieFinanzas, AvanceCiclo, ResumenDeuda } from './page'
+import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo } from './page'
 import type { ProyeccionCaja, PrecisionCobro, ClienteEnPeriodo } from '@/lib/administracion/finanzas'
+import FlujoCajaDashboard from './FlujoCajaDashboard'
 
 interface Props {
   series: SerieFinanzas[]
@@ -20,6 +21,7 @@ interface Props {
   caja: ProyeccionCaja
   deuda: ResumenDeuda
   precisionCobro: PrecisionCobro
+  flujo: DatosFlujo
   ultimaCorrida: string | null
   clientesSinPlazo: number
   /** Viene del servidor, no de `new Date()` acá: el mismo valor en render de
@@ -167,10 +169,10 @@ function Etiqueta({ children, title }: { children: React.ReactNode; title?: stri
 }
 
 export default function AdministracionClient({
-  series, avance, mtd, caja, deuda, precisionCobro, ultimaCorrida, clientesSinPlazo, hoyISO,
+  series, avance, mtd, caja, deuda, precisionCobro, flujo, ultimaCorrida, clientesSinPlazo, hoyISO,
 }: Props) {
   const router = useRouter()
-  const [tab, setTab] = useState<'ingresos' | 'caja'>('ingresos')
+  const [tab, setTab] = useState<'ingresos' | 'flujo' | 'cobranza'>('ingresos')
   const [serieId, setSerieId] = useState('general::')
   const [verModelo, setVerModelo] = useState(false)
   const [semanaExpandida, setSemanaExpandida] = useState<string | null>(null)
@@ -270,7 +272,11 @@ export default function AdministracionClient({
 
         {/* ── Pestañas ─────────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 2, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 4, width: 'fit-content', marginBottom: 24 }}>
-          {([['ingresos', 'Ingresos', TrendingUp], ['caja', 'Flujo de Caja', Wallet]] as const).map(([id, label, Icon]) => (
+          {([
+            ['ingresos', 'Ingresos', TrendingUp],
+            ['flujo', 'Flujo de Caja', Wallet],
+            ['cobranza', 'Cobranza y Deuda', Target],
+          ] as const).map(([id, label, Icon]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -448,8 +454,11 @@ export default function AdministracionClient({
           </div>
         )}
 
-        {/* ══════════════ FLUJO DE CAJA ══════════════ */}
-        {tab === 'caja' && (
+        {/* ══════════════ FLUJO DE CAJA SEMANAL ══════════════ */}
+        {tab === 'flujo' && <FlujoCajaDashboard flujo={flujo} hoyISO={hoyISO} />}
+
+        {/* ══════════════ COBRANZA Y DEUDA ══════════════ */}
+        {tab === 'cobranza' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
             {/* Precisión de cobro — calibra la proyección contra la realidad:
