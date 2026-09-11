@@ -95,6 +95,14 @@ function fRangoSemana(iso: string): string {
   return `${fDia(iso)} – ${fDia(fin)}`
 }
 
+/** Bajo 3 días de plazo observado no es "crédito" en ningún sentido útil —
+ *  es un cliente (típico HORECA chico) que paga al contado o al día
+ *  siguiente. Separarlo evita el absurdo de mostrar "Crédito 1 días". */
+function etiquetaPlazo(dias: number): string {
+  if (dias <= 2) return 'Contado'
+  return `Crédito ${dias} día${dias === 1 ? '' : 's'}`
+}
+
 /** Agrupa los clientes de una semana por plazo de pago (7, 15, 30... días),
  *  de menor a mayor plazo — así se ve de un vistazo si el cobro de la semana
  *  depende de crédito corto o largo. Se redondea el plazo al entero más
@@ -639,30 +647,34 @@ export default function AdministracionClient({
                                           <p style={{ fontSize: 12.5, color: C.muted, padding: '10px 0' }}>Sin clientes identificados para esta semana.</p>
                                         ) : grupos.map(g => (
                                           <div key={g.dias} style={{ marginTop: 12 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, flexWrap: 'wrap', gap: 4 }}>
                                               <span style={{
                                                 fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em',
-                                                color: C.blue, background: C.blueSoft, padding: '3px 9px', borderRadius: 999,
+                                                color: g.dias <= 2 ? C.green : C.blue, background: g.dias <= 2 ? C.greenSoft : C.blueSoft,
+                                                padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
                                               }}>
-                                                Crédito {g.dias} días
+                                                {etiquetaPlazo(g.dias)}
                                               </span>
-                                              <span style={{ fontSize: 12, color: C.muted }}>
+                                              <span style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>
                                                 {fMoney(g.bruto)} · {g.clientes.length} cliente{g.clientes.length !== 1 ? 's' : ''}
                                               </span>
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                              {/* Nombre y monto uno debajo del otro, no lado a lado: si van en la
+                                                  misma línea (justify-content: space-between), el monto queda al
+                                                  borde derecho de la tabla ANCHA (min-width 540), invisible sin
+                                                  arrastrar el scroll horizontal — pasó en la primera versión. */}
                                               {g.clientes.map(c => (
                                                 <div key={c.cliente} style={{
-                                                  display: 'flex', justifyContent: 'space-between', gap: 10,
                                                   background: C.card, border: `1px solid ${C.line}`, borderRadius: 8,
-                                                  padding: '7px 10px',
+                                                  padding: '7px 10px', maxWidth: 280,
                                                 }}>
-                                                  <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                  <p style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {c.cliente}
-                                                  </span>
-                                                  <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                                  </p>
+                                                  <p style={{ fontSize: 13.5, color: C.blue, fontWeight: 800, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
                                                     {fMoney(c.bruto)}
-                                                  </span>
+                                                  </p>
                                                 </div>
                                               ))}
                                             </div>
