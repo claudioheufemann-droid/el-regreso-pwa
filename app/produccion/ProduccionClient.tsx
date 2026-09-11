@@ -16,7 +16,7 @@ import {
   ArrowUp, ArrowDown, CheckCircle2, Trash2, X,
 } from 'lucide-react'
 import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, RecetaInsumoLinea, LoteSinReceta } from './page'
-import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, type EnvaseBucket } from '@/lib/produccion/reglas'
+import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
    Paleta corporativa. Tailwind cubre el resto; estos tres colores van
@@ -107,24 +107,18 @@ function hoyLocalISO(d: Date = new Date()): string {
   return `${y}-${m}-${day}`
 }
 
-/** Es fin de semana la fecha yyyy-mm-dd dada (comparación por calendario,
- *  no huso horario — misma lógica de días hábiles que usa el servidor para
- *  las alarmas de quiebre). */
-function esFinDeSemanaISO(iso: string): boolean {
-  const dow = new Date(`${iso}T00:00:00Z`).getUTCDay()
-  return dow === 0 || dow === 6
-}
-
-/** Suma `diasHabiles` días hábiles (lunes a viernes) a `desdeISO`, saltando
- *  sábado/domingo — para proyectar "hasta cuándo alcanza" en el popup de
- *  confirmación de una alarma. */
+/** Suma `diasHabiles` días hábiles a `desdeISO`, saltando fin de semana y
+ *  feriados chilenos (esDiaHabilISO, en lib/produccion/reglas.ts — misma
+ *  lógica de días hábiles que usa el servidor para las alarmas de quiebre) —
+ *  para proyectar "hasta cuándo alcanza" en el popup de confirmación de una
+ *  alarma. */
 function sumarDiasHabilesISO(desdeISO: string, diasHabiles: number): string {
   let t = Date.parse(`${desdeISO}T00:00:00Z`)
   let restantes = Math.max(0, Math.round(diasHabiles))
   const MS_POR_DIA = 24 * 60 * 60 * 1000
   while (restantes > 0) {
     t += MS_POR_DIA
-    if (!esFinDeSemanaISO(new Date(t).toISOString().slice(0, 10))) restantes--
+    if (esDiaHabilISO(new Date(t).toISOString().slice(0, 10))) restantes--
   }
   return new Date(t).toISOString().slice(0, 10)
 }
@@ -1185,6 +1179,11 @@ export default function ProduccionClient({
         // sólo por temporada de alta demanda — el campo queda en false acá
         // porque SugerenciaPlan lo exige, no porque se use en este cálculo.
         lineaFija: false,
+        // Ídem: esta sección mira la cobertura a meses vista (fechaCoberturaSeg),
+        // no el detalle fino de fermentador-vs-bodega que sí usa la alarma de
+        // quiebre inmediato — se deja en 0/null porque el campo es requerido.
+        litrosFermentando: 0,
+        fechaFermentandoListo: null,
       })
     }
 
@@ -3062,6 +3061,16 @@ export default function ProduccionClient({
                                   ) : (
                                     <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-500">
                                       Sin ventas en 4 semanas — sin fecha estimada
+                                    </span>
+                                  )}
+                                  {s.litrosFermentando > 0 && (
+                                    <span
+                                      className="ml-1.5 inline-flex items-center gap-1.5 rounded-md bg-purple-100 px-2 py-1 text-xs font-bold text-purple-700"
+                                      title="Litros a granel ya fermentando para este producto — todavía sin envase, no cuentan como stock vendible hasta que salgan del fermentador."
+                                    >
+                                      <Beaker size={12} />
+                                      {fNum(s.litrosFermentando)} L fermentando
+                                      {s.fechaFermentandoListo && ` — listos ${new Date(s.fechaFermentandoListo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}`}
                                     </span>
                                   )}
                                 </div>

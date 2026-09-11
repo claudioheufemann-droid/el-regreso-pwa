@@ -180,3 +180,94 @@ export function partirClaveProductoEnvase(clave: string): { producto: string; bu
   const [producto, bucket] = clave.split(SEP_PRODUCTO_ENVASE)
   return { producto, bucket: (bucket as EnvaseBucket) ?? 'otros' }
 }
+
+/* ── Días hábiles Chile (lun-vie, sin feriados) ────────────────────────────
+   Usado por las alarmas de quiebre de stock y el ritmo de venta (ver
+   app/produccion/page.tsx): vendemos lunes a viernes, así que un "día" de
+   cobertura o de quiebre estimado tiene que saltarse fin de semana Y
+   feriado, no sólo fin de semana — si no, una alarma que dice "se agota en
+   7 días hábiles" puede caer en Fiestas Patrias y estar 2-3 días adelantada
+   o atrasada según el mes.
+
+   Fijos + Semana Santa (calculada, exacta cualquier año) + los dos feriados
+   que la ley mueve al lunes más cercano (San Pedro y San Pablo, Encuentro
+   de Dos Mundos) cubren el calendario oficial casi completo. Quedan FUERA
+   a propósito, por variar año a año según decreto y no poder calcularse:
+     - Día Nacional de los Pueblos Indígenas (~20-24 jun, ligado al
+       solsticio + regla de traslado de Ley 21.357).
+     - "Feriados irrenunciables" puente que a veces se agregan cerca del
+       18-19 de septiembre cuando caen pegados a un fin de semana.
+   Si alguno de estos cae dentro de la ventana de una alarma, la fecha
+   estimada puede adelantarse esos 1-2 días — impacto menor y acotado a
+   unos pocos días del año. */
+
+/** Domingo de Pascua (calendario gregoriano) — algoritmo de Gauss/Meeus. */
+function domingoDePascuaISO(year: number): string {
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const d = Math.floor(b / 4)
+  const e = b % 4
+  const f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3)
+  const h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4)
+  const k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31)
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+const MS_POR_DIA_FERIADOS = 86400000
+function sumarDiasISO(iso: string, dias: number): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + dias * MS_POR_DIA_FERIADOS).toISOString().slice(0, 10)
+}
+function diaSemanaISO(iso: string): number {
+  return new Date(`${iso}T00:00:00Z`).getUTCDay() // 0=domingo ... 6=sábado
+}
+/** Ley 19.668: si el feriado cae mar/mié/jue, se traslada al lunes anterior. */
+function trasladarALunes(iso: string): string {
+  const dow = diaSemanaISO(iso)
+  if (dow === 2) return sumarDiasISO(iso, -1) // martes → lunes
+  if (dow === 3) return sumarDiasISO(iso, -2) // miércoles → lunes
+  if (dow === 4) return sumarDiasISO(iso, -3) // jueves → lunes
+  return iso
+}
+
+const feriadosChilePorAnio = new Map<number, Set<string>>()
+
+/** Feriados oficiales de Chile para un año dado (ver limitaciones arriba). */
+export function feriadosChile(year: number): Set<string> {
+  const cached = feriadosChilePorAnio.get(year)
+  if (cached) return cached
+
+  const pascua = domingoDePascuaISO(year)
+  const feriados = new Set<string>([
+    `${year}-01-01`, // Año Nuevo
+    sumarDiasISO(pascua, -2), // Viernes Santo
+    sumarDiasISO(pascua, -1), // Sábado Santo
+    `${year}-05-01`, // Día Nacional del Trabajo
+    `${year}-05-21`, // Día de las Glorias Navales
+    trasladarALunes(`${year}-06-29`), // San Pedro y San Pablo
+    `${year}-07-16`, // Virgen del Carmen
+    `${year}-08-15`, // Asunción de la Virgen
+    `${year}-09-18`, // Fiestas Patrias
+    `${year}-09-19`, // Glorias del Ejército
+    trasladarALunes(`${year}-10-12`), // Encuentro de Dos Mundos
+    `${year}-10-31`, // Día de las Iglesias Evangélicas y Protestantes
+    `${year}-11-01`, // Día de Todos los Santos
+    `${year}-12-08`, // Inmaculada Concepción
+    `${year}-12-25`, // Navidad
+  ])
+  feriadosChilePorAnio.set(year, feriados)
+  return feriados
+}
+
+/** true si `iso` es lunes-viernes y no es feriado chileno. */
+export function esDiaHabilISO(iso: string): boolean {
+  const dow = diaSemanaISO(iso)
+  if (dow === 0 || dow === 6) return false
+  return !feriadosChile(Number(iso.slice(0, 4))).has(iso)
+}

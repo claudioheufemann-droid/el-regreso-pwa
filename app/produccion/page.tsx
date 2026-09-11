@@ -6,7 +6,7 @@ import { esCamaraProduccion } from '@/lib/camaras'
 import {
   bucketEnvase, normalizarProducto,
   claveProductoEnvase, partirClaveProductoEnvase, ENVASE_LABEL,
-  cicloEnCursoISO, inicioDeCiclo, finDeCiclo, type EnvaseBucket,
+  cicloEnCursoISO, inicioDeCiclo, finDeCiclo, esDiaHabilISO, type EnvaseBucket,
 } from '@/lib/produccion/reglas'
 import ProduccionClient from './ProduccionClient'
 
@@ -329,6 +329,15 @@ export interface SugerenciaPlan {
    *  orden de "Alarmas de quiebre de stock": líneas fijas siempre primero,
    *  antes que cualquier producto experimental sin importar la urgencia. */
   lineaFija: boolean
+  /** Litros a granel fermentando que SÍ se sumaron al pipeline pero que
+   *  todavía no cuentan como vendibles (ver `fechaFermentandoListo`) — 0 si
+   *  no hay nada fermentando o si ya debería haber salido. Antes esto sólo
+   *  vivía adentro de `motivo` (texto libre); se separa en su propio campo
+   *  para poder mostrarlo como badge visible en vez de sólo en el tooltip. */
+  litrosFermentando: number
+  /** yyyy-mm-dd en que el fermentador de `litrosFermentando` queda listo —
+   *  null si no hay nada fermentando para este producto. */
+  fechaFermentandoListo: string | null
 }
 
 /**
@@ -441,34 +450,32 @@ export default async function ProduccionPage() {
     (Date.parse(`${finCiclo}T00:00:00Z`) - Date.parse(`${inicioCiclo}T00:00:00Z`)) / MS_POR_DIA
   ) + 1
 
-  // ── Días hábiles (lunes a viernes) — para CUALQUIER cálculo de RITMO de
-  // venta (no de tiempo transcurrido). El reparto no vende fin de semana,
-  // así que dividir los litros vendidos por días CALENDARIO subestima el
-  // ritmo real: un lote vendido en 10 días hábiles se repartía entre 14
-  // días calendario y daba una velocidad más lenta de la real. Se usa tanto
-  // para las alarmas de quiebre como para "a este ritmo cerrarías con X L"
-  // en Forecasting — diaActual/diasEnMes (calendario) siguen siendo los
-  // correctos para "en qué día del ciclo estamos".
-  const esFinDeSemanaISO = (iso: string) => {
-    const dow = new Date(`${iso}T00:00:00Z`).getUTCDay()
-    return dow === 0 || dow === 6
-  }
+  // ── Días hábiles (lunes a viernes, sin feriados chilenos) — para
+  // CUALQUIER cálculo de RITMO de venta (no de tiempo transcurrido). El
+  // reparto no vende fin de semana NI feriado, así que dividir los litros
+  // vendidos por días CALENDARIO (o por días hábiles que ignoran feriados)
+  // subestima el ritmo real: un lote vendido en 10 días hábiles se repartía
+  // entre 14 días calendario y daba una velocidad más lenta de la real. Se
+  // usa tanto para las alarmas de quiebre como para "a este ritmo cerrarías
+  // con X L" en Forecasting — diaActual/diasEnMes (calendario) siguen siendo
+  // los correctos para "en qué día del ciclo estamos". esDiaHabilISO() vive
+  // en lib/produccion/reglas.ts (feriados chilenos, ver limitaciones ahí).
   const contarDiasHabilesISO = (desdeISO: string, hastaISO: string): number => {
     let n = 0
     for (let t = Date.parse(`${desdeISO}T00:00:00Z`); t <= Date.parse(`${hastaISO}T00:00:00Z`); t += MS_POR_DIA) {
-      if (!esFinDeSemanaISO(new Date(t).toISOString().slice(0, 10))) n++
+      if (esDiaHabilISO(new Date(t).toISOString().slice(0, 10))) n++
     }
     return n
   }
   const diasHabilesTranscurridos = contarDiasHabilesISO(inicioCiclo, hoyISO)
   const diasHabilesEnCiclo = contarDiasHabilesISO(inicioCiclo, finCiclo)
-  /** Suma `diasHabiles` días hábiles a `desdeISO`, saltando sábado/domingo. */
+  /** Suma `diasHabiles` días hábiles a `desdeISO`, saltando fin de semana y feriados. */
   const sumarDiasHabilesISO = (desdeISO: string, diasHabiles: number): string => {
     let t = Date.parse(`${desdeISO}T00:00:00Z`)
     let restantes = Math.max(0, Math.round(diasHabiles))
     while (restantes > 0) {
       t += MS_POR_DIA
-      if (!esFinDeSemanaISO(new Date(t).toISOString().slice(0, 10))) restantes--
+      if (esDiaHabilISO(new Date(t).toISOString().slice(0, 10))) restantes--
     }
     return new Date(t).toISOString().slice(0, 10)
   }
@@ -1297,6 +1304,8 @@ export default async function ProduccionPage() {
         fechaEstimadaQuiebre,
         motivo,
         lineaFija: LINEAS_FIJAS.has(s.producto),
+        litrosFermentando: fermentandoEsFuturo ? Math.round(fermentando) : 0,
+        fechaFermentandoListo: fermentandoEsFuturo ? fechaFermentando : null,
       } as SugerenciaPlan
     })
     .filter((s): s is SugerenciaPlan => s !== null)
