@@ -48,6 +48,23 @@ export function bucketEnvase(envase: string | null, litros: number): EnvaseBucke
   return 'otros'
 }
 
+/**
+ * Redondea un objetivo en litros (stock de seguridad, punto de reorden) HACIA
+ * ARRIBA al múltiplo entero de barril más cercano — decisión del usuario,
+ * 11-sep-2026: un barril no se llena a medias, así que un colchón de "14 L"
+ * en barril 30L no es un objetivo real (no existe un barril con 14L de
+ * colchón); el objetivo físico mínimo son 30L = 1 barril entero. Sin esto,
+ * la UI mostraba "14 L · ≈0 barriles", que lee como "no necesito nada" para
+ * un formato que en la práctica exige tener un barril lleno de repuesto.
+ * No aplica a 'lata' (mezcla 354/473ml, sin tamaño fijo — ver
+ * estimarUnidadesEnvase en ProduccionClient.tsx) ni a 'otros'/'producto'
+ * (agregado de varios formatos, no tiene un tamaño de envase único). */
+export function redondearLitrosABarril(litros: number, envase: EnvaseBucket | string | null): number {
+  const tamano = envase === 'barril_30' ? 30 : envase === 'barril_50' ? 50 : null
+  if (tamano == null || litros <= 0) return litros
+  return Math.ceil(litros / tamano) * tamano
+}
+
 /* ────────────────────────────────────────────────────────────────────────
    CICLO INTERNO DE PRODUCCIÓN (no calendario)
    Definido con el usuario el 4 sep 2026: por un tema de ciclos internos, el

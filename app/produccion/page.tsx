@@ -6,7 +6,7 @@ import { esCamaraProduccion } from '@/lib/camaras'
 import {
   bucketEnvase, normalizarProducto,
   claveProductoEnvase, partirClaveProductoEnvase, ENVASE_LABEL,
-  cicloEnCursoISO, inicioDeCiclo, finDeCiclo, esDiaHabilISO, type EnvaseBucket,
+  cicloEnCursoISO, inicioDeCiclo, finDeCiclo, esDiaHabilISO, redondearLitrosABarril, type EnvaseBucket,
 } from '@/lib/produccion/reglas'
 import ProduccionClient from './ProduccionClient'
 
@@ -1017,8 +1017,11 @@ export default async function ProduccionPage() {
       demandaMensualProyectada: Number(s.demanda_mensual_proyectada),
       demandaEnVentana: Number(s.demanda_en_ventana),
       sigmaSemanal: Number(s.sigma_semanal),
-      stockSeguridadLitros: Number(s.stock_seguridad_litros),
-      puntoReordenLitros: Number(s.punto_reorden_litros),
+      // Redondeado hacia arriba al barril entero más cercano cuando el
+      // envase es barril_30/barril_50 (ver redondearLitrosABarril) — un
+      // colchón "de 14L" en formato barril no es un objetivo físico real.
+      stockSeguridadLitros: redondearLitrosABarril(Number(s.stock_seguridad_litros), envase),
+      puntoReordenLitros: redondearLitrosABarril(Number(s.punto_reorden_litros), envase),
       confianza: s.confianza as 'alta' | 'media' | 'baja',
       mapeBacktest: s.mape_backtest != null ? Number(s.mape_backtest) : null,
       mesesHistorial: s.meses_historial != null ? Number(s.meses_historial) : null,
