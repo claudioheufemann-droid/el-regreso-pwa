@@ -1,16 +1,17 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import {
-  TrendingUp, Wallet, AlertTriangle, Info, CalendarClock, Truck, HelpCircle, ChevronLeft, Target, UserX,
+  TrendingUp, Wallet, AlertTriangle, Info, CalendarClock, Truck, HelpCircle, ChevronLeft, ChevronDown,
+  ChevronRight, Target, UserX,
 } from 'lucide-react'
 import type { SerieFinanzas, AvanceCiclo, ResumenDeuda } from './page'
-import type { ProyeccionCaja, PrecisionCobro } from '@/lib/administracion/finanzas'
+import type { ProyeccionCaja, PrecisionCobro, ClienteEnPeriodo } from '@/lib/administracion/finanzas'
 
 interface Props {
   series: SerieFinanzas[]
@@ -94,6 +95,28 @@ function fRangoSemana(iso: string): string {
   return `${fDia(iso)} – ${fDia(fin)}`
 }
 
+/** Agrupa los clientes de una semana por plazo de pago (7, 15, 30... días),
+ *  de menor a mayor plazo — así se ve de un vistazo si el cobro de la semana
+ *  depende de crédito corto o largo. Se redondea el plazo al entero más
+ *  cercano: el plazo "real" (mediana observada) puede venir fraccionado,
+ *  pero el cupo que importa acá es el nominal (7/15/30/45/60/90). */
+function agruparPorPlazo(clientes: ClienteEnPeriodo[]) {
+  const porDias = new Map<number, ClienteEnPeriodo[]>()
+  for (const c of clientes) {
+    const dias = Math.round(c.diasPago)
+    const arr = porDias.get(dias) ?? []
+    arr.push(c)
+    porDias.set(dias, arr)
+  }
+  return [...porDias.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([dias, arr]) => ({
+      dias,
+      bruto: arr.reduce((s, c) => s + c.bruto, 0),
+      clientes: arr.sort((a, b) => b.bruto - a.bruto),
+    }))
+}
+
 /** Tarjeta blanca con el mismo tratamiento visual que Ventas: fondo blanco,
  *  borde gris claro, esquinas redondeadas — nada de fondo oscuro. */
 function Card({ children, acento }: { children: React.ReactNode; acento?: string }) {
@@ -142,6 +165,7 @@ export default function AdministracionClient({
   const [tab, setTab] = useState<'ingresos' | 'caja'>('ingresos')
   const [serieId, setSerieId] = useState('general::')
   const [verModelo, setVerModelo] = useState(false)
+  const [semanaExpandida, setSemanaExpandida] = useState<string | null>(null)
 
   const serieActual = series.find(s => s.id === serieId) ?? series.find(s => s.nivel === 'general') ?? null
 
@@ -584,17 +608,73 @@ export default function AdministracionClient({
                           </tr>
                         </thead>
                         <tbody>
-                          {proximas8.map((p, i) => (
-                            <tr key={p.inicio} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
-                              <td style={{ padding: '10px 14px', color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                {fSemana(p.inicio)}
-                                <span style={{ color: C.muted, fontWeight: 400 }}> · {fRangoSemana(p.inicio)}</span>
-                              </td>
-                              <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fMoney(p.neto)}</td>
-                              <td style={{ padding: '10px 14px', textAlign: 'right', color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fMoney(p.bruto)}</td>
-                              <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{p.filas}</td>
-                            </tr>
-                          ))}
+                          {proximas8.map((p, i) => {
+                            const expandido = semanaExpandida === p.inicio
+                            const grupos = expandido ? agruparPorPlazo(p.clientes) : []
+                            return (
+                              <Fragment key={p.inicio}>
+                                <tr
+                                  onClick={() => setSemanaExpandida(expandido ? null : p.inicio)}
+                                  style={{
+                                    borderTop: i === 0 ? 'none' : `1px solid ${C.line}`, cursor: 'pointer',
+                                    background: expandido ? C.blueSoft : 'transparent',
+                                  }}
+                                >
+                                  <td style={{ padding: '10px 14px', color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                      {expandido ? <ChevronDown size={14} color={C.muted} /> : <ChevronRight size={14} color={C.muted} />}
+                                      {fSemana(p.inicio)}
+                                    </span>
+                                    <span style={{ color: C.muted, fontWeight: 400 }}> · {fRangoSemana(p.inicio)}</span>
+                                  </td>
+                                  <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fMoney(p.neto)}</td>
+                                  <td style={{ padding: '10px 14px', textAlign: 'right', color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fMoney(p.bruto)}</td>
+                                  <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{p.filas}</td>
+                                </tr>
+                                {expandido && (
+                                  <tr>
+                                    <td colSpan={4} style={{ padding: 0, background: C.bg, borderBottom: `1px solid ${C.line}` }}>
+                                      <div style={{ padding: '4px 14px 16px' }}>
+                                        {grupos.length === 0 ? (
+                                          <p style={{ fontSize: 12.5, color: C.muted, padding: '10px 0' }}>Sin clientes identificados para esta semana.</p>
+                                        ) : grupos.map(g => (
+                                          <div key={g.dias} style={{ marginTop: 12 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                                              <span style={{
+                                                fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em',
+                                                color: C.blue, background: C.blueSoft, padding: '3px 9px', borderRadius: 999,
+                                              }}>
+                                                Crédito {g.dias} días
+                                              </span>
+                                              <span style={{ fontSize: 12, color: C.muted }}>
+                                                {fMoney(g.bruto)} · {g.clientes.length} cliente{g.clientes.length !== 1 ? 's' : ''}
+                                              </span>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                              {g.clientes.map(c => (
+                                                <div key={c.cliente} style={{
+                                                  display: 'flex', justifyContent: 'space-between', gap: 10,
+                                                  background: C.card, border: `1px solid ${C.line}`, borderRadius: 8,
+                                                  padding: '7px 10px',
+                                                }}>
+                                                  <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {c.cliente}
+                                                  </span>
+                                                  <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                                    {fMoney(c.bruto)}
+                                                  </span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>

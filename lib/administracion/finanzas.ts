@@ -82,6 +82,17 @@ export function brutoDeFila(f: FilaVentaFinanzas): number {
 
 // ── Proyección de cobranza ───────────────────────────────────────────────────
 
+/** Un cliente que se espera que pague DENTRO de una semana puntual — a
+ *  diferencia de `ClientePorCobrar` (agregado global, una fila por cliente
+ *  con su cobro más próximo), acá cada semana lleva su propio desglose para
+ *  poder responder "¿quién me paga esta semana, y a qué plazo?". */
+export interface ClienteEnPeriodo {
+  cliente: string
+  diasPago: number
+  neto: number
+  bruto: number
+}
+
 export interface PeriodoCaja {
   /** yyyy-mm-dd del lunes de la semana (o del primer día del mes si se agrupa
    *  por mes). */
@@ -94,6 +105,9 @@ export interface PeriodoCaja {
   /** true si el período ya pasó: la plata debería haber entrado. Se muestra
    *  aparte porque no es proyección, es mora esperada. */
   vencido: boolean
+  /** Quién compone el cobro de esta semana puntual, de mayor a menor bruto —
+   *  para expandir la semana y ver nombres, montos y plazo de cada uno. */
+  clientes: ClienteEnPeriodo[]
 }
 
 export interface ClientePorCobrar {
@@ -148,7 +162,10 @@ export function proyectarCaja(
    *  cobrado del histórico. */
   desdeISO: string,
 ): ProyeccionCaja {
-  const porSemana = new Map<string, { neto: number; bruto: number; filas: number }>()
+  const porSemana = new Map<string, {
+    neto: number; bruto: number; filas: number
+    clientes: Map<string, { diasPago: number; neto: number; bruto: number }>
+  }>()
   const porCliente = new Map<string, { cliente: string; diasPago: number; neto: number; bruto: number; proximoCobro: string }>()
   const sinPlazo = { neto: 0, bruto: 0, filas: 0, clientes: new Set<string>() }
   const sinDespachar = { neto: 0, bruto: 0, filas: 0 }
@@ -178,14 +195,19 @@ export function proyectarCaja(
     const fechaCobro = sumarDias(f.fecha_entrega.slice(0, 10), dias)
     if (fechaCobro < desdeISO) continue
 
+    const nombre = f.nombre_fantasia ?? '(sin nombre)'
+
     const semana = lunesDe(fechaCobro)
-    const acc = porSemana.get(semana) ?? { neto: 0, bruto: 0, filas: 0 }
+    const acc = porSemana.get(semana) ?? { neto: 0, bruto: 0, filas: 0, clientes: new Map() }
     acc.neto += neto
     acc.bruto += bruto
     acc.filas++
+    const cliSemana = acc.clientes.get(nombre) ?? { diasPago: dias, neto: 0, bruto: 0 }
+    cliSemana.neto += neto
+    cliSemana.bruto += bruto
+    acc.clientes.set(nombre, cliSemana)
     porSemana.set(semana, acc)
 
-    const nombre = f.nombre_fantasia ?? '(sin nombre)'
     const cli = porCliente.get(nombre) ?? { cliente: nombre, diasPago: dias, neto: 0, bruto: 0, proximoCobro: fechaCobro }
     cli.neto += neto
     cli.bruto += bruto
@@ -195,7 +217,13 @@ export function proyectarCaja(
 
   const semanaActual = lunesDe(hoyISO)
   const periodos: PeriodoCaja[] = [...porSemana.entries()]
-    .map(([inicio, v]) => ({ inicio, ...v, vencido: inicio < semanaActual }))
+    .map(([inicio, v]) => ({
+      inicio, neto: v.neto, bruto: v.bruto, filas: v.filas,
+      vencido: inicio < semanaActual,
+      clientes: [...v.clientes.entries()]
+        .map(([cliente, c]) => ({ cliente, diasPago: c.diasPago, neto: c.neto, bruto: c.bruto }))
+        .sort((a, b) => b.bruto - a.bruto),
+    }))
     .sort((a, b) => a.inicio.localeCompare(b.inicio))
 
   return {
