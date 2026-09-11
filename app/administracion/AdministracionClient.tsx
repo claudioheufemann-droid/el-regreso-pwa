@@ -101,7 +101,7 @@ function Card({ children, acento }: { children: React.ReactNode; acento?: string
     <div style={{
       background: C.card,
       border: `1px solid ${acento ?? C.line}`,
-      borderRadius: 16, padding: 20,
+      borderRadius: 16, padding: 'clamp(14px, 4vw, 20px)',
     }}>
       {children}
     </div>
@@ -197,7 +197,7 @@ export default function AdministracionClient({
 
   return (
     <div style={{ background: C.bg, minHeight: '100%', margin: -1, padding: '1px 0 0' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 32px 60px' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '20px clamp(12px, 4vw, 32px) 60px' }}>
 
         {/* ── Volver — mismo botón pill que el resto de la app ─────────────── */}
         <button
@@ -573,29 +573,31 @@ export default function AdministracionClient({
                   </ResponsiveContainer>
 
                   <div style={{ marginTop: 14, border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                      <thead>
-                        <tr style={{ background: C.bg }}>
-                          <th style={{ textAlign: 'left', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Semana</th>
-                          <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Venta neta</th>
-                          <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Entra al banco</th>
-                          <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Documentos</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {proximas8.map((p, i) => (
-                          <tr key={p.inicio} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
-                            <td style={{ padding: '10px 14px', color: C.text, fontWeight: 600 }}>
-                              {fSemana(p.inicio)}
-                              <span style={{ color: C.muted, fontWeight: 400 }}> · {fRangoSemana(p.inicio)}</span>
-                            </td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{fMoney(p.neto)}</td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fMoney(p.bruto)}</td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{p.filas}</td>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', minWidth: 540, borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: C.bg }}>
+                            <th style={{ textAlign: 'left', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Semana</th>
+                            <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Venta neta</th>
+                            <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Entra al banco</th>
+                            <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Documentos</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {proximas8.map((p, i) => (
+                            <tr key={p.inicio} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
+                              <td style={{ padding: '10px 14px', color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                {fSemana(p.inicio)}
+                                <span style={{ color: C.muted, fontWeight: 400 }}> · {fRangoSemana(p.inicio)}</span>
+                              </td>
+                              <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fMoney(p.neto)}</td>
+                              <td style={{ padding: '10px 14px', textAlign: 'right', color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fMoney(p.bruto)}</td>
+                              <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{p.filas}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </>
               )}
@@ -637,34 +639,36 @@ export default function AdministracionClient({
                   </h2>
                 </div>
                 <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ background: C.bg }}>
-                        <th style={{ textAlign: 'left', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Cliente</th>
-                        <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Plazo</th>
-                        <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Cobro estimado</th>
-                        <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Entra al banco</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {caja.porCliente.slice(0, 15).map((c, i) => (
-                        <tr key={c.cliente} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
-                          <td style={{ padding: '10px 14px', color: C.text, fontWeight: 600, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.cliente}</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted }}>{c.diasPago} días</td>
-                          {/* En rojo cuando la fecha ya pasó: es plata que
-                              debería estar cobrada, no un cobro por venir. */}
-                          <td style={{
-                            padding: '10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums',
-                            color: c.proximoCobro < hoyISO ? C.red : C.muted,
-                            fontWeight: c.proximoCobro < hoyISO ? 700 : 400,
-                          }}>
-                            {fSemana(c.proximoCobro)} · {fDia(c.proximoCobro)}{c.proximoCobro < hoyISO ? ' · vencido' : ''}
-                          </td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right', color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fMoney(c.bruto)}</td>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: C.bg }}>
+                          <th style={{ textAlign: 'left', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Cliente</th>
+                          <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Plazo</th>
+                          <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Cobro estimado</th>
+                          <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Entra al banco</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {caja.porCliente.slice(0, 15).map((c, i) => (
+                          <tr key={c.cliente} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
+                            <td style={{ padding: '10px 14px', color: C.text, fontWeight: 600, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.cliente}</td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, whiteSpace: 'nowrap' }}>{c.diasPago} días</td>
+                            {/* En rojo cuando la fecha ya pasó: es plata que
+                                debería estar cobrada, no un cobro por venir. */}
+                            <td style={{
+                              padding: '10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+                              color: c.proximoCobro < hoyISO ? C.red : C.muted,
+                              fontWeight: c.proximoCobro < hoyISO ? 700 : 400,
+                            }}>
+                              {fSemana(c.proximoCobro)} · {fDia(c.proximoCobro)}{c.proximoCobro < hoyISO ? ' · vencido' : ''}
+                            </td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right', color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fMoney(c.bruto)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </Card>
             )}
