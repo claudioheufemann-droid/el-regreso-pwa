@@ -15,7 +15,7 @@ import {
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
   ArrowUp, ArrowDown, CheckCircle2, Trash2, X,
 } from 'lucide-react'
-import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, LoteSinReceta } from './page'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, RecetaInsumoLinea, LoteSinReceta } from './page'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -457,7 +457,7 @@ function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.R
 }
 
 export default function ProduccionClient({
-  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, ocupacionPlanta, necesidadInsumos, stockInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, ocupacionPlanta, necesidadInsumos, stockInsumos, recetaInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
@@ -472,6 +472,7 @@ export default function ProduccionClient({
   /** Insumos que hacen falta para cubrir la cola activa del Plan Maestro, escalando cada receta al litraje real de cada lote. */
   necesidadInsumos: NecesidadInsumo[]
   stockInsumos: StockInsumoItem[]
+  recetaInsumos: RecetaInsumoLinea[]
   /** Lotes del plan cuyo producto no tiene receta cargada — su necesidad de insumos no se pudo calcular. */
   lotesSinReceta: LoteSinReceta[]
   stock: StockItem[]
@@ -1240,6 +1241,75 @@ export default function ProduccionClient({
     i.categoria.toLowerCase().includes(busquedaInsumo.toLowerCase())
   )
   const stockInsumosFiltrado = stockInsumos.filter(i =>
+    i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
+    i.categoria.toLowerCase().includes(busquedaInsumo.toLowerCase())
+  )
+
+  /* ── MRP neto simple ──────────────────────────────────────────────────
+     A diferencia de "Necesidad de Insumos" (que sólo escala los lotes YA
+     en la cola del Plan Maestro), acá la fuente de la necesidad es el
+     FORECAST del modelo — cuánto se espera vender de cada producto en los
+     próximos 30 días — así que no depende de que haya algo planificado
+     todavía. Es "neto simple": no reparte por semana ni considera lead
+     time de compra, sólo dice cuánto hace falta comprar en total dentro
+     del horizonte.
+
+     Mismo criterio de escalado lineal que Necesidad de Insumos (decisión
+     del usuario, 7-sep-2026): cantidadPorLote × (demanda del horizonte /
+     litrosBase de la receta). */
+  const MRP_HORIZONTE_DIAS = 30
+  const mrpInsumos = useMemo(() => {
+    const hoyISO = hoyLocalISO()
+    // Suma pura sobre el string ISO (no Date.now()): mismo horizonte para
+    // todo el cálculo sin importar cuándo exactamente re-renderiza React.
+    const hastaISO = new Date(Date.parse(`${hoyISO}T00:00:00Z`) + MRP_HORIZONTE_DIAS * 86400000)
+      .toISOString().slice(0, 10)
+    const disponiblePorInsumo = new Map(stockInsumos.map(s => [s.insumo, s.disponible]))
+    const precioPorInsumo = new Map(stockInsumos.map(s => [s.insumo, s.precioUnitario]))
+
+    const demandaPorProducto = new Map<string, number>()
+    const productosSinForecast = new Set<string>()
+    for (const producto of new Set(recetaInsumos.map(l => l.producto))) {
+      const serie = series.find(s => s.nivel === 'producto' && s.clave === producto)
+      if (!serie) { productosSinForecast.add(producto); continue }
+      const demanda = Math.max(demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, hastaISO), 0)
+      if (demanda > 0) demandaPorProducto.set(producto, demanda)
+    }
+
+    const necesidadPorInsumo = new Map<string, {
+      categoria: string; unidadBase: 'gr' | 'ml'; bruta: number
+      productos: { producto: string; litrosDemanda: number }[]
+    }>()
+    for (const linea of recetaInsumos) {
+      const demandaLitros = demandaPorProducto.get(linea.producto)
+      if (!demandaLitros) continue
+      const factor = demandaLitros / linea.litrosBase
+      const acc = necesidadPorInsumo.get(linea.insumo)
+        ?? { categoria: linea.categoria, unidadBase: linea.unidadBase, bruta: 0, productos: [] }
+      acc.bruta += linea.cantidadPorLote * factor
+      if (!acc.productos.some(p => p.producto === linea.producto)) {
+        acc.productos.push({ producto: linea.producto, litrosDemanda: Math.round(demandaLitros) })
+      }
+      necesidadPorInsumo.set(linea.insumo, acc)
+    }
+
+    const filas = [...necesidadPorInsumo.entries()].map(([insumo, n]) => {
+      const bruta = Math.round(n.bruta)
+      const disponible = disponiblePorInsumo.get(insumo) ?? null
+      const necesidadNeta = disponible != null ? Math.max(bruta - disponible, 0) : bruta
+      const precioUnitario = precioPorInsumo.get(insumo) ?? null
+      return {
+        insumo, categoria: n.categoria as NecesidadInsumo['categoria'], unidadBase: n.unidadBase,
+        necesidadBruta: bruta, disponible, necesidadNeta,
+        costoCompra: precioUnitario != null ? Math.round(precioUnitario * necesidadNeta) : null,
+        productos: n.productos.sort((a, b) => b.litrosDemanda - a.litrosDemanda),
+      }
+    }).sort((a, b) => b.necesidadNeta - a.necesidadNeta)
+
+    return { filas, hastaISO, productosSinForecast: [...productosSinForecast].sort() }
+  }, [recetaInsumos, series, avanceMes, stockInsumos])
+
+  const mrpFiltrado = mrpInsumos.filas.filter(i =>
     i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
     i.categoria.toLowerCase().includes(busquedaInsumo.toLowerCase())
   )
@@ -3200,6 +3270,91 @@ export default function ProduccionClient({
                             </td>
                             <td className="px-6 py-2.5 text-right tabular-nums text-gray-400">
                               {row.valorizado != null ? `$${fNum(row.valorizado)}` : <span title="Sin precio o sin stock cargado">—</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* MRP neto simple: la necesidad sale del FORECAST del modelo, no
+                  de lo que ya esté en cola — a diferencia de "Necesidad de
+                  Insumos" de abajo, que sólo mira los lotes activos del Plan
+                  Maestro. Complementarias, no reemplazan una a la otra. */}
+              {mrpInsumos.productosSinForecast.length > 0 && (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+                  <div>
+                    <p className="font-bold">
+                      {mrpInsumos.productosSinForecast.length} {mrpInsumos.productosSinForecast.length === 1 ? 'producto con receta' : 'productos con receta'} sin forecast
+                    </p>
+                    <p className="mt-1 text-amber-700">
+                      No se pudo proyectar su demanda (sin historial de venta suficiente todavía): {mrpInsumos.productosSinForecast.join(', ')}.
+                      No están sumados en el MRP de abajo.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                      <Sigma size={16} />
+                    </span>
+                    <div>
+                      <h3 className="font-bold text-gray-800">MRP — Compra sugerida de insumos</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {mrpInsumos.filas.length} insumos con necesidad, según la demanda proyectada por el modelo hasta
+                        el {mrpInsumos.hastaISO.slice(8, 10)}/{mrpInsumos.hastaISO.slice(5, 7)} (próximos {MRP_HORIZONTE_DIAS} días) —
+                        no depende de que haya lotes ya planificados.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="max-h-96 overflow-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-3 font-bold">Insumo</th>
+                        <th className="px-6 py-3 font-bold">Categoría</th>
+                        <th className="px-6 py-3 text-right font-bold">Necesidad Bruta</th>
+                        <th className="px-6 py-3 text-right font-bold">Disponible</th>
+                        <th className="px-6 py-3 text-right font-bold text-blue-700">Compra Sugerida</th>
+                        <th className="px-6 py-3 text-right font-bold">Costo Estimado</th>
+                        <th className="px-6 py-3 font-bold">Productos que lo piden</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {mrpFiltrado.length === 0 && (
+                        <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">
+                          {mrpInsumos.filas.length === 0
+                            ? 'Ningún producto con receta tiene demanda proyectada positiva en el horizonte.'
+                            : `Sin resultados para "${busquedaInsumo}".`}
+                        </td></tr>
+                      )}
+                      {mrpFiltrado.map(row => {
+                        const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
+                        return (
+                          <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
+                            <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
+                            <td className="px-6 py-3">
+                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
+                            </td>
+                            <td className="px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
+                            <td className="px-6 py-3 text-right tabular-nums text-gray-500">
+                              {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
+                            </td>
+                            <td className={`px-6 py-3 text-right font-bold tabular-nums text-blue-900 ${row.necesidadNeta > 0 ? 'bg-blue-50' : ''}`}>
+                              {row.necesidadNeta > 0 ? fCantidadInsumo(row.necesidadNeta, row.unidadBase) : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-6 py-3 text-right tabular-nums text-gray-400">
+                              {row.costoCompra != null ? `$${fNum(row.costoCompra)}` : <span title="Sin precio cargado todavía">—</span>}
+                            </td>
+                            <td className="px-6 py-3 text-xs text-gray-500">
+                              {row.productos.map(p => p.producto).join(', ')}
                             </td>
                           </tr>
                         )

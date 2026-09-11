@@ -248,6 +248,24 @@ export interface LoteSinReceta {
 }
 
 /**
+ * Una línea de receta, aplanada (producto × insumo), SIN escalar todavía —
+ * eso lo hace el cliente contra la demanda proyectada del forecast, para
+ * construir el MRP (ver mrpInsumos en ProduccionClient.tsx). Se manda cruda
+ * en vez de pre-agregada server-side porque la demanda depende de qué
+ * horizonte de fechas esté eligiendo el usuario en la UI.
+ */
+export interface RecetaInsumoLinea {
+  producto: string
+  litrosBase: number
+  insumo: string
+  categoria: 'malta' | 'lupulo' | 'levadura' | 'otros'
+  unidadBase: 'gr' | 'ml'
+  /** Cantidad de este insumo para UN lote de `litrosBase` litros. */
+  cantidadPorLote: number
+  precioUnitario: number | null
+}
+
+/**
  * Una fila de la cola priorizada del Plan Maestro (tabla plan_produccion).
  * Distinta de `lotes_produccion` (Logística: el ENVÍO/despacho de algo que
  * ya se produjo) — esto es la planificación previa: qué cocinar, cuánto,
@@ -1035,6 +1053,22 @@ export default async function ProduccionPage() {
     recetaInsumosPorRecetaId.set(ri.receta_id as string, lista)
   }
 
+  // MRP: todas las recetas aplanadas (producto × insumo), sin escalar —
+  // el cliente las escala contra la demanda proyectada del horizonte que
+  // elija, no sólo contra los lotes ya en cola. Ver RecetaInsumoLinea.
+  const recetaInsumos: RecetaInsumoLinea[] = (recetasRaw ?? []).flatMap(r => {
+    const litrosBase = Number(r.litros_base)
+    return (recetaInsumosPorRecetaId.get(r.id as string) ?? []).map(({ insumo, cantidad }) => ({
+      producto: r.producto as string,
+      litrosBase,
+      insumo: insumo.nombre,
+      categoria: insumo.categoria as RecetaInsumoLinea['categoria'],
+      unidadBase: insumo.unidad_base as RecetaInsumoLinea['unidadBase'],
+      cantidadPorLote: cantidad,
+      precioUnitario: insumo.precio_unitario,
+    }))
+  })
+
   // Último snapshot por insumo — stock_insumos ya viene ordenado por
   // fecha_informe desc, así que la primera fila de cada insumo_id es la más
   // reciente; se ignoran las filas de fechas anteriores.
@@ -1254,6 +1288,7 @@ export default async function ProduccionPage() {
       ocupacionPlanta={ocupacionPlanta}
       necesidadInsumos={necesidadInsumos}
       stockInsumos={stockInsumos}
+      recetaInsumos={recetaInsumos}
       lotesSinReceta={lotesSinReceta}
       stock={stock}
       stockSeguridad={stockSeguridad}
