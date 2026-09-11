@@ -92,6 +92,26 @@ const UNIDAD_ENVASE: Record<EnvaseBucket, string> = {
   barril_30: 'barriles', barril_50: 'barriles', lata: 'latas', otros: 'unidades',
 }
 
+/** Litros ↔ unidades, para mostrar el stock de seguridad tanto en litros
+ *  como en cantidad de envases (no sólo en litros, que no dice nada sobre
+ *  "cuántas latas/barriles tengo que tener siempre"). Barril es exacto (el
+ *  bucket ES 30L o 50L por definición — ver bucketEnvase en reglas.ts). Lata
+ *  mezcla 354ml y 473ml (decisión 4-sep-2026), así que no hay un tamaño fijo:
+ *  se estima el tamaño promedio real a partir del propio inventario físico
+ *  (disponibleLitros / disponibleUnidades) en vez de asumir uno solo — null
+ *  si no hay stock físico contado todavía para derivar el promedio. */
+function estimarUnidadesEnvase(
+  envase: EnvaseBucket, litros: number, disponibleLitros: number | null, disponibleUnidades: number | null
+): number | null {
+  if (envase === 'barril_30') return Math.round(litros / 30)
+  if (envase === 'barril_50') return Math.round(litros / 50)
+  if (envase === 'lata' && disponibleLitros && disponibleUnidades) {
+    const litrosPorLata = disponibleLitros / disponibleUnidades
+    if (litrosPorLata > 0) return Math.round(litros / litrosPorLata)
+  }
+  return null
+}
+
 /** Color por formato — sólo para la barra apilada del Split de Envasado, donde
  *  hay que distinguir tres tramos de un mismo lote de un vistazo. */
 const COLOR_ENVASE: Record<EnvaseBucket, string> = {
@@ -1141,7 +1161,7 @@ export default function ProduccionClient({
     const hoyISO = hoyLocalISO()
     if (fechaCoberturaSeg <= hoyISO) return []
     const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
-    const resultado: (SugerenciaPlan & { altaDemanda: boolean })[] = []
+    const resultado: (SugerenciaPlan & { altaDemanda: boolean; stockSeguridadLitros: number })[] = []
 
     for (const serie of series) {
       if (serie.nivel !== 'producto_envase' || !serie.producto || !serie.envaseBucket) continue
@@ -1175,6 +1195,7 @@ export default function ProduccionClient({
         ritmoDiarioActual: Math.round(ritmoDiarioActual * 10) / 10,
         diasHastaQuiebre: diasHastaQuiebre != null ? Math.round(diasHastaQuiebre) : null,
         fechaEstimadaQuiebre, motivo, altaDemanda,
+        stockSeguridadLitros: Math.round(filaStock.stockSeguridadLitros),
         // Esta sección (Necesidades Anticipadas) no prioriza por línea fija,
         // sólo por temporada de alta demanda — el campo queda en false acá
         // porque SugerenciaPlan lo exige, no porque se use en este cálculo.
@@ -1191,10 +1212,20 @@ export default function ProduccionClient({
   }, [series, stockSeguridad, avanceMes, fechaCoberturaSeg, filtroCategoriaSeg, filtroEnvaseSeg])
 
   const anticipadasPorProducto = useMemo(() => {
-    const grupos = new Map<string, { producto: string; categoria: 'cerveza' | 'kombucha'; items: typeof necesidadesAnticipadas }>()
+    // Totales por producto EN LITROS, sumando los 3 formatos — la pregunta
+    // "¿cuánto tengo que cocer en total para este producto?" no distingue
+    // envase (el envasado se decide después, ver Split de Envasado); pedir
+    // el número desglosado por formato y sumarlo a mano era el gap.
+    interface Grupo { producto: string; categoria: 'cerveza' | 'kombucha'; items: typeof necesidadesAnticipadas; totalAProducir: number; totalStockSeguridad: number }
+    const grupos = new Map<string, Grupo>()
     for (const item of necesidadesAnticipadas) {
-      if (!grupos.has(item.producto)) grupos.set(item.producto, { producto: item.producto, categoria: item.categoria, items: [] })
-      grupos.get(item.producto)!.items.push(item)
+      if (!grupos.has(item.producto)) {
+        grupos.set(item.producto, { producto: item.producto, categoria: item.categoria, items: [], totalAProducir: 0, totalStockSeguridad: 0 })
+      }
+      const grupo = grupos.get(item.producto)!
+      grupo.items.push(item)
+      grupo.totalAProducir += item.litrosSugeridos
+      grupo.totalStockSeguridad += item.stockSeguridadLitros
     }
     return [...grupos.values()]
   }, [necesidadesAnticipadas])
@@ -2515,9 +2546,22 @@ export default function ProduccionClient({
                   <div className="mt-4 flex flex-col gap-3">
                     {anticipadasPorProducto.map(grupo => (
                       <div key={grupo.producto} className="overflow-hidden rounded-lg border border-amber-200 bg-white">
-                        <div className="flex items-center gap-2.5 border-b border-amber-100 bg-amber-50/60 px-4 py-2.5">
+                        <div className="flex flex-wrap items-center gap-2.5 border-b border-amber-100 bg-amber-50/60 px-4 py-2.5">
                           <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={30} radius={7} />
                           <span className="font-semibold text-gray-800">{grupo.producto}</span>
+                          {/* Total EN LITROS del producto completo, sumando los 3 formatos —
+                              independiente del envase, tal como se pidió: "cuánto necesitamos
+                              cubrir en total" sin tener que sumar las filas de abajo a mano. */}
+                          {grupo.totalAProducir > 0 && (
+                            <span className="rounded-full bg-amber-200/70 px-2.5 py-0.5 text-xs font-bold text-amber-800">
+                              Total a producir: {fNum(grupo.totalAProducir)} L
+                            </span>
+                          )}
+                          {grupo.totalStockSeguridad > 0 && (
+                            <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-bold text-sky-700" title="Colchón mínimo que este producto debe tener siempre en stock, sumando sus 3 formatos — no es lo mismo que 'a producir' (la brecha actual).">
+                              Stock de seguridad total: {fNum(grupo.totalStockSeguridad)} L
+                            </span>
+                          )}
                         </div>
                         <div className="divide-y divide-gray-100">
                           {grupo.items.map((item, i) => (
@@ -2541,6 +2585,19 @@ export default function ProduccionClient({
                                 )}
                               </div>
                               <div className="flex shrink-0 items-center gap-3 text-right">
+                                {/* Cuánto DEBE haber siempre (el colchón) — no la brecha a producir,
+                                    para responder "cuál es nuestro stock de seguridad" tal cual se
+                                    pidió, no sólo la necesidad de venta. */}
+                                <div className="w-24">
+                                  <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-sky-500">Stock seguridad</p>
+                                  <p className="text-sm font-bold tabular-nums text-sky-700">{fNum(item.stockSeguridadLitros)} L</p>
+                                  {(() => {
+                                    const unidades = estimarUnidadesEnvase(item.envase, item.stockSeguridadLitros, item.disponibleLitros, item.disponibleUnidades)
+                                    return unidades != null
+                                      ? <p className="text-[11px] text-sky-400">≈{fNum(unidades)} {UNIDAD_ENVASE[item.envase]}</p>
+                                      : null
+                                  })()}
+                                </div>
                                 <div className="w-24">
                                   <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Disponible</p>
                                   <p className="text-sm font-bold tabular-nums text-gray-500">{fNum(item.disponibleLitros)} L</p>
