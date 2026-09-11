@@ -219,6 +219,26 @@ export interface NecesidadInsumo {
   lotes: { producto: string; litrosPlanificados: number }[]
 }
 
+/**
+ * Stock ACTUAL de un insumo, del catálogo completo — a diferencia de
+ * `NecesidadInsumo` (que sólo lista los insumos que algún lote ACTIVO del
+ * Plan Maestro necesita), esto lista TODOS los insumos del catálogo con su
+ * último inventario cargado, haya o no algo en cola pidiéndolos. Sin esto,
+ * con la cola vacía (0 lotes activos) la sección de insumos se veía vacía
+ * pese a que el stock sí estaba sincronizado — confusión real del usuario,
+ * 11-sep-2026.
+ */
+export interface StockInsumoItem {
+  insumo: string
+  categoria: 'malta' | 'lupulo' | 'levadura' | 'otros'
+  unidadBase: 'gr' | 'ml'
+  /** null = insumo del catálogo sin ningún snapshot de stock cargado todavía. */
+  disponible: number | null
+  precioUnitario: number | null
+  /** Valorizado al precio unitario — null si falta precio o disponible. */
+  valorizado: number | null
+}
+
 /** Un lote del Plan Maestro cuyo producto no tiene receta cargada todavía —
  *  su necesidad de insumos no se puede calcular y hay que decirlo, no
  *  omitirlo en silencio. */
@@ -322,7 +342,7 @@ export default async function ProduccionPage() {
   const [
     { data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios },
     { data: stockSeguridadRaw }, { data: ultimoSyncStockRaw },
-    { data: recetasRaw }, { data: recetaInsumosRaw }, { data: stockInsumosRaw },
+    { data: recetasRaw }, { data: recetaInsumosRaw }, { data: stockInsumosRaw }, { data: insumosRaw },
   ] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial, metodo'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
@@ -341,6 +361,9 @@ export default async function ProduccionPage() {
     // la necesidad neta de la proyección de compra es simplemente toda la
     // necesidad bruta, no un error.
     admin.from('stock_insumos').select('insumo_id, cantidad, fecha_informe').order('fecha_informe', { ascending: false }),
+    // Catálogo COMPLETO de insumos, no sólo los que usa algún lote activo —
+    // ver el comentario en StockInsumoItem.
+    admin.from('insumos').select('id, nombre, categoria, unidad_base, precio_unitario').order('nombre'),
   ])
   const ultimoSyncStock = (ultimoSyncStockRaw as { creado_at?: string } | null)?.creado_at ?? null
   // Se calcula server-side (comparado contra la hora del request, no la del
@@ -1065,6 +1088,23 @@ export default async function ProduccionPage() {
     })
     .sort((a, b) => a.categoria.localeCompare(b.categoria) || b.necesidadBruta - a.necesidadBruta)
 
+  // Stock general del catálogo COMPLETO de insumos — independiente de si hay
+  // o no lotes activos pidiéndolos. Ver comentario en StockInsumoItem.
+  const stockInsumos: StockInsumoItem[] = (insumosRaw ?? [])
+    .map(i => {
+      const disponible = disponiblePorInsumoId.get(i.id as string) ?? null
+      const precioUnitario = i.precio_unitario as number | null
+      return {
+        insumo: i.nombre as string,
+        categoria: i.categoria as StockInsumoItem['categoria'],
+        unidadBase: i.unidad_base as StockInsumoItem['unidadBase'],
+        disponible,
+        precioUnitario,
+        valorizado: disponible != null && precioUnitario != null ? Math.round(disponible * precioUnitario) : null,
+      }
+    })
+    .sort((a, b) => a.categoria.localeCompare(b.categoria) || a.insumo.localeCompare(b.insumo))
+
   // Sugerencias / alarmas de quiebre: SIEMPRE por producto×envase, nunca por
   // el estilo completo — lo que hay que saber no es "¿va bien Doble IPA?"
   // sino "¿en qué formato específico (barril 30L, lata...) nos vamos a
@@ -1213,6 +1253,7 @@ export default async function ProduccionPage() {
       splitFermentadores={splitFermentadores}
       ocupacionPlanta={ocupacionPlanta}
       necesidadInsumos={necesidadInsumos}
+      stockInsumos={stockInsumos}
       lotesSinReceta={lotesSinReceta}
       stock={stock}
       stockSeguridad={stockSeguridad}

@@ -15,7 +15,7 @@ import {
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
   ArrowUp, ArrowDown, CheckCircle2, Trash2, X,
 } from 'lucide-react'
-import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, LoteSinReceta } from './page'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, LoteSinReceta } from './page'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -457,7 +457,7 @@ function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.R
 }
 
 export default function ProduccionClient({
-  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, ocupacionPlanta, necesidadInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, ocupacionPlanta, necesidadInsumos, stockInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
@@ -471,6 +471,7 @@ export default function ProduccionClient({
   ocupacionPlanta: OcupacionPlanta
   /** Insumos que hacen falta para cubrir la cola activa del Plan Maestro, escalando cada receta al litraje real de cada lote. */
   necesidadInsumos: NecesidadInsumo[]
+  stockInsumos: StockInsumoItem[]
   /** Lotes del plan cuyo producto no tiene receta cargada — su necesidad de insumos no se pudo calcular. */
   lotesSinReceta: LoteSinReceta[]
   stock: StockItem[]
@@ -1230,8 +1231,15 @@ export default function ProduccionClient({
     seguridad: filasStockSeguridad.filter(f => f.estado === 'critico' || f.estado === 'bajo').length,
   }), [advertencias.length, filasStockSeguridad])
 
-  const stockInsumosVacio = necesidadInsumos.every(i => i.disponible == null)
+  // Antes se derivaba de necesidadInsumos, que con la cola de producción
+  // vacía queda vacío también (aunque el stock SÍ esté cargado) — ese falso
+  // "sin dato" fue justamente la confusión que reportó el usuario, 11-sep-2026.
+  const stockInsumosVacio = stockInsumos.every(i => i.disponible == null)
   const insumosFiltrados = necesidadInsumos.filter(i =>
+    i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
+    i.categoria.toLowerCase().includes(busquedaInsumo.toLowerCase())
+  )
+  const stockInsumosFiltrado = stockInsumos.filter(i =>
     i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
     i.categoria.toLowerCase().includes(busquedaInsumo.toLowerCase())
   )
@@ -3141,6 +3149,65 @@ export default function ProduccionClient({
                   </div>
                 </div>
               )}
+
+              {/* Stock ACTUAL del catálogo completo de insumos — independiente de si
+                  hay o no lotes activos en el Plan Maestro pidiéndolos. Existe
+                  aparte de "Necesidad de Insumos" de abajo porque esa tabla sólo
+                  lista lo que algún lote activo necesita: con la cola vacía queda
+                  vacía también, aunque el stock sí esté cargado. */}
+              <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                      <Package size={16} />
+                    </span>
+                    <div>
+                      <h3 className="font-bold text-gray-800">Stock de Insumos</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {stockInsumos.length} insumos del catálogo{stockInsumosVacio ? ' — todavía no hay ningún inventario cargado.' : '.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="max-h-96 overflow-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                      <tr>
+                        <th className="px-6 py-3 font-bold">Insumo</th>
+                        <th className="px-6 py-3 font-bold">Categoría</th>
+                        <th className="px-6 py-3 text-right font-bold">Disponible</th>
+                        <th className="px-6 py-3 text-right font-bold">Valorizado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {stockInsumosFiltrado.length === 0 && (
+                        <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                          {stockInsumos.length === 0
+                            ? 'No hay insumos cargados en el catálogo todavía.'
+                            : `Sin resultados para "${busquedaInsumo}".`}
+                        </td></tr>
+                      )}
+                      {stockInsumosFiltrado.map(row => {
+                        const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
+                        return (
+                          <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
+                            <td className="px-6 py-2.5 font-semibold text-gray-800">{row.insumo}</td>
+                            <td className="px-6 py-2.5">
+                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
+                            </td>
+                            <td className="px-6 py-2.5 text-right tabular-nums text-gray-700">
+                              {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
+                            </td>
+                            <td className="px-6 py-2.5 text-right tabular-nums text-gray-400">
+                              {row.valorizado != null ? `$${fNum(row.valorizado)}` : <span title="Sin precio o sin stock cargado">—</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
               <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 
