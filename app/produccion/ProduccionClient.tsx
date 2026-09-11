@@ -608,6 +608,7 @@ export default function ProduccionClient({
   }, [sugerenciasPlan])
 
   const [busquedaInsumo, setBusquedaInsumo] = useState('')
+  const [panelInsumosAbierto, setPanelInsumosAbierto] = useState<'stock' | 'mrp' | 'necesidad'>('stock')
   const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
   const [filtroEnvase, setFiltroEnvase] = useState<string>('todos')
   /** Muestra la descomposición del modelo (tendencia + estacionalidad). */
@@ -3256,13 +3257,23 @@ export default function ProduccionClient({
                 </div>
               )}
 
+              {/* Las 3 tablas de abajo son un acordeón: sólo una se expande a la
+                  vez, para que cuando el usuario la abre ocupe todo el alto
+                  disponible en vez de competir por espacio con las otras dos
+                  (que quedan colapsadas mostrando sólo su encabezado-resumen). */}
+
               {/* Stock ACTUAL del catálogo completo de insumos — independiente de si
                   hay o no lotes activos en el Plan Maestro pidiéndolos. Existe
                   aparte de "Necesidad de Insumos" de abajo porque esa tabla sólo
                   lista lo que algún lote activo necesita: con la cola vacía queda
                   vacía también, aunque el stock sí esté cargado. */}
-              <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+              <div className={`flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${panelInsumosAbierto === 'stock' ? 'border-amber-200 shadow-md' : 'border-gray-200'}`}>
+                <button
+                  type="button"
+                  onClick={() => setPanelInsumosAbierto('stock')}
+                  aria-expanded={panelInsumosAbierto === 'stock'}
+                  className="flex w-full flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5 text-left transition-colors hover:bg-amber-50/40"
+                >
                   <div className="flex items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
                       <Package size={16} />
@@ -3274,44 +3285,52 @@ export default function ProduccionClient({
                       </p>
                     </div>
                   </div>
-                </div>
-                <div className="max-h-96 overflow-auto">
-                  <table className="w-full border-collapse text-left">
-                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
-                      <tr>
-                        <th className="px-6 py-3 font-bold">Insumo</th>
-                        <th className="px-6 py-3 font-bold">Categoría</th>
-                        <th className="px-6 py-3 text-right font-bold">Disponible</th>
-                        <th className="px-6 py-3 text-right font-bold">Valorizado</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-sm">
-                      {stockInsumosFiltrado.length === 0 && (
-                        <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400">
-                          {stockInsumos.length === 0
-                            ? 'No hay insumos cargados en el catálogo todavía.'
-                            : `Sin resultados para "${busquedaInsumo}".`}
-                        </td></tr>
-                      )}
-                      {stockInsumosFiltrado.map(row => {
-                        const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
-                        return (
-                          <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
-                            <td className="px-6 py-2.5 font-semibold text-gray-800">{row.insumo}</td>
-                            <td className="px-6 py-2.5">
-                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
-                            </td>
-                            <td className="px-6 py-2.5 text-right tabular-nums text-gray-700">
-                              {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
-                            </td>
-                            <td className="px-6 py-2.5 text-right tabular-nums text-gray-400">
-                              {row.valorizado != null ? `$${fNum(row.valorizado)}` : <span title="Sin precio o sin stock cargado">—</span>}
-                            </td>
+                  <ChevronDown
+                    size={20}
+                    className={`shrink-0 text-gray-400 transition-transform duration-300 ${panelInsumosAbierto === 'stock' ? 'rotate-180 text-amber-600' : ''}`}
+                  />
+                </button>
+                <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${panelInsumosAbierto === 'stock' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                  <div className="overflow-hidden">
+                    <div className="max-h-[65vh] overflow-auto">
+                      <table className="w-full border-collapse text-left">
+                        <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                          <tr>
+                            <th className="px-6 py-3 font-bold">Insumo</th>
+                            <th className="px-6 py-3 font-bold">Categoría</th>
+                            <th className="px-6 py-3 text-right font-bold">Disponible</th>
+                            <th className="px-6 py-3 text-right font-bold">Valorizado</th>
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-sm">
+                          {stockInsumosFiltrado.length === 0 && (
+                            <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                              {stockInsumos.length === 0
+                                ? 'No hay insumos cargados en el catálogo todavía.'
+                                : `Sin resultados para "${busquedaInsumo}".`}
+                            </td></tr>
+                          )}
+                          {stockInsumosFiltrado.map(row => {
+                            const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
+                            return (
+                              <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
+                                <td className="px-6 py-2.5 font-semibold text-gray-800">{row.insumo}</td>
+                                <td className="px-6 py-2.5">
+                                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
+                                </td>
+                                <td className="px-6 py-2.5 text-right tabular-nums text-gray-700">
+                                  {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
+                                </td>
+                                <td className="px-6 py-2.5 text-right tabular-nums text-gray-400">
+                                  {row.valorizado != null ? `$${fNum(row.valorizado)}` : <span title="Sin precio o sin stock cargado">—</span>}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -3334,8 +3353,13 @@ export default function ProduccionClient({
                 </div>
               )}
 
-              <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+              <div className={`flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${panelInsumosAbierto === 'mrp' ? 'border-blue-200 shadow-md' : 'border-gray-200'}`}>
+                <button
+                  type="button"
+                  onClick={() => setPanelInsumosAbierto('mrp')}
+                  aria-expanded={panelInsumosAbierto === 'mrp'}
+                  className="flex w-full flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5 text-left transition-colors hover:bg-blue-50/40"
+                >
                   <div className="flex items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                       <Sigma size={16} />
@@ -3349,60 +3373,72 @@ export default function ProduccionClient({
                       </p>
                     </div>
                   </div>
-                </div>
-                <div className="max-h-96 overflow-auto">
-                  <table className="w-full border-collapse text-left">
-                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
-                      <tr>
-                        <th className="px-6 py-3 font-bold">Insumo</th>
-                        <th className="px-6 py-3 font-bold">Categoría</th>
-                        <th className="px-6 py-3 text-right font-bold">Necesidad Bruta</th>
-                        <th className="px-6 py-3 text-right font-bold">Disponible</th>
-                        <th className="px-6 py-3 text-right font-bold text-blue-700">Compra Sugerida</th>
-                        <th className="px-6 py-3 text-right font-bold">Costo Estimado</th>
-                        <th className="px-6 py-3 font-bold">Productos que lo piden</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-sm">
-                      {mrpFiltrado.length === 0 && (
-                        <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">
-                          {mrpInsumos.filas.length === 0
-                            ? 'Ningún producto con receta tiene demanda proyectada positiva en el horizonte.'
-                            : `Sin resultados para "${busquedaInsumo}".`}
-                        </td></tr>
-                      )}
-                      {mrpFiltrado.map(row => {
-                        const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
-                        return (
-                          <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
-                            <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
-                            <td className="px-6 py-3">
-                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
-                            </td>
-                            <td className="px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
-                            <td className="px-6 py-3 text-right tabular-nums text-gray-500">
-                              {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
-                            </td>
-                            <td className={`px-6 py-3 text-right font-bold tabular-nums text-blue-900 ${row.necesidadNeta > 0 ? 'bg-blue-50' : ''}`}>
-                              {row.necesidadNeta > 0 ? fCantidadInsumo(row.necesidadNeta, row.unidadBase) : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className="px-6 py-3 text-right tabular-nums text-gray-400">
-                              {row.costoCompra != null ? `$${fNum(row.costoCompra)}` : <span title="Sin precio cargado todavía">—</span>}
-                            </td>
-                            <td className="px-6 py-3 text-xs text-gray-500">
-                              {row.productos.map(p => p.producto).join(', ')}
-                            </td>
+                  <ChevronDown
+                    size={20}
+                    className={`shrink-0 text-gray-400 transition-transform duration-300 ${panelInsumosAbierto === 'mrp' ? 'rotate-180 text-blue-600' : ''}`}
+                  />
+                </button>
+                <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${panelInsumosAbierto === 'mrp' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                  <div className="overflow-hidden">
+                    <div className="max-h-[65vh] overflow-auto">
+                      <table className="w-full border-collapse text-left">
+                        <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                          <tr>
+                            <th className="px-6 py-3 font-bold">Insumo</th>
+                            <th className="px-6 py-3 font-bold">Categoría</th>
+                            <th className="px-6 py-3 text-right font-bold">Necesidad Bruta</th>
+                            <th className="px-6 py-3 text-right font-bold">Disponible</th>
+                            <th className="px-6 py-3 text-right font-bold text-blue-700">Compra Sugerida</th>
+                            <th className="px-6 py-3 text-right font-bold">Costo Estimado</th>
+                            <th className="px-6 py-3 font-bold">Productos que lo piden</th>
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-sm">
+                          {mrpFiltrado.length === 0 && (
+                            <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">
+                              {mrpInsumos.filas.length === 0
+                                ? 'Ningún producto con receta tiene demanda proyectada positiva en el horizonte.'
+                                : `Sin resultados para "${busquedaInsumo}".`}
+                            </td></tr>
+                          )}
+                          {mrpFiltrado.map(row => {
+                            const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
+                            return (
+                              <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
+                                <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
+                                <td className="px-6 py-3">
+                                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
+                                </td>
+                                <td className="px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
+                                <td className="px-6 py-3 text-right tabular-nums text-gray-500">
+                                  {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
+                                </td>
+                                <td className={`px-6 py-3 text-right font-bold tabular-nums text-blue-900 ${row.necesidadNeta > 0 ? 'bg-blue-50' : ''}`}>
+                                  {row.necesidadNeta > 0 ? fCantidadInsumo(row.necesidadNeta, row.unidadBase) : <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="px-6 py-3 text-right tabular-nums text-gray-400">
+                                  {row.costoCompra != null ? `$${fNum(row.costoCompra)}` : <span title="Sin precio cargado todavía">—</span>}
+                                </td>
+                                <td className="px-6 py-3 text-xs text-gray-500">
+                                  {row.productos.map(p => p.producto).join(', ')}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5">
+              <div className={`flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${panelInsumosAbierto === 'necesidad' ? 'border-amber-200 shadow-md' : 'border-gray-200'}`}>
+                <button
+                  type="button"
+                  onClick={() => setPanelInsumosAbierto('necesidad')}
+                  aria-expanded={panelInsumosAbierto === 'necesidad'}
+                  className="flex w-full flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5 text-left transition-colors hover:bg-amber-50/40"
+                >
                   <div>
                     <h3 className="font-bold text-gray-800">Necesidad de Insumos — Plan Maestro</h3>
                     <p className="mt-1 text-sm text-gray-500">
@@ -3410,68 +3446,80 @@ export default function ProduccionClient({
                       {' '}El disponible sale del último inventario de insumos cargado{stockInsumosVacio ? ' — todavía no hay ninguno.' : '.'}
                     </p>
                   </div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={busquedaInsumo}
-                      onChange={e => setBusquedaInsumo(e.target.value)}
-                      placeholder="Buscar insumo o categoría..."
-                      className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 sm:w-64"
+                  <div className="flex items-center gap-3">
+                    {panelInsumosAbierto === 'necesidad' && (
+                      <div className="relative" onClick={e => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          value={busquedaInsumo}
+                          onChange={e => setBusquedaInsumo(e.target.value)}
+                          placeholder="Buscar insumo o categoría..."
+                          className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 sm:w-64"
+                        />
+                        <svg className="absolute left-3 top-3 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                    )}
+                    <ChevronDown
+                      size={20}
+                      className={`shrink-0 text-gray-400 transition-transform duration-300 ${panelInsumosAbierto === 'necesidad' ? 'rotate-180 text-amber-600' : ''}`}
                     />
-                    <svg className="absolute left-3 top-3 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
                   </div>
-                </div>
+                </button>
 
-                <div className="flex-1 overflow-auto">
-                  <table className="w-full border-collapse text-left">
-                    <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
-                      <tr>
-                        <th className="px-6 py-4 font-bold">Insumo</th>
-                        <th className="px-6 py-4 font-bold">Categoría</th>
-                        <th className="px-6 py-4 text-right font-bold">Necesidad Bruta</th>
-                        <th className="px-6 py-4 text-right font-bold">Disponible</th>
-                        <th className="px-6 py-4 text-right font-bold text-amber-700">Necesidad Neta</th>
-                        <th className="px-6 py-4 text-right font-bold">Costo Estimado</th>
-                        <th className="px-6 py-4 font-bold">Lotes que lo usan</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-sm">
-                      {insumosFiltrados.length === 0 && (
-                        <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">
-                          {necesidadInsumos.length === 0
-                            ? 'No hay lotes activos en el Plan Maestro que necesiten insumos ahora mismo.'
-                            : `Sin resultados para "${busquedaInsumo}".`}
-                        </td></tr>
-                      )}
-                      {insumosFiltrados.map(row => {
-                        const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
-                        const lotesResumen = [...new Map(row.lotes.map(l => [l.producto, l])).values()]
-                        return (
-                          <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
-                            <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
-                            <td className="px-6 py-3">
-                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
-                            </td>
-                            <td className="px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
-                            <td className="px-6 py-3 text-right tabular-nums text-gray-500">
-                              {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
-                            </td>
-                            <td className={`px-6 py-3 text-right font-bold tabular-nums text-gray-900 ${row.necesidadNeta > 0 ? 'bg-amber-50' : ''}`}>
-                              {row.necesidadNeta > 0 ? fCantidadInsumo(row.necesidadNeta, row.unidadBase) : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className="px-6 py-3 text-right tabular-nums text-gray-400">
-                              {row.costoNecesidad != null ? `$${fNum(row.costoNecesidad)}` : <span title="Sin precio cargado todavía">—</span>}
-                            </td>
-                            <td className="px-6 py-3 text-xs text-gray-500">
-                              {lotesResumen.map(l => l.producto).join(', ')}
-                            </td>
+                <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${panelInsumosAbierto === 'necesidad' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                  <div className="overflow-hidden">
+                    <div className="max-h-[65vh] overflow-auto">
+                      <table className="w-full border-collapse text-left">
+                        <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
+                          <tr>
+                            <th className="px-6 py-4 font-bold">Insumo</th>
+                            <th className="px-6 py-4 font-bold">Categoría</th>
+                            <th className="px-6 py-4 text-right font-bold">Necesidad Bruta</th>
+                            <th className="px-6 py-4 text-right font-bold">Disponible</th>
+                            <th className="px-6 py-4 text-right font-bold text-amber-700">Necesidad Neta</th>
+                            <th className="px-6 py-4 text-right font-bold">Costo Estimado</th>
+                            <th className="px-6 py-4 font-bold">Lotes que lo usan</th>
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-sm">
+                          {insumosFiltrados.length === 0 && (
+                            <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">
+                              {necesidadInsumos.length === 0
+                                ? 'No hay lotes activos en el Plan Maestro que necesiten insumos ahora mismo.'
+                                : `Sin resultados para "${busquedaInsumo}".`}
+                            </td></tr>
+                          )}
+                          {insumosFiltrados.map(row => {
+                            const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
+                            const lotesResumen = [...new Map(row.lotes.map(l => [l.producto, l])).values()]
+                            return (
+                              <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
+                                <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
+                                <td className="px-6 py-3">
+                                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
+                                </td>
+                                <td className="px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
+                                <td className="px-6 py-3 text-right tabular-nums text-gray-500">
+                                  {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
+                                </td>
+                                <td className={`px-6 py-3 text-right font-bold tabular-nums text-gray-900 ${row.necesidadNeta > 0 ? 'bg-amber-50' : ''}`}>
+                                  {row.necesidadNeta > 0 ? fCantidadInsumo(row.necesidadNeta, row.unidadBase) : <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="px-6 py-3 text-right tabular-nums text-gray-400">
+                                  {row.costoNecesidad != null ? `$${fNum(row.costoNecesidad)}` : <span title="Sin precio cargado todavía">—</span>}
+                                </td>
+                                <td className="px-6 py-3 text-xs text-gray-500">
+                                  {lotesResumen.map(l => l.producto).join(', ')}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
