@@ -324,7 +324,35 @@ export interface SugerenciaPlan {
   /** yyyy-mm-dd — null si diasHastaQuiebre es null. */
   fechaEstimadaQuiebre: string | null
   motivo: string
+  /** true si `producto` está en LINEAS_FIJAS — el catálogo estable que no
+   *  puede quebrar stock (decisión del usuario, 11-sep-2026). Determina el
+   *  orden de "Alarmas de quiebre de stock": líneas fijas siempre primero,
+   *  antes que cualquier producto experimental sin importar la urgencia. */
+  lineaFija: boolean
 }
+
+/**
+ * Catálogo ESTABLE (línea fija) — lo que la cervecería siempre debe tener
+ * disponible, nunca puede quebrar stock. Todo lo demás (cervezas/kombuchas
+ * fuera de esta lista) es "experimental": rotativo, de menor prioridad.
+ * Definido por el usuario, 11-sep-2026.
+ *
+ * OJO con "Aguas Blancas" para la línea de Hazy IPA: hay DOS productos con
+ * "Hazy" en el nombre ("Aguas Blancas Hazy IPA" y "Doble Hazy IPA"). Se
+ * asumió "Aguas Blancas" por volumen y consistencia de venta real (verificado
+ * contra 180 días de ventas: Aguas Blancas 6.949 L en 26/26 semanas vs. Doble
+ * Hazy IPA 1.425 L en 24/26 — "Doble" es el patrón típico de release
+ * puntual/experimental en este catálogo). Si la intención real era la otra,
+ * corregir acá.
+ */
+const LINEAS_FIJAS = new Set<string>([
+  // Kombucha
+  'Kombucha Berry Menta', 'Kombucha Maracuyá Cardamomo', 'Kombucha Maqui',
+  'Kombucha Lemon', 'Kombucha Lupulada', 'Kombucha Detox',
+  // Cerveza
+  'Mocho English', 'Fisura', 'La Barra APA', 'Arboretum',
+  'Descenso West Coast IPA', 'Aguas Blancas',
+])
 
 export default async function ProduccionPage() {
   const user = await getServerUser()
@@ -1268,10 +1296,18 @@ export default async function ProduccionPage() {
         diasHastaQuiebre: diasHastaQuiebre != null ? Math.round(diasHastaQuiebre) : null,
         fechaEstimadaQuiebre,
         motivo,
+        lineaFija: LINEAS_FIJAS.has(s.producto),
       } as SugerenciaPlan
     })
     .filter((s): s is SugerenciaPlan => s !== null)
     .sort((a, b) => {
+      // Prioridad de negocio primero (línea fija no puede quebrar stock),
+      // urgencia real como desempate dentro de cada nivel — no al revés:
+      // una línea fija con 40 días de margen igual va antes que una
+      // experimental que quiebra mañana.
+      const prioridadA = a.lineaFija ? 0 : 1
+      const prioridadB = b.lineaFija ? 0 : 1
+      if (prioridadA !== prioridadB) return prioridadA - prioridadB
       const diasA = a.diasHastaQuiebre ?? Infinity
       const diasB = b.diasHastaQuiebre ?? Infinity
       if (diasA !== diasB) return diasA - diasB

@@ -308,63 +308,82 @@ function FormNuevoLote({
   )
 }
 
-/** Popup que se abre al confirmar una alarma de quiebre ("Agregar al plan").
- *  No agrega con los valores sugeridos a ciegas: deja fijar fecha de inicio
- *  de la elaboración y cantidad, y muestra en vivo cuánta necesidad cubre
- *  esa cantidad y hasta cuándo alcanza — todo derivado del ritmo de venta
- *  real (mismo cálculo que la alarma), para decidir la orden con criterio. */
-function ModalConfirmarLote({
-  sugerencia, guardando, onCancelar, onConfirmar,
+/**
+ * Popup que se abre al confirmar una alarma de quiebre ("Agregar al plan").
+ *
+ * Por PRODUCTO, no por formato: así se cuece en la realidad — se manda un
+ * lote con el litraje TOTAL, y recién cuando el fermentador está listo se
+ * decide cuánto va a lata y cuánto a barril (eso lo resuelve el Split de
+ * Envasado más abajo, no esta pantalla). Antes cada formato en alerta tenía
+ * su propio botón "Agregar al plan", así que cubrir Imperial Stout en sus 3
+ * formatos generaba 3 lotes separados — 3 cocciones donde en la práctica es
+ * una sola (decisión del usuario, 11-sep-2026).
+ *
+ * No agrega con el total sugerido a ciegas: deja fijar fecha de inicio y
+ * cantidad, y muestra en vivo cuánta necesidad cubre y hasta cuándo alcanza
+ * cada formato — todo derivado del ritmo de venta real (mismo cálculo que
+ * la alarma), para decidir la orden con criterio.
+ */
+function ModalConfirmarLoteGrupo({
+  grupo, guardando, onCancelar, onConfirmar,
 }: {
-  sugerencia: SugerenciaPlan
+  grupo: { producto: string; categoria: 'cerveza' | 'kombucha'; items: SugerenciaPlan[] }
   guardando: boolean
   onCancelar: () => void
-  onConfirmar: (datos: { litrosPlanificados: number; fechaPlanificada: string; necesidadCubrir: number; cubreHasta: string | null }) => void
+  onConfirmar: (datos: { litrosPlanificados: number; fechaPlanificada: string; necesidadCubrir: number; cubreHasta: string | null; motivo: string }) => void
 }) {
+  const totalSugerido = grupo.items.reduce((s, i) => s + i.litrosSugeridos, 0)
   const [fecha, setFecha] = useState(() => hoyLocalISO(new Date(Date.now() + 7 * 86400000)))
-  const [litros, setLitros] = useState(String(Math.round(sugerencia.litrosSugeridos)))
+  const [litros, setLitros] = useState(String(Math.round(totalSugerido)))
 
   const litrosNum = Number(litros)
   const valido = litrosNum > 0 && fecha.length > 0
 
-  // Días hábiles que cubre la cantidad ingresada al ritmo de venta actual —
-  // se recalcula en vivo con cada cambio de cantidad, no queda fijo con el
-  // valor sugerido original.
-  const diasCobertura = sugerencia.ritmoDiarioActual > 0 ? litrosNum / sugerencia.ritmoDiarioActual : null
+  // Ritmo agregado de TODOS los formatos en alerta — para estimar hasta
+  // cuándo alcanza el total combinado, no un formato aislado.
+  const ritmoTotal = grupo.items.reduce((s, i) => s + i.ritmoDiarioActual, 0)
+  const diasCobertura = ritmoTotal > 0 ? litrosNum / ritmoTotal : null
   const cubreHasta = diasCobertura != null ? sumarDiasHabilesISO(fecha, diasCobertura) : null
 
   function submit() {
     if (!valido) return
-    onConfirmar({ litrosPlanificados: litrosNum, fechaPlanificada: fecha, necesidadCubrir: sugerencia.litrosSugeridos, cubreHasta })
+    const motivo = grupo.items.length === 1
+      ? grupo.items[0].motivo
+      : `Cubre la necesidad combinada de ${grupo.items.length} formatos en alerta (${grupo.items.map(i => ENVASE_LABEL[i.envase] ?? i.envase).join(', ')}). El reparto por formato se decide en el Split de Envasado cuando el lote esté listo.`
+    onConfirmar({ litrosPlanificados: litrosNum, fechaPlanificada: fecha, necesidadCubrir: totalSugerido, cubreHasta, motivo })
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancelar}>
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="mb-4 flex items-center gap-3">
-          <ProductImage nombre={sugerencia.producto} categoria={sugerencia.categoria} size={36} radius={9} />
+          <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={36} radius={9} />
           <div>
-            <h3 className="font-bold text-gray-800">{sugerencia.producto}</h3>
-            <p className="text-xs font-bold uppercase tracking-wide text-amber-700">{ENVASE_LABEL[sugerencia.envase] ?? sugerencia.envase}</p>
+            <h3 className="font-bold text-gray-800">{grupo.producto}</h3>
+            <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
+              {grupo.items.length} {grupo.items.length === 1 ? 'formato en alerta' : 'formatos en alerta'}
+            </p>
           </div>
           <button onClick={onCancelar} className="ml-auto rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <X size={18} />
           </button>
         </div>
 
-        {/* Necesidad según el forecast — el dato que responde "cuánto debemos
-            cubrir", fijo (no cambia con lo que el usuario decida producir). */}
+        {/* Desglose por formato — qué compone el total sugerido, aunque el
+            lote que se va a crear es uno solo por el litraje combinado. */}
         <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-          <p>
-            <strong>Disponible ahora:</strong> {fNum(sugerencia.disponibleLitros)} L en {ENVASE_LABEL[sugerencia.envase] ?? sugerencia.envase}
-            {sugerencia.disponibleUnidades != null && ` (${fNum(sugerencia.disponibleUnidades)} ${UNIDAD_ENVASE[sugerencia.envase]})`}.
+          <p className="font-semibold">Necesidad por formato:</p>
+          <div className="mt-1.5 flex flex-col gap-1">
+            {grupo.items.map((i, idx) => (
+              <div key={`${i.envase}-${idx}`} className="flex items-center justify-between text-xs">
+                <span>{ENVASE_LABEL[i.envase] ?? i.envase} — disponible {fNum(i.disponibleLitros)} L</span>
+                <span className="font-bold">{fNum(i.litrosSugeridos)} L</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 border-t border-amber-200 pt-2">
+            <strong>Total sugerido: {fNum(totalSugerido)} L</strong>, sumando todos los formatos en alerta.
           </p>
-          <p className="mt-1"><strong>Necesidad a cubrir:</strong> {fNum(sugerencia.litrosSugeridos)} L, según el forecast y el punto de reorden.</p>
-          {sugerencia.diasHastaQuiebre != null && (
-            <p className="mt-1 text-xs text-amber-700">
-              Al ritmo de las últimas 4 semanas ({fNum(sugerencia.ritmoDiarioActual * 5)} L/semana, lun-vie), quiebra en ~{sugerencia.diasHastaQuiebre} días hábiles.
-            </p>
-          )}
         </div>
 
         <div className="mb-4 flex gap-3">
@@ -376,7 +395,7 @@ function ModalConfirmarLote({
             />
           </div>
           <div className="flex flex-1 flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-500">Cantidad a producir (L)</label>
+            <label className="text-xs font-semibold text-gray-500">Cantidad total a producir (L)</label>
             <input
               type="number" min={1} value={litros} onChange={e => setLitros(e.target.value)}
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#0F3D2E] focus:outline-none"
@@ -387,10 +406,11 @@ function ModalConfirmarLote({
         {/* Cobertura — responde "hasta cuándo nos durará esto", en vivo según
             lo que el usuario haya puesto en Cantidad y Fecha de inicio. */}
         <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
-          {sugerencia.ritmoDiarioActual > 0 && diasCobertura != null && cubreHasta ? (
+          {ritmoTotal > 0 && diasCobertura != null && cubreHasta ? (
             <p className="text-gray-700">
-              Con {fNum(litrosNum)} L, la cobertura dura <strong>~{Math.round(diasCobertura)} días hábiles</strong> al ritmo
-              actual — alcanzaría hasta el <strong>{new Date(cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}</strong>.
+              Con {fNum(litrosNum)} L, la cobertura combinada dura <strong>~{Math.round(diasCobertura)} días hábiles</strong> al
+              ritmo actual — alcanzaría hasta el <strong>{new Date(cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}</strong>.
+              El reparto exacto entre formatos se define después, en el Split de Envasado.
             </p>
           ) : (
             <p className="text-gray-500">Sin ventas en las últimas 4 semanas — no se puede estimar hasta cuándo alcanza.</p>
@@ -500,7 +520,7 @@ export default function ProduccionClient({
   const [errorPlan, setErrorPlan] = useState<string | null>(null)
   const [mostrarFormLote, setMostrarFormLote] = useState(false)
   /** Alarma sobre la que se abrió el popup de confirmación — null = cerrado. */
-  const [sugerenciaModal, setSugerenciaModal] = useState<SugerenciaPlan | null>(null)
+  const [sugerenciaModal, setSugerenciaModal] = useState<{ producto: string; categoria: 'cerveza' | 'kombucha'; items: SugerenciaPlan[] } | null>(null)
   React.useEffect(() => { setPlan(planProduccion) }, [planProduccion])
 
   async function moverLote(id: string, direccion: -1 | 1) {
@@ -1160,6 +1180,10 @@ export default function ProduccionClient({
         ritmoDiarioActual: Math.round(ritmoDiarioActual * 10) / 10,
         diasHastaQuiebre: diasHastaQuiebre != null ? Math.round(diasHastaQuiebre) : null,
         fechaEstimadaQuiebre, motivo, altaDemanda,
+        // Esta sección (Necesidades Anticipadas) no prioriza por línea fija,
+        // sólo por temporada de alta demanda — el campo queda en false acá
+        // porque SugerenciaPlan lo exige, no porque se use en este cálculo.
+        lineaFija: false,
       })
     }
 
@@ -2531,7 +2555,7 @@ export default function ProduccionClient({
                               </div>
                               <button
                                 disabled={guardandoPlan}
-                                onClick={() => setSugerenciaModal(item)}
+                                onClick={() => setSugerenciaModal({ producto: grupo.producto, categoria: grupo.categoria, items: [item] })}
                                 className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
                               >
                                 Agregar al plan
@@ -2985,19 +3009,37 @@ export default function ProduccionClient({
                     </span>
                   </div>
                   <p className="mb-4 text-sm text-amber-800/80">
-                    Por producto y <strong>formato</strong> (no por estilo completo — un mismo producto puede ir
-                    sobrado en lata y crítico en barril). Cruza el stock de seguridad, el forecast y el{' '}
-                    <strong>ritmo de venta real de las últimas 4 semanas (lunes a viernes)</strong> para estimar cuándo se agota cada uno.
+                    Las alertas se detectan por <strong>formato</strong> (un mismo producto puede ir sobrado en lata
+                    y crítico en barril) cruzando el stock de seguridad, el forecast y el{' '}
+                    <strong>ritmo de venta real de las últimas 4 semanas (lunes a viernes)</strong>, pero se cubren
+                    por <strong>producto</strong>: un solo lote con el litraje total — el reparto entre formatos se
+                    decide después, en el Split de Envasado, igual que en la cocción real.
+                    Las <strong>líneas fijas</strong> (el catálogo estable) van siempre primero: no pueden quebrar stock.
                   </p>
                   <div className="flex flex-col gap-3">
-                    {alarmasPorProducto.map(grupo => (
-                      <div key={grupo.producto} className="overflow-hidden rounded-lg border border-amber-200 bg-white shadow-sm">
-                        <div className="flex items-center gap-2.5 border-b border-amber-100 bg-amber-50/60 px-4 py-2.5">
+                    {alarmasPorProducto.map(grupo => {
+                      const esLineaFija = grupo.items[0]?.lineaFija ?? false
+                      const totalGrupo = grupo.items.reduce((s, i) => s + i.litrosSugeridos, 0)
+                      return (
+                      <div key={grupo.producto} className={`overflow-hidden rounded-lg border bg-white shadow-sm ${esLineaFija ? 'border-red-300' : 'border-amber-200'}`}>
+                        <div className={`flex flex-wrap items-center gap-2.5 border-b px-4 py-2.5 ${esLineaFija ? 'border-red-100 bg-red-50/60' : 'border-amber-100 bg-amber-50/60'}`}>
                           <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={30} radius={7} />
                           <span className="font-semibold text-gray-800">{grupo.producto}</span>
+                          {esLineaFija && (
+                            <span className="rounded-full bg-red-200/70 px-2 py-0.5 text-xs font-bold text-red-800" title="Línea fija del catálogo — no puede quebrar stock.">
+                              Línea fija
+                            </span>
+                          )}
                           <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-xs font-bold text-amber-800">
                             {grupo.items.length} {grupo.items.length === 1 ? 'formato' : 'formatos'} en alerta
                           </span>
+                          <button
+                            disabled={guardandoPlan}
+                            onClick={() => setSugerenciaModal(grupo)}
+                            className="ml-auto shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                          >
+                            Agregar al plan — {fNum(totalGrupo)} L total
+                          </button>
                         </div>
                         <div className="divide-y divide-gray-100">
                           {grupo.items.map((s, i) => {
@@ -3039,19 +3081,13 @@ export default function ProduccionClient({
                                     <p className="text-sm font-bold tabular-nums text-gray-800">{fNum(s.litrosSugeridos)} L</p>
                                   </div>
                                 </div>
-                                <button
-                                  disabled={guardandoPlan}
-                                  onClick={() => setSugerenciaModal(s)}
-                                  className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
-                                >
-                                  Agregar al plan
-                                </button>
                               </div>
                             )
                           })}
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -3521,17 +3557,17 @@ export default function ProduccionClient({
               fuera de los bloques por tab (si quedara dentro de uno, no
               renderizaría al abrirlo desde el otro). */}
           {sugerenciaModal && (
-            <ModalConfirmarLote
-              sugerencia={sugerenciaModal}
+            <ModalConfirmarLoteGrupo
+              grupo={sugerenciaModal}
               guardando={guardandoPlan}
               onCancelar={() => setSugerenciaModal(null)}
-              onConfirmar={({ litrosPlanificados, fechaPlanificada, necesidadCubrir, cubreHasta }) => agregarLote({
+              onConfirmar={({ litrosPlanificados, fechaPlanificada, necesidadCubrir, cubreHasta, motivo }) => agregarLote({
                 producto: sugerenciaModal.producto,
                 categoria: sugerenciaModal.categoria,
                 litrosPlanificados,
                 fechaPlanificada,
                 origen: 'sugerido',
-                motivo: sugerenciaModal.motivo,
+                motivo,
                 necesidadCubrir,
                 cubreHasta,
               })}
