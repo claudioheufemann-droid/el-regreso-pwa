@@ -347,7 +347,18 @@ function ModalConfirmarLoteGrupo({
   onConfirmar: (datos: { litrosPlanificados: number; fechaPlanificada: string; necesidadCubrir: number; cubreHasta: string | null; motivo: string }) => void
 }) {
   const totalSugerido = grupo.items.reduce((s, i) => s + i.litrosSugeridos, 0)
-  const [fecha, setFecha] = useState(() => hoyLocalISO(new Date(Date.now() + 7 * 86400000)))
+  // Propone el ÚLTIMO día para empezar a cocer del formato más apremiante del
+  // grupo (quiebre − lead time), no una fecha arbitraria: antes era hoy+7 fijo
+  // aunque el producto quebrara en 5 días o en 40. Si esa fecha ya pasó se
+  // propone hoy, que es lo más temprano que se puede hacer algo.
+  const [fecha, setFecha] = useState(() => {
+    const hoy = hoyLocalISO()
+    const limites = grupo.items.map(i => i.fechaLimiteInicio).filter((f): f is string => f != null)
+    if (limites.length === 0) return hoy
+    const masApremiante = limites.sort()[0]
+    return masApremiante < hoy ? hoy : masApremiante
+  })
+  const hayAtrasado = grupo.items.some(i => i.atrasado)
   const [litros, setLitros] = useState(String(Math.round(totalSugerido)))
 
   const litrosNum = Number(litros)
@@ -399,6 +410,17 @@ function ModalConfirmarLoteGrupo({
             <strong>Total sugerido: {fNum(totalSugerido)} L</strong>, sumando todos los formatos en alerta.
           </p>
         </div>
+
+        {hayAtrasado && (
+          <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-600" />
+            <p>
+              <strong>Este lote ya va atrasado.</strong> Con el lead time de este producto, ni empezando
+              hoy alcanza a estar listo antes del quiebre — igual conviene largarlo cuanto antes para
+              acortar el tiempo sin stock.
+            </p>
+          </div>
+        )}
 
         <div className="mb-4 flex gap-3">
           <div className="flex flex-1 flex-col gap-1">
@@ -623,6 +645,11 @@ export default function ProduccionClient({
 
   const [busquedaInsumo, setBusquedaInsumo] = useState('')
   const [panelInsumosAbierto, setPanelInsumosAbierto] = useState<'stock' | 'mrp' | 'necesidad'>('stock')
+  /** Horizonte del MRP en días. 30/60/90 para poder presupuestar a 1, 2 o 3
+   *  meses — el forecast alcanza hasta abril 2027, así que los tres tienen
+   *  dato real detrás (antes estaba fijo en 30 y no se podía presupuestar
+   *  más allá del mes). */
+  const [mrpHorizonteDias, setMrpHorizonteDias] = useState<30 | 60 | 90>(30)
   const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
   const [filtroEnvase, setFiltroEnvase] = useState<string>('todos')
   /** Muestra la descomposición del modelo (tendencia + estacionalidad). */
@@ -1205,6 +1232,11 @@ export default function ProduccionClient({
         // quiebre inmediato — se deja en 0/null porque el campo es requerido.
         litrosFermentando: 0,
         fechaFermentandoListo: null,
+        // La fecha límite de cocción la calcula el servidor sobre la alarma de
+        // quiebre real; acá la cobertura la fija el usuario con el filtro, así
+        // que no hay un "último día para empezar" que derivar.
+        fechaLimiteInicio: null,
+        atrasado: false,
       })
     }
 
@@ -1312,12 +1344,11 @@ export default function ProduccionClient({
      Mismo criterio de escalado lineal que Necesidad de Insumos (decisión
      del usuario, 7-sep-2026): cantidadPorLote × (demanda del horizonte /
      litrosBase de la receta). */
-  const MRP_HORIZONTE_DIAS = 30
   const mrpInsumos = useMemo(() => {
     const hoyISO = hoyLocalISO()
     // Suma pura sobre el string ISO (no Date.now()): mismo horizonte para
     // todo el cálculo sin importar cuándo exactamente re-renderiza React.
-    const hastaISO = new Date(Date.parse(`${hoyISO}T00:00:00Z`) + MRP_HORIZONTE_DIAS * 86400000)
+    const hastaISO = new Date(Date.parse(`${hoyISO}T00:00:00Z`) + mrpHorizonteDias * 86400000)
       .toISOString().slice(0, 10)
     const disponiblePorInsumo = new Map(stockInsumos.map(s => [s.insumo, s.disponible]))
     const precioPorInsumo = new Map(stockInsumos.map(s => [s.insumo, s.precioUnitario]))
@@ -1361,8 +1392,20 @@ export default function ProduccionClient({
       }
     }).sort((a, b) => b.necesidadNeta - a.necesidadNeta)
 
-    return { filas, hastaISO, productosSinForecast: [...productosSinForecast].sort() }
-  }, [recetaInsumos, series, avanceMes, stockInsumos])
+    // Valorización del horizonte completo: es la cifra que se pide para
+    // presupuestar a 1-3 meses. `sinPrecio` cuenta las filas que quedaron
+    // fuera del total por no tener precio cargado — sin eso el total se lee
+    // como presupuesto completo cuando en realidad es parcial.
+    const conNecesidad = filas.filter(f => f.necesidadNeta > 0)
+    const costoTotal = conNecesidad.reduce((s, f) => s + (f.costoCompra ?? 0), 0)
+    const sinPrecio = conNecesidad.filter(f => f.costoCompra == null).length
+
+    return {
+      filas, hastaISO, costoTotal, sinPrecio,
+      conNecesidad: conNecesidad.length,
+      productosSinForecast: [...productosSinForecast].sort(),
+    }
+  }, [recetaInsumos, series, avanceMes, stockInsumos, mrpHorizonteDias])
 
   const mrpFiltrado = mrpInsumos.filas.filter(i =>
     i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
@@ -3120,6 +3163,23 @@ export default function ProduccionClient({
                                       Sin ventas en 4 semanas — sin fecha estimada
                                     </span>
                                   )}
+                                  {/* Cuándo hay que largar la cocción — quiebre menos lead
+                                      time. Es la acción concreta de la alarma: la fecha de
+                                      quiebre dice cuándo duele, ésta dice cuándo actuar. */}
+                                  {s.fechaLimiteInicio && (
+                                    <span
+                                      className={`ml-1.5 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold ${
+                                        s.atrasado ? 'bg-red-600 text-white' : 'bg-emerald-100 text-emerald-800'
+                                      }`}
+                                      title={s.atrasado
+                                        ? `Con ${s.leadTimeSemanas} semanas de lead time, empezar hoy ya no llega antes del quiebre.`
+                                        : `Último día hábil para empezar a cocer y llegar antes del quiebre (${s.leadTimeSemanas} semanas de lead time).`}
+                                    >
+                                      <CalendarIcon size={12} />
+                                      {s.atrasado ? 'Atrasado — debió cocerse el ' : 'Cocer antes del '}
+                                      {new Date(s.fechaLimiteInicio + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                    </span>
+                                  )}
                                   {s.litrosFermentando > 0 && (
                                     <span
                                       className="ml-1.5 inline-flex items-center gap-1.5 rounded-md bg-purple-100 px-2 py-1 text-xs font-bold text-purple-700"
@@ -3446,16 +3506,56 @@ export default function ProduccionClient({
                     <div className="min-w-0">
                       <h3 className="font-bold text-gray-800">MRP — Compra sugerida de insumos</h3>
                       <p className="mt-1 text-sm text-gray-500">
-                        {mrpInsumos.filas.length} insumos con necesidad, según la demanda proyectada por el modelo hasta
-                        el {mrpInsumos.hastaISO.slice(8, 10)}/{mrpInsumos.hastaISO.slice(5, 7)} (próximos {MRP_HORIZONTE_DIAS} días) —
+                        {mrpInsumos.conNecesidad} insumos a comprar, según la demanda proyectada por el modelo hasta
+                        el {mrpInsumos.hastaISO.slice(8, 10)}/{mrpInsumos.hastaISO.slice(5, 7)} —
                         no depende de que haya lotes ya planificados.
                       </p>
+                      {/* Total valorizado del horizonte: la cifra de presupuesto.
+                          Mientras falten precios se dice cuántos insumos quedaron
+                          fuera, para no leer un total parcial como si fuera completo. */}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {mrpInsumos.costoTotal > 0 ? (
+                          <span className="rounded-md bg-blue-50 px-2.5 py-1 text-sm font-bold text-blue-800">
+                            Presupuesto {mrpHorizonteDias} días: ${fNum(mrpInsumos.costoTotal)}
+                          </span>
+                        ) : (
+                          <span className="rounded-md bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">
+                            Sin valorizar — falta cargar precios de insumos
+                          </span>
+                        )}
+                        {mrpInsumos.sinPrecio > 0 && mrpInsumos.costoTotal > 0 && (
+                          <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
+                            Parcial: {mrpInsumos.sinPrecio} sin precio
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <ChevronDown
-                    size={20}
-                    className={`shrink-0 text-gray-400 transition-transform duration-300 ${panelInsumosAbierto === 'mrp' ? 'rotate-180 text-blue-600' : ''}`}
-                  />
+                  <div className="flex shrink-0 items-center gap-3">
+                    {/* stopPropagation: el encabezado completo es el botón que abre
+                        y cierra el panel; sin esto, elegir horizonte lo colapsaría. */}
+                    <div
+                      className="flex overflow-hidden rounded-lg border border-gray-300"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {([30, 60, 90] as const).map(d => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setMrpHorizonteDias(d)}
+                          className={`px-2.5 py-1.5 text-xs font-bold transition-colors ${
+                            mrpHorizonteDias === d ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {d}d
+                        </button>
+                      ))}
+                    </div>
+                    <ChevronDown
+                      size={20}
+                      className={`shrink-0 text-gray-400 transition-transform duration-300 ${panelInsumosAbierto === 'mrp' ? 'rotate-180 text-blue-600' : ''}`}
+                    />
+                  </div>
                 </button>
                 <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${panelInsumosAbierto === 'mrp' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                   <div className="overflow-hidden">

@@ -103,7 +103,7 @@ export async function POST(req: Request) {
       .filter(([k]) => conteoSinSufijo.get(k) === 1)
   )
 
-  const matcheados: { insumoId: string; nombre: string; cantidadBase: number }[] = []
+  const matcheados: { insumoId: string; nombre: string; cantidadBase: number; precioBase: number | null }[] = []
   const sinMatch: { nombreCrudo: string; cantidad: number; unidadCruda: string; motivo: string }[] = []
 
   for (const f of filas) {
@@ -117,13 +117,35 @@ export async function POST(req: Request) {
       sinMatch.push({ ...f, motivo: `Unidad "${f.unidadCruda}" no reconocida — no se puede convertir a gr/ml sin adivinar.` })
       continue
     }
-    matcheados.push({ insumoId, nombre: f.nombreCrudo, cantidadBase: f.cantidad * conv.factor })
+    const cantidadBase = f.cantidad * conv.factor
+
+    // ── Precio por UNIDAD BASE (gr/ml), no por la unidad del informe ──────
+    // Trampa de unidades que hay que respetar sí o sí: el MRP valoriza con
+    // `precio_unitario × necesidadNeta`, y necesidadNeta está en gr/ml. Si acá
+    // se guardara el $/kg del informe tal cual, el presupuesto saldría 1.000
+    // veces más caro. Por eso todo se divide por el mismo factor con que se
+    // convirtió la cantidad.
+    //   - valorizado total → se divide por la cantidad YA en base
+    //   - precio unitario del ERP → se divide por el factor de la unidad
+    let precioBase: number | null = null
+    if (f.valorizadoTotal != null && cantidadBase > 0) {
+      precioBase = f.valorizadoTotal / cantidadBase
+    } else if (f.precioUnitarioCrudo != null) {
+      precioBase = f.precioUnitarioCrudo / conv.factor
+    }
+
+    matcheados.push({ insumoId, nombre: f.nombreCrudo, cantidadBase, precioBase })
   }
+
+  const conPrecio = matcheados.filter(m => m.precioBase != null)
 
   const resumen = {
     filasLeidas: filas.length,
     matcheados: matcheados.length,
     sinMatch: sinMatch.length,
+    /** Cuántas filas traían precio o valorizado. 0 = el archivo no tiene esa
+     *  columna y sólo se actualiza el stock (comportamiento anterior). */
+    conPrecio: conPrecio.length,
   }
 
   if (preview) {
@@ -150,7 +172,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: rpcError.message }, { status: 500 })
   }
 
+  // Precios: se actualizan aparte del snapshot de stock y a propósito DESPUÉS
+  // de él. Son dos cosas distintas — el stock es una foto con fecha, el precio
+  // es el valor vigente del catálogo (insumos.precio_unitario). Si el archivo
+  // no trae columna de precio, esto no corre y los precios previos quedan
+  // intactos, en vez de borrarse.
+  let preciosActualizados = 0
+  for (const m of conPrecio) {
+    const { error } = await supabase
+      .from('insumos')
+      .update({ precio_unitario: m.precioBase, actualizado_at: new Date().toISOString() })
+      .eq('id', m.insumoId)
+    if (!error) preciosActualizados++
+  }
+
   await logSync(supabase, { origen: esCron ? 'automatico' : 'manual', ok: true, total: filas.length, insertados: insertados ?? 0 })
 
-  return NextResponse.json({ insertados: insertados ?? 0, sinMatch: sinMatch.length, fechaInforme, resumen, sinMatchDetalle: sinMatch })
+  return NextResponse.json({ insertados: insertados ?? 0, sinMatch: sinMatch.length, preciosActualizados, fechaInforme, resumen, sinMatchDetalle: sinMatch })
 }

@@ -338,6 +338,14 @@ export interface SugerenciaPlan {
   /** yyyy-mm-dd en que el fermentador de `litrosFermentando` queda listo —
    *  null si no hay nada fermentando para este producto. */
   fechaFermentandoListo: string | null
+  /** ÚLTIMO día hábil para empezar a cocer y todavía llegar antes del quiebre:
+   *  fecha de quiebre − lead time de producción. Responde el "cuándo producir"
+   *  que antes no existía (el modal proponía hoy+7 fijo, sin mirar ni el
+   *  quiebre ni el lead time). Null si no hay fecha de quiebre proyectable. */
+  fechaLimiteInicio: string | null
+  /** true si `fechaLimiteInicio` ya pasó: aunque se empiece hoy, el lote no
+   *  alcanza a estar listo antes del quiebre. */
+  atrasado: boolean
 }
 
 /**
@@ -475,6 +483,17 @@ export default async function ProduccionPage() {
     let restantes = Math.max(0, Math.round(diasHabiles))
     while (restantes > 0) {
       t += MS_POR_DIA
+      if (esDiaHabilISO(new Date(t).toISOString().slice(0, 10))) restantes--
+    }
+    return new Date(t).toISOString().slice(0, 10)
+  }
+  /** Resta `diasHabiles` días hábiles a `desdeISO` — para calcular hacia atrás
+   *  desde la fecha de quiebre cuál es el último día para empezar a cocer. */
+  const restarDiasHabilesISO = (desdeISO: string, diasHabiles: number): string => {
+    let t = Date.parse(`${desdeISO}T00:00:00Z`)
+    let restantes = Math.max(0, Math.round(diasHabiles))
+    while (restantes > 0) {
+      t -= MS_POR_DIA
       if (esDiaHabilISO(new Date(t).toISOString().slice(0, 10))) restantes--
     }
     return new Date(t).toISOString().slice(0, 10)
@@ -1261,6 +1280,17 @@ export default async function ProduccionPage() {
         ? sumarDiasHabilesISO(hoyISO, diasHastaQuiebre)
         : null
 
+      // ── ¿Cuándo hay que EMPEZAR a cocer? ─────────────────────────────────
+      // Cálculo hacia atrás desde el quiebre: un lote tarda `leadTimeSemanas`
+      // en estar envasado y disponible (4 sem cerveza / 3 kombucha), así que
+      // el último día útil para largarlo es quiebre − lead time. Si esa fecha
+      // ya pasó, el quiebre es inevitable y hay que decirlo: empezar hoy ya
+      // no alcanza.
+      const fechaLimiteInicio = fechaEstimadaQuiebre != null
+        ? restarDiasHabilesISO(fechaEstimadaQuiebre, s.leadTimeSemanas * 5)
+        : null
+      const atrasado = fechaLimiteInicio != null && fechaLimiteInicio <= hoyISO
+
       // Litros que el ritmo actual se comería durante la ventana de riesgo
       // (lead time + hasta la próxima revisión mensual) — mismo concepto de
       // "ventana" que el stock de seguridad, pero con la velocidad real en
@@ -1290,6 +1320,12 @@ export default async function ProduccionPage() {
       motivo += fechaLabel
         ? ` Quiebre estimado: ${fechaLabel} (${Math.max(0, Math.round(diasHastaQuiebre!))} días hábiles), al ritmo de las últimas 4 semanas (lun-vie). Lead time ${s.leadTimeSemanas} semanas.`
         : ` Sin ventas en las últimas 4 semanas para proyectar fecha. Lead time ${s.leadTimeSemanas} semanas.`
+      if (fechaLimiteInicio != null) {
+        const limiteLabel = new Date(`${fechaLimiteInicio}T00:00:00Z`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+        motivo += atrasado
+          ? ` Debiste empezar a cocer el ${limiteLabel} (${s.leadTimeSemanas} semanas de lead time): empezar hoy ya no llega antes del quiebre.`
+          : ` Último día para empezar a cocer: ${limiteLabel} (${s.leadTimeSemanas} semanas de lead time).`
+      }
       if (fermentandoEsFuturo && fermentando > 0) {
         motivo += ` (${Math.round(fermentando).toLocaleString('es-CL')} L siguen fermentando, listos recién el ${new Date(fechaFermentando + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} — no cuentan como stock vendible hasta entonces.)`
       }
@@ -1309,6 +1345,8 @@ export default async function ProduccionPage() {
         lineaFija: LINEAS_FIJAS.has(s.producto),
         litrosFermentando: fermentandoEsFuturo ? Math.round(fermentando) : 0,
         fechaFermentandoListo: fermentandoEsFuturo ? fechaFermentando : null,
+        fechaLimiteInicio,
+        atrasado,
       } as SugerenciaPlan
     })
     .filter((s): s is SugerenciaPlan => s !== null)

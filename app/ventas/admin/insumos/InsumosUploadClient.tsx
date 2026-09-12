@@ -7,7 +7,7 @@ import SyncStatusCard from '@/components/ui/SyncStatusCard'
 
 interface Matcheado { insumoId: string; nombre: string; cantidadBase: number }
 interface SinMatch { nombreCrudo: string; cantidad: number; unidadCruda: string; motivo: string }
-interface Resumen { filasLeidas: number; matcheados: number; sinMatch: number }
+interface Resumen { filasLeidas: number; matcheados: number; sinMatch: number; conPrecio: number }
 
 interface PreviewResult {
   preview: true
@@ -19,6 +19,9 @@ interface PreviewResult {
 interface UploadResult {
   insertados: number
   sinMatch: number
+  /** Cuántos insumos quedaron con precio actualizado — 0 si el archivo no
+   *  traía columna de precio ni de valorizado. */
+  preciosActualizados: number
   fechaInforme: string
   resumen: Resumen
   sinMatchDetalle: SinMatch[]
@@ -168,6 +171,30 @@ export default function InsumosUploadClient() {
               </div>
             </div>
 
+            {/* El precio es opcional: si el informe trae columna de precio o de
+                valorizado, se aprovecha para valorizar el MRP y el presupuesto.
+                Si no viene, se avisa en vez de fallar en silencio — era
+                justamente el dato que faltaba para presupuestar. */}
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 20 }}>
+              <p style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Precios</p>
+              {preview.resumen.conPrecio > 0 ? (
+                <>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: '#4ADE80' }}>{fmt(preview.resumen.conPrecio)}</p>
+                  <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                    filas con precio o valorizado — se actualizará el costo unitario de esos insumos
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: '#F0B429' }}>0</p>
+                  <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                    El archivo no trae columna de precio ni de valorizado: sólo se actualiza el stock.
+                    Sin precios, el MRP y el presupuesto no pueden mostrar pesos.
+                  </p>
+                </>
+              )}
+            </div>
+
             <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>
               Insumos que sí se van a actualizar ({preview.matcheados.length})
             </p>
@@ -223,6 +250,7 @@ export default function InsumosUploadClient() {
             <p style={{ fontSize: 17, fontWeight: 800, color: 'var(--cream)', marginBottom: 6 }}>Stock de insumos actualizado</p>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
               {result.insertados} insumos guardados · {result.sinMatch} filas sin match del archivo
+              {result.preciosActualizados > 0 && ` · ${result.preciosActualizados} precios actualizados`}
             </p>
             <button onClick={handleReset} style={{ padding: '11px 24px', borderRadius: 12, fontWeight: 700, fontSize: 13, border: '1px solid var(--border)', background: 'transparent', color: 'var(--cream)', cursor: 'pointer' }}>
               Cargar otro archivo

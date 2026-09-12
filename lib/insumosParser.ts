@@ -22,6 +22,13 @@ export interface InsumoStockParsed {
   cantidad: number
   /** Unidad tal cual la declara el ERP (kg, gr, g, l, lt, ml, un...). */
   unidadCruda: string
+  /** Precio por UNIDAD DEL ERP (ej. $/kg si la fila viene en kg) — null si el
+   *  archivo no trae columna de precio. La conversión a precio por unidad
+   *  base (gr/ml) la hace la ruta, que es la que conoce el factor. */
+  precioUnitarioCrudo: number | null
+  /** Valorizado TOTAL de la fila (cantidad × precio) — null si no viene.
+   *  Muchos informes de stock traen esto en vez del precio unitario. */
+  valorizadoTotal: number | null
 }
 
 type Fila = unknown[]
@@ -38,6 +45,13 @@ function norm(v: unknown): string {
 const ALIAS_NOMBRE = ['insumo', 'producto', 'nombre', 'material', 'articulo']
 const ALIAS_CANTIDAD = ['cantidad', 'stock', 'existencia', 'saldo']
 const ALIAS_UNIDAD = ['unidad', 'medida', 'um', 'u.m.', 'u m']
+/* Precio: ambas columnas son OPCIONALES y no se pisan entre sí — ningún
+   alias de una aparece como substring en la otra. Si vienen las dos, manda
+   el valorizado total, porque es el que cuadra exacto contra la cantidad de
+   la misma fila (un precio unitario redondeado en el informe arrastra error
+   al multiplicarlo). */
+const ALIAS_PRECIO = ['precio', 'costo unitario', 'valor unitario']
+const ALIAS_VALORIZADO = ['valorizado', 'valor total', 'total valorizado']
 
 function indiceColumna(headerRow: Fila, alias: string[]): number {
   for (let i = 0; i < headerRow.length; i++) {
@@ -84,6 +98,22 @@ export function parseInsumosExcel(buffer: ArrayBuffer): InsumoStockParsed[] {
   }
 
   const { fila: filaEncabezado, colNombre, colCantidad, colUnidad } = encabezado
+  // Columnas de precio: opcionales. Si el informe no las trae, el archivo se
+  // procesa igual y sólo se actualiza el stock, como antes.
+  const yaUsada = (i: number) => i === colNombre || i === colCantidad || i === colUnidad
+  const colPrecioRaw = indiceColumna(filas[filaEncabezado], ALIAS_PRECIO)
+  const colValorizadoRaw = indiceColumna(filas[filaEncabezado], ALIAS_VALORIZADO)
+  const colPrecio = colPrecioRaw >= 0 && !yaUsada(colPrecioRaw) ? colPrecioRaw : -1
+  const colValorizado = colValorizadoRaw >= 0 && !yaUsada(colValorizadoRaw) ? colValorizadoRaw : -1
+
+  const numeroDe = (v: unknown): number | null => {
+    if (v == null || String(v).trim() === '') return null
+    // Limpia formato chileno de moneda: "$ 12.345,67" → 12345.67
+    const limpio = String(v).replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.')
+    const n = Number(limpio)
+    return Number.isFinite(n) && n > 0 ? n : null
+  }
+
   const resultado: InsumoStockParsed[] = []
 
   for (let i = filaEncabezado + 1; i < filas.length; i++) {
@@ -101,6 +131,8 @@ export function parseInsumosExcel(buffer: ArrayBuffer): InsumoStockParsed[] {
       nombreCrudo: String(nombreCrudo).trim(),
       cantidad,
       unidadCruda: colUnidad >= 0 && f[colUnidad] != null ? String(f[colUnidad]).trim() : '',
+      precioUnitarioCrudo: colPrecio >= 0 ? numeroDe(f[colPrecio]) : null,
+      valorizadoTotal: colValorizado >= 0 ? numeroDe(f[colValorizado]) : null,
     })
   }
 
