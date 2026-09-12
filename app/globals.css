@@ -1369,3 +1369,82 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   MOVIMIENTO — módulo de Producción (.prod-root)
+   Acotado a Producción a propósito: es el único módulo excluido del
+   reset global, así que es el único donde se puede confiar en el
+   espaciado y componer movimiento sin sorpresas.
+
+   REGLA DE RENDIMIENTO (el pedido fue "sin sacrificar rendimiento"):
+   sólo se anima `opacity`, `transform`, `box-shadow` y `background-color`.
+   Las dos primeras las resuelve el compositor sin recalcular layout ni
+   repintar; animar `width`, `height`, `top` o `margin` obligaría a un
+   reflow en cada cuadro y es justo lo que hace sentir lenta una interfaz.
+   Cero JavaScript y cero dependencias nuevas: nada de esto pesa en el
+   bundle, que ya es el otro frente del trabajo de velocidad.
+
+   No hace falta guard de movimiento reducido acá: el bloque
+   @media (prefers-reduced-motion: reduce) de más arriba ya recorta
+   TODA animación y transición de la app a 0.01ms.
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes prod-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Entrada de una sección al cambiar de pestaña. `both` deja el elemento
+   en el estado final: si la animación se recorta por movimiento reducido,
+   el contenido igual queda visible, nunca atrapado en opacity:0. */
+.prod-root .prod-enter {
+  animation: prod-enter 0.26s var(--spring) both;
+}
+
+/* Escalonado de las tarjetas dentro de una sección: cada una entra un
+   pelo después que la anterior. El tope de 6 pasos es deliberado —sin él,
+   una lista de 90 insumos tendría la última tarjeta entrando 3,6 s
+   después, que se lee como lentitud, no como fluidez. */
+.prod-root .prod-stagger > * {
+  animation: prod-enter 0.26s var(--spring) both;
+  animation-delay: calc(min(var(--i, 0), 6) * 45ms);
+}
+
+/* Tarjetas y paneles: se levantan apenas al pasar el cursor. 2px es
+   suficiente para que se sienta vivo sin que la página parezca temblar. */
+.prod-root .prod-hover-card {
+  transition: transform 0.18s var(--spring), box-shadow 0.18s var(--spring);
+}
+.prod-root .prod-hover-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -12px rgba(15, 61, 46, 0.28);
+}
+
+/* Filas de tabla: además del fondo, una guía de color a la izquierda que
+   ayuda a no perder la línea al leer hacia la derecha. Se dibuja con
+   box-shadow interior y no con border, porque un borde empujaría el
+   contenido 3px y la fila "saltaría" al pasar el mouse. */
+.prod-root .prod-hover-row {
+  transition: background-color 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+.prod-root .prod-hover-row:hover {
+  box-shadow: inset 3px 0 0 0 var(--gold, #E5A922);
+}
+
+/* Feedback al presionar: el control cede un poco bajo el dedo. Es lo que
+   más aporta a que la interfaz se sienta responsiva en celular, donde no
+   existe el hover. */
+.prod-root .prod-press {
+  transition: transform 0.12s var(--spring), background-color 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+.prod-root .prod-press:active {
+  transform: scale(0.97);
+}
+
+/* Íconos y botones chicos: crecen apenas en hover. */
+.prod-root .prod-hover-icon {
+  transition: transform 0.18s var(--spring), color 0.15s ease-out, background-color 0.15s ease-out;
+}
+.prod-root .prod-hover-icon:hover {
+  transform: scale(1.08);
+}

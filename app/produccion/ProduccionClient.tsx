@@ -1553,7 +1553,7 @@ export default function ProduccionClient({
                       key={id}
                       onClick={() => setActiveTab(id)}
                       aria-current={activo ? 'page' : undefined}
-                      className={`group relative flex items-center gap-3 rounded-lg py-2.5 pl-4 pr-3 text-left text-sm transition-all ${
+                      className={`prod-press group relative flex items-center gap-3 rounded-lg py-2.5 pl-4 pr-3 text-left text-sm transition-all ${
                         activo ? 'font-bold text-white' : 'font-medium text-white/60 hover:bg-white/5 hover:text-white'
                       }`}
                       style={{ backgroundColor: activo ? COLORS.lightGreen : 'transparent' }}
@@ -1670,7 +1670,7 @@ export default function ProduccionClient({
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+              className={`prod-press flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
                 activeTab === item.id ? 'text-white' : 'bg-gray-100 text-gray-600'
               }`}
               style={{ backgroundColor: activeTab === item.id ? COLORS.darkGreen : undefined }}
@@ -1686,7 +1686,7 @@ export default function ProduccionClient({
 
           {/* ══════════ VISTA 1: RESUMEN GENERAL ══════════ */}
           {activeTab === 'resumen' && (
-            <div className="flex flex-col gap-6">
+            <div className="prod-enter flex flex-col gap-6">
 
               {/* KPIs */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 lg:gap-6">
@@ -1895,7 +1895,7 @@ export default function ProduccionClient({
             // arriba (flex-1 overflow-auto) scrolleara — confirmado con el
             // computed height de la tarjeta de la tabla: 35px de alto,
             // wrapper interno en 0px pese a tener 94 filas en el DOM.
-            <div className="flex min-h-full flex-col gap-6">
+            <div className="prod-enter flex min-h-full flex-col gap-6">
 
               {/* Filtros */}
               <div className="flex flex-wrap items-end gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -2521,7 +2521,7 @@ export default function ProduccionClient({
                       {filasTablaDetalle.map(({ serie, proximo }, i) => {
                         const productoRepetido = i > 0 && filasTablaDetalle[i - 1].serie.producto === serie.producto
                         return (
-                          <tr key={serie.id} className="transition-colors hover:bg-gray-50">
+                          <tr key={serie.id} className="prod-hover-row transition-colors hover:bg-gray-50">
                             <td className="px-6 py-2.5 font-semibold text-gray-800">
                               {productoRepetido ? (
                                 <span className="pl-[42px] text-gray-300">″</span>
@@ -2579,7 +2579,7 @@ export default function ProduccionClient({
 
           {/* ══════════ VISTA 3: STOCK DE SEGURIDAD ══════════ */}
           {activeTab === 'seguridad' && (
-            <div className="flex flex-col gap-6">
+            <div className="prod-enter flex flex-col gap-6">
 
               {stockSeguridad.length === 0 ? (
                 <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
@@ -2669,9 +2669,9 @@ export default function ProduccionClient({
                     (respetando los filtros de categoría/envase de arriba).
                   </div>
                 ) : (
-                  <div className="mt-4 flex flex-col gap-3">
-                    {anticipadasPorProducto.map(grupo => (
-                      <div key={grupo.producto} className="overflow-hidden rounded-lg border border-amber-200 bg-white">
+                  <div className="prod-stagger mt-4 flex flex-col gap-3">
+                    {anticipadasPorProducto.map((grupo, idxGrupo) => (
+                      <div key={grupo.producto} style={{ '--i': idxGrupo } as React.CSSProperties} className="prod-hover-card overflow-hidden rounded-lg border border-amber-200 bg-white">
                         <div className="flex flex-wrap items-center gap-2.5 border-b border-amber-100 bg-amber-50/60 px-4 py-2.5">
                           <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={30} radius={7} />
                           <span className="font-semibold text-gray-800">{grupo.producto}</span>
@@ -2739,7 +2739,7 @@ export default function ProduccionClient({
                               <button
                                 disabled={guardandoPlan}
                                 onClick={() => setSugerenciaModal({ producto: grupo.producto, categoria: grupo.categoria, items: [item] })}
-                                className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                                className="prod-press shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
                               >
                                 Agregar al plan
                               </button>
@@ -2832,7 +2832,7 @@ export default function ProduccionClient({
                         <tr><td colSpan={11} className="px-6 py-10 text-center text-gray-400">Sin datos para este filtro.</td></tr>
                       )}
                       {gruposStockSeguridad.map(grupo => grupo.filas.map((f, i) => (
-                        <tr key={`${f.producto}::${f.envase ?? ''}`} className="transition-colors hover:bg-gray-50">
+                        <tr key={`${f.producto}::${f.envase ?? ''}`} className="prod-hover-row transition-colors hover:bg-gray-50">
                           {i === 0 && (
                             <td rowSpan={grupo.filas.length} className="border-r border-gray-100 px-6 py-3 align-top font-semibold text-gray-800">
                               <span className="inline-flex items-center gap-2.5">
@@ -2950,7 +2950,7 @@ export default function ProduccionClient({
                               let primeraFilaFormato = true
                               return formato.camaras.map(fc => {
                                 const fila = (
-                                  <tr key={`${grupo.producto}::${formato.bucket}::${fc.camara}`} className="transition-colors hover:bg-gray-50">
+                                  <tr key={`${grupo.producto}::${formato.bucket}::${fc.camara}`} className="prod-hover-row transition-colors hover:bg-gray-50">
                                     {primeraFilaProducto && (
                                       <td rowSpan={filasCamara} className="border-r border-gray-100 px-6 py-2.5 align-top font-semibold text-gray-800">
                                         <span className="inline-flex items-center gap-2.5">
@@ -3013,7 +3013,7 @@ export default function ProduccionClient({
               balancear quiebre de stock vs. sobreproducción sin inventar una
               fórmula nueva. */}
           {activeTab === 'plan' && (
-            <div className="flex h-full flex-col gap-6">
+            <div className="prod-enter flex h-full flex-col gap-6">
 
               {/* ── Split de Envasado ──────────────────────────────────────
                   Lo que está en el fermentador es líquido a granel, sin
@@ -3199,12 +3199,12 @@ export default function ProduccionClient({
                     decide después, en el Split de Envasado, igual que en la cocción real.
                     Las <strong>líneas fijas</strong> (el catálogo estable) van siempre primero: no pueden quebrar stock.
                   </p>
-                  <div className="flex flex-col gap-3">
-                    {alarmasPorProducto.map(grupo => {
+                  <div className="prod-stagger flex flex-col gap-3">
+                    {alarmasPorProducto.map((grupo, idxGrupo) => {
                       const esLineaFija = grupo.items[0]?.lineaFija ?? false
                       const totalGrupo = grupo.items.reduce((s, i) => s + i.litrosSugeridos, 0)
                       return (
-                      <div key={grupo.producto} className={`overflow-hidden rounded-lg border bg-white shadow-sm ${esLineaFija ? 'border-red-300' : 'border-amber-200'}`}>
+                      <div key={grupo.producto} style={{ '--i': idxGrupo } as React.CSSProperties} className={`prod-hover-card overflow-hidden rounded-lg border bg-white shadow-sm ${esLineaFija ? 'border-red-300' : 'border-amber-200'}`}>
                         <div className={`flex flex-wrap items-center gap-2.5 border-b px-4 py-2.5 ${esLineaFija ? 'border-red-100 bg-red-50/60' : 'border-amber-100 bg-amber-50/60'}`}>
                           <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={30} radius={7} />
                           <span className="font-semibold text-gray-800">{grupo.producto}</span>
@@ -3219,7 +3219,7 @@ export default function ProduccionClient({
                           <button
                             disabled={guardandoPlan}
                             onClick={() => setSugerenciaModal(grupo)}
-                            className="ml-auto shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                            className="prod-press ml-auto shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
                           >
                             Agregar al plan — {fNum(totalGrupo)} L total
                           </button>
@@ -3230,7 +3230,7 @@ export default function ProduccionClient({
                             // pasa a días hábiles (×5) para comparar en la misma unidad.
                             const urgente = s.diasHastaQuiebre != null && s.diasHastaQuiebre <= s.leadTimeSemanas * 5
                             return (
-                              <div key={`${s.envase}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-gray-50" title={s.motivo}>
+                              <div key={`${s.envase}-${i}`} className="prod-hover-row flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-gray-50" title={s.motivo}>
                                 <span className="w-24 shrink-0 text-xs font-bold uppercase tracking-wide text-amber-700">
                                   {ENVASE_LABEL[s.envase] ?? s.envase}
                                 </span>
@@ -3458,7 +3458,7 @@ export default function ProduccionClient({
               original. El scroll lo maneja el contenedor de arriba
               (flex-1 overflow-auto). */}
           {activeTab === 'insumos' && (
-            <div className="flex flex-col gap-6">
+            <div className="prod-enter flex flex-col gap-6">
 
               {lotesSinReceta.length > 0 && (
                 <div className="flex shrink-0 items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -3489,7 +3489,7 @@ export default function ProduccionClient({
                   type="button"
                   onClick={() => setPanelInsumosAbierto('stock')}
                   aria-expanded={panelInsumosAbierto === 'stock'}
-                  className="flex w-full flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 p-4 text-left transition-colors hover:bg-amber-50/40 sm:gap-4 sm:p-5"
+                  className="prod-press flex w-full flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 p-4 text-left transition-colors hover:bg-amber-50/40 sm:gap-4 sm:p-5"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
@@ -3535,7 +3535,7 @@ export default function ProduccionClient({
                           {stockInsumosFiltrado.map(row => {
                             const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
                             return (
-                              <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
+                              <tr key={row.insumo} className="prod-hover-row transition-colors hover:bg-gray-50">
                                 <td className="px-6 py-2.5 font-semibold text-gray-800">{row.insumo}</td>
                                 <td className="px-6 py-2.5">
                                   <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
@@ -3580,7 +3580,7 @@ export default function ProduccionClient({
                   type="button"
                   onClick={() => setPanelInsumosAbierto('mrp')}
                   aria-expanded={panelInsumosAbierto === 'mrp'}
-                  className="flex w-full flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 p-4 text-left transition-colors hover:bg-blue-50/40 sm:gap-4 sm:p-5"
+                  className="prod-press flex w-full flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 p-4 text-left transition-colors hover:bg-blue-50/40 sm:gap-4 sm:p-5"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
@@ -3626,7 +3626,7 @@ export default function ProduccionClient({
                           key={d}
                           type="button"
                           onClick={() => setMrpHorizonteDias(d)}
-                          className={`px-2.5 py-1.5 text-xs font-bold transition-colors ${
+                          className={`prod-press px-2.5 py-1.5 text-xs font-bold transition-colors ${
                             mrpHorizonteDias === d ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
                           }`}
                         >
@@ -3666,7 +3666,7 @@ export default function ProduccionClient({
                           {mrpFiltrado.map(row => {
                             const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
                             return (
-                              <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
+                              <tr key={row.insumo} className="prod-hover-row transition-colors hover:bg-gray-50">
                                 <td className="whitespace-nowrap px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
                                 <td className="px-6 py-3">
                                   <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
@@ -3699,7 +3699,7 @@ export default function ProduccionClient({
                   type="button"
                   onClick={() => setPanelInsumosAbierto('necesidad')}
                   aria-expanded={panelInsumosAbierto === 'necesidad'}
-                  className="flex w-full flex-col gap-3 border-b border-gray-100 bg-gray-50/50 p-4 text-left transition-colors hover:bg-amber-50/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5"
+                  className="prod-press flex w-full flex-col gap-3 border-b border-gray-100 bg-gray-50/50 p-4 text-left transition-colors hover:bg-amber-50/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5"
                 >
                   <div className="min-w-0">
                     <h3 className="font-bold text-gray-800">Necesidad de Insumos — Plan Maestro</h3>
@@ -3760,7 +3760,7 @@ export default function ProduccionClient({
                             const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
                             const lotesResumen = [...new Map(row.lotes.map(l => [l.producto, l])).values()]
                             return (
-                              <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
+                              <tr key={row.insumo} className="prod-hover-row transition-colors hover:bg-gray-50">
                                 <td className="whitespace-nowrap px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
                                 <td className="px-6 py-3">
                                   <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
@@ -3792,7 +3792,7 @@ export default function ProduccionClient({
 
           {/* ══════════ VISTA 6: PRESUPUESTO ══════════ */}
           {activeTab === 'presupuesto' && (
-            <div className="flex flex-col gap-6 xl:h-full xl:flex-row">
+            <div className="prod-enter flex flex-col gap-6 xl:h-full xl:flex-row">
 
               <div className="flex flex-[3] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
                 <div className="mb-6">
