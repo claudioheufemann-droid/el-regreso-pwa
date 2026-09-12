@@ -3338,13 +3338,13 @@ export default function ProduccionClient({
                   type="button"
                   onClick={() => setPanelInsumosAbierto('stock')}
                   aria-expanded={panelInsumosAbierto === 'stock'}
-                  className="flex w-full flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5 text-left transition-colors hover:bg-amber-50/40"
+                  className="flex w-full flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 p-4 text-left transition-colors hover:bg-amber-50/40 sm:gap-4 sm:p-5"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
                       <Package size={16} />
                     </span>
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-bold text-gray-800">Stock de Insumos</h3>
                       <p className="mt-1 text-sm text-gray-500">
                         {stockInsumos.length} insumos del catálogo{stockInsumosVacio ? ' — todavía no hay ningún inventario cargado.' : '.'}
@@ -3358,14 +3358,19 @@ export default function ProduccionClient({
                 </button>
                 <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${panelInsumosAbierto === 'stock' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                   <div className="overflow-hidden">
+                    {/* overflow-x-auto (en vez de que la tabla se achique para caber en
+                        pantalla) es a propósito: en celular, comprimir 4 columnas de
+                        insumos las vuelve ilegibles. Con min-width la tabla mantiene
+                        columnas de ancho usable y el usuario hace scroll horizontal —
+                        mismo patrón en las 3 tablas de esta sección. */}
                     <div className="max-h-[65vh] overflow-auto">
-                      <table className="w-full border-collapse text-left">
+                      <table className="w-full min-w-[560px] border-collapse text-left">
                         <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
                           <tr>
-                            <th className="px-6 py-3 font-bold">Insumo</th>
-                            <th className="px-6 py-3 font-bold">Categoría</th>
-                            <th className="px-6 py-3 text-right font-bold">Disponible</th>
-                            <th className="px-6 py-3 text-right font-bold">Valorizado</th>
+                            <th className="whitespace-nowrap px-6 py-3 font-bold">Insumo</th>
+                            <th className="whitespace-nowrap px-6 py-3 font-bold">Categoría</th>
+                            <th className="whitespace-nowrap px-6 py-3 text-right font-bold">Disponible</th>
+                            <th className="whitespace-nowrap px-6 py-3 text-right font-bold">Valorizado</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 text-sm">
@@ -3382,12 +3387,12 @@ export default function ProduccionClient({
                               <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
                                 <td className="px-6 py-2.5 font-semibold text-gray-800">{row.insumo}</td>
                                 <td className="px-6 py-2.5">
-                                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
+                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
                                 </td>
-                                <td className="px-6 py-2.5 text-right tabular-nums text-gray-700">
+                                <td className="whitespace-nowrap px-6 py-2.5 text-right tabular-nums text-gray-700">
                                   {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
                                 </td>
-                                <td className="px-6 py-2.5 text-right tabular-nums text-gray-400">
+                                <td className="whitespace-nowrap px-6 py-2.5 text-right tabular-nums text-gray-400">
                                   {row.valorizado != null ? `$${fNum(row.valorizado)}` : <span title="Sin precio o sin stock cargado">—</span>}
                                 </td>
                               </tr>
@@ -3424,13 +3429,13 @@ export default function ProduccionClient({
                   type="button"
                   onClick={() => setPanelInsumosAbierto('mrp')}
                   aria-expanded={panelInsumosAbierto === 'mrp'}
-                  className="flex w-full flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5 text-left transition-colors hover:bg-blue-50/40"
+                  className="flex w-full flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 p-4 text-left transition-colors hover:bg-blue-50/40 sm:gap-4 sm:p-5"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                       <Sigma size={16} />
                     </span>
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-bold text-gray-800">MRP — Compra sugerida de insumos</h3>
                       <p className="mt-1 text-sm text-gray-500">
                         {mrpInsumos.filas.length} insumos con necesidad, según la demanda proyectada por el modelo hasta
@@ -3447,16 +3452,16 @@ export default function ProduccionClient({
                 <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${panelInsumosAbierto === 'mrp' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                   <div className="overflow-hidden">
                     <div className="max-h-[65vh] overflow-auto">
-                      <table className="w-full border-collapse text-left">
+                      <table className="w-full min-w-[900px] border-collapse text-left">
                         <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
                           <tr>
-                            <th className="px-6 py-3 font-bold">Insumo</th>
-                            <th className="px-6 py-3 font-bold">Categoría</th>
-                            <th className="px-6 py-3 text-right font-bold">Necesidad Bruta</th>
-                            <th className="px-6 py-3 text-right font-bold">Disponible</th>
-                            <th className="px-6 py-3 text-right font-bold text-blue-700">Compra Sugerida</th>
-                            <th className="px-6 py-3 text-right font-bold">Costo Estimado</th>
-                            <th className="px-6 py-3 font-bold">Productos que lo piden</th>
+                            <th className="whitespace-nowrap px-6 py-3 font-bold">Insumo</th>
+                            <th className="whitespace-nowrap px-6 py-3 font-bold">Categoría</th>
+                            <th className="whitespace-nowrap px-6 py-3 text-right font-bold">Necesidad Bruta</th>
+                            <th className="whitespace-nowrap px-6 py-3 text-right font-bold">Disponible</th>
+                            <th className="whitespace-nowrap px-6 py-3 text-right font-bold text-blue-700">Compra Sugerida</th>
+                            <th className="whitespace-nowrap px-6 py-3 text-right font-bold">Costo Estimado</th>
+                            <th className="whitespace-nowrap px-6 py-3 font-bold">Productos que lo piden</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 text-sm">
@@ -3471,18 +3476,18 @@ export default function ProduccionClient({
                             const cat = CATEGORIA_INSUMO[row.categoria] ?? CATEGORIA_INSUMO.otros
                             return (
                               <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
-                                <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
+                                <td className="whitespace-nowrap px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
                                 <td className="px-6 py-3">
-                                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
+                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
                                 </td>
-                                <td className="px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
-                                <td className="px-6 py-3 text-right tabular-nums text-gray-500">
+                                <td className="whitespace-nowrap px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
+                                <td className="whitespace-nowrap px-6 py-3 text-right tabular-nums text-gray-500">
                                   {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
                                 </td>
-                                <td className={`px-6 py-3 text-right font-bold tabular-nums text-blue-900 ${row.necesidadNeta > 0 ? 'bg-blue-50' : ''}`}>
+                                <td className={`whitespace-nowrap px-6 py-3 text-right font-bold tabular-nums text-blue-900 ${row.necesidadNeta > 0 ? 'bg-blue-50' : ''}`}>
                                   {row.necesidadNeta > 0 ? fCantidadInsumo(row.necesidadNeta, row.unidadBase) : <span className="text-gray-300">—</span>}
                                 </td>
-                                <td className="px-6 py-3 text-right tabular-nums text-gray-400">
+                                <td className="whitespace-nowrap px-6 py-3 text-right tabular-nums text-gray-400">
                                   {row.costoCompra != null ? `$${fNum(row.costoCompra)}` : <span title="Sin precio cargado todavía">—</span>}
                                 </td>
                                 <td className="px-6 py-3 text-xs text-gray-500">
@@ -3503,18 +3508,21 @@ export default function ProduccionClient({
                   type="button"
                   onClick={() => setPanelInsumosAbierto('necesidad')}
                   aria-expanded={panelInsumosAbierto === 'necesidad'}
-                  className="flex w-full flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/50 p-5 text-left transition-colors hover:bg-amber-50/40"
+                  className="flex w-full flex-col gap-3 border-b border-gray-100 bg-gray-50/50 p-4 text-left transition-colors hover:bg-amber-50/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <h3 className="font-bold text-gray-800">Necesidad de Insumos — Plan Maestro</h3>
                     <p className="mt-1 text-sm text-gray-500">
                       {necesidadInsumos.length} insumos, escalados desde {planProduccion.filter(l => l.estado === 'planificado' || l.estado === 'en_curso').length} lotes activos de la cola.
                       {' '}El disponible sale del último inventario de insumos cargado{stockInsumosVacio ? ' — todavía no hay ninguno.' : '.'}
                     </p>
                   </div>
+                  {/* En un flex-col (mobile), este bloque hereda ancho completo por
+                      stretch — el buscador se estira con flex-1 y el chevron queda
+                      pegado a la derecha, sin desbordar la fila. En sm:+ vuelve a fila. */}
                   <div className="flex items-center gap-3">
                     {panelInsumosAbierto === 'necesidad' && (
-                      <div className="relative" onClick={e => e.stopPropagation()}>
+                      <div className="relative flex-1 sm:flex-none" onClick={e => e.stopPropagation()}>
                         <input
                           type="text"
                           value={busquedaInsumo}
@@ -3529,7 +3537,7 @@ export default function ProduccionClient({
                     )}
                     <ChevronDown
                       size={20}
-                      className={`shrink-0 text-gray-400 transition-transform duration-300 ${panelInsumosAbierto === 'necesidad' ? 'rotate-180 text-amber-600' : ''}`}
+                      className={`ml-auto shrink-0 text-gray-400 transition-transform duration-300 sm:ml-0 ${panelInsumosAbierto === 'necesidad' ? 'rotate-180 text-amber-600' : ''}`}
                     />
                   </div>
                 </button>
@@ -3537,16 +3545,16 @@ export default function ProduccionClient({
                 <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${panelInsumosAbierto === 'necesidad' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                   <div className="overflow-hidden">
                     <div className="max-h-[65vh] overflow-auto">
-                      <table className="w-full border-collapse text-left">
+                      <table className="w-full min-w-[900px] border-collapse text-left">
                         <thead className="sticky top-0 z-10 bg-gray-100 text-xs font-bold uppercase tracking-wider text-gray-600 shadow-sm">
                           <tr>
-                            <th className="px-6 py-4 font-bold">Insumo</th>
-                            <th className="px-6 py-4 font-bold">Categoría</th>
-                            <th className="px-6 py-4 text-right font-bold">Necesidad Bruta</th>
-                            <th className="px-6 py-4 text-right font-bold">Disponible</th>
-                            <th className="px-6 py-4 text-right font-bold text-amber-700">Necesidad Neta</th>
-                            <th className="px-6 py-4 text-right font-bold">Costo Estimado</th>
-                            <th className="px-6 py-4 font-bold">Lotes que lo usan</th>
+                            <th className="whitespace-nowrap px-6 py-4 font-bold">Insumo</th>
+                            <th className="whitespace-nowrap px-6 py-4 font-bold">Categoría</th>
+                            <th className="whitespace-nowrap px-6 py-4 text-right font-bold">Necesidad Bruta</th>
+                            <th className="whitespace-nowrap px-6 py-4 text-right font-bold">Disponible</th>
+                            <th className="whitespace-nowrap px-6 py-4 text-right font-bold text-amber-700">Necesidad Neta</th>
+                            <th className="whitespace-nowrap px-6 py-4 text-right font-bold">Costo Estimado</th>
+                            <th className="whitespace-nowrap px-6 py-4 font-bold">Lotes que lo usan</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 text-sm">
@@ -3562,18 +3570,18 @@ export default function ProduccionClient({
                             const lotesResumen = [...new Map(row.lotes.map(l => [l.producto, l])).values()]
                             return (
                               <tr key={row.insumo} className="transition-colors hover:bg-gray-50">
-                                <td className="px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
+                                <td className="whitespace-nowrap px-6 py-3 font-semibold text-gray-800">{row.insumo}</td>
                                 <td className="px-6 py-3">
-                                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
+                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-bold ${cat.badge}`}>{cat.label}</span>
                                 </td>
-                                <td className="px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
-                                <td className="px-6 py-3 text-right tabular-nums text-gray-500">
+                                <td className="whitespace-nowrap px-6 py-3 text-right tabular-nums text-gray-600">{fCantidadInsumo(row.necesidadBruta, row.unidadBase)}</td>
+                                <td className="whitespace-nowrap px-6 py-3 text-right tabular-nums text-gray-500">
                                   {row.disponible != null ? fCantidadInsumo(row.disponible, row.unidadBase) : <span className="text-gray-300">Sin dato</span>}
                                 </td>
-                                <td className={`px-6 py-3 text-right font-bold tabular-nums text-gray-900 ${row.necesidadNeta > 0 ? 'bg-amber-50' : ''}`}>
+                                <td className={`whitespace-nowrap px-6 py-3 text-right font-bold tabular-nums text-gray-900 ${row.necesidadNeta > 0 ? 'bg-amber-50' : ''}`}>
                                   {row.necesidadNeta > 0 ? fCantidadInsumo(row.necesidadNeta, row.unidadBase) : <span className="text-gray-300">—</span>}
                                 </td>
-                                <td className="px-6 py-3 text-right tabular-nums text-gray-400">
+                                <td className="whitespace-nowrap px-6 py-3 text-right tabular-nums text-gray-400">
                                   {row.costoNecesidad != null ? `$${fNum(row.costoNecesidad)}` : <span title="Sin precio cargado todavía">—</span>}
                                 </td>
                                 <td className="px-6 py-3 text-xs text-gray-500">
