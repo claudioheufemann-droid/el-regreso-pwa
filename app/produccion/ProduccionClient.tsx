@@ -31,30 +31,6 @@ const COLORS = {
   gray: '#9CA3AF',
 }
 
-/* ────────────────────────────────────────────────────────────────────────
-   DATOS DE DEMOSTRACIÓN
-   Estas tres secciones (cocciones, insumos/MRP, presupuesto) NO tienen
-   respaldo en la base todavía: no existen tablas de recetas, insumos ni
-   plan de cocción. Se dejan como maqueta para validar el diseño, y van
-   marcadas en pantalla con el badge <BadgeDemo/> para que nadie tome una
-   decisión de compra con estos números. Reemplazar por datos reales
-   cuando existan las tablas.
-   ──────────────────────────────────────────────────────────────────────── */
-const DEMO_budgetData = [
-  { month: 'Ene', cerveza: 45000, kombucha: 20000, tendencia: 65000 },
-  { month: 'Feb', cerveza: 48000, kombucha: 22000, tendencia: 70000 },
-  { month: 'Mar', cerveza: 35000, kombucha: 18000, tendencia: 53000 },
-  { month: 'Abr', cerveza: 34000, kombucha: 19000, tendencia: 53000 },
-  { month: 'May', cerveza: 36000, kombucha: 20000, tendencia: 56000 },
-  { month: 'Jun', cerveza: 35000, kombucha: 21000, tendencia: 56000 },
-  { month: 'Jul', cerveza: 32000, kombucha: 17000, tendencia: 49000 },
-  { month: 'Ago', cerveza: 33000, kombucha: 18000, tendencia: 51000 },
-  { month: 'Sep', cerveza: 40000, kombucha: 22000, tendencia: 62000 },
-  { month: 'Oct', cerveza: 42000, kombucha: 24000, tendencia: 66000 },
-  { month: 'Nov', cerveza: 47000, kombucha: 26000, tendencia: 73000 },
-  { month: 'Dic', cerveza: 55000, kombucha: 30000, tendencia: 85000 },
-]
-
 /** Etiqueta + color por categoría de insumo — mismas 4 del Excel de recetas
  *  (malta/lúpulo/levadura/otros), reutilizado en la tabla de Insumos y Compras. */
 const CATEGORIA_INSUMO: Record<string, { label: string; badge: string }> = {
@@ -116,6 +92,31 @@ function estimarUnidadesEnvase(
  *  hay que distinguir tres tramos de un mismo lote de un vistazo. */
 const COLOR_ENVASE: Record<EnvaseBucket, string> = {
   barril_30: '#0F3D2E', barril_50: '#1A5441', lata: '#E5A922', otros: '#9CA3AF',
+}
+
+/**
+ * Costo de insumos de UNA cocción: escala la receta al litraje real y la
+ * valoriza al último precio de compra de cada insumo (mismo escalado lineal
+ * que usa el MRP — decisión del usuario, 7-sep-2026).
+ *
+ * `sinPrecio` cuenta las líneas de receta que quedaron FUERA del total por no
+ * tener precio cargado. Es obligatorio mostrarlo junto al costo: un total al
+ * que le faltan insumos no se puede leer como el costo real del lote.
+ */
+function costoCoccion(producto: string, litros: number, recetaInsumos: RecetaInsumoLinea[]) {
+  const lineas = recetaInsumos.filter(l => l.producto === producto)
+  if (lineas.length === 0 || !(litros > 0)) {
+    return { costo: null as number | null, sinPrecio: 0, lineasReceta: lineas.length }
+  }
+  let costo = 0
+  let sinPrecio = 0
+  for (const l of lineas) {
+    if (l.precioUnitario == null) { sinPrecio++; continue }
+    costo += l.cantidadPorLote * (litros / l.litrosBase) * l.precioUnitario
+  }
+  // Ninguna línea tenía precio: no hay costo que mostrar, ni siquiera $0.
+  if (sinPrecio === lineas.length) return { costo: null as number | null, sinPrecio, lineasReceta: lineas.length }
+  return { costo: Math.round(costo) as number | null, sinPrecio, lineasReceta: lineas.length }
 }
 
 /** Fecha de HOY en yyyy-mm-dd, en huso HORARIO LOCAL del navegador — nunca
@@ -244,10 +245,6 @@ const GRUPOS_NAV: { titulo: string; items: TabId[] }[] = [
   { titulo: 'Abastecimiento', items: ['insumos', 'presupuesto'] },
 ]
 
-/** Secciones que todavía son maqueta (ver DATOS DE DEMOSTRACIÓN arriba). Se
- *  marcan en el propio menú para que nadie entre esperando datos reales. */
-const DEMO_TABS = new Set<TabId>(['presupuesto'])
-
 /** Alta manual de un lote al Plan Maestro. Estado propio (no vive en el
  *  padre) porque es puramente del formulario — se descarta al cerrar. */
 function FormNuevoLote({
@@ -339,10 +336,11 @@ function FormNuevoLote({
  * la alarma), para decidir la orden con criterio.
  */
 function ModalConfirmarLoteGrupo({
-  grupo, guardando, onCancelar, onConfirmar,
+  grupo, guardando, recetaInsumos, onCancelar, onConfirmar,
 }: {
   grupo: { producto: string; categoria: 'cerveza' | 'kombucha'; items: SugerenciaPlan[] }
   guardando: boolean
+  recetaInsumos: RecetaInsumoLinea[]
   onCancelar: () => void
   onConfirmar: (datos: { litrosPlanificados: number; fechaPlanificada: string; necesidadCubrir: number; cubreHasta: string | null; motivo: string }) => void
 }) {
@@ -369,6 +367,10 @@ function ModalConfirmarLoteGrupo({
   const ritmoTotal = grupo.items.reduce((s, i) => s + i.ritmoDiarioActual, 0)
   const diasCobertura = ritmoTotal > 0 ? litrosNum / ritmoTotal : null
   const cubreHasta = diasCobertura != null ? sumarDiasHabilesISO(fecha, diasCobertura) : null
+
+  // Cuánto sale cocinar esto: la receta escalada al litraje que se está por
+  // confirmar, valorizada al último precio de compra de cada insumo.
+  const costo = costoCoccion(grupo.producto, litrosNum, recetaInsumos)
 
   function submit() {
     if (!valido) return
@@ -439,6 +441,31 @@ function ModalConfirmarLoteGrupo({
           </div>
         </div>
 
+        {/* Costo de la cocción — responde "¿cuánto me sale cocinar esto?" en
+            vivo mientras se ajusta el litraje. */}
+        {costo.lineasReceta > 0 && (
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Costo de insumos de esta cocción</p>
+              {costo.sinPrecio > 0 && (
+                <p className="mt-0.5 text-xs text-blue-600">
+                  Parcial: {costo.sinPrecio} de {costo.lineasReceta} insumos de la receta sin precio cargado.
+                </p>
+              )}
+            </div>
+            {costo.costo != null ? (
+              <div className="text-right">
+                <p className="text-xl font-black tabular-nums text-blue-900">${fNum(costo.costo)}</p>
+                {litrosNum > 0 && (
+                  <p className="text-xs text-blue-600">${fNum(Math.round(costo.costo / litrosNum))} por litro</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm font-semibold text-blue-700">Sin precios cargados</p>
+            )}
+          </div>
+        )}
+
         {/* Cobertura — responde "hasta cuándo nos durará esto", en vivo según
             lo que el usuario haya puesto en Cantidad y Fecha de inicio. */}
         <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
@@ -498,16 +525,6 @@ function ChipDesviacion({ mape, derivado = false }: { mape: number | null; deriv
       }
     >
       {mape.toFixed(0)}%
-    </span>
-  )
-}
-
-/* ── Badge para todo lo que todavía es maqueta ─────────────────────────── */
-function BadgeDemo({ children = 'Datos de demostración' }: { children?: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-700">
-      <Info size={12} />
-      {children}
     </span>
   )
 }
@@ -1407,6 +1424,81 @@ export default function ProduccionClient({
     }
   }, [recetaInsumos, series, avanceMes, stockInsumos, mrpHorizonteDias])
 
+  /* ── Presupuesto de insumos, mes a mes ────────────────────────────────────
+     Responde "cuánto plata necesito para comprar insumos los próximos meses".
+     Usa el forecast mensual de cada producto (litros), lo baja a insumos por
+     receta y lo valoriza al último precio de compra.
+
+     Lo que lo hace un presupuesto de COMPRA y no de consumo: el stock actual
+     se va descontando mes a mes en cadena. Lo que ya está en bodega cubre
+     primero el mes 1; sólo lo que falta se compra. El mes 2 arranca con el
+     remanente que dejó el 1, y así. Sin esto, el mes 1 pediría comprar cosas
+     que ya están compradas. */
+  const PRESUPUESTO_MESES = 3
+  const presupuestoInsumos = useMemo(() => {
+    const seriePorProducto = new Map(
+      series.filter(s => s.nivel === 'producto' && s.clave).map(s => [s.clave as string, s])
+    )
+    const meses = [...new Set(
+      series.flatMap(s => s.puntos.filter(p => p.tipo === 'forecast').map(p => p.mes))
+    )].sort().slice(0, PRESUPUESTO_MESES)
+
+    const precioPorInsumo = new Map(stockInsumos.map(s => [s.insumo, s.precioUnitario]))
+    // Saldo de bodega que se va consumiendo a lo largo de los meses.
+    const stockRestante = new Map(stockInsumos.map(s => [s.insumo, s.disponible ?? 0]))
+
+    const filas = meses.map(mes => {
+      // Necesidad bruta del mes por insumo, separando cuánto viene de cerveza
+      // y cuánto de kombucha — un mismo insumo (azúcar, CO₂) lo piden las dos
+      // líneas, así que el costo se reparte después en esa misma proporción.
+      const bruta = new Map<string, { total: number; cerveza: number; kombucha: number }>()
+      for (const l of recetaInsumos) {
+        const serie = seriePorProducto.get(l.producto)
+        const litros = serie?.puntos.find(p => p.mes === mes && p.tipo === 'forecast')?.litros ?? 0
+        if (litros <= 0) continue
+        const cantidad = l.cantidadPorLote * (litros / l.litrosBase)
+        const acc = bruta.get(l.insumo) ?? { total: 0, cerveza: 0, kombucha: 0 }
+        acc.total += cantidad
+        if (serie?.categoria === 'kombucha') acc.kombucha += cantidad
+        else acc.cerveza += cantidad
+        bruta.set(l.insumo, acc)
+      }
+
+      let cerveza = 0
+      let kombucha = 0
+      let sinPrecio = 0
+      for (const [insumo, n] of bruta) {
+        const hay = stockRestante.get(insumo) ?? 0
+        const cubierto = Math.min(hay, n.total)
+        stockRestante.set(insumo, hay - cubierto)
+        const aComprar = n.total - cubierto
+        if (aComprar <= 0) continue
+        const precio = precioPorInsumo.get(insumo) ?? null
+        if (precio == null) { sinPrecio++; continue }
+        const propCerveza = n.total > 0 ? n.cerveza / n.total : 0
+        cerveza += aComprar * precio * propCerveza
+        kombucha += aComprar * precio * (1 - propCerveza)
+      }
+
+      return {
+        mes,
+        etiqueta: etiquetaMes(mes),
+        cerveza: Math.round(cerveza),
+        kombucha: Math.round(kombucha),
+        total: Math.round(cerveza + kombucha),
+        sinPrecio,
+      }
+    })
+
+    return {
+      filas,
+      total: filas.reduce((s, f) => s + f.total, 0),
+      totalCerveza: filas.reduce((s, f) => s + f.cerveza, 0),
+      totalKombucha: filas.reduce((s, f) => s + f.kombucha, 0),
+      sinPrecio: filas.reduce((m, f) => Math.max(m, f.sinPrecio), 0),
+    }
+  }, [series, recetaInsumos, stockInsumos])
+
   const mrpFiltrado = mrpInsumos.filas.filter(i =>
     i.insumo.toLowerCase().includes(busquedaInsumo.toLowerCase()) ||
     i.categoria.toLowerCase().includes(busquedaInsumo.toLowerCase())
@@ -1481,15 +1573,6 @@ export default function ProduccionClient({
                           title={`${alertas} ${alertas === 1 ? 'punto' : 'puntos'} que requieren atención`}
                         >
                           {alertas}
-                        </span>
-                      )}
-                      {DEMO_TABS.has(id) && (
-                        <span
-                          className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide"
-                          style={{ backgroundColor: 'rgba(229,169,34,0.16)', color: COLORS.amber }}
-                          title="Sección de maqueta: todavía sin datos reales"
-                        >
-                          demo
                         </span>
                       )}
                     </button>
@@ -3715,19 +3798,36 @@ export default function ProduccionClient({
                 <div className="mb-6">
                   <div className="flex flex-wrap items-center gap-3">
                     <h3 className="text-lg font-bold text-gray-800">Gasto Proyectado en Insumos Productivos</h3>
-                    <BadgeDemo />
                   </div>
                   <p className="mt-1 text-sm text-gray-500">
-                    Presupuesto mensual separado por línea de negocio (Cerveza y Kombucha).
+                    Cuánto hay que <strong>comprar</strong> los próximos {PRESUPUESTO_MESES} meses: demanda proyectada por el
+                    modelo, bajada a insumos por receta y valorizada al último precio de compra. Lo que ya está en bodega se
+                    descuenta primero, así que esto es compra, no consumo.
                   </p>
+                  {presupuestoInsumos.sinPrecio > 0 && (
+                    <p className="mt-2 inline-flex rounded-md bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
+                      Presupuesto parcial: hasta {presupuestoInsumos.sinPrecio} insumos por mes quedaron fuera por no tener precio cargado.
+                    </p>
+                  )}
                 </div>
 
+                {presupuestoInsumos.total === 0 ? (
+                  <div className="flex flex-1 items-center justify-center rounded-lg bg-gray-50 p-8 text-center text-sm text-gray-500">
+                    <div>
+                      <p className="font-semibold text-gray-700">Todavía no hay presupuesto que mostrar.</p>
+                      <p className="mt-1">
+                        Falta cargar el precio de los insumos. Sube el informe de insumos con la columna
+                        &quot;Último precio de compra&quot; y esta pantalla se llena sola.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
                 <div className="relative min-h-[360px] w-full flex-1">
                   <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={DEMO_budgetData} margin={{ top: 20, right: 20, left: 10, bottom: 5 }}>
+                    <ComposedChart data={presupuestoInsumos.filas} margin={{ top: 20, right: 20, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 600 }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dx={-6} tickFormatter={(val: number) => `$${val / 1000}k`} />
+                      <XAxis dataKey="etiqueta" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 600 }} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dx={-6} tickFormatter={(val: number) => `$${fNum(Math.round(val / 1000))}k`} />
                       <Tooltip
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                         formatter={(value, name) => [`$${Number(value).toLocaleString('es-CL')}`, name]}
@@ -3736,17 +3836,21 @@ export default function ProduccionClient({
 
                       <Bar dataKey="cerveza" name="Insumos Cerveza" stackId="a" fill={COLORS.darkGreen} />
                       <Bar dataKey="kombucha" name="Insumos Kombucha" stackId="a" fill={COLORS.amber} radius={[4, 4, 0, 0]} />
-                      <Line type="monotone" dataKey="tendencia" name="Tendencia Total" stroke={COLORS.gray} strokeWidth={2} strokeDasharray="4 4" dot={false} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
+                )}
               </div>
 
               <div className="flex flex-1 flex-col gap-6 xl:max-w-sm">
                 <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">Resumen Gasto Anual</h3>
-                  <div className="mb-1 text-sm text-gray-500">Total Proyectado (Insumos)</div>
-                  <div className="mb-6 text-4xl font-black text-gray-900">$978.000</div>
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                    Compra de insumos · {PRESUPUESTO_MESES} meses
+                  </h3>
+                  <div className="mb-1 text-sm text-gray-500">Total a comprar</div>
+                  <div className="mb-6 text-4xl font-black text-gray-900">
+                    {presupuestoInsumos.total > 0 ? `$${fNum(presupuestoInsumos.total)}` : <span className="text-2xl text-gray-300">Sin valorizar</span>}
+                  </div>
 
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
@@ -3754,29 +3858,47 @@ export default function ProduccionClient({
                         <div className="text-sm font-bold text-gray-800">Cerveza Artesanal</div>
                         <div className="text-xs text-gray-500">Malta, lúpulo, levadura, etc.</div>
                       </div>
-                      <div className="font-bold text-gray-900">$645.000</div>
+                      <div className="font-bold text-gray-900">${fNum(presupuestoInsumos.totalCerveza)}</div>
                     </div>
 
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50/50 p-3">
                       <div>
-                        <div className="text-sm font-bold text-gray-800">Kombucha (La Ida)</div>
-                        <div className="text-xs text-gray-500">Té, frutas, scoby, etc.</div>
+                        <div className="text-sm font-bold text-gray-800">Kombucha</div>
+                        <div className="text-xs text-gray-500">Té, frutas, azúcar, etc.</div>
                       </div>
-                      <div className="font-bold text-amber-900">$333.000</div>
+                      <div className="font-bold text-amber-900">${fNum(presupuestoInsumos.totalKombucha)}</div>
                     </div>
                   </div>
+
+                  {presupuestoInsumos.filas.length > 0 && (
+                    <div className="mt-5 flex flex-col gap-2 border-t border-gray-100 pt-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Mes a mes</p>
+                      {presupuestoInsumos.filas.map(f => (
+                        <div key={f.mes} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-gray-600">{f.etiqueta}</span>
+                          <span className="font-bold tabular-nums text-gray-800">${fNum(f.total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
+                {/* Contraste contra el gasto real de los últimos 13 meses de
+                    facturas del ERP: si el presupuesto calculado se aleja mucho
+                    de esta cifra, el problema está en los precios o en las
+                    recetas, no en el presupuesto. */}
                 <div className="flex flex-col gap-3 rounded-xl border border-green-200 bg-green-50 p-6 shadow-sm">
                   <div className="flex items-center gap-2 font-bold text-green-800">
                     <CircleDollarSign size={20} />
-                    Flujo de Caja Estimado
+                    Control contra el gasto real
                   </div>
                   <p className="text-sm leading-relaxed text-green-700">
-                    La cobranza esperada a 3 meses cubre el <strong>145%</strong> del gasto proyectado en insumos para
-                    el mismo período, asumiendo un 70% de cartera sin deuda. Flujo neto positivo.
+                    Según las facturas del ERP, el gasto real en insumos productivos (cervecería, kombuchería y CO₂)
+                    promedia <strong>$11,2 millones al mes</strong>.
+                    {presupuestoInsumos.total > 0 && (
+                      <> Este presupuesto proyecta <strong>${fNum(Math.round(presupuestoInsumos.total / Math.max(presupuestoInsumos.filas.length, 1)))} por mes</strong> — si la diferencia es grande, revisar precios y recetas antes de usarlo.</>
+                    )}
                   </p>
-                  <BadgeDemo />
                 </div>
               </div>
             </div>
@@ -3790,6 +3912,7 @@ export default function ProduccionClient({
             <ModalConfirmarLoteGrupo
               grupo={sugerenciaModal}
               guardando={guardandoPlan}
+              recetaInsumos={recetaInsumos}
               onCancelar={() => setSugerenciaModal(null)}
               onConfirmar={({ litrosPlanificados, fechaPlanificada, necesidadCubrir, cubreHasta, motivo }) => agregarLote({
                 producto: sugerenciaModal.producto,
