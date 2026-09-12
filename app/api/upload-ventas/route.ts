@@ -383,20 +383,9 @@ export async function POST(req: NextRequest) {
         .filter((p): p is string => !!p && esPedidoReal(p))
     ),
   ]
-  for (let i = 0; i < pedidosEnArchivo.length; i += 500) {
-    const lote = pedidosEnArchivo.slice(i, i + 500)
-    const { error: deleteError } = await supabase.from('ventas').delete().in('pedido', lote)
-    if (deleteError) {
-      return NextResponse.json(
-        { error: `Error al limpiar datos: ${deleteError.message}` },
-        { status: 500 }
-      )
-    }
-  }
-
   // Filas sin pedido numérico real (devoluciones, cargas manuales antiguas):
   // mantener el criterio anterior de reemplazo por vendedor+fecha, acotado a
-  // esas mismas filas para no interferir con el borrado por pedido de arriba.
+  // esas mismas filas para no interferir con el borrado por pedido.
   const combinacionesSinPedido = [
     ...new Map(
       registros
@@ -407,41 +396,37 @@ export async function POST(req: NextRequest) {
         ])
     ).values(),
   ]
-  for (const { vendedor, fecha } of combinacionesSinPedido) {
-    const { error: deleteError } = await supabase
-      .from('ventas')
-      .delete()
-      .eq('vendedor_actual', vendedor)
-      .eq('fecha_pedido', fecha)
-      // NULL no matchea el regex bajo lógica de 3 valores, así que .not() solo
-      // no alcanza — hay que pedirlo explícito con is.null.
-      .or('pedido.is.null,pedido.not.match.^[0-9]+$')
 
-    if (deleteError) {
-      return NextResponse.json(
-        { error: `Error al limpiar datos: ${deleteError.message}` },
-        { status: 500 }
-      )
-    }
+  // ── Reemplazo atómico y serializado ──────────────────────────────────────
+  // Borrado + inserción van en UNA transacción del lado de Postgres, con un
+  // advisory lock que serializa cargas concurrentes (ver migración
+  // reemplazar_ventas_atomico_con_lock).
+  //
+  // Antes esto eran tres bucles sueltos —borrar por pedido, borrar sin
+  // pedido, insertar en lotes de 200— cada uno con su propia transacción. Si
+  // el ETL del ERP se disparaba dos veces a la vez, ambas corridas borraban y
+  // después ambas insertaban el archivo completo: pasó el 12-sep-2026 18:46 y
+  // dejó 3.196 filas duplicadas entre agosto y septiembre (el panel de Ventas
+  // marcó 12.248 L y +173% con ~7.700 L reales). El síntoma es traicionero
+  // porque se corrige solo en la sincronización siguiente, así que el número
+  // malo aparece y desaparece según cuándo se mire.
+  //
+  // No se vuelve a mandar en lotes a propósito: partirlo en varias llamadas
+  // rompería la atomicidad, que es justamente lo que arregla el bug.
+  const { data: insertadasRpc, error: rpcError } = await supabase.rpc('reemplazar_ventas', {
+    p_pedidos: pedidosEnArchivo,
+    p_sin_pedido: combinacionesSinPedido,
+    p_filas: registros,
+  })
+
+  if (rpcError) {
+    return NextResponse.json(
+      { error: `Error al reemplazar ventas: ${rpcError.message}` },
+      { status: 500 }
+    )
   }
 
-  const BATCH = 200
-  let insertadas = 0
-
-  for (let i = 0; i < registros.length; i += BATCH) {
-    const batch = registros.slice(i, i + BATCH)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error: insertError } = await supabase
-      .from('ventas')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert(batch as any[])
-      .select('id')
-
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
-    }
-    insertadas += data?.length ?? batch.length
-  }
+  const insertadas = insertadasRpc ?? registros.length
 
   // ── Reconciliación de pedidos huérfanos (rediseñada 08-sep-2026) ─────────
   // Objetivo: cuando un pedido se cancela/elimina en el ERP, deja de venir en
