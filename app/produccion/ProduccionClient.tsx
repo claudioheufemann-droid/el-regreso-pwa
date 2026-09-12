@@ -3306,11 +3306,19 @@ export default function ProduccionClient({
               precio queda pendiente (columna "Costo" vacía) hasta que exista
               una lista de precios — decisión del usuario, 7-sep-2026: ver
               la necesidad en CANTIDAD primero, valorizar después. */}
+          {/* SIN h-full, y con shrink-0 en cada tarjeta, a propósito: con una
+              altura fija acá las tarjetas (que llevan overflow-hidden) se
+              encogían por debajo de su propio contenido para caber —en CSS un
+              flex item con overflow distinto de visible tiene min-size
+              automático 0— y terminaban recortando su propio encabezado, con
+              el chevron adentro. Ese era el "se acoplan y se sobreponen"
+              original. El scroll lo maneja el contenedor de arriba
+              (flex-1 overflow-auto). */}
           {activeTab === 'insumos' && (
-            <div className="flex h-full flex-col gap-6">
+            <div className="flex flex-col gap-6">
 
               {lotesSinReceta.length > 0 && (
-                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <div className="flex shrink-0 items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                   <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
                   <div>
                     <p className="font-bold">
@@ -3333,7 +3341,7 @@ export default function ProduccionClient({
                   aparte de "Necesidad de Insumos" de abajo porque esa tabla sólo
                   lista lo que algún lote activo necesita: con la cola vacía queda
                   vacía también, aunque el stock sí esté cargado. */}
-              <div className={`flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${panelInsumosAbierto === 'stock' ? 'border-amber-200 shadow-md' : 'border-gray-200'}`}>
+              <div className={`flex shrink-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${panelInsumosAbierto === 'stock' ? 'border-amber-200 shadow-md' : 'border-gray-200'}`}>
                 <button
                   type="button"
                   onClick={() => setPanelInsumosAbierto('stock')}
@@ -3410,7 +3418,7 @@ export default function ProduccionClient({
                   Insumos" de abajo, que sólo mira los lotes activos del Plan
                   Maestro. Complementarias, no reemplazan una a la otra. */}
               {mrpInsumos.productosSinForecast.length > 0 && (
-                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <div className="flex shrink-0 items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                   <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
                   <div>
                     <p className="font-bold">
@@ -3424,7 +3432,7 @@ export default function ProduccionClient({
                 </div>
               )}
 
-              <div className={`flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${panelInsumosAbierto === 'mrp' ? 'border-blue-200 shadow-md' : 'border-gray-200'}`}>
+              <div className={`flex shrink-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${panelInsumosAbierto === 'mrp' ? 'border-blue-200 shadow-md' : 'border-gray-200'}`}>
                 <button
                   type="button"
                   onClick={() => setPanelInsumosAbierto('mrp')}
@@ -3503,7 +3511,7 @@ export default function ProduccionClient({
                 </div>
               </div>
 
-              <div className={`flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${panelInsumosAbierto === 'necesidad' ? 'border-amber-200 shadow-md' : 'border-gray-200'}`}>
+              <div className={`flex shrink-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${panelInsumosAbierto === 'necesidad' ? 'border-amber-200 shadow-md' : 'border-gray-200'}`}>
                 <button
                   type="button"
                   onClick={() => setPanelInsumosAbierto('necesidad')}
