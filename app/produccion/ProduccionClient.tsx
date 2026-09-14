@@ -1462,28 +1462,82 @@ export default function ProduccionClient({
   }, [stockSeguridad, ocupacionPlanta.tanques])
 
   /** Mes que muestra el calendario diario de cocciones sugeridas — 0 = mes
-   *  actual, navegable con las flechas. */
+   *  actual, navegable con las flechas. Independiente del horizonte de
+   *  planificación (siempre 3 meses, ver más abajo): esto sólo controla qué
+   *  página del resultado ya calculado se está mirando. */
   const [mesCoberturaOffset, setMesCoberturaOffset] = useState(0)
 
-  /* ── Calendario diario de cocciones SUGERIDAS ───────────────────────────
-     A diferencia del Cronograma de Cocciones (Resumen), que sólo muestra
-     lotes YA CONFIRMADOS en el Plan Maestro, esto muestra lo que el modelo
-     sugiere cocer y cuándo — con "Agregar al plan" todavía sin apretar.
-     Combina las alarmas de quiebre (más apremiantes: la fecha ya viene del
-     stock físico agotándose) con Necesidad Anticipada (cobertura a futuro),
-     sin duplicar producto — si ya hay una alarma de quiebre, esa manda por
-     ser la más urgente de las dos.
+  /** Cuántos meses adelante cubre la programación automática — pedido del
+   *  usuario, 14-sep-2026: "debemos tener una ventana de 3 meses con las
+   *  cocciones programadas". No es el filtro manual "Cubrir hasta" de
+   *  Necesidad Anticipada (ese sigue siendo un simulador aparte); esto se
+   *  arma solo, siempre a 3 meses vista, cada vez que se abre la pantalla. */
+  const HORIZONTE_MESES_CALENDARIO = 3
 
-     Además cruza contra la OCUPACIÓN DE TANQUES: una cocción no libera su
-     fermentador el mismo día, se queda ocupado el lead time completo (4
-     semanas cerveza / 3 kombucha — es el mismo número que ya usa el resto
-     del módulo para todo lo demás; es por CATEGORÍA, no por estilo puntual,
-     porque hoy no hay un dato de fermentación por receta más fino que ése.
-     Si se carga esa granularidad más adelante, este cálculo la puede usar
-     directo). Dos sugerencias que se solapan en el tiempo y son más que los
-     tanques reales de esa línea van a chocar por espacio, no sólo por
-     litros — se marca con una franja roja en el día y un ícono en la
-     tarjeta afectada. */
+  /* ── Cocciones que pide el forecast dentro del horizonte ────────────────
+     A diferencia de Necesidad Anticipada (una fecha de cobertura que el
+     usuario elige a mano), esto se arma SOLO: para cada uno de los próximos
+     3 meses del forecast, cuánto hace falta cocer por producto para llegar
+     con el colchón de stock de seguridad puesto — mismo encadenamiento de
+     stock mes a mes que el Plan de Cobertura de arriba (lo que sobra de un
+     mes pasa al siguiente), pero por PRODUCTO en vez de agregado por línea,
+     porque acá hace falta saber a quién calendarizar.
+
+     Se recalcula solo con cada carga de la pantalla: no hay nada que
+     "correr" a mano cuando el forecast mensual (día 24) termine — la
+     próxima vez que alguien abra Stock de Seguridad ya sale con los números
+     nuevos. */
+  const coccionesDelForecast = useMemo(() => {
+    const filasProducto = stockSeguridad.filter(s => s.nivel === 'producto')
+    const meses = [...new Set(filasProducto.map(s => s.mes))].sort().slice(0, HORIZONTE_MESES_CALENDARIO)
+    if (meses.length === 0) return []
+
+    const stockRestante = new Map<string, number>()
+    for (const s of filasProducto) {
+      if (s.mes !== meses[0]) continue
+      stockRestante.set(s.producto, (s.stockActualLitros ?? 0) + s.litrosEnProduccion)
+    }
+
+    const resultado: { producto: string; categoria: 'cerveza' | 'kombucha'; litros: number; leadTimeSemanas: number; fechaDeseada: string }[] = []
+    for (const mes of meses) {
+      for (const s of filasProducto) {
+        if (s.mes !== mes) continue
+        const disponible = stockRestante.get(s.producto) ?? 0
+        const necesidadConColchon = s.demandaMensualProyectada + s.stockSeguridadLitros
+        const aProducir = Math.max(necesidadConColchon - disponible, 0)
+        stockRestante.set(s.producto, aProducir > 0 ? s.stockSeguridadLitros : disponible - s.demandaMensualProyectada)
+        if (aProducir <= 0) continue
+        // Fecha deseada: empezar lo bastante temprano para tener el colchón
+        // puesto el primer día del mes que lo necesita (mismo criterio de
+        // "quiebre − lead time" que el resto del módulo, sólo que el
+        // "quiebre" acá es el inicio del mes detonante, no una alarma real).
+        resultado.push({
+          producto: s.producto, categoria: s.categoria, litros: Math.round(aProducir),
+          leadTimeSemanas: s.leadTimeSemanas, fechaDeseada: restarDiasHabilesISO(mes, s.leadTimeSemanas * 5),
+        })
+      }
+    }
+    return resultado
+  }, [stockSeguridad])
+
+  /* ── Calendario diario de cocciones SUGERIDAS, con capacidad real ───────
+     A diferencia del Cronograma de Cocciones (Resumen), que sólo muestra
+     lotes YA CONFIRMADOS en el Plan Maestro, esto arma una PROGRAMACIÓN
+     completa a 3 meses: reparte las cocciones que pide el forecast
+     (coccionesDelForecast) en fechas reales, respetando que una cocción
+     ocupa su fermentador el lead time completo y que sólo hay una cantidad
+     fija de tanques de cada línea (T=cervecería, K=kombuchería).　Si dos
+     cocciones compiten por el mismo tramo y no alcanzan los tanques, la de
+     MENOR prioridad se corre a la siguiente fecha libre en vez de quedar
+     las dos apiladas el mismo día — "programadas de buena forma", no sólo
+     una lista de fechas ideales sin cruzar contra la ocupación real.
+
+     Las alarmas de quiebre YA CONFIRMADAS como críticas (fecha viene del
+     stock físico agotándose, no del forecast) entran con MÁXIMA prioridad y
+     su propia fecha real — son más urgentes y más confiables que cualquier
+     proyección, así que el resto se programa alrededor de ellas, nunca al
+     revés. Fuera de eso, prioridad: atrasadas primero, después por fecha
+     deseada más próxima. */
   const calendarioCobertura = useMemo(() => {
     const hoy = new Date()
     const base = new Date(hoy.getFullYear(), hoy.getMonth() + mesCoberturaOffset, 1)
@@ -1494,99 +1548,105 @@ export default function ProduccionClient({
     const sumarDiasCalISO = (desdeISO: string, dias: number) =>
       new Date(Date.parse(`${desdeISO}T00:00:00Z`) + dias * 86400000).toISOString().slice(0, 10)
 
-    interface Sugerido {
-      producto: string; categoria: 'cerveza' | 'kombucha'; litros: number; fecha: string; atrasado: boolean
-      leadTimeSemanas: number
-      /** Hasta cuándo alcanza este litraje al ritmo de venta actual —
-       *  mismo cálculo que usa el modal de confirmación. Null si no hay
-       *  ritmo (sin ventas recientes) para proyectar una fecha. */
+    interface Candidata {
+      producto: string; categoria: 'cerveza' | 'kombucha'; litros: number; leadTimeSemanas: number
+      fechaDeseada: string; atrasado: boolean
+      /** Hasta cuándo alcanza este litraje al ritmo de venta actual — null
+       *  si no hay ritmo reciente (producto sin ventas) para proyectar. */
       cubreHasta: string | null
-      /** true si el fermentador de esta línea no alcanzaría — hay más
-       *  cocciones que tanques físicos de esa categoría el mismo tramo de
-       *  semanas. Señal de choque de OCUPACIÓN, no de litros. */
-      posibleChoque: boolean
     }
     const vistos = new Set<string>()
-    const sugeridos: Sugerido[] = []
+    const candidatas: Candidata[] = []
+    // Prioridad 1: alarmas de quiebre reales — fecha del stock físico, no
+    // del forecast, y más confiable que cualquier proyección.
     for (const g of alarmasPorProducto) {
       const fecha = g.items.map(i => i.fechaLimiteInicio).filter((f): f is string => f != null).sort()[0]
       const total = g.items.reduce((s, i) => s + i.litrosSugeridos, 0)
       if (!fecha || total <= 0) continue
       vistos.add(g.producto)
       const ritmoTotal = g.items.reduce((s, i) => s + i.ritmoDiarioActual, 0)
-      const leadTimeSemanas = g.items[0]?.leadTimeSemanas ?? (g.categoria === 'kombucha' ? 3 : 4)
-      sugeridos.push({
-        producto: g.producto, categoria: g.categoria, litros: total, fecha, leadTimeSemanas,
-        atrasado: g.items.some(i => i.atrasado),
+      candidatas.push({
+        producto: g.producto, categoria: g.categoria, litros: total,
+        leadTimeSemanas: g.items[0]?.leadTimeSemanas ?? (g.categoria === 'kombucha' ? 3 : 4),
+        fechaDeseada: fecha, atrasado: g.items.some(i => i.atrasado),
         cubreHasta: ritmoTotal > 0 ? sumarDiasHabilesISO(fecha, total / ritmoTotal) : null,
-        posibleChoque: false,
       })
     }
-    for (const g of anticipadasPorProducto) {
-      if (vistos.has(g.producto)) continue
-      const fecha = g.items.map(i => i.fechaLimiteInicio).filter((f): f is string => f != null).sort()[0]
-      if (!fecha || g.totalAProducir <= 0) continue
-      const ritmoTotal = g.items.reduce((s, i) => s + i.ritmoDiarioActual, 0)
-      const leadTimeSemanas = g.items[0]?.leadTimeSemanas ?? (g.categoria === 'kombucha' ? 3 : 4)
-      sugeridos.push({
-        producto: g.producto, categoria: g.categoria, litros: g.totalAProducir, fecha, leadTimeSemanas,
-        atrasado: g.items.some(i => i.atrasado),
-        cubreHasta: ritmoTotal > 0 ? sumarDiasHabilesISO(fecha, g.totalAProducir / ritmoTotal) : null,
-        posibleChoque: false,
-      })
+    // Prioridad 2: lo que pide el forecast a 3 meses, para los productos que
+    // no tienen ya una alarma real cubriendo ese mismo tramo.
+    for (const c of coccionesDelForecast) {
+      if (vistos.has(c.producto)) continue
+      candidatas.push({ ...c, atrasado: c.fechaDeseada < hoyISO, cubreHasta: null })
     }
+    // Orden de prioridad al repartir tanque: atrasadas primero, después la
+    // fecha deseada más próxima — la misma lógica de "quién entra primero a
+    // la cola" que ya usa el resto del módulo.
+    candidatas.sort((a, b) => Number(b.atrasado) - Number(a.atrasado) || a.fechaDeseada.localeCompare(b.fechaDeseada))
 
-    // ── Ocupación esperada de tanques, día por día del mes visible ────────
     const totalTanquesPorCategoria = {
       cerveza: ocupacionPlanta.tanques.filter(t => t.categoria === 'cerveza').length,
       kombucha: ocupacionPlanta.tanques.filter(t => t.categoria === 'kombucha').length,
     }
-    // Lo que YA está fermentando hoy (splitFermentadores) sigue ocupando su
-    // tanque hasta su fecha estimada de embarrilado — sin fecha, se asume
-    // ocupado igual (más conservador que asumir libre y toparse después).
-    const ocupadosHoyReal = (fechaISO: string, categoria: 'cerveza' | 'kombucha') =>
+    // Lo que YA está fermentando hoy sigue ocupando su tanque hasta su fecha
+    // estimada de embarrilado — sin fecha, se asume ocupado igual (más
+    // conservador que asumir libre y toparse después).
+    const ocupadosBase = (fechaISO: string, categoria: 'cerveza' | 'kombucha') =>
       splitFermentadores.filter(sf =>
         sf.categoria === categoria && (!sf.fechaDisponibleEstimada || sf.fechaDisponibleEstimada > fechaISO)
       ).length
-
-    const ventanas = sugeridos.map(s => ({
-      categoria: s.categoria, inicio: s.fecha, fin: sumarDiasCalISO(s.fecha, s.leadTimeSemanas * 7), ref: s,
-    }))
-    const sobrecargaPorDia = new Map<number, { cerveza: boolean; kombucha: boolean }>()
-    for (let d = 1; d <= diasEnMesCal; d++) {
-      const fechaISO = `${anio}-${String(mesIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-      const resultado = { cerveza: false, kombucha: false }
-      for (const cat of ['cerveza', 'kombucha'] as const) {
-        const concurrentes = ventanas.filter(v => v.categoria === cat && v.inicio <= fechaISO && fechaISO < v.fin).length
-        resultado[cat] = ocupadosHoyReal(fechaISO, cat) + concurrentes > totalTanquesPorCategoria[cat]
-      }
-      sobrecargaPorDia.set(d, resultado)
+    // Ocupación simulada que se va llenando a medida que se programa cada
+    // candidata — arranca vacía; se consulta ocupadosBase() + lo ya
+    // asignado en esta misma pasada.
+    const asignadoPorDia = new Map<string, { cerveza: number; kombucha: number }>()
+    const hayLibre = (fechaISO: string, categoria: 'cerveza' | 'kombucha') => {
+      const asignado = asignadoPorDia.get(fechaISO)?.[categoria] ?? 0
+      return ocupadosBase(fechaISO, categoria) + asignado < totalTanquesPorCategoria[categoria]
     }
-    // Cada sugerencia queda marcada si algún día de SU ventana (acotada al
-    // mes visible) está sobrecargado en su línea.
-    for (const v of ventanas) {
-      const desde = v.inicio > `${anio}-${String(mesIdx + 1).padStart(2, '0')}-01` ? v.inicio : `${anio}-${String(mesIdx + 1).padStart(2, '0')}-01`
-      let d0 = Number(desde.slice(8, 10))
-      let cursorISO = desde
-      while (cursorISO < v.fin && d0 <= diasEnMesCal) {
-        if (sobrecargaPorDia.get(d0)?.[v.categoria]) { v.ref.posibleChoque = true; break }
-        d0++
-        cursorISO = sumarDiasCalISO(cursorISO, 1)
+    const marcarOcupado = (desdeISO: string, categoria: 'cerveza' | 'kombucha', dias: number) => {
+      let d = desdeISO
+      for (let i = 0; i < dias; i++) {
+        const prev = asignadoPorDia.get(d) ?? { cerveza: 0, kombucha: 0 }
+        asignadoPorDia.set(d, { ...prev, [categoria]: prev[categoria] + 1 })
+        d = sumarDiasCalISO(d, 1)
       }
     }
 
-    const porDia = new Map<number, Sugerido[]>()
-    for (const s of sugeridos) {
-      const [y, m, d] = s.fecha.split('-').map(Number)
+    interface Programada extends Candidata { fechaProgramada: string; diasReprogramada: number }
+    const programadas: Programada[] = []
+    for (const c of candidatas) {
+      let candidataDesde = c.fechaDeseada < hoyISO ? hoyISO : c.fechaDeseada
+      let intentos = 0
+      // Busca el primer día donde TODA la ventana de fermentación (lead
+      // time completo) tenga tanque libre de su línea — tope de 300 días
+      // (~10 meses) para no colgarse si una línea está estructuralmente
+      // saturada; en ese caso queda en la última fecha probada, igual de
+      // útil como señal de "no entra en absoluto" que quedarse pegado.
+      while (intentos < 300) {
+        let cabe = true
+        let cursor = candidataDesde
+        for (let i = 0; i < c.leadTimeSemanas * 7; i++) {
+          if (!hayLibre(cursor, c.categoria)) { cabe = false; break }
+          cursor = sumarDiasCalISO(cursor, 1)
+        }
+        if (cabe) break
+        candidataDesde = sumarDiasCalISO(candidataDesde, 1)
+        intentos++
+      }
+      marcarOcupado(candidataDesde, c.categoria, c.leadTimeSemanas * 7)
+      const diasReprogramada = Math.round((Date.parse(`${candidataDesde}T00:00:00Z`) - Date.parse(`${c.fechaDeseada}T00:00:00Z`)) / 86400000)
+      programadas.push({ ...c, fechaProgramada: candidataDesde, diasReprogramada })
+    }
+
+    const porDia = new Map<number, Programada[]>()
+    for (const p of programadas) {
+      const [y, m, d] = p.fechaProgramada.split('-').map(Number)
       if (y !== anio || m !== mesIdx + 1) continue
       if (!porDia.has(d)) porDia.set(d, [])
-      porDia.get(d)!.push(s)
+      porDia.get(d)!.push(p)
     }
-    const dias = Array.from({ length: diasEnMesCal }, (_, i) => ({
-      dia: i + 1, sugeridos: porDia.get(i + 1) ?? [], sobrecarga: sobrecargaPorDia.get(i + 1) ?? { cerveza: false, kombucha: false },
-    }))
+    const dias = Array.from({ length: diasEnMesCal }, (_, i) => ({ dia: i + 1, sugeridos: porDia.get(i + 1) ?? [] }))
     return { dias, offsetPrimerDia, hoyISO, anio, mesIdx, etiqueta: base.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }) }
-  }, [alarmasPorProducto, anticipadasPorProducto, splitFermentadores, ocupacionPlanta.tanques, mesCoberturaOffset])
+  }, [alarmasPorProducto, coccionesDelForecast, splitFermentadores, ocupacionPlanta.tanques, mesCoberturaOffset])
 
   /* ── Inventario actual agrupado: producto → formato → cámara ───────────
      `stock` llega como una fila por (producto, formato, cámara) — se
@@ -3093,18 +3153,13 @@ export default function ProduccionClient({
                     {calendarioCobertura.dias.map(dia => {
                       const fechaDiaISO = `${calendarioCobertura.anio}-${String(calendarioCobertura.mesIdx + 1).padStart(2, '0')}-${String(dia.dia).padStart(2, '0')}`
                       const esHoy = fechaDiaISO === calendarioCobertura.hoyISO
-                      const sobrecargado = dia.sobrecarga.cerveza || dia.sobrecarga.kombucha
                       return (
                       <div
                         key={dia.dia}
-                        title={sobrecargado
-                          ? `Ese día no alcanzan los tanques de ${dia.sobrecarga.cerveza && dia.sobrecarga.kombucha ? 'cervecería ni kombuchería' : dia.sobrecarga.cerveza ? 'cervecería' : 'kombuchería'} — hay más cocciones superpuestas (lead time incluido) que fermentadores físicos de esa línea.`
-                          : undefined}
                         className={`prod-hover-card relative flex min-h-[80px] flex-col gap-1 rounded-md border p-1.5 ${
-                          sobrecargado ? 'border-red-300 bg-red-50/50' : esHoy ? 'border-[#0F3D2E] bg-[#0F3D2E]/5' : 'border-gray-100 bg-gray-50/30'
+                          esHoy ? 'border-[#0F3D2E] bg-[#0F3D2E]/5' : 'border-gray-100 bg-gray-50/30'
                         }`}
                       >
-                        {sobrecargado && <div className="absolute inset-x-0 top-0 h-1 rounded-t-md bg-red-400" />}
                         <span className={`absolute right-2 top-1.5 text-xs font-medium ${esHoy ? 'font-bold text-[#0F3D2E]' : 'text-gray-400'}`}>{dia.dia}</span>
                         <div className="mt-4 flex flex-col gap-1">
                           {dia.sugeridos.map((s, i) => (
@@ -3118,13 +3173,14 @@ export default function ProduccionClient({
                                       : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
                                 }`}
                               >
-                                {s.posibleChoque && <AlertTriangle size={9} className="shrink-0 text-red-600" />}
+                                {s.diasReprogramada > 0 && <Beaker size={9} className="shrink-0 text-purple-600" />}
                                 <span className="truncate">{s.producto}</span>
                               </span>
-                              {/* Detalle al pasar el cursor: cantidad a producir y hasta
-                                  cuándo alcanza — lo que se pidió poder ver sin tener que
+                              {/* Detalle al pasar el cursor: cantidad a producir, hasta
+                                  cuándo alcanza, y si se corrió de fecha por falta de
+                                  tanque libre — lo que se pidió poder ver sin tener que
                                   ir a buscarlo en las tarjetas de abajo. */}
-                              <div className="invisible absolute -top-2 left-1/2 z-20 w-48 -translate-x-1/2 -translate-y-full rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white opacity-0 shadow-xl transition-opacity group-hover/chip:visible group-hover/chip:opacity-100">
+                              <div className="invisible absolute -top-2 left-1/2 z-20 w-52 -translate-x-1/2 -translate-y-full rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white opacity-0 shadow-xl transition-opacity group-hover/chip:visible group-hover/chip:opacity-100">
                                 <p className="font-bold">{s.producto}</p>
                                 <p className="mt-1 text-gray-300">
                                   {s.categoria === 'kombucha' ? 'Kombuchería' : 'Cervecería'} · Lead time {s.leadTimeSemanas} semanas
@@ -3135,9 +3191,10 @@ export default function ProduccionClient({
                                   <strong>{s.cubreHasta ? new Date(s.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'sin ritmo de venta para proyectar'}</strong>
                                 </p>
                                 {s.atrasado && <p className="mt-1.5 font-bold text-red-400">ATRASADO — debió cocerse antes de hoy.</p>}
-                                {s.posibleChoque && (
-                                  <p className="mt-1.5 font-bold text-red-400">
-                                    Choca con otra cocción: no hay suficientes fermentadores de esta línea libres en ese tramo.
+                                {s.diasReprogramada > 0 && (
+                                  <p className="mt-1.5 font-bold text-purple-300">
+                                    Se corrió {s.diasReprogramada} {s.diasReprogramada === 1 ? 'día' : 'días'} — no había tanque libre de
+                                    esta línea en la fecha ideal ({new Date(s.fechaDeseada + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}).
                                   </p>
                                 )}
                                 <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 bg-gray-900" />
@@ -3153,11 +3210,13 @@ export default function ProduccionClient({
                     })}
                   </div>
                   <p className="mt-3 text-xs text-gray-400">
-                    Borde punteado = sugerencia sin confirmar (fecha límite para empezar a cocer y llegar a tiempo).
-                    Borde rojo sólido = ya atrasada. Franja roja arriba del día + ⚠ en la tarjeta = choca con otra
-                    cocción: no alcanzan los fermentadores de esa línea en ese tramo, contando que cada cocción ocupa
-                    su tanque el lead time completo (4 semanas cerveza / 3 kombucha — por categoría, no por estilo:
-                    todavía no hay ese dato cargado por receta). Pasá el cursor sobre una cocción para el detalle.
+                    Programado a 3 meses según el forecast, la capacidad real de fermentadores y lo que ya está
+                    ocupado hoy — no sólo fechas ideales: si dos cocciones competían por el mismo tanque, la de menor
+                    prioridad se corrió sola a la siguiente fecha libre (ícono <Beaker size={9} className="inline text-purple-600" /> = se
+                    reprogramó, ver detalle al pasar el cursor). Borde punteado = sugerencia sin confirmar. Borde
+                    rojo sólido = atrasada. El lead time usado es por línea (4 semanas cerveza / 3 kombucha), no por
+                    estilo puntual — todavía no hay ese dato cargado por receta. Se recalcula solo con cada carga de
+                    la pantalla, sin nada que correr a mano cuando el forecast mensual actualice los números.
                     Confirmalas desde las tarjetas de abajo o desde Plan Maestro.
                   </p>
                 </div>
