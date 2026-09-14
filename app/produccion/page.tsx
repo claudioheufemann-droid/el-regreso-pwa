@@ -141,7 +141,7 @@ export interface OcupacionPlanta {
   /** Cada tanque ACTIVO en `fermentadores`, con su capacidad y lo que tiene
    *  hoy (0 si está vacío) — a diferencia de antes, incluye los vacíos: son
    *  justamente el espacio disponible para la próxima cocción. */
-  tanques: { tanque: string; tipo: string; capacidadLitros: number; litros: number; libreLitros: number }[]
+  tanques: { tanque: string; tipo: string; categoria: 'cerveza' | 'kombucha'; capacidadLitros: number; litros: number; libreLitros: number }[]
 }
 
 /**
@@ -442,7 +442,7 @@ export default async function ProduccionPage() {
     // informe (sólo lista tanques CON contenido, nunca los vacíos ni su
     // máximo), así que vive en esta tabla cargada a mano. Ver el comentario
     // largo en OcupacionPlanta.
-    admin.from('fermentadores').select('nombre, tipo, capacidad_litros').eq('activo', true),
+    admin.from('fermentadores').select('nombre, tipo, categoria, capacidad_litros').eq('activo', true),
   ])
   const ultimoSyncStock = (ultimoSyncStockRaw as { creado_at?: string } | null)?.creado_at ?? null
   // Se calcula server-side (comparado contra la hora del request, no la del
@@ -791,7 +791,7 @@ export default async function ProduccionPage() {
     const tanque = ((s.camara as string | null) ?? 'Sin tanque').trim()
     litrosPorTanque.set(tanque, (litrosPorTanque.get(tanque) ?? 0) + Number(s.litros))
   }
-  const fermentadores = (fermentadoresRaw ?? []) as { nombre: string; tipo: string; capacidad_litros: number }[]
+  const fermentadores = (fermentadoresRaw ?? []) as { nombre: string; tipo: string; categoria: 'cerveza' | 'kombucha'; capacidad_litros: number }[]
   const capacidadTotalLitros = fermentadores.length > 0
     ? Math.round(fermentadores.reduce((s, f) => s + Number(f.capacidad_litros), 0))
     : null
@@ -799,7 +799,7 @@ export default async function ProduccionPage() {
     .map(f => {
       const litros = Math.round(litrosPorTanque.get(f.nombre) ?? 0)
       const capacidadLitros = Math.round(Number(f.capacidad_litros))
-      return { tanque: f.nombre, tipo: f.tipo, capacidadLitros, litros, libreLitros: capacidadLitros - litros }
+      return { tanque: f.nombre, tipo: f.tipo, categoria: f.categoria, capacidadLitros, litros, libreLitros: capacidadLitros - litros }
     })
     .sort((a, b) => b.litros - a.litros)
   const litrosEnFermentacionTotal = Math.round([...litrosPorTanque.values()].reduce((a, b) => a + b, 0))

@@ -119,6 +119,40 @@ function costoCoccion(producto: string, litros: number, recetaInsumos: RecetaIns
   return { costo: Math.round(costo) as number | null, sinPrecio, lineasReceta: lineas.length }
 }
 
+/**
+ * Qué fermentador conviene usar para una cocción de `litrosNecesarios`, de la
+ * línea `categoria` (cerveza/kombucha — los tanques con código T son
+ * exclusivos de cervecería y los K de kombuchería, decisión del usuario,
+ * 14-sep-2026: ver la migración agregar_categoria_fermentadores).
+ *
+ * Sólo se ofrecen tanques VACÍOS: uno con fermentación en curso no se puede
+ * compartir con una cocción nueva de otro lote, así que "tiene 200L libres
+ * de 3.000L" no sirve para esto aunque sí sirva para el cálculo agregado de
+ * % de ocupación de planta.
+ *
+ * Prioriza el tanque MÁS CHICO que alcance — no el más grande disponible —
+ * para no ocupar un fermentador de 3.000L en una cocción de 300L y dejarlo
+ * sin uso para la próxima cocción grande que sí lo necesite.
+ */
+function recomendarFermentador(
+  categoria: 'cerveza' | 'kombucha',
+  litrosNecesarios: number,
+  tanques: OcupacionPlanta['tanques'],
+): { tanque: OcupacionPlanta['tanques'][number] | null; ajustado: boolean } {
+  const vacios = tanques.filter(t => t.categoria === categoria && t.litros === 0)
+  if (vacios.length === 0) return { tanque: null, ajustado: false }
+
+  const queAlcanzan = vacios.filter(t => t.capacidadLitros >= litrosNecesarios).sort((a, b) => a.capacidadLitros - b.capacidadLitros)
+  if (queAlcanzan.length > 0) return { tanque: queAlcanzan[0], ajustado: false }
+
+  // Ningún vacío alcanza solo: se ofrece igual el más grande disponible —
+  // mejor que no sugerir nada — pero marcado como "ajustado" para que quede
+  // claro que no cubre el volumen completo (hay que cocer menos, partir en
+  // dos lotes, o esperar a que se libere uno más grande).
+  const masGrande = [...vacios].sort((a, b) => b.capacidadLitros - a.capacidadLitros)[0]
+  return { tanque: masGrande, ajustado: true }
+}
+
 /** Fecha de HOY en yyyy-mm-dd, en huso HORARIO LOCAL del navegador — nunca
  *  `toISOString()`, que da la fecha en UTC y en Chile (UTC-3/-4) ya marca
  *  "mañana" desde media tarde, haciendo aparecer como atrasado un lote
@@ -683,6 +717,10 @@ export default function ProduccionClient({
    *  dato real detrás (antes estaba fijo en 30 y no se podía presupuestar
    *  más allá del mes). */
   const [mrpHorizonteDias, setMrpHorizonteDias] = useState<30 | 60 | 90>(30)
+  /** Capacidad de Planta arranca colapsada: son 23 tarjetas de tanque, mucho
+   *  espacio vertical para algo que no hace falta ver en cada carga de la
+   *  pantalla — igual que el acordeón de Insumos y Compras. */
+  const [capacidadPlantaAbierta, setCapacidadPlantaAbierta] = useState(false)
   const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
   const [filtroEnvase, setFiltroEnvase] = useState<string>('todos')
   /** Muestra la descomposición del modelo (tendencia + estacionalidad). */
@@ -1295,19 +1333,38 @@ export default function ProduccionClient({
     // "¿cuánto tengo que cocer en total para este producto?" no distingue
     // envase (el envasado se decide después, ver Split de Envasado); pedir
     // el número desglosado por formato y sumarlo a mano era el gap.
-    interface Grupo { producto: string; categoria: 'cerveza' | 'kombucha'; items: typeof necesidadesAnticipadas; totalAProducir: number; totalStockSeguridad: number }
+    interface Grupo {
+      producto: string; categoria: 'cerveza' | 'kombucha'; items: typeof necesidadesAnticipadas
+      totalAProducir: number; totalStockSeguridad: number
+      fermentadorSugerido: OcupacionPlanta['tanques'][number] | null
+      fermentadorAjustado: boolean
+    }
     const grupos = new Map<string, Grupo>()
     for (const item of necesidadesAnticipadas) {
       if (!grupos.has(item.producto)) {
-        grupos.set(item.producto, { producto: item.producto, categoria: item.categoria, items: [], totalAProducir: 0, totalStockSeguridad: 0 })
+        grupos.set(item.producto, {
+          producto: item.producto, categoria: item.categoria, items: [],
+          totalAProducir: 0, totalStockSeguridad: 0,
+          fermentadorSugerido: null, fermentadorAjustado: false,
+        })
       }
       const grupo = grupos.get(item.producto)!
       grupo.items.push(item)
       grupo.totalAProducir += item.litrosSugeridos
       grupo.totalStockSeguridad += item.stockSeguridadLitros
     }
+    // La recomendación de tanque se calcula DESPUÉS de sumar todos los
+    // formatos: el litraje que importa para elegir fermentador es el total
+    // del producto (lo que realmente se cuece de una vez), no cada formato
+    // por separado — mismo criterio que "Agregar al plan" del Plan Maestro.
+    for (const grupo of grupos.values()) {
+      if (grupo.totalAProducir <= 0) continue
+      const { tanque, ajustado } = recomendarFermentador(grupo.categoria, grupo.totalAProducir, ocupacionPlanta.tanques)
+      grupo.fermentadorSugerido = tanque
+      grupo.fermentadorAjustado = ajustado
+    }
     return [...grupos.values()]
-  }, [necesidadesAnticipadas])
+  }, [necesidadesAnticipadas, ocupacionPlanta.tanques])
 
   /* ── Inventario actual agrupado: producto → formato → cámara ───────────
      `stock` llega como una fila por (producto, formato, cámara) — se
@@ -2682,15 +2739,39 @@ export default function ProduccionClient({
                   meterlo. Va ANTES de "Necesidad de Producción Anticipada" a
                   propósito: primero el espacio disponible, después la
                   decisión de qué llenar con él. */}
-              {ocupacionPlanta.capacidadTotalLitros != null && (
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
+              {ocupacionPlanta.capacidadTotalLitros != null && (() => {
+                // Desglose por línea: los tanques T son exclusivos de
+                // cervecería y los K de kombuchería (decisión del usuario,
+                // 14-sep-2026) — verlas por separado importa porque un 90%
+                // de ocupación GENERAL puede esconder que la línea que
+                // realmente falta llenar está casi vacía.
+                const porCategoria = (cat: 'cerveza' | 'kombucha') => {
+                  const tanquesCat = ocupacionPlanta.tanques.filter(t => t.categoria === cat)
+                  const capacidad = tanquesCat.reduce((s, t) => s + t.capacidadLitros, 0)
+                  const ocupado = tanquesCat.reduce((s, t) => s + t.litros, 0)
+                  return { capacidad, ocupado, libre: capacidad - ocupado }
+                }
+                const cerveza = porCategoria('cerveza')
+                const kombucha = porCategoria('kombucha')
+
+                return (
+                <div className={`rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${capacidadPlantaAbierta ? 'border-gray-300 shadow-md' : 'border-gray-200'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setCapacidadPlantaAbierta(v => !v)}
+                    aria-expanded={capacidadPlantaAbierta}
+                    className="prod-press flex w-full flex-col gap-3 p-4 text-left transition-colors hover:bg-gray-50/60 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4 sm:p-5"
+                  >
+                    <div className="min-w-0">
                       <h3 className="font-bold text-gray-800">Capacidad de Planta — Fermentadores y Estanques</h3>
                       <p className="mt-1 text-sm text-gray-500">
                         Cuánto espacio real hay para la próxima cocción, tanque por tanque — el jefe de producción
                         es el último filtro: esto sólo muestra dónde entra, no decide qué cocer.
                       </p>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                        <span><span className="font-bold text-gray-700">Cervecería (T):</span> {fNum(cerveza.libre)} L libres de {fNum(cerveza.capacidad)} L</span>
+                        <span><span className="font-bold text-gray-700">Kombuchería (K):</span> {fNum(kombucha.libre)} L libres de {fNum(kombucha.capacidad)} L</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
@@ -2706,55 +2787,73 @@ export default function ProduccionClient({
                       }`}>
                         {ocupacionPlanta.porcentajeOcupacion}% ocupado
                       </span>
+                      <ChevronDown
+                        size={20}
+                        className={`shrink-0 text-gray-400 transition-transform duration-300 ${capacidadPlantaAbierta ? 'rotate-180 text-gray-600' : ''}`}
+                      />
+                    </div>
+                  </button>
+
+                  <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${capacidadPlantaAbierta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                    <div className="overflow-hidden">
+                      <div className="px-4 pb-5 sm:px-5">
+                        {/* Barra agregada de planta — mismo lenguaje visual que las
+                            barras por tanque de abajo, a escala de toda la planta. */}
+                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+                          <div
+                            className={`h-full rounded-full ${(ocupacionPlanta.porcentajeOcupacion ?? 0) >= 85 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${Math.min(100, ocupacionPlanta.porcentajeOcupacion ?? 0)}%` }}
+                          />
+                        </div>
+
+                        {/* Tanques ordenados por espacio LIBRE descendente — el
+                            jefe de producción mira primero dónde hay más lugar para
+                            meter la próxima cocción, no dónde hay más contenido. */}
+                        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                          {[...ocupacionPlanta.tanques]
+                            .sort((a, b) => b.libreLitros - a.libreLitros)
+                            .map(t => {
+                              const pct = t.capacidadLitros > 0 ? Math.min(100, Math.round((t.litros / t.capacidadLitros) * 100)) : 0
+                              const vacio = t.litros === 0
+                              return (
+                                <div
+                                  key={t.tanque}
+                                  className={`prod-hover-card rounded-lg border p-2.5 ${vacio ? 'border-emerald-200 bg-emerald-50/40' : 'border-gray-200 bg-white'}`}
+                                  title={`${t.tanque} (${t.tipo}, ${t.categoria === 'cerveza' ? 'cervecería' : 'kombuchería'}) — ${fNum(t.litros)} / ${fNum(t.capacidadLitros)} L, ${fNum(t.libreLitros)} L libres`}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <p className="truncate text-xs font-bold text-gray-800">{t.tanque}</p>
+                                    <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-bold ${
+                                      t.categoria === 'cerveza' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                    }`}>
+                                      {t.categoria === 'cerveza' ? 'CERV' : 'KOMB'}
+                                    </span>
+                                  </div>
+                                  <p className="truncate text-[10px] text-gray-400">{t.tipo}</p>
+                                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                                    <div
+                                      className={`h-full rounded-full ${vacio ? 'bg-gray-200' : pct >= 90 ? 'bg-red-500' : 'bg-[#0F3D2E]'}`}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                  <div className="mt-1 flex items-baseline justify-between">
+                                    <span className="text-[11px] tabular-nums text-gray-500">{fNum(t.litros)}/{fNum(t.capacidadLitros)} L</span>
+                                    {vacio ? (
+                                      <span className="text-[10px] font-bold text-emerald-600">Libre</span>
+                                    ) : (
+                                      <span className="text-[10px] font-bold text-gray-400">{fNum(t.libreLitros)} L libres</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      </div>
                     </div>
                   </div>
-
-                  {/* Barra agregada de planta — mismo lenguaje visual que las
-                      barras por tanque de abajo, a escala de toda la planta. */}
-                  <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
-                    <div
-                      className={`h-full rounded-full ${(ocupacionPlanta.porcentajeOcupacion ?? 0) >= 85 ? 'bg-red-500' : 'bg-emerald-500'}`}
-                      style={{ width: `${Math.min(100, ocupacionPlanta.porcentajeOcupacion ?? 0)}%` }}
-                    />
-                  </div>
-
-                  {/* Tanques ordenados por espacio LIBRE descendente — el
-                      jefe de producción mira primero dónde hay más lugar para
-                      meter la próxima cocción, no dónde hay más contenido. */}
-                  <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                    {[...ocupacionPlanta.tanques]
-                      .sort((a, b) => b.libreLitros - a.libreLitros)
-                      .map(t => {
-                        const pct = t.capacidadLitros > 0 ? Math.min(100, Math.round((t.litros / t.capacidadLitros) * 100)) : 0
-                        const vacio = t.litros === 0
-                        return (
-                          <div
-                            key={t.tanque}
-                            className={`prod-hover-card rounded-lg border p-2.5 ${vacio ? 'border-emerald-200 bg-emerald-50/40' : 'border-gray-200 bg-white'}`}
-                            title={`${t.tanque} (${t.tipo}) — ${fNum(t.litros)} / ${fNum(t.capacidadLitros)} L, ${fNum(t.libreLitros)} L libres`}
-                          >
-                            <p className="truncate text-xs font-bold text-gray-800">{t.tanque}</p>
-                            <p className="truncate text-[10px] text-gray-400">{t.tipo}</p>
-                            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                              <div
-                                className={`h-full rounded-full ${vacio ? 'bg-gray-200' : pct >= 90 ? 'bg-red-500' : 'bg-[#0F3D2E]'}`}
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
-                            <div className="mt-1 flex items-baseline justify-between">
-                              <span className="text-[11px] tabular-nums text-gray-500">{fNum(t.litros)}/{fNum(t.capacidadLitros)} L</span>
-                              {vacio ? (
-                                <span className="text-[10px] font-bold text-emerald-600">Libre</span>
-                              ) : (
-                                <span className="text-[10px] font-bold text-gray-400">{fNum(t.libreLitros)} L libres</span>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                  </div>
                 </div>
-              )}
+                )
+              })()}
 
               {/* Necesidad de Producción Anticipada — responde "¿cuánto
                   necesito producir para cubrir hasta tal fecha?" y avisa
@@ -2805,6 +2904,36 @@ export default function ProduccionClient({
                             <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-bold text-sky-700" title="Colchón mínimo que este producto debe tener siempre en stock, sumando sus 3 formatos — no es lo mismo que 'a producir' (la brecha actual).">
                               Stock de seguridad total: {fNum(grupo.totalStockSeguridad)} L
                             </span>
+                          )}
+                          {/* Recomendación de fermentador — sólo tanques vacíos de la
+                              línea correcta (T=cerveza, K=kombucha), el más chico que
+                              alcance para el litraje total del producto. Es sugerencia,
+                              no asignación: el jefe de producción decide con esto delante,
+                              no en base a esto solo. */}
+                          {grupo.totalAProducir > 0 && (
+                            grupo.fermentadorSugerido ? (
+                              <span
+                                className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${
+                                  grupo.fermentadorAjustado
+                                    ? 'border-red-200 bg-red-50 text-red-700'
+                                    : 'border-purple-200 bg-purple-50 text-purple-700'
+                                }`}
+                                title={grupo.fermentadorAjustado
+                                  ? `Ningún tanque vacío de esta línea alcanza el litraje completo — ${grupo.fermentadorSugerido.tanque} (${fNum(grupo.fermentadorSugerido.capacidadLitros)} L) es el más grande disponible. Hay que cocer menos, partir en dos lotes, o esperar a que se libere uno más grande.`
+                                  : `${grupo.fermentadorSugerido.tanque} está vacío y es el más chico que alcanza para ${fNum(grupo.totalAProducir)} L — no ocupa de más un tanque grande.`}
+                              >
+                                <Beaker size={11} className="mr-1 inline" />
+                                {grupo.fermentadorAjustado ? 'No entra completo — ' : 'Usar '}
+                                {grupo.fermentadorSugerido.tanque} ({fNum(grupo.fermentadorSugerido.capacidadLitros)} L)
+                              </span>
+                            ) : (
+                              <span
+                                className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs font-bold text-gray-500"
+                                title={`No hay ningún fermentador de ${grupo.categoria === 'cerveza' ? 'cervecería (código T)' : 'kombuchería (código K)'} vacío en este momento.`}
+                              >
+                                Sin tanque vacío disponible
+                              </span>
+                            )
                           )}
                         </div>
                         <div className="divide-y divide-gray-100">
