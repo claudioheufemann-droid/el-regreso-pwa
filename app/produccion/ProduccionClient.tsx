@@ -1472,7 +1472,18 @@ export default function ProduccionClient({
      Combina las alarmas de quiebre (más apremiantes: la fecha ya viene del
      stock físico agotándose) con Necesidad Anticipada (cobertura a futuro),
      sin duplicar producto — si ya hay una alarma de quiebre, esa manda por
-     ser la más urgente de las dos. */
+     ser la más urgente de las dos.
+
+     Además cruza contra la OCUPACIÓN DE TANQUES: una cocción no libera su
+     fermentador el mismo día, se queda ocupado el lead time completo (4
+     semanas cerveza / 3 kombucha — es el mismo número que ya usa el resto
+     del módulo para todo lo demás; es por CATEGORÍA, no por estilo puntual,
+     porque hoy no hay un dato de fermentación por receta más fino que ése.
+     Si se carga esa granularidad más adelante, este cálculo la puede usar
+     directo). Dos sugerencias que se solapan en el tiempo y son más que los
+     tanques reales de esa línea van a chocar por espacio, no sólo por
+     litros — se marca con una franja roja en el día y un ícono en la
+     tarjeta afectada. */
   const calendarioCobertura = useMemo(() => {
     const hoy = new Date()
     const base = new Date(hoy.getFullYear(), hoy.getMonth() + mesCoberturaOffset, 1)
@@ -1480,8 +1491,21 @@ export default function ProduccionClient({
     const diasEnMesCal = new Date(anio, mesIdx + 1, 0).getDate()
     const offsetPrimerDia = (new Date(anio, mesIdx, 1).getDay() + 6) % 7
     const hoyISO = hoyLocalISO()
+    const sumarDiasCalISO = (desdeISO: string, dias: number) =>
+      new Date(Date.parse(`${desdeISO}T00:00:00Z`) + dias * 86400000).toISOString().slice(0, 10)
 
-    interface Sugerido { producto: string; categoria: 'cerveza' | 'kombucha'; litros: number; fecha: string; atrasado: boolean }
+    interface Sugerido {
+      producto: string; categoria: 'cerveza' | 'kombucha'; litros: number; fecha: string; atrasado: boolean
+      leadTimeSemanas: number
+      /** Hasta cuándo alcanza este litraje al ritmo de venta actual —
+       *  mismo cálculo que usa el modal de confirmación. Null si no hay
+       *  ritmo (sin ventas recientes) para proyectar una fecha. */
+      cubreHasta: string | null
+      /** true si el fermentador de esta línea no alcanzaría — hay más
+       *  cocciones que tanques físicos de esa categoría el mismo tramo de
+       *  semanas. Señal de choque de OCUPACIÓN, no de litros. */
+      posibleChoque: boolean
+    }
     const vistos = new Set<string>()
     const sugeridos: Sugerido[] = []
     for (const g of alarmasPorProducto) {
@@ -1489,13 +1513,66 @@ export default function ProduccionClient({
       const total = g.items.reduce((s, i) => s + i.litrosSugeridos, 0)
       if (!fecha || total <= 0) continue
       vistos.add(g.producto)
-      sugeridos.push({ producto: g.producto, categoria: g.categoria, litros: total, fecha, atrasado: g.items.some(i => i.atrasado) })
+      const ritmoTotal = g.items.reduce((s, i) => s + i.ritmoDiarioActual, 0)
+      const leadTimeSemanas = g.items[0]?.leadTimeSemanas ?? (g.categoria === 'kombucha' ? 3 : 4)
+      sugeridos.push({
+        producto: g.producto, categoria: g.categoria, litros: total, fecha, leadTimeSemanas,
+        atrasado: g.items.some(i => i.atrasado),
+        cubreHasta: ritmoTotal > 0 ? sumarDiasHabilesISO(fecha, total / ritmoTotal) : null,
+        posibleChoque: false,
+      })
     }
     for (const g of anticipadasPorProducto) {
       if (vistos.has(g.producto)) continue
       const fecha = g.items.map(i => i.fechaLimiteInicio).filter((f): f is string => f != null).sort()[0]
       if (!fecha || g.totalAProducir <= 0) continue
-      sugeridos.push({ producto: g.producto, categoria: g.categoria, litros: g.totalAProducir, fecha, atrasado: g.items.some(i => i.atrasado) })
+      const ritmoTotal = g.items.reduce((s, i) => s + i.ritmoDiarioActual, 0)
+      const leadTimeSemanas = g.items[0]?.leadTimeSemanas ?? (g.categoria === 'kombucha' ? 3 : 4)
+      sugeridos.push({
+        producto: g.producto, categoria: g.categoria, litros: g.totalAProducir, fecha, leadTimeSemanas,
+        atrasado: g.items.some(i => i.atrasado),
+        cubreHasta: ritmoTotal > 0 ? sumarDiasHabilesISO(fecha, g.totalAProducir / ritmoTotal) : null,
+        posibleChoque: false,
+      })
+    }
+
+    // ── Ocupación esperada de tanques, día por día del mes visible ────────
+    const totalTanquesPorCategoria = {
+      cerveza: ocupacionPlanta.tanques.filter(t => t.categoria === 'cerveza').length,
+      kombucha: ocupacionPlanta.tanques.filter(t => t.categoria === 'kombucha').length,
+    }
+    // Lo que YA está fermentando hoy (splitFermentadores) sigue ocupando su
+    // tanque hasta su fecha estimada de embarrilado — sin fecha, se asume
+    // ocupado igual (más conservador que asumir libre y toparse después).
+    const ocupadosHoyReal = (fechaISO: string, categoria: 'cerveza' | 'kombucha') =>
+      splitFermentadores.filter(sf =>
+        sf.categoria === categoria && (!sf.fechaDisponibleEstimada || sf.fechaDisponibleEstimada > fechaISO)
+      ).length
+
+    const ventanas = sugeridos.map(s => ({
+      categoria: s.categoria, inicio: s.fecha, fin: sumarDiasCalISO(s.fecha, s.leadTimeSemanas * 7), ref: s,
+    }))
+    const sobrecargaPorDia = new Map<number, { cerveza: boolean; kombucha: boolean }>()
+    for (let d = 1; d <= diasEnMesCal; d++) {
+      const fechaISO = `${anio}-${String(mesIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const resultado = { cerveza: false, kombucha: false }
+      for (const cat of ['cerveza', 'kombucha'] as const) {
+        const concurrentes = ventanas.filter(v => v.categoria === cat && v.inicio <= fechaISO && fechaISO < v.fin).length
+        resultado[cat] = ocupadosHoyReal(fechaISO, cat) + concurrentes > totalTanquesPorCategoria[cat]
+      }
+      sobrecargaPorDia.set(d, resultado)
+    }
+    // Cada sugerencia queda marcada si algún día de SU ventana (acotada al
+    // mes visible) está sobrecargado en su línea.
+    for (const v of ventanas) {
+      const desde = v.inicio > `${anio}-${String(mesIdx + 1).padStart(2, '0')}-01` ? v.inicio : `${anio}-${String(mesIdx + 1).padStart(2, '0')}-01`
+      let d0 = Number(desde.slice(8, 10))
+      let cursorISO = desde
+      while (cursorISO < v.fin && d0 <= diasEnMesCal) {
+        if (sobrecargaPorDia.get(d0)?.[v.categoria]) { v.ref.posibleChoque = true; break }
+        d0++
+        cursorISO = sumarDiasCalISO(cursorISO, 1)
+      }
     }
 
     const porDia = new Map<number, Sugerido[]>()
@@ -1505,9 +1582,11 @@ export default function ProduccionClient({
       if (!porDia.has(d)) porDia.set(d, [])
       porDia.get(d)!.push(s)
     }
-    const dias = Array.from({ length: diasEnMesCal }, (_, i) => ({ dia: i + 1, sugeridos: porDia.get(i + 1) ?? [] }))
+    const dias = Array.from({ length: diasEnMesCal }, (_, i) => ({
+      dia: i + 1, sugeridos: porDia.get(i + 1) ?? [], sobrecarga: sobrecargaPorDia.get(i + 1) ?? { cerveza: false, kombucha: false },
+    }))
     return { dias, offsetPrimerDia, hoyISO, anio, mesIdx, etiqueta: base.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }) }
-  }, [alarmasPorProducto, anticipadasPorProducto, mesCoberturaOffset])
+  }, [alarmasPorProducto, anticipadasPorProducto, splitFermentadores, ocupacionPlanta.tanques, mesCoberturaOffset])
 
   /* ── Inventario actual agrupado: producto → formato → cámara ───────────
      `stock` llega como una fila por (producto, formato, cámara) — se
@@ -3014,29 +3093,56 @@ export default function ProduccionClient({
                     {calendarioCobertura.dias.map(dia => {
                       const fechaDiaISO = `${calendarioCobertura.anio}-${String(calendarioCobertura.mesIdx + 1).padStart(2, '0')}-${String(dia.dia).padStart(2, '0')}`
                       const esHoy = fechaDiaISO === calendarioCobertura.hoyISO
+                      const sobrecargado = dia.sobrecarga.cerveza || dia.sobrecarga.kombucha
                       return (
                       <div
                         key={dia.dia}
+                        title={sobrecargado
+                          ? `Ese día no alcanzan los tanques de ${dia.sobrecarga.cerveza && dia.sobrecarga.kombucha ? 'cervecería ni kombuchería' : dia.sobrecarga.cerveza ? 'cervecería' : 'kombuchería'} — hay más cocciones superpuestas (lead time incluido) que fermentadores físicos de esa línea.`
+                          : undefined}
                         className={`prod-hover-card relative flex min-h-[80px] flex-col gap-1 rounded-md border p-1.5 ${
-                          esHoy ? 'border-[#0F3D2E] bg-[#0F3D2E]/5' : 'border-gray-100 bg-gray-50/30'
+                          sobrecargado ? 'border-red-300 bg-red-50/50' : esHoy ? 'border-[#0F3D2E] bg-[#0F3D2E]/5' : 'border-gray-100 bg-gray-50/30'
                         }`}
                       >
+                        {sobrecargado && <div className="absolute inset-x-0 top-0 h-1 rounded-t-md bg-red-400" />}
                         <span className={`absolute right-2 top-1.5 text-xs font-medium ${esHoy ? 'font-bold text-[#0F3D2E]' : 'text-gray-400'}`}>{dia.dia}</span>
                         <div className="mt-4 flex flex-col gap-1">
                           {dia.sugeridos.map((s, i) => (
-                            <span
-                              key={i}
-                              title={`${s.producto} — ${fNum(s.litros)} L${s.atrasado ? ' — ATRASADO' : ''}`}
-                              className={`truncate rounded-sm border py-1 pl-1.5 pr-1 text-[10px] font-bold ${
-                                s.atrasado
-                                  ? 'border-red-500 bg-red-50 text-red-700'
-                                  : s.categoria === 'kombucha'
-                                    ? 'border-dashed border-amber-400 bg-amber-50 text-amber-800'
-                                    : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
-                              }`}
-                            >
-                              {s.producto}
-                            </span>
+                            <div key={i} className="group/chip relative">
+                              <span
+                                className={`flex items-center gap-0.5 truncate rounded-sm border py-1 pl-1.5 pr-1 text-[10px] font-bold ${
+                                  s.atrasado
+                                    ? 'border-red-500 bg-red-50 text-red-700'
+                                    : s.categoria === 'kombucha'
+                                      ? 'border-dashed border-amber-400 bg-amber-50 text-amber-800'
+                                      : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
+                                }`}
+                              >
+                                {s.posibleChoque && <AlertTriangle size={9} className="shrink-0 text-red-600" />}
+                                <span className="truncate">{s.producto}</span>
+                              </span>
+                              {/* Detalle al pasar el cursor: cantidad a producir y hasta
+                                  cuándo alcanza — lo que se pidió poder ver sin tener que
+                                  ir a buscarlo en las tarjetas de abajo. */}
+                              <div className="invisible absolute -top-2 left-1/2 z-20 w-48 -translate-x-1/2 -translate-y-full rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white opacity-0 shadow-xl transition-opacity group-hover/chip:visible group-hover/chip:opacity-100">
+                                <p className="font-bold">{s.producto}</p>
+                                <p className="mt-1 text-gray-300">
+                                  {s.categoria === 'kombucha' ? 'Kombuchería' : 'Cervecería'} · Lead time {s.leadTimeSemanas} semanas
+                                </p>
+                                <p className="mt-1.5"><span className="text-gray-400">A producir:</span> <strong>{fNum(s.litros)} L</strong></p>
+                                <p>
+                                  <span className="text-gray-400">Nos alcanza hasta:</span>{' '}
+                                  <strong>{s.cubreHasta ? new Date(s.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'sin ritmo de venta para proyectar'}</strong>
+                                </p>
+                                {s.atrasado && <p className="mt-1.5 font-bold text-red-400">ATRASADO — debió cocerse antes de hoy.</p>}
+                                {s.posibleChoque && (
+                                  <p className="mt-1.5 font-bold text-red-400">
+                                    Choca con otra cocción: no hay suficientes fermentadores de esta línea libres en ese tramo.
+                                  </p>
+                                )}
+                                <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 bg-gray-900" />
+                              </div>
+                            </div>
                           ))}
                           {dia.sugeridos.length === 0 && (
                             <span className="text-[10px] text-gray-300">—</span>
@@ -3048,7 +3154,11 @@ export default function ProduccionClient({
                   </div>
                   <p className="mt-3 text-xs text-gray-400">
                     Borde punteado = sugerencia sin confirmar (fecha límite para empezar a cocer y llegar a tiempo).
-                    Borde rojo sólido = ya atrasada. Confirmalas desde las tarjetas de abajo o desde Plan Maestro.
+                    Borde rojo sólido = ya atrasada. Franja roja arriba del día + ⚠ en la tarjeta = choca con otra
+                    cocción: no alcanzan los fermentadores de esa línea en ese tramo, contando que cada cocción ocupa
+                    su tanque el lead time completo (4 semanas cerveza / 3 kombucha — por categoría, no por estilo:
+                    todavía no hay ese dato cargado por receta). Pasá el cursor sobre una cocción para el detalle.
+                    Confirmalas desde las tarjetas de abajo o desde Plan Maestro.
                   </p>
                 </div>
               </div>
