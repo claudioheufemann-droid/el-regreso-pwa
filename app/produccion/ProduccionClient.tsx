@@ -144,6 +144,22 @@ function sumarDiasHabilesISO(desdeISO: string, diasHabiles: number): string {
   return new Date(t).toISOString().slice(0, 10)
 }
 
+/** Resta `diasHabiles` días hábiles a `desdeISO` — mismo criterio que
+ *  restarDiasHabilesISO del servidor (app/produccion/page.tsx), usado acá
+ *  para calcular el "último día para empezar a cocer" en Necesidades
+ *  Anticipadas, que no viene precalculado desde el servidor porque la fecha
+ *  de cobertura la fija el usuario en el filtro, no una alarma fija. */
+function restarDiasHabilesISO(desdeISO: string, diasHabiles: number): string {
+  let t = Date.parse(`${desdeISO}T00:00:00Z`)
+  let restantes = Math.max(0, Math.round(diasHabiles))
+  const MS_POR_DIA = 24 * 60 * 60 * 1000
+  while (restantes > 0) {
+    t -= MS_POR_DIA
+    if (esDiaHabilISO(new Date(t).toISOString().slice(0, 10))) restantes--
+  }
+  return new Date(t).toISOString().slice(0, 10)
+}
+
 function diffDiasISO(desdeISO: string, hastaISO: string): number {
   return Math.round((Date.parse(`${hastaISO}T00:00:00Z`) - Date.parse(`${desdeISO}T00:00:00Z`)) / 86400000)
 }
@@ -1229,8 +1245,25 @@ export default function ProduccionClient({
       const fechaEstimadaQuiebre = diasHastaQuiebre != null ? sumarDiasHabilesISO(hoyISO, diasHastaQuiebre) : null
       const fechaLabel = new Date(`${fechaCoberturaSeg}T00:00:00Z`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
 
+      // Cuándo hay que EMPEZAR a cocer para llegar a tiempo — mismo cálculo
+      // que las alarmas de quiebre (quiebre − lead time), pero acá derivado
+      // en el cliente porque la fecha de cobertura la fija el usuario en el
+      // filtro, no viene de una alarma fija del servidor. Sólo tiene sentido
+      // cuando hay ritmo real para proyectar una fecha de quiebre — sin
+      // ventas no hay "cuándo" que calcular, sólo "cuánto".
+      const fechaLimiteInicio = fechaEstimadaQuiebre != null
+        ? restarDiasHabilesISO(fechaEstimadaQuiebre, filaStock.leadTimeSemanas * 5)
+        : null
+      const atrasado = fechaLimiteInicio != null && fechaLimiteInicio <= hoyISO
+
       let motivo = `Cubrir hasta ${fechaLabel}: demanda proyectada ${Math.round(demandaProyectada)} L, disponible ${Math.round(disponible)} L.`
       if (altaDemanda) motivo += ' El modelo anticipa una temporada de alta demanda dentro de este período.'
+      if (fechaLimiteInicio) {
+        const limiteLabel = new Date(`${fechaLimiteInicio}T00:00:00Z`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+        motivo += atrasado
+          ? ` Debiste empezar a cocer el ${limiteLabel} (${filaStock.leadTimeSemanas} semanas de lead time).`
+          : ` Último día para empezar a cocer: ${limiteLabel} (${filaStock.leadTimeSemanas} semanas de lead time).`
+      }
 
       resultado.push({
         producto: serie.producto, envase, categoria: (serie.categoria as 'cerveza' | 'kombucha') ?? 'cerveza',
@@ -1249,11 +1282,8 @@ export default function ProduccionClient({
         // quiebre inmediato — se deja en 0/null porque el campo es requerido.
         litrosFermentando: 0,
         fechaFermentandoListo: null,
-        // La fecha límite de cocción la calcula el servidor sobre la alarma de
-        // quiebre real; acá la cobertura la fija el usuario con el filtro, así
-        // que no hay un "último día para empezar" que derivar.
-        fechaLimiteInicio: null,
-        atrasado: false,
+        fechaLimiteInicio,
+        atrasado,
       })
     }
 
@@ -1736,19 +1766,25 @@ export default function ProduccionClient({
                   <p className="text-[11px] text-gray-400">Error medio vs. venta real</p>
                 </div>
 
-                {/* En Fermentación — reemplaza al "78% Capacidad Planta" que era
-                    demo. El informe del ERP no trae la capacidad nominal de cada
-                    fermentador ni lista los vacíos, así que un % de ocupación
-                    sería inventado: se muestra lo que sí se sabe. */}
+                {/* En Fermentación — desde que existe la capacidad real de cada
+                    tanque (tabla fermentadores, 14-sep-2026), el % de ocupación
+                    ya no es inventado. */}
                 <div
                   className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-                  title={ocupacionPlanta.tanques.map(t => `${t.tanque}: ${fNum(t.litros)} L`).join('\n')}
+                  title={ocupacionPlanta.tanques.map(t => `${t.tanque} (${t.tipo}): ${fNum(t.litros)} / ${fNum(t.capacidadLitros)} L`).join('\n')}
                 >
                   <div className="flex items-center justify-between gap-2 text-sm font-medium text-gray-500">
                     <span className="flex items-center gap-2">
                       <Beaker size={18} style={{ color: COLORS.darkGreen }} />
                       En Fermentación
                     </span>
+                    {ocupacionPlanta.porcentajeOcupacion != null && (
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                        ocupacionPlanta.porcentajeOcupacion >= 85 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        {ocupacionPlanta.porcentajeOcupacion}% ocupado
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="whitespace-nowrap text-3xl font-bold text-gray-900">
@@ -1759,7 +1795,9 @@ export default function ProduccionClient({
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-400">
-                    A granel, sin envasar — ver el split en Plan Maestro
+                    {ocupacionPlanta.litrosLibres != null
+                      ? `${fNum(ocupacionPlanta.litrosLibres)} L libres de ${fNum(ocupacionPlanta.capacidadTotalLitros!)} L — a granel, sin envasar`
+                      : 'A granel, sin envasar — ver el split en Plan Maestro'}
                   </p>
                 </div>
               </div>
@@ -2638,6 +2676,86 @@ export default function ProduccionClient({
                 ))}
               </div>
 
+              {/* Capacidad de Planta — la dimensión que faltaba para que la
+                  planificación de arriba sea ejecutable: de nada sirve saber
+                  cuánto y cuándo cocer si no se sabe si hay tanque libre para
+                  meterlo. Va ANTES de "Necesidad de Producción Anticipada" a
+                  propósito: primero el espacio disponible, después la
+                  decisión de qué llenar con él. */}
+              {ocupacionPlanta.capacidadTotalLitros != null && (
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-gray-800">Capacidad de Planta — Fermentadores y Estanques</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Cuánto espacio real hay para la próxima cocción, tanque por tanque — el jefe de producción
+                        es el último filtro: esto sólo muestra dónde entra, no decide qué cocer.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Libre</p>
+                        <p className="text-xl font-black text-emerald-700">{fNum(ocupacionPlanta.litrosLibres!)} L</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Ocupado</p>
+                        <p className="text-xl font-black text-gray-800">{fNum(ocupacionPlanta.litrosEnFermentacion)} L</p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1.5 text-sm font-bold ${
+                        (ocupacionPlanta.porcentajeOcupacion ?? 0) >= 85 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        {ocupacionPlanta.porcentajeOcupacion}% ocupado
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Barra agregada de planta — mismo lenguaje visual que las
+                      barras por tanque de abajo, a escala de toda la planta. */}
+                  <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className={`h-full rounded-full ${(ocupacionPlanta.porcentajeOcupacion ?? 0) >= 85 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${Math.min(100, ocupacionPlanta.porcentajeOcupacion ?? 0)}%` }}
+                    />
+                  </div>
+
+                  {/* Tanques ordenados por espacio LIBRE descendente — el
+                      jefe de producción mira primero dónde hay más lugar para
+                      meter la próxima cocción, no dónde hay más contenido. */}
+                  <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    {[...ocupacionPlanta.tanques]
+                      .sort((a, b) => b.libreLitros - a.libreLitros)
+                      .map(t => {
+                        const pct = t.capacidadLitros > 0 ? Math.min(100, Math.round((t.litros / t.capacidadLitros) * 100)) : 0
+                        const vacio = t.litros === 0
+                        return (
+                          <div
+                            key={t.tanque}
+                            className={`prod-hover-card rounded-lg border p-2.5 ${vacio ? 'border-emerald-200 bg-emerald-50/40' : 'border-gray-200 bg-white'}`}
+                            title={`${t.tanque} (${t.tipo}) — ${fNum(t.litros)} / ${fNum(t.capacidadLitros)} L, ${fNum(t.libreLitros)} L libres`}
+                          >
+                            <p className="truncate text-xs font-bold text-gray-800">{t.tanque}</p>
+                            <p className="truncate text-[10px] text-gray-400">{t.tipo}</p>
+                            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                              <div
+                                className={`h-full rounded-full ${vacio ? 'bg-gray-200' : pct >= 90 ? 'bg-red-500' : 'bg-[#0F3D2E]'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <div className="mt-1 flex items-baseline justify-between">
+                              <span className="text-[11px] tabular-nums text-gray-500">{fNum(t.litros)}/{fNum(t.capacidadLitros)} L</span>
+                              {vacio ? (
+                                <span className="text-[10px] font-bold text-emerald-600">Libre</span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-gray-400">{fNum(t.libreLitros)} L libres</span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                </div>
+              )}
+
               {/* Necesidad de Producción Anticipada — responde "¿cuánto
                   necesito producir para cubrir hasta tal fecha?" y avisa
                   cuándo se viene una temporada de alta demanda, no sólo si
@@ -2700,6 +2818,23 @@ export default function ProduccionClient({
                                   <span className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
                                     <TrendingUp size={12} />
                                     Viene alta demanda
+                                  </span>
+                                )}
+                                {/* Cuándo hay que largar la cocción para llegar a tiempo — la pieza
+                                    que faltaba para armar planificación desde esta pantalla: antes
+                                    sólo decía CUÁNTO producir, nunca CUÁNDO empezar. */}
+                                {item.fechaLimiteInicio && item.litrosSugeridos > 0 && (
+                                  <span
+                                    className={`ml-1.5 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold ${
+                                      item.atrasado ? 'bg-red-600 text-white' : 'bg-emerald-100 text-emerald-800'
+                                    }`}
+                                    title={item.atrasado
+                                      ? `Con ${item.leadTimeSemanas} semanas de lead time, empezar hoy ya no llega antes del quiebre proyectado.`
+                                      : `Último día hábil para empezar a cocer y llegar antes del quiebre proyectado (${item.leadTimeSemanas} semanas de lead time).`}
+                                  >
+                                    <CalendarIcon size={12} />
+                                    {item.atrasado ? 'Atrasado — debió cocerse el ' : 'Cocer antes del '}
+                                    {new Date(item.fechaLimiteInicio + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
                                   </span>
                                 )}
                                 {/* litrosSugeridos sólo puede ser 0 cuando la fila entró a la lista

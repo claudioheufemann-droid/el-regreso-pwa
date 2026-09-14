@@ -122,16 +122,26 @@ export interface StockSeguridadItem {
 }
 
 /**
- * Ocupación de la sala de fermentación. Hoy sólo puede decir cuánto hay y en
- * cuántos tanques: el informe del ERP no trae la capacidad nominal de cada
- * fermentador ni lista los vacíos, así que un % de ocupación sería inventado.
- * Cuando exista ese listado (capacidad por tanque), acá se agrega
- * `capacidadTotal` y el porcentaje pasa a ser real.
+ * Ocupación de la sala de fermentación. Cruza el informe del ERP (qué tanque
+ * tiene contenido y cuánto) con la tabla `fermentadores` (capacidad nominal
+ * de cada uno — el ERP nunca trae eso, ver el comentario en page.tsx donde
+ * se arma) para dar un % de ocupación REAL, no estimado.
  */
 export interface OcupacionPlanta {
   litrosEnFermentacion: number
   fermentadoresOcupados: number
-  tanques: { tanque: string; litros: number }[]
+  /** Suma de `capacidad_litros` de los tanques activos en `fermentadores` —
+   *  null si esa tabla está vacía (nadie cargó capacidades todavía). */
+  capacidadTotalLitros: number | null
+  /** Litros libres = capacidad total − ocupado. Null en las mismas
+   *  condiciones que `capacidadTotalLitros`. */
+  litrosLibres: number | null
+  /** 0-100, redondeado a un decimal. Null si no hay capacidad cargada. */
+  porcentajeOcupacion: number | null
+  /** Cada tanque ACTIVO en `fermentadores`, con su capacidad y lo que tiene
+   *  hoy (0 si está vacío) — a diferencia de antes, incluye los vacíos: son
+   *  justamente el espacio disponible para la próxima cocción. */
+  tanques: { tanque: string; tipo: string; capacidadLitros: number; litros: number; libreLitros: number }[]
 }
 
 /**
@@ -406,6 +416,7 @@ export default async function ProduccionPage() {
     { data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios },
     { data: stockSeguridadRaw }, { data: ultimoSyncStockRaw },
     { data: recetasRaw }, { data: recetaInsumosRaw }, { data: stockInsumosRaw }, { data: insumosRaw },
+    { data: fermentadoresRaw },
   ] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial, metodo'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
@@ -427,6 +438,11 @@ export default async function ProduccionPage() {
     // Catálogo COMPLETO de insumos, no sólo los que usa algún lote activo —
     // ver el comentario en StockInsumoItem.
     admin.from('insumos').select('id, nombre, categoria, unidad_base, precio_unitario').order('nombre'),
+    // Capacidad nominal de cada fermentador — el ERP no la trae en ningún
+    // informe (sólo lista tanques CON contenido, nunca los vacíos ni su
+    // máximo), así que vive en esta tabla cargada a mano. Ver el comentario
+    // largo en OcupacionPlanta.
+    admin.from('fermentadores').select('nombre, tipo, capacidad_litros').eq('activo', true),
   ])
   const ultimoSyncStock = (ultimoSyncStockRaw as { creado_at?: string } | null)?.creado_at ?? null
   // Se calcula server-side (comparado contra la hora del request, no la del
@@ -762,24 +778,40 @@ export default async function ProduccionPage() {
   // tanque todavía no se envasó, así que no aparece en ninguna cámara.
   /* ── Ocupación de fermentadores ──────────────────────────────────────────
      El informe del ERP lista SÓLO los fermentadores con contenido, con sus
-     litros — no trae la capacidad nominal de cada uno ni los que están
-     vacíos, y stock_productos guarda una sola foto (sin histórico), así que
-     tampoco se puede inferir la capacidad del máximo visto. Sin ese dato no
-     hay porcentaje de ocupación honesto: se muestra lo que sí se sabe
-     (litros a granel y cuántos tanques están ocupados). Para convertirlo en
-     un % real hace falta el listado de fermentadores con su capacidad. */
-  const fermentadoresOcupados = new Map<string, number>()
+     litros — nunca trae la capacidad nominal ni los que están vacíos. Esa
+     capacidad vive en `fermentadores` (cargada a mano, 14-sep-2026, desde la
+     pantalla de administración de tanques del ERP — ver la migración
+     crear_tabla_fermentadores_capacidad). Cruzando ambas fuentes por nombre
+     de tanque sale un % de ocupación real, y los tanques vacíos pasan a ser
+     visibles como espacio disponible para la próxima cocción, no un vacío
+     de datos. */
+  const litrosPorTanque = new Map<string, number>()
   for (const s of stockRaw ?? []) {
     if (s.tipo !== 'tanque' || s.litros == null) continue
     const tanque = ((s.camara as string | null) ?? 'Sin tanque').trim()
-    fermentadoresOcupados.set(tanque, (fermentadoresOcupados.get(tanque) ?? 0) + Number(s.litros))
+    litrosPorTanque.set(tanque, (litrosPorTanque.get(tanque) ?? 0) + Number(s.litros))
   }
+  const fermentadores = (fermentadoresRaw ?? []) as { nombre: string; tipo: string; capacidad_litros: number }[]
+  const capacidadTotalLitros = fermentadores.length > 0
+    ? Math.round(fermentadores.reduce((s, f) => s + Number(f.capacidad_litros), 0))
+    : null
+  const tanquesConCapacidad = fermentadores
+    .map(f => {
+      const litros = Math.round(litrosPorTanque.get(f.nombre) ?? 0)
+      const capacidadLitros = Math.round(Number(f.capacidad_litros))
+      return { tanque: f.nombre, tipo: f.tipo, capacidadLitros, litros, libreLitros: capacidadLitros - litros }
+    })
+    .sort((a, b) => b.litros - a.litros)
+  const litrosEnFermentacionTotal = Math.round([...litrosPorTanque.values()].reduce((a, b) => a + b, 0))
   const ocupacionPlanta: OcupacionPlanta = {
-    litrosEnFermentacion: Math.round([...fermentadoresOcupados.values()].reduce((a, b) => a + b, 0)),
-    fermentadoresOcupados: fermentadoresOcupados.size,
-    tanques: [...fermentadoresOcupados.entries()]
-      .map(([tanque, litros]) => ({ tanque, litros: Math.round(litros) }))
-      .sort((a, b) => b.litros - a.litros),
+    litrosEnFermentacion: litrosEnFermentacionTotal,
+    fermentadoresOcupados: [...litrosPorTanque.values()].filter(l => l > 0).length,
+    capacidadTotalLitros,
+    litrosLibres: capacidadTotalLitros != null ? capacidadTotalLitros - litrosEnFermentacionTotal : null,
+    porcentajeOcupacion: capacidadTotalLitros
+      ? Math.round((litrosEnFermentacionTotal / capacidadTotalLitros) * 1000) / 10
+      : null,
+    tanques: tanquesConCapacidad,
   }
 
   const litrosEnProduccionPorProducto = new Map<string, number>()
