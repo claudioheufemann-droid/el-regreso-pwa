@@ -22,13 +22,18 @@ export interface InsumoStockParsed {
   cantidad: number
   /** Unidad tal cual la declara el ERP (kg, gr, g, l, lt, ml, un...). */
   unidadCruda: string
-  /** Precio por UNIDAD DEL ERP (ej. $/kg si la fila viene en kg) — null si el
-   *  archivo no trae columna de precio. La conversión a precio por unidad
-   *  base (gr/ml) la hace la ruta, que es la que conoce el factor. */
+  /** Precio por UNIDAD DEL ERP (columna "Último precio de compra": ej. $/kg
+   *  si la fila viene en kg) — null si el archivo no trae esa columna. La
+   *  conversión a precio por unidad base (gr/ml) la hace la ruta, que es la
+   *  que conoce el factor.
+   *
+   *  A PROPÓSITO no se usa la columna "Valorizado" del informe (decisión
+   *  del usuario, 14-sep-2026): esa columna sale de Stock × PPP (precio
+   *  promedio ponderado histórico), no del último precio pagado — para
+   *  valorizar compras FUTURAS interesa cuánto se paga HOY, no el promedio
+   *  histórico. "Último precio de compra" es literalmente la columna que
+   *  responde eso. */
   precioUnitarioCrudo: number | null
-  /** Valorizado TOTAL de la fila (cantidad × precio) — null si no viene.
-   *  Muchos informes de stock traen esto en vez del precio unitario. */
-  valorizadoTotal: number | null
 }
 
 type Fila = unknown[]
@@ -45,13 +50,19 @@ function norm(v: unknown): string {
 const ALIAS_NOMBRE = ['insumo', 'producto', 'nombre', 'material', 'articulo']
 const ALIAS_CANTIDAD = ['cantidad', 'stock', 'existencia', 'saldo']
 const ALIAS_UNIDAD = ['unidad', 'medida', 'um', 'u.m.', 'u m']
-/* Precio: ambas columnas son OPCIONALES y no se pisan entre sí — ningún
-   alias de una aparece como substring en la otra. Si vienen las dos, manda
-   el valorizado total, porque es el que cuadra exacto contra la cantidad de
-   la misma fila (un precio unitario redondeado en el informe arrastra error
-   al multiplicarlo). */
+/* Precio: columna OPCIONAL — si el informe no la trae, el archivo se procesa
+ * igual y sólo se actualiza el stock.
+ *
+ * A propósito NO se usa la columna "Valorizado" del informe (decisión del
+ * usuario, 14-sep-2026, verificado contra un export real del 14-sep):
+ * "Valorizado" sale de Stock × PPP (precio promedio ponderado histórico),
+ * no del último precio pagado — para Ácido Fosfórico el informe traía
+ * "Último precio de compra" $6,55/ml pero "Valorizado" ÷ Stock daba $8,74/ml,
+ * un 33% más alto porque mezclaba compras viejas. Sólo interesa "Último
+ * precio de compra": es la columna que el propio informe usa para decir
+ * cuánto se paga HOY, que es lo que hace falta para presupuestar compras
+ * futuras. */
 const ALIAS_PRECIO = ['precio', 'costo unitario', 'valor unitario']
-const ALIAS_VALORIZADO = ['valorizado', 'valor total', 'total valorizado']
 
 function indiceColumna(headerRow: Fila, alias: string[]): number {
   for (let i = 0; i < headerRow.length; i++) {
@@ -98,17 +109,30 @@ export function parseInsumosExcel(buffer: ArrayBuffer): InsumoStockParsed[] {
   }
 
   const { fila: filaEncabezado, colNombre, colCantidad, colUnidad } = encabezado
-  // Columnas de precio: opcionales. Si el informe no las trae, el archivo se
+  // Columna de precio: opcional. Si el informe no la trae, el archivo se
   // procesa igual y sólo se actualiza el stock, como antes.
   const yaUsada = (i: number) => i === colNombre || i === colCantidad || i === colUnidad
   const colPrecioRaw = indiceColumna(filas[filaEncabezado], ALIAS_PRECIO)
-  const colValorizadoRaw = indiceColumna(filas[filaEncabezado], ALIAS_VALORIZADO)
   const colPrecio = colPrecioRaw >= 0 && !yaUsada(colPrecioRaw) ? colPrecioRaw : -1
-  const colValorizado = colValorizadoRaw >= 0 && !yaUsada(colValorizadoRaw) ? colValorizadoRaw : -1
 
+  /**
+   * Bug real, encontrado el 14-sep-2026 auditando un export real: esta
+   * limpieza de moneda chilena ("$ 12.345,67" → 12345.67, quitando puntos de
+   * miles) se aplicaba TAMBIÉN a celdas que xlsx ya entrega como número JS
+   * real (ej. 180888.80621876736, no el texto "$180.888,81"). Sobre un
+   * número así, el paso "quitar todos los puntos" borraba el punto DECIMAL
+   * real, no uno de miles — "180888.80621876736" quedaba "18088880621876736",
+   * un número ~100.000 veces más grande. Resultado en producción: Ácido
+   * Fosfórico guardado a $873.858.967.240/ml en vez de $6,55/ml.
+   * Las celdas de precio del ERP son siempre numéricas (nunca vienen como
+   * texto con símbolo $), así que ahora un `number` se usa tal cual, sin
+   * pasar por ninguna limpieza de texto — la limpieza de string queda sólo
+   * como resguardo para el caso (no visto hasta ahora) de que llegue como
+   * texto.
+   */
   const numeroDe = (v: unknown): number | null => {
     if (v == null || String(v).trim() === '') return null
-    // Limpia formato chileno de moneda: "$ 12.345,67" → 12345.67
+    if (typeof v === 'number') return Number.isFinite(v) && v > 0 ? v : null
     const limpio = String(v).replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.')
     const n = Number(limpio)
     return Number.isFinite(n) && n > 0 ? n : null
@@ -132,7 +156,6 @@ export function parseInsumosExcel(buffer: ArrayBuffer): InsumoStockParsed[] {
       cantidad,
       unidadCruda: colUnidad >= 0 && f[colUnidad] != null ? String(f[colUnidad]).trim() : '',
       precioUnitarioCrudo: colPrecio >= 0 ? numeroDe(f[colPrecio]) : null,
-      valorizadoTotal: colValorizado >= 0 ? numeroDe(f[colValorizado]) : null,
     })
   }
 

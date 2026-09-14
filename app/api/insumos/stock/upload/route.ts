@@ -120,19 +120,17 @@ export async function POST(req: Request) {
     const cantidadBase = f.cantidad * conv.factor
 
     // ── Precio por UNIDAD BASE (gr/ml), no por la unidad del informe ──────
+    // Se usa SÓLO "Último precio de compra" (decisión del usuario,
+    // 14-sep-2026) — no la columna "Valorizado" del informe, que sale de
+    // Stock × precio promedio ponderado histórico y no del último precio
+    // pagado (ver el comentario largo en lib/insumosParser.ts).
+    //
     // Trampa de unidades que hay que respetar sí o sí: el MRP valoriza con
     // `precio_unitario × necesidadNeta`, y necesidadNeta está en gr/ml. Si acá
     // se guardara el $/kg del informe tal cual, el presupuesto saldría 1.000
-    // veces más caro. Por eso todo se divide por el mismo factor con que se
+    // veces más caro — por eso se divide por el mismo factor con que se
     // convirtió la cantidad.
-    //   - valorizado total → se divide por la cantidad YA en base
-    //   - precio unitario del ERP → se divide por el factor de la unidad
-    let precioBase: number | null = null
-    if (f.valorizadoTotal != null && cantidadBase > 0) {
-      precioBase = f.valorizadoTotal / cantidadBase
-    } else if (f.precioUnitarioCrudo != null) {
-      precioBase = f.precioUnitarioCrudo / conv.factor
-    }
+    const precioBase = f.precioUnitarioCrudo != null ? f.precioUnitarioCrudo / conv.factor : null
 
     matcheados.push({ insumoId, nombre: f.nombreCrudo, cantidadBase, precioBase })
   }
