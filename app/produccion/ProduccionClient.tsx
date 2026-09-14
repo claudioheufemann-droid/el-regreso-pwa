@@ -426,7 +426,7 @@ function ModalConfirmarLoteGrupo({
     if (!valido) return
     const motivo = grupo.items.length === 1
       ? grupo.items[0].motivo
-      : `Cubre la necesidad combinada de ${grupo.items.length} formatos en alerta (${grupo.items.map(i => ENVASE_LABEL[i.envase] ?? i.envase).join(', ')}). El reparto por formato se decide en el Split de Envasado cuando el lote esté listo.`
+      : `Cubre la necesidad combinada de ${grupo.items.length} formatos (${grupo.items.map(i => ENVASE_LABEL[i.envase] ?? i.envase).join(', ')}). El reparto por formato se decide en el Split de Envasado cuando el lote esté listo.`
     onConfirmar({ litrosPlanificados: litrosNum, fechaPlanificada: fecha, necesidadCubrir: totalSugerido, cubreHasta, motivo })
   }
 
@@ -2935,6 +2935,22 @@ export default function ProduccionClient({
                               </span>
                             )
                           )}
+                          {/* Mismo modo que "Agregar al plan" del Plan Maestro: un
+                              solo botón por PRODUCTO con el litraje total, no uno
+                              por formato — el reparto entre lata/barril se decide
+                              después en el Split de Envasado, igual que en la
+                              cocción real. La necesidad desglosada por envase sigue
+                              abajo, fila por fila, sólo que ya no dispara un lote
+                              cada una. */}
+                          {grupo.totalAProducir > 0 && (
+                            <button
+                              disabled={guardandoPlan}
+                              onClick={() => setSugerenciaModal(grupo)}
+                              className="prod-press ml-auto shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                            >
+                              Agregar al plan — {fNum(grupo.totalAProducir)} L total
+                            </button>
+                          )}
                         </div>
                         <div className="divide-y divide-gray-100">
                           {grupo.items.map((item, i) => (
@@ -3000,13 +3016,6 @@ export default function ProduccionClient({
                                   <p className="text-sm font-bold tabular-nums text-gray-800">{fNum(item.litrosSugeridos)} L</p>
                                 </div>
                               </div>
-                              <button
-                                disabled={guardandoPlan}
-                                onClick={() => setSugerenciaModal({ producto: grupo.producto, categoria: grupo.categoria, items: [item] })}
-                                className="prod-press shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
-                              >
-                                Agregar al plan
-                              </button>
                             </div>
                           ))}
                         </div>
