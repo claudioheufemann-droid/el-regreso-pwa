@@ -1,20 +1,36 @@
 'use client'
 
+/**
+ * Deuda real por cliente — lo que antes era la página aparte
+ * /administracion/cobranza (CobranzaClient.tsx). Absorbida acá adentro como
+ * la mitad "dato duro" de la pestaña Cobranza y Deuda: la otra mitad, más
+ * arriba en AdministracionClient, es la PROYECCIÓN (nuestro modelo de
+ * cuándo debería entrar la plata); ésta es el ESTADO actual según el ERP —
+ * quién debe, hace cuánto, y con qué herramienta cobrarle. Decisión del
+ * usuario, 15-sep-2026: una sola pestaña, no una página aparte con su
+ * propio ítem de menú para un solo destino más.
+ *
+ * Mismo dato y misma reconstrucción de facturas que antes (lib/cobranza.ts),
+ * sólo que repintado en la paleta CLARA del resto de Administración en vez
+ * del tema oscuro que usaba la página vieja — la razón visual concreta por
+ * la que esa página se sentía "aparte" del resto del módulo.
+ */
 import { Fragment, useMemo, useState } from 'react'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer,
-} from 'recharts'
-import {
-  Wallet, ChevronDown, ChevronRight, Search, FileDown, MessageCircle, Phone, Info, X,
-} from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from 'recharts'
+import { ChevronDown, ChevronRight, Search, FileDown, MessageCircle, Phone, Info, X, Users } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCorto } from '@/lib/types'
 import { diasMoraDeudor } from '@/lib/cobranza'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import PanelCobranza, { documentosParaWA, type DatosCobranza } from '@/components/deudores/PanelCobranza'
 
-// ── Tipos ────────────────────────────────────────────────────────────────────
-interface DeudorRaw {
+const C = {
+  card: '#FFFFFF', bg: '#F1F5F9', text: '#0F172A', muted: '#64748B',
+  line: '#E2E8F0', gold: '#B45309', goldSoft: '#FFFBEB',
+  red: '#DC2626', redSoft: '#FEF2F2', green: '#059669', purple: '#7C3AED',
+}
+
+export interface DeudorRaw {
   id: string
   nombre_fantasia: string
   razon_social?: string
@@ -43,11 +59,8 @@ interface DeudorRaw {
 }
 
 interface Deudor extends DeudorRaw {
-  /** Parte de `deuda_vencida` que es co-packing (litros/latas de maquila). */
   maquila_vencida: number
-  /** `deuda_vencida` menos la maquila: lo que persigue el área comercial. */
   deuda_comercial: number
-  /** `saldo_total` menos la maquila. */
   saldo_comercial: number
 }
 
@@ -69,29 +82,17 @@ function conDeudaComercial(filas: DeudorRaw[], maquilaPorCliente: Record<string,
   })
 }
 
-// Universo del módulo: las 4 carteras de venta + la de Claudio. Todo lo que
-// el ERP aparca bajo un pseudo-vendedor (Incobrable, CERVECERÍA, Inactivo,
-// Vendedor Muestras, OnLine, sin vendedor) queda fuera — mismo criterio que
-// /ventas/deudores (lib/types.ts → grupoCarteraDe).
 function esCarteraDeVenta(d: Deudor): boolean {
   return grupoCarteraDe(d.vendedor) === 'vendedor'
 }
-
 function diasMoraDe(d: Deudor): number {
   return diasMoraDeudor({ ...d, deuda_vencida: d.deuda_comercial })
 }
-
 function saldoNoVencidoDe(d: Pick<Deudor, 'saldo_total' | 'deuda_vencida'>): number {
   return Math.max(0, (d.saldo_total || 0) - (d.deuda_vencida || 0))
 }
 
-interface FilaCartera {
-  vendedor: string
-  deudores: number
-  clientes: number
-  vencida: number
-  saldo: number
-}
+interface FilaCartera { vendedor: string; deudores: number; clientes: number; vencida: number; saldo: number }
 
 function resumenCarteras(deudores: Deudor[], clientesPorVendedor: Record<string, number>) {
   const acc = new Map<string, FilaCartera>(
@@ -121,9 +122,9 @@ const TRAMOS_CHART = [
   { key: 'deuda_mas_90_dias', label: '+90' },
 ] as const
 
+// Verde→rojo a medida que la mora envejece — mismo criterio de color que el
+// resto del módulo (60 días o más es rojo).
 function colorTramo(i: number): string {
-  // Verde→rojo a medida que la mora envejece — mismo criterio de color que
-  // el resto del módulo (>=60 días es rojo).
   return ['#4ADE80', '#A3E635', '#FBBF24', '#FB923C', '#F87171', '#DC2626'][i] ?? '#DC2626'
 }
 
@@ -131,13 +132,11 @@ function csvEscape(v: string | number): string {
   const s = String(v)
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
-
 function fFecha(iso: string): string {
   const [y, m, d] = iso.split('T')[0].split('-')
   const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
   return `${parseInt(d)} ${meses[parseInt(m) - 1]} ${y}`
 }
-
 function exportarCSV(deudores: Deudor[]) {
   const headers = ['Cliente', 'Localidad', 'Vendedor', 'Deuda vencida', 'Días vencida', 'Doc. más antiguo', 'Maquila (no comercial)', 'Saldo total', 'Barriles', 'Último pago']
   const filas = deudores.map(d => [
@@ -158,24 +157,16 @@ function exportarCSV(deudores: Deudor[]) {
   URL.revokeObjectURL(url)
 }
 
-// ── UI compartida con el resto de Administración ─────────────────────────────
-function Card({ children, acento, style }: { children: React.ReactNode; acento?: string; style?: React.CSSProperties }) {
+function Card({ children, acento }: { children: React.ReactNode; acento?: string }) {
   return (
-    <div style={{
-      background: 'var(--surface)', border: `1px solid ${acento ?? 'var(--border)'}`,
-      borderRadius: 16, padding: 20, ...style,
-    }}>
+    <div style={{ background: C.card, border: `1px solid ${acento ?? C.line}`, borderRadius: 16, padding: 20 }}>
       {children}
     </div>
   )
 }
-
 function Etiqueta({ children, title }: { children: React.ReactNode; title?: string }) {
   return (
-    <p title={title} style={{
-      fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase',
-      color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 5,
-    }}>
+    <p title={title} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
       {children}
       {title && <Info size={11} style={{ opacity: 0.5 }} />}
     </p>
@@ -183,18 +174,22 @@ function Etiqueta({ children, title }: { children: React.ReactNode; title?: stri
 }
 
 const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '9px 12px', background: 'var(--bg)', border: '1px solid var(--border)',
-  borderRadius: 9, color: 'var(--cream)', fontSize: 13, outline: 'none',
+  width: '100%', padding: '9px 12px', background: C.card, border: `1px solid ${C.line}`,
+  borderRadius: 9, color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box',
 }
-
 const selectStyle: React.CSSProperties = {
   ...inputStyle, appearance: 'none',
-  backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23888\' stroke-width=\'2\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")',
+  backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%2364748B\' stroke-width=\'2\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")',
   backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', paddingRight: 32,
 }
+const fCompact = (n: number) => {
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
+  if (abs >= 1_000) return `$${Math.round(n / 1_000)}k`
+  return `$${Math.round(n)}`
+}
 
-// ── Componente principal ──────────────────────────────────────────────────────
-export default function CobranzaClient({ initialDeudores, clientesPorVendedor, maquilaPorCliente }: Props) {
+export default function DeudaClienteSection({ initialDeudores, clientesPorVendedor, maquilaPorCliente }: Props) {
   const [cartera, setCartera] = useState<string>('todos')
   const [estado, setEstado] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
   const [searchText, setSearchText] = useState('')
@@ -207,11 +202,7 @@ export default function CobranzaClient({ initialDeudores, clientesPorVendedor, m
     () => conDeudaComercial(initialDeudores, maquilaPorCliente).filter(esCarteraDeVenta),
     [initialDeudores, maquilaPorCliente],
   )
-
-  const { filas: carteras, total } = useMemo(
-    () => resumenCarteras(universo, clientesPorVendedor),
-    [universo, clientesPorVendedor],
-  )
+  const { filas: carteras, total } = useMemo(() => resumenCarteras(universo, clientesPorVendedor), [universo, clientesPorVendedor])
 
   const filtrados = useMemo(() => universo.filter(d => {
     if (cartera !== 'todos' && vendedorCanonico(d.vendedor) !== cartera) return false
@@ -233,24 +224,13 @@ export default function CobranzaClient({ initialDeudores, clientesPorVendedor, m
   const clientesUniverso = cartera === 'todos' ? total.clientes : (clientesPorVendedor[cartera] ?? 0)
 
   const clientesConSaldoNoVencido = useMemo(
-    () => filtrados
-      .map(d => ({ nombre: d.nombre_fantasia, monto: saldoNoVencidoDe(d) }))
-      .filter(c => c.monto > 0)
-      .sort((a, b) => b.monto - a.monto),
+    () => filtrados.map(d => ({ nombre: d.nombre_fantasia, monto: saldoNoVencidoDe(d) })).filter(c => c.monto > 0).sort((a, b) => b.monto - a.monto),
     [filtrados],
   )
-
   const datosAging = useMemo(() => TRAMOS_CHART.map(t => ({
     label: t.label,
     monto: filtrados.reduce((s, d) => s + (Number(d[t.key as keyof Deudor]) || 0), 0),
   })), [filtrados])
-
-  const fCompact = (n: number) => {
-    const abs = Math.abs(n)
-    if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
-    if (abs >= 1_000) return `$${Math.round(n / 1_000)}k`
-    return `$${Math.round(n)}`
-  }
 
   function abrirWA(d: Deudor) {
     setWaTarget({
@@ -265,134 +245,103 @@ export default function CobranzaClient({ initialDeudores, clientesPorVendedor, m
   }
 
   return (
-    <div style={{ padding: '28px 32px 60px', maxWidth: 1400 }}>
-      {/* ── Encabezado ───────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 22 }}>
-        <div>
-          <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)' }}>
-            Administración y Finanzas
-          </p>
-          <h1 style={{ fontSize: 30, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.8px', lineHeight: 1.1, marginTop: 2 }}>
-            Cobranza
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6, maxWidth: 640 }}>
-            Suma de las 4 carteras de venta más la de Claudio. No incluye incobrables, CERVECERÍA
-            ni cuentas internas — ni el co-packing a terceros (maquila), que se muestra aparte.
-          </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Users size={16} style={{ color: C.gold }} />
+          <h2 style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>
+            Deuda actual por cliente — dato del ERP
+          </h2>
         </div>
         {filtrados.length > 0 && (
           <button onClick={() => exportarCSV(filtrados)}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 9,
-              border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--cream)',
-              fontSize: 12.5, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 9,
+              border: `1px solid ${C.line}`, background: C.card, color: C.text, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
             <FileDown size={14} /> Exportar CSV
           </button>
         )}
       </div>
+      <p style={{ fontSize: 12.5, color: C.muted, marginTop: -10 }}>
+        Suma de las 4 carteras de venta más la de Claudio. No incluye incobrables, CERVECERÍA ni cuentas
+        internas — ni el co-packing a terceros (maquila), que se muestra aparte de la deuda comercial.
+      </p>
 
-      {/* ── KPIs ─────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
         <Card>
           <Etiqueta>Total deudores</Etiqueta>
-          <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--cream)', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
+          <p style={{ fontSize: 26, fontWeight: 900, color: C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
             {totals.deudores}
             {clientesUniverso > 0 && (
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--muted)' }}>
-                {' '}de {clientesUniverso} ({Math.round((totals.deudores / clientesUniverso) * 100)}%)
-              </span>
+              <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}> de {clientesUniverso} ({Math.round((totals.deudores / clientesUniverso) * 100)}%)</span>
             )}
           </p>
-          <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>
-            {totals.conVencida} con deuda vencida{totals.deudores - totals.conVencida > 0 ? ` · ${totals.deudores - totals.conVencida} solo dentro de plazo` : ''}
+          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>
+            {totals.conVencida} con deuda vencida{totals.deudores - totals.conVencida > 0 ? ` · ${totals.deudores - totals.conVencida} sólo dentro de plazo` : ''}
           </p>
         </Card>
-
-        <Card acento={totals.deuda_vencida > 0 ? 'rgba(248,113,113,0.25)' : undefined}>
+        <Card acento={totals.deuda_vencida > 0 ? '#FECACA' : undefined}>
           <Etiqueta title="Deuda ya vencida, sin la maquila (co-packing a terceros).">Deuda vencida</Etiqueta>
-          <p style={{ fontSize: 28, fontWeight: 900, color: '#F87171', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-            {formatCurrency(totals.deuda_vencida)}
-          </p>
-          <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>lo que persigue el área comercial</p>
+          <p style={{ fontSize: 26, fontWeight: 900, color: C.red, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totals.deuda_vencida)}</p>
+          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>lo que persigue el área comercial</p>
         </Card>
-
         <Card>
           <Etiqueta title="Vencida + no vencida (plata dentro de plazo, todavía no exigible).">Saldo total</Etiqueta>
-          <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--gold)', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-            {formatCurrency(totals.saldo_total)}
-          </p>
+          <p style={{ fontSize: 26, fontWeight: 900, color: C.gold, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totals.saldo_total)}</p>
           <button onClick={() => setVerSaldoNoVencido(v => !v)}
-            style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 6, padding: 0,
-              background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11.5, fontWeight: 600 }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 6, padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: 11.5, fontWeight: 600 }}>
             {formatCurrency(saldoNoVencido)} aún no vence
             {verSaldoNoVencido ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </button>
         </Card>
-
         <Card>
           <Etiqueta>Barriles adeudados</Etiqueta>
-          <p style={{ fontSize: 28, fontWeight: 900, color: '#C084FC', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-            {totals.barriles.toLocaleString('es-CL')}
-          </p>
-          <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>sin devolver, cartera filtrada</p>
+          <p style={{ fontSize: 26, fontWeight: 900, color: C.purple, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{totals.barriles.toLocaleString('es-CL')}</p>
+          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>sin devolver, cartera filtrada</p>
         </Card>
       </div>
 
-      {/* ── Saldo no vencido, detalle por cliente ───────────────────────────── */}
       {verSaldoNoVencido && (
-        <Card style={{ marginBottom: 18 }}>
+        <Card>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h2 style={{ fontSize: 14.5, fontWeight: 800, color: 'var(--cream)' }}>
-              Saldo no vencido por cliente — {formatCurrency(saldoNoVencido)}
-            </h2>
-            <button onClick={() => setVerSaldoNoVencido(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
-              <X size={16} />
-            </button>
+            <h3 style={{ fontSize: 14, fontWeight: 800, color: C.text }}>Saldo no vencido por cliente — {formatCurrency(saldoNoVencido)}</h3>
+            <button onClick={() => setVerSaldoNoVencido(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted }}><X size={16} /></button>
           </div>
           {clientesConSaldoNoVencido.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--muted)' }}>Nadie de la cartera filtrada tiene saldo dentro de plazo.</p>
+            <p style={{ fontSize: 13, color: C.muted }}>Nadie de la cartera filtrada tiene saldo dentro de plazo.</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
               {clientesConSaldoNoVencido.map(c => (
-                <div key={c.nombre} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 12px', background: 'var(--bg)', borderRadius: 9, border: '1px solid var(--border)' }}>
-                  <span style={{ fontSize: 12.5, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</span>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>{formatCurrency(c.monto)}</span>
+                <div key={c.nombre} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 12px', background: C.bg, borderRadius: 9, border: `1px solid ${C.line}` }}>
+                  <span style={{ fontSize: 12.5, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.muted, flexShrink: 0 }}>{formatCurrency(c.monto)}</span>
                 </div>
               ))}
             </div>
           )}
-          <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10 }}>
+          <p style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>
             El detalle por factura de cada cliente está en su fila de la tabla — desplegarla y abrir &quot;aún no vencido&quot;.
           </p>
         </Card>
       )}
 
-      {/* ── Antigüedad de la deuda ───────────────────────────────────────── */}
-      <Card style={{ marginBottom: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <h2 style={{ fontSize: 14.5, fontWeight: 800, color: 'var(--cream)' }}>Deuda vencida por antigüedad</h2>
-        </div>
+      <Card>
+        <h3 style={{ fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 14 }}>Deuda vencida por antigüedad</h3>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={datosAging}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--muted)' }} />
-            <YAxis tickFormatter={fCompact} tick={{ fontSize: 11, fill: 'var(--muted)' }} width={56} />
-            <Tooltip
-              formatter={(v) => formatCurrency(Number(v))}
-              labelFormatter={l => `${l} días`}
-              contentStyle={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12 }}
-            />
+            <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: C.muted }} />
+            <YAxis tickFormatter={fCompact} tick={{ fontSize: 11, fill: C.muted }} width={56} />
+            <Tooltip formatter={(v) => formatCurrency(Number(v))} labelFormatter={l => `${l} días`}
+              contentStyle={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, fontSize: 12 }} />
             <Bar dataKey="monto" radius={[4, 4, 0, 0]}>
               {datosAging.map((_, i) => <Cell key={i} fill={colorTramo(i)} />)}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-        <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-          Días desde el vencimiento de cada documento, según los tramos que informa el ERP.
-        </p>
+        <p style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Días desde el vencimiento de cada documento, según los tramos que informa el ERP.</p>
       </Card>
 
-      {/* ── Desglose por cartera (también filtro) ───────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${carteras.length + 1}, 1fr)`, gap: 12, marginBottom: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(140px, 1fr))`, gap: 12 }}>
         {[{ vendedor: 'todos', nombre: 'Todos', deudores: total.deudores, clientes: total.clientes, vencida: total.vencida },
           ...carteras.map(f => ({ vendedor: f.vendedor, nombre: nombreCorto(f.vendedor), deudores: f.deudores, clientes: f.clientes, vencida: f.vencida })),
         ].map(f => {
@@ -401,40 +350,35 @@ export default function CobranzaClient({ initialDeudores, clientesPorVendedor, m
             <button key={f.vendedor} onClick={() => setCartera(f.vendedor)}
               style={{
                 textAlign: 'left', cursor: 'pointer', font: 'inherit',
-                background: activo ? 'rgba(212,175,55,0.08)' : 'var(--surface)',
-                border: `1px solid ${activo ? 'var(--gold)' : 'var(--border)'}`,
+                background: activo ? C.goldSoft : C.card,
+                border: `1px solid ${activo ? C.gold : C.line}`,
                 borderRadius: 12, padding: '13px 16px',
               }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: activo ? 'var(--gold)' : 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
-                {f.nombre}
-              </p>
-              <p style={{ fontSize: 17, fontWeight: 900, color: '#F87171' }}>{formatCurrency(f.vencida)}</p>
-              <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
-                {f.deudores} deudor{f.deudores === 1 ? '' : 'es'}{f.clientes > 0 ? ` de ${f.clientes}` : ''}
-              </p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: activo ? C.gold : C.muted, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>{f.nombre}</p>
+              <p style={{ fontSize: 17, fontWeight: 900, color: C.red }}>{formatCurrency(f.vencida)}</p>
+              <p style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{f.deudores} deudor{f.deudores === 1 ? '' : 'es'}{f.clientes > 0 ? ` de ${f.clientes}` : ''}</p>
             </button>
           )
         })}
       </div>
 
-      {/* ── Filtros ──────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px', marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '16px 20px' }}>
         <div>
-          <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>BUSCAR</label>
+          <label style={{ fontSize: 11, color: C.muted, fontWeight: 700, display: 'block', marginBottom: 6 }}>BUSCAR</label>
           <div style={{ position: 'relative' }}>
-            <Search size={14} color="var(--muted)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+            <Search size={14} color={C.muted} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
             <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="Nombre cliente…" style={{ ...inputStyle, paddingLeft: 30 }} />
           </div>
         </div>
         <div>
-          <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>VENDEDOR</label>
+          <label style={{ fontSize: 11, color: C.muted, fontWeight: 700, display: 'block', marginBottom: 6 }}>VENDEDOR</label>
           <select value={cartera} onChange={e => setCartera(e.target.value)} style={selectStyle}>
             <option value="todos">Todos los vendedores</option>
             {carteras.map(f => <option key={f.vendedor} value={f.vendedor}>{f.vendedor}</option>)}
           </select>
         </div>
         <div>
-          <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>ESTADO</label>
+          <label style={{ fontSize: 11, color: C.muted, fontWeight: 700, display: 'block', marginBottom: 6 }}>ESTADO</label>
           <select value={estado} onChange={e => setEstado(e.target.value as typeof estado)} style={selectStyle}>
             <option value="todos">Todos</option>
             <option value="vencida">Con deuda vencida</option>
@@ -443,25 +387,23 @@ export default function CobranzaClient({ initialDeudores, clientesPorVendedor, m
         </div>
       </div>
 
-      {/* ── Tabla ────────────────────────────────────────────────────────── */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden' }}>
         {filtrados.length === 0 ? (
-          <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-            <Wallet size={28} style={{ color: 'var(--muted)', margin: '0 auto 10px' }} />
-            <p style={{ color: 'var(--muted)', fontSize: 14 }}>
+          <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+            <p style={{ color: C.muted, fontSize: 14 }}>
               {universo.length === 0 ? 'Todavía no hay deudores cargados.' : 'No hay deudores que coincidan con los filtros.'}
             </p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <tr style={{ background: C.bg, borderBottom: `1px solid ${C.line}` }}>
                   {['Cliente', 'Vendedor', 'Deuda Vencida', 'Días Vencida', 'Saldo Total', 'Barriles', 'Último Pago', ''].map(h => (
                     <th key={h} style={{
                       padding: '10px 14px',
                       textAlign: ['Deuda Vencida', 'Saldo Total', 'Barriles', 'Días Vencida'].includes(h) ? 'right' : 'left',
-                      fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap',
+                      fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap',
                     }}>
                       {h}
                     </th>
@@ -476,58 +418,52 @@ export default function CobranzaClient({ initialDeudores, clientesPorVendedor, m
                     <Fragment key={d.id}>
                       <tr
                         onClick={() => { setExpandedRow(abierto ? null : d.id); setCobranza(null) }}
-                        style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', background: abierto ? 'rgba(212,175,55,0.04)' : 'transparent' }}
-                        onMouseEnter={e => { if (!abierto) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)' }}
-                        onMouseLeave={e => { if (!abierto) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                        style={{ borderTop: `1px solid ${C.line}`, cursor: 'pointer', background: abierto ? C.goldSoft : 'transparent' }}
                       >
-                        <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--cream)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {d.nombre_fantasia}
-                        </td>
-                        <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{vendedorCanonico(d.vendedor) || '—'}</td>
-                        <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: d.deuda_comercial > 0 ? '#F87171' : '#4ADE80' }}>
+                        <td style={{ padding: '11px 14px', fontWeight: 700, color: C.text, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.nombre_fantasia}</td>
+                        <td style={{ padding: '11px 14px', color: C.muted }}>{vendedorCanonico(d.vendedor) || '—'}</td>
+                        <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: d.deuda_comercial > 0 ? C.red : C.green }}>
                           {formatCurrency(d.deuda_comercial)}
                           {d.maquila_vencida > 0 && (
-                            <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: 'var(--muted)' }}>
-                              + {formatCurrency(Math.round(d.maquila_vencida))} maquila
-                            </span>
+                            <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: C.muted }}>+ {formatCurrency(Math.round(d.maquila_vencida))} maquila</span>
                           )}
                         </td>
-                        <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap', color: dias >= 60 ? '#F87171' : dias > 0 ? '#FBBF24' : 'var(--muted)' }}>
+                        <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap', color: dias >= 60 ? C.red : dias > 0 ? '#D97706' : C.muted }}>
                           {dias > 0 ? `${dias} días` : '—'}
                         </td>
-                        <td style={{ padding: '11px 14px', textAlign: 'right', color: 'var(--cream)', fontWeight: 600 }}>{formatCurrency(d.saldo_comercial)}</td>
-                        <td style={{ padding: '11px 14px', textAlign: 'right', color: d.barriles_adeudados > 0 ? '#C084FC' : 'var(--muted)', fontWeight: 600 }}>{d.barriles_adeudados}</td>
-                        <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{d.ultimo_pago ? new Date(d.ultimo_pago).toLocaleDateString('es-CL') : '—'}</td>
+                        <td style={{ padding: '11px 14px', textAlign: 'right', color: C.text, fontWeight: 600 }}>{formatCurrency(d.saldo_comercial)}</td>
+                        <td style={{ padding: '11px 14px', textAlign: 'right', color: d.barriles_adeudados > 0 ? C.purple : C.muted, fontWeight: 600 }}>{d.barriles_adeudados}</td>
+                        <td style={{ padding: '11px 14px', color: C.muted }}>{d.ultimo_pago ? new Date(d.ultimo_pago).toLocaleDateString('es-CL') : '—'}</td>
                         <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                          {abierto ? <ChevronDown size={14} style={{ color: 'var(--gold)' }} /> : <ChevronRight size={14} style={{ color: 'var(--muted)' }} />}
+                          {abierto ? <ChevronDown size={14} style={{ color: C.gold }} /> : <ChevronRight size={14} style={{ color: C.muted }} />}
                         </td>
                       </tr>
 
                       {abierto && (
                         <tr key={`${d.id}-detalle`}>
-                          <td colSpan={8} style={{ padding: '20px 24px', background: 'rgba(212,175,55,0.03)', borderBottom: '1px solid var(--border)', borderLeft: '3px solid var(--gold)' }}>
-                            <PanelCobranza cliente={d.nombre_fantasia} tema="oscuro" onDatos={setCobranza} />
+                          <td colSpan={8} style={{ padding: '20px 24px', background: C.goldSoft, borderBottom: `1px solid ${C.line}`, borderLeft: `3px solid ${C.gold}` }}>
+                            <PanelCobranza cliente={d.nombre_fantasia} tema="claro" onDatos={setCobranza} />
 
                             <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
                               <button onClick={e => { e.stopPropagation(); abrirWA(d) }}
                                 style={{ minHeight: 38, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 7,
-                                  background: 'rgba(37,211,102,0.12)', border: '1px solid rgba(37,211,102,0.3)',
-                                  borderRadius: 10, color: '#25D366', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                                  background: 'rgba(37,211,102,0.10)', border: '1px solid rgba(37,211,102,0.35)',
+                                  borderRadius: 10, color: '#128C3E', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
                                 <MessageCircle size={14} /> Cobrar por WhatsApp
                               </button>
                               {d.telefono && (
                                 <a href={`tel:${d.telefono}`} onClick={e => e.stopPropagation()}
                                   style={{ minHeight: 38, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 7,
-                                    background: 'rgba(96,165,250,0.10)', border: '1px solid rgba(96,165,250,0.28)',
-                                    borderRadius: 10, color: '#60A5FA', fontSize: 12.5, fontWeight: 700, textDecoration: 'none' }}>
+                                    background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.3)',
+                                    borderRadius: 10, color: '#2563EB', fontSize: 12.5, fontWeight: 700, textDecoration: 'none' }}>
                                   <Phone size={14} /> Llamar
                                 </a>
                               )}
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 24 }}>
                               <div>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>Contacto</p>
+                                <p style={{ fontSize: 11, fontWeight: 700, color: C.gold, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>Contacto</p>
                                 {[
                                   { label: 'Email', value: d.email },
                                   { label: 'Teléfono', value: d.telefono },
@@ -535,13 +471,13 @@ export default function CobranzaClient({ initialDeudores, clientesPorVendedor, m
                                   { label: 'Razón Social', value: d.razon_social },
                                 ].map(({ label, value }) => (
                                   <div key={label} style={{ marginBottom: 6 }}>
-                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{label}: </span>
-                                    <span style={{ fontSize: 12, color: 'var(--cream)' }}>{value || '—'}</span>
+                                    <span style={{ fontSize: 11, color: C.muted }}>{label}: </span>
+                                    <span style={{ fontSize: 12, color: C.text }}>{value || '—'}</span>
                                   </div>
                                 ))}
                               </div>
                               <div>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>Deuda por Antigüedad</p>
+                                <p style={{ fontSize: 11, fontWeight: 700, color: C.gold, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>Deuda por Antigüedad</p>
                                 {[
                                   { label: '0–14 días', value: d.deuda_menor_14_dias },
                                   { label: '15–29 días', value: d.deuda_entre_15_29_dias },
@@ -551,13 +487,13 @@ export default function CobranzaClient({ initialDeudores, clientesPorVendedor, m
                                   { label: '+90 días', value: d.deuda_mas_90_dias },
                                 ].map(({ label, value }) => (
                                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{label}</span>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: (value || 0) > 0 ? '#F87171' : 'var(--muted)' }}>{formatCurrency(value || 0)}</span>
+                                    <span style={{ fontSize: 12, color: C.muted }}>{label}</span>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: (value || 0) > 0 ? C.red : C.muted }}>{formatCurrency(value || 0)}</span>
                                   </div>
                                 ))}
                               </div>
                               <div>
-                                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>Cuenta</p>
+                                <p style={{ fontSize: 11, fontWeight: 700, color: C.gold, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>Cuenta</p>
                                 {[
                                   { label: 'Tipo Cliente', value: d.tipo_cliente },
                                   { label: 'Límite Cta Cte', value: d.limite_cta_cte ? formatCurrency(d.limite_cta_cte) : null },
@@ -566,8 +502,8 @@ export default function CobranzaClient({ initialDeudores, clientesPorVendedor, m
                                   { label: 'Fecha Alta', value: d.fecha_alta ? new Date(d.fecha_alta).toLocaleDateString('es-CL') : null },
                                 ].map(({ label, value }) => (
                                   <div key={label} style={{ marginBottom: 6 }}>
-                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{label}: </span>
-                                    <span style={{ fontSize: 12, color: 'var(--cream)' }}>{value || '—'}</span>
+                                    <span style={{ fontSize: 11, color: C.muted }}>{label}: </span>
+                                    <span style={{ fontSize: 12, color: C.text }}>{value || '—'}</span>
                                   </div>
                                 ))}
                               </div>
@@ -583,10 +519,7 @@ export default function CobranzaClient({ initialDeudores, clientesPorVendedor, m
           </div>
         )}
       </div>
-
-      <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, textAlign: 'right' }}>
-        Mostrando {filtrados.length} de {universo.length} deudores
-      </p>
+      <p style={{ fontSize: 11, color: C.muted, textAlign: 'right' }}>Mostrando {filtrados.length} de {universo.length} deudores</p>
 
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
     </div>

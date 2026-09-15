@@ -13,6 +13,7 @@ import {
 import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo } from './page'
 import type { ProyeccionCaja, PrecisionCobro, ClienteEnPeriodo } from '@/lib/administracion/finanzas'
 import FlujoCajaDashboard from './FlujoCajaDashboard'
+import DeudaClienteSection, { type DeudorRaw } from './DeudaClienteSection'
 
 interface Props {
   series: SerieFinanzas[]
@@ -27,6 +28,11 @@ interface Props {
   /** Viene del servidor, no de `new Date()` acá: el mismo valor en render de
    *  servidor y de cliente evita un desajuste de hidratación. */
   hoyISO: string
+  /** Deuda actual por cliente — antes vivía en la ruta aparte
+   *  /administracion/cobranza, absorbida dentro de esta pestaña. */
+  deudoresDetalle: DeudorRaw[]
+  clientesPorVendedor: Record<string, number>
+  maquilaPorCliente: Record<string, number>
 }
 
 /**
@@ -170,9 +176,14 @@ function Etiqueta({ children, title }: { children: React.ReactNode; title?: stri
 
 export default function AdministracionClient({
   series, avance, mtd, caja, deuda, precisionCobro, flujo, ultimaCorrida, clientesSinPlazo, hoyISO,
+  deudoresDetalle, clientesPorVendedor, maquilaPorCliente,
 }: Props) {
   const router = useRouter()
-  const [tab, setTab] = useState<'ingresos' | 'flujo' | 'cobranza'>('ingresos')
+  // 'flujo' primero: es la pregunta operativa del día a día ("¿cuándo entra
+  // la plata?"). 'ingresos' (el modelo de facturación) y 'cobranza' (estado
+  // de deuda del ERP) son consulta más puntual. Reordenado sin fusionar
+  // pestañas — decisión del usuario, 15-sep-2026.
+  const [tab, setTab] = useState<'flujo' | 'ingresos' | 'cobranza'>('flujo')
   const [serieId, setSerieId] = useState('general::')
   const [verModelo, setVerModelo] = useState(false)
   const [semanaExpandida, setSemanaExpandida] = useState<string | null>(null)
@@ -273,8 +284,8 @@ export default function AdministracionClient({
         {/* ── Pestañas ─────────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 2, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 4, width: 'fit-content', marginBottom: 24 }}>
           {([
-            ['ingresos', 'Ingresos', TrendingUp],
             ['flujo', 'Flujo de Caja', Wallet],
+            ['ingresos', 'Ingresos', TrendingUp],
             ['cobranza', 'Cobranza y Deuda', Target],
           ] as const).map(([id, label, Icon]) => (
             <button
@@ -773,6 +784,14 @@ export default function AdministracionClient({
                 </div>
               </Card>
             )}
+
+            <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 22, marginTop: 4 }}>
+              <DeudaClienteSection
+                initialDeudores={deudoresDetalle}
+                clientesPorVendedor={clientesPorVendedor}
+                maquilaPorCliente={maquilaPorCliente}
+              />
+            </div>
           </div>
         )}
       </div>
