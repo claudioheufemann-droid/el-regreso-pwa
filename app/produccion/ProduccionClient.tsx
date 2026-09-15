@@ -1368,49 +1368,76 @@ export default function ProduccionClient({
 
   /* ══════════ MOTOR DE PLANIFICACIÓN DE PRODUCCIÓN ══════════
      UN solo cálculo arma todo el plan; el calendario diario, el resumen
-     mensual y los avisos son proyecciones de ESE resultado. Antes cada
-     vista calculaba lo suyo por separado y podían contradecirse: el resumen
-     mensual proponía "2 tanques de 2.000L" mientras el calendario ponía una
-     sola cocción de 4.900L que no cabía en ningún tanque real de la planta.
+     mensual y los avisos son proyecciones de ESE resultado.
 
-     Lo que el motor respeta, en orden:
-       1. DEMANDA del forecast, mes a mes, encadenando el stock que sobra
-          de un mes al siguiente.
-       2. COLCHÓN de stock de seguridad puesto al cierre de cada mes — no
-          alcanza con no llegar a cero.
-       3. TAMAÑO REAL de los fermentadores: una necesidad de 4.900L no es
-          una cocción, son varias, cada una acotada a un tanque que existe.
-          Éste era el hueco de fondo del diseño anterior.
-       4. LÍNEA del tanque: los T sólo cervecería, los K sólo kombuchería.
-       5. OCUPACIÓN en el tiempo: cada cocción toma su tanque el lead time
-          completo, y los tanques que hoy tienen producto recién se liberan
-          en su fecha estimada de embarrilado (dato real del ERP).
-       6. PRIORIDAD para repartir tanques: primero lo que ya tiene alarma de
-          quiebre real, después línea fija, después la fecha en que se
-          necesita.
+     El motor es una SIMULACIÓN DÍA A DÍA del inventario de cada producto a
+     lo largo del horizonte, no un reparto de "cuánto falta este mes". Ese
+     cambio es el que arregla el defecto que se veía en pantalla: cuando el
+     plan se armaba por mes, todas las cocciones caían amontonadas el mismo
+     día (el primero disponible), porque la única fecha que existía era "lo
+     antes posible". Acá cada cocción nace de un evento propio del producto
+     —su stock cayó al punto de reorden— así que se reparten solas en el
+     tiempo, cada una en el día en que de verdad hay que prenderla.
 
-     Se recalcula solo con cada carga de la pantalla: no hay nada que correr
-     a mano cuando el forecast mensual (día 24) actualice los números. */
+     El ciclo que simula, por producto:
+       1. ARRANQUE: la primera cocción va en la fecha que ya propone el Plan
+          Maestro (`fechaLimiteInicio` de la alarma de quiebre: el último día
+          hábil para cocer y todavía llegar). Es el mismo número que el
+          usuario ve en "Alarmas de quiebre de stock" — las dos pantallas no
+          pueden decir fechas distintas para lo mismo.
+       2. LISTO: esa cocción entra a bodega en inicio + lead time y ahí
+          recién suma stock vendible.
+       3. CONSUMO: el stock baja todos los días al ritmo del forecast del mes
+          que corresponda (por eso el plan se reacomoda solo cuando el
+          forecast se recalcula el día 24).
+       4. REORDEN: cuando el inventario proyectado (stock + lo que viene en
+          camino) toca el PUNTO DE REORDEN del producto, se dispara la
+          siguiente cocción. Y así hasta el fin del horizonte.
+
+     Lo que limita al ciclo —y sin esto el calendario sería una lista de
+     deseos, no un plan:
+       • TAMAÑO REAL de los fermentadores: cada cocción se acota a un tanque
+         que existe. Lo que no cabe queda para el siguiente reorden.
+       • LÍNEA del tanque: los T sólo cervecería, los K sólo kombuchería.
+       • OCUPACIÓN en el tiempo: un tanque queda tomado el lead time completo,
+         y los que hoy tienen producto recién se liberan en su fecha estimada
+         de embarrilado (dato real del ERP). Si el día del reorden no hay
+         tanque libre de la línea, la cocción NO se inventa: espera, y esos
+         días de espera quedan registrados (`diasTarde`) — es capacidad
+         faltante, y así se ve.
+       • PRIORIDAD para repartir tanques escasos: primero lo que ya tiene
+         alarma de quiebre real, después línea fija, después orden alfabético
+         para que el resultado sea estable entre cargas.
+
+     "Llega tarde" lo decide la propia simulación: si el stock del producto
+     cruza cero mientras la cocción viene en camino, ese lote se marca como
+     que no alcanzó. No es una comparación contra el borde del mes. */
   const HORIZONTE_MESES_PLAN = 3
 
   const planSugerido = useMemo(() => {
     const hoyISO = hoyLocalISO()
     const sumarDiasCalISO = (desde: string, dias: number) =>
       new Date(Date.parse(`${desde}T00:00:00Z`) + dias * 86400000).toISOString().slice(0, 10)
-    const maxISO = (a: string, b: string) => (a > b ? a : b)
     const diffDias = (a: string, b: string) =>
       Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000)
+    const mesDe = (iso: string) => iso.slice(0, 8) + '01'
 
     interface LoteSugerido {
       id: string; producto: string; categoria: 'cerveza' | 'kombucha'
       litros: number; tanque: string; capacidadTanque: number
       fechaInicio: string; fechaListo: string
-      mes: string; fechaObjetivo: string; diasTarde: number
+      /** Mes en que se COCE (el que agrupa el calendario y el resumen). */
+      mes: string
+      /** Día en que el reorden pidió esta cocción; si no había tanque libre,
+       *  `fechaInicio` es posterior y la diferencia son los `diasTarde`. */
+      fechaObjetivo: string; diasTarde: number
       leadTimeSemanas: number; conAlarma: boolean
       loteNro: number; loteDe: number
-      /** Cuándo se agota lo que hay de ese producto si no llega nada. */
+      /** Cuándo se agota lo que hay si esta cocción no llegara. */
       fechaAgotamiento: string
-      /** El lote queda listo antes de que se acabe el stock. */
+      /** Hasta cuándo alcanza el stock UNA VEZ que entra esta cocción. */
+      cubreHasta: string
+      /** El stock no llegó a cero mientras este lote venía en camino. */
       llegaATiempo: boolean
     }
     interface MesPlan {
@@ -1429,68 +1456,71 @@ export default function ProduccionClient({
     const meses = [...new Set(filasProducto.map(s => s.mes))].sort().slice(0, HORIZONTE_MESES_PLAN)
     if (meses.length === 0 || ocupacionPlanta.tanques.length === 0) return vacio
 
-    /* ── 1. Necesidad por producto y mes, encadenando el stock ────────── */
-    const stockRestante = new Map<string, number>()
-    for (const s of filasProducto) {
-      if (s.mes !== meses[0]) continue
-      stockRestante.set(s.producto, (s.stockActualLitros ?? 0) + s.litrosEnProduccion)
-    }
+    // El horizonte termina al cerrar el último mes proyectado.
+    const [uAnio, uMes] = meses[meses.length - 1].split('-').map(Number)
+    const finISO = new Date(Date.UTC(uAnio, uMes, 1)).toISOString().slice(0, 10)
 
-    /* La fecha de la alarma de quiebre sale del stock FÍSICO agotándose, no
-       del borde del mes del forecast, así que es más precisa. Se usa sólo
-       para ADELANTAR la fecha objetivo, nunca para cambiar los litros: el
-       litraje sale siempre del mismo modelo (forecast encadenado) y no de
-       dos fórmulas distintas que podrían no cuadrar entre sí. */
+    /* La fecha de arranque sale del Plan Maestro (mismo dato que la pantalla
+       de alarmas), no de un cálculo paralelo: si las dos vistas propusieran
+       fechas distintas para la misma cocción, el plan deja de ser creíble. */
     const alarmaPorProducto = new Map<string, string>()
     for (const g of alarmasPorProducto) {
       const f = g.items.map(i => i.fechaLimiteInicio).filter((x): x is string => x != null).sort()[0]
       if (f) alarmaPorProducto.set(g.producto, f)
     }
-    /* Línea fija: sólo se conoce de los productos que hoy tienen alarma (el
-       flag lo calcula el servidor sobre esas filas). Es un desempate de
-       prioridad, así que saber de algunos y no de todos degrada bien. */
     const lineaFijaPorProducto = new Set(sugerenciasPlan.filter(s => s.lineaFija).map(s => s.producto))
 
-    interface Necesidad {
-      producto: string; categoria: 'cerveza' | 'kombucha'; litros: number
-      leadTimeSemanas: number; mes: string; fechaObjetivo: string
-      lineaFija: boolean; conAlarma: boolean
-      /** Cuándo se queda sin producto si no llega nada nuevo — con eso se
-       *  juzga si una cocción llega a tiempo. */
-      fechaAgotamiento: string
+    /* ── 1. Estado inicial de cada producto ───────────────────────────── */
+    interface ParamsMes {
+      mes: string; consumoDiario: number
+      puntoReorden: number; stockSeguridad: number; demandaMensual: number
     }
-    const necesidades: Necesidad[] = []
-    for (const mes of meses) {
-      for (const s of filasProducto) {
-        if (s.mes !== mes) continue
-        const disponible = stockRestante.get(s.producto) ?? 0
-        const aProducir = Math.max(s.demandaMensualProyectada + s.stockSeguridadLitros - disponible, 0)
-        stockRestante.set(s.producto, aProducir > 0 ? s.stockSeguridadLitros : disponible - s.demandaMensualProyectada)
-        if (aProducir < 1) continue
-        // Tiene que estar LISTO antes de que arranque el mes que lo pide.
-        let fechaObjetivo = restarDiasHabilesISO(mes, s.leadTimeSemanas * 5)
-        const fechaAlarma = mes === meses[0] ? alarmaPorProducto.get(s.producto) : undefined
-        if (fechaAlarma && fechaAlarma < fechaObjetivo) fechaObjetivo = fechaAlarma
-
-        /* Cuándo se acaba lo que hay. Sirve para juzgar "llega a tiempo" de
-           una forma que signifique algo: comparar contra el día 1 del mes
-           marcaba TODO en rojo apenas el mes arrancaba (el 14 de septiembre,
-           ninguna cocción puede estar lista "antes del 1 de septiembre"), y
-           un tablero todo rojo no informa nada. Lo que de verdad importa es
-           si el lote llega antes de quedarse sin producto.
-           El consumo se prorratea sobre días corridos del mes; es una
-           aproximación —la venta real es de lunes a viernes— pero acá sólo
-           se usa para ordenar urgencias, no para calcular litros. */
-        const consumoDiario = s.demandaMensualProyectada / 30
-        const desde = mes > hoyISO ? mes : hoyISO
-        const diasDeRunway = consumoDiario > 0 ? Math.floor(disponible / consumoDiario) : 3650
-        necesidades.push({
-          producto: s.producto, categoria: s.categoria, litros: Math.round(aProducir),
-          leadTimeSemanas: s.leadTimeSemanas, mes, fechaObjetivo,
-          lineaFija: lineaFijaPorProducto.has(s.producto), conAlarma: !!fechaAlarma,
-          fechaAgotamiento: sumarDiasCalISO(desde, Math.min(diasDeRunway, 3650)),
-        })
+    interface Estado {
+      producto: string; categoria: 'cerveza' | 'kombucha'
+      leadTimeSemanas: number; leadDias: number
+      lineaFija: boolean; conAlarma: boolean
+      forzarEl: string | null
+      stock: number
+      enCamino: LoteSugerido[]
+      params: ParamsMes[]
+      pendienteDesde: string | null
+      nro: number
+      faltante: number
+    }
+    const estados = new Map<string, Estado>()
+    for (const s of filasProducto) {
+      if (!meses.includes(s.mes)) continue
+      let e = estados.get(s.producto)
+      if (!e) {
+        const alarma = alarmaPorProducto.get(s.producto)
+        e = {
+          producto: s.producto, categoria: s.categoria,
+          leadTimeSemanas: s.leadTimeSemanas, leadDias: Math.round(s.leadTimeSemanas * 7),
+          lineaFija: lineaFijaPorProducto.has(s.producto), conAlarma: !!alarma,
+          // Una alarma vencida (el plazo ya pasó) no se agenda en el pasado:
+          // se cuece hoy, que es lo antes que se puede hacer algo.
+          forzarEl: alarma ? (alarma > hoyISO ? alarma : hoyISO) : null,
+          stock: (s.stockActualLitros ?? 0) + s.litrosEnProduccion,
+          enCamino: [], params: [], pendienteDesde: null, nro: 0, faltante: 0,
+        }
+        estados.set(s.producto, e)
       }
+      e.params.push({
+        mes: s.mes,
+        // El consumo se prorratea sobre días corridos: la venta real es de
+        // lunes a viernes, pero acá sólo define CUÁNDO se gatilla el reorden,
+        // no cuántos litros se cuecen.
+        consumoDiario: s.demandaMensualProyectada / 30,
+        puntoReorden: s.puntoReordenLitros,
+        stockSeguridad: s.stockSeguridadLitros,
+        demandaMensual: s.demandaMensualProyectada,
+      })
+    }
+    for (const e of estados.values()) e.params.sort((a, b) => a.mes.localeCompare(b.mes))
+    const paramsDe = (e: Estado, mes: string): ParamsMes => {
+      let elegido = e.params[0]
+      for (const p of e.params) if (p.mes <= mes) elegido = p
+      return elegido
     }
 
     /* ── 2. Desde cuándo queda libre cada tanque ──────────────────────── */
@@ -1507,95 +1537,134 @@ export default function ProduccionClient({
       }
     }
 
-    /* ── 3. Partir cada necesidad en lotes que quepan en tanques reales ─ */
-    necesidades.sort((a, b) =>
+    /* ── 3. Simulación día a día ──────────────────────────────────────── */
+    const orden = [...estados.values()].sort((a, b) =>
       Number(b.conAlarma) - Number(a.conAlarma) ||
       Number(b.lineaFija) - Number(a.lineaFija) ||
-      a.fechaObjetivo.localeCompare(b.fechaObjetivo)
+      a.producto.localeCompare(b.producto)
     )
-
     const lotes: LoteSugerido[] = []
     const sinTanque: { producto: string; litros: number; motivo: string }[] = []
 
-    for (const n of necesidades) {
-      const flota = ocupacionPlanta.tanques.filter(t => t.categoria === n.categoria)
-      if (flota.length === 0) {
-        sinTanque.push({ producto: n.producto, litros: n.litros, motivo: 'No hay fermentadores cargados para esa línea.' })
-        continue
-      }
-      const objetivo = maxISO(n.fechaObjetivo, hoyISO)
-      const delProducto: LoteSugerido[] = []
-      let restante = n.litros
-      let guardia = 0
+    for (let d = hoyISO; d < finISO; d = sumarDiasCalISO(d, 1)) {
+      const mesHoy = mesDe(d)
+      for (const e of orden) {
+        const p = paramsDe(e, mesHoy)
 
-      while (restante >= 1 && guardia < 30) {
-        guardia++
-        // Dos casos, y la diferencia importa: si algún tanque puede CERRAR
-        // la necesidad de una vez, se usa uno del tamaño adecuado. Si
-        // ninguno alcanza, se llena el más grande disponible y el resto va
-        // a otra cocción.
-        //
-        // El filtro por tamaño (hasta 1,5× el tanque más chico que alcanza)
-        // es a propósito: sin él, el algoritmo agarraba el tanque que se
-        // liberaba ANTES aunque fuera gigante para el lote — llegó a poner
-        // 20 L de Del Caribe Sour en un fermentador de 1.700 L, ocupándolo
-        // cuatro semanas. Ningún jefe de producción haría eso: prefiere
-        // esperar a que se libere uno chico. Con el filtro, "empezar antes"
-        // sólo desempata entre tanques de tamaño razonable para el lote.
-        const queCierran = flota.filter(t => t.capacidadLitros >= restante)
-        let candidatos: typeof flota
-        if (queCierran.length > 0) {
-          const capMinima = Math.min(...queCierran.map(t => t.capacidadLitros))
-          candidatos = queCierran.filter(t => t.capacidadLitros <= capMinima * 1.5)
-        } else {
-          candidatos = flota
+        // a) Llega lo que estaba en camino.
+        const llegan = e.enCamino.filter(l => l.fechaListo === d)
+        if (llegan.length > 0) {
+          for (const l of llegan) e.stock += l.litros
+          e.enCamino = e.enCamino.filter(l => l.fechaListo !== d)
         }
-        let mejor: { tanque: (typeof flota)[number]; inicio: string } | null = null
-        for (const t of candidatos) {
-          const inicio = maxISO(objetivo, libreDesde.get(t.tanque) ?? hoyISO)
-          if (!mejor) { mejor = { tanque: t, inicio }; continue }
-          if (inicio < mejor.inicio) { mejor = { tanque: t, inicio }; continue }
-          if (inicio === mejor.inicio) {
+
+        // b) Se vende el día.
+        e.stock -= p.consumoDiario
+        if (e.stock < 0) {
+          // Quiebre proyectado: lo que venga en camino ya no alcanzó.
+          for (const l of e.enCamino) l.llegaATiempo = false
+        }
+
+        // c) ¿Toca cocer? Dos gatillos: la alarma del Plan Maestro (sólo la
+        //    primera vez) o el punto de reorden del producto.
+        let guardia = 0
+        for (;;) {
+          guardia++
+          if (guardia > 4) break
+          const enCaminoLitros = e.enCamino.reduce((s, l) => s + l.litros, 0)
+          const posicion = e.stock + enCaminoLitros
+          const forzado = e.forzarEl != null && d >= e.forzarEl
+          if (!forzado && posicion > p.puntoReorden) break
+          if (e.nro >= 12) break
+
+          /* Nivel objetivo de reposición: se repone hasta DEJAR EL INVENTARIO
+             POR ENCIMA del punto de reorden, con un mes de venta de holgura.
+             Esto tiene que ser mayor que el punto de reorden sí o sí, y no es
+             un detalle: el punto de reorden ya cubre el lead time + el período
+             de revisión (≈2 meses de venta) más el colchón. Reponer sólo "un
+             mes + colchón" deja el stock POR DEBAJO del reorden apenas entra,
+             así que el modelo vuelve a pedir cocción al día siguiente, y al
+             otro, en pedazos cada vez más chicos. Probado contra los datos
+             reales: con ese nivel salían 71 cocciones, varias de 1 y 2 litros
+             ocupando un fermentador entero. Con éste salen 54 cocciones de
+             tamaño real y cada producto vuelve a cocer cada 3-6 semanas. */
+          let objetivo = Math.max(p.puntoReorden + p.demandaMensual - posicion, 0)
+          // Una cocción disparada por la alarma del Plan Maestro nunca es un
+          // completar de 3 litros: si hay que prender la olla, se cuece al
+          // menos un mes de venta.
+          if (forzado) objetivo = Math.max(objetivo, p.demandaMensual)
+          if (objetivo < 1) break
+
+          const flota = ocupacionPlanta.tanques.filter(t => t.categoria === e.categoria)
+          if (flota.length === 0) {
+            sinTanque.push({ producto: e.producto, litros: Math.round(objetivo), motivo: 'No hay fermentadores cargados para esa línea.' })
+            e.forzarEl = null
+            break
+          }
+          if (e.pendienteDesde == null) e.pendienteDesde = d
+
+          const libres = flota.filter(t => (libreDesde.get(t.tanque) ?? hoyISO) <= d)
+          if (libres.length === 0) break // sin capacidad hoy: se reintenta mañana
+
+          // El filtro por tamaño (hasta 1,5× el tanque más chico que alcanza)
+          // evita el absurdo de ocupar un fermentador de 1.700 L cuatro
+          // semanas para 20 L sólo porque era el que estaba libre.
+          const queCierran = libres.filter(t => t.capacidadLitros >= objetivo)
+          let candidatos = libres
+          if (queCierran.length > 0) {
+            const capMinima = Math.min(...queCierran.map(t => t.capacidadLitros))
+            candidatos = queCierran.filter(t => t.capacidadLitros <= capMinima * 1.5)
+          }
+          const elegido = candidatos.reduce((mejor, t) => {
+            if (!mejor) return t
             // A igual disponibilidad: el más chico si cierra la necesidad,
             // el más grande si sólo puede llenarse.
-            const ganaPorTamano = queCierran.length > 0
-              ? t.capacidadLitros < mejor.tanque.capacidadLitros
-              : t.capacidadLitros > mejor.tanque.capacidadLitros
-            if (ganaPorTamano) mejor = { tanque: t, inicio }
+            return queCierran.length > 0
+              ? (t.capacidadLitros < mejor.capacidadLitros ? t : mejor)
+              : (t.capacidadLitros > mejor.capacidadLitros ? t : mejor)
+          }, candidatos[0])
+
+          const litros = Math.round(Math.min(objetivo, elegido.capacidadLitros))
+          const fechaListo = sumarDiasCalISO(d, e.leadDias)
+          const objetivoFecha = e.pendienteDesde ?? d
+          const consumo = p.consumoDiario
+          e.nro++
+          const lote: LoteSugerido = {
+            id: `${e.producto}|${d}|${e.nro}`,
+            producto: e.producto, categoria: e.categoria,
+            litros, tanque: elegido.tanque, capacidadTanque: elegido.capacidadLitros,
+            fechaInicio: d, fechaListo, mes: mesHoy,
+            fechaObjetivo: objetivoFecha, diasTarde: Math.max(0, diffDias(d, objetivoFecha)),
+            leadTimeSemanas: e.leadTimeSemanas, conAlarma: e.conAlarma,
+            loteNro: e.nro, loteDe: 0,
+            fechaAgotamiento: sumarDiasCalISO(d, consumo > 0 ? Math.max(0, Math.floor(posicion / consumo)) : 3650),
+            cubreHasta: sumarDiasCalISO(fechaListo, consumo > 0 ? Math.max(0, Math.floor((posicion + litros) / consumo)) : 3650),
+            llegaATiempo: true,
           }
+          lotes.push(lote)
+          e.enCamino.push(lote)
+          libreDesde.set(elegido.tanque, fechaListo)
+          e.forzarEl = null
+          e.pendienteDesde = null
         }
-        if (!mejor) break
-
-        const litrosLote = Math.min(restante, mejor.tanque.capacidadLitros)
-        const fechaListo = sumarDiasCalISO(mejor.inicio, n.leadTimeSemanas * 7)
-        delProducto.push({
-          id: n.producto + '|' + n.mes + '|' + delProducto.length,
-          producto: n.producto, categoria: n.categoria,
-          litros: Math.round(litrosLote), tanque: mejor.tanque.tanque,
-          capacidadTanque: mejor.tanque.capacidadLitros,
-          fechaInicio: mejor.inicio, fechaListo,
-          mes: n.mes, fechaObjetivo: n.fechaObjetivo,
-          diasTarde: Math.max(0, diffDias(mejor.inicio, n.fechaObjetivo)),
-          leadTimeSemanas: n.leadTimeSemanas, conAlarma: n.conAlarma,
-          loteNro: delProducto.length + 1, loteDe: 0,
-          fechaAgotamiento: n.fechaAgotamiento,
-          // Sólo el PRIMER lote de una necesidad tiene que llegar antes del
-          // quiebre: los siguientes reponen sobre lo que ya entró.
-          llegaATiempo: delProducto.length > 0 || fechaListo <= n.fechaAgotamiento,
-        })
-        libreDesde.set(mejor.tanque.tanque, fechaListo)
-        restante -= litrosLote
       }
-
-      if (restante >= 1) {
-        sinTanque.push({
-          producto: n.producto, litros: Math.round(restante),
-          motivo: 'No alcanzaron los tanques de la línea para cubrir todo el volumen.',
-        })
-      }
-      for (const l of delProducto) l.loteDe = delProducto.length
-      lotes.push(...delProducto)
     }
+
+    // Lo que quedó pedido y nunca encontró tanque dentro del horizonte.
+    for (const e of orden) {
+      if (e.pendienteDesde == null) continue
+      const p = paramsDe(e, mesDe(finISO))
+      const falta = Math.max(p.demandaMensual + p.stockSeguridad - (e.stock + e.enCamino.reduce((s, l) => s + l.litros, 0)), 0)
+      if (falta < 1) continue
+      sinTanque.push({
+        producto: e.producto, litros: Math.round(falta),
+        motivo: 'Pidió cocción pero no hubo ningún fermentador libre de su línea dentro del horizonte.',
+      })
+    }
+
+    const totalPorProducto = new Map<string, number>()
+    for (const l of lotes) totalPorProducto.set(l.producto, (totalPorProducto.get(l.producto) ?? 0) + 1)
+    for (const l of lotes) l.loteDe = totalPorProducto.get(l.producto) ?? 1
     lotes.sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio) || a.producto.localeCompare(b.producto))
 
     /* ── 4. Resumen mensual, derivado del plan real (no un cálculo aparte) */
@@ -1603,8 +1672,6 @@ export default function ProduccionClient({
       const delMes = lotes.filter(l => l.mes === mes)
       const cerveza = delMes.filter(l => l.categoria === 'cerveza')
       const kombucha = delMes.filter(l => l.categoria === 'kombucha')
-      // "Tarde" de verdad: el lote no llega a estar LISTO antes de que
-      // arranque el mes que tenía que cubrir.
       const lotesTarde = delMes.filter(l => !l.llegaATiempo).length
       return {
         mes, etiqueta: etiquetaMes(mes),
@@ -3029,10 +3096,10 @@ export default function ProduccionClient({
                     </span>
                   </div>
                   <p className="mb-4 text-sm text-gray-500">
-                    Demanda del forecast + colchón de stock de seguridad, menos lo que ya hay en bodega y fermentando
-                    (encadenado mes a mes). El volumen se parte en cocciones del tamaño de los tanques que existen de
-                    verdad, cada una con su fermentador asignado y su fecha — el detalle día por día está en el
-                    calendario de abajo.
+                    Simulación día a día del inventario de cada producto: el stock baja al ritmo del forecast y se
+                    programa una cocción cada vez que toca su punto de reorden, arrancando por la fecha que ya propone
+                    el Plan Maestro. Cada cocción se acota al tamaño de un tanque que existe de verdad, con su
+                    fermentador asignado — el detalle día por día está en el calendario de abajo.
                   </p>
 
                   {planSugerido.sinTanque.length > 0 && (
@@ -3069,7 +3136,7 @@ export default function ProduccionClient({
                                 f.severidad === 'critico' ? 'bg-red-500' : f.severidad === 'ajustado' ? 'bg-amber-500' : 'bg-emerald-500'
                               }`}
                               title={
-                                f.severidad === 'critico' ? 'Hay cocciones que no llegan a estar listas antes de que arranque el mes que tenían que cubrir.'
+                                f.severidad === 'critico' ? 'Hay cocciones que no alcanzan a estar listas antes de que el producto se agote.'
                                   : f.severidad === 'ajustado' ? 'Alguna cocción tuvo que correrse de su fecha ideal por falta de tanque libre.'
                                   : 'Todo entra en fecha con los tanques disponibles.'
                               }
@@ -3098,7 +3165,7 @@ export default function ProduccionClient({
 
                           {f.lotesTarde > 0 ? (
                             <p className="mt-2.5 border-t border-gray-200/70 pt-2 text-[11px] font-bold text-red-600">
-                              {f.lotesTarde} {f.lotesTarde === 1 ? 'cocción no llega' : 'cocciones no llegan'} antes de que arranque el mes.
+                              {f.lotesTarde} {f.lotesTarde === 1 ? 'cocción no llega' : 'cocciones no llegan'} antes de que se agote el producto.
                             </p>
                           ) : f.lotesCerveza + f.lotesKombucha === 0 ? (
                             <p className="mt-2.5 border-t border-gray-200/70 pt-2 text-[11px] text-emerald-600">
@@ -3176,11 +3243,11 @@ export default function ProduccionClient({
                         <span className={`absolute right-2 top-1.5 text-xs font-medium ${esHoy ? 'font-bold text-[#0F3D2E]' : 'text-gray-400'}`}>{dia.dia}</span>
                         <div className="mt-4 flex flex-col gap-1">
                           {dia.lotes.map(l => {
-                            // "No llega" = el producto se acaba antes de que esta
-                            // cocción esté lista. Se mide contra el agotamiento
-                            // real del stock, no contra el día 1 del mes: con el
-                            // borde del mes, TODO salía rojo apenas el mes
-                            // arrancaba y el tablero dejaba de informar.
+                            // "No llega" lo decide la propia simulación: el stock
+                            // proyectado del producto cruzó cero mientras esta
+                            // cocción venía en camino. No es una comparación
+                            // contra el borde del mes (con eso TODO salía rojo
+                            // apenas el mes arrancaba y el tablero no informaba).
                             const noLlega = !l.llegaATiempo
                             return (
                             <div key={l.id} className="group/chip relative">
@@ -3216,8 +3283,9 @@ export default function ProduccionClient({
                                   <strong>{new Date(l.fechaListo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
                                 </p>
                                 <p>
-                                  <span className="text-gray-400">Cubre:</span>{' '}
-                                  <strong className="capitalize">{etiquetaMes(l.mes)}</strong>
+                                  <span className="text-gray-400">Alcanza hasta:</span>{' '}
+                                  <strong>{new Date(l.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
+                                  <span className="text-gray-400"> (ahí toca cocer de nuevo)</span>
                                 </p>
                                 {l.conAlarma && (
                                   <p className="mt-1.5 text-amber-300">Este producto ya tiene alarma de quiebre activa.</p>
@@ -3251,14 +3319,16 @@ export default function ProduccionClient({
                   </div>
                   <p className="mt-3 text-xs text-gray-400">
                     Cada tarjeta es una cocción concreta: un volumen que cabe en un tanque que existe, con ese tanque
-                    ya asignado y su fecha. El volumen que pide el forecast se parte en varias cocciones cuando no
-                    entra en un solo fermentador, y cada tanque queda tomado el lead time completo antes de poder
-                    reutilizarse. Pasá el cursor para ver litros, tanque, cuándo queda listo y qué mes cubre.
-                    Borde punteado = sugerencia sin confirmar; <Beaker size={9} className="inline text-purple-600" /> = se
-                    corrió de su fecha ideal por falta de tanque libre, pero llega igual; borde rojo = no llega antes
-                    de que arranque el mes que tenía que cubrir. El lead time es por línea (4 semanas cerveza / 3
-                    kombucha), no por estilo puntual — todavía no hay ese dato cargado por receta. Se recalcula solo
-                    con cada carga de la pantalla. Confirmalas desde las tarjetas de abajo o desde Plan Maestro.
+                    ya asignado y su fecha. La primera cocción de cada producto va en la fecha que propone el Plan
+                    Maestro; de ahí en adelante se simula el consumo del forecast día a día y la siguiente se agenda
+                    cuando el stock proyectado toca el punto de reorden — por eso las cocciones de un mismo producto
+                    se reparten en el tiempo en vez de amontonarse. Cada tanque queda tomado el lead time completo
+                    antes de poder reutilizarse. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta
+                    cuándo alcanza. Borde punteado = sugerencia sin confirmar; <Beaker size={9} className="inline text-purple-600" /> = se
+                    corrió de su fecha ideal porque no había tanque libre de su línea, pero llega igual; borde rojo =
+                    el stock se agota antes de que esta cocción esté lista. El lead time es por línea (4 semanas
+                    cerveza / 3 kombucha), no por estilo puntual — todavía no hay ese dato cargado por receta. Se
+                    recalcula solo con cada carga de la pantalla. Confirmalas desde las tarjetas de abajo o desde Plan Maestro.
                   </p>
                 </div>
               </div>
