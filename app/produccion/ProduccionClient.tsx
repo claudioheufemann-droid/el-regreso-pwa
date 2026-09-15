@@ -1414,6 +1414,19 @@ export default function ProduccionClient({
      que no alcanzó. No es una comparación contra el borde del mes. */
   const HORIZONTE_MESES_PLAN = 3
 
+  /** Cocciones que el usuario movió a mano arrastrándolas en el calendario:
+   *  `producto|Nº de cocción` → fecha pedida. La clave NO es el id del lote
+   *  porque al mover una cocción se vuelve a simular todo lo que viene
+   *  detrás y los ids se regeneran; "la 2ª cocción de Mocho English" sí
+   *  sobrevive a esa regeneración. */
+  const [anclasCoccion, setAnclasCoccion] = useState<Map<string, string>>(new Map())
+  const [arrastrando, setArrastrando] = useState<string | null>(null)
+
+  const anclarCoccion = (producto: string, nro: number, fechaISO: string) => {
+    setAnclasCoccion(prev => new Map(prev).set(`${producto}|${nro}`, fechaISO))
+  }
+  const limpiarAnclas = () => setAnclasCoccion(new Map())
+
   /** Cocciones que la sala puede sacar en un día POR LÍNEA (cervecería y
    *  kombuchería son procesos separados, así que el tope es por cada una).
    *
@@ -1455,6 +1468,9 @@ export default function ProduccionClient({
       /** true = NO es una sugerencia: ya está fermentando en el tanque. Se
        *  muestra en el calendario el día que sale, no el día que entró. */
       enCurso: boolean
+      /** true si esta cocción está anclada a una fecha que el usuario eligió
+       *  arrastrándola en el calendario, en vez de a su punto de reorden. */
+      movidoManual: boolean
     }
     interface MesPlan {
       mes: string; etiqueta: string
@@ -1583,7 +1599,7 @@ export default function ProduccionClient({
           leadTimeSemanas: e.leadTimeSemanas, conAlarma: e.conAlarma,
           loteNro: 0, loteDe: 0,
           fechaAgotamiento: sale, cubreHasta: sale,
-          llegaATiempo: true, enCurso: true,
+          llegaATiempo: true, enCurso: true, movidoManual: false,
         }
         e.enCamino.push(lote)
         lotes.push(lote)
@@ -1612,7 +1628,7 @@ export default function ProduccionClient({
         fechaObjetivo: sale, diasTarde: 0,
         leadTimeSemanas: e.leadTimeSemanas, conAlarma: e.conAlarma,
         loteNro: 0, loteDe: 0, fechaAgotamiento: sale, cubreHasta: sale,
-        llegaATiempo: true, enCurso: true,
+        llegaATiempo: true, enCurso: true, movidoManual: false,
       })
     }
 
@@ -1671,7 +1687,26 @@ export default function ProduccionClient({
            detrás, y el calendario mostraba un solo estilo. */
         const enCaminoLitros = e.enCamino.reduce((s, l) => s + l.litros, 0)
         const posicion = e.stock + enCaminoLitros
-        const forzado = e.forzarEl != null && d >= e.forzarEl
+
+        /* ANCLA MANUAL: la fecha que el usuario le puso arrastrando la
+           cocción en el calendario. Se identifica por producto + número de
+           cocción (la 1ª, la 2ª…) y no por el id del lote, a propósito: al
+           mover una cocción se vuelve a simular TODO lo que viene después, y
+           los ids se regeneran. "La 2ª cocción de Mocho English" sobrevive a
+           esa regeneración; un id no.
+
+           Manda en los dos sentidos, que es lo que hace útil arrastrar:
+             · hacia adelante — no se cuece aunque el stock ya haya tocado el
+               punto de reorden, porque el usuario la corrió;
+             · hacia atrás — se cuece aunque todavía sobre stock.
+           Lo que el ancla NO puede saltarse es la planta: si ese día no hay
+           tanque libre de su línea, no hay cupo de sala o es feriado, la
+           cocción cae en el primer día que sí se pueda y la diferencia queda
+           registrada como `diasTarde` contra la fecha pedida. */
+        const ancla = anclasCoccion.get(`${e.producto}|${e.nro + 1}`)
+        if (ancla && d < ancla) continue
+        const anclado = ancla != null
+        const forzado = anclado || (e.forzarEl != null && d >= e.forzarEl)
         if (!forzado && posicion > p.puntoReorden) continue
         if (e.nro >= 12) continue
         // La sala de cocción tiene un tope diario, y no se cuece sábado,
@@ -1705,7 +1740,7 @@ export default function ProduccionClient({
           e.forzarEl = null
           continue
         }
-        if (e.pendienteDesde == null) e.pendienteDesde = d
+        if (e.pendienteDesde == null) e.pendienteDesde = anclado && ancla ? ancla : d
 
         const libres = flota.filter(t => (libreDesde.get(t.tanque) ?? hoyISO) <= d)
         if (libres.length === 0) continue // sin capacidad hoy: se reintenta mañana
@@ -1756,7 +1791,7 @@ export default function ProduccionClient({
           loteNro: e.nro, loteDe: 0,
           fechaAgotamiento: sumarDiasCalISO(d, consumo > 0 ? Math.max(0, Math.floor(posicion / consumo)) : 3650),
           cubreHasta: sumarDiasCalISO(fechaListo, consumo > 0 ? Math.max(0, Math.floor((posicion + litros) / consumo)) : 3650),
-          llegaATiempo: true, enCurso: false,
+          llegaATiempo: true, enCurso: false, movidoManual: anclado,
         }
         lotes.push(lote)
         e.enCamino.push(lote)
@@ -1806,7 +1841,7 @@ export default function ProduccionClient({
     })
 
     return { lotes, porMes, sinTanque }
-  }, [stockSeguridad, alarmasPorProducto, sugerenciasPlan, splitFermentadores, ocupacionPlanta.tanques])
+  }, [stockSeguridad, alarmasPorProducto, sugerenciasPlan, splitFermentadores, ocupacionPlanta.tanques, anclasCoccion])
 
   /** Mes que muestra el calendario diario — 0 = mes actual, navegable con
    *  las flechas. Sólo cambia qué página del plan ya calculado se mira; el
@@ -1892,6 +1927,36 @@ export default function ProduccionClient({
       if (siguiente.has(id)) siguiente.delete(id); else siguiente.add(id)
       return siguiente
     })
+  }
+
+  /** Redondea un desglose por mes de forma que la suma dé EXACTAMENTE el
+   *  total. Redondear cada mes por su cuenta deja un descuadre de unos pesos
+   *  (el total se redondea una vez por insumo y el desglose una vez por
+   *  insumo y mes), y un presupuesto cuyos meses no suman el total se lee
+   *  como roto aunque la diferencia sea $87 sobre $16 millones. Método del
+   *  resto mayor: se redondea hacia abajo y los pesos que sobran van a los
+   *  meses con el decimal más grande. */
+  function repartirExacto(entradas: [string, number][], total: number) {
+    if (entradas.length === 0) return []
+    /* Primero se escalan los meses para que su suma sea el total. Hace falta
+       porque las dos cifras se calculan por caminos distintos: el total sale
+       de redondear `precio × a-comprar` UNA vez por insumo, y el desglose de
+       repartir cantidades sin redondear entre las cocciones. Sobre $16
+       millones la diferencia era de $87 — invisible en plata, pero deja el
+       desglose sin cuadrar con su propio total. */
+    const sumaCruda = entradas.reduce((s, [, v]) => s + v, 0)
+    const factor = sumaCruda > 0 ? total / sumaCruda : 0
+    const piso = entradas.map(([mes, v]) => {
+      const ajustado = v * factor
+      return { mes, costo: Math.floor(ajustado), resto: ajustado - Math.floor(ajustado) }
+    })
+    let sobran = total - piso.reduce((s, p) => s + p.costo, 0)
+    for (const p of [...piso].sort((a, b) => b.resto - a.resto)) {
+      if (sobran <= 0) break
+      p.costo++
+      sobran--
+    }
+    return piso.map(({ mes, costo }) => ({ mes, costo }))
   }
 
   const presupuesto = useMemo(() => {
@@ -2008,13 +2073,30 @@ export default function ProduccionClient({
       }
     }).sort((a, b) => (b.costoAComprar ?? 0) - (a.costoAComprar ?? 0) || a.insumo.localeCompare(b.insumo))
 
+    /* Desembolso por mes: se reparte COCCIÓN POR COCCIÓN, no se carga entero
+       al mes de la compra más temprana. La diferencia no es cosmética: un
+       insumo que usan cocciones de septiembre, octubre y noviembre tiene una
+       sola `fechaCompra` (la más temprana, que es cuando hay que emitir la
+       primera orden), y cargarle todo el costo a ese mes metía el presupuesto
+       entero en el primer mes del horizonte. Con el reparto, cada mes muestra
+       lo que de verdad hay que desembolsar.
+
+       El stock de bodega se asigna a las cocciones MÁS TEMPRANAS primero
+       (FIFO): lo que ya está en la estantería se consume en la próxima
+       cocción, no se reserva para diciembre. Por construcción la suma de los
+       meses da exactamente el mismo total que la línea agregada. */
     const porMes = new Map<string, number>()
     for (const l of lineas) {
-      if (l.costoAComprar == null) continue
-      // El gasto cae en el mes en que hay que EMITIR la orden, que es lo que
-      // se presupuesta: la plata sale antes que la cocción.
-      const mes = l.fechaCompra.slice(0, 7)
-      porMes.set(mes, (porMes.get(mes) ?? 0) + l.costoAComprar)
+      if (l.precioUnitario == null) continue
+      let cubiertoPorBodega = l.disponible ?? 0
+      for (const d of l.detalle) {
+        const desdeBodega = Math.min(cubiertoPorBodega, d.cantidad)
+        cubiertoPorBodega -= desdeBodega
+        const aComprarAcá = d.cantidad - desdeBodega
+        if (aComprarAcá <= 0) continue
+        const mes = d.fechaCompra.slice(0, 7)
+        porMes.set(mes, (porMes.get(mes) ?? 0) + l.precioUnitario * aComprarAcá)
+      }
     }
 
     return {
@@ -2024,7 +2106,7 @@ export default function ProduccionClient({
           insumos: g.insumos.map(i => ({ ...i, cantidad: Math.round(i.cantidad), costo: i.costo != null ? Math.round(i.costo) : null }))
             .sort((a, b) => (b.costo ?? 0) - (a.costo ?? 0)) }))
         .sort((a, b) => (b.costo ?? 0) - (a.costo ?? 0)),
-      porMesCompra: [...porMes.entries()].sort().map(([mes, costo]) => ({ mes, costo })),
+      porMesCompra: repartirExacto([...porMes.entries()].sort(), lineas.reduce((s, l) => s + (l.costoAComprar ?? 0), 0)),
       total: lineas.reduce((s, l) => s + (l.costoAComprar ?? 0), 0),
       totalBruto: lineas.reduce((s, l) => s + (l.costo ?? 0), 0),
       cocciones: seleccionados.length,
@@ -3601,6 +3683,20 @@ export default function ProduccionClient({
                     <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
                       Sin confirmar
                     </span>
+                    {/* Los ajustes manuales viven sólo en esta sesión: no se
+                        guardan en base. Hay que poder devolver el plan al
+                        original sin recargar la página. */}
+                    {anclasCoccion.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={limpiarAnclas}
+                        className="prod-press flex items-center gap-1 rounded-full border border-[#C9A227] bg-[#C9A227]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#7a6216] hover:bg-[#C9A227]/20"
+                        title="Volver al plan que propone el modelo"
+                      >
+                        <X size={11} />
+                        {anclasCoccion.size} {anclasCoccion.size === 1 ? 'cocción movida' : 'cocciones movidas'} — deshacer
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -3645,8 +3741,23 @@ export default function ProduccionClient({
                       return (
                       <div
                         key={dia.dia}
+                        onDragOver={ev => { if (arrastrando && fechaDiaISO >= calendarioCobertura.hoyISO) ev.preventDefault() }}
+                        onDrop={ev => {
+                          ev.preventDefault()
+                          // El id que viaja es `producto|Nº de cocción`, no el
+                          // id del lote: al soltar se re-simula todo y los
+                          // ids cambian (ver el comentario en el motor).
+                          const carga = ev.dataTransfer.getData('text/plain') || arrastrando
+                          setArrastrando(null)
+                          if (!carga || fechaDiaISO < calendarioCobertura.hoyISO) return
+                          const corte = carga.lastIndexOf('|')
+                          if (corte < 0) return
+                          anclarCoccion(carga.slice(0, corte), Number(carga.slice(corte + 1)), fechaDiaISO)
+                        }}
                         className={`prod-hover-card relative flex min-h-[80px] flex-col gap-1 rounded-md border p-1.5 ${
-                          esHoy ? 'border-[#0F3D2E] bg-[#0F3D2E]/5' : 'border-gray-100 bg-gray-50/30'
+                          arrastrando && fechaDiaISO >= calendarioCobertura.hoyISO
+                            ? 'border-dashed border-[#C9A227] bg-[#C9A227]/5'
+                            : esHoy ? 'border-[#0F3D2E] bg-[#0F3D2E]/5' : 'border-gray-100 bg-gray-50/30'
                         }`}
                       >
                         <span className={`absolute right-2 top-1.5 text-xs font-medium ${esHoy ? 'font-bold text-[#0F3D2E]' : 'text-gray-400'}`}>{dia.dia}</span>
@@ -3664,14 +3775,23 @@ export default function ProduccionClient({
                             <div key={l.id} className="group/chip relative">
                               <button
                                 type="button"
+                                draggable={!l.enCurso}
+                                onDragStart={ev => {
+                                  ev.dataTransfer.setData('text/plain', `${l.producto}|${l.loteNro}`)
+                                  ev.dataTransfer.effectAllowed = 'move'
+                                  setArrastrando(`${l.producto}|${l.loteNro}`)
+                                }}
+                                onDragEnd={() => setArrastrando(null)}
                                 onClick={() => { if (!l.enCurso) alternarLote(l.id) }}
                                 disabled={l.enCurso}
-                                title={l.enCurso ? undefined : (marcado ? 'Quitar del presupuesto' : 'Incluir en el presupuesto')}
+                                title={l.enCurso ? undefined : (marcado ? 'Quitar del presupuesto' : 'Incluir en el presupuesto') + ' · arrastrala a otro día para moverla'}
                                 className={`prod-press flex w-full items-center gap-0.5 truncate rounded-sm border py-1 pl-1.5 pr-1 text-left text-[10px] font-bold ${
                                   l.enCurso ? 'cursor-default' : 'cursor-pointer'
-                                } ${
+                                } ${arrastrando === `${l.producto}|${l.loteNro}` ? 'opacity-30' : ''} ${
                                   l.enCurso
                                     ? 'border-sky-500 bg-sky-500/10 text-sky-800'
+                                    : l.movidoManual && marcado
+                                      ? 'border-[1.5px] border-[#C9A227] bg-[#C9A227]/10 text-[#7a6216]'
                                     : !marcado
                                       ? 'border-gray-300 bg-white text-gray-400 opacity-60'
                                       : noLlega
@@ -3683,7 +3803,9 @@ export default function ProduccionClient({
                               >
                                 {l.enCurso
                                   ? <Beaker size={9} className="shrink-0 text-sky-600" />
-                                  : l.diasTarde > 0 && !noLlega && <Beaker size={9} className="shrink-0 text-purple-600" />}
+                                  : l.movidoManual
+                                    ? <ArrowDown size={9} className="shrink-0 -rotate-90 text-[#C9A227]" />
+                                    : l.diasTarde > 0 && !noLlega && <Beaker size={9} className="shrink-0 text-purple-600" />}
                                 <span className="truncate">{l.producto}</span>
                               </button>
                               {/* Detalle al pasar el cursor: cuánto, en qué tanque,
@@ -3737,9 +3859,17 @@ export default function ProduccionClient({
                                     el tanque no estaba libre antes — igual llega a tiempo.
                                   </p>
                                 )}
+                                {l.movidoManual && (
+                                  <p className="mt-1.5 font-bold text-[#E6C34A]">
+                                    Movida a mano a esta fecha.
+                                    {l.diasTarde > 0 && ` Se pidió para el ${new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} pero no había tanque libre de su línea hasta acá.`}
+                                    {' '}Las cocciones siguientes de este producto se recalcularon con el forecast.
+                                  </p>
+                                )}
                                 {!l.enCurso && (
                                   <p className="mt-1.5 border-t border-white/15 pt-1.5 text-[10px] text-gray-400">
                                     {marcado ? 'Incluida en el presupuesto — clic para sacarla.' : 'Fuera del presupuesto — clic para incluirla.'}
+                                    {' '}Arrastrala a otro día para moverla.
                                   </p>
                                 )}
                                 <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 bg-gray-900" />
@@ -3766,7 +3896,12 @@ export default function ProduccionClient({
                     elige para cocer lo menos veces posible, que es lo que baja la merma: si un fermentador libre cierra
                     todo el volumen se usa el más chico que lo cierre —misma merma, y los grandes quedan libres para
                     quien los necesita—; si ninguno alcanza se llena el más grande disponible y el resto va a la cocción
-                    siguiente. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; borde azul lleno = <strong>ya está fermentando</strong> (no hay que
+                    siguiente. <strong>Arrastrá una cocción a otro día para moverla</strong>: el plan se vuelve a simular completo
+                    desde ahí, así que las cocciones siguientes de ese producto se recalculan con el forecast (si la
+                    adelantás, la que viene se corre; si la atrasás, se acerca) y el presupuesto de abajo se ajusta con
+                    sus nuevas fechas de compra. Una cocción movida no puede saltarse la planta: si ese día no hay
+                    tanque libre de su línea, no hay cupo de sala o es feriado, cae en el primer día que sí se pueda y
+                    el tooltip lo dice. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; borde azul lleno = <strong>ya está fermentando</strong> (no hay que
                     cocerla: se muestra el día que sale del tanque, que es cuando entra a bodega y se libera el
                     fermentador); <Beaker size={9} className="inline text-purple-600" /> = se corrió de su fecha ideal
                     porque no había tanque libre de su línea, pero llega igual; borde rojo = el stock se agota antes de
