@@ -8,9 +8,10 @@ import {
 } from 'recharts'
 import {
   TrendingUp, Wallet, AlertTriangle, Info, CalendarClock, Truck, HelpCircle, ChevronLeft, ChevronDown,
-  ChevronRight, Target, UserX,
+  ChevronRight, Target, UserX, Sparkles,
 } from 'lucide-react'
-import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo } from './page'
+import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo, ForecastCliente } from './page'
+import { lunesDe } from '@/lib/administracion/finanzas'
 import type { ProyeccionCaja, PrecisionCobro, ClienteEnPeriodo } from '@/lib/administracion/finanzas'
 import FlujoCajaDashboard from './FlujoCajaDashboard'
 import DeudaClienteSection, { type DeudorRaw } from './DeudaClienteSection'
@@ -33,6 +34,9 @@ interface Props {
   deudoresDetalle: DeudorRaw[]
   clientesPorVendedor: Record<string, number>
   maquilaPorCliente: Record<string, number>
+  /** Forecast individual por cliente (Prophet, mismo ciclo mensual que
+   *  Ingresos, repartido a semanas) — hoy sólo Cliente PDV. */
+  forecastClientes: ForecastCliente[]
 }
 
 /**
@@ -176,14 +180,15 @@ function Etiqueta({ children, title }: { children: React.ReactNode; title?: stri
 
 export default function AdministracionClient({
   series, avance, mtd, caja, deuda, precisionCobro, flujo, ultimaCorrida, clientesSinPlazo, hoyISO,
-  deudoresDetalle, clientesPorVendedor, maquilaPorCliente,
+  deudoresDetalle, clientesPorVendedor, maquilaPorCliente, forecastClientes,
 }: Props) {
   const router = useRouter()
   // 'flujo' primero: es la pregunta operativa del día a día ("¿cuándo entra
   // la plata?"). 'ingresos' (el modelo de facturación) y 'cobranza' (estado
   // de deuda del ERP) son consulta más puntual. Reordenado sin fusionar
   // pestañas — decisión del usuario, 15-sep-2026.
-  const [tab, setTab] = useState<'flujo' | 'ingresos' | 'cobranza'>('flujo')
+  const [tab, setTab] = useState<'flujo' | 'ingresos' | 'cobranza' | 'forecast'>('flujo')
+  const [clienteForecast, setClienteForecast] = useState(forecastClientes[0]?.nombre ?? null)
   const [serieId, setSerieId] = useState('general::')
   const [verModelo, setVerModelo] = useState(false)
   const [semanaExpandida, setSemanaExpandida] = useState<string | null>(null)
@@ -287,6 +292,7 @@ export default function AdministracionClient({
             ['flujo', 'Flujo de Caja', Wallet],
             ['ingresos', 'Ingresos', TrendingUp],
             ['cobranza', 'Cobranza y Deuda', Target],
+            ['forecast', 'Forecast', Sparkles],
           ] as const).map(([id, label, Icon]) => (
             <button
               key={id}
@@ -395,7 +401,7 @@ export default function AdministracionClient({
               <Card>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 16 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {series.map(s => (
+                    {series.filter(s => s.nivel !== 'cliente').map(s => (
                       <button
                         key={s.id}
                         onClick={() => setSerieId(s.id)}
@@ -792,6 +798,150 @@ export default function AdministracionClient({
                 maquilaPorCliente={maquilaPorCliente}
               />
             </div>
+          </div>
+        )}
+
+        {/* ══════════════ FORECAST POR CLIENTE ══════════════ */}
+        {tab === 'forecast' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {forecastClientes.length === 0 ? (
+              <CardAlerta>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <Sparkles size={17} style={{ color: C.amber, flexShrink: 0, marginTop: 1 }} />
+                  <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>
+                    Todavía no hay ningún cliente configurado para forecast individual.
+                  </p>
+                </div>
+              </CardAlerta>
+            ) : (() => {
+              const fc = forecastClientes.find(f => f.nombre === clienteForecast) ?? forecastClientes[0]
+              const tieneModelo = fc.semanas.some(s => s.proyectado != null)
+              const datosChart = fc.semanas.map(s => ({
+                semana: `S${semanaISO(s.inicio)}`,
+                rango: fRangoSemana(s.inicio),
+                real: s.real,
+                proyectado: s.proyectado,
+                proyectadoMin: s.proyectadoMin,
+                proyectadoMax: s.proyectadoMax,
+              }))
+              return (
+                <Fragment key={fc.nombre}>
+                  {forecastClientes.length > 1 && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {forecastClientes.map(f => (
+                        <button
+                          key={f.nombre}
+                          onClick={() => setClienteForecast(f.nombre)}
+                          style={{
+                            padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+                            border: `1px solid ${fc.nombre === f.nombre ? C.blue : C.line}`,
+                            background: fc.nombre === f.nombre ? C.blueSoft : 'transparent',
+                            color: fc.nombre === f.nombre ? C.blue : C.muted,
+                          }}
+                        >
+                          {f.nombre}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <Card>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+                      <div>
+                        <p style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>{fc.nombre} — compra por semana</p>
+                        <p style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+                          Cobro inmediato (venta al contado): la semana proyectada de venta es la misma semana en que entra la plata.
+                        </p>
+                      </div>
+                      {fc.mape != null && (
+                        <span
+                          title="Error promedio del backtest del modelo mensual de este cliente, repartido acá a semanas."
+                          style={{
+                            fontSize: 11.5, fontWeight: 700, padding: '4px 10px', borderRadius: 999,
+                            border: `1px solid ${C.line}`, color: fc.mape <= 30 ? C.green : C.amber,
+                          }}
+                        >
+                          desvío {fc.mape.toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                  </Card>
+
+                  {!tieneModelo && (
+                    <CardAlerta>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        <AlertTriangle size={17} style={{ color: C.amber, flexShrink: 0, marginTop: 1 }} />
+                        <div>
+                          <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>
+                            El modelo para {fc.nombre} todavía no corrió
+                          </p>
+                          <p style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                            Las barras de venta real ya se ven abajo — salen directo de <code>ventas</code>. La
+                            proyección de las próximas semanas aparece después de la primera corrida de Prophet
+                            para este cliente (mismo workflow mensual <code>forecast-produccion</code>).
+                          </p>
+                        </div>
+                      </div>
+                    </CardAlerta>
+                  )}
+
+                  <Card>
+                    <ResponsiveContainer width="100%" height={280}>
+                      <ComposedChart data={datosChart}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
+                        <XAxis dataKey="semana" tick={{ fontSize: 11, fill: C.muted }} />
+                        <YAxis tickFormatter={fCompact} tick={{ fontSize: 11, fill: C.muted }} width={56} />
+                        <Tooltip
+                          formatter={(v) => (typeof v === 'number' ? fMoney(v) : '—')}
+                          labelFormatter={(label, payload) => payload?.[0]?.payload?.rango ?? label}
+                          contentStyle={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, fontSize: 12 }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Bar dataKey="real" name="Venta real" fill={C.blue} radius={[4, 4, 0, 0]} />
+                        <Line dataKey="proyectado" name="Proyectado" stroke={C.purple} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+                        <Line dataKey="proyectadoMin" name="Rango mín." stroke={C.purple} strokeWidth={1} strokeDasharray="4 4" dot={false} connectNulls />
+                        <Line dataKey="proyectadoMax" name="Rango máx." stroke={C.purple} strokeWidth={1} strokeDasharray="4 4" dot={false} connectNulls />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </Card>
+
+                  <Card>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', minWidth: 480, borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: C.bg }}>
+                            <th style={{ textAlign: 'left', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Semana</th>
+                            <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Venta real</th>
+                            <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Proyectado</th>
+                            <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Rango</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {fc.semanas.map((s, i) => (
+                            <tr key={s.inicio} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.line}`, background: s.inicio === lunesDe(hoyISO) ? C.blueSoft : 'transparent' }}>
+                              <td style={{ padding: '10px 14px', color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                S{semanaISO(s.inicio)} · {fRangoSemana(s.inicio)}
+                              </td>
+                              <td style={{ padding: '10px 14px', textAlign: 'right', color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                                {s.real != null ? fMoney(s.real) : '—'}
+                              </td>
+                              <td style={{ padding: '10px 14px', textAlign: 'right', color: C.purple, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                                {s.proyectado != null ? fMoney(s.proyectado) : '—'}
+                              </td>
+                              <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                {s.proyectadoMin != null && s.proyectadoMax != null
+                                  ? `${fCompact(s.proyectadoMin)} – ${fCompact(s.proyectadoMax)}`
+                                  : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                </Fragment>
+              )
+            })()}
           </div>
         )}
       </div>

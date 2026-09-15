@@ -326,6 +326,24 @@ export const CLIENTES_COBRO_INMEDIATO: string[] = [
   'cliente feria',
 ]
 
+/**
+ * Clientes con su propio forecast individual (Prophet) en la pestaña
+ * "Forecast" de Administración — además del general y por categoría que ya
+ * corren. Primer caso, 15-sep-2026: Cliente PDV, porque es cobro inmediato
+ * (ver CLIENTES_COBRO_INMEDIATO) y saber cuánto va a vender la semana que
+ * viene sirve para planificar caja de verdad, no sólo para mirar.
+ *
+ * El nombre va TAL CUAL aparece en `ventas.nombre_fantasia` (no en
+ * minúsculas, a diferencia de las otras listas de este archivo): lo usa
+ * `ingresos_por_ciclo_cliente(p_cliente)` en Postgres con un match exacto
+ * de igualdad — así aprovecha el índice (nombre_fantasia, fecha_pedido) en
+ * vez de forzar un `lower(trim(...))` que ese índice no puede resolver
+ * (encontrado armando este forecast: 2.6s más lento por serie).
+ */
+export const CLIENTES_FORECAST_INDIVIDUAL: string[] = [
+  'Cliente PDV',
+]
+
 /** Plazo de cobro a usar para un cliente, forzando 0 días para los de
  *  CLIENTES_COBRO_INMEDIATO sin importar lo que traiga `clientes` —
  *  ver el comentario de esa constante. */

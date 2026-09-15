@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { DIA_INICIO_CICLO, DIA_FIN_CICLO } from '@/lib/produccion/reglas'
+import { CLIENTES_FORECAST_INDIVIDUAL } from '@/lib/types'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -54,6 +55,23 @@ export async function GET(req: Request) {
   const { data, error } = await supabase.rpc('ingresos_por_ciclo')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Serie individual por cliente (hoy sólo Cliente PDV) — para el forecast
+  // de la pestaña "Forecast" en Administración. Consulta aparte porque es
+  // una función SQL distinta (ingresos_por_ciclo_cliente), no una fila más
+  // de ingresos_por_ciclo(): ese RPC agrupa por categoría, no por cliente,
+  // y mezclar ambos ahí habría obligado a escanear la tabla dos veces igual.
+  const clientePorNombre = new Map<string, { mes: string; monto: number }[]>()
+  for (const nombre of CLIENTES_FORECAST_INDIVIDUAL) {
+    const { data: filasCliente, error: errCliente } = await supabase.rpc('ingresos_por_ciclo_cliente', { p_cliente: nombre })
+    if (errCliente) return NextResponse.json({ error: errCliente.message }, { status: 500 })
+    clientePorNombre.set(
+      nombre,
+      ((filasCliente ?? []) as { ciclo: string; monto: number }[])
+        .map(f => ({ mes: String(f.ciclo).slice(0, 10), monto: Math.round(Number(f.monto) || 0) }))
+        .sort((a, b) => a.mes.localeCompare(b.mes)),
+    )
+  }
+
   const filas = (data ?? []) as { ciclo: string; categoria: string; monto: number }[]
 
   const general = new Map<string, number>()
@@ -95,7 +113,7 @@ export async function GET(req: Request) {
     },
     {
       tipo: 'excluido_cliente', clave: null,
-      detalle: 'Se excluye el consumo interno (PDV, BaseCamp, mermas, muestras, feria) y los tours/degustaciones: son litros reales, pero nadie los paga, así que no son ingreso.',
+      detalle: 'PDV, BaseCamp, ferias y la maquila a EWU Ginger Beer SÍ cuentan como ingreso acá (a diferencia de los reportes de venta comercial de Ventas). Sólo quedan afuera mermas, muestras, marketing y control de calidad: son litros reales, pero nadie los paga.',
       severidad: 'info',
     },
   ]
@@ -114,8 +132,11 @@ export async function GET(req: Request) {
     })
   }
 
+  const clienteObj: Record<string, { mes: string; monto: number }[]> = {}
+  for (const [nombre, serie] of clientePorNombre) clienteObj[nombre] = serie
+
   return NextResponse.json({
-    series: { general: serieGeneral, categoria: categoriaObj },
+    series: { general: serieGeneral, categoria: categoriaObj, cliente: clienteObj },
     calidadDatos: calidad,
     meta: { ciclosConVenta: serieGeneral.length, categorias: Object.keys(categoriaObj) },
   })

@@ -497,6 +497,18 @@ def correr_finanzas(mes_base: pd.Timestamp) -> int:
             forecast, validacion, [],
         )
 
+    # Forecast individual por cliente — hoy sólo Cliente PDV (pestaña
+    # "Forecast" de Administración). Mismo modelo mensual/por ciclo que
+    # general y categoría; en la UI se reparte a semanas porque PDV es cobro
+    # inmediato (dias_pago=0) y ahí es donde de verdad sirve para planificar.
+    clientes = series.get("cliente", {})
+    print(f"[Finanzas] Por cliente: {len(clientes)} series")
+    for cliente, puntos in clientes.items():
+        comprometer_serie(
+            procesar_serie("cliente", cliente, a_puntos(puntos), mes_base),
+            forecast, validacion, [],
+        )
+
     # De vuelta a la unidad real: el endpoint de carga espera monto/montoMin/montoMax.
     filas = [
         {

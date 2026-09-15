@@ -13,7 +13,7 @@ import {
   type ClienteRiesgo, type CicloConversion,
 } from '@/lib/administracion/flujoSemanal'
 import { esCamaraProduccion } from '@/lib/camaras'
-import { vendedorCanonico, diasPagoEfectivo } from '@/lib/types'
+import { vendedorCanonico, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL } from '@/lib/types'
 import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
 import AdministracionClient from './AdministracionClient'
 
@@ -32,7 +32,7 @@ export interface PuntoFinanzas {
 
 export interface SerieFinanzas {
   id: string
-  nivel: 'general' | 'categoria'
+  nivel: 'general' | 'categoria' | 'cliente'
   clave: string | null
   puntos: PuntoFinanzas[]
   /** Error del backtest walk-forward a 1 mes, en %. null = no alcanzó el
@@ -42,6 +42,27 @@ export interface SerieFinanzas {
   /** Venta neta del ciclo EN CURSO, calculada en vivo — el modelo excluye el
    *  ciclo abierto a propósito, así que este número no sale de él. */
   montoCicloEnCurso: number
+}
+
+/** Una semana de la pestaña Forecast, para UN cliente. `real` es venta ya
+ *  ocurrida (fecha de pedido dentro de esa semana); `proyectado*` sale de
+ *  repartir el forecast MENSUAL de Prophet (por ciclo interno) en días
+ *  dentro de ese ciclo y agruparlos por semana — no es un modelo semanal
+ *  propio, es el mismo forecast mensual visto a otra escala. */
+export interface SemanaForecastCliente {
+  /** yyyy-mm-dd del lunes ISO de la semana. */
+  inicio: string
+  real: number | null
+  proyectado: number | null
+  proyectadoMin: number | null
+  proyectadoMax: number | null
+}
+
+export interface ForecastCliente {
+  nombre: string
+  mape: number | null
+  mesesHistorial: number | null
+  semanas: SemanaForecastCliente[]
 }
 
 export interface AvanceCiclo {
@@ -241,6 +262,11 @@ export default async function AdministracionPage() {
   // (mismo criterio que la serie histórica que alimenta el modelo).
   const mtdGeneral = { neto: 0, bruto: 0 }
   const mtdPorCategoria = new Map<string, number>()
+  // Igual que mtdPorCategoria pero por CLIENTE exacto — sólo para los de
+  // CLIENTES_FORECAST_INDIVIDUAL (hoy Cliente PDV). No pasa por esIngresoReal
+  // otra vez: ya se evaluó arriba: si el cliente está en la lista y llegó
+  // hasta acá, ya sabemos que cuenta como ingreso.
+  const mtdPorCliente = new Map<string, number>()
   for (const v of ventasRaw) {
     if (!v.fecha_pedido || v.fecha_pedido < inicioCiclo || v.fecha_pedido > finCiclo) continue
     if (!esIngresoReal(v)) continue
@@ -250,18 +276,24 @@ export default async function AdministracionPage() {
     mtdGeneral.bruto += brutoDeFila(v)
     const cat = categoriaNormalizada(v.producto, v.categoria_producto)
     mtdPorCategoria.set(cat, (mtdPorCategoria.get(cat) ?? 0) + neto)
+    if (v.nombre_fantasia && CLIENTES_FORECAST_INDIVIDUAL.includes(v.nombre_fantasia)) {
+      mtdPorCliente.set(v.nombre_fantasia, (mtdPorCliente.get(v.nombre_fantasia) ?? 0) + neto)
+    }
   }
 
   const series: SerieFinanzas[] = [...porSerie.entries()].map(([id, puntos]) => {
     const [nivel, claveRaw] = id.split('::')
     const clave = claveRaw || null
     const val = validacionPorSerie.get(id)
+    const montoCicloEnCurso = nivel === 'general' ? mtdGeneral.neto
+      : nivel === 'cliente' ? (mtdPorCliente.get(clave ?? '') ?? 0)
+      : (mtdPorCategoria.get(clave ?? '') ?? 0)
     return {
-      id, nivel: nivel as 'general' | 'categoria', clave,
+      id, nivel: nivel as 'general' | 'categoria' | 'cliente', clave,
       puntos: puntos.sort((a, b) => a.mes.localeCompare(b.mes)),
       mape: val?.mape != null ? Number(val.mape) : null,
       mesesHistorial: val?.meses_historial != null ? Number(val.meses_historial) : null,
-      montoCicloEnCurso: nivel === 'general' ? mtdGeneral.neto : (mtdPorCategoria.get(clave ?? '') ?? 0),
+      montoCicloEnCurso,
     }
   })
 
@@ -469,6 +501,63 @@ export default async function AdministracionPage() {
     hayCompras: compras.length > 0,
   }
 
+  // ── Forecast individual por cliente (pestaña "Forecast") ───────────────────
+  // 8 semanas atrás (venta real, para ver la tendencia) + 8 adelante
+  // (proyección repartida desde el forecast mensual de Prophet).
+  const semanasForecastCliente = semanasRodantes(hoyISO, 8, 8)
+  const forecastClientes: ForecastCliente[] = CLIENTES_FORECAST_INDIVIDUAL.map(nombre => {
+    const serie = series.find(s => s.nivel === 'cliente' && s.clave === nombre)
+
+    const reales = new Map<string, number>()
+    for (const v of ventasRaw) {
+      if (v.nombre_fantasia !== nombre) continue
+      if (!esIngresoReal(v)) continue
+      if (!v.fecha_pedido) continue
+      const neto = Number(v.total_sin_impuesto) || 0
+      if (neto === 0) continue
+      const lunes = lunesDeFecha(v.fecha_pedido)
+      reales.set(lunes, (reales.get(lunes) ?? 0) + neto)
+    }
+
+    // Reparte cada ciclo proyectado en sus días y los agrupa por semana —
+    // sólo los días que todavía no pasaron, mismo criterio que ya usa
+    // construirFlujoSemanal para el forecast general.
+    const proyectados = new Map<string, { monto: number; min: number; max: number }>()
+    for (const p of serie?.puntos ?? []) {
+      if (p.tipo !== 'forecast') continue
+      const inicioC = inicioDeCiclo(p.mes)
+      const finC = finDeCiclo(p.mes)
+      const diasC = Math.floor((Date.parse(`${finC}T00:00:00Z`) - Date.parse(`${inicioC}T00:00:00Z`)) / MS_POR_DIA) + 1
+      if (diasC <= 0) continue
+      const porDia = p.monto / diasC
+      const porDiaMin = p.montoMin != null ? p.montoMin / diasC : porDia
+      const porDiaMax = p.montoMax != null ? p.montoMax / diasC : porDia
+      for (let d = 0; d < diasC; d++) {
+        const dia = correrDias(inicioC, d)
+        if (dia < hoyISO) continue
+        const lunes = lunesDeFecha(dia)
+        const acc = proyectados.get(lunes) ?? { monto: 0, min: 0, max: 0 }
+        acc.monto += porDia
+        acc.min += porDiaMin
+        acc.max += porDiaMax
+        proyectados.set(lunes, acc)
+      }
+    }
+
+    const semanas: SemanaForecastCliente[] = semanasForecastCliente.map(inicio => {
+      const proy = proyectados.get(inicio)
+      return {
+        inicio,
+        real: reales.has(inicio) ? Math.round(reales.get(inicio)!) : null,
+        proyectado: proy ? Math.round(proy.monto) : null,
+        proyectadoMin: proy ? Math.round(proy.min) : null,
+        proyectadoMax: proy ? Math.round(proy.max) : null,
+      }
+    })
+
+    return { nombre, mape: serie?.mape ?? null, mesesHistorial: serie?.mesesHistorial ?? null, semanas }
+  })
+
   return (
     <AdministracionClient
       series={series}
@@ -484,6 +573,7 @@ export default async function AdministracionPage() {
       deudoresDetalle={deudoresDetalle ?? []}
       clientesPorVendedor={clientesPorVendedor}
       maquilaPorCliente={maquilaPorCliente}
+      forecastClientes={forecastClientes}
     />
   )
 }
