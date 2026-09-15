@@ -1452,6 +1452,9 @@ export default function ProduccionClient({
       cubreHasta: string
       /** El stock no llegó a cero mientras este lote venía en camino. */
       llegaATiempo: boolean
+      /** true = NO es una sugerencia: ya está fermentando en el tanque. Se
+       *  muestra en el calendario el día que sale, no el día que entró. */
+      enCurso: boolean
     }
     interface MesPlan {
       mes: string; etiqueta: string
@@ -1513,7 +1516,14 @@ export default function ProduccionClient({
           // Una alarma vencida (el plazo ya pasó) no se agenda en el pasado:
           // se cuece hoy, que es lo antes que se puede hacer algo.
           forzarEl: alarma ? (alarma > hoyISO ? alarma : hoyISO) : null,
-          stock: (s.stockActualLitros ?? 0) + s.litrosEnProduccion,
+          /* SÓLO lo que está envasado en bodega. Los litros que están en un
+             fermentador AHORA no son stock: no se pueden vender hasta que se
+             embarrilen. Entran más abajo como lotes en curso, con su fecha
+             real de salida. Contarlos acá —como se hacía— hacía creer que el
+             producto estaba cubierto hoy y atrasaba la cocción siguiente:
+             Fisura tiene 3.000 L en el Bright tank T4 que recién salen el
+             22-sep, y el plan le daba CERO cocciones en tres meses. */
+          stock: s.stockActualLitros ?? 0,
           enCamino: [], params: [], pendienteDesde: null, nro: 0, faltante: 0,
         }
         estados.set(s.producto, e)
@@ -1536,6 +1546,76 @@ export default function ProduccionClient({
       return elegido
     }
 
+    const lotes: LoteSugerido[] = []
+    const sinTanque: { producto: string; litros: number; motivo: string }[] = []
+
+    /* ── 1b. Lo que HOY está en los fermentadores ─────────────────────────
+       El plan tiene que conversar con la planta real: cada tanque con
+       producto es una cocción que ya ocurrió y que va a aterrizar en bodega
+       en una fecha concreta. Entra al modelo como un lote EN CURSO —no como
+       stock disponible— así que:
+         · suma recién el día que se embarrila (y hasta entonces el producto
+           puede quebrar, que es justo lo que hay que ver),
+         · deja el tanque tomado hasta esa fecha,
+         · y aparece en el calendario, para que se vea junto a lo sugerido.
+       La fecha viene del ERP (columna "Fecha embarrilado estimada"). Puede
+       venir VENCIDA —hoy 3 de los 4 tanques la tienen— porque es la fecha
+       que calculó el enólogo y el embarrilado se corrió: en ese caso se toma
+       hoy, que es lo antes que ese volumen puede estar disponible. */
+    const enCursoPorProducto = new Map<string, number>()
+    for (const sf of splitFermentadores) {
+      const e = estados.get(sf.producto)
+      if (!e) continue
+      for (const t of sf.tanques) {
+        if (t.litros <= 0) continue
+        const sale = t.fechaEstimada && t.fechaEstimada > hoyISO ? t.fechaEstimada : hoyISO
+        const lote: LoteSugerido = {
+          id: `curso|${t.nombre}|${sf.producto}`,
+          producto: sf.producto, categoria: e.categoria,
+          litros: Math.round(t.litros), tanque: t.nombre,
+          capacidadTanque: ocupacionPlanta.tanques.find(x => x.tanque === t.nombre)?.capacidadLitros ?? t.litros,
+          // Una cocción en curso no tiene fecha de inicio conocida (el ERP no
+          // la trae): se retrocede el lead time desde la salida, sólo para
+          // poder ordenarla. Lo que importa y se muestra es `fechaListo`.
+          fechaInicio: sumarDiasCalISO(sale, -e.leadDias),
+          fechaListo: sale, mes: mesDe(sale),
+          fechaObjetivo: sale, diasTarde: 0,
+          leadTimeSemanas: e.leadTimeSemanas, conAlarma: e.conAlarma,
+          loteNro: 0, loteDe: 0,
+          fechaAgotamiento: sale, cubreHasta: sale,
+          llegaATiempo: true, enCurso: true,
+        }
+        e.enCamino.push(lote)
+        lotes.push(lote)
+        enCursoPorProducto.set(sf.producto, (enCursoPorProducto.get(sf.producto) ?? 0) + lote.litros)
+      }
+    }
+    /* Red de seguridad: si el informe declara litros en producción de un
+       producto que el split no desglosó por tanque, esos litros no se
+       pierden — entran con la fecha estimada del producto, o con un lead
+       time completo si tampoco hay. */
+    for (const s of filasProducto) {
+      if (s.mes !== meses[0]) continue
+      const e = estados.get(s.producto)
+      if (!e) continue
+      const faltan = Math.round(s.litrosEnProduccion - (enCursoPorProducto.get(s.producto) ?? 0))
+      if (faltan < 1) continue
+      const sf = splitFermentadores.find(x => x.producto === s.producto)
+      const sale = sf?.fechaDisponibleEstimada && sf.fechaDisponibleEstimada > hoyISO
+        ? sf.fechaDisponibleEstimada
+        : sumarDiasCalISO(hoyISO, e.leadDias)
+      e.enCamino.push({
+        id: `curso|sintanque|${s.producto}`,
+        producto: s.producto, categoria: e.categoria,
+        litros: faltan, tanque: '—', capacidadTanque: faltan,
+        fechaInicio: sumarDiasCalISO(sale, -e.leadDias), fechaListo: sale, mes: mesDe(sale),
+        fechaObjetivo: sale, diasTarde: 0,
+        leadTimeSemanas: e.leadTimeSemanas, conAlarma: e.conAlarma,
+        loteNro: 0, loteDe: 0, fechaAgotamiento: sale, cubreHasta: sale,
+        llegaATiempo: true, enCurso: true,
+      })
+    }
+
     /* ── 2. Desde cuándo queda libre cada tanque ──────────────────────── */
     const libreDesde = new Map<string, string>()
     for (const t of ocupacionPlanta.tanques) libreDesde.set(t.tanque, hoyISO)
@@ -1556,9 +1636,6 @@ export default function ProduccionClient({
       Number(b.lineaFija) - Number(a.lineaFija) ||
       a.producto.localeCompare(b.producto)
     )
-    const lotes: LoteSugerido[] = []
-    const sinTanque: { producto: string; litros: number; motivo: string }[] = []
-
     for (let d = hoyISO; d < finISO; d = sumarDiasCalISO(d, 1)) {
       const mesHoy = mesDe(d)
       /* Cupo de la sala de cocción para ESTE día. Sábados, domingos y
@@ -1679,7 +1756,7 @@ export default function ProduccionClient({
           loteNro: e.nro, loteDe: 0,
           fechaAgotamiento: sumarDiasCalISO(d, consumo > 0 ? Math.max(0, Math.floor(posicion / consumo)) : 3650),
           cubreHasta: sumarDiasCalISO(fechaListo, consumo > 0 ? Math.max(0, Math.floor((posicion + litros) / consumo)) : 3650),
-          llegaATiempo: true,
+          llegaATiempo: true, enCurso: false,
         }
         lotes.push(lote)
         e.enCamino.push(lote)
@@ -1702,14 +1779,19 @@ export default function ProduccionClient({
       })
     }
 
+    // La numeración "cocción N de M" cuenta sólo lo sugerido: un lote que ya
+    // está en el tanque no es una cocción por hacer.
+    const sugeridos = lotes.filter(l => !l.enCurso)
     const totalPorProducto = new Map<string, number>()
-    for (const l of lotes) totalPorProducto.set(l.producto, (totalPorProducto.get(l.producto) ?? 0) + 1)
-    for (const l of lotes) l.loteDe = totalPorProducto.get(l.producto) ?? 1
+    for (const l of sugeridos) totalPorProducto.set(l.producto, (totalPorProducto.get(l.producto) ?? 0) + 1)
+    for (const l of sugeridos) l.loteDe = totalPorProducto.get(l.producto) ?? 1
     lotes.sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio) || a.producto.localeCompare(b.producto))
 
     /* ── 4. Resumen mensual, derivado del plan real (no un cálculo aparte) */
     const porMes: MesPlan[] = meses.map(mes => {
-      const delMes = lotes.filter(l => l.mes === mes)
+      // Litros A COCER del mes: lo que ya está fermentando no se cuece de
+      // nuevo, así que queda fuera del resumen (sí se ve en el calendario).
+      const delMes = sugeridos.filter(l => l.mes === mes)
       const cerveza = delMes.filter(l => l.categoria === 'cerveza')
       const kombucha = delMes.filter(l => l.categoria === 'kombucha')
       const lotesTarde = delMes.filter(l => !l.llegaATiempo).length
@@ -1741,7 +1823,10 @@ export default function ProduccionClient({
 
     const porDia = new Map<number, typeof planSugerido.lotes>()
     for (const l of planSugerido.lotes) {
-      const [y, m, d] = l.fechaInicio.split('-').map(Number)
+      // Una cocción sugerida se muestra el día que hay que PRENDER LA OLLA.
+      // Una que ya está en el tanque, el día que SALE — que es la fecha que
+      // le sirve a quien planifica: ahí se libera el tanque y entra stock.
+      const [y, m, d] = (l.enCurso ? l.fechaListo : l.fechaInicio).split('-').map(Number)
       if (y !== anio || m !== mesIdx + 1) continue
       if (!porDia.has(d)) porDia.set(d, [])
       porDia.get(d)!.push(l)
@@ -3132,14 +3217,25 @@ export default function ProduccionClient({
                     <CalendarIcon size={18} style={{ color: COLORS.darkGreen }} />
                     <h3 className="font-bold text-gray-800">Plan de Cobertura — {HORIZONTE_MESES_PLAN} meses</h3>
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
-                      {planSugerido.lotes.length} {planSugerido.lotes.length === 1 ? 'cocción' : 'cocciones'} programadas
+                      {planSugerido.lotes.filter(l => !l.enCurso).length} {planSugerido.lotes.filter(l => !l.enCurso).length === 1 ? 'cocción' : 'cocciones'} programadas
                     </span>
+                    {/* El plan arranca de la planta real: lo que hoy está en los
+                        tanques no se vuelve a cocer, y esos fermentadores no se
+                        pueden usar hasta que se embarrilen. */}
+                    {planSugerido.lotes.some(l => l.enCurso) && (
+                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-700">
+                        + {fNum(planSugerido.lotes.filter(l => l.enCurso).reduce((a, l) => a + l.litros, 0))} L ya fermentando
+                        en {planSugerido.lotes.filter(l => l.enCurso).length} {planSugerido.lotes.filter(l => l.enCurso).length === 1 ? 'tanque' : 'tanques'}
+                      </span>
+                    )}
                   </div>
                   <p className="mb-4 text-sm text-gray-500">
                     Simulación día a día del inventario de cada producto: el stock baja al ritmo del forecast y se
                     programa una cocción cada vez que toca su punto de reorden, arrancando por la fecha que ya propone
                     el Plan Maestro. Cada cocción se acota al tamaño de un tanque que existe de verdad, con su
-                    fermentador asignado — el detalle día por día está en el calendario de abajo.
+                    fermentador asignado. Parte de la planta como está hoy: lo que ya se está fermentando no se vuelve
+                    a cocer, suma a stock recién el día que se embarrila, y mantiene su tanque ocupado hasta entonces
+                    — el detalle día por día está en el calendario de abajo.
                   </p>
 
                   {planSugerido.sinTanque.length > 0 && (
@@ -3293,14 +3389,18 @@ export default function ProduccionClient({
                             <div key={l.id} className="group/chip relative">
                               <span
                                 className={`flex items-center gap-0.5 truncate rounded-sm border py-1 pl-1.5 pr-1 text-[10px] font-bold ${
-                                  noLlega
-                                    ? 'border-red-500 bg-red-50 text-red-700'
-                                    : l.categoria === 'kombucha'
-                                      ? 'border-dashed border-amber-400 bg-amber-50 text-amber-800'
-                                      : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
+                                  l.enCurso
+                                    ? 'border-sky-500 bg-sky-500/10 text-sky-800'
+                                    : noLlega
+                                      ? 'border-red-500 bg-red-50 text-red-700'
+                                      : l.categoria === 'kombucha'
+                                        ? 'border-dashed border-amber-400 bg-amber-50 text-amber-800'
+                                        : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
                                 }`}
                               >
-                                {l.diasTarde > 0 && !noLlega && <Beaker size={9} className="shrink-0 text-purple-600" />}
+                                {l.enCurso
+                                  ? <Beaker size={9} className="shrink-0 text-sky-600" />
+                                  : l.diasTarde > 0 && !noLlega && <Beaker size={9} className="shrink-0 text-purple-600" />}
                                 <span className="truncate">{l.producto}</span>
                               </span>
                               {/* Detalle al pasar el cursor: cuánto, en qué tanque,
@@ -3311,23 +3411,33 @@ export default function ProduccionClient({
                                   {l.loteDe > 1 && <span className="ml-1 font-normal text-gray-400">· cocción {l.loteNro} de {l.loteDe}</span>}
                                 </p>
                                 <p className="mt-1 text-gray-300">
-                                  {l.categoria === 'kombucha' ? 'Kombuchería' : 'Cervecería'} · {l.leadTimeSemanas} semanas en tanque
+                                  {l.enCurso
+                                    ? 'Ya está fermentando — no hay que cocerla'
+                                    : `${l.categoria === 'kombucha' ? 'Kombuchería' : 'Cervecería'} · ${l.leadTimeSemanas} semanas en tanque`}
                                 </p>
                                 <p className="mt-1.5">
-                                  <span className="text-gray-400">Cocer:</span> <strong>{fNum(l.litros)} L</strong>
+                                  <span className="text-gray-400">{l.enCurso ? 'Salen:' : 'Cocer:'}</span> <strong>{fNum(l.litros)} L</strong>
                                   <span className="text-gray-400"> en </span><strong>{l.tanque}</strong>
                                   <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
                                 </p>
                                 <p>
-                                  <span className="text-gray-400">Queda listo:</span>{' '}
+                                  <span className="text-gray-400">{l.enCurso ? 'Se embarrila:' : 'Queda listo:'}</span>{' '}
                                   <strong>{new Date(l.fechaListo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
                                 </p>
-                                <p>
-                                  <span className="text-gray-400">Alcanza hasta:</span>{' '}
-                                  <strong>{new Date(l.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
-                                  <span className="text-gray-400"> (ahí toca cocer de nuevo)</span>
-                                </p>
-                                {l.conAlarma && (
+                                {!l.enCurso && (
+                                  <p>
+                                    <span className="text-gray-400">Alcanza hasta:</span>{' '}
+                                    <strong>{new Date(l.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
+                                    <span className="text-gray-400"> (ahí toca cocer de nuevo)</span>
+                                  </p>
+                                )}
+                                {l.enCurso && (
+                                  <p className="mt-1.5 text-sky-300">
+                                    Cocción que ya ocurrió: está en el tanque ahora. El tanque se libera ese día y esos
+                                    litros recién ahí se pueden vender.
+                                  </p>
+                                )}
+                                {l.conAlarma && !l.enCurso && (
                                   <p className="mt-1.5 text-amber-300">Este producto ya tiene alarma de quiebre activa.</p>
                                 )}
                                 {noLlega && (
@@ -3368,9 +3478,11 @@ export default function ProduccionClient({
                     elige para cocer lo menos veces posible, que es lo que baja la merma: si un fermentador libre cierra
                     todo el volumen se usa el más chico que lo cierre —misma merma, y los grandes quedan libres para
                     quien los necesita—; si ninguno alcanza se llena el más grande disponible y el resto va a la cocción
-                    siguiente. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; <Beaker size={9} className="inline text-purple-600" /> = se
-                    corrió de su fecha ideal porque no había tanque libre de su línea, pero llega igual; borde rojo =
-                    el stock se agota antes de que esta cocción esté lista. El lead time es por línea (4 semanas
+                    siguiente. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; borde azul lleno = <strong>ya está fermentando</strong> (no hay que
+                    cocerla: se muestra el día que sale del tanque, que es cuando entra a bodega y se libera el
+                    fermentador); <Beaker size={9} className="inline text-purple-600" /> = se corrió de su fecha ideal
+                    porque no había tanque libre de su línea, pero llega igual; borde rojo = el stock se agota antes de
+                    que esta cocción esté lista. El lead time es por línea (4 semanas
                     cerveza / 3 kombucha), no por estilo puntual — todavía no hay ese dato cargado por receta. Se
                     recalcula solo con cada carga de la pantalla. Confirmalas desde las tarjetas de abajo o desde Plan Maestro.
                   </p>
