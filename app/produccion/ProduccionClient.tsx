@@ -1490,7 +1490,20 @@ export default function ProduccionClient({
   const anclarCoccion = (producto: string, nro: number, fechaISO: string) => {
     setAnclasCoccion(prev => new Map(prev).set(`${producto}|${nro}`, fechaISO))
   }
-  const limpiarAnclas = () => setAnclasCoccion(new Map())
+
+  /** Igual que `anclasCoccion` pero para el TANQUE — el usuario elige a mano
+   *  en qué fermentador cocer, desde el desplegable de la tarjeta. Misma
+   *  clave `producto|Nº de cocción` y mismo motivo: al recalcular el plan
+   *  los ids se regeneran, pero "la 2ª cocción de Mocho English" no. */
+  const [anclasTanque, setAnclasTanque] = useState<Map<string, string>>(new Map())
+  const anclarTanque = (producto: string, nro: number, tanque: string) => {
+    setAnclasTanque(prev => {
+      const siguiente = new Map(prev)
+      if (tanque) siguiente.set(`${producto}|${nro}`, tanque); else siguiente.delete(`${producto}|${nro}`)
+      return siguiente
+    })
+  }
+  const limpiarAnclas = () => { setAnclasCoccion(new Map()); setAnclasTanque(new Map()) }
 
   /** Cocciones que la sala puede sacar en un día POR LÍNEA (cervecería y
    *  kombuchería son procesos separados, así que el tope es por cada una).
@@ -1536,6 +1549,14 @@ export default function ProduccionClient({
       /** true si esta cocción está anclada a una fecha que el usuario eligió
        *  arrastrándola en el calendario, en vez de a su punto de reorden. */
       movidoManual: boolean
+      /** true si el TANQUE lo eligió el usuario (desplegable de la tarjeta),
+       *  no el modelo. Cuando es así, `litros` es la capacidad completa del
+       *  tanque elegido, no sólo lo que pedía el punto de reorden — llenarlo
+       *  entero cuesta la misma merma que llenarlo a medias, y el excedente
+       *  sobre lo pedido queda como stock: la propia simulación lo descuenta
+       *  del consumo de los meses siguientes y corre sola la próxima cocción
+       *  más adelante (se ve reflejado en `cubreHasta`). */
+      tanqueManual: boolean
       /** Sólo para `enCurso`: la fecha de embarrilado ESTIMADA tal cual la
        *  trae el ERP, sin ajustar — puede estar vencida (el enólogo calculó
        *  una fecha y el embarrilado se corrió). El calendario la usa para
@@ -1673,7 +1694,7 @@ export default function ProduccionClient({
           leadTimeSemanas: e.leadTimeSemanas, conAlarma: e.conAlarma,
           loteNro: 0, loteDe: 0,
           fechaAgotamiento: sale, cubreHasta: sale,
-          llegaATiempo: true, enCurso: true, movidoManual: false,
+          llegaATiempo: true, enCurso: true, movidoManual: false, tanqueManual: false,
           fechaEmbarriladoReal: t.fechaEstimada ?? null,
         }
         e.enCamino.push(lote)
@@ -1703,7 +1724,7 @@ export default function ProduccionClient({
         fechaObjetivo: sale, diasTarde: 0,
         leadTimeSemanas: e.leadTimeSemanas, conAlarma: e.conAlarma,
         loteNro: 0, loteDe: 0, fechaAgotamiento: sale, cubreHasta: sale,
-        llegaATiempo: true, enCurso: true, movidoManual: false,
+        llegaATiempo: true, enCurso: true, movidoManual: false, tanqueManual: false,
         fechaEmbarriladoReal: sf?.fechaDisponibleEstimada ?? null,
       })
     }
@@ -1819,40 +1840,66 @@ export default function ProduccionClient({
         if (e.pendienteDesde == null) e.pendienteDesde = anclado && ancla ? ancla : d
 
         const libres = flota.filter(t => (libreDesde.get(t.tanque) ?? hoyISO) <= d)
-        if (libres.length === 0) continue // sin capacidad hoy: se reintenta mañana
 
-        /* Elección de tanque — la regla de rentabilidad de la planta.
-           La merma de una cocción (fondos, trub, purgas, lo que queda en
-           mangueras) es casi la misma cueza 150 L o 3.000 L. Lo que encarece
-           el litro no es usar un tanque grande: es PARTIR el volumen en
-           varias cocciones, porque cada una paga su propia merma y su propia
-           jornada de sala. Así que el criterio es minimizar el número de
-           cocciones, y recién después no desperdiciar tanque:
+        /* ANCLA DE TANQUE: el usuario eligió a mano en qué fermentador cocer
+           esta cocción (desplegable de la tarjeta del calendario). Igual que
+           el ancla de fecha, nunca se salta la planta — si el tanque elegido
+           sigue ocupado hoy, la cocción ESPERA a que se libere (no cae a
+           otro tanque en su lugar): eso es justo lo que hace útil elegir,
+           coordinar la ocupación real en vez de una preferencia que el
+           modelo puede pasar por alto. */
+        const tanqueAncla = anclasTanque.get(`${e.producto}|${e.nro + 1}`)
+        const forzadoTanque = tanqueAncla ? flota.find(t => t.tanque === tanqueAncla) : undefined
 
-             1. Si algún tanque libre cierra TODO el volumen de una vez, se
-                usa el MÁS CHICO que lo cierre. Es una sola cocción igual que
-                con uno grande, pero deja los grandes libres para los
-                volúmenes que sí los necesitan. (Acá caen los casos chicos:
-                22 L de un experimental van al Lavoratorio de 150, no a un T
-                de 1.700 — mismo costo de merma, un fermentador menos
-                bloqueado cuatro semanas.)
-             2. Si ninguno alcanza, se usa el MÁS GRANDE disponible y se
-                llena entero. El resto queda para la cocción siguiente.
+        let elegido: (typeof flota)[number]
+        let tanqueManual = false
+        if (forzadoTanque) {
+          if (!libres.some(t => t.tanque === tanqueAncla)) continue // sigue ocupado: se reintenta mañana
+          elegido = forzadoTanque
+          tanqueManual = true
+        } else {
+          if (libres.length === 0) continue // sin capacidad hoy: se reintenta mañana
 
-           La versión anterior —"el mayor tanque que se llene al menos al
-           70%"— parecía la misma idea pero hacía lo contrario: con 700 L a
-           cocer y un T de 450 libre, tomaba el de 450 y dejaba 250 L
-           colgando, que caían al día siguiente en un Lavoratorio de 150, y
-           al otro en otro. Cuatro cocciones y cuatro mermas donde cabía UNA
-           de 700 L en el de 1.500. Verificado contra los datos reales:
-           Imperial Stout salía como 450+150+150+150+292 L. */
-        const queCierran = libres.filter(t => t.capacidadLitros >= objetivo)
-        const elegido = queCierran.length > 0
-          ? queCierran.reduce((mejor, t) => (t.capacidadLitros < mejor.capacidadLitros ? t : mejor), queCierran[0])
-          : libres.reduce((mejor, t) => (t.capacidadLitros > mejor.capacidadLitros ? t : mejor), libres[0])
+          /* Elección AUTOMÁTICA — la regla de rentabilidad de la planta.
+             La merma de una cocción (fondos, trub, purgas, lo que queda en
+             mangueras) es casi la misma cueza 150 L o 3.000 L. Lo que
+             encarece el litro no es usar un tanque grande: es PARTIR el
+             volumen en varias cocciones, porque cada una paga su propia
+             merma y su propia jornada de sala. Así que el criterio es
+             minimizar el número de cocciones, y recién después no
+             desperdiciar tanque:
 
+               1. Si algún tanque libre cierra TODO el volumen de una vez, se
+                  usa el MÁS CHICO que lo cierre. Es una sola cocción igual
+                  que con uno grande, pero deja los grandes libres para los
+                  volúmenes que sí los necesitan. (Acá caen los casos chicos:
+                  22 L de un experimental van al Lavoratorio de 150, no a un
+                  T de 1.700 — mismo costo de merma, un fermentador menos
+                  bloqueado cuatro semanas.)
+               2. Si ninguno alcanza, se usa el MÁS GRANDE disponible y se
+                  llena entero. El resto queda para la cocción siguiente.
 
-        const litros = Math.round(Math.min(objetivo, elegido.capacidadLitros))
+             La versión anterior —"el mayor tanque que se llene al menos al
+             70%"— parecía la misma idea pero hacía lo contrario: con 700 L a
+             cocer y un T de 450 libre, tomaba el de 450 y dejaba 250 L
+             colgando, que caían al día siguiente en un Lavoratorio de 150, y
+             al otro en otro. Cuatro cocciones y cuatro mermas donde cabía
+             UNA de 700 L en el de 1.500. Verificado contra los datos reales:
+             Imperial Stout salía como 450+150+150+150+292 L. */
+          const queCierran = libres.filter(t => t.capacidadLitros >= objetivo)
+          elegido = queCierran.length > 0
+            ? queCierran.reduce((mejor, t) => (t.capacidadLitros < mejor.capacidadLitros ? t : mejor), queCierran[0])
+            : libres.reduce((mejor, t) => (t.capacidadLitros > mejor.capacidadLitros ? t : mejor), libres[0])
+        }
+
+        /* Tanque elegido a mano: se llena ENTERO, no sólo lo que pedía el
+           punto de reorden — la merma es casi la misma a medias que llena, y
+           el excedente sobre `objetivo` queda como stock: la propia
+           simulación lo descuenta del consumo de los meses siguientes y
+           corre sola la próxima cocción más adelante (se refleja abajo en
+           `cubreHasta`). Tanque automático: se respeta el tope de `objetivo`
+           como siempre. */
+        const litros = Math.round(tanqueManual ? elegido.capacidadLitros : Math.min(objetivo, elegido.capacidadLitros))
         const fechaListo = sumarDiasCalISO(d, e.leadDias)
         const objetivoFecha = e.pendienteDesde ?? d
         const consumo = p.consumoDiario
@@ -1867,7 +1914,7 @@ export default function ProduccionClient({
           loteNro: e.nro, loteDe: 0,
           fechaAgotamiento: sumarDiasCalISO(d, consumo > 0 ? Math.max(0, Math.floor(posicion / consumo)) : 3650),
           cubreHasta: sumarDiasCalISO(fechaListo, consumo > 0 ? Math.max(0, Math.floor((posicion + litros) / consumo)) : 3650),
-          llegaATiempo: true, enCurso: false, movidoManual: anclado,
+          llegaATiempo: true, enCurso: false, movidoManual: anclado, tanqueManual,
           fechaEmbarriladoReal: null,
         }
         lotes.push(lote)
@@ -1918,7 +1965,7 @@ export default function ProduccionClient({
     })
 
     return { lotes, porMes, sinTanque }
-  }, [stockSeguridad, alarmasPorProducto, sugerenciasPlan, splitFermentadores, ocupacionPlanta.tanques, anclasCoccion, horizontePlanMeses])
+  }, [stockSeguridad, alarmasPorProducto, sugerenciasPlan, splitFermentadores, ocupacionPlanta.tanques, anclasCoccion, anclasTanque, horizontePlanMeses])
 
   /** Mes que muestra el calendario diario — 0 = mes actual, navegable con
    *  las flechas. Sólo cambia qué página del plan ya calculado se mira; el
@@ -4421,6 +4468,16 @@ export default function ProduccionClient({
                               && l.fechaEmbarriladoReal < calendarioCobertura.hoyISO
                             return (
                             <div key={l.id} className="group/chip relative">
+                              {/* Punto independiente de todo lo demás: un tanque elegido a
+                                  mano puede coincidir con cualquier otro estado (movida,
+                                  atrasada, no llega), así que no compite por el color del
+                                  borde — se marca aparte para no perder ninguna señal. */}
+                              {l.tanqueManual && (
+                                <span
+                                  className="absolute -right-0.5 -top-0.5 z-10 h-2 w-2 rounded-full border border-white bg-emerald-500"
+                                  title="Tanque elegido a mano"
+                                />
+                              )}
                               <button
                                 type="button"
                                 draggable={!l.enCurso}
@@ -4474,9 +4531,38 @@ export default function ProduccionClient({
                                 </p>
                                 <p className="mt-1.5">
                                   <span className="text-gray-400">{l.enCurso ? 'Salen:' : 'Cocer:'}</span> <strong>{fNum(l.litros)} L</strong>
-                                  <span className="text-gray-400"> en </span><strong>{l.tanque}</strong>
-                                  <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
+                                  {l.enCurso && (
+                                    <>
+                                      <span className="text-gray-400"> en </span><strong>{l.tanque}</strong>
+                                      <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
+                                    </>
+                                  )}
                                 </p>
+                                {/* Elegir el tanque a mano decide dos cosas a la vez: EN CUÁL se
+                                    cuece (coordina la ocupación real, nunca desplaza lo que ya está
+                                    adentro) y CUÁNTO — se llena entero en vez de sólo lo que pedía
+                                    el reorden, y el excedente corre la próxima cocción más adelante
+                                    (mirar "Alcanza hasta" abajo). "Automático" vuelve al criterio
+                                    del modelo. onClick con stopPropagation porque el <select> vive
+                                    en el tooltip, no en el botón — no hace falta para el click en sí,
+                                    pero si el usuario suelta el drag encima interfiere si no se corta. */}
+                                {!l.enCurso && (
+                                  <div className="mt-1" onClick={ev => ev.stopPropagation()} onMouseDown={ev => ev.stopPropagation()}>
+                                    <select
+                                      value={l.tanqueManual ? l.tanque : ''}
+                                      onChange={ev => anclarTanque(l.producto, l.loteNro, ev.target.value)}
+                                      className="w-full rounded border border-white/20 bg-gray-800 px-1.5 py-1 text-[11px] font-bold text-white focus:outline-none"
+                                    >
+                                      <option value="">Automático — {l.tanque} ({fNum(l.capacidadTanque)} L)</option>
+                                      {ocupacionPlanta.tanques
+                                        .filter(t => t.categoria === l.categoria)
+                                        .sort((a, b) => a.capacidadLitros - b.capacidadLitros)
+                                        .map(t => (
+                                          <option key={t.tanque} value={t.tanque}>{t.tanque} ({fNum(t.capacidadLitros)} L)</option>
+                                        ))}
+                                    </select>
+                                  </div>
+                                )}
                                 <p>
                                   <span className="text-gray-400">
                                     {l.enCurso ? (l.fechaEmbarriladoReal ? 'Fecha embarrilado (ERP):' : 'Estimado (sin fecha ERP):') : 'Queda listo:'}
@@ -4490,12 +4576,14 @@ export default function ProduccionClient({
                                     <span className="text-gray-400"> (ahí toca cocer de nuevo)</span>
                                   </p>
                                 )}
-                                {l.enCurso && embarriladoVencido && (
-                                  <p className="mt-1.5 font-bold text-red-400">
-                                    Atrasado: el enólogo calculó esta fecha y ya pasó. El tanque sigue tomado —
-                                    conviene confirmar en planta si de verdad no se embarriló, o si el ERP quedó
-                                    desactualizado y el fermentador ya está libre.
+                                {l.tanqueManual && (
+                                  <p className="mt-1.5 text-emerald-300">
+                                    Tanque elegido a mano: se cuece lleno, más de lo que pedía el reorden. El excedente
+                                    queda como stock y corre la próxima cocción — por eso alcanza hasta más adelante.
                                   </p>
+                                )}
+                                {l.enCurso && embarriladoVencido && (
+                                  <p className="mt-1.5 font-bold text-red-400">Atraso de embarrilado</p>
                                 )}
                                 {l.enCurso && !embarriladoVencido && (
                                   <p className="mt-1.5 text-sky-300">
@@ -4564,12 +4652,20 @@ export default function ProduccionClient({
                           const embarriladoVencido = l.enCurso && !!l.fechaEmbarriladoReal
                             && l.fechaEmbarriladoReal < calendarioCobertura.hoyISO
                           return (
-                            <button
+                            // Ya no es un <button>: el selector de tanque vive adentro y un
+                            // <select> no puede anidarse dentro de un <button> (HTML inválido,
+                            // el navegador lo saca afuera y rompe el layout). role="button" +
+                            // teclado mantiene el mismo comportamiento accesible que tenía.
+                            <div
                               key={l.id}
-                              type="button"
+                              role={l.enCurso ? undefined : 'button'}
+                              tabIndex={l.enCurso ? undefined : 0}
                               onClick={() => { if (!l.enCurso) alternarLote(l) }}
-                              disabled={l.enCurso}
-                              className={`prod-press flex flex-col gap-1 rounded-lg border p-3 text-left ${
+                              onKeyDown={ev => {
+                                if (l.enCurso || (ev.key !== 'Enter' && ev.key !== ' ')) return
+                                ev.preventDefault(); alternarLote(l)
+                              }}
+                              className={`prod-press relative flex flex-col gap-1 rounded-lg border p-3 text-left ${l.enCurso ? '' : 'cursor-pointer'} ${
                                 l.enCurso
                                   ? embarriladoVencido ? 'border-red-500 bg-red-50' : 'border-sky-500 bg-sky-500/10'
                                   : !marcado
@@ -4583,17 +4679,49 @@ export default function ProduccionClient({
                                           : 'border-dashed border-emerald-400 bg-emerald-50'
                               }`}
                             >
+                              {l.tanqueManual && (
+                                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-emerald-500" title="Tanque elegido a mano" />
+                              )}
                               <div className="flex items-baseline justify-between gap-2">
                                 <span className="truncate text-sm font-bold text-gray-800">{l.producto}</span>
                                 <span className="shrink-0 text-sm font-bold tabular-nums text-gray-700">{fNum(l.litros)} L</span>
                               </div>
-                              <p className="text-xs text-gray-500">
-                                {l.enCurso ? 'Ya fermentando en ' : ''}{l.tanque}
-                                <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
-                                {' · '}
-                                {l.enCurso ? (l.fechaEmbarriladoReal ? 'embarrilado' : 'estimado') : 'listo'} el{' '}
-                                {new Date((l.enCurso ? (l.fechaEmbarriladoReal ?? l.fechaListo) : l.fechaListo) + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
-                              </p>
+                              {l.enCurso ? (
+                                <p className="text-xs text-gray-500">
+                                  Ya fermentando en {l.tanque}
+                                  <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
+                                  {' · '}
+                                  {l.fechaEmbarriladoReal ? 'embarrilado' : 'estimado'} el{' '}
+                                  {new Date((l.fechaEmbarriladoReal ?? l.fechaListo) + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                </p>
+                              ) : (
+                                <>
+                                  <p className="text-xs text-gray-500">
+                                    Listo el{' '}
+                                    {new Date(l.fechaListo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                  </p>
+                                  {/* Mismo criterio que el tooltip de escritorio: elegir tanque
+                                      decide DÓNDE (coordina ocupación real) y CUÁNTO (se llena
+                                      entero, no sólo lo que pedía el reorden). */}
+                                  <label className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500" onClick={ev => ev.stopPropagation()}>
+                                    Tanque:
+                                    <select
+                                      value={l.tanqueManual ? l.tanque : ''}
+                                      onChange={ev => { ev.stopPropagation(); anclarTanque(l.producto, l.loteNro, ev.target.value) }}
+                                      onClick={ev => ev.stopPropagation()}
+                                      className="min-w-0 flex-1 rounded border border-gray-200 bg-white px-1.5 py-1 text-xs font-bold text-gray-700"
+                                    >
+                                      <option value="">Automático — {l.tanque} ({fNum(l.capacidadTanque)} L)</option>
+                                      {ocupacionPlanta.tanques
+                                        .filter(t => t.categoria === l.categoria)
+                                        .sort((a, b) => a.capacidadLitros - b.capacidadLitros)
+                                        .map(t => (
+                                          <option key={t.tanque} value={t.tanque}>{t.tanque} ({fNum(t.capacidadLitros)} L)</option>
+                                        ))}
+                                    </select>
+                                  </label>
+                                </>
+                              )}
                               {!l.enCurso && (
                                 <p className="text-[11px] text-gray-400">
                                   Alcanza hasta el{' '}
@@ -4608,11 +4736,9 @@ export default function ProduccionClient({
                                 </p>
                               )}
                               {embarriladoVencido && (
-                                <p className="text-[11px] font-bold text-red-600">
-                                  Atrasado: el ERP calculó esta fecha y ya pasó. Confirmar en planta si sigue en el tanque.
-                                </p>
+                                <p className="text-[11px] font-bold text-red-600">Atraso de embarrilado</p>
                               )}
-                            </button>
+                            </div>
                           )
                         })}
                       </div>
@@ -4651,7 +4777,11 @@ export default function ProduccionClient({
                     porque no había tanque libre de su línea, pero llega igual; borde rojo = el stock se agota antes de
                     que esta cocción esté lista; <strong>tarjeta gris y apagada</strong> = está fuera del presupuesto —
                     TODA cocción sugerida entra así por defecto, sea de este mes o de dentro de un año, porque sigue
-                    siendo una propuesta del modelo y no algo ya decidido; un clic la activa. El lead time es por línea (4 semanas
+                    siendo una propuesta del modelo y no algo ya decidido; un clic la activa; <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 align-middle" /> = <strong>tanque elegido a mano</strong> desde el desplegable del tooltip —
+                    se llena entero en vez de sólo lo que pedía el reorden, y el excedente corre la próxima cocción más
+                    adelante (&quot;Alcanza hasta&quot; lo refleja); &quot;Automático&quot; en el desplegable vuelve al criterio del
+                    modelo. Elegir tanque nunca desplaza lo que ya está adentro: si el elegido sigue ocupado, la
+                    cocción espera a que se libere, igual que al mover la fecha. El lead time es por línea (4 semanas
                     cerveza / 3 kombucha), no por estilo puntual — todavía no hay ese dato cargado por receta. Se
                     recalcula solo con cada carga de la pantalla. Confirmalas desde las tarjetas de abajo o desde Plan Maestro.
                   </p>
