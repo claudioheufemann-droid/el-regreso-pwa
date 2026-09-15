@@ -1465,19 +1465,19 @@ export default function ProduccionClient({
      "Llega tarde" lo decide la propia simulación: si el stock del producto
      cruza cero mientras la cocción viene en camino, ese lote se marca como
      que no alcanzó. No es una comparación contra el borde del mes. */
-  /** El horizonte "de confianza": lo que arranca MARCADO en el presupuesto
-   *  sin que el usuario tenga que tocar nada (ver `marcadoPorDefecto` más
-   *  abajo). Es una constante, no cambia con el selector de abajo — extender
-   *  el horizonte no debería aflojar de golpe qué se compra sin mirar. */
-  const HORIZONTE_BASE_MESES = 3
+  /** Con cuántos meses arranca el selector de horizonte de abajo — no tiene
+   *  ningún efecto sobre qué queda marcado en el presupuesto (eso ahora es
+   *  uniforme: nada arranca marcado, ver `estaSeleccionado` más abajo). Es
+   *  sólo el valor inicial antes de que el usuario toque los atajos. */
+  const HORIZONTE_PLAN_INICIAL = 3
 
-  /** Cuántos meses simula el motor — antes era la misma constante de arriba
-   *  a secas, así que el calendario nunca pasaba de noviembre. Ahora es
-   *  ajustable (selector más abajo) y tiene un solo tope real: no hay
-   *  forecast más allá de `mesesSeguridad`, así que pedirle más al motor no
-   *  agrega cocciones nuevas, sólo un horizonte vacío. */
-  const [horizontePlanMeses, setHorizontePlanMeses] = useState(HORIZONTE_BASE_MESES)
-  const horizontePlanMax = mesesSeguridad.length || HORIZONTE_BASE_MESES
+  /** Cuántos meses simula el motor — antes era una constante fija en 3, así
+   *  que el calendario nunca pasaba de noviembre. Ahora es ajustable
+   *  (selector más abajo) y tiene un solo tope real: no hay forecast más
+   *  allá de `mesesSeguridad`, así que pedirle más al motor no agrega
+   *  cocciones nuevas, sólo un horizonte vacío. */
+  const [horizontePlanMeses, setHorizontePlanMeses] = useState(HORIZONTE_PLAN_INICIAL)
+  const horizontePlanMax = mesesSeguridad.length || HORIZONTE_PLAN_INICIAL
 
   /** Cocciones que el usuario movió a mano arrastrándolas en el calendario:
    *  `producto|Nº de cocción` → fecha pedida. La clave NO es el id del lote
@@ -1536,6 +1536,15 @@ export default function ProduccionClient({
       /** true si esta cocción está anclada a una fecha que el usuario eligió
        *  arrastrándola en el calendario, en vez de a su punto de reorden. */
       movidoManual: boolean
+      /** Sólo para `enCurso`: la fecha de embarrilado ESTIMADA tal cual la
+       *  trae el ERP, sin ajustar — puede estar vencida (el enólogo calculó
+       *  una fecha y el embarrilado se corrió). El calendario la usa para
+       *  posicionar el chip, en vez de `fechaListo` (que sí se recorta a hoy
+       *  como mínimo, porque ésa alimenta la simulación de stock y no puede
+       *  sumar litros en un día que ya pasó). Null para todo lo demás: las
+       *  cocciones sugeridas no tienen esta ambigüedad, `fechaListo` ya es
+       *  la fecha real proyectada. */
+      fechaEmbarriladoReal: string | null
     }
     interface MesPlan {
       mes: string; etiqueta: string
@@ -1665,6 +1674,7 @@ export default function ProduccionClient({
           loteNro: 0, loteDe: 0,
           fechaAgotamiento: sale, cubreHasta: sale,
           llegaATiempo: true, enCurso: true, movidoManual: false,
+          fechaEmbarriladoReal: t.fechaEstimada ?? null,
         }
         e.enCamino.push(lote)
         lotes.push(lote)
@@ -1694,6 +1704,7 @@ export default function ProduccionClient({
         leadTimeSemanas: e.leadTimeSemanas, conAlarma: e.conAlarma,
         loteNro: 0, loteDe: 0, fechaAgotamiento: sale, cubreHasta: sale,
         llegaATiempo: true, enCurso: true, movidoManual: false,
+        fechaEmbarriladoReal: sf?.fechaDisponibleEstimada ?? null,
       })
     }
 
@@ -1857,6 +1868,7 @@ export default function ProduccionClient({
           fechaAgotamiento: sumarDiasCalISO(d, consumo > 0 ? Math.max(0, Math.floor(posicion / consumo)) : 3650),
           cubreHasta: sumarDiasCalISO(fechaListo, consumo > 0 ? Math.max(0, Math.floor((posicion + litros) / consumo)) : 3650),
           llegaATiempo: true, enCurso: false, movidoManual: anclado,
+          fechaEmbarriladoReal: null,
         }
         lotes.push(lote)
         e.enCamino.push(lote)
@@ -1924,9 +1936,13 @@ export default function ProduccionClient({
     const porDia = new Map<number, typeof planSugerido.lotes>()
     for (const l of planSugerido.lotes) {
       // Una cocción sugerida se muestra el día que hay que PRENDER LA OLLA.
-      // Una que ya está en el tanque, el día que SALE — que es la fecha que
-      // le sirve a quien planifica: ahí se libera el tanque y entra stock.
-      const [y, m, d] = (l.enCurso ? l.fechaListo : l.fechaInicio).split('-').map(Number)
+      // Una que ya está en el tanque, el día real de EMBARRILADO que trae el
+      // ERP — aunque esté vencido: eso es justo lo que hay que ver (un
+      // fermentador que debió liberarse hace días y sigue con producto), no
+      // esconderlo bajo "hoy". `fechaListo` (que sí se recorta a hoy) sólo
+      // alimenta la simulación de stock, no la posición en el calendario.
+      const posicion = l.enCurso ? (l.fechaEmbarriladoReal ?? l.fechaListo) : l.fechaInicio
+      const [y, m, d] = posicion.split('-').map(Number)
       if (y !== anio || m !== mesIdx + 1) continue
       if (!porDia.has(d)) porDia.set(d, [])
       porDia.get(d)!.push(l)
@@ -1959,26 +1975,17 @@ export default function ProduccionClient({
    *  emite un domingo. */
   const LEAD_COMPRA_DIAS_HABILES = 5
 
-  /** Meses que arrancan MARCADOS en el presupuesto sin tocar nada — el
-   *  horizonte de confianza (los primeros HORIZONTE_BASE_MESES del plan
-   *  actual). Lo que el selector de arriba agrega más allá de eso entra al
-   *  calendario como sugerencia, pero arranca DESMARCADO: cuanto más lejos,
-   *  más especulativa la cocción (el forecast, el stock disponible y hasta
-   *  qué tanque va a estar libre son proyecciones sobre proyecciones), así
-   *  que no debería comprometer plata sin que alguien la mire primero.
-   *  Se recalcula con el plan, no queda pegado al primer cálculo. */
-  const mesesBaseActivos = useMemo(
-    () => new Set([...new Set(planSugerido.lotes.map(l => l.mes))].sort().slice(0, HORIZONTE_BASE_MESES)),
-    [planSugerido]
-  )
-  const marcadoPorDefecto = (l: { enCurso: boolean; mes: string }) => !l.enCurso && mesesBaseActivos.has(l.mes)
-
-  /** Cocciones cuyo estado de selección DIFIERE del default de arriba — no
-   *  un set de "las marcadas", sino de "las que el usuario tocó". Así una
-   *  cocción del horizonte base sigue marcada sin que nadie la toque, y una
-   *  del horizonte extendido sigue desmarcada hasta que se active a mano;
-   *  ninguna de las dos necesita que el usuario pase por todo el calendario
-   *  clickeando una por una. */
+  /** Ninguna cocción SUGERIDA arranca marcada para el presupuesto — ni
+   *  siquiera las de este mes. Toda sugerencia es una proyección (forecast +
+   *  punto de reorden + tanque asignado por el modelo, no algo que ya se
+   *  decidió cocer), así que ninguna debería sumar plata al presupuesto sin
+   *  que alguien la mire primero y la active a mano.
+   *
+   *  Las cocciones EN CURSO (ya en un fermentador) son la única excepción, y
+   *  ni siquiera pasan por acá: no son una sugerencia que activar, ya
+   *  ocurrieron — quedan afuera del set de selección directamente (`!l.enCurso`
+   *  en `lotesEnVentana` más abajo), se ven en el calendario en azul, y nunca
+   *  entran al presupuesto porque sus insumos ya se compraron. */
   const [togglesPresupuesto, setTogglesPresupuesto] = useState<Set<string>>(new Set())
   const [presupuestoDesde, setPresupuestoDesde] = useState<string>('')
   const [presupuestoHasta, setPresupuestoHasta] = useState<string>('')
@@ -2001,9 +2008,8 @@ export default function ProduccionClient({
     ),
     [planSugerido, ventanaDesde, ventanaHasta]
   )
-  const estaSeleccionado = (l: { id: string; enCurso: boolean; mes: string }) =>
-    togglesPresupuesto.has(l.id) ? !marcadoPorDefecto(l) : marcadoPorDefecto(l)
-  const alternarLote = (l: { id: string; enCurso: boolean; mes: string }) => {
+  const estaSeleccionado = (l: { id: string }) => togglesPresupuesto.has(l.id)
+  const alternarLote = (l: { id: string }) => {
     setTogglesPresupuesto(prev => {
       const siguiente = new Set(prev)
       if (siguiente.has(l.id)) siguiente.delete(l.id); else siguiente.add(l.id)
@@ -2196,10 +2202,10 @@ export default function ProduccionClient({
       sinPrecio: [...sinPrecio].sort(),
       sinReceta: [...sinReceta].sort(),
     }
-    // `estaSeleccionado`/`marcadoPorDefecto` se derivan de togglesPresupuesto
-    // y mesesBaseActivos, que ya están en la lista.
+    // `estaSeleccionado` se deriva de togglesPresupuesto, que ya está en la
+    // lista — no hace falta como dependencia propia.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lotesEnVentana, togglesPresupuesto, mesesBaseActivos, recetaInsumos, stockInsumos])
+  }, [lotesEnVentana, togglesPresupuesto, recetaInsumos, stockInsumos])
 
   /** Excel de orden de compra. El xlsx se carga sólo al apretar el botón
    *  (import dinámico): es una librería pesada y no tiene por qué viajar en
@@ -4210,14 +4216,13 @@ export default function ProduccionClient({
                       )}
                     </div>
                   </div>
-                  {horizontePlanMeses > HORIZONTE_BASE_MESES && (
-                    <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      <Info size={13} className="mt-0.5 shrink-0" />
-                      Más allá de {HORIZONTE_BASE_MESES} meses las cocciones sugeridas entran{' '}
-                      <strong className="mx-1">desmarcadas</strong> del presupuesto — son más especulativas cuanto más
-                      lejos, así que hay que activarlas a mano (clic en la tarjeta) antes de que sumen a la compra.
-                    </p>
-                  )}
+                  <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <Info size={13} className="mt-0.5 shrink-0" />
+                    Todas las cocciones sugeridas —de este mes o de más adelante— entran{' '}
+                    <strong className="mx-1">desmarcadas</strong> del presupuesto: son propuestas del modelo, no algo
+                    ya decidido, así que hay que activarlas a mano (clic en la tarjeta) antes de que sumen a la compra.
+                    Lo que ya está fermentando no necesita esto — sus insumos ya se compraron.
+                  </p>
                   <p className="mb-4 text-sm text-gray-500">
                     Simulación día a día del inventario de cada producto: el stock baja al ritmo del forecast y se
                     programa una cocción cada vez que toca su punto de reorden, arrancando por la fecha que ya propone
@@ -4410,6 +4415,10 @@ export default function ProduccionClient({
                             const noLlega = !l.llegaATiempo
                             // Marcado = entra al presupuesto de insumos de abajo.
                             const marcado = !l.enCurso && estaSeleccionado(l)
+                            // La fecha que el ERP calculó ya pasó y el tanque
+                            // sigue con producto: el embarrilado se atrasó.
+                            const embarriladoVencido = l.enCurso && !!l.fechaEmbarriladoReal
+                              && l.fechaEmbarriladoReal < calendarioCobertura.hoyISO
                             return (
                             <div key={l.id} className="group/chip relative">
                               <button
@@ -4428,7 +4437,9 @@ export default function ProduccionClient({
                                   l.enCurso ? 'cursor-default' : 'cursor-pointer'
                                 } ${arrastrando === `${l.producto}|${l.loteNro}` ? 'opacity-30' : ''} ${
                                   l.enCurso
-                                    ? 'border-sky-500 bg-sky-500/10 text-sky-800'
+                                    ? embarriladoVencido
+                                      ? 'border-red-500 bg-red-50 text-red-700'
+                                      : 'border-sky-500 bg-sky-500/10 text-sky-800'
                                     : l.movidoManual && marcado
                                       ? 'border-[1.5px] border-[#C9A227] bg-[#C9A227]/10 text-[#7a6216]'
                                     : !marcado
@@ -4441,7 +4452,9 @@ export default function ProduccionClient({
                                 }`}
                               >
                                 {l.enCurso
-                                  ? <Beaker size={9} className="shrink-0 text-sky-600" />
+                                  ? embarriladoVencido
+                                    ? <AlertTriangle size={9} className="shrink-0 text-red-600" />
+                                    : <Beaker size={9} className="shrink-0 text-sky-600" />
                                   : l.movidoManual
                                     ? <ArrowDown size={9} className="shrink-0 -rotate-90 text-[#C9A227]" />
                                     : l.diasTarde > 0 && !noLlega && <Beaker size={9} className="shrink-0 text-purple-600" />}
@@ -4465,8 +4478,10 @@ export default function ProduccionClient({
                                   <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
                                 </p>
                                 <p>
-                                  <span className="text-gray-400">{l.enCurso ? 'Se embarrila:' : 'Queda listo:'}</span>{' '}
-                                  <strong>{new Date(l.fechaListo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
+                                  <span className="text-gray-400">
+                                    {l.enCurso ? (l.fechaEmbarriladoReal ? 'Fecha embarrilado (ERP):' : 'Estimado (sin fecha ERP):') : 'Queda listo:'}
+                                  </span>{' '}
+                                  <strong>{new Date((l.enCurso ? (l.fechaEmbarriladoReal ?? l.fechaListo) : l.fechaListo) + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
                                 </p>
                                 {!l.enCurso && (
                                   <p>
@@ -4475,7 +4490,14 @@ export default function ProduccionClient({
                                     <span className="text-gray-400"> (ahí toca cocer de nuevo)</span>
                                   </p>
                                 )}
-                                {l.enCurso && (
+                                {l.enCurso && embarriladoVencido && (
+                                  <p className="mt-1.5 font-bold text-red-400">
+                                    Atrasado: el enólogo calculó esta fecha y ya pasó. El tanque sigue tomado —
+                                    conviene confirmar en planta si de verdad no se embarriló, o si el ERP quedó
+                                    desactualizado y el fermentador ya está libre.
+                                  </p>
+                                )}
+                                {l.enCurso && !embarriladoVencido && (
                                   <p className="mt-1.5 text-sky-300">
                                     Cocción que ya ocurrió: está en el tanque ahora. El tanque se libera ese día y esos
                                     litros recién ahí se pueden vender.
@@ -4539,6 +4561,8 @@ export default function ProduccionClient({
                         </p>
                         {dia.lotes.map(l => {
                           const marcado = !l.enCurso && estaSeleccionado(l)
+                          const embarriladoVencido = l.enCurso && !!l.fechaEmbarriladoReal
+                            && l.fechaEmbarriladoReal < calendarioCobertura.hoyISO
                           return (
                             <button
                               key={l.id}
@@ -4547,7 +4571,7 @@ export default function ProduccionClient({
                               disabled={l.enCurso}
                               className={`prod-press flex flex-col gap-1 rounded-lg border p-3 text-left ${
                                 l.enCurso
-                                  ? 'border-sky-500 bg-sky-500/10'
+                                  ? embarriladoVencido ? 'border-red-500 bg-red-50' : 'border-sky-500 bg-sky-500/10'
                                   : !marcado
                                     ? 'border-gray-200 bg-white opacity-60'
                                     : !l.llegaATiempo
@@ -4567,8 +4591,8 @@ export default function ProduccionClient({
                                 {l.enCurso ? 'Ya fermentando en ' : ''}{l.tanque}
                                 <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
                                 {' · '}
-                                {l.enCurso ? 'se embarrila' : 'listo'} el{' '}
-                                {new Date(l.fechaListo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                {l.enCurso ? (l.fechaEmbarriladoReal ? 'embarrilado' : 'estimado') : 'listo'} el{' '}
+                                {new Date((l.enCurso ? (l.fechaEmbarriladoReal ?? l.fechaListo) : l.fechaListo) + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
                               </p>
                               {!l.enCurso && (
                                 <p className="text-[11px] text-gray-400">
@@ -4581,6 +4605,11 @@ export default function ProduccionClient({
                                 <p className="text-[11px] font-bold text-red-600">
                                   No llega: el stock se agota cerca del{' '}
                                   {new Date(l.fechaAgotamiento + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}.
+                                </p>
+                              )}
+                              {embarriladoVencido && (
+                                <p className="text-[11px] font-bold text-red-600">
+                                  Atrasado: el ERP calculó esta fecha y ya pasó. Confirmar en planta si sigue en el tanque.
                                 </p>
                               )}
                             </button>
@@ -4615,13 +4644,14 @@ export default function ProduccionClient({
                     sus nuevas fechas de compra. Una cocción movida no puede saltarse la planta: si ese día no hay
                     tanque libre de su línea, no hay cupo de sala o es feriado, cae en el primer día que sí se pueda y
                     el tooltip lo dice. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; borde azul lleno = <strong>ya está fermentando</strong> (no hay que
-                    cocerla: se muestra el día que sale del tanque, que es cuando entra a bodega y se libera el
-                    fermentador); <Beaker size={9} className="inline text-purple-600" /> = se corrió de su fecha ideal
+                    cocerla: se muestra en la fecha real de embarrilado que trae el ERP, que es cuando entra a bodega y
+                    se libera el fermentador); borde azul con ⚠ = esa fecha de embarrilado <strong>ya pasó</strong> y el
+                    tanque sigue con producto según el ERP — vale la pena confirmar en planta si es un dato viejo o si
+                    de verdad sigue tomado; <Beaker size={9} className="inline text-purple-600" /> = se corrió de su fecha ideal
                     porque no había tanque libre de su línea, pero llega igual; borde rojo = el stock se agota antes de
                     que esta cocción esté lista; <strong>tarjeta gris y apagada</strong> = está fuera del presupuesto —
-                    más allá de {HORIZONTE_BASE_MESES} meses todo entra así por defecto, porque cuanto más lejos más
-                    especulativa (el forecast, el stock y hasta qué tanque va a estar libre son proyecciones sobre
-                    proyecciones); un clic la activa. El lead time es por línea (4 semanas
+                    TODA cocción sugerida entra así por defecto, sea de este mes o de dentro de un año, porque sigue
+                    siendo una propuesta del modelo y no algo ya decidido; un clic la activa. El lead time es por línea (4 semanas
                     cerveza / 3 kombucha), no por estilo puntual — todavía no hay ese dato cargado por receta. Se
                     recalcula solo con cada carga de la pantalla. Confirmalas desde las tarjetas de abajo o desde Plan Maestro.
                   </p>
@@ -5325,23 +5355,14 @@ export default function ProduccionClient({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            // "Marcar todas" activa incluso lo que está fuera
-                            // del horizonte base — es una decisión explícita
-                            // del usuario, no el default silencioso.
-                            const todas = planSugerido.lotes.filter(l => !l.enCurso)
-                            setTogglesPresupuesto(new Set(todas.filter(l => !marcadoPorDefecto(l)).map(l => l.id)))
-                          }}
+                          onClick={() => setTogglesPresupuesto(new Set(planSugerido.lotes.filter(l => !l.enCurso).map(l => l.id)))}
                           className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
                         >
                           Marcar todas
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            const todas = planSugerido.lotes.filter(l => !l.enCurso)
-                            setTogglesPresupuesto(new Set(todas.filter(l => marcadoPorDefecto(l)).map(l => l.id)))
-                          }}
+                          onClick={() => setTogglesPresupuesto(new Set())}
                           className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
                         >
                           Desmarcar todas
