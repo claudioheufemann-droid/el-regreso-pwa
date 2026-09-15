@@ -308,6 +308,34 @@ export function esClienteExcluidoFinanzas(nombre: string | null | undefined): bo
 }
 
 /**
+ * Clientes de CLIENTES_INCLUIR_FINANZAS que además son venta al CONTADO
+ * (punto de venta propio o feria): cobran en el momento, nunca generan un
+ * movimiento de cuenta corriente del que sacar un plazo. El maestro de
+ * `clientes` nunca les trae `dias_pago` — ni declarado ni real observado —
+ * porque no son cuentas de crédito en el ERP, y cada sincronización desde el
+ * ERP vuelve a pisar cualquier valor cargado a mano con null.
+ *
+ * Sin esto, el flujo de caja de Administración (proyectarCaja/
+ * construirFlujoSemanal) los manda al balde "sin plazo estimable" y esa
+ * plata desaparece tanto de "confirmado" como de "proyectado" — encontrado
+ * auditando el módulo, 15-sep-2026: ~$45M netos de los últimos 120 días
+ * (24% de la venta despachada) quedaban así, casi todo Cliente PDV.
+ */
+export const CLIENTES_COBRO_INMEDIATO: string[] = [
+  'cliente pdv',
+  'cliente feria',
+]
+
+/** Plazo de cobro a usar para un cliente, forzando 0 días para los de
+ *  CLIENTES_COBRO_INMEDIATO sin importar lo que traiga `clientes` —
+ *  ver el comentario de esa constante. */
+export function diasPagoEfectivo(nombre: string | null | undefined, diasPagoDelMaestro: number | null): number | null {
+  const n = (nombre ?? '').toLowerCase().trim()
+  if (CLIENTES_COBRO_INMEDIATO.some(inc => n.includes(inc))) return 0
+  return diasPagoDelMaestro
+}
+
+/**
  * Subconjunto de CLIENTES_EXCLUIR que además de excluirse de los reportes de
  * venta real, ni siquiera se GUARDA en `ventas` al cargar un archivo del ERP.
  *

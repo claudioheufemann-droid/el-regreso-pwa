@@ -13,7 +13,7 @@ import {
   type ClienteRiesgo, type CicloConversion,
 } from '@/lib/administracion/flujoSemanal'
 import { esCamaraProduccion } from '@/lib/camaras'
-import { vendedorCanonico } from '@/lib/types'
+import { vendedorCanonico, diasPagoEfectivo } from '@/lib/types'
 import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
 import AdministracionClient from './AdministracionClient'
 
@@ -284,7 +284,7 @@ export default async function AdministracionPage() {
     const dias = c.dias_pago_real_muestras != null && c.dias_pago_real_muestras >= 3
       ? c.dias_pago_real_mediana
       : c.dias_pago
-    if (previo == null) diasPagoPorCliente.set(k, dias)
+    if (previo == null) diasPagoPorCliente.set(k, diasPagoEfectivo(c.nombre_fantasia, dias))
   }
 
   // Se descartan los cobros esperados de hace más de 14 días: `ventas` no dice
