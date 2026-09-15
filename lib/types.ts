@@ -355,6 +355,11 @@ export const CLIENTES_FORECAST_INDIVIDUAL: string[] = [
  */
 export const NOMBRE_RESTAURANTE_FORECAST = 'Restaurante BaseCamp'
 
+/** Etiqueta de la serie agregada de compras (todos los proveedores juntos)
+ *  en la pestaña Forecast — nivel='compra' en forecast_finanzas, clave =
+ *  este string o el nombre exacto de un proveedor de `compras_historico`. */
+export const NOMBRE_COMPRAS_TOTAL = 'Total compras'
+
 /** Plazo de cobro a usar para un cliente, forzando 0 días para los de
  *  CLIENTES_COBRO_INMEDIATO sin importar lo que traiga `clientes` —
  *  ver el comentario de esa constante. */

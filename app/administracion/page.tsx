@@ -13,7 +13,7 @@ import {
   type ClienteRiesgo, type CicloConversion,
 } from '@/lib/administracion/flujoSemanal'
 import { esCamaraProduccion } from '@/lib/camaras'
-import { vendedorCanonico, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST } from '@/lib/types'
+import { vendedorCanonico, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
 import AdministracionClient from './AdministracionClient'
 
@@ -32,7 +32,7 @@ export interface PuntoFinanzas {
 
 export interface SerieFinanzas {
   id: string
-  nivel: 'general' | 'categoria' | 'cliente' | 'restaurante'
+  nivel: 'general' | 'categoria' | 'cliente' | 'restaurante' | 'compra'
   clave: string | null
   puntos: PuntoFinanzas[]
   /** Error del backtest walk-forward a 1 mes, en %. null = no alcanzó el
@@ -162,7 +162,7 @@ export default async function AdministracionPage() {
 
   const [
     forecastRaw, validacionRaw, ventasRaw, clientesRaw, deudoresRaw, ultimaCorridaRaw,
-    saldosRaw, comprasRaw, stockRaw, ventasRestauranteRaw,
+    saldosRaw, comprasRaw, stockRaw, ventasRestauranteRaw, comprasHistoricoRaw,
   ] = await Promise.all([
     (async () => {
       const filas: Record<string, unknown>[] = []
@@ -228,6 +228,11 @@ export default async function AdministracionPage() {
     admin.from('ventas_restaurante').select('fecha, monto')
       .gte('fecha', desdeVentas)
       .then(r => (r.data ?? []) as { fecha: string; monto: number }[]),
+    // Compras por proveedor (compras_historico, cargada a mano) para el
+    // forecast de Compras — misma ventana que ventasRaw.
+    admin.from('compras_historico').select('fecha, proveedor, monto')
+      .gte('fecha', desdeVentas)
+      .then(r => (r.data ?? []) as { fecha: string; proveedor: string; monto: number }[]),
   ])
 
   // ── Deuda actual por cliente (antes /administracion/cobranza, absorbida acá
@@ -299,6 +304,16 @@ export default async function AdministracionPage() {
     mtdRestaurante += Number(r.monto) || 0
   }
 
+  // Compra del ciclo en curso, general y por proveedor.
+  const mtdComprasPorProveedor = new Map<string, number>()
+  let mtdComprasGeneral = 0
+  for (const c of comprasHistoricoRaw) {
+    if (c.fecha < inicioCiclo || c.fecha > finCiclo) continue
+    const monto = Number(c.monto) || 0
+    mtdComprasGeneral += monto
+    mtdComprasPorProveedor.set(c.proveedor, (mtdComprasPorProveedor.get(c.proveedor) ?? 0) + monto)
+  }
+
   const series: SerieFinanzas[] = [...porSerie.entries()].map(([id, puntos]) => {
     const [nivel, claveRaw] = id.split('::')
     const clave = claveRaw || null
@@ -306,9 +321,10 @@ export default async function AdministracionPage() {
     const montoCicloEnCurso = nivel === 'general' ? mtdGeneral.neto
       : nivel === 'cliente' ? (mtdPorCliente.get(clave ?? '') ?? 0)
       : nivel === 'restaurante' ? mtdRestaurante
+      : nivel === 'compra' ? (clave === NOMBRE_COMPRAS_TOTAL ? mtdComprasGeneral : (mtdComprasPorProveedor.get(clave ?? '') ?? 0))
       : (mtdPorCategoria.get(clave ?? '') ?? 0)
     return {
-      id, nivel: nivel as 'general' | 'categoria' | 'cliente' | 'restaurante', clave,
+      id, nivel: nivel as 'general' | 'categoria' | 'cliente' | 'restaurante' | 'compra', clave,
       puntos: puntos.sort((a, b) => a.mes.localeCompare(b.mes)),
       mape: val?.mape != null ? Number(val.mape) : null,
       mesesHistorial: val?.meses_historial != null ? Number(val.meses_historial) : null,
@@ -594,6 +610,32 @@ export default async function AdministracionPage() {
     realesRestaurante,
   ))
 
+  // Compras por proveedor — plata que SALE, no que entra. [0] = "Total
+  // compras" (agregado real de TODOS los proveedores, no sólo los que
+  // tienen modelo propio); el resto son las series con nivel='compra' que
+  // el endpoint ya filtró a proveedores con presencia recurrente.
+  const realesComprasTotal = new Map<string, number>()
+  const realesComprasPorProveedor = new Map<string, Map<string, number>>()
+  for (const c of comprasHistoricoRaw) {
+    const lunes = lunesDeFecha(c.fecha)
+    const monto = Number(c.monto) || 0
+    realesComprasTotal.set(lunes, (realesComprasTotal.get(lunes) ?? 0) + monto)
+    const acc = realesComprasPorProveedor.get(c.proveedor) ?? new Map<string, number>()
+    acc.set(lunes, (acc.get(lunes) ?? 0) + monto)
+    realesComprasPorProveedor.set(c.proveedor, acc)
+  }
+  const forecastCompras: ForecastCliente[] = [
+    armarForecastCliente(NOMBRE_COMPRAS_TOTAL, series.find(s => s.nivel === 'compra' && s.clave === NOMBRE_COMPRAS_TOTAL), realesComprasTotal),
+    ...series
+      .filter(s => s.nivel === 'compra' && s.clave !== NOMBRE_COMPRAS_TOTAL)
+      .sort((a, b) => {
+        const totalA = a.puntos.filter(p => p.tipo === 'historico').reduce((s, p) => s + p.monto, 0)
+        const totalB = b.puntos.filter(p => p.tipo === 'historico').reduce((s, p) => s + p.monto, 0)
+        return totalB - totalA
+      })
+      .map(s => armarForecastCliente(s.clave!, s, realesComprasPorProveedor.get(s.clave!) ?? new Map())),
+  ]
+
   return (
     <AdministracionClient
       series={series}
@@ -610,6 +652,7 @@ export default async function AdministracionPage() {
       clientesPorVendedor={clientesPorVendedor}
       maquilaPorCliente={maquilaPorCliente}
       forecastClientes={forecastClientes}
+      forecastCompras={forecastCompras}
     />
   )
 }

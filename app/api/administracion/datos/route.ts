@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { DIA_INICIO_CICLO, DIA_FIN_CICLO } from '@/lib/produccion/reglas'
-import { CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST } from '@/lib/types'
+import { CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
+
+/** Un proveedor necesita al menos esta cantidad de ciclos con compra para
+ *  que valga la pena correrle Prophet — forecastear una compra puntual de
+ *  una sola vez no dice nada, y serían decenas de series sin valor. 12
+ *  ciclos ~ un año de presencia dentro del historial cargado (hoy ~36
+ *  ciclos posibles, sep-2023 a la fecha). */
+const MIN_CICLOS_PROVEEDOR_COMPRAS = 12
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -82,6 +89,24 @@ export async function GET(req: Request) {
     .map(f => ({ mes: String(f.ciclo).slice(0, 10), monto: Math.round(Number(f.monto) || 0) }))
     .sort((a, b) => a.mes.localeCompare(b.mes))
 
+  // Compras por proveedor — nueva tabla compras_historico (informe "Compras
+  // detalladas" del ERP, cargado a mano). Mismo tratamiento que restaurante:
+  // ciclo interno + Prophet + reparto a semanas, pero acá con una dimensión
+  // extra (proveedor) que el resto de las series no tiene.
+  const { data: filasCompras, error: errCompras } = await supabase.rpc('compras_por_ciclo')
+  if (errCompras) return NextResponse.json({ error: errCompras.message }, { status: 500 })
+  const comprasFilas = (filasCompras ?? []) as { ciclo: string; proveedor: string; monto: number }[]
+
+  const comprasGeneral = new Map<string, number>()
+  const comprasPorProveedor = new Map<string, Map<string, number>>()
+  for (const f of comprasFilas) {
+    const mes = String(f.ciclo).slice(0, 10)
+    const monto = Number(f.monto) || 0
+    comprasGeneral.set(mes, (comprasGeneral.get(mes) ?? 0) + monto)
+    if (!comprasPorProveedor.has(f.proveedor)) comprasPorProveedor.set(f.proveedor, new Map())
+    comprasPorProveedor.get(f.proveedor)!.set(mes, monto)
+  }
+
   const filas = (data ?? []) as { ciclo: string; categoria: string; monto: number }[]
 
   const general = new Map<string, number>()
@@ -145,12 +170,21 @@ export async function GET(req: Request) {
   const clienteObj: Record<string, { mes: string; monto: number }[]> = {}
   for (const [nombre, serie] of clientePorNombre) clienteObj[nombre] = serie
 
+  const comprasObj: Record<string, { mes: string; monto: number }[]> = {
+    [NOMBRE_COMPRAS_TOTAL]: toArray(comprasGeneral),
+  }
+  for (const [proveedor, serie] of comprasPorProveedor) {
+    if (serie.size < MIN_CICLOS_PROVEEDOR_COMPRAS) continue
+    comprasObj[proveedor] = toArray(serie)
+  }
+
   return NextResponse.json({
     series: {
       general: serieGeneral,
       categoria: categoriaObj,
       cliente: clienteObj,
       restaurante: { [NOMBRE_RESTAURANTE_FORECAST]: serieRestaurante },
+      compras: comprasObj,
     },
     calidadDatos: calidad,
     meta: { ciclosConVenta: serieGeneral.length, categorias: Object.keys(categoriaObj) },

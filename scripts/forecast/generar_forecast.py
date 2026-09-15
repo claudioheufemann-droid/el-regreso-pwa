@@ -519,6 +519,17 @@ def correr_finanzas(mes_base: pd.Timestamp) -> int:
             forecast, validacion, [],
         )
 
+    # Compras por proveedor (compras_historico, cargada a mano) — el
+    # endpoint ya filtró a "Total compras" + proveedores con presencia
+    # recurrente (>=12 ciclos); acá sólo se corre Prophet para cada una.
+    compras = series.get("compras", {})
+    print(f"[Finanzas] Compras: {len(compras)} series")
+    for nombre, puntos in compras.items():
+        comprometer_serie(
+            procesar_serie("compra", nombre, a_puntos(puntos), mes_base),
+            forecast, validacion, [],
+        )
+
     # De vuelta a la unidad real: el endpoint de carga espera monto/montoMin/montoMax.
     filas = [
         {
