@@ -1276,6 +1276,38 @@ export default function ProduccionClient({
      alcanza pero se acerca una temporada alta que se lo va a comer rápido. */
   const [fechaCoberturaSeg, setFechaCoberturaSeg] = useState(() => hoyLocalISO(new Date(Date.now() + 60 * 86400000)))
 
+  /** Hasta dónde de verdad se puede cubrir: el último mes con forecast real
+   *  (`mesesSeguridad`, calculado arriba). Elegir una fecha más allá de esto
+   *  no rompe nada, pero es una trampa silenciosa — `demandaProyectadaEnPeriodo`
+   *  sólo suma litros donde hay un ciclo de forecast; para los meses sin dato
+   *  simplemente no suma nada, así que "A producir" se ve más chico de lo que
+   *  en realidad hace falta, sin ningún aviso. Se usa como tope del selector
+   *  para que esa fecha ni se pueda elegir. */
+  const horizonteCoberturaISO = mesesSeguridad.length > 0 ? finDeCiclo(mesesSeguridad[mesesSeguridad.length - 1]) : ''
+
+  /** Atajos sobre la fecha "Cubrir hasta" — antes era un único campo de fecha
+   *  suelto que arrancaba en +60 días y daba la impresión de estar fijo ahí.
+   *  Los atajos cubren los horizontes que de verdad se preguntan (mes a mes,
+   *  trimestre, semestre) y quedan acotados al horizonte real de arriba: no
+   *  tiene sentido ofrecer "6 meses" si el forecast sólo llega a 4. */
+  const presetsCobertura = useMemo(() => {
+    const hoyMs = Date.now()
+    const candidatos = [
+      { label: '1 mes', dias: 30 },
+      { label: '2 meses', dias: 60 },
+      { label: '3 meses', dias: 90 },
+      { label: '6 meses', dias: 180 },
+    ].map(p => ({ label: p.label, fecha: hoyLocalISO(new Date(hoyMs + p.dias * 86400000)) }))
+      .filter(p => !horizonteCoberturaISO || p.fecha <= horizonteCoberturaISO)
+    // Si el horizonte cae justo sobre un atajo que ya existe (ej.: el
+    // forecast termina exactamente a 6 meses), no se agrega un botón
+    // duplicado que apunte a la misma fecha con otro nombre.
+    if (horizonteCoberturaISO && !candidatos.some(p => p.fecha === horizonteCoberturaISO)) {
+      candidatos.push({ label: 'Fin del forecast', fecha: horizonteCoberturaISO })
+    }
+    return candidatos
+  }, [horizonteCoberturaISO])
+
   const necesidadesAnticipadas = useMemo(() => {
     const hoyISO = hoyLocalISO()
     if (fechaCoberturaSeg <= hoyISO) return []
@@ -3636,12 +3668,47 @@ export default function ProduccionClient({
                       y qué productos vienen con una temporada de alta demanda por delante.
                     </p>
                   </div>
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col items-end gap-1.5">
                     <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Cubrir hasta</label>
-                    <input
-                      type="date" value={fechaCoberturaSeg} onChange={e => setFechaCoberturaSeg(e.target.value)}
-                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      {/* Atajos a los horizontes que de verdad se preguntan — antes
+                          sólo había un campo de fecha suelto arrancando en +60
+                          días, sin señal de que se podía mover más allá. */}
+                      {presetsCobertura.map(p => (
+                        <button
+                          key={p.label}
+                          type="button"
+                          onClick={() => setFechaCoberturaSeg(p.fecha)}
+                          className={`prod-press rounded-full px-2.5 py-1 text-xs font-bold ${
+                            fechaCoberturaSeg === p.fecha
+                              ? 'text-white'
+                              : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}
+                          style={fechaCoberturaSeg === p.fecha ? { backgroundColor: COLORS.darkGreen } : undefined}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                      <input
+                        type="date" value={fechaCoberturaSeg} onChange={e => setFechaCoberturaSeg(e.target.value)}
+                        min={hoyLocalISO(new Date(Date.now() + 86400000))}
+                        max={horizonteCoberturaISO || undefined}
+                        className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    {/* El tope no es arbitrario: es donde se acaba el forecast.
+                        Elegir algo más allá no rompe el cálculo, pero lo hace
+                        mentir por defecto — los meses sin forecast simplemente
+                        no suman demanda, así que "A producir" se vería más chico
+                        de lo real sin ningún aviso. Por eso el date input ya no
+                        deja pasar de ahí, y acá se explica por qué. */}
+                    {horizonteCoberturaISO && (
+                      <p className="text-[11px] text-gray-400">
+                        El forecast llega hasta el{' '}
+                        {new Date(horizonteCoberturaISO + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
+                        {' '}— no se puede cubrir más allá sin proyección de venta.
+                      </p>
+                    )}
                   </div>
                 </div>
 
