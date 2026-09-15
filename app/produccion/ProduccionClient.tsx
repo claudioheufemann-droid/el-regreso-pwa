@@ -1414,6 +1414,18 @@ export default function ProduccionClient({
      que no alcanzó. No es una comparación contra el borde del mes. */
   const HORIZONTE_MESES_PLAN = 3
 
+  /** Cocciones que la sala puede sacar en un día POR LÍNEA (cervecería y
+   *  kombuchería son procesos separados, así que el tope es por cada una).
+   *
+   *  Sin este tope el calendario era físicamente imposible: como casi todos
+   *  los productos ya están bajo su punto de reorden HOY, los 14 disparaban
+   *  el mismo día y el plan mostraba 14 cocciones en una sola jornada. Tener
+   *  tanque libre no significa poder macerar: la olla es una sola.
+   *
+   *  Si el número real es otro, se cambia acá y todo el plan se reacomoda
+   *  solo — es el único lugar donde vive el supuesto. */
+  const COCCIONES_POR_DIA_LINEA = 2
+
   const planSugerido = useMemo(() => {
     const hoyISO = hoyLocalISO()
     const sumarDiasCalISO = (desde: string, dias: number) =>
@@ -1548,6 +1560,12 @@ export default function ProduccionClient({
 
     for (let d = hoyISO; d < finISO; d = sumarDiasCalISO(d, 1)) {
       const mesHoy = mesDe(d)
+      /* Cupo de la sala de cocción para ESTE día. Sábados, domingos y
+         feriados no tienen cupo: nadie macera un 18 de septiembre. El stock
+         igual se sigue vendiendo y consumiendo esos días — lo único que no
+         pasa es que se prenda la olla. */
+      const coccionesHoy = new Map<'cerveza' | 'kombucha', number>()
+      const diaHabil = esDiaHabilISO(d)
       for (const e of orden) {
         const p = paramsDe(e, mesHoy)
 
@@ -1567,15 +1585,19 @@ export default function ProduccionClient({
 
         // c) ¿Toca cocer? Dos gatillos: la alarma del Plan Maestro (sólo la
         //    primera vez) o el punto de reorden del producto.
-        let guardia = 0
-        for (;;) {
-          guardia++
-          if (guardia > 4) break
+        //    Una sola cocción por producto y por día: dos lotes del mismo
+        //    estilo el mismo día son dos macerados, no caben en una jornada.
+        {
           const enCaminoLitros = e.enCamino.reduce((s, l) => s + l.litros, 0)
           const posicion = e.stock + enCaminoLitros
           const forzado = e.forzarEl != null && d >= e.forzarEl
           if (!forzado && posicion > p.puntoReorden) break
           if (e.nro >= 12) break
+          // La sala de cocción tiene un tope diario, y no se cuece sábado,
+          // domingo ni feriado: si no hay cupo, la cocción espera (y ese
+          // atraso queda contado más abajo como `diasTarde`).
+          if (!diaHabil) break
+          if ((coccionesHoy.get(e.categoria) ?? 0) >= COCCIONES_POR_DIA_LINEA) break
 
           /* Nivel objetivo de reposición: se repone hasta DEJAR EL INVENTARIO
              POR ENCIMA del punto de reorden, con un mes de venta de holgura.
@@ -1644,6 +1666,7 @@ export default function ProduccionClient({
           lotes.push(lote)
           e.enCamino.push(lote)
           libreDesde.set(elegido.tanque, fechaListo)
+          coccionesHoy.set(e.categoria, (coccionesHoy.get(e.categoria) ?? 0) + 1)
           e.forzarEl = null
           e.pendienteDesde = null
         }
@@ -3323,8 +3346,9 @@ export default function ProduccionClient({
                     Maestro; de ahí en adelante se simula el consumo del forecast día a día y la siguiente se agenda
                     cuando el stock proyectado toca el punto de reorden — por eso las cocciones de un mismo producto
                     se reparten en el tiempo en vez de amontonarse. Cada tanque queda tomado el lead time completo
-                    antes de poder reutilizarse. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta
-                    cuándo alcanza. Borde punteado = sugerencia sin confirmar; <Beaker size={9} className="inline text-purple-600" /> = se
+                    antes de poder reutilizarse, y la sala de cocción tiene tope: hasta {COCCIONES_POR_DIA_LINEA} cocciones
+                    por día por línea, sólo en días hábiles (no se macera sábado, domingo ni feriado). Pasá el cursor
+                    para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; <Beaker size={9} className="inline text-purple-600" /> = se
                     corrió de su fecha ideal porque no había tanque libre de su línea, pero llega igual; borde rojo =
                     el stock se agota antes de que esta cocción esté lista. El lead time es por línea (4 semanas
                     cerveza / 3 kombucha), no por estilo puntual — todavía no hay ese dato cargado por receta. Se
