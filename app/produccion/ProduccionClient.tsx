@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -1486,6 +1487,30 @@ export default function ProduccionClient({
    *  sobrevive a esa regeneración. */
   const [anclasCoccion, setAnclasCoccion] = useState<Map<string, string>>(new Map())
   const [arrastrando, setArrastrando] = useState<string | null>(null)
+
+  /** Tooltip del calendario: antes era un panel `absolute` sujeto al chip, y
+   *  la propia celda del día lo recortaba (overflow del contenedor scrollable)
+   *  apenas el chip estaba cerca del borde de la grilla — se veía tal cual lo
+   *  mostró el usuario, la mitad del panel cortada. Se resuelve con un
+   *  portal a `document.body`: el tooltip deja de ser descendiente de la
+   *  celda (nada que lo recorte) y se posiciona en coordenadas de pantalla
+   *  (`position: fixed`) calculadas a partir del rectángulo real del chip.
+   *  `lote` es lo que hay que pintar; `rect` es de dónde salió, para ubicar
+   *  el panel y decidir si abre hacia arriba o hacia abajo. */
+  const [tooltipHover, setTooltipHover] = useState<{ lote: (typeof planSugerido.lotes)[number]; rect: DOMRect } | null>(null)
+  // Pequeño margen antes de cerrar: sin esto, mover el mouse del chip hacia
+  // el propio tooltip (para tocar el <select> de tanque, por ejemplo) lo
+  // cierra a mitad de camino porque el mouse cruza un hueco que ya no tiene
+  // encima ningún elemento — el tooltip vive en otro lugar del DOM ahora.
+  const cierreTooltipRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const abrirTooltip = (lote: (typeof planSugerido.lotes)[number], rect: DOMRect) => {
+    if (cierreTooltipRef.current) { clearTimeout(cierreTooltipRef.current); cierreTooltipRef.current = null }
+    setTooltipHover({ lote, rect })
+  }
+  const programarCierreTooltip = () => {
+    if (cierreTooltipRef.current) clearTimeout(cierreTooltipRef.current)
+    cierreTooltipRef.current = setTimeout(() => setTooltipHover(null), 120)
+  }
 
   const anclarCoccion = (producto: string, nro: number, fechaISO: string) => {
     setAnclasCoccion(prev => new Map(prev).set(`${producto}|${nro}`, fechaISO))
@@ -4467,7 +4492,14 @@ export default function ProduccionClient({
                             const embarriladoVencido = l.enCurso && !!l.fechaEmbarriladoReal
                               && l.fechaEmbarriladoReal < calendarioCobertura.hoyISO
                             return (
-                            <div key={l.id} className="group/chip relative">
+                            <div
+                              key={l.id}
+                              className="relative"
+                              onMouseEnter={ev => abrirTooltip(l, ev.currentTarget.getBoundingClientRect())}
+                              onMouseLeave={programarCierreTooltip}
+                              onFocus={ev => abrirTooltip(l, ev.currentTarget.getBoundingClientRect())}
+                              onBlur={programarCierreTooltip}
+                            >
                               {/* Punto independiente de todo lo demás: un tanque elegido a
                                   mano puede coincidir con cualquier otro estado (movida,
                                   atrasada, no llega), así que no compite por el color del
@@ -4517,112 +4549,6 @@ export default function ProduccionClient({
                                     : l.diasTarde > 0 && !noLlega && <Beaker size={9} className="shrink-0 text-purple-600" />}
                                 <span className="truncate">{l.producto}</span>
                               </button>
-                              {/* Detalle al pasar el cursor: cuánto, en qué tanque,
-                                  cuándo queda listo y hasta cuándo cubre. */}
-                              <div className="invisible absolute -top-2 left-1/2 z-20 w-56 -translate-x-1/2 -translate-y-full rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white opacity-0 shadow-xl transition-opacity group-hover/chip:visible group-hover/chip:opacity-100">
-                                <p className="font-bold">
-                                  {l.producto}
-                                  {l.loteDe > 1 && <span className="ml-1 font-normal text-gray-400">· cocción {l.loteNro} de {l.loteDe}</span>}
-                                </p>
-                                <p className="mt-1 text-gray-300">
-                                  {l.enCurso
-                                    ? 'Ya está fermentando — no hay que cocerla'
-                                    : `${l.categoria === 'kombucha' ? 'Kombuchería' : 'Cervecería'} · ${l.leadTimeSemanas} semanas en tanque`}
-                                </p>
-                                <p className="mt-1.5">
-                                  <span className="text-gray-400">{l.enCurso ? 'Salen:' : 'Cocer:'}</span> <strong>{fNum(l.litros)} L</strong>
-                                  {l.enCurso && (
-                                    <>
-                                      <span className="text-gray-400"> en </span><strong>{l.tanque}</strong>
-                                      <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
-                                    </>
-                                  )}
-                                </p>
-                                {/* Elegir el tanque a mano decide dos cosas a la vez: EN CUÁL se
-                                    cuece (coordina la ocupación real, nunca desplaza lo que ya está
-                                    adentro) y CUÁNTO — se llena entero en vez de sólo lo que pedía
-                                    el reorden, y el excedente corre la próxima cocción más adelante
-                                    (mirar "Alcanza hasta" abajo). "Automático" vuelve al criterio
-                                    del modelo. onClick con stopPropagation porque el <select> vive
-                                    en el tooltip, no en el botón — no hace falta para el click en sí,
-                                    pero si el usuario suelta el drag encima interfiere si no se corta. */}
-                                {!l.enCurso && (
-                                  <div className="mt-1" onClick={ev => ev.stopPropagation()} onMouseDown={ev => ev.stopPropagation()}>
-                                    <select
-                                      value={l.tanqueManual ? l.tanque : ''}
-                                      onChange={ev => anclarTanque(l.producto, l.loteNro, ev.target.value)}
-                                      className="w-full rounded border border-white/20 bg-gray-800 px-1.5 py-1 text-[11px] font-bold text-white focus:outline-none"
-                                    >
-                                      <option value="">Automático — {l.tanque} ({fNum(l.capacidadTanque)} L)</option>
-                                      {ocupacionPlanta.tanques
-                                        .filter(t => t.categoria === l.categoria)
-                                        .sort((a, b) => a.capacidadLitros - b.capacidadLitros)
-                                        .map(t => (
-                                          <option key={t.tanque} value={t.tanque}>{t.tanque} ({fNum(t.capacidadLitros)} L)</option>
-                                        ))}
-                                    </select>
-                                  </div>
-                                )}
-                                <p>
-                                  <span className="text-gray-400">
-                                    {l.enCurso ? (l.fechaEmbarriladoReal ? 'Fecha embarrilado (ERP):' : 'Estimado (sin fecha ERP):') : 'Queda listo:'}
-                                  </span>{' '}
-                                  <strong>{new Date((l.enCurso ? (l.fechaEmbarriladoReal ?? l.fechaListo) : l.fechaListo) + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
-                                </p>
-                                {!l.enCurso && (
-                                  <p>
-                                    <span className="text-gray-400">Alcanza hasta:</span>{' '}
-                                    <strong>{new Date(l.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
-                                    <span className="text-gray-400"> (ahí toca cocer de nuevo)</span>
-                                  </p>
-                                )}
-                                {l.tanqueManual && (
-                                  <p className="mt-1.5 text-emerald-300">
-                                    Tanque elegido a mano: se cuece lleno, más de lo que pedía el reorden. El excedente
-                                    queda como stock y corre la próxima cocción — por eso alcanza hasta más adelante.
-                                  </p>
-                                )}
-                                {l.enCurso && embarriladoVencido && (
-                                  <p className="mt-1.5 font-bold text-red-400">Atraso de embarrilado</p>
-                                )}
-                                {l.enCurso && !embarriladoVencido && (
-                                  <p className="mt-1.5 text-sky-300">
-                                    Cocción que ya ocurrió: está en el tanque ahora. El tanque se libera ese día y esos
-                                    litros recién ahí se pueden vender.
-                                  </p>
-                                )}
-                                {l.conAlarma && !l.enCurso && (
-                                  <p className="mt-1.5 text-amber-300">Este producto ya tiene alarma de quiebre activa.</p>
-                                )}
-                                {noLlega && (
-                                  <p className="mt-1.5 font-bold text-red-400">
-                                    No llega: el stock se agota cerca del{' '}
-                                    {new Date(l.fechaAgotamiento + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} y
-                                    esta cocción recién queda lista después.
-                                  </p>
-                                )}
-                                {l.diasTarde > 0 && !noLlega && (
-                                  <p className="mt-1.5 text-purple-300">
-                                    Se corrió {l.diasTarde} {l.diasTarde === 1 ? 'día' : 'días'} de la fecha ideal
-                                    ({new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}) porque
-                                    el tanque no estaba libre antes — igual llega a tiempo.
-                                  </p>
-                                )}
-                                {l.movidoManual && (
-                                  <p className="mt-1.5 font-bold text-[#E6C34A]">
-                                    Movida a mano a esta fecha.
-                                    {l.diasTarde > 0 && ` Se pidió para el ${new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} pero no había tanque libre de su línea hasta acá.`}
-                                    {' '}Las cocciones siguientes de este producto se recalcularon con el forecast.
-                                  </p>
-                                )}
-                                {!l.enCurso && (
-                                  <p className="mt-1.5 border-t border-white/15 pt-1.5 text-[10px] text-gray-400">
-                                    {marcado ? 'Incluida en el presupuesto — clic para sacarla.' : 'Fuera del presupuesto — clic para incluirla.'}
-                                    {' '}Arrastrala a otro día para moverla.
-                                  </p>
-                                )}
-                                <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 bg-gray-900" />
-                              </div>
                             </div>
                             )
                           })}
@@ -4752,6 +4678,156 @@ export default function ProduccionClient({
                     calendario en un computador: el arrastre no funciona en pantalla táctil.
                   </p>
                 </div>
+
+                {/* Portal: el tooltip se pinta en document.body, en coordenadas de
+                    pantalla — así ninguna celda ni contenedor con scroll lo recorta,
+                    sin importar en qué borde de la grilla esté el chip. */}
+                {tooltipHover && typeof document !== 'undefined' && createPortal(
+                  (() => {
+                    const l = tooltipHover.lote
+                    const rect = tooltipHover.rect
+                    const noLlega = !l.llegaATiempo
+                    const marcado = !l.enCurso && estaSeleccionado(l)
+                    const embarriladoVencido = l.enCurso && !!l.fechaEmbarriladoReal && l.fechaEmbarriladoReal < calendarioCobertura.hoyISO
+
+                    const ANCHO = 224 // w-56
+                    const MARGEN = 8
+                    // Centrado sobre el chip por defecto, pero clampeado para no
+                    // salirse de la pantalla — cerca de los bordes izq/der de la
+                    // grilla el tooltip ya no queda perfectamente centrado, y es
+                    // preferible eso a que se corte.
+                    const centroX = rect.left + rect.width / 2
+                    const left = Math.min(
+                      Math.max(centroX, MARGEN + ANCHO / 2),
+                      window.innerWidth - MARGEN - ANCHO / 2
+                    )
+                    // Arriba por defecto (como antes); si no hay ~260px libres
+                    // encima —el caso exacto que reportó el usuario, chips de la
+                    // primera fila del mes— se abre hacia abajo en su lugar.
+                    const ALTO_ESTIMADO = 260
+                    const abreAbajo = rect.top < ALTO_ESTIMADO
+                    const top = abreAbajo ? rect.bottom + MARGEN : rect.top - MARGEN
+
+                    return (
+                      <div
+                        style={{ position: 'fixed', left, top, width: ANCHO, zIndex: 9999, transform: `translate(-50%, ${abreAbajo ? '0' : '-100%'})` }}
+                        onMouseEnter={() => abrirTooltip(l, rect)}
+                        onMouseLeave={programarCierreTooltip}
+                        className="rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white shadow-xl"
+                      >
+                        <p className="font-bold">
+                          {l.producto}
+                          {l.loteDe > 1 && <span className="ml-1 font-normal text-gray-400">· cocción {l.loteNro} de {l.loteDe}</span>}
+                        </p>
+                        <p className="mt-1 text-gray-300">
+                          {l.enCurso
+                            ? 'Ya está fermentando — no hay que cocerla'
+                            : `${l.categoria === 'kombucha' ? 'Kombuchería' : 'Cervecería'} · ${l.leadTimeSemanas} semanas en tanque`}
+                        </p>
+                        <p className="mt-1.5">
+                          <span className="text-gray-400">{l.enCurso ? 'Salen:' : 'Cocer:'}</span> <strong>{fNum(l.litros)} L</strong>
+                          {l.enCurso && (
+                            <>
+                              <span className="text-gray-400"> en </span><strong>{l.tanque}</strong>
+                              <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
+                            </>
+                          )}
+                        </p>
+                        {/* Elegir el tanque a mano decide dos cosas a la vez: EN CUÁL se
+                            cuece (coordina la ocupación real, nunca desplaza lo que ya está
+                            adentro) y CUÁNTO — se llena entero en vez de sólo lo que pedía
+                            el reorden, y el excedente corre la próxima cocción más adelante
+                            (mirar "Alcanza hasta" abajo). "Automático" vuelve al criterio
+                            del modelo. */}
+                        {!l.enCurso && (
+                          <div className="mt-1">
+                            <select
+                              value={l.tanqueManual ? l.tanque : ''}
+                              onChange={ev => anclarTanque(l.producto, l.loteNro, ev.target.value)}
+                              className="w-full rounded border border-white/20 bg-gray-800 px-1.5 py-1 text-[11px] font-bold text-white focus:outline-none"
+                            >
+                              <option value="">Automático — {l.tanque} ({fNum(l.capacidadTanque)} L)</option>
+                              {ocupacionPlanta.tanques
+                                .filter(t => t.categoria === l.categoria)
+                                .sort((a, b) => a.capacidadLitros - b.capacidadLitros)
+                                .map(t => (
+                                  <option key={t.tanque} value={t.tanque}>{t.tanque} ({fNum(t.capacidadLitros)} L)</option>
+                                ))}
+                            </select>
+                          </div>
+                        )}
+                        <p>
+                          <span className="text-gray-400">
+                            {l.enCurso ? (l.fechaEmbarriladoReal ? 'Fecha embarrilado (ERP):' : 'Estimado (sin fecha ERP):') : 'Queda listo:'}
+                          </span>{' '}
+                          <strong>{new Date((l.enCurso ? (l.fechaEmbarriladoReal ?? l.fechaListo) : l.fechaListo) + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
+                        </p>
+                        {!l.enCurso && (
+                          <p>
+                            <span className="text-gray-400">Alcanza hasta:</span>{' '}
+                            <strong>{new Date(l.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
+                            <span className="text-gray-400"> (ahí toca cocer de nuevo)</span>
+                          </p>
+                        )}
+                        {l.tanqueManual && (
+                          <p className="mt-1.5 text-emerald-300">
+                            Tanque elegido a mano: se cuece lleno, más de lo que pedía el reorden. El excedente
+                            queda como stock y corre la próxima cocción — por eso alcanza hasta más adelante.
+                          </p>
+                        )}
+                        {l.enCurso && embarriladoVencido && (
+                          <p className="mt-1.5 font-bold text-red-400">Atraso de embarrilado</p>
+                        )}
+                        {l.enCurso && !embarriladoVencido && (
+                          <p className="mt-1.5 text-sky-300">
+                            Cocción que ya ocurrió: está en el tanque ahora. El tanque se libera ese día y esos
+                            litros recién ahí se pueden vender.
+                          </p>
+                        )}
+                        {l.conAlarma && !l.enCurso && (
+                          <p className="mt-1.5 text-amber-300">Este producto ya tiene alarma de quiebre activa.</p>
+                        )}
+                        {noLlega && (
+                          <p className="mt-1.5 font-bold text-red-400">
+                            No llega: el stock se agota cerca del{' '}
+                            {new Date(l.fechaAgotamiento + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} y
+                            esta cocción recién queda lista después.
+                          </p>
+                        )}
+                        {l.diasTarde > 0 && !noLlega && (
+                          <p className="mt-1.5 text-purple-300">
+                            Se corrió {l.diasTarde} {l.diasTarde === 1 ? 'día' : 'días'} de la fecha ideal
+                            ({new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}) porque
+                            el tanque no estaba libre antes — igual llega a tiempo.
+                          </p>
+                        )}
+                        {l.movidoManual && (
+                          <p className="mt-1.5 font-bold text-[#E6C34A]">
+                            Movida a mano a esta fecha.
+                            {l.diasTarde > 0 && ` Se pidió para el ${new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} pero no había tanque libre de su línea hasta acá.`}
+                            {' '}Las cocciones siguientes de este producto se recalcularon con el forecast.
+                          </p>
+                        )}
+                        {!l.enCurso && (
+                          <p className="mt-1.5 border-t border-white/15 pt-1.5 text-[10px] text-gray-400">
+                            {marcado ? 'Incluida en el presupuesto — clic para sacarla.' : 'Fuera del presupuesto — clic para incluirla.'}
+                            {' '}Arrastrala a otro día para moverla.
+                          </p>
+                        )}
+                        {/* La flechita apunta desde el mismo lado por el que se abrió —
+                            abajo del panel cuando abre hacia arriba, arriba cuando abre
+                            hacia abajo — no necesariamente al centro exacto del chip si
+                            el panel se clampeó cerca de un borde de la pantalla. */}
+                        <div
+                          className={`absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900 ${
+                            abreAbajo ? '-top-1' : 'top-full -translate-y-1'
+                          }`}
+                        />
+                      </div>
+                    )
+                  })(),
+                  document.body
+                )}
 
                   <p className="mt-3 text-xs text-gray-400">
                     Cada tarjeta es una cocción concreta: un volumen que cabe en un tanque que existe, con ese tanque
