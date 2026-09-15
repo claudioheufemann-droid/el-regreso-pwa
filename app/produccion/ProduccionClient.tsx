@@ -276,24 +276,45 @@ function fMinutosDesde(min: number) {
   return `hace ${Math.round(horas / 24)} d`
 }
 
+/** Las seis preguntas que el módulo responde, en el orden en que se hacen
+ *  de verdad en la planta: primero cuánto se va a vender, después cuánto hay
+ *  que cocer, después cuándo, y al final qué comprar para poder hacerlo.
+ *
+ *  El `sub` no es decoración: es el criterio con el que se decidió qué va en
+ *  cada pantalla. Antes "Stock de Seguridad" acumulaba siete secciones —el
+ *  colchón, el calendario, la capacidad de planta y el presupuesto— bajo un
+ *  nombre que describía sólo la primera, y había tres lugares distintos con
+ *  números de compra. Si una sección no contesta la pregunta del `sub`, está
+ *  en la pantalla equivocada. */
 const navItems = [
-  { id: 'resumen', icon: LayoutDashboard, label: 'Resumen General' },
-  { id: 'forecasting', icon: TrendingUp, label: 'Forecasting' },
-  { id: 'seguridad', icon: Package, label: 'Stock de Seguridad' },
-  { id: 'plan', icon: CalendarDays, label: 'Plan Maestro' },
-  { id: 'insumos', icon: ShoppingCart, label: 'Insumos y Compras' },
-  { id: 'presupuesto', icon: CircleDollarSign, label: 'Presupuesto' },
+  { id: 'resumen', icon: LayoutDashboard, label: 'Resumen', sub: 'Cómo venimos' },
+  { id: 'forecasting', icon: TrendingUp, label: 'Forecasting', sub: 'Cuánto vamos a vender' },
+  { id: 'seguridad', icon: Package, label: 'Cuánto cocinar', sub: 'Colchón y punto de reorden' },
+  { id: 'calendario', icon: CalendarDays, label: 'Cuándo cocinar', sub: 'Calendario y tanques' },
+  { id: 'plan', icon: CheckCircle2, label: 'Plan Maestro', sub: 'Cocciones confirmadas' },
+  { id: 'insumos', icon: ShoppingCart, label: 'Qué comprar', sub: 'Insumos, cuánto y cuándo' },
+  { id: 'presupuesto', icon: CircleDollarSign, label: 'Presupuesto', sub: 'Gasto proyectado' },
 ] as const
 
 type TabId = (typeof navItems)[number]['id']
 
-/** Agrupación del menú: primero entender la demanda, después decidir qué
- *  producir y comprar. Una lista plana de seis ítems no comunicaba ese orden. */
 const GRUPOS_NAV: { titulo: string; items: TabId[] }[] = [
   { titulo: 'Demanda', items: ['resumen', 'forecasting'] },
-  { titulo: 'Planificación', items: ['seguridad', 'plan'] },
+  { titulo: 'Producción', items: ['seguridad', 'calendario', 'plan'] },
   { titulo: 'Abastecimiento', items: ['insumos', 'presupuesto'] },
 ]
+
+/** Encabezado de cada vista: la pregunta que contesta, en una línea. Es lo
+ *  que evita que el módulo vuelva a convertirse en un montón de tarjetas sin
+ *  jerarquía — cada pantalla declara para qué está. */
+function PreguntaDeLaVista({ pregunta, detalle }: { pregunta: string; detalle: string }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+      <h2 className="text-base font-bold text-gray-800 sm:text-lg">{pregunta}</h2>
+      <p className="mt-1 text-sm text-gray-500">{detalle}</p>
+    </div>
+  )
+}
 
 /** Alta manual de un lote al Plan Maestro. Estado propio (no vive en el
  *  padre) porque es puramente del formulario — se descarta al cerrar. */
@@ -2249,7 +2270,11 @@ export default function ProduccionClient({
   const alertasPorTab = useMemo<Partial<Record<TabId, number>>>(() => ({
     forecasting: advertencias.length,
     seguridad: filasStockSeguridad.filter(f => f.estado === 'critico' || f.estado === 'bajo').length,
-  }), [advertencias.length, filasStockSeguridad])
+    // Una cocción que no alcanza a estar lista antes de que el producto se
+    // agote es exactamente lo que hay que ver sin entrar a la pantalla.
+    calendario: planSugerido.lotes.filter(l => !l.enCurso && !l.llegaATiempo).length
+      + planSugerido.sinTanque.length,
+  }), [advertencias.length, filasStockSeguridad, planSugerido])
 
   // Antes se derivaba de necesidadInsumos, que con la cola de producción
   // vacía queda vacío también (aunque el stock SÍ esté cargado) — ese falso
@@ -2420,6 +2445,7 @@ export default function ProduccionClient({
   )
 
   const tituloActual = navItems.find(i => i.id === activeTab)?.label ?? ''
+  const subtituloActual = navItems.find(i => i.id === activeTab)?.sub ?? ''
 
   return (
     // prod-root: excluye a este módulo del reset global `* { padding: 0 }` de
@@ -2480,7 +2506,12 @@ export default function ProduccionClient({
                         style={{ backgroundColor: COLORS.amber, opacity: activo ? 1 : 0 }}
                       />
                       <item.icon size={18} className="shrink-0" style={{ color: activo ? COLORS.amber : undefined }} />
-                      <span className="flex-1 truncate">{item.label}</span>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate">{item.label}</span>
+                        <span className={`truncate text-[10px] font-medium ${activo ? 'text-white/70' : 'text-white/35'}`}>
+                          {item.sub}
+                        </span>
+                      </span>
                       {alertas > 0 && (
                         <span
                           className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-black tabular-nums"
@@ -2543,7 +2574,10 @@ export default function ProduccionClient({
             <Link href="/" aria-label="Volver al inicio" className="shrink-0 rounded-md p-1.5 text-gray-500 hover:bg-gray-100 lg:hidden">
               <Home size={18} />
             </Link>
-            <h2 className="truncate text-base font-bold text-gray-800 lg:text-xl">{tituloActual}</h2>
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-bold text-gray-800 lg:text-xl">{tituloActual}</h2>
+              <p className="truncate text-[11px] text-gray-400 lg:text-xs">{subtituloActual}</p>
+            </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-3 lg:gap-6">
@@ -2580,20 +2614,34 @@ export default function ProduccionClient({
         )}
 
         {/* ── Tabs (móvil) ── */}
-        <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-gray-200 bg-white px-3 py-2 lg:hidden">
-          {navItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`prod-press flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                activeTab === item.id ? 'text-white' : 'bg-gray-100 text-gray-600'
-              }`}
-              style={{ backgroundColor: activeTab === item.id ? COLORS.darkGreen : undefined }}
-            >
-              <item.icon size={14} />
-              {item.label}
-            </button>
-          ))}
+        <div className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-gray-200 bg-white px-3 py-2 lg:hidden">
+          {navItems.map(item => {
+            const activo = activeTab === item.id
+            const alertas = alertasPorTab[item.id] ?? 0
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                aria-current={activo ? 'page' : undefined}
+                className={`prod-press relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                  activo ? 'text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+                style={{ backgroundColor: activo ? COLORS.darkGreen : undefined }}
+              >
+                <item.icon size={14} />
+                {item.label}
+                {/* En el teléfono no se ve el menú lateral, así que la marca
+                    de alertas tiene que viajar acá o se pierde. */}
+                {alertas > 0 && (
+                  <span className={`rounded-full px-1.5 text-[10px] font-black tabular-nums ${
+                    activo ? 'bg-white/25 text-white' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {alertas}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
         {/* ── Contenido ── */}
@@ -2819,6 +2867,11 @@ export default function ProduccionClient({
             // computed height de la tarjeta de la tabla: 35px de alto,
             // wrapper interno en 0px pese a tener 94 filas en el DOM.
             <div className="prod-enter flex min-h-full flex-col gap-6">
+              <PreguntaDeLaVista
+                pregunta="¿Cuánto vamos a vender?"
+                detalle="La proyección de demanda que alimenta todo lo demás: el colchón de seguridad, el calendario de cocciones y el presupuesto de insumos salen de acá."
+              />
+
 
               {/* Filtros */}
               <div className="flex flex-wrap items-end gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -3503,6 +3556,11 @@ export default function ProduccionClient({
           {/* ══════════ VISTA 3: STOCK DE SEGURIDAD ══════════ */}
           {activeTab === 'seguridad' && (
             <div className="prod-enter flex flex-col gap-6">
+              <PreguntaDeLaVista
+                pregunta="¿Cuánto hay que cocinar de cada producto?"
+                detalle="El colchón de seguridad y el punto de reorden que salen del forecast, contra lo que hay hoy en bodega. Acá se decide el CUÁNTO; el cuándo está en la pantalla siguiente."
+              />
+
 
               {stockSeguridad.length === 0 ? (
                 <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
@@ -3561,774 +3619,7 @@ export default function ProduccionClient({
                 ))}
               </div>
 
-              {/* ══════════ PLAN DE COBERTURA ══════════
-                  Resumen mensual del MISMO plan que muestra el calendario de
-                  abajo — no un cálculo aparte. Cada cifra de acá es la suma
-                  de lotes reales ya asignados a un tanque concreto, así que
-                  las dos vistas no pueden contradecirse. */}
-              {planSugerido.porMes.length > 0 && (
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <CalendarIcon size={18} style={{ color: COLORS.darkGreen }} />
-                    <h3 className="font-bold text-gray-800">Plan de Cobertura — {HORIZONTE_MESES_PLAN} meses</h3>
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
-                      {planSugerido.lotes.filter(l => !l.enCurso).length} {planSugerido.lotes.filter(l => !l.enCurso).length === 1 ? 'cocción' : 'cocciones'} programadas
-                    </span>
-                    {/* El plan arranca de la planta real: lo que hoy está en los
-                        tanques no se vuelve a cocer, y esos fermentadores no se
-                        pueden usar hasta que se embarrilen. */}
-                    {planSugerido.lotes.some(l => l.enCurso) && (
-                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-700">
-                        + {fNum(planSugerido.lotes.filter(l => l.enCurso).reduce((a, l) => a + l.litros, 0))} L ya fermentando
-                        en {planSugerido.lotes.filter(l => l.enCurso).length} {planSugerido.lotes.filter(l => l.enCurso).length === 1 ? 'tanque' : 'tanques'}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mb-4 text-sm text-gray-500">
-                    Simulación día a día del inventario de cada producto: el stock baja al ritmo del forecast y se
-                    programa una cocción cada vez que toca su punto de reorden, arrancando por la fecha que ya propone
-                    el Plan Maestro. Cada cocción se acota al tamaño de un tanque que existe de verdad, con su
-                    fermentador asignado. Parte de la planta como está hoy: lo que ya se está fermentando no se vuelve
-                    a cocer, suma a stock recién el día que se embarrila, y mantiene su tanque ocupado hasta entonces
-                    — el detalle día por día está en el calendario de abajo.
-                  </p>
 
-                  {planSugerido.sinTanque.length > 0 && (
-                    <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                      <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-600" />
-                      <div>
-                        <p className="font-bold">
-                          {planSugerido.sinTanque.length} {planSugerido.sinTanque.length === 1 ? 'volumen sin tanque' : 'volúmenes sin tanque'} donde ponerlo
-                        </p>
-                        <p className="mt-0.5 text-red-700">
-                          {planSugerido.sinTanque.map(s => `${s.producto} (${fNum(s.litros)} L)`).join(', ')} — no alcanzan
-                          los fermentadores de esa línea dentro del horizonte. Hay que sumar capacidad, correr la
-                          cobertura, o aceptar el quiebre.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="overflow-x-auto">
-                    <div className="flex min-w-max gap-3 pb-1">
-                      {planSugerido.porMes.map(f => (
-                        <div
-                          key={f.mes}
-                          className={`prod-hover-card w-60 shrink-0 rounded-lg border p-3 ${
-                            f.severidad === 'critico' ? 'border-red-300 bg-red-50/60'
-                              : f.severidad === 'ajustado' ? 'border-amber-300 bg-amber-50/60'
-                              : 'border-emerald-200 bg-emerald-50/40'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-bold capitalize text-gray-800">{f.etiqueta}</span>
-                            <span
-                              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                                f.severidad === 'critico' ? 'bg-red-500' : f.severidad === 'ajustado' ? 'bg-amber-500' : 'bg-emerald-500'
-                              }`}
-                              title={
-                                f.severidad === 'critico' ? 'Hay cocciones que no alcanzan a estar listas antes de que el producto se agote.'
-                                  : f.severidad === 'ajustado' ? 'Alguna cocción tuvo que correrse de su fecha ideal por falta de tanque libre.'
-                                  : 'Todo entra en fecha con los tanques disponibles.'
-                              }
-                            />
-                          </div>
-
-                          <div className="mt-2.5 border-t border-gray-200/70 pt-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Cervecería (T)</span>
-                              <span className="text-xs font-bold tabular-nums text-gray-800">{fNum(f.litrosCerveza)} L</span>
-                            </div>
-                            <p className="mt-0.5 text-[11px] text-gray-500">
-                              {f.lotesCerveza === 0 ? 'Sin cocciones' : `${f.lotesCerveza} ${f.lotesCerveza === 1 ? 'cocción' : 'cocciones'}`}
-                            </p>
-                          </div>
-
-                          <div className="mt-2 border-t border-gray-200/70 pt-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Kombuchería (K)</span>
-                              <span className="text-xs font-bold tabular-nums text-gray-800">{fNum(f.litrosKombucha)} L</span>
-                            </div>
-                            <p className="mt-0.5 text-[11px] text-gray-500">
-                              {f.lotesKombucha === 0 ? 'Sin cocciones' : `${f.lotesKombucha} ${f.lotesKombucha === 1 ? 'cocción' : 'cocciones'}`}
-                            </p>
-                          </div>
-
-                          {f.lotesTarde > 0 ? (
-                            <p className="mt-2.5 border-t border-gray-200/70 pt-2 text-[11px] font-bold text-red-600">
-                              {f.lotesTarde} {f.lotesTarde === 1 ? 'cocción no llega' : 'cocciones no llegan'} antes de que se agote el producto.
-                            </p>
-                          ) : f.lotesCerveza + f.lotesKombucha === 0 ? (
-                            <p className="mt-2.5 border-t border-gray-200/70 pt-2 text-[11px] text-emerald-600">
-                              Cubierto con stock + colchón, sin cocer nada nuevo.
-                            </p>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Calendario diario de cocciones SUGERIDAS — el "cuándo" del
-                  Plan de Cobertura, día por día. Distinto a propósito del
-                  Cronograma de Cocciones de Resumen: ahí sólo viven lotes YA
-                  CONFIRMADOS; acá se ve lo que el modelo sugiere ANTES de
-                  apretar "Agregar al plan", para poder armar el calendario
-                  completo de un vistazo antes de confirmar cada cocción. */}
-              <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-4 lg:px-6">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="font-bold text-gray-800">Calendario de Cocciones Sugeridas</h3>
-                    <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-                      Sin confirmar
-                    </span>
-                    {/* Los ajustes manuales viven sólo en esta sesión: no se
-                        guardan en base. Hay que poder devolver el plan al
-                        original sin recargar la página. */}
-                    {anclasCoccion.size > 0 && (
-                      <button
-                        type="button"
-                        onClick={limpiarAnclas}
-                        className="prod-press flex items-center gap-1 rounded-full border border-[#C9A227] bg-[#C9A227]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#7a6216] hover:bg-[#C9A227]/20"
-                        title="Volver al plan que propone el modelo"
-                      >
-                        <X size={11} />
-                        {anclasCoccion.size} {anclasCoccion.size === 1 ? 'cocción movida' : 'cocciones movidas'} — deshacer
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setMesCoberturaOffset(v => v - 1)}
-                      className="prod-hover-icon prod-press rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-50"
-                      aria-label="Mes anterior"
-                    >
-                      <ChevronDown size={16} className="rotate-90" />
-                    </button>
-                    <span className="min-w-[9rem] text-center text-sm font-bold capitalize text-gray-700">{calendarioCobertura.etiqueta}</span>
-                    <button
-                      onClick={() => setMesCoberturaOffset(v => v + 1)}
-                      className="prod-hover-icon prod-press rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-50"
-                      aria-label="Mes siguiente"
-                    >
-                      <ChevronDown size={16} className="-rotate-90" />
-                    </button>
-                    {mesCoberturaOffset !== 0 && (
-                      <button
-                        onClick={() => setMesCoberturaOffset(0)}
-                        className="prod-press rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50"
-                      >
-                        Hoy
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="overflow-auto p-4">
-                  <div className="grid min-w-[620px] grid-cols-7 gap-2">
-                    {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(dia => (
-                      <div key={dia} className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-gray-400">
-                        {dia}
-                      </div>
-                    ))}
-
-                    {Array.from({ length: calendarioCobertura.offsetPrimerDia }, (_, i) => <div key={`vacio-${i}`} />)}
-
-                    {calendarioCobertura.dias.map(dia => {
-                      const fechaDiaISO = `${calendarioCobertura.anio}-${String(calendarioCobertura.mesIdx + 1).padStart(2, '0')}-${String(dia.dia).padStart(2, '0')}`
-                      const esHoy = fechaDiaISO === calendarioCobertura.hoyISO
-                      return (
-                      <div
-                        key={dia.dia}
-                        onDragOver={ev => { if (arrastrando && fechaDiaISO >= calendarioCobertura.hoyISO) ev.preventDefault() }}
-                        onDrop={ev => {
-                          ev.preventDefault()
-                          // El id que viaja es `producto|Nº de cocción`, no el
-                          // id del lote: al soltar se re-simula todo y los
-                          // ids cambian (ver el comentario en el motor).
-                          const carga = ev.dataTransfer.getData('text/plain') || arrastrando
-                          setArrastrando(null)
-                          if (!carga || fechaDiaISO < calendarioCobertura.hoyISO) return
-                          const corte = carga.lastIndexOf('|')
-                          if (corte < 0) return
-                          anclarCoccion(carga.slice(0, corte), Number(carga.slice(corte + 1)), fechaDiaISO)
-                        }}
-                        className={`prod-hover-card relative flex min-h-[80px] flex-col gap-1 rounded-md border p-1.5 ${
-                          arrastrando && fechaDiaISO >= calendarioCobertura.hoyISO
-                            ? 'border-dashed border-[#C9A227] bg-[#C9A227]/5'
-                            : esHoy ? 'border-[#0F3D2E] bg-[#0F3D2E]/5' : 'border-gray-100 bg-gray-50/30'
-                        }`}
-                      >
-                        <span className={`absolute right-2 top-1.5 text-xs font-medium ${esHoy ? 'font-bold text-[#0F3D2E]' : 'text-gray-400'}`}>{dia.dia}</span>
-                        <div className="mt-4 flex flex-col gap-1">
-                          {dia.lotes.map(l => {
-                            // "No llega" lo decide la propia simulación: el stock
-                            // proyectado del producto cruzó cero mientras esta
-                            // cocción venía en camino. No es una comparación
-                            // contra el borde del mes (con eso TODO salía rojo
-                            // apenas el mes arrancaba y el tablero no informaba).
-                            const noLlega = !l.llegaATiempo
-                            // Marcado = entra al presupuesto de insumos de abajo.
-                            const marcado = !l.enCurso && estaSeleccionado(l.id)
-                            return (
-                            <div key={l.id} className="group/chip relative">
-                              <button
-                                type="button"
-                                draggable={!l.enCurso}
-                                onDragStart={ev => {
-                                  ev.dataTransfer.setData('text/plain', `${l.producto}|${l.loteNro}`)
-                                  ev.dataTransfer.effectAllowed = 'move'
-                                  setArrastrando(`${l.producto}|${l.loteNro}`)
-                                }}
-                                onDragEnd={() => setArrastrando(null)}
-                                onClick={() => { if (!l.enCurso) alternarLote(l.id) }}
-                                disabled={l.enCurso}
-                                title={l.enCurso ? undefined : (marcado ? 'Quitar del presupuesto' : 'Incluir en el presupuesto') + ' · arrastrala a otro día para moverla'}
-                                className={`prod-press flex w-full items-center gap-0.5 truncate rounded-sm border py-1 pl-1.5 pr-1 text-left text-[10px] font-bold ${
-                                  l.enCurso ? 'cursor-default' : 'cursor-pointer'
-                                } ${arrastrando === `${l.producto}|${l.loteNro}` ? 'opacity-30' : ''} ${
-                                  l.enCurso
-                                    ? 'border-sky-500 bg-sky-500/10 text-sky-800'
-                                    : l.movidoManual && marcado
-                                      ? 'border-[1.5px] border-[#C9A227] bg-[#C9A227]/10 text-[#7a6216]'
-                                    : !marcado
-                                      ? 'border-gray-300 bg-white text-gray-400 opacity-60'
-                                      : noLlega
-                                        ? 'border-red-500 bg-red-50 text-red-700'
-                                        : l.categoria === 'kombucha'
-                                          ? 'border-dashed border-amber-400 bg-amber-50 text-amber-800'
-                                          : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
-                                }`}
-                              >
-                                {l.enCurso
-                                  ? <Beaker size={9} className="shrink-0 text-sky-600" />
-                                  : l.movidoManual
-                                    ? <ArrowDown size={9} className="shrink-0 -rotate-90 text-[#C9A227]" />
-                                    : l.diasTarde > 0 && !noLlega && <Beaker size={9} className="shrink-0 text-purple-600" />}
-                                <span className="truncate">{l.producto}</span>
-                              </button>
-                              {/* Detalle al pasar el cursor: cuánto, en qué tanque,
-                                  cuándo queda listo y hasta cuándo cubre. */}
-                              <div className="invisible absolute -top-2 left-1/2 z-20 w-56 -translate-x-1/2 -translate-y-full rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white opacity-0 shadow-xl transition-opacity group-hover/chip:visible group-hover/chip:opacity-100">
-                                <p className="font-bold">
-                                  {l.producto}
-                                  {l.loteDe > 1 && <span className="ml-1 font-normal text-gray-400">· cocción {l.loteNro} de {l.loteDe}</span>}
-                                </p>
-                                <p className="mt-1 text-gray-300">
-                                  {l.enCurso
-                                    ? 'Ya está fermentando — no hay que cocerla'
-                                    : `${l.categoria === 'kombucha' ? 'Kombuchería' : 'Cervecería'} · ${l.leadTimeSemanas} semanas en tanque`}
-                                </p>
-                                <p className="mt-1.5">
-                                  <span className="text-gray-400">{l.enCurso ? 'Salen:' : 'Cocer:'}</span> <strong>{fNum(l.litros)} L</strong>
-                                  <span className="text-gray-400"> en </span><strong>{l.tanque}</strong>
-                                  <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
-                                </p>
-                                <p>
-                                  <span className="text-gray-400">{l.enCurso ? 'Se embarrila:' : 'Queda listo:'}</span>{' '}
-                                  <strong>{new Date(l.fechaListo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
-                                </p>
-                                {!l.enCurso && (
-                                  <p>
-                                    <span className="text-gray-400">Alcanza hasta:</span>{' '}
-                                    <strong>{new Date(l.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
-                                    <span className="text-gray-400"> (ahí toca cocer de nuevo)</span>
-                                  </p>
-                                )}
-                                {l.enCurso && (
-                                  <p className="mt-1.5 text-sky-300">
-                                    Cocción que ya ocurrió: está en el tanque ahora. El tanque se libera ese día y esos
-                                    litros recién ahí se pueden vender.
-                                  </p>
-                                )}
-                                {l.conAlarma && !l.enCurso && (
-                                  <p className="mt-1.5 text-amber-300">Este producto ya tiene alarma de quiebre activa.</p>
-                                )}
-                                {noLlega && (
-                                  <p className="mt-1.5 font-bold text-red-400">
-                                    No llega: el stock se agota cerca del{' '}
-                                    {new Date(l.fechaAgotamiento + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} y
-                                    esta cocción recién queda lista después.
-                                  </p>
-                                )}
-                                {l.diasTarde > 0 && !noLlega && (
-                                  <p className="mt-1.5 text-purple-300">
-                                    Se corrió {l.diasTarde} {l.diasTarde === 1 ? 'día' : 'días'} de la fecha ideal
-                                    ({new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}) porque
-                                    el tanque no estaba libre antes — igual llega a tiempo.
-                                  </p>
-                                )}
-                                {l.movidoManual && (
-                                  <p className="mt-1.5 font-bold text-[#E6C34A]">
-                                    Movida a mano a esta fecha.
-                                    {l.diasTarde > 0 && ` Se pidió para el ${new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} pero no había tanque libre de su línea hasta acá.`}
-                                    {' '}Las cocciones siguientes de este producto se recalcularon con el forecast.
-                                  </p>
-                                )}
-                                {!l.enCurso && (
-                                  <p className="mt-1.5 border-t border-white/15 pt-1.5 text-[10px] text-gray-400">
-                                    {marcado ? 'Incluida en el presupuesto — clic para sacarla.' : 'Fuera del presupuesto — clic para incluirla.'}
-                                    {' '}Arrastrala a otro día para moverla.
-                                  </p>
-                                )}
-                                <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 bg-gray-900" />
-                              </div>
-                            </div>
-                            )
-                          })}
-                          {dia.lotes.length === 0 && (
-                            <span className="text-[10px] text-gray-300">—</span>
-                          )}
-                        </div>
-                      </div>
-                      )
-                    })}
-                  </div>
-                  <p className="mt-3 text-xs text-gray-400">
-                    Cada tarjeta es una cocción concreta: un volumen que cabe en un tanque que existe, con ese tanque
-                    ya asignado y su fecha. La primera cocción de cada producto va en la fecha que propone el Plan
-                    Maestro; de ahí en adelante se simula el consumo del forecast día a día y la siguiente se agenda
-                    cuando el stock proyectado toca el punto de reorden — por eso las cocciones de un mismo producto
-                    se reparten en el tiempo en vez de amontonarse. Cada tanque queda tomado el lead time completo
-                    antes de poder reutilizarse, y la sala de cocción tiene tope: hasta {COCCIONES_POR_DIA_LINEA} cocciones
-                    por día por línea, sólo en días hábiles (no se macera sábado, domingo ni feriado). El tanque se
-                    elige para cocer lo menos veces posible, que es lo que baja la merma: si un fermentador libre cierra
-                    todo el volumen se usa el más chico que lo cierre —misma merma, y los grandes quedan libres para
-                    quien los necesita—; si ninguno alcanza se llena el más grande disponible y el resto va a la cocción
-                    siguiente. <strong>Arrastrá una cocción a otro día para moverla</strong>: el plan se vuelve a simular completo
-                    desde ahí, así que las cocciones siguientes de ese producto se recalculan con el forecast (si la
-                    adelantás, la que viene se corre; si la atrasás, se acerca) y el presupuesto de abajo se ajusta con
-                    sus nuevas fechas de compra. Una cocción movida no puede saltarse la planta: si ese día no hay
-                    tanque libre de su línea, no hay cupo de sala o es feriado, cae en el primer día que sí se pueda y
-                    el tooltip lo dice. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; borde azul lleno = <strong>ya está fermentando</strong> (no hay que
-                    cocerla: se muestra el día que sale del tanque, que es cuando entra a bodega y se libera el
-                    fermentador); <Beaker size={9} className="inline text-purple-600" /> = se corrió de su fecha ideal
-                    porque no había tanque libre de su línea, pero llega igual; borde rojo = el stock se agota antes de
-                    que esta cocción esté lista. El lead time es por línea (4 semanas
-                    cerveza / 3 kombucha), no por estilo puntual — todavía no hay ese dato cargado por receta. Se
-                    recalcula solo con cada carga de la pantalla. Confirmalas desde las tarjetas de abajo o desde Plan Maestro.
-                  </p>
-                </div>
-              </div>
-
-              {/* ══════════ PRESUPUESTO DE INSUMOS ══════════
-                  Va pegado al calendario a propósito: es la traducción a
-                  plata de las cocciones de arriba, y las dos vistas comparten
-                  la selección. Lo que se marca allá es lo que se compra acá. */}
-              {mesesPlan.length > 0 && (
-                <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <div className="border-b border-gray-100 p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <ShoppingCart size={18} style={{ color: COLORS.darkGreen }} />
-                        <h3 className="font-bold text-gray-800">Presupuesto de insumos del calendario</h3>
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
-                          {presupuesto.cocciones} de {lotesEnVentana.length} cocciones
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={descargarPresupuesto}
-                        disabled={descargando || presupuesto.lineas.length === 0}
-                        className="prod-press flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        style={{ backgroundColor: COLORS.darkGreen }}
-                      >
-                        <ArrowDown size={15} />
-                        {descargando ? 'Generando…' : 'Descargar Excel'}
-                      </button>
-                    </div>
-                    <p className="mt-2 text-sm text-gray-500">
-                      Cada cocción del calendario se baja a insumos por su receta, escalada al volumen real del tanque
-                      asignado, y se valoriza al último precio de compra. La fecha de compra es la cocción menos{' '}
-                      {LEAD_COMPRA_DIAS_HABILES} días hábiles, para que el insumo esté en planta cuando se macera.
-                      Hacé clic en cualquier cocción del calendario de arriba para sacarla o incluirla.
-                    </p>
-
-                    {/* Ventana libre: mensual, trimestral, o lo que elija */}
-                    <div className="mt-4 flex flex-wrap items-end gap-3">
-                      <label className="flex flex-col gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Desde</span>
-                        <select
-                          value={ventanaDesde}
-                          onChange={e => setPresupuestoDesde(e.target.value)}
-                          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700"
-                        >
-                          {mesesPlan.map(m => <option key={m} value={m}>{etiquetaMes(m + '-01')}</option>)}
-                        </select>
-                      </label>
-                      <label className="flex flex-col gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Hasta</span>
-                        <select
-                          value={ventanaHasta}
-                          onChange={e => setPresupuestoHasta(e.target.value)}
-                          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700"
-                        >
-                          {mesesPlan.map(m => <option key={m} value={m}>{etiquetaMes(m + '-01')}</option>)}
-                        </select>
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => { setPresupuestoDesde(mesesPlan[0]); setPresupuestoHasta(mesesPlan[0]) }}
-                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
-                        >
-                          Mensual
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setPresupuestoDesde(mesesPlan[0]); setPresupuestoHasta(mesesPlan[mesesPlan.length - 1]) }}
-                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
-                        >
-                          Todo el horizonte ({mesesPlan.length} {mesesPlan.length === 1 ? 'mes' : 'meses'})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSeleccionPresupuesto(null)}
-                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
-                        >
-                          Marcar todas
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSeleccionPresupuesto(new Set())}
-                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
-                        >
-                          Desmarcar todas
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {presupuesto.lineas.length === 0 ? (
-                    <p className="p-5 text-sm text-gray-400">
-                      No hay cocciones marcadas en esta ventana. Marcá alguna en el calendario de arriba.
-                    </p>
-                  ) : (
-                    <>
-                      {/* Cifras de cabecera */}
-                      <div className="grid gap-px border-b border-gray-100 bg-gray-100 sm:grid-cols-2 lg:grid-cols-4">
-                        <div className="bg-white p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">A comprar</p>
-                          <p className="mt-1 text-2xl font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>
-                            ${fNum(presupuesto.total)}
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-gray-400">neto de lo que ya hay en bodega</p>
-                        </div>
-                        <div className="bg-white p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Necesidad total</p>
-                          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-700">${fNum(presupuesto.totalBruto)}</p>
-                          <p className="mt-0.5 text-[11px] text-gray-400">si no hubiera nada en bodega</p>
-                        </div>
-                        <div className="bg-white p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Producción</p>
-                          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-700">{fNum(presupuesto.litros)} L</p>
-                          <p className="mt-0.5 text-[11px] text-gray-400">
-                            {presupuesto.cocciones} {presupuesto.cocciones === 1 ? 'cocción' : 'cocciones'} ·{' '}
-                            {presupuesto.total > 0 && presupuesto.litros > 0
-                              ? `$${fNum(presupuesto.total / presupuesto.litros)}/L`
-                              : '—'}
-                          </p>
-                        </div>
-                        <div className="bg-white p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Insumos</p>
-                          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-700">
-                            {presupuesto.lineas.filter(l => l.aComprar > 0).length}
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-gray-400">
-                            de {presupuesto.lineas.length} que pide la receta
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Un total al que le faltan insumos no se puede leer como
-                          presupuesto completo — hay que decirlo, no omitirlo. */}
-                      {(presupuesto.sinPrecio.length > 0 || presupuesto.sinReceta.length > 0) && (
-                        <div className="flex items-start gap-2.5 border-b border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
-                          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
-                          <div>
-                            {presupuesto.sinReceta.length > 0 && (
-                              <p>
-                                <strong>{presupuesto.sinReceta.length} producto{presupuesto.sinReceta.length === 1 ? '' : 's'} sin receta cargada</strong> —
-                                sus cocciones están en el calendario pero NO en este total: {presupuesto.sinReceta.join(', ')}.
-                              </p>
-                            )}
-                            {presupuesto.sinPrecio.length > 0 && (
-                              <p className={presupuesto.sinReceta.length > 0 ? 'mt-1' : ''}>
-                                <strong>{presupuesto.sinPrecio.length} insumo{presupuesto.sinPrecio.length === 1 ? '' : 's'} sin precio</strong> —
-                                se piden igual pero no suman al presupuesto: {presupuesto.sinPrecio.join(', ')}.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Cuándo sale la plata */}
-                      {presupuesto.porMesCompra.length > 1 && (
-                        <div className="border-b border-gray-100 px-5 py-4">
-                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">
-                            Desembolso por mes de compra
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {presupuesto.porMesCompra.map(m => (
-                              <div key={m.mes} className="rounded-lg border border-gray-200 px-3 py-2">
-                                <p className="text-xs font-bold capitalize text-gray-600">{etiquetaMes(m.mes + '-01')}</p>
-                                <p className="text-sm font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>${fNum(m.costo)}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Lista de compra */}
-                      <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3">
-                        {(['insumo', 'producto'] as const).map(v => (
-                          <button
-                            key={v}
-                            type="button"
-                            onClick={() => setVistaPresupuesto(v)}
-                            className={`prod-press rounded-lg px-3 py-1.5 text-xs font-bold ${
-                              vistaPresupuesto === v ? 'text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
-                            }`}
-                            style={vistaPresupuesto === v ? { backgroundColor: COLORS.darkGreen } : undefined}
-                          >
-                            {v === 'insumo' ? 'Qué comprar' : 'Por receta de producto'}
-                          </button>
-                        ))}
-                      </div>
-
-                      {vistaPresupuesto === 'insumo' ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full min-w-[820px] text-sm">
-                            <thead className="border-b border-gray-100 bg-gray-50/60 text-[10px] uppercase tracking-wide text-gray-500">
-                              <tr>
-                                <th className="px-4 py-2.5 text-left font-bold">Comprar el</th>
-                                <th className="px-4 py-2.5 text-left font-bold">Insumo</th>
-                                <th className="px-4 py-2.5 text-right font-bold">Necesidad</th>
-                                <th className="px-4 py-2.5 text-right font-bold">En bodega</th>
-                                <th className="px-4 py-2.5 text-right font-bold">A comprar</th>
-                                <th className="px-4 py-2.5 text-right font-bold">Precio</th>
-                                <th className="px-4 py-2.5 text-right font-bold">Costo</th>
-                                <th className="px-4 py-2.5 text-left font-bold">Para qué cocciones</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                              {presupuesto.lineas.map(l => (
-                                <tr key={l.insumo} className={`prod-hover-row ${l.aComprar === 0 ? 'text-gray-400' : ''}`}>
-                                  <td className="whitespace-nowrap px-4 py-3 font-bold tabular-nums text-gray-700">
-                                    {new Date(l.fechaCompra + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <p className="font-bold text-gray-800">{l.insumo}</p>
-                                    <p className="text-[11px] capitalize text-gray-400">{l.categoria}</p>
-                                  </td>
-                                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">{fNum(l.cantidad)} {l.unidadBase}</td>
-                                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-500">
-                                    {l.disponible != null ? `${fNum(l.disponible)} ${l.unidadBase}` : 'sin dato'}
-                                  </td>
-                                  <td className="whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums text-gray-900">
-                                    {l.aComprar > 0 ? `${fNum(l.aComprar)} ${l.unidadBase}` : '—'}
-                                  </td>
-                                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-500">
-                                    {l.precioUnitario != null ? `$${l.precioUnitario.toLocaleString('es-CL', { maximumFractionDigits: 2 })}` : '—'}
-                                  </td>
-                                  <td className="whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums" style={{ color: l.costoAComprar ? COLORS.darkGreen : undefined }}>
-                                    {l.costoAComprar != null ? `$${fNum(l.costoAComprar)}` : 'sin precio'}
-                                  </td>
-                                  <td className="px-4 py-3 text-[11px] text-gray-500">
-                                    {l.detalle.map(d => (
-                                      <span key={d.producto + d.fechaCoccion} className="mr-2 inline-block whitespace-nowrap">
-                                        {d.producto}{' '}
-                                        <span className="text-gray-400">
-                                          {new Date(d.fechaCoccion + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
-                                          {' · '}{fNum(d.cantidad)} {l.unidadBase}
-                                        </span>
-                                      </span>
-                                    ))}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                            <tfoot className="border-t border-gray-200 bg-gray-50/60">
-                              <tr>
-                                <td colSpan={6} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-gray-500">Total a comprar</td>
-                                <td className="px-4 py-3 text-right text-base font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>${fNum(presupuesto.total)}</td>
-                                <td />
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-gray-100">
-                          {presupuesto.porProducto.map(g => (
-                            <div key={g.producto} className="p-5">
-                              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                <p className="font-bold text-gray-800">{g.producto}</p>
-                                <p className="text-sm font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>
-                                  {g.costo != null ? `$${fNum(g.costo)}` : 'sin costo'}
-                                </p>
-                              </div>
-                              <p className="mt-0.5 text-xs text-gray-500">
-                                {g.cocciones} {g.cocciones === 1 ? 'cocción' : 'cocciones'} · {fNum(g.litros)} L
-                                {g.costo != null && g.litros > 0 && ` · $${fNum(g.costo / g.litros)}/L`}
-                                {g.sinPrecio > 0 && ` · ${g.sinPrecio} línea${g.sinPrecio === 1 ? '' : 's'} sin precio`}
-                              </p>
-                              <div className="mt-3 overflow-x-auto">
-                                <table className="w-full min-w-[420px] text-sm">
-                                  <tbody className="divide-y divide-gray-50">
-                                    {g.insumos.map(i => (
-                                      <tr key={i.insumo} className="prod-hover-row">
-                                        <td className="py-2 pr-3 text-gray-700">{i.insumo}</td>
-                                        <td className="whitespace-nowrap py-2 px-3 text-right tabular-nums text-gray-600">{fNum(i.cantidad)} {i.unidadBase}</td>
-                                        <td className="whitespace-nowrap py-2 pl-3 text-right font-bold tabular-nums text-gray-800">
-                                          {i.costo != null ? `$${fNum(i.costo)}` : '—'}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <p className="border-t border-gray-100 p-4 text-xs text-gray-400">
-                        La cantidad de cada insumo sale de la receta escalada al volumen de la cocción, no de un
-                        promedio: una cocción de 3.000 L de un tanque grande pide exactamente cuatro veces lo de una
-                        de 750 L. Cuando una receta usa el mismo insumo en dos momentos (el mismo lúpulo en whirlpool y
-                        en dry hop, por ejemplo) acá se suman: para cocer son etapas distintas, para comprar es el
-                        mismo saco. &quot;A comprar&quot; descuenta lo que ya hay en bodega según el último informe de stock de
-                        insumos — ese descuento se aplica sobre el total de la ventana, no cocción por cocción, porque
-                        el informe es una foto sin reservas por lote. El Excel trae tres hojas: la orden de compra, el
-                        detalle de qué cocción pide cada insumo, y el resumen por mes y por producto.
-                      </p>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Capacidad de Planta — la dimensión que faltaba para que la
-                  planificación de arriba sea ejecutable: de nada sirve saber
-                  cuánto y cuándo cocer si no se sabe si hay tanque libre para
-                  meterlo. Va ANTES de "Necesidad de Producción Anticipada" a
-                  propósito: primero el espacio disponible, después la
-                  decisión de qué llenar con él. */}
-              {ocupacionPlanta.capacidadTotalLitros != null && (() => {
-                // Desglose por línea: los tanques T son exclusivos de
-                // cervecería y los K de kombuchería (decisión del usuario,
-                // 14-sep-2026) — verlas por separado importa porque un 90%
-                // de ocupación GENERAL puede esconder que la línea que
-                // realmente falta llenar está casi vacía.
-                const porCategoria = (cat: 'cerveza' | 'kombucha') => {
-                  const tanquesCat = ocupacionPlanta.tanques.filter(t => t.categoria === cat)
-                  const capacidad = tanquesCat.reduce((s, t) => s + t.capacidadLitros, 0)
-                  const ocupado = tanquesCat.reduce((s, t) => s + t.litros, 0)
-                  return { capacidad, ocupado, libre: capacidad - ocupado }
-                }
-                const cerveza = porCategoria('cerveza')
-                const kombucha = porCategoria('kombucha')
-
-                return (
-                <div className={`rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${capacidadPlantaAbierta ? 'border-gray-300 shadow-md' : 'border-gray-200'}`}>
-                  <button
-                    type="button"
-                    onClick={() => setCapacidadPlantaAbierta(v => !v)}
-                    aria-expanded={capacidadPlantaAbierta}
-                    className="prod-press flex w-full flex-col gap-3 p-4 text-left transition-colors hover:bg-gray-50/60 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4 sm:p-5"
-                  >
-                    <div className="min-w-0">
-                      <h3 className="font-bold text-gray-800">Capacidad de Planta — Fermentadores y Estanques</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Cuánto espacio real hay para la próxima cocción, tanque por tanque — el jefe de producción
-                        es el último filtro: esto sólo muestra dónde entra, no decide qué cocer.
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                        <span><span className="font-bold text-gray-700">Cervecería (T):</span> {fNum(cerveza.libre)} L libres de {fNum(cerveza.capacidad)} L</span>
-                        <span><span className="font-bold text-gray-700">Kombuchería (K):</span> {fNum(kombucha.libre)} L libres de {fNum(kombucha.capacidad)} L</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Libre</p>
-                        <p className="text-xl font-black text-emerald-700">{fNum(ocupacionPlanta.litrosLibres!)} L</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Ocupado</p>
-                        <p className="text-xl font-black text-gray-800">{fNum(ocupacionPlanta.litrosEnFermentacion)} L</p>
-                      </div>
-                      <span className={`rounded-full px-3 py-1.5 text-sm font-bold ${
-                        (ocupacionPlanta.porcentajeOcupacion ?? 0) >= 85 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        {ocupacionPlanta.porcentajeOcupacion}% ocupado
-                      </span>
-                      <ChevronDown
-                        size={20}
-                        className={`shrink-0 text-gray-400 transition-transform duration-300 ${capacidadPlantaAbierta ? 'rotate-180 text-gray-600' : ''}`}
-                      />
-                    </div>
-                  </button>
-
-                  <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${capacidadPlantaAbierta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                    <div className="overflow-hidden">
-                      <div className="px-4 pb-5 sm:px-5">
-                        {/* Barra agregada de planta — mismo lenguaje visual que las
-                            barras por tanque de abajo, a escala de toda la planta. */}
-                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
-                          <div
-                            className={`h-full rounded-full ${(ocupacionPlanta.porcentajeOcupacion ?? 0) >= 85 ? 'bg-red-500' : 'bg-emerald-500'}`}
-                            style={{ width: `${Math.min(100, ocupacionPlanta.porcentajeOcupacion ?? 0)}%` }}
-                          />
-                        </div>
-
-                        {/* Tanques ordenados por espacio LIBRE descendente — el
-                            jefe de producción mira primero dónde hay más lugar para
-                            meter la próxima cocción, no dónde hay más contenido. */}
-                        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                          {[...ocupacionPlanta.tanques]
-                            .sort((a, b) => b.libreLitros - a.libreLitros)
-                            .map(t => {
-                              const pct = t.capacidadLitros > 0 ? Math.min(100, Math.round((t.litros / t.capacidadLitros) * 100)) : 0
-                              const vacio = t.litros === 0
-                              return (
-                                <div
-                                  key={t.tanque}
-                                  className={`prod-hover-card rounded-lg border p-2.5 ${vacio ? 'border-emerald-200 bg-emerald-50/40' : 'border-gray-200 bg-white'}`}
-                                  title={`${t.tanque} (${t.tipo}, ${t.categoria === 'cerveza' ? 'cervecería' : 'kombuchería'}) — ${fNum(t.litros)} / ${fNum(t.capacidadLitros)} L, ${fNum(t.libreLitros)} L libres`}
-                                >
-                                  <div className="flex items-center justify-between gap-1">
-                                    <p className="truncate text-xs font-bold text-gray-800">{t.tanque}</p>
-                                    <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-bold ${
-                                      t.categoria === 'cerveza' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                                    }`}>
-                                      {t.categoria === 'cerveza' ? 'CERV' : 'KOMB'}
-                                    </span>
-                                  </div>
-                                  <p className="truncate text-[10px] text-gray-400">{t.tipo}</p>
-                                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                                    <div
-                                      className={`h-full rounded-full ${vacio ? 'bg-gray-200' : pct >= 90 ? 'bg-red-500' : 'bg-[#0F3D2E]'}`}
-                                      style={{ width: `${pct}%` }}
-                                    />
-                                  </div>
-                                  <div className="mt-1 flex items-baseline justify-between">
-                                    <span className="text-[11px] tabular-nums text-gray-500">{fNum(t.litros)}/{fNum(t.capacidadLitros)} L</span>
-                                    {vacio ? (
-                                      <span className="text-[10px] font-bold text-emerald-600">Libre</span>
-                                    ) : (
-                                      <span className="text-[10px] font-bold text-gray-400">{fNum(t.libreLitros)} L libres</span>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                )
-              })()}
 
               {/* Necesidad de Producción Anticipada — responde "¿cuánto
                   necesito producir para cubrir hasta tal fecha?" y avisa
@@ -4753,6 +4044,601 @@ export default function ProduccionClient({
             </div>
           )}
 
+          {/* ══════════ VISTA: CUÁNDO COCINAR ══════════
+              El calendario de producción. Antes vivía adentro de "Stock de
+              Seguridad", que ya se había vuelto un cajón de siete secciones
+              con nombre de una sola. Son dos preguntas distintas y ahora son
+              dos pantallas: allá se responde CUÁNTO hay que cocer (colchón,
+              punto de reorden, necesidad); acá CUÁNDO, con qué tanque y en
+              qué orden. */}
+          {activeTab === 'calendario' && (
+            <div className="flex flex-col gap-4 pb-4">
+              <PreguntaDeLaVista
+                pregunta="¿Cuándo vamos a cocinar, y en qué tanque?"
+                detalle="El plan sale del forecast y del punto de reorden de cada producto, acotado a los fermentadores que existen de verdad. Arrastrá una cocción para moverla: se replanifica todo lo que viene después."
+              />
+              {/* ══════════ PLAN DE COBERTURA ══════════
+                  Resumen mensual del MISMO plan que muestra el calendario de
+                  abajo — no un cálculo aparte. Cada cifra de acá es la suma
+                  de lotes reales ya asignados a un tanque concreto, así que
+                  las dos vistas no pueden contradecirse. */}
+              {planSugerido.porMes.length > 0 && (
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <CalendarIcon size={18} style={{ color: COLORS.darkGreen }} />
+                    <h3 className="font-bold text-gray-800">Plan de Cobertura — {HORIZONTE_MESES_PLAN} meses</h3>
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
+                      {planSugerido.lotes.filter(l => !l.enCurso).length} {planSugerido.lotes.filter(l => !l.enCurso).length === 1 ? 'cocción' : 'cocciones'} programadas
+                    </span>
+                    {/* El plan arranca de la planta real: lo que hoy está en los
+                        tanques no se vuelve a cocer, y esos fermentadores no se
+                        pueden usar hasta que se embarrilen. */}
+                    {planSugerido.lotes.some(l => l.enCurso) && (
+                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-700">
+                        + {fNum(planSugerido.lotes.filter(l => l.enCurso).reduce((a, l) => a + l.litros, 0))} L ya fermentando
+                        en {planSugerido.lotes.filter(l => l.enCurso).length} {planSugerido.lotes.filter(l => l.enCurso).length === 1 ? 'tanque' : 'tanques'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mb-4 text-sm text-gray-500">
+                    Simulación día a día del inventario de cada producto: el stock baja al ritmo del forecast y se
+                    programa una cocción cada vez que toca su punto de reorden, arrancando por la fecha que ya propone
+                    el Plan Maestro. Cada cocción se acota al tamaño de un tanque que existe de verdad, con su
+                    fermentador asignado. Parte de la planta como está hoy: lo que ya se está fermentando no se vuelve
+                    a cocer, suma a stock recién el día que se embarrila, y mantiene su tanque ocupado hasta entonces
+                    — el detalle día por día está en el calendario de abajo.
+                  </p>
+
+                  {planSugerido.sinTanque.length > 0 && (
+                    <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                      <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-600" />
+                      <div>
+                        <p className="font-bold">
+                          {planSugerido.sinTanque.length} {planSugerido.sinTanque.length === 1 ? 'volumen sin tanque' : 'volúmenes sin tanque'} donde ponerlo
+                        </p>
+                        <p className="mt-0.5 text-red-700">
+                          {planSugerido.sinTanque.map(s => `${s.producto} (${fNum(s.litros)} L)`).join(', ')} — no alcanzan
+                          los fermentadores de esa línea dentro del horizonte. Hay que sumar capacidad, correr la
+                          cobertura, o aceptar el quiebre.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="overflow-x-auto">
+                    <div className="flex min-w-max gap-3 pb-1">
+                      {planSugerido.porMes.map(f => (
+                        <div
+                          key={f.mes}
+                          className={`prod-hover-card w-60 shrink-0 rounded-lg border p-3 ${
+                            f.severidad === 'critico' ? 'border-red-300 bg-red-50/60'
+                              : f.severidad === 'ajustado' ? 'border-amber-300 bg-amber-50/60'
+                              : 'border-emerald-200 bg-emerald-50/40'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-bold capitalize text-gray-800">{f.etiqueta}</span>
+                            <span
+                              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                                f.severidad === 'critico' ? 'bg-red-500' : f.severidad === 'ajustado' ? 'bg-amber-500' : 'bg-emerald-500'
+                              }`}
+                              title={
+                                f.severidad === 'critico' ? 'Hay cocciones que no alcanzan a estar listas antes de que el producto se agote.'
+                                  : f.severidad === 'ajustado' ? 'Alguna cocción tuvo que correrse de su fecha ideal por falta de tanque libre.'
+                                  : 'Todo entra en fecha con los tanques disponibles.'
+                              }
+                            />
+                          </div>
+
+                          <div className="mt-2.5 border-t border-gray-200/70 pt-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Cervecería (T)</span>
+                              <span className="text-xs font-bold tabular-nums text-gray-800">{fNum(f.litrosCerveza)} L</span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-gray-500">
+                              {f.lotesCerveza === 0 ? 'Sin cocciones' : `${f.lotesCerveza} ${f.lotesCerveza === 1 ? 'cocción' : 'cocciones'}`}
+                            </p>
+                          </div>
+
+                          <div className="mt-2 border-t border-gray-200/70 pt-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Kombuchería (K)</span>
+                              <span className="text-xs font-bold tabular-nums text-gray-800">{fNum(f.litrosKombucha)} L</span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-gray-500">
+                              {f.lotesKombucha === 0 ? 'Sin cocciones' : `${f.lotesKombucha} ${f.lotesKombucha === 1 ? 'cocción' : 'cocciones'}`}
+                            </p>
+                          </div>
+
+                          {f.lotesTarde > 0 ? (
+                            <p className="mt-2.5 border-t border-gray-200/70 pt-2 text-[11px] font-bold text-red-600">
+                              {f.lotesTarde} {f.lotesTarde === 1 ? 'cocción no llega' : 'cocciones no llegan'} antes de que se agote el producto.
+                            </p>
+                          ) : f.lotesCerveza + f.lotesKombucha === 0 ? (
+                            <p className="mt-2.5 border-t border-gray-200/70 pt-2 text-[11px] text-emerald-600">
+                              Cubierto con stock + colchón, sin cocer nada nuevo.
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Calendario diario de cocciones SUGERIDAS — el "cuándo" del
+                  Plan de Cobertura, día por día. Distinto a propósito del
+                  Cronograma de Cocciones de Resumen: ahí sólo viven lotes YA
+                  CONFIRMADOS; acá se ve lo que el modelo sugiere ANTES de
+                  apretar "Agregar al plan", para poder armar el calendario
+                  completo de un vistazo antes de confirmar cada cocción. */}
+              <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-4 lg:px-6">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="font-bold text-gray-800">Calendario de Cocciones Sugeridas</h3>
+                    <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                      Sin confirmar
+                    </span>
+                    {/* Los ajustes manuales viven sólo en esta sesión: no se
+                        guardan en base. Hay que poder devolver el plan al
+                        original sin recargar la página. */}
+                    {anclasCoccion.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={limpiarAnclas}
+                        className="prod-press flex items-center gap-1 rounded-full border border-[#C9A227] bg-[#C9A227]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#7a6216] hover:bg-[#C9A227]/20"
+                        title="Volver al plan que propone el modelo"
+                      >
+                        <X size={11} />
+                        {anclasCoccion.size} {anclasCoccion.size === 1 ? 'cocción movida' : 'cocciones movidas'} — deshacer
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setMesCoberturaOffset(v => v - 1)}
+                      className="prod-hover-icon prod-press rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-50"
+                      aria-label="Mes anterior"
+                    >
+                      <ChevronDown size={16} className="rotate-90" />
+                    </button>
+                    <span className="min-w-[9rem] text-center text-sm font-bold capitalize text-gray-700">{calendarioCobertura.etiqueta}</span>
+                    <button
+                      onClick={() => setMesCoberturaOffset(v => v + 1)}
+                      className="prod-hover-icon prod-press rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-50"
+                      aria-label="Mes siguiente"
+                    >
+                      <ChevronDown size={16} className="-rotate-90" />
+                    </button>
+                    {mesCoberturaOffset !== 0 && (
+                      <button
+                        onClick={() => setMesCoberturaOffset(0)}
+                        className="prod-press rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50"
+                      >
+                        Hoy
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* La grilla mensual necesita 620px para no deformarse, así
+                    que en el teléfono se cambia por una agenda vertical (más
+                    abajo). Un mes de 7 columnas en 375px obliga a arrastrar
+                    de lado para leer cada semana, y el tooltip de hover —que
+                    es donde vive el detalle— no existe en pantalla táctil. */}
+                <div className="hidden overflow-auto p-4 sm:block">
+                  <div className="grid min-w-[620px] grid-cols-7 gap-2">
+                    {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(dia => (
+                      <div key={dia} className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-gray-400">
+                        {dia}
+                      </div>
+                    ))}
+
+                    {Array.from({ length: calendarioCobertura.offsetPrimerDia }, (_, i) => <div key={`vacio-${i}`} />)}
+
+                    {calendarioCobertura.dias.map(dia => {
+                      const fechaDiaISO = `${calendarioCobertura.anio}-${String(calendarioCobertura.mesIdx + 1).padStart(2, '0')}-${String(dia.dia).padStart(2, '0')}`
+                      const esHoy = fechaDiaISO === calendarioCobertura.hoyISO
+                      return (
+                      <div
+                        key={dia.dia}
+                        onDragOver={ev => { if (arrastrando && fechaDiaISO >= calendarioCobertura.hoyISO) ev.preventDefault() }}
+                        onDrop={ev => {
+                          ev.preventDefault()
+                          // El id que viaja es `producto|Nº de cocción`, no el
+                          // id del lote: al soltar se re-simula todo y los
+                          // ids cambian (ver el comentario en el motor).
+                          const carga = ev.dataTransfer.getData('text/plain') || arrastrando
+                          setArrastrando(null)
+                          if (!carga || fechaDiaISO < calendarioCobertura.hoyISO) return
+                          const corte = carga.lastIndexOf('|')
+                          if (corte < 0) return
+                          anclarCoccion(carga.slice(0, corte), Number(carga.slice(corte + 1)), fechaDiaISO)
+                        }}
+                        className={`prod-hover-card relative flex min-h-[80px] flex-col gap-1 rounded-md border p-1.5 ${
+                          arrastrando && fechaDiaISO >= calendarioCobertura.hoyISO
+                            ? 'border-dashed border-[#C9A227] bg-[#C9A227]/5'
+                            : esHoy ? 'border-[#0F3D2E] bg-[#0F3D2E]/5' : 'border-gray-100 bg-gray-50/30'
+                        }`}
+                      >
+                        <span className={`absolute right-2 top-1.5 text-xs font-medium ${esHoy ? 'font-bold text-[#0F3D2E]' : 'text-gray-400'}`}>{dia.dia}</span>
+                        <div className="mt-4 flex flex-col gap-1">
+                          {dia.lotes.map(l => {
+                            // "No llega" lo decide la propia simulación: el stock
+                            // proyectado del producto cruzó cero mientras esta
+                            // cocción venía en camino. No es una comparación
+                            // contra el borde del mes (con eso TODO salía rojo
+                            // apenas el mes arrancaba y el tablero no informaba).
+                            const noLlega = !l.llegaATiempo
+                            // Marcado = entra al presupuesto de insumos de abajo.
+                            const marcado = !l.enCurso && estaSeleccionado(l.id)
+                            return (
+                            <div key={l.id} className="group/chip relative">
+                              <button
+                                type="button"
+                                draggable={!l.enCurso}
+                                onDragStart={ev => {
+                                  ev.dataTransfer.setData('text/plain', `${l.producto}|${l.loteNro}`)
+                                  ev.dataTransfer.effectAllowed = 'move'
+                                  setArrastrando(`${l.producto}|${l.loteNro}`)
+                                }}
+                                onDragEnd={() => setArrastrando(null)}
+                                onClick={() => { if (!l.enCurso) alternarLote(l.id) }}
+                                disabled={l.enCurso}
+                                title={l.enCurso ? undefined : (marcado ? 'Quitar del presupuesto' : 'Incluir en el presupuesto') + ' · arrastrala a otro día para moverla'}
+                                className={`prod-press flex w-full items-center gap-0.5 truncate rounded-sm border py-1 pl-1.5 pr-1 text-left text-[10px] font-bold ${
+                                  l.enCurso ? 'cursor-default' : 'cursor-pointer'
+                                } ${arrastrando === `${l.producto}|${l.loteNro}` ? 'opacity-30' : ''} ${
+                                  l.enCurso
+                                    ? 'border-sky-500 bg-sky-500/10 text-sky-800'
+                                    : l.movidoManual && marcado
+                                      ? 'border-[1.5px] border-[#C9A227] bg-[#C9A227]/10 text-[#7a6216]'
+                                    : !marcado
+                                      ? 'border-gray-300 bg-white text-gray-400 opacity-60'
+                                      : noLlega
+                                        ? 'border-red-500 bg-red-50 text-red-700'
+                                        : l.categoria === 'kombucha'
+                                          ? 'border-dashed border-amber-400 bg-amber-50 text-amber-800'
+                                          : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
+                                }`}
+                              >
+                                {l.enCurso
+                                  ? <Beaker size={9} className="shrink-0 text-sky-600" />
+                                  : l.movidoManual
+                                    ? <ArrowDown size={9} className="shrink-0 -rotate-90 text-[#C9A227]" />
+                                    : l.diasTarde > 0 && !noLlega && <Beaker size={9} className="shrink-0 text-purple-600" />}
+                                <span className="truncate">{l.producto}</span>
+                              </button>
+                              {/* Detalle al pasar el cursor: cuánto, en qué tanque,
+                                  cuándo queda listo y hasta cuándo cubre. */}
+                              <div className="invisible absolute -top-2 left-1/2 z-20 w-56 -translate-x-1/2 -translate-y-full rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white opacity-0 shadow-xl transition-opacity group-hover/chip:visible group-hover/chip:opacity-100">
+                                <p className="font-bold">
+                                  {l.producto}
+                                  {l.loteDe > 1 && <span className="ml-1 font-normal text-gray-400">· cocción {l.loteNro} de {l.loteDe}</span>}
+                                </p>
+                                <p className="mt-1 text-gray-300">
+                                  {l.enCurso
+                                    ? 'Ya está fermentando — no hay que cocerla'
+                                    : `${l.categoria === 'kombucha' ? 'Kombuchería' : 'Cervecería'} · ${l.leadTimeSemanas} semanas en tanque`}
+                                </p>
+                                <p className="mt-1.5">
+                                  <span className="text-gray-400">{l.enCurso ? 'Salen:' : 'Cocer:'}</span> <strong>{fNum(l.litros)} L</strong>
+                                  <span className="text-gray-400"> en </span><strong>{l.tanque}</strong>
+                                  <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
+                                </p>
+                                <p>
+                                  <span className="text-gray-400">{l.enCurso ? 'Se embarrila:' : 'Queda listo:'}</span>{' '}
+                                  <strong>{new Date(l.fechaListo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
+                                </p>
+                                {!l.enCurso && (
+                                  <p>
+                                    <span className="text-gray-400">Alcanza hasta:</span>{' '}
+                                    <strong>{new Date(l.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
+                                    <span className="text-gray-400"> (ahí toca cocer de nuevo)</span>
+                                  </p>
+                                )}
+                                {l.enCurso && (
+                                  <p className="mt-1.5 text-sky-300">
+                                    Cocción que ya ocurrió: está en el tanque ahora. El tanque se libera ese día y esos
+                                    litros recién ahí se pueden vender.
+                                  </p>
+                                )}
+                                {l.conAlarma && !l.enCurso && (
+                                  <p className="mt-1.5 text-amber-300">Este producto ya tiene alarma de quiebre activa.</p>
+                                )}
+                                {noLlega && (
+                                  <p className="mt-1.5 font-bold text-red-400">
+                                    No llega: el stock se agota cerca del{' '}
+                                    {new Date(l.fechaAgotamiento + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} y
+                                    esta cocción recién queda lista después.
+                                  </p>
+                                )}
+                                {l.diasTarde > 0 && !noLlega && (
+                                  <p className="mt-1.5 text-purple-300">
+                                    Se corrió {l.diasTarde} {l.diasTarde === 1 ? 'día' : 'días'} de la fecha ideal
+                                    ({new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}) porque
+                                    el tanque no estaba libre antes — igual llega a tiempo.
+                                  </p>
+                                )}
+                                {l.movidoManual && (
+                                  <p className="mt-1.5 font-bold text-[#E6C34A]">
+                                    Movida a mano a esta fecha.
+                                    {l.diasTarde > 0 && ` Se pidió para el ${new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} pero no había tanque libre de su línea hasta acá.`}
+                                    {' '}Las cocciones siguientes de este producto se recalcularon con el forecast.
+                                  </p>
+                                )}
+                                {!l.enCurso && (
+                                  <p className="mt-1.5 border-t border-white/15 pt-1.5 text-[10px] text-gray-400">
+                                    {marcado ? 'Incluida en el presupuesto — clic para sacarla.' : 'Fuera del presupuesto — clic para incluirla.'}
+                                    {' '}Arrastrala a otro día para moverla.
+                                  </p>
+                                )}
+                                <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 bg-gray-900" />
+                              </div>
+                            </div>
+                            )
+                          })}
+                          {dia.lotes.length === 0 && (
+                            <span className="text-[10px] text-gray-300">—</span>
+                          )}
+                        </div>
+                      </div>
+                      )
+                    })}
+                  </div>
+                {/* Agenda de teléfono: los mismos lotes, sólo los días que
+                    tienen algo, y con el detalle a la vista en vez de escondido
+                    en un hover que en táctil no se puede invocar. */}
+                <div className="flex flex-col divide-y divide-gray-100 sm:hidden">
+                  {calendarioCobertura.dias.filter(d => d.lotes.length > 0).map(dia => {
+                    const fechaDiaISO = `${calendarioCobertura.anio}-${String(calendarioCobertura.mesIdx + 1).padStart(2, '0')}-${String(dia.dia).padStart(2, '0')}`
+                    const esHoy = fechaDiaISO === calendarioCobertura.hoyISO
+                    return (
+                      <div key={dia.dia} className="flex flex-col gap-2 p-4">
+                        <p className={`text-xs font-bold uppercase tracking-wide ${esHoy ? 'text-[#0F3D2E]' : 'text-gray-400'}`}>
+                          {new Date(fechaDiaISO + 'T00:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })}
+                          {esHoy && ' · hoy'}
+                        </p>
+                        {dia.lotes.map(l => {
+                          const marcado = !l.enCurso && estaSeleccionado(l.id)
+                          return (
+                            <button
+                              key={l.id}
+                              type="button"
+                              onClick={() => { if (!l.enCurso) alternarLote(l.id) }}
+                              disabled={l.enCurso}
+                              className={`prod-press flex flex-col gap-1 rounded-lg border p-3 text-left ${
+                                l.enCurso
+                                  ? 'border-sky-500 bg-sky-500/10'
+                                  : !marcado
+                                    ? 'border-gray-200 bg-white opacity-60'
+                                    : !l.llegaATiempo
+                                      ? 'border-red-500 bg-red-50'
+                                      : l.movidoManual
+                                        ? 'border-[#C9A227] bg-[#C9A227]/10'
+                                        : l.categoria === 'kombucha'
+                                          ? 'border-dashed border-amber-400 bg-amber-50'
+                                          : 'border-dashed border-emerald-400 bg-emerald-50'
+                              }`}
+                            >
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="truncate text-sm font-bold text-gray-800">{l.producto}</span>
+                                <span className="shrink-0 text-sm font-bold tabular-nums text-gray-700">{fNum(l.litros)} L</span>
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                {l.enCurso ? 'Ya fermentando en ' : ''}{l.tanque}
+                                <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
+                                {' · '}
+                                {l.enCurso ? 'se embarrila' : 'listo'} el{' '}
+                                {new Date(l.fechaListo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                              </p>
+                              {!l.enCurso && (
+                                <p className="text-[11px] text-gray-400">
+                                  Alcanza hasta el{' '}
+                                  {new Date(l.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                  {' · '}{marcado ? 'en el presupuesto' : 'fuera del presupuesto'}
+                                </p>
+                              )}
+                              {!l.llegaATiempo && !l.enCurso && (
+                                <p className="text-[11px] font-bold text-red-600">
+                                  No llega: el stock se agota cerca del{' '}
+                                  {new Date(l.fechaAgotamiento + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}.
+                                </p>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                  {calendarioCobertura.lotesEnElMes === 0 && (
+                    <p className="p-4 text-sm text-gray-400">No hay cocciones este mes.</p>
+                  )}
+                  <p className="p-4 text-[11px] text-gray-400">
+                    Tocá una cocción para incluirla o sacarla del presupuesto. Para moverla de día hay que usar el
+                    calendario en un computador: el arrastre no funciona en pantalla táctil.
+                  </p>
+                </div>
+
+                  <p className="mt-3 text-xs text-gray-400">
+                    Cada tarjeta es una cocción concreta: un volumen que cabe en un tanque que existe, con ese tanque
+                    ya asignado y su fecha. La primera cocción de cada producto va en la fecha que propone el Plan
+                    Maestro; de ahí en adelante se simula el consumo del forecast día a día y la siguiente se agenda
+                    cuando el stock proyectado toca el punto de reorden — por eso las cocciones de un mismo producto
+                    se reparten en el tiempo en vez de amontonarse. Cada tanque queda tomado el lead time completo
+                    antes de poder reutilizarse, y la sala de cocción tiene tope: hasta {COCCIONES_POR_DIA_LINEA} cocciones
+                    por día por línea, sólo en días hábiles (no se macera sábado, domingo ni feriado). El tanque se
+                    elige para cocer lo menos veces posible, que es lo que baja la merma: si un fermentador libre cierra
+                    todo el volumen se usa el más chico que lo cierre —misma merma, y los grandes quedan libres para
+                    quien los necesita—; si ninguno alcanza se llena el más grande disponible y el resto va a la cocción
+                    siguiente. <strong>Arrastrá una cocción a otro día para moverla</strong>: el plan se vuelve a simular completo
+                    desde ahí, así que las cocciones siguientes de ese producto se recalculan con el forecast (si la
+                    adelantás, la que viene se corre; si la atrasás, se acerca) y el presupuesto de abajo se ajusta con
+                    sus nuevas fechas de compra. Una cocción movida no puede saltarse la planta: si ese día no hay
+                    tanque libre de su línea, no hay cupo de sala o es feriado, cae en el primer día que sí se pueda y
+                    el tooltip lo dice. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; borde azul lleno = <strong>ya está fermentando</strong> (no hay que
+                    cocerla: se muestra el día que sale del tanque, que es cuando entra a bodega y se libera el
+                    fermentador); <Beaker size={9} className="inline text-purple-600" /> = se corrió de su fecha ideal
+                    porque no había tanque libre de su línea, pero llega igual; borde rojo = el stock se agota antes de
+                    que esta cocción esté lista. El lead time es por línea (4 semanas
+                    cerveza / 3 kombucha), no por estilo puntual — todavía no hay ese dato cargado por receta. Se
+                    recalcula solo con cada carga de la pantalla. Confirmalas desde las tarjetas de abajo o desde Plan Maestro.
+                  </p>
+                </div>
+              </div>
+
+              {/* Capacidad de Planta — la dimensión que faltaba para que la
+                  planificación de arriba sea ejecutable: de nada sirve saber
+                  cuánto y cuándo cocer si no se sabe si hay tanque libre para
+                  meterlo. Va ANTES de "Necesidad de Producción Anticipada" a
+                  propósito: primero el espacio disponible, después la
+                  decisión de qué llenar con él. */}
+              {ocupacionPlanta.capacidadTotalLitros != null && (() => {
+                // Desglose por línea: los tanques T son exclusivos de
+                // cervecería y los K de kombuchería (decisión del usuario,
+                // 14-sep-2026) — verlas por separado importa porque un 90%
+                // de ocupación GENERAL puede esconder que la línea que
+                // realmente falta llenar está casi vacía.
+                const porCategoria = (cat: 'cerveza' | 'kombucha') => {
+                  const tanquesCat = ocupacionPlanta.tanques.filter(t => t.categoria === cat)
+                  const capacidad = tanquesCat.reduce((s, t) => s + t.capacidadLitros, 0)
+                  const ocupado = tanquesCat.reduce((s, t) => s + t.litros, 0)
+                  return { capacidad, ocupado, libre: capacidad - ocupado }
+                }
+                const cerveza = porCategoria('cerveza')
+                const kombucha = porCategoria('kombucha')
+
+                return (
+                <div className={`rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${capacidadPlantaAbierta ? 'border-gray-300 shadow-md' : 'border-gray-200'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setCapacidadPlantaAbierta(v => !v)}
+                    aria-expanded={capacidadPlantaAbierta}
+                    className="prod-press flex w-full flex-col gap-3 p-4 text-left transition-colors hover:bg-gray-50/60 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4 sm:p-5"
+                  >
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-gray-800">Capacidad de Planta — Fermentadores y Estanques</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Cuánto espacio real hay para la próxima cocción, tanque por tanque — el jefe de producción
+                        es el último filtro: esto sólo muestra dónde entra, no decide qué cocer.
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                        <span><span className="font-bold text-gray-700">Cervecería (T):</span> {fNum(cerveza.libre)} L libres de {fNum(cerveza.capacidad)} L</span>
+                        <span><span className="font-bold text-gray-700">Kombuchería (K):</span> {fNum(kombucha.libre)} L libres de {fNum(kombucha.capacidad)} L</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Libre</p>
+                        <p className="text-xl font-black text-emerald-700">{fNum(ocupacionPlanta.litrosLibres!)} L</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Ocupado</p>
+                        <p className="text-xl font-black text-gray-800">{fNum(ocupacionPlanta.litrosEnFermentacion)} L</p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1.5 text-sm font-bold ${
+                        (ocupacionPlanta.porcentajeOcupacion ?? 0) >= 85 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        {ocupacionPlanta.porcentajeOcupacion}% ocupado
+                      </span>
+                      <ChevronDown
+                        size={20}
+                        className={`shrink-0 text-gray-400 transition-transform duration-300 ${capacidadPlantaAbierta ? 'rotate-180 text-gray-600' : ''}`}
+                      />
+                    </div>
+                  </button>
+
+                  <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${capacidadPlantaAbierta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                    <div className="overflow-hidden">
+                      <div className="px-4 pb-5 sm:px-5">
+                        {/* Barra agregada de planta — mismo lenguaje visual que las
+                            barras por tanque de abajo, a escala de toda la planta. */}
+                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+                          <div
+                            className={`h-full rounded-full ${(ocupacionPlanta.porcentajeOcupacion ?? 0) >= 85 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${Math.min(100, ocupacionPlanta.porcentajeOcupacion ?? 0)}%` }}
+                          />
+                        </div>
+
+                        {/* Tanques ordenados por espacio LIBRE descendente — el
+                            jefe de producción mira primero dónde hay más lugar para
+                            meter la próxima cocción, no dónde hay más contenido. */}
+                        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                          {[...ocupacionPlanta.tanques]
+                            .sort((a, b) => b.libreLitros - a.libreLitros)
+                            .map(t => {
+                              const pct = t.capacidadLitros > 0 ? Math.min(100, Math.round((t.litros / t.capacidadLitros) * 100)) : 0
+                              const vacio = t.litros === 0
+                              return (
+                                <div
+                                  key={t.tanque}
+                                  className={`prod-hover-card rounded-lg border p-2.5 ${vacio ? 'border-emerald-200 bg-emerald-50/40' : 'border-gray-200 bg-white'}`}
+                                  title={`${t.tanque} (${t.tipo}, ${t.categoria === 'cerveza' ? 'cervecería' : 'kombuchería'}) — ${fNum(t.litros)} / ${fNum(t.capacidadLitros)} L, ${fNum(t.libreLitros)} L libres`}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <p className="truncate text-xs font-bold text-gray-800">{t.tanque}</p>
+                                    <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-bold ${
+                                      t.categoria === 'cerveza' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                    }`}>
+                                      {t.categoria === 'cerveza' ? 'CERV' : 'KOMB'}
+                                    </span>
+                                  </div>
+                                  <p className="truncate text-[10px] text-gray-400">{t.tipo}</p>
+                                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                                    <div
+                                      className={`h-full rounded-full ${vacio ? 'bg-gray-200' : pct >= 90 ? 'bg-red-500' : 'bg-[#0F3D2E]'}`}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                  <div className="mt-1 flex items-baseline justify-between">
+                                    <span className="text-[11px] tabular-nums text-gray-500">{fNum(t.litros)}/{fNum(t.capacidadLitros)} L</span>
+                                    {vacio ? (
+                                      <span className="text-[10px] font-bold text-emerald-600">Libre</span>
+                                    ) : (
+                                      <span className="text-[10px] font-bold text-gray-400">{fNum(t.libreLitros)} L libres</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                )
+              })()}
+
+              {/* Puente al presupuesto: lo que se marca acá es lo que se
+                  compra allá. Sin esta tira el usuario no ve que su selección
+                  tuvo efecto, porque el presupuesto vive en otra pestaña. */}
+              {presupuesto.cocciones > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('insumos')}
+                  className="prod-press prod-hover-card flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <ShoppingCart size={18} style={{ color: COLORS.darkGreen }} />
+                    <div>
+                      <p className="text-sm font-bold text-gray-800">
+                        {presupuesto.cocciones} {presupuesto.cocciones === 1 ? 'cocción marcada' : 'cocciones marcadas'} · {fNum(presupuesto.litros)} L
+                      </p>
+                      <p className="text-xs text-gray-500">Insumos para cocerlas, con su fecha de compra</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>
+                      ${fNum(presupuesto.total)}
+                    </span>
+                    <span className="text-xs font-bold text-gray-400">Ver presupuesto</span>
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
+
+
           {/* ══════════ VISTA 4: PLAN MAESTRO ══════════
               Cola priorizada (estilo kanban/MRP: arriba = próximo a cocer).
               Combina lo agendado a mano con alarmas de quiebre en vivo — por
@@ -4762,6 +4648,11 @@ export default function ProduccionClient({
               fórmula nueva. */}
           {activeTab === 'plan' && (
             <div className="prod-enter flex h-full flex-col gap-6">
+              <PreguntaDeLaVista
+                pregunta="¿Qué está confirmado para cocinar?"
+                detalle="La cola real de cocciones ya comprometidas, con su prioridad y su split de envasado. Lo de acá ya se decidió; lo sugerido vive en Cuándo cocinar."
+              />
+
 
               {/* ── Split de Envasado ──────────────────────────────────────
                   Lo que está en el fermentador es líquido a granel, sin
@@ -4877,7 +4768,7 @@ export default function ProduccionClient({
                         {/* ── Destino del lote: para qué sirve, no sólo en qué
                             envase queda. El colchón no se vende (está para
                             absorber variabilidad); lo demás sí. ── */}
-                        <div className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+                        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-gray-100 pt-3 sm:grid-cols-3">
                           <div>
                             <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Colchón</p>
                             <p className="mt-1 text-sm font-bold tabular-nums text-gray-700">{fNum(s.litrosColchon)} L</p>
@@ -5190,6 +5081,15 @@ export default function ProduccionClient({
             </div>
           )}
 
+          {/* ══════════ VISTA: QUÉ COMPRAR ══════════
+              Las tres miradas de compra en UNA pantalla, de la más concreta a
+              la más gruesa. Antes estaban repartidas en dos pestañas y el
+              usuario tenía que saber cuál mirar:
+                1. El presupuesto del CALENDARIO — cocciones con fecha y
+                   tanque. Es el que se puede convertir en orden de compra.
+                2. El MRP del forecast — cuánto hace falta para vender lo
+                   proyectado, sin plan de cocción todavía.
+                3. El stock de insumos y la necesidad del Plan Maestro. */}
           {/* ══════════ VISTA 5: INSUMOS Y COMPRAS ══════════
               Cruza el Plan Maestro con las recetas cargadas: cada receta
               escala linealmente al litraje real de cada lote, y se suma
@@ -5207,6 +5107,307 @@ export default function ProduccionClient({
               (flex-1 overflow-auto). */}
           {activeTab === 'insumos' && (
             <div className="prod-enter flex flex-col gap-6">
+              <PreguntaDeLaVista
+                pregunta="¿Cuánto comprar, cuándo y para qué cocción?"
+                detalle="Arriba, los insumos de las cocciones que marcaste en el calendario, con su fecha de orden. Abajo, la mirada gruesa contra el forecast y el inventario de insumos."
+              />
+
+              {/* ══════════ PRESUPUESTO DE INSUMOS ══════════
+                  Va pegado al calendario a propósito: es la traducción a
+                  plata de las cocciones de arriba, y las dos vistas comparten
+                  la selección. Lo que se marca allá es lo que se compra acá. */}
+              {mesesPlan.length > 0 && (
+                <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <div className="border-b border-gray-100 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ShoppingCart size={18} style={{ color: COLORS.darkGreen }} />
+                        <h3 className="font-bold text-gray-800">Presupuesto de insumos del calendario</h3>
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
+                          {presupuesto.cocciones} de {lotesEnVentana.length} cocciones
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={descargarPresupuesto}
+                        disabled={descargando || presupuesto.lineas.length === 0}
+                        className="prod-press flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        style={{ backgroundColor: COLORS.darkGreen }}
+                      >
+                        <ArrowDown size={15} />
+                        {descargando ? 'Generando…' : 'Descargar Excel'}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500">
+                      Cada cocción del calendario se baja a insumos por su receta, escalada al volumen real del tanque
+                      asignado, y se valoriza al último precio de compra. La fecha de compra es la cocción menos{' '}
+                      {LEAD_COMPRA_DIAS_HABILES} días hábiles, para que el insumo esté en planta cuando se macera.
+                      Hacé clic en cualquier cocción del calendario de arriba para sacarla o incluirla.
+                    </p>
+
+                    {/* Ventana libre: mensual, trimestral, o lo que elija */}
+                    <div className="mt-4 flex flex-wrap items-end gap-3">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Desde</span>
+                        <select
+                          value={ventanaDesde}
+                          onChange={e => setPresupuestoDesde(e.target.value)}
+                          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700"
+                        >
+                          {mesesPlan.map(m => <option key={m} value={m}>{etiquetaMes(m + '-01')}</option>)}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Hasta</span>
+                        <select
+                          value={ventanaHasta}
+                          onChange={e => setPresupuestoHasta(e.target.value)}
+                          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700"
+                        >
+                          {mesesPlan.map(m => <option key={m} value={m}>{etiquetaMes(m + '-01')}</option>)}
+                        </select>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setPresupuestoDesde(mesesPlan[0]); setPresupuestoHasta(mesesPlan[0]) }}
+                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                        >
+                          Mensual
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setPresupuestoDesde(mesesPlan[0]); setPresupuestoHasta(mesesPlan[mesesPlan.length - 1]) }}
+                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                        >
+                          Todo el horizonte ({mesesPlan.length} {mesesPlan.length === 1 ? 'mes' : 'meses'})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSeleccionPresupuesto(null)}
+                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                        >
+                          Marcar todas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSeleccionPresupuesto(new Set())}
+                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                        >
+                          Desmarcar todas
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {presupuesto.lineas.length === 0 ? (
+                    <p className="p-5 text-sm text-gray-400">
+                      No hay cocciones marcadas en esta ventana. Marcá alguna en el calendario de arriba.
+                    </p>
+                  ) : (
+                    <>
+                      {/* Cifras de cabecera */}
+                      <div className="grid gap-px border-b border-gray-100 bg-gray-100 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="bg-white p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">A comprar</p>
+                          <p className="mt-1 text-2xl font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>
+                            ${fNum(presupuesto.total)}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-gray-400">neto de lo que ya hay en bodega</p>
+                        </div>
+                        <div className="bg-white p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Necesidad total</p>
+                          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-700">${fNum(presupuesto.totalBruto)}</p>
+                          <p className="mt-0.5 text-[11px] text-gray-400">si no hubiera nada en bodega</p>
+                        </div>
+                        <div className="bg-white p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Producción</p>
+                          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-700">{fNum(presupuesto.litros)} L</p>
+                          <p className="mt-0.5 text-[11px] text-gray-400">
+                            {presupuesto.cocciones} {presupuesto.cocciones === 1 ? 'cocción' : 'cocciones'} ·{' '}
+                            {presupuesto.total > 0 && presupuesto.litros > 0
+                              ? `$${fNum(presupuesto.total / presupuesto.litros)}/L`
+                              : '—'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Insumos</p>
+                          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-700">
+                            {presupuesto.lineas.filter(l => l.aComprar > 0).length}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-gray-400">
+                            de {presupuesto.lineas.length} que pide la receta
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Un total al que le faltan insumos no se puede leer como
+                          presupuesto completo — hay que decirlo, no omitirlo. */}
+                      {(presupuesto.sinPrecio.length > 0 || presupuesto.sinReceta.length > 0) && (
+                        <div className="flex items-start gap-2.5 border-b border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
+                          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                          <div>
+                            {presupuesto.sinReceta.length > 0 && (
+                              <p>
+                                <strong>{presupuesto.sinReceta.length} producto{presupuesto.sinReceta.length === 1 ? '' : 's'} sin receta cargada</strong> —
+                                sus cocciones están en el calendario pero NO en este total: {presupuesto.sinReceta.join(', ')}.
+                              </p>
+                            )}
+                            {presupuesto.sinPrecio.length > 0 && (
+                              <p className={presupuesto.sinReceta.length > 0 ? 'mt-1' : ''}>
+                                <strong>{presupuesto.sinPrecio.length} insumo{presupuesto.sinPrecio.length === 1 ? '' : 's'} sin precio</strong> —
+                                se piden igual pero no suman al presupuesto: {presupuesto.sinPrecio.join(', ')}.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Cuándo sale la plata */}
+                      {presupuesto.porMesCompra.length > 1 && (
+                        <div className="border-b border-gray-100 px-5 py-4">
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                            Desembolso por mes de compra
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {presupuesto.porMesCompra.map(m => (
+                              <div key={m.mes} className="rounded-lg border border-gray-200 px-3 py-2">
+                                <p className="text-xs font-bold capitalize text-gray-600">{etiquetaMes(m.mes + '-01')}</p>
+                                <p className="text-sm font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>${fNum(m.costo)}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Lista de compra */}
+                      <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3">
+                        {(['insumo', 'producto'] as const).map(v => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setVistaPresupuesto(v)}
+                            className={`prod-press rounded-lg px-3 py-1.5 text-xs font-bold ${
+                              vistaPresupuesto === v ? 'text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                            }`}
+                            style={vistaPresupuesto === v ? { backgroundColor: COLORS.darkGreen } : undefined}
+                          >
+                            {v === 'insumo' ? 'Qué comprar' : 'Por receta de producto'}
+                          </button>
+                        ))}
+                      </div>
+
+                      {vistaPresupuesto === 'insumo' ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[820px] text-sm">
+                            <thead className="border-b border-gray-100 bg-gray-50/60 text-[10px] uppercase tracking-wide text-gray-500">
+                              <tr>
+                                <th className="px-4 py-2.5 text-left font-bold">Comprar el</th>
+                                <th className="px-4 py-2.5 text-left font-bold">Insumo</th>
+                                <th className="px-4 py-2.5 text-right font-bold">Necesidad</th>
+                                <th className="px-4 py-2.5 text-right font-bold">En bodega</th>
+                                <th className="px-4 py-2.5 text-right font-bold">A comprar</th>
+                                <th className="px-4 py-2.5 text-right font-bold">Precio</th>
+                                <th className="px-4 py-2.5 text-right font-bold">Costo</th>
+                                <th className="px-4 py-2.5 text-left font-bold">Para qué cocciones</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {presupuesto.lineas.map(l => (
+                                <tr key={l.insumo} className={`prod-hover-row ${l.aComprar === 0 ? 'text-gray-400' : ''}`}>
+                                  <td className="whitespace-nowrap px-4 py-3 font-bold tabular-nums text-gray-700">
+                                    {new Date(l.fechaCompra + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <p className="font-bold text-gray-800">{l.insumo}</p>
+                                    <p className="text-[11px] capitalize text-gray-400">{l.categoria}</p>
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">{fNum(l.cantidad)} {l.unidadBase}</td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-500">
+                                    {l.disponible != null ? `${fNum(l.disponible)} ${l.unidadBase}` : 'sin dato'}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums text-gray-900">
+                                    {l.aComprar > 0 ? `${fNum(l.aComprar)} ${l.unidadBase}` : '—'}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-500">
+                                    {l.precioUnitario != null ? `$${l.precioUnitario.toLocaleString('es-CL', { maximumFractionDigits: 2 })}` : '—'}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums" style={{ color: l.costoAComprar ? COLORS.darkGreen : undefined }}>
+                                    {l.costoAComprar != null ? `$${fNum(l.costoAComprar)}` : 'sin precio'}
+                                  </td>
+                                  <td className="px-4 py-3 text-[11px] text-gray-500">
+                                    {l.detalle.map(d => (
+                                      <span key={d.producto + d.fechaCoccion} className="mr-2 inline-block whitespace-nowrap">
+                                        {d.producto}{' '}
+                                        <span className="text-gray-400">
+                                          {new Date(d.fechaCoccion + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                          {' · '}{fNum(d.cantidad)} {l.unidadBase}
+                                        </span>
+                                      </span>
+                                    ))}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot className="border-t border-gray-200 bg-gray-50/60">
+                              <tr>
+                                <td colSpan={6} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-gray-500">Total a comprar</td>
+                                <td className="px-4 py-3 text-right text-base font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>${fNum(presupuesto.total)}</td>
+                                <td />
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-100">
+                          {presupuesto.porProducto.map(g => (
+                            <div key={g.producto} className="p-5">
+                              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                <p className="font-bold text-gray-800">{g.producto}</p>
+                                <p className="text-sm font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>
+                                  {g.costo != null ? `$${fNum(g.costo)}` : 'sin costo'}
+                                </p>
+                              </div>
+                              <p className="mt-0.5 text-xs text-gray-500">
+                                {g.cocciones} {g.cocciones === 1 ? 'cocción' : 'cocciones'} · {fNum(g.litros)} L
+                                {g.costo != null && g.litros > 0 && ` · $${fNum(g.costo / g.litros)}/L`}
+                                {g.sinPrecio > 0 && ` · ${g.sinPrecio} línea${g.sinPrecio === 1 ? '' : 's'} sin precio`}
+                              </p>
+                              <div className="mt-3 overflow-x-auto">
+                                <table className="w-full min-w-[420px] text-sm">
+                                  <tbody className="divide-y divide-gray-50">
+                                    {g.insumos.map(i => (
+                                      <tr key={i.insumo} className="prod-hover-row">
+                                        <td className="py-2 pr-3 text-gray-700">{i.insumo}</td>
+                                        <td className="whitespace-nowrap py-2 px-3 text-right tabular-nums text-gray-600">{fNum(i.cantidad)} {i.unidadBase}</td>
+                                        <td className="whitespace-nowrap py-2 pl-3 text-right font-bold tabular-nums text-gray-800">
+                                          {i.costo != null ? `$${fNum(i.costo)}` : '—'}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <p className="border-t border-gray-100 p-4 text-xs text-gray-400">
+                        La cantidad de cada insumo sale de la receta escalada al volumen de la cocción, no de un
+                        promedio: una cocción de 3.000 L de un tanque grande pide exactamente cuatro veces lo de una
+                        de 750 L. Cuando una receta usa el mismo insumo en dos momentos (el mismo lúpulo en whirlpool y
+                        en dry hop, por ejemplo) acá se suman: para cocer son etapas distintas, para comprar es el
+                        mismo saco. &quot;A comprar&quot; descuenta lo que ya hay en bodega según el último informe de stock de
+                        insumos — ese descuento se aplica sobre el total de la ventana, no cocción por cocción, porque
+                        el informe es una foto sin reservas por lote. El Excel trae tres hojas: la orden de compra, el
+                        detalle de qué cocción pide cada insumo, y el resumen por mes y por producto.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
 
               {lotesSinReceta.length > 0 && (
                 <div className="flex shrink-0 items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -5541,6 +5742,11 @@ export default function ProduccionClient({
           {/* ══════════ VISTA 6: PRESUPUESTO ══════════ */}
           {activeTab === 'presupuesto' && (
             <div className="prod-enter flex flex-col gap-6 xl:h-full xl:flex-row">
+              <PreguntaDeLaVista
+                pregunta="¿Cuánto vamos a gastar en insumos?"
+                detalle="El gasto proyectado mes a mes contra el forecast completo. Es la mirada gruesa; la orden de compra concreta, cocción por cocción, está en Qué comprar."
+              />
+
 
               <div className="flex flex-[3] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
                 <div className="mb-6">
