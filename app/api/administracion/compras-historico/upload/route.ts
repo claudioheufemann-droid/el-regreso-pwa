@@ -30,8 +30,11 @@ function aNumero(v: unknown): number {
  *
  * Carga el informe "Compras detalladas" del ERP (línea por insumo, no por
  * factura) a `compras_historico`, agregando por Fecha + Proveedor con
- * "Total$" — mismo criterio que el histórico inicial (15-sep-2026).
- * Alimenta el forecast de Compras (por proveedor) en la pestaña Forecast.
+ * "Costo$" (NETO, sin el 19% de IVA) — mismo criterio que el resto del
+ * forecast (Ingresos y Cliente PDV ya trabajan en neto; decisión del
+ * usuario, 15-sep-2026: todo el módulo Forecast va en neto, "Total$" se
+ * descarta a propósito). Alimenta el forecast de Compras (por proveedor)
+ * en la pestaña Forecast.
  *
  * A diferencia de "Compras Pagos" (que alimenta compras_comprometidas, el
  * flujo de caja semanal), esto es sólo para el forecast de PATRÓN de compra
@@ -70,11 +73,11 @@ export async function POST(req: Request) {
   const header = filas[0].map(h => String(h ?? '').trim())
   const idxFecha = header.findIndex(h => /^fecha$/i.test(h))
   const idxProveedor = header.findIndex(h => /^proveedor$/i.test(h))
-  const idxTotal = header.findIndex(h => /^total\$?$/i.test(h))
+  const idxCosto = header.findIndex(h => /^costo\$?$/i.test(h))
 
-  if (idxFecha === -1 || idxProveedor === -1 || idxTotal === -1) {
+  if (idxFecha === -1 || idxProveedor === -1 || idxCosto === -1) {
     return NextResponse.json({
-      error: `No se encontraron las columnas esperadas ("Fecha", "Proveedor", "Total$"). Columnas leídas: ${header.join(', ')}`,
+      error: `No se encontraron las columnas esperadas ("Fecha", "Proveedor", "Costo$"). Columnas leídas: ${header.join(', ')}`,
     }, { status: 400 })
   }
 
@@ -86,7 +89,7 @@ export async function POST(req: Request) {
     const fecha = aFechaISO(fila[idxFecha])
     const proveedor = String(fila[idxProveedor] ?? '').trim()
     if (!fecha || !proveedor) { filasIgnoradas++; continue }
-    const monto = aNumero(fila[idxTotal])
+    const monto = aNumero(fila[idxCosto])
     const clave = `${fecha}::${proveedor}`
     const acc = porFechaProveedor.get(clave) ?? { proveedor, monto: 0, filas: 0 }
     acc.monto += monto

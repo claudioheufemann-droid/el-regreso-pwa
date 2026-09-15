@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo, ForecastCliente } from './page'
 import { lunesDe } from '@/lib/administracion/finanzas'
-import { NOMBRE_RESTAURANTE_FORECAST } from '@/lib/types'
+import { NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import type { ProyeccionCaja, PrecisionCobro, ClienteEnPeriodo } from '@/lib/administracion/finanzas'
 import FlujoCajaDashboard from './FlujoCajaDashboard'
 import DeudaClienteSection, { type DeudorRaw } from './DeudaClienteSection'
@@ -933,60 +933,58 @@ export default function AdministracionClient({
           </div>
         )}
 
-        {/* ══════════════ FORECAST POR CLIENTE ══════════════ */}
-        {tab === 'forecast' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            {forecastClientes.length === 0 ? (
+        {/* ══════════════ FORECAST POR CLIENTE / RESTAURANTE / COMPRAS ══════════════ */}
+        {tab === 'forecast' && (() => {
+          // Compras entra como UNA pastilla más ("Total compras"), al lado
+          // de Cliente PDV y Restaurante BaseCamp — decisión del usuario,
+          // 15-sep-2026. El desglose por proveedor vive DENTRO de esa
+          // pastilla (selector aparte: son demasiados para pills propias).
+          const pastillas = forecastCompras.length > 0 ? [...forecastClientes, forecastCompras[0]] : forecastClientes
+          if (pastillas.length === 0) {
+            return (
               <CardAlerta>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   <Sparkles size={17} style={{ color: C.amber, flexShrink: 0, marginTop: 1 }} />
                   <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>
-                    Todavía no hay ningún cliente configurado para forecast individual.
+                    Todavía no hay ninguna serie configurada para forecast individual.
                   </p>
                 </div>
               </CardAlerta>
-            ) : (() => {
-              const fc = forecastClientes.find(f => f.nombre === clienteForecast) ?? forecastClientes[0]
-              return (
-                <Fragment key={fc.nombre}>
-                  {forecastClientes.length > 1 && (
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {forecastClientes.map(f => (
-                        <button
-                          key={f.nombre}
-                          onClick={() => setClienteForecast(f.nombre)}
-                          style={{
-                            padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
-                            border: `1px solid ${fc.nombre === f.nombre ? C.blue : C.line}`,
-                            background: fc.nombre === f.nombre ? C.blueSoft : 'transparent',
-                            color: fc.nombre === f.nombre ? C.blue : C.muted,
-                          }}
-                        >
-                          {f.nombre}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <VistaForecastSerie
-                    fc={fc}
-                    hoyISO={hoyISO}
-                    subtitulo="Cobro inmediato (venta al contado): la semana proyectada de venta es la misma semana en que entra la plata."
-                  />
-                </Fragment>
-              )
-            })()}
+            )
+          }
 
-            {forecastCompras.length > 0 && (() => {
-              const fcCompra = forecastCompras.find(f => f.nombre === proveedorCompras) ?? forecastCompras[0]
-              return (
-                <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 22, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          const activa = pastillas.find(f => f.nombre === clienteForecast) ?? pastillas[0]
+          const esCompras = activa.nombre === NOMBRE_COMPRAS_TOTAL
+          const fcCompra = esCompras ? (forecastCompras.find(f => f.nombre === proveedorCompras) ?? forecastCompras[0]) : null
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {pastillas.length > 1 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {pastillas.map(f => (
+                    <button
+                      key={f.nombre}
+                      onClick={() => setClienteForecast(f.nombre)}
+                      style={{
+                        padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+                        border: `1px solid ${activa.nombre === f.nombre ? C.blue : C.line}`,
+                        background: activa.nombre === f.nombre ? C.blueSoft : 'transparent',
+                        color: activa.nombre === f.nombre ? C.blue : C.muted,
+                      }}
+                    >
+                      {f.nombre}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {esCompras && fcCompra ? (
+                <Fragment key={fcCompra.nombre}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
-                    <div>
-                      <p style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>Compras — cuánto vamos a necesitar</p>
-                      <p style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
-                        Filtrá por proveedor para ver su propio patrón; &quot;Total compras&quot; suma a todos.
-                      </p>
-                    </div>
+                    <p style={{ fontSize: 12, color: C.muted }}>
+                      Plata que sale, no que entra. Filtrá por proveedor para ver su propio patrón;
+                      &quot;{NOMBRE_COMPRAS_TOTAL}&quot; suma a todos.
+                    </p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <select
                         value={fcCompra.nombre}
@@ -1012,13 +1010,19 @@ export default function AdministracionClient({
                   <VistaForecastSerie
                     fc={fcCompra}
                     hoyISO={hoyISO}
-                    subtitulo="Plata que sale, no que entra: cuánto esperamos pagar a este proveedor cada semana según su patrón de compra habitual."
+                    subtitulo="Montos netos, sin IVA — cuánto esperamos pagar a este proveedor cada semana según su patrón de compra habitual."
                   />
-                </div>
-              )
-            })()}
-          </div>
-        )}
+                </Fragment>
+              ) : (
+                <VistaForecastSerie
+                  fc={activa}
+                  hoyISO={hoyISO}
+                  subtitulo="Montos netos. Cobro inmediato (venta al contado): la semana proyectada de venta es la misma semana en que entra la plata."
+                />
+              )}
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
