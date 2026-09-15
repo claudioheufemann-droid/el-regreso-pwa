@@ -275,6 +275,39 @@ export function esClienteExcluidoProduccion(nombre: string | null | undefined): 
 }
 
 /**
+ * Clientes que Ventas EXCLUYE pero que Administración y Finanzas SÍ cuenta
+ * como flujo real de la planta — mismo patrón que CLIENTES_INCLUIR_PRODUCCION
+ * (una RE-inclusión sobre CLIENTES_EXCLUIR, no una lista aparte: sacar un
+ * nombre de acá lo devuelve al comportamiento de Ventas).
+ *
+ * Decisión del usuario, 15-sep-2026: el punto de venta propio, el consumo
+ * de BaseCamp, las ferias y el co-packing a EWU Ginger Beer mueven plata o
+ * insumos reales que Finanzas necesita ver en "Facturado" y en el flujo de
+ * caja, aunque Comercial no los reporte como venta a un cliente externo.
+ * `cliente merma pdv` NO entra acá a propósito: es pérdida, no facturación.
+ */
+export const CLIENTES_INCLUIR_FINANZAS: string[] = [
+  'cliente pdv',
+  'basecamp el regreso',
+  'cliente feria',
+  'ewu ginger beer',
+]
+
+/**
+ * Cliente que no debe entrar al ingreso real de Administración y Finanzas.
+ *
+ * Parte de la exclusión de Ventas, pero las re-inclusiones de Finanzas
+ * mandan: se evalúan primero, así un cliente de CLIENTES_INCLUIR_FINANZAS
+ * cuenta como facturación aunque figure en CLIENTES_EXCLUIR.
+ */
+export function esClienteExcluidoFinanzas(nombre: string | null | undefined): boolean {
+  if (!nombre) return false
+  const n = nombre.toLowerCase().trim()
+  if (CLIENTES_INCLUIR_FINANZAS.some(inc => n.includes(inc))) return false
+  return esClienteExcluido(nombre)
+}
+
+/**
  * Subconjunto de CLIENTES_EXCLUIR que además de excluirse de los reportes de
  * venta real, ni siquiera se GUARDA en `ventas` al cargar un archivo del ERP.
  *

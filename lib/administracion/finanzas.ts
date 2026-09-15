@@ -23,7 +23,7 @@
  * lib/cobranza.ts, que ya está verificado contra los tramos del ERP.
  */
 import { brutoLinea, sumarDias } from '@/lib/cobranza'
-import { esClienteExcluido } from '@/lib/types'
+import { esClienteExcluidoFinanzas } from '@/lib/types'
 
 /** Mirror exacto de la función SQL `_categoria_normalizada`, para que la
  *  apertura por categoría dé lo mismo acá que en los RPC de Ventas. Si cambia
@@ -60,12 +60,15 @@ export interface FilaVentaFinanzas {
   entregado: boolean | null
 }
 
-/** ¿Esta fila es ingreso real de la empresa? Excluye consumo interno
- *  (PDV, BaseCamp, mermas, muestras) y tours: nunca generan plata a cobrar.
- *  La maquila SÍ entra — no es venta del área comercial, pero es plata que la
- *  empresa factura y cobra, que es lo que le importa a Administración. */
+/** ¿Esta fila es ingreso real de la empresa? Excluye consumo interno sin
+ *  valor de flujo (mermas, muestras, marketing, calidad) y tours. PDV,
+ *  BaseCamp, ferias y la maquila a EWU Ginger Beer SÍ entran (decisión del
+ *  usuario, 15-sep-2026) — no son venta del área comercial, pero mueven
+ *  plata o insumos reales que le importan a Finanzas, vía
+ *  `esClienteExcluidoFinanzas` (re-inclusión sobre la lista general de
+ *  CLIENTES_EXCLUIR, mismo patrón que ya usa Producción). */
 export function esIngresoReal(f: Pick<FilaVentaFinanzas, 'nombre_fantasia' | 'producto'>): boolean {
-  if (esClienteExcluido(f.nombre_fantasia)) return false
+  if (esClienteExcluidoFinanzas(f.nombre_fantasia)) return false
   if (esProductoExcluido(f.producto)) return false
   return true
 }

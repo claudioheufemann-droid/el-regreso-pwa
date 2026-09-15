@@ -19,14 +19,16 @@ function getAdminClient() {
  * El agregado lo hace la función `ingresos_por_ciclo()` en Postgres, no este
  * endpoint: la primera versión paginaba la tabla `ventas` entera (100k+ filas,
  * 100+ viajes encadenados a PostgREST) y se pasaba del timeout de la función
- * serverless. Además, al vivir en SQL reutiliza _excluir_cliente /
- * _excluir_producto / _categoria_normalizada — las MISMAS que usan los RPC del
- * dashboard de Ventas —, así que el histórico de ingresos no puede
- * desalinearse de lo que Ventas reporta.
+ * serverless. Vive en SQL y reutiliza _excluir_producto / _categoria_normalizada
+ * — las MISMAS que usan los RPC del dashboard de Ventas.
  *
- * Ojo con la población: excluye el consumo interno (PDV, BaseCamp, feria,
- * mermas). Son litros que Producción sí tiene que fabricar, pero nadie los
- * paga: contarlos acá inflaría el forecast de ingresos con venta inexistente.
+ * La población de CLIENTE sí es distinta de Ventas a propósito, vía
+ * `_excluir_cliente_finanzas()` (espejo SQL de `esClienteExcluidoFinanzas` en
+ * lib/types.ts): PDV, BaseCamp, ferias y la maquila a EWU Ginger Beer SÍ
+ * cuentan acá — mueven plata o insumos reales que le importan a Finanzas,
+ * aunque Ventas los excluya de sus propios reportes de venta comercial
+ * (decisión del usuario, 15-sep-2026). Mermas, muestras, marketing y calidad
+ * siguen afuera: no generan plata que cobrar.
  *
  * Autenticación dual, mismo patrón que /api/produccion/datos.
  */
