@@ -509,6 +509,16 @@ def correr_finanzas(mes_base: pd.Timestamp) -> int:
             forecast, validacion, [],
         )
 
+    # Restaurante de BaseCamp (POS Toteat) — otra fuente de datos
+    # (ventas_restaurante, cargada a mano) pero mismo tratamiento.
+    restaurante = series.get("restaurante", {})
+    print(f"[Finanzas] Restaurante: {len(restaurante)} series")
+    for nombre, puntos in restaurante.items():
+        comprometer_serie(
+            procesar_serie("restaurante", nombre, a_puntos(puntos), mes_base),
+            forecast, validacion, [],
+        )
+
     # De vuelta a la unidad real: el endpoint de carga espera monto/montoMin/montoMax.
     filas = [
         {

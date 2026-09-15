@@ -13,7 +13,7 @@ import {
   type ClienteRiesgo, type CicloConversion,
 } from '@/lib/administracion/flujoSemanal'
 import { esCamaraProduccion } from '@/lib/camaras'
-import { vendedorCanonico, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL } from '@/lib/types'
+import { vendedorCanonico, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST } from '@/lib/types'
 import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
 import AdministracionClient from './AdministracionClient'
 
@@ -32,7 +32,7 @@ export interface PuntoFinanzas {
 
 export interface SerieFinanzas {
   id: string
-  nivel: 'general' | 'categoria' | 'cliente'
+  nivel: 'general' | 'categoria' | 'cliente' | 'restaurante'
   clave: string | null
   puntos: PuntoFinanzas[]
   /** Error del backtest walk-forward a 1 mes, en %. null = no alcanzó el
@@ -162,7 +162,7 @@ export default async function AdministracionPage() {
 
   const [
     forecastRaw, validacionRaw, ventasRaw, clientesRaw, deudoresRaw, ultimaCorridaRaw,
-    saldosRaw, comprasRaw, stockRaw,
+    saldosRaw, comprasRaw, stockRaw, ventasRestauranteRaw,
   ] = await Promise.all([
     (async () => {
       const filas: Record<string, unknown>[] = []
@@ -221,6 +221,13 @@ export default async function AdministracionPage() {
     // ciclo de conversión. Mismo criterio de cámaras que usa Producción.
     admin.from('stock_productos').select('camara, litros, tipo')
       .then(r => r.data ?? []),
+    // Venta diaria del restaurante de BaseCamp (POS Toteat, cargada a mano —
+    // ver ventas_restaurante) para el forecast individual y su MTD en vivo.
+    // Misma ventana de 120 días que ventasRaw: alcanza y sobra para las 8
+    // semanas hacia atrás que muestra la pestaña Forecast.
+    admin.from('ventas_restaurante').select('fecha, monto')
+      .gte('fecha', desdeVentas)
+      .then(r => (r.data ?? []) as { fecha: string; monto: number }[]),
   ])
 
   // ── Deuda actual por cliente (antes /administracion/cobranza, absorbida acá
@@ -281,15 +288,27 @@ export default async function AdministracionPage() {
     }
   }
 
+  // Venta del restaurante en lo que va del ciclo — de ventas_restaurante, no
+  // de ventasRaw (otra tabla). El monto ya es bruto (boleta), no neto como
+  // el resto de estos MTD, pero montoCicloEnCurso sólo se usa para compararlo
+  // contra el forecast de LA MISMA serie, que también corrió sobre este
+  // monto bruto — no hace falta que las unidades calcen entre series.
+  let mtdRestaurante = 0
+  for (const r of ventasRestauranteRaw) {
+    if (r.fecha < inicioCiclo || r.fecha > finCiclo) continue
+    mtdRestaurante += Number(r.monto) || 0
+  }
+
   const series: SerieFinanzas[] = [...porSerie.entries()].map(([id, puntos]) => {
     const [nivel, claveRaw] = id.split('::')
     const clave = claveRaw || null
     const val = validacionPorSerie.get(id)
     const montoCicloEnCurso = nivel === 'general' ? mtdGeneral.neto
       : nivel === 'cliente' ? (mtdPorCliente.get(clave ?? '') ?? 0)
+      : nivel === 'restaurante' ? mtdRestaurante
       : (mtdPorCategoria.get(clave ?? '') ?? 0)
     return {
-      id, nivel: nivel as 'general' | 'categoria' | 'cliente', clave,
+      id, nivel: nivel as 'general' | 'categoria' | 'cliente' | 'restaurante', clave,
       puntos: puntos.sort((a, b) => a.mes.localeCompare(b.mes)),
       mape: val?.mape != null ? Number(val.mape) : null,
       mesesHistorial: val?.meses_historial != null ? Number(val.meses_historial) : null,
@@ -501,29 +520,17 @@ export default async function AdministracionPage() {
     hayCompras: compras.length > 0,
   }
 
-  // ── Forecast individual por cliente (pestaña "Forecast") ───────────────────
+  // ── Forecast individual (pestaña "Forecast") ────────────────────────────────
   // 8 semanas atrás (venta real, para ver la tendencia) + 8 adelante
-  // (proyección repartida desde el forecast mensual de Prophet).
+  // (proyección repartida desde el forecast mensual de Prophet). Mismo
+  // reparto de mes→semana para cualquier serie forecasteada, sea cliente de
+  // `ventas` (PDV) o el restaurante (ventas_restaurante) — sólo cambia de
+  // dónde sale el mapa de `reales`.
   const semanasForecastCliente = semanasRodantes(hoyISO, 8, 8)
-  const forecastClientes: ForecastCliente[] = CLIENTES_FORECAST_INDIVIDUAL.map(nombre => {
-    const serie = series.find(s => s.nivel === 'cliente' && s.clave === nombre)
 
-    const reales = new Map<string, number>()
-    for (const v of ventasRaw) {
-      if (v.nombre_fantasia !== nombre) continue
-      if (!esIngresoReal(v)) continue
-      if (!v.fecha_pedido) continue
-      const neto = Number(v.total_sin_impuesto) || 0
-      if (neto === 0) continue
-      const lunes = lunesDeFecha(v.fecha_pedido)
-      reales.set(lunes, (reales.get(lunes) ?? 0) + neto)
-    }
-
-    // Reparte cada ciclo proyectado en sus días y los agrupa por semana —
-    // sólo los días que todavía no pasaron, mismo criterio que ya usa
-    // construirFlujoSemanal para el forecast general.
+  function repartirForecastEnSemanas(puntos: PuntoFinanzas[]): Map<string, { monto: number; min: number; max: number }> {
     const proyectados = new Map<string, { monto: number; min: number; max: number }>()
-    for (const p of serie?.puntos ?? []) {
+    for (const p of puntos) {
       if (p.tipo !== 'forecast') continue
       const inicioC = inicioDeCiclo(p.mes)
       const finC = finDeCiclo(p.mes)
@@ -543,7 +550,11 @@ export default async function AdministracionPage() {
         proyectados.set(lunes, acc)
       }
     }
+    return proyectados
+  }
 
+  function armarForecastCliente(nombre: string, serie: SerieFinanzas | undefined, reales: Map<string, number>): ForecastCliente {
+    const proyectados = repartirForecastEnSemanas(serie?.puntos ?? [])
     const semanas: SemanaForecastCliente[] = semanasForecastCliente.map(inicio => {
       const proy = proyectados.get(inicio)
       return {
@@ -554,9 +565,34 @@ export default async function AdministracionPage() {
         proyectadoMax: proy ? Math.round(proy.max) : null,
       }
     })
-
     return { nombre, mape: serie?.mape ?? null, mesesHistorial: serie?.mesesHistorial ?? null, semanas }
+  }
+
+  const forecastClientes: ForecastCliente[] = CLIENTES_FORECAST_INDIVIDUAL.map(nombre => {
+    const reales = new Map<string, number>()
+    for (const v of ventasRaw) {
+      if (v.nombre_fantasia !== nombre) continue
+      if (!esIngresoReal(v)) continue
+      if (!v.fecha_pedido) continue
+      const neto = Number(v.total_sin_impuesto) || 0
+      if (neto === 0) continue
+      const lunes = lunesDeFecha(v.fecha_pedido)
+      reales.set(lunes, (reales.get(lunes) ?? 0) + neto)
+    }
+    return armarForecastCliente(nombre, series.find(s => s.nivel === 'cliente' && s.clave === nombre), reales)
   })
+
+  // Restaurante de BaseCamp — misma mecánica, real desde ventas_restaurante.
+  const realesRestaurante = new Map<string, number>()
+  for (const r of ventasRestauranteRaw) {
+    const lunes = lunesDeFecha(r.fecha)
+    realesRestaurante.set(lunes, (realesRestaurante.get(lunes) ?? 0) + (Number(r.monto) || 0))
+  }
+  forecastClientes.push(armarForecastCliente(
+    NOMBRE_RESTAURANTE_FORECAST,
+    series.find(s => s.nivel === 'restaurante' && s.clave === NOMBRE_RESTAURANTE_FORECAST),
+    realesRestaurante,
+  ))
 
   return (
     <AdministracionClient

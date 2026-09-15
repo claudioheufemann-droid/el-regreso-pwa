@@ -344,6 +344,17 @@ export const CLIENTES_FORECAST_INDIVIDUAL: string[] = [
   'Cliente PDV',
 ]
 
+/**
+ * Nombre para mostrar del forecast del restaurante de BaseCamp Pucón (POS
+ * Toteat — venta a público, boletas). Vive aparte de
+ * CLIENTES_FORECAST_INDIVIDUAL porque la fuente de datos es otra tabla
+ * (`ventas_restaurante`, cargada a mano desde el informe "Ventas Totales"
+ * del POS) y no hay fila de `ventas`/`nombre_fantasia` con la que matchear
+ * — la pestaña Forecast lo suma igual, es sólo el mismo string usado en
+ * server y cliente para etiquetar la serie nivel='restaurante'.
+ */
+export const NOMBRE_RESTAURANTE_FORECAST = 'Restaurante BaseCamp'
+
 /** Plazo de cobro a usar para un cliente, forzando 0 días para los de
  *  CLIENTES_COBRO_INMEDIATO sin importar lo que traiga `clientes` —
  *  ver el comentario de esa constante. */

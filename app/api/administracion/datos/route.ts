@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { DIA_INICIO_CICLO, DIA_FIN_CICLO } from '@/lib/produccion/reglas'
-import { CLIENTES_FORECAST_INDIVIDUAL } from '@/lib/types'
+import { CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST } from '@/lib/types'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -72,6 +72,16 @@ export async function GET(req: Request) {
     )
   }
 
+  // Serie del restaurante de BaseCamp (POS Toteat, venta a público) — otra
+  // tabla (`ventas_restaurante`, cargada a mano, no viene del ERP de la
+  // cervecería) pero mismo tratamiento: ciclo interno + Prophet + reparto a
+  // semanas en la pestaña Forecast.
+  const { data: filasRestaurante, error: errRestaurante } = await supabase.rpc('ingresos_por_ciclo_restaurante')
+  if (errRestaurante) return NextResponse.json({ error: errRestaurante.message }, { status: 500 })
+  const serieRestaurante = ((filasRestaurante ?? []) as { ciclo: string; monto: number }[])
+    .map(f => ({ mes: String(f.ciclo).slice(0, 10), monto: Math.round(Number(f.monto) || 0) }))
+    .sort((a, b) => a.mes.localeCompare(b.mes))
+
   const filas = (data ?? []) as { ciclo: string; categoria: string; monto: number }[]
 
   const general = new Map<string, number>()
@@ -136,7 +146,12 @@ export async function GET(req: Request) {
   for (const [nombre, serie] of clientePorNombre) clienteObj[nombre] = serie
 
   return NextResponse.json({
-    series: { general: serieGeneral, categoria: categoriaObj, cliente: clienteObj },
+    series: {
+      general: serieGeneral,
+      categoria: categoriaObj,
+      cliente: clienteObj,
+      restaurante: { [NOMBRE_RESTAURANTE_FORECAST]: serieRestaurante },
+    },
     calidadDatos: calidad,
     meta: { ciclosConVenta: serieGeneral.length, categorias: Object.keys(categoriaObj) },
   })

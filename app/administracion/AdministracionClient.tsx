@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react'
 import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo, ForecastCliente } from './page'
 import { lunesDe } from '@/lib/administracion/finanzas'
+import { NOMBRE_RESTAURANTE_FORECAST } from '@/lib/types'
 import type { ProyeccionCaja, PrecisionCobro, ClienteEnPeriodo } from '@/lib/administracion/finanzas'
 import FlujoCajaDashboard from './FlujoCajaDashboard'
 import DeudaClienteSection, { type DeudorRaw } from './DeudaClienteSection'
@@ -401,7 +403,7 @@ export default function AdministracionClient({
               <Card>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 16 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {series.filter(s => s.nivel !== 'cliente').map(s => (
+                    {series.filter(s => s.nivel !== 'cliente' && s.nivel !== 'restaurante').map(s => (
                       <button
                         key={s.id}
                         onClick={() => setSerieId(s.id)}
@@ -853,17 +855,30 @@ export default function AdministracionClient({
                           Cobro inmediato (venta al contado): la semana proyectada de venta es la misma semana en que entra la plata.
                         </p>
                       </div>
-                      {fc.mape != null && (
-                        <span
-                          title="Error promedio del backtest del modelo mensual de este cliente, repartido acá a semanas."
-                          style={{
-                            fontSize: 11.5, fontWeight: 700, padding: '4px 10px', borderRadius: 999,
-                            border: `1px solid ${C.line}`, color: fc.mape <= 30 ? C.green : C.amber,
-                          }}
-                        >
-                          desvío {fc.mape.toFixed(0)}%
-                        </span>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {fc.mape != null && (
+                          <span
+                            title="Error promedio del backtest del modelo mensual de este cliente, repartido acá a semanas."
+                            style={{
+                              fontSize: 11.5, fontWeight: 700, padding: '4px 10px', borderRadius: 999,
+                              border: `1px solid ${C.line}`, color: fc.mape <= 30 ? C.green : C.amber,
+                            }}
+                          >
+                            desvío {fc.mape.toFixed(0)}%
+                          </span>
+                        )}
+                        {fc.nombre === NOMBRE_RESTAURANTE_FORECAST && (
+                          <Link
+                            href="/administracion/forecast/cargar-restaurante"
+                            style={{
+                              fontSize: 12, fontWeight: 700, color: C.blue, textDecoration: 'none',
+                              padding: '6px 12px', borderRadius: 9, border: `1px solid ${C.blue}`,
+                            }}
+                          >
+                            Cargar informe
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   </Card>
 
