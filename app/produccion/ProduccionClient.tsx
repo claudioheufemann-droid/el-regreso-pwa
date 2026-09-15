@@ -1839,6 +1839,279 @@ export default function ProduccionClient({
     }
   }, [planSugerido, mesCoberturaOffset])
 
+  /* ══════════ PRESUPUESTO DE INSUMOS DEL CALENDARIO ══════════
+     Toma las cocciones SELECCIONADAS del calendario, las baja a insumos por
+     receta y las valoriza. Es distinto del MRP de más abajo y de "Presupuesto
+     de insumos mes a mes": aquéllos parten del forecast agregado ("cuántos
+     litros voy a vender"), éste parte del PLAN CONCRETO ("estas cocciones,
+     estos días, en estos tanques"), así que cada peso tiene una cocción con
+     fecha detrás y se puede emitir la orden de compra.
+
+     Lo que aporta y no existía:
+       · Fecha de compra por insumo: la cocción menos el lead time de compra.
+       · Selección: se presupuesta lo que el usuario marca, no todo.
+       · Ventana libre de meses (mensual, trimestral, lo que elija).
+       · Exportable a Excel como orden de compra. */
+
+  /** Lead time de compra de insumos: días HÁBILES entre emitir la orden y
+   *  tener el insumo en planta. 5 días hábiles ≈ la semana que pidió el
+   *  usuario, pero cayendo siempre en día laboral: una orden de compra no se
+   *  emite un domingo. */
+  const LEAD_COMPRA_DIAS_HABILES = 5
+
+  /** Cocciones marcadas para el presupuesto. `null` = todavía no se tocó
+   *  nada, y en ese caso van TODAS las de la ventana (el presupuesto sirve
+   *  apenas se abre la pantalla, en vez de arrancar en cero). */
+  const [seleccionPresupuesto, setSeleccionPresupuesto] = useState<Set<string> | null>(null)
+  const [presupuestoDesde, setPresupuestoDesde] = useState<string>('')
+  const [presupuestoHasta, setPresupuestoHasta] = useState<string>('')
+  const [vistaPresupuesto, setVistaPresupuesto] = useState<'insumo' | 'producto'>('insumo')
+  const [descargando, setDescargando] = useState(false)
+
+  /** Meses que ofrece el selector de ventana: los que tienen cocciones. */
+  const mesesPlan = useMemo(
+    () => [...new Set(planSugerido.lotes.filter(l => !l.enCurso).map(l => l.fechaInicio.slice(0, 7)))].sort(),
+    [planSugerido]
+  )
+  const ventanaDesde = presupuestoDesde || mesesPlan[0] || ''
+  const ventanaHasta = presupuestoHasta || mesesPlan[mesesPlan.length - 1] || ''
+
+  /** Cocciones dentro de la ventana elegida. Una cocción EN CURSO no entra
+   *  nunca: sus insumos ya se compraron y ya están en el tanque. */
+  const lotesEnVentana = useMemo(
+    () => planSugerido.lotes.filter(l =>
+      !l.enCurso && l.fechaInicio.slice(0, 7) >= ventanaDesde && l.fechaInicio.slice(0, 7) <= ventanaHasta
+    ),
+    [planSugerido, ventanaDesde, ventanaHasta]
+  )
+  const estaSeleccionado = (id: string) => seleccionPresupuesto == null || seleccionPresupuesto.has(id)
+  const alternarLote = (id: string) => {
+    setSeleccionPresupuesto(prev => {
+      const base = prev ?? new Set(planSugerido.lotes.filter(l => !l.enCurso).map(l => l.id))
+      const siguiente = new Set(base)
+      if (siguiente.has(id)) siguiente.delete(id); else siguiente.add(id)
+      return siguiente
+    })
+  }
+
+  const presupuesto = useMemo(() => {
+    interface LineaInsumo {
+      insumo: string; categoria: string; unidadBase: 'gr' | 'ml'
+      cantidad: number; precioUnitario: number | null; costo: number | null
+      /** Lo antes que hay que emitir la orden para que llegue a tiempo. */
+      fechaCompra: string
+      /** Qué cocciones lo piden — el vínculo producto → insumo que hace
+       *  auditable cada línea del presupuesto. */
+      detalle: {
+        producto: string; fechaCoccion: string; fechaCompra: string
+        litros: number; tanque: string; cantidad: number; costo: number | null
+      }[]
+      disponible: number | null
+      aComprar: number
+      costoAComprar: number | null
+    }
+    interface GrupoProducto {
+      producto: string; cocciones: number; litros: number
+      costo: number | null; sinPrecio: number
+      insumos: { insumo: string; cantidad: number; unidadBase: 'gr' | 'ml'; costo: number | null }[]
+    }
+    const vacio = {
+      lineas: [] as LineaInsumo[], porProducto: [] as GrupoProducto[],
+      porMesCompra: [] as { mes: string; costo: number }[],
+      total: 0, totalBruto: 0, cocciones: 0, litros: 0,
+      sinPrecio: [] as string[], sinReceta: [] as string[],
+    }
+
+    const seleccionados = lotesEnVentana.filter(l => estaSeleccionado(l.id))
+    if (seleccionados.length === 0) return vacio
+
+    const disponiblePorInsumo = new Map(stockInsumos.map(s => [s.insumo, s.disponible]))
+    const lineasPorProducto = new Map<string, RecetaInsumoLinea[]>()
+    for (const l of recetaInsumos) {
+      const arr = lineasPorProducto.get(l.producto) ?? []
+      arr.push(l)
+      lineasPorProducto.set(l.producto, arr)
+    }
+
+    const porInsumo = new Map<string, LineaInsumo>()
+    const porProducto = new Map<string, GrupoProducto>()
+    const sinReceta = new Set<string>()
+    const sinPrecio = new Set<string>()
+
+    for (const lote of seleccionados) {
+      const receta = lineasPorProducto.get(lote.producto)
+      if (!receta || receta.length === 0) { sinReceta.add(lote.producto); continue }
+      const fechaCompra = restarDiasHabilesISO(lote.fechaInicio, LEAD_COMPRA_DIAS_HABILES)
+
+      const grupo = porProducto.get(lote.producto)
+        ?? { producto: lote.producto, cocciones: 0, litros: 0, costo: 0 as number | null, sinPrecio: 0, insumos: [] }
+      grupo.cocciones++
+      grupo.litros += lote.litros
+
+      for (const linea of receta) {
+        // La receta está escrita para `litrosBase`; se escala al volumen real
+        // de ESTA cocción, que sale del tamaño del tanque asignado.
+        const cantidad = linea.cantidadPorLote * (lote.litros / linea.litrosBase)
+        const costo = linea.precioUnitario != null ? cantidad * linea.precioUnitario : null
+        if (linea.precioUnitario == null) { sinPrecio.add(linea.insumo); grupo.sinPrecio++ }
+        else if (grupo.costo != null) grupo.costo += costo ?? 0
+
+        /* Un mismo insumo puede venir varias veces en la misma receta con
+           distinto uso (el mismo lúpulo en whirlpool y en dry hop, por
+           ejemplo — verificado en los datos: pasa en 5 recetas). Para cocer
+           son momentos distintos; para COMPRAR es el mismo saco, así que acá
+           se suman. */
+        const acc = porInsumo.get(linea.insumo) ?? {
+          insumo: linea.insumo, categoria: linea.categoria, unidadBase: linea.unidadBase,
+          cantidad: 0, precioUnitario: linea.precioUnitario, costo: linea.precioUnitario != null ? 0 : null,
+          fechaCompra, detalle: [], disponible: disponiblePorInsumo.get(linea.insumo) ?? null,
+          aComprar: 0, costoAComprar: null,
+        }
+        acc.cantidad += cantidad
+        if (acc.costo != null && costo != null) acc.costo += costo
+        // La fecha que manda es la MÁS TEMPRANA: si el insumo se usa en tres
+        // cocciones, la orden hay que emitirla para la primera.
+        if (fechaCompra < acc.fechaCompra) acc.fechaCompra = fechaCompra
+        const yaEsaCoccion = acc.detalle.find(d => d.producto === lote.producto && d.fechaCoccion === lote.fechaInicio)
+        if (yaEsaCoccion) {
+          yaEsaCoccion.cantidad += cantidad
+          if (yaEsaCoccion.costo != null && costo != null) yaEsaCoccion.costo += costo
+        } else {
+          acc.detalle.push({
+            producto: lote.producto, fechaCoccion: lote.fechaInicio, fechaCompra,
+            litros: lote.litros, tanque: lote.tanque, cantidad, costo,
+          })
+        }
+        porInsumo.set(linea.insumo, acc)
+
+        const gi = grupo.insumos.find(x => x.insumo === linea.insumo)
+        if (gi) { gi.cantidad += cantidad; if (gi.costo != null && costo != null) gi.costo += costo }
+        else grupo.insumos.push({ insumo: linea.insumo, cantidad, unidadBase: linea.unidadBase, costo })
+      }
+      porProducto.set(lote.producto, grupo)
+    }
+
+    /* Neteo contra el inventario de insumos que ya hay en bodega: no se
+       compra lo que está en la estantería. Es una aproximación deliberada —
+       el stock se descuenta del total del período, no cocción por cocción,
+       porque el informe de insumos es una foto sin reservas por lote. Por eso
+       se muestran las dos cifras (necesidad y a comprar) y no sólo una. */
+    const lineas = [...porInsumo.values()].map(l => {
+      const cantidad = Math.round(l.cantidad)
+      const aComprar = l.disponible != null ? Math.max(cantidad - l.disponible, 0) : cantidad
+      return {
+        ...l, cantidad,
+        costo: l.costo != null ? Math.round(l.costo) : null,
+        aComprar,
+        costoAComprar: l.precioUnitario != null ? Math.round(l.precioUnitario * aComprar) : null,
+        detalle: l.detalle.sort((a, b) => a.fechaCoccion.localeCompare(b.fechaCoccion)),
+      }
+    }).sort((a, b) => (b.costoAComprar ?? 0) - (a.costoAComprar ?? 0) || a.insumo.localeCompare(b.insumo))
+
+    const porMes = new Map<string, number>()
+    for (const l of lineas) {
+      if (l.costoAComprar == null) continue
+      // El gasto cae en el mes en que hay que EMITIR la orden, que es lo que
+      // se presupuesta: la plata sale antes que la cocción.
+      const mes = l.fechaCompra.slice(0, 7)
+      porMes.set(mes, (porMes.get(mes) ?? 0) + l.costoAComprar)
+    }
+
+    return {
+      lineas,
+      porProducto: [...porProducto.values()]
+        .map(g => ({ ...g, litros: Math.round(g.litros), costo: g.costo != null ? Math.round(g.costo) : null,
+          insumos: g.insumos.map(i => ({ ...i, cantidad: Math.round(i.cantidad), costo: i.costo != null ? Math.round(i.costo) : null }))
+            .sort((a, b) => (b.costo ?? 0) - (a.costo ?? 0)) }))
+        .sort((a, b) => (b.costo ?? 0) - (a.costo ?? 0)),
+      porMesCompra: [...porMes.entries()].sort().map(([mes, costo]) => ({ mes, costo })),
+      total: lineas.reduce((s, l) => s + (l.costoAComprar ?? 0), 0),
+      totalBruto: lineas.reduce((s, l) => s + (l.costo ?? 0), 0),
+      cocciones: seleccionados.length,
+      litros: seleccionados.reduce((s, l) => s + l.litros, 0),
+      sinPrecio: [...sinPrecio].sort(),
+      sinReceta: [...sinReceta].sort(),
+    }
+    // `estaSeleccionado` se deriva de seleccionPresupuesto, que sí está en la
+    // lista — no hace falta como dependencia propia.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotesEnVentana, seleccionPresupuesto, recetaInsumos, stockInsumos])
+
+  /** Excel de orden de compra. El xlsx se carga sólo al apretar el botón
+   *  (import dinámico): es una librería pesada y no tiene por qué viajar en
+   *  el bundle de todos los que abren Producción. */
+  async function descargarPresupuesto() {
+    if (presupuesto.lineas.length === 0) return
+    setDescargando(true)
+    try {
+      const XLSX = await import('xlsx')
+      const libro = XLSX.utils.book_new()
+
+      // Hoja 1 — la orden de compra propiamente tal.
+      const compra = presupuesto.lineas.map(l => ({
+        'Fecha de compra': l.fechaCompra,
+        'Insumo': l.insumo,
+        'Categoría': l.categoria,
+        'Necesidad total': l.cantidad,
+        'En bodega': l.disponible ?? '',
+        'A comprar': l.aComprar,
+        'Unidad': l.unidadBase,
+        'Precio unitario': l.precioUnitario ?? '',
+        'Costo a comprar': l.costoAComprar ?? '',
+        'Para cocciones': l.detalle.map(d => `${d.producto} ${d.fechaCoccion} (${Math.round(d.litros)} L)`).join(' · '),
+      }))
+      compra.push({
+        'Fecha de compra': '', 'Insumo': 'TOTAL', 'Categoría': '', 'Necesidad total': '' as never,
+        'En bodega': '', 'A comprar': '' as never, 'Unidad': '' as never, 'Precio unitario': '',
+        'Costo a comprar': presupuesto.total, 'Para cocciones': '',
+      })
+      XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(compra), 'Orden de compra')
+
+      // Hoja 2 — el vínculo cocción → insumo, línea por línea, para auditar
+      // de dónde sale cada peso.
+      const detalle: Record<string, string | number>[] = []
+      for (const l of presupuesto.lineas) {
+        for (const d of l.detalle) {
+          detalle.push({
+            'Fecha de compra': d.fechaCompra, 'Fecha de cocción': d.fechaCoccion,
+            'Producto': d.producto, 'Litros': Math.round(d.litros), 'Tanque': d.tanque,
+            'Insumo': l.insumo, 'Cantidad': Math.round(d.cantidad), 'Unidad': l.unidadBase,
+            'Precio unitario': l.precioUnitario ?? '', 'Costo': d.costo != null ? Math.round(d.costo) : '',
+          })
+        }
+      }
+      detalle.sort((a, b) => String(a['Fecha de compra']).localeCompare(String(b['Fecha de compra'])))
+      XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(detalle), 'Detalle por cocción')
+
+      // Hoja 3 — resumen por producto y por mes de compra.
+      const resumen: Record<string, string | number>[] = [
+        { Concepto: 'Ventana', Valor: `${ventanaDesde} a ${ventanaHasta}` },
+        { Concepto: 'Cocciones consideradas', Valor: presupuesto.cocciones },
+        { Concepto: 'Litros a producir', Valor: presupuesto.litros },
+        { Concepto: 'Costo insumos (necesidad total)', Valor: presupuesto.totalBruto },
+        { Concepto: 'Costo a comprar (neto de bodega)', Valor: presupuesto.total },
+        { Concepto: '', Valor: '' },
+        { Concepto: 'POR MES DE COMPRA', Valor: '' },
+        ...presupuesto.porMesCompra.map(m => ({ Concepto: m.mes, Valor: m.costo })),
+        { Concepto: '', Valor: '' },
+        { Concepto: 'POR PRODUCTO', Valor: '' },
+        ...presupuesto.porProducto.map(p => ({ Concepto: `${p.producto} (${p.cocciones} cocc., ${p.litros} L)`, Valor: p.costo ?? '' })),
+      ]
+      if (presupuesto.sinPrecio.length > 0) {
+        resumen.push({ Concepto: '', Valor: '' },
+          { Concepto: 'INSUMOS SIN PRECIO (quedaron fuera del total)', Valor: presupuesto.sinPrecio.join(', ') })
+      }
+      if (presupuesto.sinReceta.length > 0) {
+        resumen.push({ Concepto: 'PRODUCTOS SIN RECETA (no se pudo costear)', Valor: presupuesto.sinReceta.join(', ') })
+      }
+      XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(resumen), 'Resumen')
+
+      XLSX.writeFile(libro, `presupuesto-insumos-${ventanaDesde}-a-${ventanaHasta}.xlsx`)
+    } finally {
+      setDescargando(false)
+    }
+  }
+
   /* ── Inventario actual agrupado: producto → formato → cámara ───────────
      `stock` llega como una fila por (producto, formato, cámara) — se
      reagrupa acá para que la tabla muestre de un vistazo cuánto hay de cada
@@ -3385,24 +3658,34 @@ export default function ProduccionClient({
                             // contra el borde del mes (con eso TODO salía rojo
                             // apenas el mes arrancaba y el tablero no informaba).
                             const noLlega = !l.llegaATiempo
+                            // Marcado = entra al presupuesto de insumos de abajo.
+                            const marcado = !l.enCurso && estaSeleccionado(l.id)
                             return (
                             <div key={l.id} className="group/chip relative">
-                              <span
-                                className={`flex items-center gap-0.5 truncate rounded-sm border py-1 pl-1.5 pr-1 text-[10px] font-bold ${
+                              <button
+                                type="button"
+                                onClick={() => { if (!l.enCurso) alternarLote(l.id) }}
+                                disabled={l.enCurso}
+                                title={l.enCurso ? undefined : (marcado ? 'Quitar del presupuesto' : 'Incluir en el presupuesto')}
+                                className={`prod-press flex w-full items-center gap-0.5 truncate rounded-sm border py-1 pl-1.5 pr-1 text-left text-[10px] font-bold ${
+                                  l.enCurso ? 'cursor-default' : 'cursor-pointer'
+                                } ${
                                   l.enCurso
                                     ? 'border-sky-500 bg-sky-500/10 text-sky-800'
-                                    : noLlega
-                                      ? 'border-red-500 bg-red-50 text-red-700'
-                                      : l.categoria === 'kombucha'
-                                        ? 'border-dashed border-amber-400 bg-amber-50 text-amber-800'
-                                        : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
+                                    : !marcado
+                                      ? 'border-gray-300 bg-white text-gray-400 opacity-60'
+                                      : noLlega
+                                        ? 'border-red-500 bg-red-50 text-red-700'
+                                        : l.categoria === 'kombucha'
+                                          ? 'border-dashed border-amber-400 bg-amber-50 text-amber-800'
+                                          : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
                                 }`}
                               >
                                 {l.enCurso
                                   ? <Beaker size={9} className="shrink-0 text-sky-600" />
                                   : l.diasTarde > 0 && !noLlega && <Beaker size={9} className="shrink-0 text-purple-600" />}
                                 <span className="truncate">{l.producto}</span>
-                              </span>
+                              </button>
                               {/* Detalle al pasar el cursor: cuánto, en qué tanque,
                                   cuándo queda listo y hasta cuándo cubre. */}
                               <div className="invisible absolute -top-2 left-1/2 z-20 w-56 -translate-x-1/2 -translate-y-full rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white opacity-0 shadow-xl transition-opacity group-hover/chip:visible group-hover/chip:opacity-100">
@@ -3454,6 +3737,11 @@ export default function ProduccionClient({
                                     el tanque no estaba libre antes — igual llega a tiempo.
                                   </p>
                                 )}
+                                {!l.enCurso && (
+                                  <p className="mt-1.5 border-t border-white/15 pt-1.5 text-[10px] text-gray-400">
+                                    {marcado ? 'Incluida en el presupuesto — clic para sacarla.' : 'Fuera del presupuesto — clic para incluirla.'}
+                                  </p>
+                                )}
                                 <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 bg-gray-900" />
                               </div>
                             </div>
@@ -3488,6 +3776,302 @@ export default function ProduccionClient({
                   </p>
                 </div>
               </div>
+
+              {/* ══════════ PRESUPUESTO DE INSUMOS ══════════
+                  Va pegado al calendario a propósito: es la traducción a
+                  plata de las cocciones de arriba, y las dos vistas comparten
+                  la selección. Lo que se marca allá es lo que se compra acá. */}
+              {mesesPlan.length > 0 && (
+                <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <div className="border-b border-gray-100 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ShoppingCart size={18} style={{ color: COLORS.darkGreen }} />
+                        <h3 className="font-bold text-gray-800">Presupuesto de insumos del calendario</h3>
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
+                          {presupuesto.cocciones} de {lotesEnVentana.length} cocciones
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={descargarPresupuesto}
+                        disabled={descargando || presupuesto.lineas.length === 0}
+                        className="prod-press flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        style={{ backgroundColor: COLORS.darkGreen }}
+                      >
+                        <ArrowDown size={15} />
+                        {descargando ? 'Generando…' : 'Descargar Excel'}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500">
+                      Cada cocción del calendario se baja a insumos por su receta, escalada al volumen real del tanque
+                      asignado, y se valoriza al último precio de compra. La fecha de compra es la cocción menos{' '}
+                      {LEAD_COMPRA_DIAS_HABILES} días hábiles, para que el insumo esté en planta cuando se macera.
+                      Hacé clic en cualquier cocción del calendario de arriba para sacarla o incluirla.
+                    </p>
+
+                    {/* Ventana libre: mensual, trimestral, o lo que elija */}
+                    <div className="mt-4 flex flex-wrap items-end gap-3">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Desde</span>
+                        <select
+                          value={ventanaDesde}
+                          onChange={e => setPresupuestoDesde(e.target.value)}
+                          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700"
+                        >
+                          {mesesPlan.map(m => <option key={m} value={m}>{etiquetaMes(m + '-01')}</option>)}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Hasta</span>
+                        <select
+                          value={ventanaHasta}
+                          onChange={e => setPresupuestoHasta(e.target.value)}
+                          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700"
+                        >
+                          {mesesPlan.map(m => <option key={m} value={m}>{etiquetaMes(m + '-01')}</option>)}
+                        </select>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setPresupuestoDesde(mesesPlan[0]); setPresupuestoHasta(mesesPlan[0]) }}
+                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                        >
+                          Mensual
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setPresupuestoDesde(mesesPlan[0]); setPresupuestoHasta(mesesPlan[mesesPlan.length - 1]) }}
+                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                        >
+                          Todo el horizonte ({mesesPlan.length} {mesesPlan.length === 1 ? 'mes' : 'meses'})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSeleccionPresupuesto(null)}
+                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                        >
+                          Marcar todas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSeleccionPresupuesto(new Set())}
+                          className="prod-press rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                        >
+                          Desmarcar todas
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {presupuesto.lineas.length === 0 ? (
+                    <p className="p-5 text-sm text-gray-400">
+                      No hay cocciones marcadas en esta ventana. Marcá alguna en el calendario de arriba.
+                    </p>
+                  ) : (
+                    <>
+                      {/* Cifras de cabecera */}
+                      <div className="grid gap-px border-b border-gray-100 bg-gray-100 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="bg-white p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">A comprar</p>
+                          <p className="mt-1 text-2xl font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>
+                            ${fNum(presupuesto.total)}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-gray-400">neto de lo que ya hay en bodega</p>
+                        </div>
+                        <div className="bg-white p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Necesidad total</p>
+                          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-700">${fNum(presupuesto.totalBruto)}</p>
+                          <p className="mt-0.5 text-[11px] text-gray-400">si no hubiera nada en bodega</p>
+                        </div>
+                        <div className="bg-white p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Producción</p>
+                          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-700">{fNum(presupuesto.litros)} L</p>
+                          <p className="mt-0.5 text-[11px] text-gray-400">
+                            {presupuesto.cocciones} {presupuesto.cocciones === 1 ? 'cocción' : 'cocciones'} ·{' '}
+                            {presupuesto.total > 0 && presupuesto.litros > 0
+                              ? `$${fNum(presupuesto.total / presupuesto.litros)}/L`
+                              : '—'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Insumos</p>
+                          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-700">
+                            {presupuesto.lineas.filter(l => l.aComprar > 0).length}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-gray-400">
+                            de {presupuesto.lineas.length} que pide la receta
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Un total al que le faltan insumos no se puede leer como
+                          presupuesto completo — hay que decirlo, no omitirlo. */}
+                      {(presupuesto.sinPrecio.length > 0 || presupuesto.sinReceta.length > 0) && (
+                        <div className="flex items-start gap-2.5 border-b border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
+                          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                          <div>
+                            {presupuesto.sinReceta.length > 0 && (
+                              <p>
+                                <strong>{presupuesto.sinReceta.length} producto{presupuesto.sinReceta.length === 1 ? '' : 's'} sin receta cargada</strong> —
+                                sus cocciones están en el calendario pero NO en este total: {presupuesto.sinReceta.join(', ')}.
+                              </p>
+                            )}
+                            {presupuesto.sinPrecio.length > 0 && (
+                              <p className={presupuesto.sinReceta.length > 0 ? 'mt-1' : ''}>
+                                <strong>{presupuesto.sinPrecio.length} insumo{presupuesto.sinPrecio.length === 1 ? '' : 's'} sin precio</strong> —
+                                se piden igual pero no suman al presupuesto: {presupuesto.sinPrecio.join(', ')}.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Cuándo sale la plata */}
+                      {presupuesto.porMesCompra.length > 1 && (
+                        <div className="border-b border-gray-100 px-5 py-4">
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                            Desembolso por mes de compra
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {presupuesto.porMesCompra.map(m => (
+                              <div key={m.mes} className="rounded-lg border border-gray-200 px-3 py-2">
+                                <p className="text-xs font-bold capitalize text-gray-600">{etiquetaMes(m.mes + '-01')}</p>
+                                <p className="text-sm font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>${fNum(m.costo)}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Lista de compra */}
+                      <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3">
+                        {(['insumo', 'producto'] as const).map(v => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setVistaPresupuesto(v)}
+                            className={`prod-press rounded-lg px-3 py-1.5 text-xs font-bold ${
+                              vistaPresupuesto === v ? 'text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                            }`}
+                            style={vistaPresupuesto === v ? { backgroundColor: COLORS.darkGreen } : undefined}
+                          >
+                            {v === 'insumo' ? 'Qué comprar' : 'Por receta de producto'}
+                          </button>
+                        ))}
+                      </div>
+
+                      {vistaPresupuesto === 'insumo' ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[820px] text-sm">
+                            <thead className="border-b border-gray-100 bg-gray-50/60 text-[10px] uppercase tracking-wide text-gray-500">
+                              <tr>
+                                <th className="px-4 py-2.5 text-left font-bold">Comprar el</th>
+                                <th className="px-4 py-2.5 text-left font-bold">Insumo</th>
+                                <th className="px-4 py-2.5 text-right font-bold">Necesidad</th>
+                                <th className="px-4 py-2.5 text-right font-bold">En bodega</th>
+                                <th className="px-4 py-2.5 text-right font-bold">A comprar</th>
+                                <th className="px-4 py-2.5 text-right font-bold">Precio</th>
+                                <th className="px-4 py-2.5 text-right font-bold">Costo</th>
+                                <th className="px-4 py-2.5 text-left font-bold">Para qué cocciones</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {presupuesto.lineas.map(l => (
+                                <tr key={l.insumo} className={`prod-hover-row ${l.aComprar === 0 ? 'text-gray-400' : ''}`}>
+                                  <td className="whitespace-nowrap px-4 py-3 font-bold tabular-nums text-gray-700">
+                                    {new Date(l.fechaCompra + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <p className="font-bold text-gray-800">{l.insumo}</p>
+                                    <p className="text-[11px] capitalize text-gray-400">{l.categoria}</p>
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">{fNum(l.cantidad)} {l.unidadBase}</td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-500">
+                                    {l.disponible != null ? `${fNum(l.disponible)} ${l.unidadBase}` : 'sin dato'}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums text-gray-900">
+                                    {l.aComprar > 0 ? `${fNum(l.aComprar)} ${l.unidadBase}` : '—'}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-500">
+                                    {l.precioUnitario != null ? `$${l.precioUnitario.toLocaleString('es-CL', { maximumFractionDigits: 2 })}` : '—'}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums" style={{ color: l.costoAComprar ? COLORS.darkGreen : undefined }}>
+                                    {l.costoAComprar != null ? `$${fNum(l.costoAComprar)}` : 'sin precio'}
+                                  </td>
+                                  <td className="px-4 py-3 text-[11px] text-gray-500">
+                                    {l.detalle.map(d => (
+                                      <span key={d.producto + d.fechaCoccion} className="mr-2 inline-block whitespace-nowrap">
+                                        {d.producto}{' '}
+                                        <span className="text-gray-400">
+                                          {new Date(d.fechaCoccion + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                          {' · '}{fNum(d.cantidad)} {l.unidadBase}
+                                        </span>
+                                      </span>
+                                    ))}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot className="border-t border-gray-200 bg-gray-50/60">
+                              <tr>
+                                <td colSpan={6} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-gray-500">Total a comprar</td>
+                                <td className="px-4 py-3 text-right text-base font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>${fNum(presupuesto.total)}</td>
+                                <td />
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-100">
+                          {presupuesto.porProducto.map(g => (
+                            <div key={g.producto} className="p-5">
+                              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                <p className="font-bold text-gray-800">{g.producto}</p>
+                                <p className="text-sm font-bold tabular-nums" style={{ color: COLORS.darkGreen }}>
+                                  {g.costo != null ? `$${fNum(g.costo)}` : 'sin costo'}
+                                </p>
+                              </div>
+                              <p className="mt-0.5 text-xs text-gray-500">
+                                {g.cocciones} {g.cocciones === 1 ? 'cocción' : 'cocciones'} · {fNum(g.litros)} L
+                                {g.costo != null && g.litros > 0 && ` · $${fNum(g.costo / g.litros)}/L`}
+                                {g.sinPrecio > 0 && ` · ${g.sinPrecio} línea${g.sinPrecio === 1 ? '' : 's'} sin precio`}
+                              </p>
+                              <div className="mt-3 overflow-x-auto">
+                                <table className="w-full min-w-[420px] text-sm">
+                                  <tbody className="divide-y divide-gray-50">
+                                    {g.insumos.map(i => (
+                                      <tr key={i.insumo} className="prod-hover-row">
+                                        <td className="py-2 pr-3 text-gray-700">{i.insumo}</td>
+                                        <td className="whitespace-nowrap py-2 px-3 text-right tabular-nums text-gray-600">{fNum(i.cantidad)} {i.unidadBase}</td>
+                                        <td className="whitespace-nowrap py-2 pl-3 text-right font-bold tabular-nums text-gray-800">
+                                          {i.costo != null ? `$${fNum(i.costo)}` : '—'}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <p className="border-t border-gray-100 p-4 text-xs text-gray-400">
+                        La cantidad de cada insumo sale de la receta escalada al volumen de la cocción, no de un
+                        promedio: una cocción de 3.000 L de un tanque grande pide exactamente cuatro veces lo de una
+                        de 750 L. Cuando una receta usa el mismo insumo en dos momentos (el mismo lúpulo en whirlpool y
+                        en dry hop, por ejemplo) acá se suman: para cocer son etapas distintas, para comprar es el
+                        mismo saco. &quot;A comprar&quot; descuenta lo que ya hay en bodega según el último informe de stock de
+                        insumos — ese descuento se aplica sobre el total de la ventana, no cocción por cocción, porque
+                        el informe es una foto sin reservas por lote. El Excel trae tres hojas: la orden de compra, el
+                        detalle de qué cocción pide cada insumo, y el resumen por mes y por producto.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Capacidad de Planta — la dimensión que faltaba para que la
                   planificación de arriba sea ejecutable: de nada sirve saber
