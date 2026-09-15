@@ -1426,6 +1426,7 @@ export default function ProduccionClient({
    *  solo — es el único lugar donde vive el supuesto. */
   const COCCIONES_POR_DIA_LINEA = 2
 
+
   const planSugerido = useMemo(() => {
     const hoyISO = hoyLocalISO()
     const sumarDiasCalISO = (desde: string, dias: number) =>
@@ -1583,93 +1584,109 @@ export default function ProduccionClient({
           for (const l of e.enCamino) l.llegaATiempo = false
         }
 
-        // c) ¿Toca cocer? Dos gatillos: la alarma del Plan Maestro (sólo la
-        //    primera vez) o el punto de reorden del producto.
-        //    Una sola cocción por producto y por día: dos lotes del mismo
-        //    estilo el mismo día son dos macerados, no caben en una jornada.
-        {
-          const enCaminoLitros = e.enCamino.reduce((s, l) => s + l.litros, 0)
-          const posicion = e.stock + enCaminoLitros
-          const forzado = e.forzarEl != null && d >= e.forzarEl
-          if (!forzado && posicion > p.puntoReorden) break
-          if (e.nro >= 12) break
-          // La sala de cocción tiene un tope diario, y no se cuece sábado,
-          // domingo ni feriado: si no hay cupo, la cocción espera (y ese
-          // atraso queda contado más abajo como `diasTarde`).
-          if (!diaHabil) break
-          if ((coccionesHoy.get(e.categoria) ?? 0) >= COCCIONES_POR_DIA_LINEA) break
+        /* c) ¿Toca cocer? Dos gatillos: la alarma del Plan Maestro (sólo la
+              primera vez) o el punto de reorden del producto.
 
-          /* Nivel objetivo de reposición: se repone hasta DEJAR EL INVENTARIO
-             POR ENCIMA del punto de reorden, con un mes de venta de holgura.
-             Esto tiene que ser mayor que el punto de reorden sí o sí, y no es
-             un detalle: el punto de reorden ya cubre el lead time + el período
-             de revisión (≈2 meses de venta) más el colchón. Reponer sólo "un
-             mes + colchón" deja el stock POR DEBAJO del reorden apenas entra,
-             así que el modelo vuelve a pedir cocción al día siguiente, y al
-             otro, en pedazos cada vez más chicos. Probado contra los datos
-             reales: con ese nivel salían 71 cocciones, varias de 1 y 2 litros
-             ocupando un fermentador entero. Con éste salen 54 cocciones de
-             tamaño real y cada producto vuelve a cocer cada 3-6 semanas. */
-          let objetivo = Math.max(p.puntoReorden + p.demandaMensual - posicion, 0)
-          // Una cocción disparada por la alarma del Plan Maestro nunca es un
-          // completar de 3 litros: si hay que prender la olla, se cuece al
-          // menos un mes de venta.
-          if (forzado) objetivo = Math.max(objetivo, p.demandaMensual)
-          if (objetivo < 1) break
+           OJO con el control de flujo: esto vive dentro del for de productos,
+           así que cada salida tiene que ser `continue` (pasar al SIGUIENTE
+           producto), nunca `break`. Con `break` el primer producto que no
+           necesitaba cocer cortaba el día entero para todos los que venían
+           detrás, y el calendario mostraba un solo estilo. */
+        const enCaminoLitros = e.enCamino.reduce((s, l) => s + l.litros, 0)
+        const posicion = e.stock + enCaminoLitros
+        const forzado = e.forzarEl != null && d >= e.forzarEl
+        if (!forzado && posicion > p.puntoReorden) continue
+        if (e.nro >= 12) continue
+        // La sala de cocción tiene un tope diario, y no se cuece sábado,
+        // domingo ni feriado: si no hay cupo, la cocción espera (y ese
+        // atraso queda contado más abajo como `diasTarde`). Una sola cocción
+        // por producto y por día: dos lotes del mismo estilo el mismo día
+        // son dos macerados, no caben en una jornada.
+        if (!diaHabil) continue
+        if ((coccionesHoy.get(e.categoria) ?? 0) >= COCCIONES_POR_DIA_LINEA) continue
 
-          const flota = ocupacionPlanta.tanques.filter(t => t.categoria === e.categoria)
-          if (flota.length === 0) {
-            sinTanque.push({ producto: e.producto, litros: Math.round(objetivo), motivo: 'No hay fermentadores cargados para esa línea.' })
-            e.forzarEl = null
-            break
-          }
-          if (e.pendienteDesde == null) e.pendienteDesde = d
+        /* Nivel objetivo de reposición: se repone hasta DEJAR EL INVENTARIO
+           POR ENCIMA del punto de reorden, con un mes de venta de holgura.
+           Esto tiene que ser mayor que el punto de reorden sí o sí, y no es
+           un detalle: el punto de reorden ya cubre el lead time + el período
+           de revisión (≈2 meses de venta) más el colchón. Reponer sólo "un
+           mes + colchón" deja el stock POR DEBAJO del reorden apenas entra,
+           así que el modelo vuelve a pedir cocción al día siguiente, y al
+           otro, en pedazos cada vez más chicos. Probado contra los datos
+           reales: con ese nivel salían 71 cocciones, varias de 1 y 2 litros
+           ocupando un fermentador entero. */
+        let objetivo = Math.max(p.puntoReorden + p.demandaMensual - posicion, 0)
+        // Una cocción disparada por la alarma del Plan Maestro nunca es un
+        // completar de 3 litros: si hay que prender la olla, se cuece al
+        // menos un mes de venta.
+        if (forzado) objetivo = Math.max(objetivo, p.demandaMensual)
+        if (objetivo < 1) continue
 
-          const libres = flota.filter(t => (libreDesde.get(t.tanque) ?? hoyISO) <= d)
-          if (libres.length === 0) break // sin capacidad hoy: se reintenta mañana
-
-          // El filtro por tamaño (hasta 1,5× el tanque más chico que alcanza)
-          // evita el absurdo de ocupar un fermentador de 1.700 L cuatro
-          // semanas para 20 L sólo porque era el que estaba libre.
-          const queCierran = libres.filter(t => t.capacidadLitros >= objetivo)
-          let candidatos = libres
-          if (queCierran.length > 0) {
-            const capMinima = Math.min(...queCierran.map(t => t.capacidadLitros))
-            candidatos = queCierran.filter(t => t.capacidadLitros <= capMinima * 1.5)
-          }
-          const elegido = candidatos.reduce((mejor, t) => {
-            if (!mejor) return t
-            // A igual disponibilidad: el más chico si cierra la necesidad,
-            // el más grande si sólo puede llenarse.
-            return queCierran.length > 0
-              ? (t.capacidadLitros < mejor.capacidadLitros ? t : mejor)
-              : (t.capacidadLitros > mejor.capacidadLitros ? t : mejor)
-          }, candidatos[0])
-
-          const litros = Math.round(Math.min(objetivo, elegido.capacidadLitros))
-          const fechaListo = sumarDiasCalISO(d, e.leadDias)
-          const objetivoFecha = e.pendienteDesde ?? d
-          const consumo = p.consumoDiario
-          e.nro++
-          const lote: LoteSugerido = {
-            id: `${e.producto}|${d}|${e.nro}`,
-            producto: e.producto, categoria: e.categoria,
-            litros, tanque: elegido.tanque, capacidadTanque: elegido.capacidadLitros,
-            fechaInicio: d, fechaListo, mes: mesHoy,
-            fechaObjetivo: objetivoFecha, diasTarde: Math.max(0, diffDias(d, objetivoFecha)),
-            leadTimeSemanas: e.leadTimeSemanas, conAlarma: e.conAlarma,
-            loteNro: e.nro, loteDe: 0,
-            fechaAgotamiento: sumarDiasCalISO(d, consumo > 0 ? Math.max(0, Math.floor(posicion / consumo)) : 3650),
-            cubreHasta: sumarDiasCalISO(fechaListo, consumo > 0 ? Math.max(0, Math.floor((posicion + litros) / consumo)) : 3650),
-            llegaATiempo: true,
-          }
-          lotes.push(lote)
-          e.enCamino.push(lote)
-          libreDesde.set(elegido.tanque, fechaListo)
-          coccionesHoy.set(e.categoria, (coccionesHoy.get(e.categoria) ?? 0) + 1)
+        const flota = ocupacionPlanta.tanques.filter(t => t.categoria === e.categoria)
+        if (flota.length === 0) {
+          sinTanque.push({ producto: e.producto, litros: Math.round(objetivo), motivo: 'No hay fermentadores cargados para esa línea.' })
           e.forzarEl = null
-          e.pendienteDesde = null
+          continue
         }
+        if (e.pendienteDesde == null) e.pendienteDesde = d
+
+        const libres = flota.filter(t => (libreDesde.get(t.tanque) ?? hoyISO) <= d)
+        if (libres.length === 0) continue // sin capacidad hoy: se reintenta mañana
+
+        /* Elección de tanque — la regla de rentabilidad de la planta.
+           La merma de una cocción (fondos, trub, purgas, lo que queda en
+           mangueras) es casi la misma cueza 150 L o 3.000 L. Lo que encarece
+           el litro no es usar un tanque grande: es PARTIR el volumen en
+           varias cocciones, porque cada una paga su propia merma y su propia
+           jornada de sala. Así que el criterio es minimizar el número de
+           cocciones, y recién después no desperdiciar tanque:
+
+             1. Si algún tanque libre cierra TODO el volumen de una vez, se
+                usa el MÁS CHICO que lo cierre. Es una sola cocción igual que
+                con uno grande, pero deja los grandes libres para los
+                volúmenes que sí los necesitan. (Acá caen los casos chicos:
+                22 L de un experimental van al Lavoratorio de 150, no a un T
+                de 1.700 — mismo costo de merma, un fermentador menos
+                bloqueado cuatro semanas.)
+             2. Si ninguno alcanza, se usa el MÁS GRANDE disponible y se
+                llena entero. El resto queda para la cocción siguiente.
+
+           La versión anterior —"el mayor tanque que se llene al menos al
+           70%"— parecía la misma idea pero hacía lo contrario: con 700 L a
+           cocer y un T de 450 libre, tomaba el de 450 y dejaba 250 L
+           colgando, que caían al día siguiente en un Lavoratorio de 150, y
+           al otro en otro. Cuatro cocciones y cuatro mermas donde cabía UNA
+           de 700 L en el de 1.500. Verificado contra los datos reales:
+           Imperial Stout salía como 450+150+150+150+292 L. */
+        const queCierran = libres.filter(t => t.capacidadLitros >= objetivo)
+        const elegido = queCierran.length > 0
+          ? queCierran.reduce((mejor, t) => (t.capacidadLitros < mejor.capacidadLitros ? t : mejor), queCierran[0])
+          : libres.reduce((mejor, t) => (t.capacidadLitros > mejor.capacidadLitros ? t : mejor), libres[0])
+
+
+        const litros = Math.round(Math.min(objetivo, elegido.capacidadLitros))
+        const fechaListo = sumarDiasCalISO(d, e.leadDias)
+        const objetivoFecha = e.pendienteDesde ?? d
+        const consumo = p.consumoDiario
+        e.nro++
+        const lote: LoteSugerido = {
+          id: `${e.producto}|${d}|${e.nro}`,
+          producto: e.producto, categoria: e.categoria,
+          litros, tanque: elegido.tanque, capacidadTanque: elegido.capacidadLitros,
+          fechaInicio: d, fechaListo, mes: mesHoy,
+          fechaObjetivo: objetivoFecha, diasTarde: Math.max(0, diffDias(d, objetivoFecha)),
+          leadTimeSemanas: e.leadTimeSemanas, conAlarma: e.conAlarma,
+          loteNro: e.nro, loteDe: 0,
+          fechaAgotamiento: sumarDiasCalISO(d, consumo > 0 ? Math.max(0, Math.floor(posicion / consumo)) : 3650),
+          cubreHasta: sumarDiasCalISO(fechaListo, consumo > 0 ? Math.max(0, Math.floor((posicion + litros) / consumo)) : 3650),
+          llegaATiempo: true,
+        }
+        lotes.push(lote)
+        e.enCamino.push(lote)
+        libreDesde.set(elegido.tanque, fechaListo)
+        coccionesHoy.set(e.categoria, (coccionesHoy.get(e.categoria) ?? 0) + 1)
+        e.forzarEl = null
+        e.pendienteDesde = null
       }
     }
 
@@ -3347,8 +3364,11 @@ export default function ProduccionClient({
                     cuando el stock proyectado toca el punto de reorden — por eso las cocciones de un mismo producto
                     se reparten en el tiempo en vez de amontonarse. Cada tanque queda tomado el lead time completo
                     antes de poder reutilizarse, y la sala de cocción tiene tope: hasta {COCCIONES_POR_DIA_LINEA} cocciones
-                    por día por línea, sólo en días hábiles (no se macera sábado, domingo ni feriado). Pasá el cursor
-                    para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; <Beaker size={9} className="inline text-purple-600" /> = se
+                    por día por línea, sólo en días hábiles (no se macera sábado, domingo ni feriado). El tanque se
+                    elige para cocer lo menos veces posible, que es lo que baja la merma: si un fermentador libre cierra
+                    todo el volumen se usa el más chico que lo cierre —misma merma, y los grandes quedan libres para
+                    quien los necesita—; si ninguno alcanza se llena el más grande disponible y el resto va a la cocción
+                    siguiente. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; <Beaker size={9} className="inline text-purple-600" /> = se
                     corrió de su fecha ideal porque no había tanque libre de su línea, pero llega igual; borde rojo =
                     el stock se agota antes de que esta cocción esté lista. El lead time es por línea (4 semanas
                     cerveza / 3 kombucha), no por estilo puntual — todavía no hay ese dato cargado por receta. Se
