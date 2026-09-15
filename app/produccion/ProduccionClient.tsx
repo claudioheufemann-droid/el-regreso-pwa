@@ -1490,14 +1490,23 @@ export default function ProduccionClient({
 
   /** Tooltip del calendario: antes era un panel `absolute` sujeto al chip, y
    *  la propia celda del día lo recortaba (overflow del contenedor scrollable)
-   *  apenas el chip estaba cerca del borde de la grilla — se veía tal cual lo
-   *  mostró el usuario, la mitad del panel cortada. Se resuelve con un
-   *  portal a `document.body`: el tooltip deja de ser descendiente de la
-   *  celda (nada que lo recorte) y se posiciona en coordenadas de pantalla
-   *  (`position: fixed`) calculadas a partir del rectángulo real del chip.
-   *  `lote` es lo que hay que pintar; `rect` es de dónde salió, para ubicar
-   *  el panel y decidir si abre hacia arriba o hacia abajo. */
+   *  apenas el chip estaba cerca del borde de la grilla. Pasarlo a un portal
+   *  a `document.body` (`position: fixed`) saca ese recorte de encima, pero
+   *  trajo un problema nuevo: había que ADIVINAR el alto del panel para
+   *  decidir si abría arriba o abajo, y una tarjeta con alarma + "no llega"
+   *  + selector de tanque mide bastante más que una simple — la adivinanza
+   *  fija (260px) se quedaba corta y el panel terminaba tapando la fila de
+   *  arriba en vez de acomodarse.
+   *
+   *  Se resuelve MIDIENDO el panel real en vez de adivinar: primero se monta
+   *  invisible y fuera de pantalla (`tooltipPos` en null), después un
+   *  `useLayoutEffect` lee su alto/ancho verdadero con `getBoundingClientRect`
+   *  y recién ahí se calcula la posición final — arriba o abajo según cuál
+   *  lado tiene más espacio de verdad, no una estimación. Como
+   *  `useLayoutEffect` corre antes de pintar, el usuario nunca ve el salto. */
   const [tooltipHover, setTooltipHover] = useState<{ lote: (typeof planSugerido.lotes)[number]; rect: DOMRect } | null>(null)
+  const [tooltipPos, setTooltipPos] = useState<{ left: number; top: number; abreAbajo: boolean } | null>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
   // Pequeño margen antes de cerrar: sin esto, mover el mouse del chip hacia
   // el propio tooltip (para tocar el <select> de tanque, por ejemplo) lo
   // cierra a mitad de camino porque el mouse cruza un hueco que ya no tiene
@@ -1506,11 +1515,44 @@ export default function ProduccionClient({
   const abrirTooltip = (lote: (typeof planSugerido.lotes)[number], rect: DOMRect) => {
     if (cierreTooltipRef.current) { clearTimeout(cierreTooltipRef.current); cierreTooltipRef.current = null }
     setTooltipHover({ lote, rect })
+    setTooltipPos(null) // fuerza a re-medir: la próxima pasada calcula la posición real
   }
   const programarCierreTooltip = () => {
     if (cierreTooltipRef.current) clearTimeout(cierreTooltipRef.current)
-    cierreTooltipRef.current = setTimeout(() => setTooltipHover(null), 120)
+    cierreTooltipRef.current = setTimeout(() => { setTooltipHover(null); setTooltipPos(null) }, 120)
   }
+  // Corre después de cada render donde cambió qué cocción está en hover (o
+  // recién se montó su panel): mide el panel real y decide dónde va.
+  React.useLayoutEffect(() => {
+    if (!tooltipHover || !tooltipRef.current) return
+    const el = tooltipRef.current
+    const rect = tooltipHover.rect
+    const MARGEN = 8
+    const alto = el.offsetHeight
+    const ancho = el.offsetWidth
+    // Arriba por defecto (como toda esta UI), salvo que de verdad no quepa
+    // arriba Y sí quepa (o haya más aire) abajo.
+    const espacioArriba = rect.top
+    const espacioAbajo = window.innerHeight - rect.bottom
+    const abreAbajo = espacioArriba < alto + MARGEN && espacioAbajo > espacioArriba
+    let top = abreAbajo ? rect.bottom + MARGEN : rect.top - MARGEN - alto
+    // Clamp vertical: si ni arriba ni abajo alcanzan enteros (pantalla muy
+    // baja), que quede dentro de la ventana en vez de cortarse contra el
+    // borde — para eso está el scroll interno del panel (`max-h`+`overflow`).
+    top = Math.min(Math.max(top, MARGEN), window.innerHeight - alto - MARGEN)
+    const centroX = rect.left + rect.width / 2
+    const left = Math.min(Math.max(centroX - ancho / 2, MARGEN), window.innerWidth - ancho - MARGEN)
+    setTooltipPos({ left, top, abreAbajo })
+    // La dependencia es el OBJETO `tooltipHover`, no `tooltipHover?.lote.id`:
+    // `abrirTooltip` crea un objeto nuevo en cada llamada aunque sea la misma
+    // cocción (re-entrar rápido al mismo chip dentro de la ventana de gracia
+    // del cierre, por ejemplo), así que depender del id no alcanza — con eso
+    // el efecto no volvía a correr, `tooltipPos` se quedaba en null (porque
+    // `abrirTooltip` lo resetea) y el panel quedaba invisible para siempre.
+    // Depender de la identidad del objeto garantiza una medición por cada
+    // apertura real, sin pelear con el resto de los renders del componente
+    // (que no tocan `tooltipHover`, así que no disparan el efecto de más).
+  }, [tooltipHover])
 
   const anclarCoccion = (producto: string, nro: number, fechaISO: string) => {
     setAnclasCoccion(prev => new Map(prev).set(`${producto}|${nro}`, fechaISO))
@@ -4690,30 +4732,24 @@ export default function ProduccionClient({
                     const marcado = !l.enCurso && estaSeleccionado(l)
                     const embarriladoVencido = l.enCurso && !!l.fechaEmbarriladoReal && l.fechaEmbarriladoReal < calendarioCobertura.hoyISO
 
-                    const ANCHO = 224 // w-56
-                    const MARGEN = 8
-                    // Centrado sobre el chip por defecto, pero clampeado para no
-                    // salirse de la pantalla — cerca de los bordes izq/der de la
-                    // grilla el tooltip ya no queda perfectamente centrado, y es
-                    // preferible eso a que se corte.
-                    const centroX = rect.left + rect.width / 2
-                    const left = Math.min(
-                      Math.max(centroX, MARGEN + ANCHO / 2),
-                      window.innerWidth - MARGEN - ANCHO / 2
-                    )
-                    // Arriba por defecto (como antes); si no hay ~260px libres
-                    // encima —el caso exacto que reportó el usuario, chips de la
-                    // primera fila del mes— se abre hacia abajo en su lugar.
-                    const ALTO_ESTIMADO = 260
-                    const abreAbajo = rect.top < ALTO_ESTIMADO
-                    const top = abreAbajo ? rect.bottom + MARGEN : rect.top - MARGEN
-
                     return (
                       <div
-                        style={{ position: 'fixed', left, top, width: ANCHO, zIndex: 9999, transform: `translate(-50%, ${abreAbajo ? '0' : '-100%'})` }}
+                        ref={tooltipRef}
+                        style={{
+                          position: 'fixed',
+                          // Mientras no se midió el panel real (tooltipPos aún
+                          // null, primera pasada tras abrir), se monta invisible
+                          // y fuera de pantalla — nunca se ve en la posición
+                          // "adivinada" de antes, ni parpadea al reubicarse.
+                          left: tooltipPos?.left ?? -9999,
+                          top: tooltipPos?.top ?? -9999,
+                          width: 224, // w-56
+                          zIndex: 9999,
+                          visibility: tooltipPos ? 'visible' : 'hidden',
+                        }}
                         onMouseEnter={() => abrirTooltip(l, rect)}
                         onMouseLeave={programarCierreTooltip}
-                        className="rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white shadow-xl"
+                        className="max-h-[70vh] overflow-y-auto rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white shadow-xl"
                       >
                         <p className="font-bold">
                           {l.producto}
@@ -4817,12 +4853,17 @@ export default function ProduccionClient({
                         {/* La flechita apunta desde el mismo lado por el que se abrió —
                             abajo del panel cuando abre hacia arriba, arriba cuando abre
                             hacia abajo — no necesariamente al centro exacto del chip si
-                            el panel se clampeó cerca de un borde de la pantalla. */}
-                        <div
-                          className={`absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900 ${
-                            abreAbajo ? '-top-1' : 'top-full -translate-y-1'
-                          }`}
-                        />
+                            el panel se clampeó cerca de un borde de la pantalla. Sólo se
+                            pinta una vez que se sabe de qué lado abrió (tooltipPos ya
+                            calculado); durante la pasada de medición no importa, el panel
+                            entero está invisible todavía. */}
+                        {tooltipPos && (
+                          <div
+                            className={`absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900 ${
+                              tooltipPos.abreAbajo ? '-top-1' : 'top-full -translate-y-1'
+                            }`}
+                          />
+                        )}
                       </div>
                     )
                   })(),
