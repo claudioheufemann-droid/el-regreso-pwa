@@ -74,6 +74,21 @@ SEMANAS_POR_MES = 30.44 / 7
 
 LEAD_TIME_SEMANAS = {"cerveza": 4, "kombucha": 3}
 
+# Tiempo de GESTIÓN con proveedores para que los insumos (materias primas)
+# lleguen a planta — el cuello de botella ANTES de poder siquiera largar una
+# cocción. Decisión del usuario, 16-sep-2026: ~2 semanas reales, igual para
+# cerveza y kombucha (no depende del producto, depende del proveedor). Antes
+# el punto de reorden sólo restaba el lead time de COCCIÓN (LEAD_TIME_SEMANAS)
+# desde el quiebre proyectado, como si los insumos ya estuvieran en bodega el
+# día que se decide producir — subestimaba el colchón necesario en 2 semanas
+# de venta real.
+#
+# ESPEJO: lib/produccion/reglas.ts::LEAD_TIME_INSUMOS_SEMANAS — mantener
+# sincronizados. Acá se suma a la `ventana` de SS/ROP (afecta el litraje);
+# en el cliente se usa además para calcular la FECHA límite para iniciar
+# gestiones en la tabla de Necesidad de Producción Anticipada.
+LEAD_TIME_INSUMOS_SEMANAS = 2
+
 # Cada cuánto se REVISA el inventario y se puede reaccionar. El modelo corre
 # una vez al mes, así que si un producto cae bajo su punto de reorden el día
 # 3, nadie se entera hasta la corrida siguiente: el colchón tiene que cubrir
@@ -385,7 +400,9 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
       · σ sale de la banda de confianza de Prophet, que ya descontó tendencia
         y estacionalidad. La dispersión entre años medía el CRECIMIENTO, no la
         incertidumbre: daba entre 1,2x y 3,1x más grande de lo real.
-      · La ventana suma el período de revisión, no sólo el lead time.
+      · La ventana suma el período de revisión Y el lead time de gestión de
+        insumos con proveedores, no sólo el lead time de cocción — ver
+        LEAD_TIME_INSUMOS_SEMANAS arriba.
     """
     mape_por_serie = {
         (v["nivel"], v.get("clave")): (v.get("mape"), v.get("mesesHistorial"), v.get("metodo", "propio"))
@@ -418,7 +435,7 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
 
         lt = LEAD_TIME_SEMANAS[categoria]
         sigma_lt = SIGMA_LEAD_TIME_SEMANAS[categoria]
-        ventana = lt + PERIODO_REVISION_SEMANAS
+        ventana = lt + LEAD_TIME_INSUMOS_SEMANAS + PERIODO_REVISION_SEMANAS
 
         ss = Z_SERVICIO * math.sqrt(ventana * sigma_semanal**2 + (demanda_semanal**2) * (sigma_lt**2))
         rop = demanda_semanal * ventana + ss

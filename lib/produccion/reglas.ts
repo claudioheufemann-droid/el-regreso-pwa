@@ -65,6 +65,20 @@ export function redondearLitrosABarril(litros: number, envase: EnvaseBucket | st
   return Math.ceil(litros / tamano) * tamano
 }
 
+/** Semanas que toma la GESTIÓN con proveedores para que los insumos (materias
+ *  primas) lleguen a planta — el cuello de botella ANTES de poder siquiera
+ *  largar una cocción. Decisión del usuario, 16-sep-2026: ~2 semanas reales,
+ *  igual para cerveza y kombucha.
+ *
+ *  ESPEJO: scripts/forecast/generar_forecast.py::LEAD_TIME_INSUMOS_SEMANAS —
+ *  mantener sincronizados. Ese valor ya está sumado en `puntoReordenLitros`/
+ *  `stockSeguridadLitros` que trae cada fila de stock_seguridad (afecta el
+ *  litraje del colchón); acá se usa ADEMÁS en el cliente para calcular la
+ *  FECHA límite para iniciar gestiones — se resta junto con el lead time de
+ *  cocción de la fila (`leadTimeSemanas`, que sigue siendo sólo el tiempo de
+ *  cocer) desde la fecha de quiebre proyectada. */
+export const LEAD_TIME_INSUMOS_SEMANAS = 2
+
 /* ────────────────────────────────────────────────────────────────────────
    CICLO INTERNO DE PRODUCCIÓN (no calendario)
    Definido con el usuario el 4 sep 2026: por un tema de ciclos internos, el

@@ -19,7 +19,7 @@ import {
 import PopoverCoccion from './PopoverCoccion'
 import { useArrastreCalendario, type CargaArrastre } from './useArrastreCalendario'
 import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, RecetaInsumoLinea, LoteSinReceta } from './page'
-import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, type EnvaseBucket } from '@/lib/produccion/reglas'
+import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, LEAD_TIME_INSUMOS_SEMANAS, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
    Paleta corporativa. Tailwind cubre el resto; estos tres colores van
@@ -1355,6 +1355,15 @@ export default function ProduccionClient({
         : null
       const atrasado = fechaLimiteInicio != null && fechaLimiteInicio <= hoyISO
 
+      // Cuándo hay que empezar a GESTIONAR con el proveedor para que los
+      // insumos lleguen a tiempo — siempre antes que fechaLimiteInicio,
+      // porque sin insumos en planta no se puede ni largar la cocción. Ver
+      // LEAD_TIME_INSUMOS_SEMANAS (~2 semanas de gestión real, 16-sep-2026).
+      const fechaLimiteGestion = fechaEstimadaQuiebre != null
+        ? restarDiasHabilesISO(fechaEstimadaQuiebre, (filaStock.leadTimeSemanas + LEAD_TIME_INSUMOS_SEMANAS) * 5)
+        : null
+      const atrasadoGestion = fechaLimiteGestion != null && fechaLimiteGestion <= hoyISO
+
       let motivo = `Cubrir hasta ${fechaLabel}: demanda proyectada ${Math.round(demandaProyectada)} L, disponible ${Math.round(disponible)} L.`
       if (altaDemanda) motivo += ' El modelo anticipa una temporada de alta demanda dentro de este período.'
       if (fechaLimiteInicio) {
@@ -1362,6 +1371,12 @@ export default function ProduccionClient({
         motivo += atrasado
           ? ` Debiste empezar a cocer el ${limiteLabel} (${filaStock.leadTimeSemanas} semanas de lead time).`
           : ` Último día para empezar a cocer: ${limiteLabel} (${filaStock.leadTimeSemanas} semanas de lead time).`
+      }
+      if (fechaLimiteGestion) {
+        const limiteGestionLabel = new Date(`${fechaLimiteGestion}T00:00:00Z`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+        motivo += atrasadoGestion
+          ? ` Debiste gestionar los insumos con el proveedor el ${limiteGestionLabel} (${LEAD_TIME_INSUMOS_SEMANAS} semanas de gestión + ${filaStock.leadTimeSemanas} de cocción).`
+          : ` Último día para empezar a gestionar insumos con el proveedor: ${limiteGestionLabel} (${LEAD_TIME_INSUMOS_SEMANAS} semanas de gestión + ${filaStock.leadTimeSemanas} de cocción).`
       }
 
       resultado.push({
@@ -1372,6 +1387,7 @@ export default function ProduccionClient({
         diasHastaQuiebre: diasHastaQuiebre != null ? Math.round(diasHastaQuiebre) : null,
         fechaEstimadaQuiebre, motivo, altaDemanda,
         stockSeguridadLitros: Math.round(filaStock.stockSeguridadLitros),
+        puntoReordenLitros: Math.round(filaStock.puntoReordenLitros),
         // Esta sección (Necesidades Anticipadas) no prioriza por línea fija,
         // sólo por temporada de alta demanda — el campo queda en false acá
         // porque SugerenciaPlan lo exige, no porque se use en este cálculo.
@@ -1383,6 +1399,8 @@ export default function ProduccionClient({
         fechaFermentandoListo: null,
         fechaLimiteInicio,
         atrasado,
+        fechaLimiteGestion,
+        atrasadoGestion,
       })
     }
 
@@ -2093,10 +2111,14 @@ export default function ProduccionClient({
        · Exportable a Excel como orden de compra. */
 
   /** Lead time de compra de insumos: días HÁBILES entre emitir la orden y
-   *  tener el insumo en planta. 5 días hábiles ≈ la semana que pidió el
-   *  usuario, pero cayendo siempre en día laboral: una orden de compra no se
-   *  emite un domingo. */
-  const LEAD_COMPRA_DIAS_HABILES = 5
+   *  tener el insumo en planta. Se deriva de LEAD_TIME_INSUMOS_SEMANAS (misma
+   *  constante que usa el punto de reorden de Necesidad de Producción
+   *  Anticipada y las Alarmas de quiebre de stock, ver lib/produccion/reglas)
+   *  para no mantener dos números de "cuánto se demora un insumo" por
+   *  separado — actualizado 16-sep-2026 de 1 a 2 semanas (5→10 días hábiles)
+   *  con el tiempo real que toma la gestión con los proveedores, medido por
+   *  el usuario. */
+  const LEAD_COMPRA_DIAS_HABILES = LEAD_TIME_INSUMOS_SEMANAS * 5
 
   /** Ninguna cocción SUGERIDA arranca marcada para el presupuesto — ni
    *  siquiera las de este mes. Toda sugerencia es una proyección (forecast +
@@ -3986,6 +4008,24 @@ export default function ProduccionClient({
                                     {new Date(item.fechaLimiteInicio + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
                                   </span>
                                 )}
+                                {/* Antes de poder cocer hace falta tener los insumos en planta —
+                                    eso toma su propio lead time de gestión con el proveedor
+                                    (LEAD_TIME_INSUMOS_SEMANAS, ~2 semanas), así que este límite
+                                    siempre cae antes que "Cocer antes del" de arriba. */}
+                                {item.fechaLimiteGestion && item.litrosSugeridos > 0 && (
+                                  <span
+                                    className={`ml-1.5 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold ${
+                                      item.atrasadoGestion ? 'bg-red-600 text-white' : 'bg-indigo-100 text-indigo-800'
+                                    }`}
+                                    title={item.atrasadoGestion
+                                      ? `Con ${LEAD_TIME_INSUMOS_SEMANAS} semanas de gestión de insumos + ${item.leadTimeSemanas} de cocción, empezar a gestionar hoy ya no llega antes del quiebre proyectado.`
+                                      : `Último día hábil para empezar a gestionar los insumos con el proveedor y llegar antes del quiebre proyectado (${LEAD_TIME_INSUMOS_SEMANAS} semanas de gestión + ${item.leadTimeSemanas} de cocción).`}
+                                  >
+                                    <ShoppingCart size={12} />
+                                    {item.atrasadoGestion ? 'Atrasado — debió gestionarse el ' : 'Gestionar insumos antes del '}
+                                    {new Date(item.fechaLimiteGestion + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                  </span>
+                                )}
                                 {/* litrosSugeridos sólo puede ser 0 cuando la fila entró a la lista
                                     por altaDemanda (el filtro de arriba descarta las que no tienen
                                     ni necesidad ni alza) — el disponible alcanza hoy, pero avisa
@@ -4007,6 +4047,15 @@ export default function ProduccionClient({
                                       ? <p className="text-[11px] text-sky-400">≈{fNum(unidades)} {UNIDAD_ENVASE[item.envase]}</p>
                                       : null
                                   })()}
+                                </div>
+                                {/* A cuántos litros hay que reaccionar y empezar a gestionar —
+                                    ya incluye el lead time de gestión de insumos con el proveedor
+                                    (LEAD_TIME_INSUMOS_SEMANAS), no sólo el de cocción. Mismo dato
+                                    que "Punto de reorden" en la tabla de Stock de Seguridad de
+                                    abajo, acá al lado de "Disponible" para leerlo sin bajar. */}
+                                <div className="w-24">
+                                  <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-indigo-500">Punto reorden</p>
+                                  <p className="text-sm font-bold tabular-nums text-indigo-700">{fNum(item.puntoReordenLitros)} L</p>
                                 </div>
                                 <div className="w-24">
                                   <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Disponible</p>
@@ -4031,7 +4080,9 @@ export default function ProduccionClient({
                   Demanda proyectada = forecast de Prophet ciclo a ciclo entre hoy y la fecha elegida (el ciclo en curso
                   usa el ritmo de venta real, lun-vie). "Viene alta demanda" = el modelo ya identificó un empuje
                   estacional fuerte en algún mes dentro del período — anticiparse antes de que el punto de reorden lo
-                  marque como crítico.
+                  marque como crítico. “Punto reorden” ya suma {LEAD_TIME_INSUMOS_SEMANAS} semanas de gestión de
+                  insumos con el proveedor al lead time de cocción — “Gestionar insumos antes del” es el límite real
+                  para reaccionar, antes de “Cocer antes del”.
                 </p>
               </div>
 
@@ -4161,9 +4212,9 @@ export default function ProduccionClient({
                           </td>
                           <td
                             className="px-4 py-3 text-center tabular-nums text-gray-600"
-                            title={`Lead time ${f.leadTimeSemanas} sem. + revisión mensual ${f.periodoRevisionSemanas.toFixed(1)} sem.`}
+                            title={`Lead time de cocción ${f.leadTimeSemanas} sem. + gestión de insumos con el proveedor ${LEAD_TIME_INSUMOS_SEMANAS} sem. + revisión mensual ${f.periodoRevisionSemanas.toFixed(1)} sem.`}
                           >
-                            {(f.leadTimeSemanas + f.periodoRevisionSemanas).toFixed(1)} sem.
+                            {(f.leadTimeSemanas + LEAD_TIME_INSUMOS_SEMANAS + f.periodoRevisionSemanas).toFixed(1)} sem.
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fNum(f.demandaEnVentana)} L</td>
                           <td className="px-4 py-3 text-right font-bold tabular-nums text-amber-700">{fNum(f.stockSeguridadLitros)} L</td>
@@ -5329,6 +5380,23 @@ export default function ProduccionClient({
                                       {new Date(s.fechaLimiteInicio + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
                                     </span>
                                   )}
+                                  {/* Antes de cocer hace falta tener los insumos en planta —
+                                      lead time de gestión con el proveedor, siempre anterior
+                                      al límite de "Cocer antes del". */}
+                                  {s.fechaLimiteGestion && (
+                                    <span
+                                      className={`ml-1.5 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold ${
+                                        s.atrasadoGestion ? 'bg-red-600 text-white' : 'bg-indigo-100 text-indigo-800'
+                                      }`}
+                                      title={s.atrasadoGestion
+                                        ? `Con ${LEAD_TIME_INSUMOS_SEMANAS} semanas de gestión de insumos + ${s.leadTimeSemanas} de cocción, empezar a gestionar hoy ya no llega antes del quiebre.`
+                                        : `Último día hábil para empezar a gestionar los insumos con el proveedor y llegar antes del quiebre (${LEAD_TIME_INSUMOS_SEMANAS} semanas de gestión + ${s.leadTimeSemanas} de cocción).`}
+                                    >
+                                      <ShoppingCart size={12} />
+                                      {s.atrasadoGestion ? 'Atrasado — debió gestionarse el ' : 'Gestionar insumos antes del '}
+                                      {new Date(s.fechaLimiteGestion + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                                    </span>
+                                  )}
                                   {s.litrosFermentando > 0 && (
                                     <span
                                       className="ml-1.5 inline-flex items-center gap-1.5 rounded-md bg-purple-100 px-2 py-1 text-xs font-bold text-purple-700"
@@ -5345,6 +5413,10 @@ export default function ProduccionClient({
                                     "tengo 1.697 L" cuando en realidad es lo que FALTA producir
                                     (el disponible real era 314 L). */}
                                 <div className="flex shrink-0 items-center gap-3 text-right">
+                                  <div className="w-24">
+                                    <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-indigo-500">Punto reorden</p>
+                                    <p className="text-sm font-bold tabular-nums text-indigo-700">{fNum(s.puntoReordenLitros)} L</p>
+                                  </div>
                                   <div className="w-24">
                                     <p className="text-[10px] font-bold uppercase leading-none tracking-wide text-gray-400">Disponible</p>
                                     <p className="text-sm font-bold tabular-nums text-gray-500">{fNum(s.disponibleLitros)} L</p>

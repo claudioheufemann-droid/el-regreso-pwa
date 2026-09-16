@@ -6,7 +6,8 @@ import { esCamaraProduccion } from '@/lib/camaras'
 import {
   bucketEnvase, normalizarProducto,
   claveProductoEnvase, partirClaveProductoEnvase, ENVASE_LABEL,
-  cicloEnCursoISO, inicioDeCiclo, finDeCiclo, esDiaHabilISO, redondearLitrosABarril, type EnvaseBucket,
+  cicloEnCursoISO, inicioDeCiclo, finDeCiclo, esDiaHabilISO, redondearLitrosABarril,
+  LEAD_TIME_INSUMOS_SEMANAS, type EnvaseBucket,
 } from '@/lib/produccion/reglas'
 import ProduccionClient from './ProduccionClient'
 
@@ -356,6 +357,20 @@ export interface SugerenciaPlan {
   /** true si `fechaLimiteInicio` ya pasó: aunque se empiece hoy, el lote no
    *  alcanza a estar listo antes del quiebre. */
   atrasado: boolean
+  /** Litros a los que hay que reaccionar — viene directo de
+   *  stock_seguridad.punto_reorden_litros, que ya suma el lead time de
+   *  gestión de insumos (LEAD_TIME_INSUMOS_SEMANAS) a la ventana de riesgo.
+   *  Es el número que responde "a cuántos litros deberíamos empezar a
+   *  gestionar", en vez de sólo la fecha. */
+  puntoReordenLitros: number
+  /** ÚLTIMO día hábil para empezar a GESTIONAR con los proveedores (no para
+   *  cocer): fecha de quiebre − (lead time de cocción + lead time de gestión
+   *  de insumos, LEAD_TIME_INSUMOS_SEMANAS). Siempre es igual o anterior a
+   *  `fechaLimiteInicio` — hay que tener los insumos ANTES de poder largar la
+   *  cocción. Null si no hay fecha de quiebre proyectable. */
+  fechaLimiteGestion: string | null
+  /** true si `fechaLimiteGestion` ya pasó. */
+  atrasadoGestion: boolean
 }
 
 /**
@@ -1323,13 +1338,24 @@ export default async function ProduccionPage() {
         : null
       const atrasado = fechaLimiteInicio != null && fechaLimiteInicio <= hoyISO
 
+      // ── ¿Cuándo hay que empezar a GESTIONAR con los proveedores? ────────
+      // Antes de poder cocer hace falta tener los insumos en planta, y eso
+      // toma su propio lead time (LEAD_TIME_INSUMOS_SEMANAS, ~2 semanas de
+      // gestión real) — así que el límite para arrancar las gestiones es
+      // SIEMPRE anterior al límite para empezar a cocer, no el mismo día.
+      const fechaLimiteGestion = fechaEstimadaQuiebre != null
+        ? restarDiasHabilesISO(fechaEstimadaQuiebre, (s.leadTimeSemanas + LEAD_TIME_INSUMOS_SEMANAS) * 5)
+        : null
+      const atrasadoGestion = fechaLimiteGestion != null && fechaLimiteGestion <= hoyISO
+
       // Litros que el ritmo actual se comería durante la ventana de riesgo
-      // (lead time + hasta la próxima revisión mensual) — mismo concepto de
-      // "ventana" que el stock de seguridad, pero con la velocidad real en
-      // vez del promedio del forecast. La ventana la fija el proveedor en
-      // semanas calendario; se pasa a días hábiles (5/7) para que combine
-      // con un ritmo que también es por día hábil.
-      const ventanaDiasHabiles = (s.leadTimeSemanas + s.periodoRevisionSemanas) * 5
+      // (lead time de cocción + lead time de gestión de insumos + hasta la
+      // próxima revisión mensual) — mismo concepto de "ventana" que el stock
+      // de seguridad (ver LEAD_TIME_INSUMOS_SEMANAS), pero con la velocidad
+      // real en vez del promedio del forecast. La ventana la fija el
+      // proveedor en semanas calendario; se pasa a días hábiles (5/7) para
+      // que combine con un ritmo que también es por día hábil.
+      const ventanaDiasHabiles = (s.leadTimeSemanas + LEAD_TIME_INSUMOS_SEMANAS + s.periodoRevisionSemanas) * 5
       const necesidadRitmo = Math.max(ritmoDiarioActual * ventanaDiasHabiles - disponible, 0)
       const necesidadReorden = Math.max(s.puntoReordenLitros - disponible, 0)
       const necesidadNeta = Math.round(Math.max(necesidadRitmo, necesidadReorden))
@@ -1358,6 +1384,12 @@ export default async function ProduccionPage() {
           ? ` Debiste empezar a cocer el ${limiteLabel} (${s.leadTimeSemanas} semanas de lead time): empezar hoy ya no llega antes del quiebre.`
           : ` Último día para empezar a cocer: ${limiteLabel} (${s.leadTimeSemanas} semanas de lead time).`
       }
+      if (fechaLimiteGestion != null) {
+        const limiteGestionLabel = new Date(`${fechaLimiteGestion}T00:00:00Z`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+        motivo += atrasadoGestion
+          ? ` Debiste gestionar los insumos con el proveedor el ${limiteGestionLabel} (${LEAD_TIME_INSUMOS_SEMANAS} semanas de gestión + ${s.leadTimeSemanas} de cocción).`
+          : ` Último día para empezar a gestionar insumos con el proveedor: ${limiteGestionLabel} (${LEAD_TIME_INSUMOS_SEMANAS} semanas de gestión + ${s.leadTimeSemanas} de cocción).`
+      }
       if (fermentandoEsFuturo && fermentando > 0) {
         motivo += ` (${Math.round(fermentando).toLocaleString('es-CL')} L siguen fermentando, listos recién el ${new Date(fechaFermentando + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} — no cuentan como stock vendible hasta entonces.)`
       }
@@ -1379,6 +1411,9 @@ export default async function ProduccionPage() {
         fechaFermentandoListo: fermentandoEsFuturo ? fechaFermentando : null,
         fechaLimiteInicio,
         atrasado,
+        puntoReordenLitros: Math.round(s.puntoReordenLitros),
+        fechaLimiteGestion,
+        atrasadoGestion,
       } as SugerenciaPlan
     })
     .filter((s): s is SugerenciaPlan => s !== null)
