@@ -16,7 +16,7 @@ import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import PanelCobranza, {
   documentosParaWA, FilaDocumento, CLARO as PALETA_DOC_CLARO, OSCURO as PALETA_DOC_OSCURO, type DatosCobranza,
 } from '@/components/deudores/PanelCobranza'
-import { diasMoraDeudor } from '@/lib/cobranza'
+import { diasMoraDeudor, type DocumentoVencido } from '@/lib/cobranza'
 
 interface Deudor {
   id: string
@@ -187,23 +187,78 @@ function diasMoraDe(d: Deudor): number {
   return diasMoraDeudor({ ...d, deuda_vencida: d.deuda_comercial })
 }
 
-function exportarCSV(deudores: Deudor[]) {
-  const headers = ['Cliente', 'Localidad', 'Vendedor', 'Deuda vencida', 'Días vencida', 'Doc. más antiguo', 'Remito', 'Maquila (no comercial)', 'Saldo total', 'Barriles', 'Último pago']
-  const filas = deudores.map(d => [
-    d.nombre_fantasia, d.localidad ?? '', vendedorCanonico(d.vendedor) || '',
-    d.deuda_comercial, diasMoraDe(d),
-    d.external_fecha ? fFecha(d.external_fecha) : '',
-    d.external_remito_mas_antiguo ?? '',
-    Math.round(d.maquila_vencida),
-    d.saldo_comercial, d.barriles_adeudados,
-    d.ultimo_pago ? fFecha(d.ultimo_pago) : '',
-  ])
+async function fetchDetalleDeudor(nombreFantasia: string): Promise<{ vencidos: DocumentoVencido[] } | null> {
+  try {
+    const res = await fetch(`/api/deudores/detalle?cliente=${encodeURIComponent(nombreFantasia)}`)
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.detalle ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Informe de deuda por factura — una fila por documento vencido, no una por
+ * cliente (pedido de Claudio, 2026-09-16: el informe anterior sólo daba el
+ * total del cliente y no servía para trabajar la cobranza factura a factura).
+ * Pide el detalle de cada cliente al mismo endpoint que usa PanelCobranza
+ * (no viene precargado: son ~170 deudores y traer sus ventas de entrada
+ * pesaría varios MB). Cuando el ERP tiene deuda vencida que ninguna factura
+ * reconstruida explica, se agrega una fila "Sin factura identificada" con el
+ * resto, para que la suma de filas de cada cliente siempre calce con la
+ * "Deuda Vencida" que se ve en pantalla.
+ */
+async function exportarPorFactura(deudores: Deudor[], onProgress: (hecho: number, total: number) => void) {
+  const headers = [
+    'Cliente', 'Localidad', 'Vendedor', 'N° Factura', 'Pedido',
+    'Fecha Emisión', 'Fecha Vencimiento', 'Días Vencida', 'Tramo', 'Monto',
+    'Saldo Total Cliente', 'Barriles Adeudados', 'Último Pago',
+  ]
+  const filas: (string | number)[][] = []
+
+  const CONCURRENCIA = 6
+  let hecho = 0
+  for (let i = 0; i < deudores.length; i += CONCURRENCIA) {
+    const lote = deudores.slice(i, i + CONCURRENCIA)
+    const resultados = await Promise.all(lote.map(async d => ({ d, detalle: await fetchDetalleDeudor(d.nombre_fantasia) })))
+    for (const { d, detalle } of resultados) {
+      const vendedor = vendedorCanonico(d.vendedor) || ''
+      const ultimoPago = d.ultimo_pago ? fFecha(d.ultimo_pago) : ''
+      // La maquila no es deuda del área comercial (ver conDeudaComercial) —
+      // se descarta acá también para que el informe hable de la misma plata.
+      const docs = (detalle?.vencidos ?? []).filter(doc => !doc.esMaquila)
+
+      for (const doc of docs) {
+        filas.push([
+          d.nombre_fantasia, d.localidad ?? '', vendedor,
+          doc.numeroFactura ?? '', doc.pedido ?? '',
+          fFecha(doc.fechaEmision), fFecha(doc.fechaVencimiento),
+          doc.diasMora, doc.tramoLabel, doc.monto,
+          d.saldo_comercial, d.barriles_adeudados, ultimoPago,
+        ])
+      }
+
+      const identificado = docs.reduce((s, doc) => s + doc.monto, 0)
+      const resto = Math.round(d.deuda_comercial - identificado)
+      if (resto > 1) {
+        filas.push([
+          d.nombre_fantasia, d.localidad ?? '', vendedor,
+          '', '', '', '', diasMoraDe(d), 'Sin factura identificada', resto,
+          d.saldo_comercial, d.barriles_adeudados, ultimoPago,
+        ])
+      }
+    }
+    hecho += lote.length
+    onProgress(hecho, deudores.length)
+  }
+
   const csv = [headers, ...filas].map(fila => fila.map(csvEscape).join(',')).join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `deudores-${new Date().toISOString().split('T')[0]}.csv`
+  a.download = `deudores-facturas-${new Date().toISOString().split('T')[0]}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -630,6 +685,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
   const [searchText, setSearchText] = useState('')
   const [sortBy, setSortBy] = useState<'deuda' | 'nombre' | 'antigua'>('deuda')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [exportando, setExportando] = useState<{ hecho: number; total: number } | null>(null)
 
   const deudores = useMemo(
     () => conDeudaComercial(initialDeudores, maquilaPorCliente),
@@ -876,9 +932,21 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: MC.text }}>{filtrados.length} cliente{filtrados.length === 1 ? '' : 's'}</p>
           {filtrados.length > 0 && (
-            <button onClick={() => exportarCSV(filtrados)}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', color: MC.blue, fontSize: 12.5, fontWeight: 700 }}>
-              <FileDown size={14} /> Exportar
+            <button
+              disabled={!!exportando}
+              onClick={async () => {
+                setExportando({ hecho: 0, total: filtrados.length })
+                try {
+                  await exportarPorFactura(filtrados, (hecho, total) => setExportando({ hecho, total }))
+                } finally {
+                  setExportando(null)
+                }
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none',
+                cursor: exportando ? 'default' : 'pointer', color: MC.blue, fontSize: 12.5, fontWeight: 700 }}>
+              {exportando
+                ? <><Loader2 size={14} className="animate-spin" /> Generando {exportando.hecho}/{exportando.total}…</>
+                : <><FileDown size={14} /> Exportar por factura</>}
             </button>
           )}
         </div>
@@ -927,6 +995,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const [showSaldoNoVencido, setShowSaldoNoVencido] = useState(false)
+  const [exportando, setExportando] = useState<{ hecho: number; total: number } | null>(null)
   // Detalle de cobranza del cliente desplegado — lo llena PanelCobranza y lo
   // consume el mensaje de WhatsApp de esa misma fila.
   const [cobranza, setCobranza] = useState<DatosCobranza | null>(null)
@@ -984,9 +1053,35 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
 
   return (
     <div style={{ padding: '24px 20px 60px', maxWidth: 1400, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-        <Wallet size={22} style={{ color: 'var(--gold)' }} />
-        <h1 style={{ fontSize: 24, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>Deudores</h1>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Wallet size={22} style={{ color: 'var(--gold)' }} />
+          <h1 style={{ fontSize: 24, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>Deudores</h1>
+        </div>
+        {filteredDeudores.length > 0 && (
+          <button
+            disabled={!!exportando}
+            onClick={async () => {
+              setExportando({ hecho: 0, total: filteredDeudores.length })
+              try {
+                await exportarPorFactura(filteredDeudores, (hecho, total) => setExportando({ hecho, total }))
+              } finally {
+                setExportando(null)
+              }
+            }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0,
+              padding: '9px 16px', borderRadius: 10, minHeight: 38,
+              background: exportando ? 'var(--surface)' : 'rgba(212,175,55,0.1)',
+              border: `1px solid ${exportando ? 'var(--border)' : 'rgba(212,175,55,0.35)'}`,
+              color: exportando ? 'var(--muted)' : 'var(--gold)',
+              fontSize: 13, fontWeight: 700, cursor: exportando ? 'default' : 'pointer',
+            }}>
+            {exportando
+              ? <><Loader2 size={15} className="animate-spin" /> Generando {exportando.hecho}/{exportando.total}…</>
+              : <><FileDown size={15} /> Exportar por factura</>}
+          </button>
+        )}
       </div>
       <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
         {isAdmin
