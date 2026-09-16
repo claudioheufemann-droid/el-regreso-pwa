@@ -229,17 +229,24 @@ async function exportarPorFactura(deudores: Deudor[], onProgress: (hecho: number
       // se descarta acá también para que el informe hable de la misma plata.
       const docs = (detalle?.vencidos ?? []).filter(doc => !doc.esMaquila)
 
+      // Redondeado a pesos enteros — igual que formatCurrency() en toda la
+      // pantalla. Sin esto, el resto de decimales de punto flotante que
+      // arrastra el cálculo de litros*precio (ej. 1886397.4850000899) se
+      // escribe tal cual en el CSV, y Excel en configuración regional
+      // chilena (coma decimal) lee el "." como si no existiera, convirtiendo
+      // "1886397.4850000899" en 18.863.974.850.000.899 — un número
+      // astronómico que no tiene nada que ver con la factura real.
       for (const doc of docs) {
         filas.push([
           d.nombre_fantasia, d.localidad ?? '', vendedor,
           doc.numeroFactura ?? '', doc.pedido ?? '',
           fFecha(doc.fechaEmision), fFecha(doc.fechaVencimiento),
-          doc.diasMora, doc.tramoLabel, doc.monto,
+          doc.diasMora, doc.tramoLabel, Math.round(doc.monto),
           d.saldo_comercial, d.barriles_adeudados, ultimoPago,
         ])
       }
 
-      const identificado = docs.reduce((s, doc) => s + doc.monto, 0)
+      const identificado = docs.reduce((s, doc) => s + Math.round(doc.monto), 0)
       const resto = Math.round(d.deuda_comercial - identificado)
       if (resto > 1) {
         filas.push([
