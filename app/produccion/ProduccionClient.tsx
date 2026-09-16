@@ -843,12 +843,25 @@ export default function ProduccionClient({
     return mapa
   }, [stock])
 
+  /** El ERP carga el formato de lata estándar como "Lata (354 ml)" en el
+   *  nombre del producto (ver litrosLata en page.tsx), pero el tamaño físico
+   *  real es 375 ml — corrección del usuario, 16-sep-2026. Sólo para ESTA
+   *  conversión litros→unidades del gráfico de Forecasting: no se toca el
+   *  litraje que ya usan Stock de Seguridad / Calculadora de Cobertura /
+   *  Inventario Actual (viene del ERP tal cual, cantidad × 0.354), porque
+   *  corregirlo ahí cambiaría números de stock disponible en todo el módulo
+   *  — un cambio más grande que lo pedido acá. Se detecta por cercanía al
+   *  valor mal cargado (0.354) en vez de comparar con el string crudo del
+   *  ERP, que ya se perdió al armar litrosPorLataPorProducto. */
+  const LITROS_LATA_ERP_MAL_CARGADO = 0.354
+  const LITROS_LATA_REAL = 0.375
+
   /* ── Conversión litros → unidades para la serie del gráfico de Forecasting ──
      Sólo tiene sentido cuando la serie elegida es un producto×envase
      concreto: "Todos los formatos" o "Todos los productos" no tienen un
      tamaño de envase único que convertir. Barril es exacto (30L o 50L, el
      bucket ES el tamaño — ver bucketEnvase en reglas.ts); lata se estima del
-     propio inventario físico porque el bucket mezcla 354ml y 473ml (mismo
+     propio inventario físico porque el bucket mezcla dos tamaños (mismo
      criterio que litrosPorLataPorProducto arriba, reutilizado acá). */
   const unidadEnvaseSerieActual = useMemo(() => {
     if (!serieActual || serieActual.nivel !== 'producto_envase' || !serieActual.envaseBucket || !serieActual.producto) return null
@@ -856,8 +869,12 @@ export default function ProduccionClient({
     if (bucket === 'barril_30') return { litrosPorUnidad: 30, nombre: UNIDAD_ENVASE.barril_30 }
     if (bucket === 'barril_50') return { litrosPorUnidad: 50, nombre: UNIDAD_ENVASE.barril_50 }
     if (bucket === 'lata') {
-      const litrosPorLata = litrosPorLataPorProducto.get(serieActual.producto)
-      return litrosPorLata ? { litrosPorUnidad: litrosPorLata, nombre: UNIDAD_ENVASE.lata } : null
+      const litrosPorLataERP = litrosPorLataPorProducto.get(serieActual.producto)
+      if (!litrosPorLataERP) return null
+      const litrosPorLata = Math.abs(litrosPorLataERP - LITROS_LATA_ERP_MAL_CARGADO) < 0.01
+        ? LITROS_LATA_REAL
+        : litrosPorLataERP
+      return { litrosPorUnidad: litrosPorLata, nombre: UNIDAD_ENVASE.lata }
     }
     return null
   }, [serieActual, litrosPorLataPorProducto])
