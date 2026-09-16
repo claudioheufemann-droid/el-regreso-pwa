@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState, useRef } from 'react'
+import React, { useCallback, useMemo, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -14,8 +14,10 @@ import {
   LayoutDashboard, TrendingUp, Package, CalendarDays, ShoppingCart,
   CircleDollarSign, Bell, Plus, AlertTriangle, Calendar as CalendarIcon,
   TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
-  ArrowUp, ArrowDown, CheckCircle2, Trash2, X,
+  ArrowUp, ArrowDown, CheckCircle2, Trash2, X, GripVertical, Move,
 } from 'lucide-react'
+import PopoverCoccion from './PopoverCoccion'
+import { useArrastreCalendario, type CargaArrastre } from './useArrastreCalendario'
 import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, RecetaInsumoLinea, LoteSinReceta } from './page'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, type EnvaseBucket } from '@/lib/produccion/reglas'
 
@@ -310,9 +312,14 @@ const GRUPOS_NAV: { titulo: string; items: TabId[] }[] = [
  *  jerarquía — cada pantalla declara para qué está. */
 function PreguntaDeLaVista({ pregunta, detalle }: { pregunta: string; detalle: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-      <h2 className="text-base font-bold text-gray-800 sm:text-lg">{pregunta}</h2>
-      <p className="mt-1 text-sm text-gray-500">{detalle}</p>
+    // Barra verde a la izquierda en vez de una tarjeta blanca más entre
+    // tarjetas blancas: el encabezado tiene que leerse como el título de la
+    // pantalla, no como el primer dato. Con todo del mismo color, la pregunta
+    // que da sentido a la vista se perdía entre los paneles de abajo.
+    <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-white p-4 pl-5 shadow-sm sm:p-5 sm:pl-6">
+      <span className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: COLORS.darkGreen }} />
+      <h2 className="text-base font-bold tracking-tight text-gray-900 sm:text-[19px]">{pregunta}</h2>
+      <p className="mt-1 max-w-4xl text-sm leading-relaxed text-gray-500">{detalle}</p>
     </div>
   )
 }
@@ -1486,73 +1493,42 @@ export default function ProduccionClient({
    *  detrás y los ids se regeneran; "la 2ª cocción de Mocho English" sí
    *  sobrevive a esa regeneración. */
   const [anclasCoccion, setAnclasCoccion] = useState<Map<string, string>>(new Map())
-  const [arrastrando, setArrastrando] = useState<string | null>(null)
 
-  /** Tooltip del calendario: antes era un panel `absolute` sujeto al chip, y
-   *  la propia celda del día lo recortaba (overflow del contenedor scrollable)
-   *  apenas el chip estaba cerca del borde de la grilla. Pasarlo a un portal
-   *  a `document.body` (`position: fixed`) saca ese recorte de encima, pero
-   *  trajo un problema nuevo: había que ADIVINAR el alto del panel para
-   *  decidir si abría arriba o abajo, y una tarjeta con alarma + "no llega"
-   *  + selector de tanque mide bastante más que una simple — la adivinanza
-   *  fija (260px) se quedaba corta y el panel terminaba tapando la fila de
-   *  arriba en vez de acomodarse.
+  /** Detalle de una cocción del calendario, en dos modos (ver
+   *  PopoverCoccion.tsx): `preview` al pasar el cursor —sólo lectura, se
+   *  cierra solo— y `fijado` al hacer clic, que es donde viven las acciones.
    *
-   *  Se resuelve MIDIENDO el panel real en vez de adivinar: primero se monta
-   *  invisible y fuera de pantalla (`tooltipPos` en null), después un
-   *  `useLayoutEffect` lee su alto/ancho verdadero con `getBoundingClientRect`
-   *  y recién ahí se calcula la posición final — arriba o abajo según cuál
-   *  lado tiene más espacio de verdad, no una estimación. Como
-   *  `useLayoutEffect` corre antes de pintar, el usuario nunca ve el salto. */
-  const [tooltipHover, setTooltipHover] = useState<{ lote: (typeof planSugerido.lotes)[number]; rect: DOMRect } | null>(null)
-  const [tooltipPos, setTooltipPos] = useState<{ left: number; top: number; abreAbajo: boolean } | null>(null)
-  const tooltipRef = useRef<HTMLDivElement>(null)
-  // Pequeño margen antes de cerrar: sin esto, mover el mouse del chip hacia
-  // el propio tooltip (para tocar el <select> de tanque, por ejemplo) lo
-  // cierra a mitad de camino porque el mouse cruza un hueco que ya no tiene
-  // encima ningún elemento — el tooltip vive en otro lugar del DOM ahora.
-  const cierreTooltipRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const abrirTooltip = (lote: (typeof planSugerido.lotes)[number], rect: DOMRect) => {
-    if (cierreTooltipRef.current) { clearTimeout(cierreTooltipRef.current); cierreTooltipRef.current = null }
-    setTooltipHover({ lote, rect })
-    setTooltipPos(null) // fuerza a re-medir: la próxima pasada calcula la posición real
+   *  Antes era un único tooltip de hover que además contenía el `<select>` de
+   *  tanque: el control real estaba en un panel que se cerraba al mover el
+   *  mouse, y en pantalla táctil no se podía abrir de ninguna forma. Separar
+   *  los dos modos es lo que resuelve las dos cosas a la vez. */
+  const [detalleCoccion, setDetalleCoccion] = useState<
+    { lote: (typeof planSugerido.lotes)[number]; rect: DOMRect; modo: 'preview' | 'fijado' } | null
+  >(null)
+  // Margen antes de cerrar el preview: sin esto, mover el mouse del chip hacia
+  // el propio panel lo cierra a mitad de camino, porque el panel vive en un
+  // portal y entre los dos hay un hueco sin ningún elemento encima.
+  const cierrePreviewRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cancelarCierrePreview = () => {
+    if (cierrePreviewRef.current) { clearTimeout(cierrePreviewRef.current); cierrePreviewRef.current = null }
   }
-  const programarCierreTooltip = () => {
-    if (cierreTooltipRef.current) clearTimeout(cierreTooltipRef.current)
-    cierreTooltipRef.current = setTimeout(() => { setTooltipHover(null); setTooltipPos(null) }, 120)
+  const abrirPreview = (lote: (typeof planSugerido.lotes)[number], rect: DOMRect) => {
+    cancelarCierrePreview()
+    // Un panel ya fijado manda sobre el hover: pasar el cursor por otro chip
+    // no debe robarle el foco a lo que el usuario dejó abierto a propósito.
+    setDetalleCoccion(prev => (prev?.modo === 'fijado' ? prev : { lote, rect, modo: 'preview' }))
   }
-  // Corre después de cada render donde cambió qué cocción está en hover (o
-  // recién se montó su panel): mide el panel real y decide dónde va.
-  React.useLayoutEffect(() => {
-    if (!tooltipHover || !tooltipRef.current) return
-    const el = tooltipRef.current
-    const rect = tooltipHover.rect
-    const MARGEN = 8
-    const alto = el.offsetHeight
-    const ancho = el.offsetWidth
-    // Arriba por defecto (como toda esta UI), salvo que de verdad no quepa
-    // arriba Y sí quepa (o haya más aire) abajo.
-    const espacioArriba = rect.top
-    const espacioAbajo = window.innerHeight - rect.bottom
-    const abreAbajo = espacioArriba < alto + MARGEN && espacioAbajo > espacioArriba
-    let top = abreAbajo ? rect.bottom + MARGEN : rect.top - MARGEN - alto
-    // Clamp vertical: si ni arriba ni abajo alcanzan enteros (pantalla muy
-    // baja), que quede dentro de la ventana en vez de cortarse contra el
-    // borde — para eso está el scroll interno del panel (`max-h`+`overflow`).
-    top = Math.min(Math.max(top, MARGEN), window.innerHeight - alto - MARGEN)
-    const centroX = rect.left + rect.width / 2
-    const left = Math.min(Math.max(centroX - ancho / 2, MARGEN), window.innerWidth - ancho - MARGEN)
-    setTooltipPos({ left, top, abreAbajo })
-    // La dependencia es el OBJETO `tooltipHover`, no `tooltipHover?.lote.id`:
-    // `abrirTooltip` crea un objeto nuevo en cada llamada aunque sea la misma
-    // cocción (re-entrar rápido al mismo chip dentro de la ventana de gracia
-    // del cierre, por ejemplo), así que depender del id no alcanza — con eso
-    // el efecto no volvía a correr, `tooltipPos` se quedaba en null (porque
-    // `abrirTooltip` lo resetea) y el panel quedaba invisible para siempre.
-    // Depender de la identidad del objeto garantiza una medición por cada
-    // apertura real, sin pelear con el resto de los renders del componente
-    // (que no tocan `tooltipHover`, así que no disparan el efecto de más).
-  }, [tooltipHover])
+  const programarCierrePreview = () => {
+    cancelarCierrePreview()
+    cierrePreviewRef.current = setTimeout(() => {
+      setDetalleCoccion(prev => (prev?.modo === 'fijado' ? prev : null))
+    }, 140)
+  }
+  const fijarDetalle = (lote: (typeof planSugerido.lotes)[number], rect: DOMRect) => {
+    cancelarCierrePreview()
+    setDetalleCoccion({ lote, rect, modo: 'fijado' })
+  }
+  const cerrarDetalle = () => { cancelarCierrePreview(); setDetalleCoccion(null) }
 
   const anclarCoccion = (producto: string, nro: number, fechaISO: string) => {
     setAnclasCoccion(prev => new Map(prev).set(`${producto}|${nro}`, fechaISO))
@@ -1571,6 +1547,39 @@ export default function ProduccionClient({
     })
   }
   const limpiarAnclas = () => { setAnclasCoccion(new Map()); setAnclasTanque(new Map()) }
+
+  /** Arrastre del calendario (Pointer Events: mouse, lápiz y dedo por el mismo
+   *  camino — ver useArrastreCalendario.ts). Dos cargas posibles:
+   *
+   *   · `coccion`    — una cocción ya planificada que se MUEVE de día. Queda
+   *                    anclada a esa fecha y el plan se re-simula desde ahí.
+   *   · `sugerencia` — un producto que el modelo pide cocer pero que todavía
+   *                    no existe como lote. Soltarlo en un día lo CREA en el
+   *                    Plan Maestro con esa fecha, sin pasar por el modal.
+   *
+   *  No se puede soltar en el pasado: una cocción no se agenda para ayer. */
+  const puedeSoltarEnDia = useCallback((fechaISO: string) => fechaISO >= hoyLocalISO(), [])
+  const alSoltarEnDia = useCallback((carga: CargaArrastre, fechaISO: string) => {
+    if (carga.tipo === 'coccion') {
+      anclarCoccion(carga.producto, carga.loteNro, fechaISO)
+      return
+    }
+    void agregarLote({
+      producto: carga.producto,
+      categoria: carga.categoria,
+      litrosPlanificados: carga.litros,
+      fechaPlanificada: fechaISO,
+      motivo: carga.motivo ?? 'Arrastrado al calendario desde las sugerencias del modelo',
+      origen: 'sugerido',
+      necesidadCubrir: carga.necesidadCubrir ?? null,
+      cubreHasta: carga.cubreHasta ?? null,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const { arrastre, propsOrigen, propsDestino } = useArrastreCalendario({
+    onSoltar: alSoltarEnDia,
+    puedeSoltarEn: puedeSoltarEnDia,
+  })
 
   /** Cocciones que la sala puede sacar en un día POR LÍNEA (cervecería y
    *  kombuchería son procesos separados, así que el tope es por cada una).
@@ -2750,34 +2759,47 @@ export default function ProduccionClient({
       <main className="flex h-full flex-1 flex-col overflow-hidden bg-gray-100">
 
         {/* ── Barra superior ── */}
-        <header className="mobile-safe-top flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 lg:h-16 lg:px-8 lg:py-0">
+        <header className="mobile-safe-top flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white/95 px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur lg:h-16 lg:px-8 lg:py-0">
           <div className="flex min-w-0 items-center gap-3">
-            <Link href="/" aria-label="Volver al inicio" className="shrink-0 rounded-md p-1.5 text-gray-500 hover:bg-gray-100 lg:hidden">
+            <Link href="/" aria-label="Volver al inicio" className="prod-press shrink-0 rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 lg:hidden">
               <Home size={18} />
             </Link>
             <div className="min-w-0">
-              <h2 className="truncate text-base font-bold text-gray-800 lg:text-xl">{tituloActual}</h2>
+              <h2 className="truncate text-base font-bold tracking-tight text-gray-900 lg:text-xl">{tituloActual}</h2>
               <p className="truncate text-[11px] text-gray-400 lg:text-xs">{subtituloActual}</p>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-3 lg:gap-6">
-            <div className="hidden items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-600 xl:flex">
-              <CalendarIcon size={16} />
-              <span>{ultimaCorrida ? `Modelo: ${ultimaCorrida.slice(0, 10)}` : 'Sin corrida'}</span>
-              <ChevronDown size={14} />
+          <div className="flex shrink-0 items-center gap-2.5 lg:gap-4">
+            {/* Cuándo corrió el modelo. No es un desplegable —nunca lo fue— así
+                que se le sacó la flechita que lo hacía parecer uno. */}
+            <div
+              className="hidden items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-[13px] font-medium text-gray-600 xl:flex"
+              title="Última corrida del modelo de forecast"
+            >
+              <CalendarIcon size={15} className="text-gray-400" />
+              <span className="tabular-nums">{ultimaCorrida ? ultimaCorrida.slice(0, 10) : 'Sin corrida'}</span>
             </div>
 
-            <div className="relative cursor-pointer" title={`${advertencias.length} advertencias del modelo`}>
-              <Bell size={20} className="text-gray-600" />
+            {/* Antes era un <div> con cursor-pointer: se veía clickeable, no
+                respondía al teclado y ningún lector de pantalla lo anunciaba.
+                Ahora es un botón real que lleva a las advertencias. */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('resumen')}
+              aria-label={`${advertencias.length} advertencias del modelo`}
+              title={`${advertencias.length} advertencias del modelo`}
+              className="prod-press prod-hover-icon relative rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            >
+              <Bell size={19} />
               {advertencias.length > 0 && (
-                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500" />
+                <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500" />
               )}
-            </div>
+            </button>
 
             <button
               onClick={() => { setActiveTab('plan'); setMostrarFormLote(true) }}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white shadow-sm transition-transform hover:scale-105 lg:px-4"
+              className="prod-press flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white shadow-sm ring-1 ring-black/5 hover:brightness-105 lg:px-4"
               style={{ backgroundColor: COLORS.amber }}
             >
               <Plus size={18} />
@@ -2804,8 +2826,8 @@ export default function ProduccionClient({
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
                 aria-current={activo ? 'page' : undefined}
-                className={`prod-press relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                  activo ? 'text-white' : 'bg-gray-100 text-gray-600'
+                className={`prod-press relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-semibold transition-colors ${
+                  activo ? 'text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
                 style={{ backgroundColor: activo ? COLORS.darkGreen : undefined }}
               >
@@ -4430,9 +4452,10 @@ export default function ProduccionClient({
                   apretar "Agregar al plan", para poder armar el calendario
                   completo de un vistazo antes de confirmar cada cocción. */}
               <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-4 lg:px-6">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="font-bold text-gray-800">Calendario de Cocciones Sugeridas</h3>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gradient-to-b from-gray-50 to-white px-4 py-4 lg:px-6">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <CalendarDays size={17} style={{ color: COLORS.darkGreen }} />
+                    <h3 className="font-bold tracking-tight text-gray-900">Calendario de Cocciones Sugeridas</h3>
                     <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
                       Sin confirmar
                     </span>
@@ -4451,26 +4474,33 @@ export default function ProduccionClient({
                       </button>
                     )}
                   </div>
+                  {/* Navegación de mes: los dos controles y la etiqueta en un
+                      solo bloque, para que se lean como un control único en vez
+                      de tres botones sueltos. */}
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setMesCoberturaOffset(v => v - 1)}
-                      className="prod-hover-icon prod-press rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-50"
-                      aria-label="Mes anterior"
-                    >
-                      <ChevronDown size={16} className="rotate-90" />
-                    </button>
-                    <span className="min-w-[9rem] text-center text-sm font-bold capitalize text-gray-700">{calendarioCobertura.etiqueta}</span>
-                    <button
-                      onClick={() => setMesCoberturaOffset(v => v + 1)}
-                      className="prod-hover-icon prod-press rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-50"
-                      aria-label="Mes siguiente"
-                    >
-                      <ChevronDown size={16} className="-rotate-90" />
-                    </button>
+                    <div className="flex items-center overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                      <button
+                        onClick={() => setMesCoberturaOffset(v => v - 1)}
+                        className="prod-press p-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                        aria-label="Mes anterior"
+                      >
+                        <ChevronDown size={16} className="rotate-90" />
+                      </button>
+                      <span className="min-w-[9rem] border-x border-gray-200 px-2 py-1.5 text-center text-sm font-bold capitalize text-gray-800">
+                        {calendarioCobertura.etiqueta}
+                      </span>
+                      <button
+                        onClick={() => setMesCoberturaOffset(v => v + 1)}
+                        className="prod-press p-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                        aria-label="Mes siguiente"
+                      >
+                        <ChevronDown size={16} className="-rotate-90" />
+                      </button>
+                    </div>
                     {mesCoberturaOffset !== 0 && (
                       <button
                         onClick={() => setMesCoberturaOffset(0)}
-                        className="prod-press rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50"
+                        className="prod-press rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-600 shadow-sm hover:bg-gray-50"
                       >
                         Hoy
                       </button>
@@ -4478,11 +4508,89 @@ export default function ProduccionClient({
                   </div>
                 </div>
 
+                {/* ══════════ BANDEJA DE SUGERENCIAS ══════════
+                    Los productos que el modelo pide cocer pero que todavía no
+                    son un lote confirmado. Antes sólo se podían mandar a
+                    producción desde otra pestaña ("Cuánto cocinar") y con un
+                    modal que pedía fecha a mano; acá se arrastran al día que
+                    corresponda y quedan creados con esa fecha, que es la
+                    forma natural de agendar cuando el calendario está a la
+                    vista. El botón sigue existiendo para quien prefiera el
+                    modal —y es el único camino con teclado—. */}
+                {anticipadasPorProducto.some(g => g.totalAProducir > 0) && (
+                  <div className="border-b border-gray-100 bg-gradient-to-b from-amber-50/60 to-transparent px-4 py-3 lg:px-6">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <GripVertical size={14} className="text-amber-600" />
+                      <h4 className="text-[13px] font-bold text-gray-800">Sugerencias sin programar</h4>
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                        {anticipadasPorProducto.filter(g => g.totalAProducir > 0).length}
+                      </span>
+                      <span className="text-[11px] text-gray-500">
+                        Arrastrá una al día en que querés cocerla — se agrega al Plan Maestro con esa fecha.
+                        <span className="hidden sm:inline"> En el teléfono, mantené apretado para levantarla.</span>
+                      </span>
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {anticipadasPorProducto
+                        .filter(g => g.totalAProducir > 0)
+                        .map(g => {
+                          const yaEnPlan = plan.some(
+                            l => l.producto === g.producto && l.estado !== 'cancelado' && l.estado !== 'completado',
+                          )
+                          const arrastrandoEsta = arrastre?.carga.tipo === 'sugerencia' && arrastre.carga.producto === g.producto
+                          return (
+                            <div
+                              key={g.producto}
+                              {...propsOrigen({
+                                tipo: 'sugerencia',
+                                producto: g.producto,
+                                categoria: g.categoria,
+                                litros: Math.round(g.totalAProducir),
+                                motivo: `Sugerido por el modelo: faltan ${fNum(g.totalAProducir)} L para cubrir el colchón`,
+                              })}
+                              className={`prod-chip prod-press flex w-48 shrink-0 cursor-grab flex-col gap-1 rounded-lg border p-2.5 active:cursor-grabbing ${
+                                arrastrandoEsta ? 'opacity-25' : ''
+                              } ${
+                                yaEnPlan
+                                  ? 'border-gray-200 bg-white/70'
+                                  : g.categoria === 'kombucha'
+                                    ? 'border-amber-300 bg-white shadow-sm'
+                                    : 'border-emerald-300 bg-white shadow-sm'
+                              }`}
+                              title={`${g.producto} — arrastrá al calendario para programarla`}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <GripVertical size={11} className="shrink-0 text-gray-300" />
+                                <ProductImage nombre={g.producto} categoria={g.categoria} size={20} radius={5} />
+                                <span className="truncate text-[11.5px] font-bold text-gray-800">{g.producto}</span>
+                              </div>
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="text-[15px] font-black tabular-nums text-gray-900">{fNum(g.totalAProducir)} L</span>
+                                {g.fermentadorSugerido && (
+                                  <span className={`truncate rounded-full px-1.5 py-0.5 text-[9.5px] font-bold ${
+                                    g.fermentadorAjustado ? 'bg-red-50 text-red-700' : 'bg-purple-50 text-purple-700'
+                                  }`}>
+                                    {g.fermentadorSugerido.tanque}
+                                  </span>
+                                )}
+                              </div>
+                              {yaEnPlan && (
+                                <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
+                                  <CheckCircle2 size={10} /> Ya hay un lote en el plan
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })}
+                    </div>
+                  </div>
+                )}
+
                 {/* La grilla mensual necesita 620px para no deformarse, así
                     que en el teléfono se cambia por una agenda vertical (más
                     abajo). Un mes de 7 columnas en 375px obliga a arrastrar
-                    de lado para leer cada semana, y el tooltip de hover —que
-                    es donde vive el detalle— no existe en pantalla táctil. */}
+                    de lado para leer cada semana. El detalle de cada cocción
+                    ya no depende del hover: se toca y se abre fijado. */}
                 <div className="hidden overflow-auto p-4 sm:block">
                   <div className="grid min-w-[620px] grid-cols-7 gap-2">
                     {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(dia => (
@@ -4496,29 +4604,34 @@ export default function ProduccionClient({
                     {calendarioCobertura.dias.map(dia => {
                       const fechaDiaISO = `${calendarioCobertura.anio}-${String(calendarioCobertura.mesIdx + 1).padStart(2, '0')}-${String(dia.dia).padStart(2, '0')}`
                       const esHoy = fechaDiaISO === calendarioCobertura.hoyISO
+                      const esFuturoOHoy = fechaDiaISO >= calendarioCobertura.hoyISO
                       return (
                       <div
                         key={dia.dia}
-                        onDragOver={ev => { if (arrastrando && fechaDiaISO >= calendarioCobertura.hoyISO) ev.preventDefault() }}
-                        onDrop={ev => {
-                          ev.preventDefault()
-                          // El id que viaja es `producto|Nº de cocción`, no el
-                          // id del lote: al soltar se re-simula todo y los
-                          // ids cambian (ver el comentario en el motor).
-                          const carga = ev.dataTransfer.getData('text/plain') || arrastrando
-                          setArrastrando(null)
-                          if (!carga || fechaDiaISO < calendarioCobertura.hoyISO) return
-                          const corte = carga.lastIndexOf('|')
-                          if (corte < 0) return
-                          anclarCoccion(carga.slice(0, corte), Number(carga.slice(corte + 1)), fechaDiaISO)
-                        }}
-                        className={`prod-hover-card relative flex min-h-[80px] flex-col gap-1 rounded-md border p-1.5 ${
-                          arrastrando && fechaDiaISO >= calendarioCobertura.hoyISO
-                            ? 'border-dashed border-[#C9A227] bg-[#C9A227]/5'
-                            : esHoy ? 'border-[#0F3D2E] bg-[#0F3D2E]/5' : 'border-gray-100 bg-gray-50/30'
+                        {...propsDestino(fechaDiaISO)}
+                        className={`prod-dia relative flex min-h-[86px] flex-col gap-1 rounded-lg border p-1.5 ${
+                          // Tres estados de destino durante un arrastre, en vez
+                          // del único borde dorado de antes: el día bajo el
+                          // puntero se resalta fuerte (es el que va a recibir
+                          // la cocción), los otros días válidos quedan apenas
+                          // insinuados, y el pasado se apaga — que no se pueda
+                          // soltar ahí tiene que verse, no sólo fallar.
+                          arrastre && arrastre.diaDestino === fechaDiaISO
+                            ? 'prod-dia-activo border-[#C9A227] bg-[#C9A227]/15 ring-2 ring-[#C9A227]/40'
+                            : arrastre && esFuturoOHoy
+                              ? 'border-dashed border-[#C9A227]/45 bg-[#C9A227]/[0.04]'
+                              : arrastre
+                                ? 'border-gray-100 bg-gray-50/30 opacity-40'
+                                : esHoy
+                                  ? 'border-[#0F3D2E]/40 bg-[#0F3D2E]/[0.06] ring-1 ring-[#0F3D2E]/15'
+                                  : 'border-gray-100 bg-gray-50/40 hover:border-gray-200 hover:bg-gray-50'
                         }`}
                       >
-                        <span className={`absolute right-2 top-1.5 text-xs font-medium ${esHoy ? 'font-bold text-[#0F3D2E]' : 'text-gray-400'}`}>{dia.dia}</span>
+                        <span className={`absolute right-1.5 top-1 text-[11px] tabular-nums ${
+                          esHoy
+                            ? 'flex h-5 w-5 items-center justify-center rounded-full bg-[#0F3D2E] font-bold text-white'
+                            : 'font-medium text-gray-400'
+                        }`}>{dia.dia}</span>
                         <div className="mt-4 flex flex-col gap-1">
                           {dia.lotes.map(l => {
                             // "No llega" lo decide la propia simulación: el stock
@@ -4537,10 +4650,10 @@ export default function ProduccionClient({
                             <div
                               key={l.id}
                               className="relative"
-                              onMouseEnter={ev => abrirTooltip(l, ev.currentTarget.getBoundingClientRect())}
-                              onMouseLeave={programarCierreTooltip}
-                              onFocus={ev => abrirTooltip(l, ev.currentTarget.getBoundingClientRect())}
-                              onBlur={programarCierreTooltip}
+                              onMouseEnter={ev => abrirPreview(l, ev.currentTarget.getBoundingClientRect())}
+                              onMouseLeave={programarCierrePreview}
+                              onFocus={ev => abrirPreview(l, ev.currentTarget.getBoundingClientRect())}
+                              onBlur={programarCierrePreview}
                             >
                               {/* Punto independiente de todo lo demás: un tanque elegido a
                                   mano puede coincidir con cualquier otro estado (movida,
@@ -4554,19 +4667,30 @@ export default function ProduccionClient({
                               )}
                               <button
                                 type="button"
-                                draggable={!l.enCurso}
-                                onDragStart={ev => {
-                                  ev.dataTransfer.setData('text/plain', `${l.producto}|${l.loteNro}`)
-                                  ev.dataTransfer.effectAllowed = 'move'
-                                  setArrastrando(`${l.producto}|${l.loteNro}`)
-                                }}
-                                onDragEnd={() => setArrastrando(null)}
-                                onClick={() => { if (!l.enCurso) alternarLote(l) }}
-                                disabled={l.enCurso}
-                                title={l.enCurso ? undefined : (marcado ? 'Quitar del presupuesto' : 'Incluir en el presupuesto') + ' · arrastrala a otro día para moverla'}
-                                className={`prod-press flex w-full items-center gap-0.5 truncate rounded-sm border py-1 pl-1.5 pr-1 text-left text-[10px] font-bold ${
-                                  l.enCurso ? 'cursor-default' : 'cursor-pointer'
-                                } ${arrastrando === `${l.producto}|${l.loteNro}` ? 'opacity-30' : ''} ${
+                                {...propsOrigen(
+                                  { tipo: 'coccion', producto: l.producto, loteNro: l.loteNro, categoria: l.categoria, litros: l.litros },
+                                  !l.enCurso,
+                                )}
+                                // El clic ya no alterna el presupuesto: abre el
+                                // panel fijado, donde esa acción es un botón
+                                // con nombre. Alternar a ciegas con un clic en
+                                // un chip de 10px era fácil de disparar sin
+                                // querer y no decía qué había pasado.
+                                onClick={ev => fijarDetalle(l, ev.currentTarget.getBoundingClientRect())}
+                                title={l.enCurso
+                                  ? 'Ver detalle'
+                                  : `${marcado ? 'En el presupuesto' : 'Fuera del presupuesto'} · clic para abrir · arrastrala a otro día para moverla`}
+                                className={`prod-chip prod-press flex w-full items-center gap-1 truncate rounded-md border py-1 pl-1 pr-1.5 text-left text-[10px] font-bold ${
+                                  l.enCurso ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+                                } ${
+                                  arrastre?.carga.tipo === 'coccion'
+                                  && arrastre.carga.producto === l.producto
+                                  && arrastre.carga.loteNro === l.loteNro
+                                    ? 'opacity-25' : ''
+                                } ${
+                                  detalleCoccion?.modo === 'fijado' && detalleCoccion.lote.id === l.id
+                                    ? 'ring-2 ring-[#0F3D2E]/35' : ''
+                                } ${
                                   l.enCurso
                                     ? embarriladoVencido
                                       ? 'border-red-500 bg-red-50 text-red-700'
@@ -4582,6 +4706,13 @@ export default function ProduccionClient({
                                           : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
                                 }`}
                               >
+                                {/* Manija: sin esto no hay ninguna señal de que
+                                    el chip se puede arrastrar — el cursor grab
+                                    sólo aparece al pasar por encima, y en
+                                    táctil no existe. */}
+                                {!l.enCurso && (
+                                  <GripVertical size={9} className="prod-chip-grip -ml-0.5 shrink-0 text-current opacity-0" />
+                                )}
                                 {l.enCurso
                                   ? embarriladoVencido
                                     ? <AlertTriangle size={9} className="shrink-0 text-red-600" />
@@ -4716,158 +4847,34 @@ export default function ProduccionClient({
                     <p className="p-4 text-sm text-gray-400">No hay cocciones este mes.</p>
                   )}
                   <p className="p-4 text-[11px] text-gray-400">
-                    Tocá una cocción para incluirla o sacarla del presupuesto. Para moverla de día hay que usar el
-                    calendario en un computador: el arrastre no funciona en pantalla táctil.
+                    Tocá una cocción para incluirla o sacarla del presupuesto. Para moverla de día, mantenela apretada
+                    un momento y arrastrala sobre la grilla del mes — o abrí su detalle y usá &quot;Mover a otro día&quot;.
                   </p>
                 </div>
 
-                {/* Portal: el tooltip se pinta en document.body, en coordenadas de
-                    pantalla — así ninguna celda ni contenedor con scroll lo recorta,
-                    sin importar en qué borde de la grilla esté el chip. */}
-                {tooltipHover && typeof document !== 'undefined' && createPortal(
-                  (() => {
-                    const l = tooltipHover.lote
-                    const rect = tooltipHover.rect
-                    const noLlega = !l.llegaATiempo
-                    const marcado = !l.enCurso && estaSeleccionado(l)
-                    const embarriladoVencido = l.enCurso && !!l.fechaEmbarriladoReal && l.fechaEmbarriladoReal < calendarioCobertura.hoyISO
-
-                    return (
-                      <div
-                        ref={tooltipRef}
-                        style={{
-                          position: 'fixed',
-                          // Mientras no se midió el panel real (tooltipPos aún
-                          // null, primera pasada tras abrir), se monta invisible
-                          // y fuera de pantalla — nunca se ve en la posición
-                          // "adivinada" de antes, ni parpadea al reubicarse.
-                          left: tooltipPos?.left ?? -9999,
-                          top: tooltipPos?.top ?? -9999,
-                          width: 224, // w-56
-                          zIndex: 9999,
-                          visibility: tooltipPos ? 'visible' : 'hidden',
-                        }}
-                        onMouseEnter={() => abrirTooltip(l, rect)}
-                        onMouseLeave={programarCierreTooltip}
-                        className="max-h-[70vh] overflow-y-auto rounded-lg bg-gray-900 p-2.5 text-[11px] font-normal text-white shadow-xl"
-                      >
-                        <p className="font-bold">
-                          {l.producto}
-                          {l.loteDe > 1 && <span className="ml-1 font-normal text-gray-400">· cocción {l.loteNro} de {l.loteDe}</span>}
-                        </p>
-                        <p className="mt-1 text-gray-300">
-                          {l.enCurso
-                            ? 'Ya está fermentando — no hay que cocerla'
-                            : `${l.categoria === 'kombucha' ? 'Kombuchería' : 'Cervecería'} · ${l.leadTimeSemanas} semanas en tanque`}
-                        </p>
-                        <p className="mt-1.5">
-                          <span className="text-gray-400">{l.enCurso ? 'Salen:' : 'Cocer:'}</span> <strong>{fNum(l.litros)} L</strong>
-                          {l.enCurso && (
-                            <>
-                              <span className="text-gray-400"> en </span><strong>{l.tanque}</strong>
-                              <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
-                            </>
-                          )}
-                        </p>
-                        {/* Elegir el tanque a mano decide dos cosas a la vez: EN CUÁL se
-                            cuece (coordina la ocupación real, nunca desplaza lo que ya está
-                            adentro) y CUÁNTO — se llena entero en vez de sólo lo que pedía
-                            el reorden, y el excedente corre la próxima cocción más adelante
-                            (mirar "Alcanza hasta" abajo). "Automático" vuelve al criterio
-                            del modelo. */}
-                        {!l.enCurso && (
-                          <div className="mt-1">
-                            <select
-                              value={l.tanqueManual ? l.tanque : ''}
-                              onChange={ev => anclarTanque(l.producto, l.loteNro, ev.target.value)}
-                              className="w-full rounded border border-white/20 bg-gray-800 px-1.5 py-1 text-[11px] font-bold text-white focus:outline-none"
-                            >
-                              <option value="">Automático — {l.tanque} ({fNum(l.capacidadTanque)} L)</option>
-                              {ocupacionPlanta.tanques
-                                .filter(t => t.categoria === l.categoria)
-                                .sort((a, b) => a.capacidadLitros - b.capacidadLitros)
-                                .map(t => (
-                                  <option key={t.tanque} value={t.tanque}>{t.tanque} ({fNum(t.capacidadLitros)} L)</option>
-                                ))}
-                            </select>
-                          </div>
-                        )}
-                        <p>
-                          <span className="text-gray-400">
-                            {l.enCurso ? (l.fechaEmbarriladoReal ? 'Fecha embarrilado (ERP):' : 'Estimado (sin fecha ERP):') : 'Queda listo:'}
-                          </span>{' '}
-                          <strong>{new Date((l.enCurso ? (l.fechaEmbarriladoReal ?? l.fechaListo) : l.fechaListo) + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
-                        </p>
-                        {!l.enCurso && (
-                          <p>
-                            <span className="text-gray-400">Alcanza hasta:</span>{' '}
-                            <strong>{new Date(l.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</strong>
-                            <span className="text-gray-400"> (ahí toca cocer de nuevo)</span>
-                          </p>
-                        )}
-                        {l.tanqueManual && (
-                          <p className="mt-1.5 text-emerald-300">
-                            Tanque elegido a mano: se cuece lleno, más de lo que pedía el reorden. El excedente
-                            queda como stock y corre la próxima cocción — por eso alcanza hasta más adelante.
-                          </p>
-                        )}
-                        {l.enCurso && embarriladoVencido && (
-                          <p className="mt-1.5 font-bold text-red-400">Atraso de embarrilado</p>
-                        )}
-                        {l.enCurso && !embarriladoVencido && (
-                          <p className="mt-1.5 text-sky-300">
-                            Cocción que ya ocurrió: está en el tanque ahora. El tanque se libera ese día y esos
-                            litros recién ahí se pueden vender.
-                          </p>
-                        )}
-                        {l.conAlarma && !l.enCurso && (
-                          <p className="mt-1.5 text-amber-300">Este producto ya tiene alarma de quiebre activa.</p>
-                        )}
-                        {noLlega && (
-                          <p className="mt-1.5 font-bold text-red-400">
-                            No llega: el stock se agota cerca del{' '}
-                            {new Date(l.fechaAgotamiento + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} y
-                            esta cocción recién queda lista después.
-                          </p>
-                        )}
-                        {l.diasTarde > 0 && !noLlega && (
-                          <p className="mt-1.5 text-purple-300">
-                            Se corrió {l.diasTarde} {l.diasTarde === 1 ? 'día' : 'días'} de la fecha ideal
-                            ({new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}) porque
-                            el tanque no estaba libre antes — igual llega a tiempo.
-                          </p>
-                        )}
-                        {l.movidoManual && (
-                          <p className="mt-1.5 font-bold text-[#E6C34A]">
-                            Movida a mano a esta fecha.
-                            {l.diasTarde > 0 && ` Se pidió para el ${new Date(l.fechaObjetivo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })} pero no había tanque libre de su línea hasta acá.`}
-                            {' '}Las cocciones siguientes de este producto se recalcularon con el forecast.
-                          </p>
-                        )}
-                        {!l.enCurso && (
-                          <p className="mt-1.5 border-t border-white/15 pt-1.5 text-[10px] text-gray-400">
-                            {marcado ? 'Incluida en el presupuesto — clic para sacarla.' : 'Fuera del presupuesto — clic para incluirla.'}
-                            {' '}Arrastrala a otro día para moverla.
-                          </p>
-                        )}
-                        {/* La flechita apunta desde el mismo lado por el que se abrió —
-                            abajo del panel cuando abre hacia arriba, arriba cuando abre
-                            hacia abajo — no necesariamente al centro exacto del chip si
-                            el panel se clampeó cerca de un borde de la pantalla. Sólo se
-                            pinta una vez que se sabe de qué lado abrió (tooltipPos ya
-                            calculado); durante la pasada de medición no importa, el panel
-                            entero está invisible todavía. */}
-                        {tooltipPos && (
-                          <div
-                            className={`absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900 ${
-                              tooltipPos.abreAbajo ? '-top-1' : 'top-full -translate-y-1'
-                            }`}
-                          />
-                        )}
-                      </div>
-                    )
-                  })(),
-                  document.body
+                {/* Detalle de la cocción: preview al pasar el cursor, panel
+                    fijado al hacer clic. Vive en un portal a document.body
+                    (dentro del componente) para que ninguna celda con scroll
+                    lo recorte, sin importar en qué borde de la grilla esté. */}
+                {detalleCoccion && (
+                  <PopoverCoccion
+                    lote={detalleCoccion.lote}
+                    rect={detalleCoccion.rect}
+                    modo={detalleCoccion.modo}
+                    hoyISO={calendarioCobertura.hoyISO}
+                    marcado={!detalleCoccion.lote.enCurso && estaSeleccionado(detalleCoccion.lote)}
+                    tanques={ocupacionPlanta.tanques}
+                    fNum={fNum}
+                    onAlternar={() => alternarLote(detalleCoccion.lote)}
+                    onAnclarTanque={t => anclarTanque(detalleCoccion.lote.producto, detalleCoccion.lote.loteNro, t)}
+                    onMoverFecha={f => {
+                      anclarCoccion(detalleCoccion.lote.producto, detalleCoccion.lote.loteNro, f)
+                      cerrarDetalle()
+                    }}
+                    onCerrar={cerrarDetalle}
+                    onMouseEnter={detalleCoccion.modo === 'preview' ? cancelarCierrePreview : undefined}
+                    onMouseLeave={detalleCoccion.modo === 'preview' ? programarCierrePreview : undefined}
+                  />
                 )}
 
                   <p className="mt-3 text-xs text-gray-400">
@@ -4886,7 +4893,9 @@ export default function ProduccionClient({
                     adelantás, la que viene se corre; si la atrasás, se acerca) y el presupuesto de abajo se ajusta con
                     sus nuevas fechas de compra. Una cocción movida no puede saltarse la planta: si ese día no hay
                     tanque libre de su línea, no hay cupo de sala o es feriado, cae en el primer día que sí se pueda y
-                    el tooltip lo dice. Pasá el cursor para ver litros, tanque, cuándo queda listo y hasta cuándo alcanza. Borde punteado = sugerencia sin confirmar; borde azul lleno = <strong>ya está fermentando</strong> (no hay que
+                    el panel de detalle lo dice. Pasá el cursor por una cocción para ver litros, tanque, cuándo queda listo y hasta
+                    cuándo alcanza; <strong>hacé clic para fijar el panel</strong> y desde ahí incluirla en el presupuesto, cambiarle el
+                    tanque o moverla de fecha. Borde punteado = sugerencia sin confirmar; borde azul lleno = <strong>ya está fermentando</strong> (no hay que
                     cocerla: se muestra en la fecha real de embarrilado que trae el ERP, que es cuando entra a bodega y
                     se libera el fermentador); borde azul con ⚠ = esa fecha de embarrilado <strong>ya pasó</strong> y el
                     tanque sigue con producto según el ERP — vale la pena confirmar en planta si es un dato viejo o si
@@ -6297,6 +6306,42 @@ export default function ProduccionClient({
                 cubreHasta,
               })}
             />
+          )}
+
+          {/* Fantasma del arrastre: sigue al puntero mientras se mueve una
+              cocción o una sugerencia. Con el drag nativo lo dibujaba el
+              navegador (una captura pálida del elemento); con Pointer Events
+              hay que pintarlo, y de paso queda mucho más informativo — dice
+              qué se está moviendo y si el día bajo el cursor lo acepta.
+              `pointer-events-none` es obligatorio: sin eso, el propio
+              fantasma sería el elemento que `elementFromPoint` encuentra bajo
+              el dedo y nunca se detectaría la celda de destino. */}
+          {arrastre && typeof document !== 'undefined' && createPortal(
+            <div
+              // `prod-root`: el portal sale del árbol del módulo y sin esta
+              // clase el reset global deja el padding del fantasma en 0 (ver
+              // el comentario largo en PopoverCoccion.tsx).
+              className="prod-root pointer-events-none fixed z-[10000] -translate-x-1/2 -translate-y-[130%]"
+              style={{ left: arrastre.x, top: arrastre.y }}
+            >
+              <div className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold shadow-xl ring-1 ${
+                arrastre.diaDestino
+                  ? 'bg-[#0F3D2E] text-white ring-white/20'
+                  : 'bg-white text-gray-500 ring-gray-200'
+              }`}>
+                <Move size={12} className="shrink-0" />
+                <span className="max-w-[170px] truncate">{arrastre.carga.producto}</span>
+                <span className={arrastre.diaDestino ? 'text-white/60' : 'text-gray-400'}>
+                  {fNum(arrastre.carga.litros)} L
+                </span>
+              </div>
+              {arrastre.diaDestino && (
+                <p className="mt-1 text-center text-[10px] font-bold text-[#0F3D2E]">
+                  {new Date(arrastre.diaDestino + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                </p>
+              )}
+            </div>,
+            document.body,
           )}
         </div>
       </main>

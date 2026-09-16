@@ -1448,3 +1448,68 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
 .prod-root .prod-hover-icon:hover {
   transform: scale(1.08);
 }
+
+/* ═══════════════ Calendario de cocciones ═══════════════
+   El arrastre dejó de usar la API nativa de HTML5 y pasó a Pointer Events
+   (ver useArrastreCalendario.ts), así que el feedback que antes dibujaba el
+   navegador —el "fantasma" translúcido del elemento— ahora es nuestro. */
+
+/* Chip de cocción y tarjeta de sugerencia. `touch-action: manipulation` deja
+   pasar el scroll vertical con el dedo (el long-press que levanta la cocción
+   lo maneja el hook por su cuenta) pero mata el retardo de 300ms del
+   doble-tap, que es lo que hacía sentir lento el toque en el teléfono. */
+.prod-root .prod-chip {
+  touch-action: manipulation;
+  transition: transform 0.15s var(--spring), box-shadow 0.15s var(--spring),
+              opacity 0.15s ease-out, border-color 0.15s ease-out;
+  /* El texto no debe seleccionarse al mantener apretado para arrastrar: sin
+     esto, el gesto de levantar una cocción en el teléfono dispara la lupa de
+     selección de texto del sistema y tapa justo lo que se está moviendo. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.prod-root .prod-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -4px rgba(15, 61, 46, 0.35);
+}
+
+/* La manija sólo aparece al acercarse: estando siempre visible robaba ancho
+   al nombre del producto, que es lo único que se alcanza a leer en un chip
+   de una celda de calendario. */
+.prod-root .prod-chip .prod-chip-grip {
+  transition: opacity 0.15s ease-out;
+}
+.prod-root .prod-chip:hover .prod-chip-grip {
+  opacity: 0.45;
+}
+
+/* Celda de día. La transición va en el borde y el fondo para que el
+   resaltado del destino durante el arrastre entre suave en vez de parpadear
+   celda por celda mientras el puntero cruza la grilla. */
+.prod-root .prod-dia {
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out,
+              box-shadow 0.15s ease-out, opacity 0.15s ease-out;
+}
+
+/* Día bajo el puntero: además del anillo, un latido muy corto que confirma
+   "acá se suelta". Es la señal que el drag nativo nunca dio. */
+.prod-root .prod-dia-activo {
+  animation: prod-latido 0.9s ease-in-out infinite;
+}
+@keyframes prod-latido {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.4); }
+  50%      { box-shadow: 0 0 0 5px rgba(201, 162, 39, 0.18); }
+}
+
+/* Panel de detalle de la cocción: entra con un desplazamiento mínimo. No se
+   anima el `top`/`left` —los calcula JS midiendo el panel— sino opacidad y
+   escala, que el compositor resuelve sin reflow. */
+.prod-root .prod-popover,
+.prod-popover {
+  animation: prod-popover-in 0.16s var(--spring) both;
+  transform-origin: center top;
+}
+@keyframes prod-popover-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
