@@ -843,6 +843,25 @@ export default function ProduccionClient({
     return mapa
   }, [stock])
 
+  /* ── Conversión litros → unidades para la serie del gráfico de Forecasting ──
+     Sólo tiene sentido cuando la serie elegida es un producto×envase
+     concreto: "Todos los formatos" o "Todos los productos" no tienen un
+     tamaño de envase único que convertir. Barril es exacto (30L o 50L, el
+     bucket ES el tamaño — ver bucketEnvase en reglas.ts); lata se estima del
+     propio inventario físico porque el bucket mezcla 354ml y 473ml (mismo
+     criterio que litrosPorLataPorProducto arriba, reutilizado acá). */
+  const unidadEnvaseSerieActual = useMemo(() => {
+    if (!serieActual || serieActual.nivel !== 'producto_envase' || !serieActual.envaseBucket || !serieActual.producto) return null
+    const bucket = serieActual.envaseBucket as EnvaseBucket
+    if (bucket === 'barril_30') return { litrosPorUnidad: 30, nombre: UNIDAD_ENVASE.barril_30 }
+    if (bucket === 'barril_50') return { litrosPorUnidad: 50, nombre: UNIDAD_ENVASE.barril_50 }
+    if (bucket === 'lata') {
+      const litrosPorLata = litrosPorLataPorProducto.get(serieActual.producto)
+      return litrosPorLata ? { litrosPorUnidad: litrosPorLata, nombre: UNIDAD_ENVASE.lata } : null
+    }
+    return null
+  }, [serieActual, litrosPorLataPorProducto])
+
   const envasesCoberturaDisponibles = useMemo(
     () => productoCobertura === TODOS_PRODUCTOS
       ? ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.envaseBucket === b))
@@ -3244,6 +3263,19 @@ export default function ProduccionClient({
                     <p className="mt-1 text-sm text-gray-500">
                       {serieActual?.label ?? '—'} · el área ámbar marca la temporada alta (Dic–Feb).
                     </p>
+                    {/* La conversión a unidades sólo aparece cuando la serie elegida
+                        es un producto×envase concreto (no "todos los formatos" ni un
+                        consolidado) — ahí sí hay un tamaño de envase único con el que
+                        convertir litros a barriles/latas. Se aclara la base acá para
+                        que el número de la tabla/tooltip no parezca sacado de la nada. */}
+                    {unidadEnvaseSerieActual && (
+                      <p className="mt-0.5 text-xs font-semibold text-gray-400">
+                        pasa el mouse por el gráfico para ver también la cantidad de {unidadEnvaseSerieActual.nombre} pronosticadas
+                        {unidadEnvaseSerieActual.nombre === 'latas'
+                          ? ` (≈${Math.round(unidadEnvaseSerieActual.litrosPorUnidad * 1000)} ml/lata, estimado del inventario físico)`
+                          : ` (${unidadEnvaseSerieActual.litrosPorUnidad} L/barril)`}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {/* Interruptor de la descomposición: por defecto apagado
@@ -3419,9 +3451,22 @@ export default function ProduccionClient({
                                   const texto = Array.isArray(valor)
                                     ? `${fNum(Number(valor[0]))} – ${fNum(Number(valor[1]))} L`
                                     : `${fNum(Number(valor))} L`
+                                  // Además de litros, cuántos envases son — sólo tiene sentido
+                                  // para las series de demanda (no para tendencia/estacionalidad,
+                                  // que son componentes del modelo, no litros vendibles) y sólo
+                                  // cuando la serie elegida es un producto×envase con conversión
+                                  // conocida (ver unidadEnvaseSerieActual).
+                                  const mostrarUnidades = unidadEnvaseSerieActual != null &&
+                                    ['ventaProyectada', 'ventaReal', 'ritmo', 'rango'].includes(String(entrada.dataKey))
+                                  const unidadesTexto = mostrarUnidades
+                                    ? Array.isArray(valor)
+                                      ? `${fNum(Math.round(Number(valor[0]) / unidadEnvaseSerieActual!.litrosPorUnidad))} – ${fNum(Math.round(Number(valor[1]) / unidadEnvaseSerieActual!.litrosPorUnidad))} ${unidadEnvaseSerieActual!.nombre}`
+                                      : `≈ ${fNum(Math.round(Number(valor) / unidadEnvaseSerieActual!.litrosPorUnidad))} ${unidadEnvaseSerieActual!.nombre}`
+                                    : null
                                   return (
                                     <p key={String(entrada.dataKey)} style={{ color: entrada.color }} className="font-semibold">
                                       {entrada.name}: {texto}
+                                      {unidadesTexto && <span className="ml-1 font-normal text-gray-400">({unidadesTexto})</span>}
                                     </p>
                                   )
                                 })}
