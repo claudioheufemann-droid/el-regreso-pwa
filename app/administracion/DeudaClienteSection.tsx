@@ -17,7 +17,7 @@
  */
 import { Fragment, useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from 'recharts'
-import { ChevronDown, ChevronRight, Search, FileDown, MessageCircle, Phone, Info, X, Users } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, FileDown, MessageCircle, Phone, Info, X, Users } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCorto } from '@/lib/types'
 import { diasMoraDeudor } from '@/lib/cobranza'
@@ -63,6 +63,9 @@ interface Deudor extends DeudorRaw {
   deuda_comercial: number
   saldo_comercial: number
 }
+
+type SortKey = 'cliente' | 'vendedor' | 'deuda' | 'dias' | 'saldo' | 'barriles' | 'ultimoPago'
+interface SortConfig { key: SortKey; dir: 'asc' | 'desc' }
 
 interface Props {
   initialDeudores: DeudorRaw[]
@@ -194,6 +197,7 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
   const [estado, setEstado] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
   const [searchText, setSearchText] = useState('')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null)
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const [cobranza, setCobranza] = useState<DatosCobranza | null>(null)
   const [verSaldoNoVencido, setVerSaldoNoVencido] = useState(false)
@@ -211,6 +215,36 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
     if (searchText && !d.nombre_fantasia.toLowerCase().includes(searchText.toLowerCase())) return false
     return true
   }), [universo, cartera, estado, searchText])
+
+  const filtradosOrdenados = useMemo(() => {
+    if (!sortConfig) return filtrados
+    const { key, dir } = sortConfig
+    const mult = dir === 'asc' ? 1 : -1
+    const valor = (d: Deudor): string | number => {
+      switch (key) {
+        case 'cliente': return d.nombre_fantasia
+        case 'vendedor': return vendedorCanonico(d.vendedor) || ''
+        case 'deuda': return d.deuda_comercial
+        case 'dias': return diasMoraDe(d)
+        case 'saldo': return d.saldo_comercial
+        case 'barriles': return d.barriles_adeudados
+        case 'ultimoPago': return d.ultimo_pago ?? ''
+      }
+    }
+    return [...filtrados].sort((a, b) => {
+      const va = valor(a), vb = valor(b)
+      if (typeof va === 'string' || typeof vb === 'string') return String(va).localeCompare(String(vb)) * mult
+      return (va - vb) * mult
+    })
+  }, [filtrados, sortConfig])
+
+  function toggleSort(key: SortKey) {
+    setSortConfig(prev => {
+      if (prev?.key === key) return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      // Texto empieza A→Z; números/fecha empiezan con lo más urgente primero (mayor/más antiguo)
+      return { key, dir: key === 'cliente' || key === 'vendedor' ? 'asc' : 'desc' }
+    })
+  }
 
   const totals = useMemo(() => ({
     deudores: filtrados.length,
@@ -254,7 +288,7 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
           </h2>
         </div>
         {filtrados.length > 0 && (
-          <button onClick={() => exportarCSV(filtrados)}
+          <button onClick={() => exportarCSV(filtradosOrdenados)}
             style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 9,
               border: `1px solid ${C.line}`, background: C.card, color: C.text, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
             <FileDown size={14} /> Exportar CSV
@@ -399,19 +433,40 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
             <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: C.bg, borderBottom: `1px solid ${C.line}` }}>
-                  {['Cliente', 'Vendedor', 'Deuda Vencida', 'Días Vencida', 'Saldo Total', 'Barriles', 'Último Pago', ''].map(h => (
-                    <th key={h} style={{
-                      padding: '10px 14px',
-                      textAlign: ['Deuda Vencida', 'Saldo Total', 'Barriles', 'Días Vencida'].includes(h) ? 'right' : 'left',
-                      fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap',
-                    }}>
-                      {h}
-                    </th>
-                  ))}
+                  {([
+                    { label: 'Cliente', key: 'cliente', align: 'left' },
+                    { label: 'Vendedor', key: 'vendedor', align: 'left' },
+                    { label: 'Deuda Vencida', key: 'deuda', align: 'right' },
+                    { label: 'Días Vencida', key: 'dias', align: 'right' },
+                    { label: 'Saldo Total', key: 'saldo', align: 'right' },
+                    { label: 'Barriles', key: 'barriles', align: 'right' },
+                    { label: 'Último Pago', key: 'ultimoPago', align: 'left' },
+                    { label: '', key: null, align: 'center' },
+                  ] as { label: string; key: SortKey | null; align: 'left' | 'right' | 'center' }[]).map(col => {
+                    const activo = sortConfig?.key === col.key
+                    return (
+                      <th key={col.label || 'acciones'} onClick={col.key ? () => toggleSort(col.key as SortKey) : undefined}
+                        style={{
+                          padding: '10px 14px',
+                          textAlign: col.align,
+                          fontSize: 11, fontWeight: 700, color: activo ? C.gold : C.muted, letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap',
+                          cursor: col.key ? 'pointer' : 'default', userSelect: 'none',
+                        }}>
+                        {col.key ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, justifyContent: col.align === 'right' ? 'flex-end' : 'flex-start' }}>
+                            {col.label}
+                            {activo
+                              ? (sortConfig!.dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)
+                              : <ChevronsUpDown size={11} style={{ opacity: 0.4 }} />}
+                          </span>
+                        ) : col.label}
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {filtrados.map(d => {
+                {filtradosOrdenados.map(d => {
                   const abierto = expandedRow === d.id
                   // Estimado rápido salvo que esta fila esté desplegada y ya
                   // haya llegado el detalle real (fecha_pedido + dias_pago).
