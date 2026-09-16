@@ -92,10 +92,20 @@ export async function GET(req: Request) {
   // Compras por proveedor — nueva tabla compras_historico (informe "Compras
   // detalladas" del ERP, cargado a mano). Mismo tratamiento que restaurante:
   // ciclo interno + Prophet + reparto a semanas, pero acá con una dimensión
-  // extra (proveedor) que el resto de las series no tiene.
-  const { data: filasCompras, error: errCompras } = await supabase.rpc('compras_por_ciclo')
-  if (errCompras) return NextResponse.json({ error: errCompras.message }, { status: 500 })
-  const comprasFilas = (filasCompras ?? []) as { ciclo: string; proveedor: string; monto: number }[]
+  // extra (proveedor). Con 645 proveedores esto son ~2.900 filas (ciclo ×
+  // proveedor) — muy por encima de las 1000 que PostgREST devuelve por
+  // default en un .rpc() sin paginar, así que hay que pedirlo por páginas
+  // (encontrado 15-sep-2026: sin esto, sólo entraban los ciclos más viejos
+  // de cada proveedor —la función ordena por ciclo— y el corte de "≥12
+  // ciclos" quedaba mal calculado para casi todos).
+  const comprasFilas: { ciclo: string; proveedor: string; monto: number }[] = []
+  for (let offset = 0; ; offset += 1000) {
+    const { data: pagina, error: errCompras } = await supabase.rpc('compras_por_ciclo').range(offset, offset + 999)
+    if (errCompras) return NextResponse.json({ error: errCompras.message }, { status: 500 })
+    if (!pagina || pagina.length === 0) break
+    comprasFilas.push(...(pagina as { ciclo: string; proveedor: string; monto: number }[]))
+    if (pagina.length < 1000) break
+  }
 
   const comprasGeneral = new Map<string, number>()
   const comprasPorProveedor = new Map<string, Map<string, number>>()
