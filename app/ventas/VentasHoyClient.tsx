@@ -1649,7 +1649,12 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
         <div style={{
           display: 'grid',
           gridTemplateColumns: isDesktop ? 'repeat(auto-fit, minmax(480px, 1fr))' : '1fr',
-          gap: isDesktop ? 20 : 14, alignItems: 'start',
+          // stretch (no 'start'): en desktop "Lo que gano yo" y el hero de
+          // Ventas quedan como dos tarjetas de igual alto en la misma fila —
+          // antes cada una tomaba solo el alto de su propio contenido y el
+          // hero (que además tiene Mix de Productos abajo) quedaba visiblemente
+          // más alto, con el borde inferior de las dos tarjetas desparejo.
+          gap: isDesktop ? 20 : 14, alignItems: isDesktop ? 'stretch' : 'start',
         }}>
         {/* Remuneración variable propia (cláusula NOVENA del contrato). Va
             arriba de todo, antes del hero, por pedido de Claudio: es lo que

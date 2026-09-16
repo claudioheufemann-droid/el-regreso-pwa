@@ -63,6 +63,21 @@ export default function MiComision({ desde, hasta, nombrePeriodo, isDesktop = fa
     return () => { vivo = false }
   }, [desde, hasta])
 
+  // Mini "de dónde sale tu comisión" — antes de los returns tempranos
+  // (regla de hooks). Mismo cálculo que porCategoria en HojaDetalle pero
+  // sólo top 2, para el frente de la tarjeta: en desktop le da a "Lo que
+  // gano yo" el mismo tipo de contenido (un mini mix) que ya tenía el hero
+  // de Ventas de al lado con su Mix de Productos, así las dos tarjetas
+  // quedan con un alto y una densidad de información parecidos en vez de
+  // que ésta termine visiblemente más corta.
+  const porCategoriaMini = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of data?.productos ?? []) {
+      m.set(p.categoria, (m.get(p.categoria) ?? 0) + p.ventaNeta)
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2)
+  }, [data])
+
   if (error) return null           // sin permiso o error: la tarjeta no existe
   if (!data) return <Esqueleto />
 
@@ -81,6 +96,7 @@ export default function MiComision({ desde, hasta, nombrePeriodo, isDesktop = fa
         style={{
           background: C.hero, borderRadius: 18, padding: isDesktop ? 24 : 18, width: '100%',
           border: 'none', textAlign: 'left', cursor: 'pointer', font: 'inherit', color: '#fff',
+          ...(isDesktop ? { height: '100%', display: 'flex', flexDirection: 'column' } : {}),
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -214,6 +230,38 @@ export default function MiComision({ desde, hasta, nombrePeriodo, isDesktop = fa
               — ya está comisionando, pero vale la pena cobrarlo
             </span>
           </p>
+        )}
+
+        {/* marginTop:'auto' — empuja este bloque al piso de la tarjeta,
+            ocupando el espacio que sobra ahora que la tarjeta se estira al
+            alto del hero de Ventas (ver grid en VentasHoyClient). */}
+        {isDesktop && porCategoriaMini.length > 0 && (
+          <div style={{ marginTop: 'auto', paddingTop: 18 }}>
+            <div style={{ height: 1, background: 'rgba(255,255,255,.1)', marginBottom: 14 }} />
+            <p style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', marginBottom: 10 }}>
+              DE DÓNDE SALE TU COMISIÓN
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+              {(() => {
+                const total = porCategoriaMini.reduce((s, [, v]) => s + Math.max(0, v), 0)
+                return porCategoriaMini.map(([cat, venta]) => {
+                  const pct = total > 0 ? (Math.max(0, venta) / total) * 100 : 0
+                  const color = cat === 'Kombucha' ? '#34D399' : cat === 'Cerveza' ? '#F59E0B' : '#A78BFA'
+                  return (
+                    <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, width: 76, flexShrink: 0 }}>{cat}</span>
+                      <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,.1)', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3 }} />
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 800, color, width: 76, textAlign: 'right', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        {fComision(venta * TASA_COMISION)}
+                      </span>
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+          </div>
         )}
       </button>
 
