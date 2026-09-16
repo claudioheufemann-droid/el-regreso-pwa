@@ -14,7 +14,7 @@
  * originó la foto ya no exista en memoria.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { upsertOrQueue } from './offlineQueue'
+import { upsertOrQueue, ensureFreshSession } from './offlineQueue'
 
 interface UploadSpec {
   bucket: string           // ej. 'terreno-fotos'
@@ -102,6 +102,7 @@ export async function queuePhoto(spec: UploadSpec, file: File | Blob): Promise<v
 export async function flushPhotoQueue(supabase: SupabaseClient): Promise<void> {
   const pending = await getAllPhotos()
   if (pending.length === 0) return
+  await ensureFreshSession(supabase)
 
   for (const p of pending) {
     try {
@@ -145,6 +146,7 @@ export async function uploadConTimeout(
   file: File,
   timeoutMs = 7000,
 ): Promise<string | null> {
+  await ensureFreshSession(supabase)
   const upload = supabase.storage
     .from(spec.bucket)
     .upload(spec.path, file, { upsert: true, contentType: file.type || 'image/jpeg' })

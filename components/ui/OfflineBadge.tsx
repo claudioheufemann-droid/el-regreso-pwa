@@ -28,12 +28,24 @@ export default function OfflineBadge() {
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
 
+    // El navegador pausa el timer de auto-refresh de supabase-js mientras la
+    // pestaña/PWA está en segundo plano (pantalla apagada, app minimizada en
+    // terreno). Sin esto el token queda vencido y el próximo flush de la
+    // cola offline sale no-autenticado — ver lib/offlineQueue.ts.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') supabase.auth.startAutoRefresh()
+      else supabase.auth.stopAutoRefresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    if (document.visibilityState === 'visible') supabase.auth.startAutoRefresh()
+
     const unsub1 = onQueueChange(setPendientesDatos)
     const unsub2 = onPhotoQueueChange(setPendientesFotos)
 
     return () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
+      document.removeEventListener('visibilitychange', onVisible)
       unsub1()
       unsub2()
     }

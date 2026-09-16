@@ -64,6 +64,22 @@ export function queuedCount(): number {
 }
 
 /**
+ * El vendedor pasa horas en terreno con la pantalla apagada o la pestaña en
+ * segundo plano entre visita y visita. Los navegadores móviles pausan los
+ * timers en background, así que el refresh automático del token de sesión
+ * (programado por supabase-js) muchas veces no llega a dispararse solo. Si
+ * no se fuerza acá, el upsert sale con un access_token vencido: Postgres lo
+ * trata como no-autenticado y el RLS (`vendedor_id = auth.uid()`) rechaza la
+ * fila con 403 — indistinguible de un error de red, así que quedaba
+ * reintentándose cada 20s hasta descartarse silenciosamente a los ~10min,
+ * perdiendo el pedido/jornada sin avisar. getSession() refresca sola si el
+ * token está vencido o a punto de vencer.
+ */
+export async function ensureFreshSession(supabase: SupabaseClient): Promise<void> {
+  try { await supabase.auth.getSession() } catch {}
+}
+
+/**
  * Intenta escribir de inmediato. Si falla por red, encola para reintento
  * automático y no lanza — el flujo de la UI sigue sin bloquearse.
  */
@@ -74,6 +90,7 @@ export async function upsertOrQueue(
   onConflict = 'id',
 ): Promise<{ ok: boolean; queued: boolean }> {
   try {
+    await ensureFreshSession(supabase)
     const { error } = await supabase.from(table).upsert(payload, { onConflict })
     if (error) throw error
     return { ok: true, queued: false }
@@ -97,6 +114,7 @@ export async function upsertOrQueue(
 export async function flushQueue(supabase: SupabaseClient): Promise<void> {
   const queue = readQueue()
   if (queue.length === 0) return
+  await ensureFreshSession(supabase)
   const remaining: QueuedOp[] = []
   const muertos: QueuedOp[] = []
   for (const op of queue) {

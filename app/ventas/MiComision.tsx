@@ -135,30 +135,33 @@ export default function MiComision({ desde, hasta, nombrePeriodo, isDesktop = fa
             mitad derecha en blanco. En mobile se mantienen las dos filas de
             siempre. */}
         {isDesktop ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
+          // 2x2, no 4 en una fila: con montos en pesos chilenos (hasta 11
+          // caracteres) 4 columnas de 1fr quedaban tan angostas que el
+          // nowrap desbordaba una cifra encima de la siguiente columna.
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '18px 24px' }}>
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 12.5, color: '#94A3B8' }}>Entregado</p>
-              <p style={{ fontSize: 25, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 25, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {fComision(resumen.ventaNeta)}
               </p>
               <p style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>base de tu comisión</p>
             </div>
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 12.5, color: '#94A3B8' }}>Por entregar</p>
-              <p style={{ fontSize: 25, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 25, fontWeight: 800, color: '#F59E0B', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {fComision(porEntregar.ventaNeta)}
               </p>
               <p style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 2 }}>aún no cuenta</p>
             </div>
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 12.5, color: '#94A3B8' }}>Comisión 1%</p>
-              <p style={{ fontSize: 25, fontWeight: 800, color: '#34D399', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 25, fontWeight: 800, color: '#34D399', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {fComision(resumen.comision)}
               </p>
             </div>
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 12.5, color: '#94A3B8' }}>Bonos</p>
-              <p style={{ fontSize: 25, fontWeight: 800, color: resumen.variableTotal > resumen.comision ? '#F59E0B' : '#64748B', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 25, fontWeight: 800, color: resumen.variableTotal > resumen.comision ? '#F59E0B' : '#64748B', letterSpacing: '-0.5px', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {fComision(resumen.bonoEscala + resumen.bonoPago + resumen.bonoActivacion)}
               </p>
             </div>
