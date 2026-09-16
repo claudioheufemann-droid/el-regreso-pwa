@@ -219,7 +219,13 @@ export interface FilaVenta extends LineaVenta {
 }
 
 export interface DetalleCobranza {
-  /** Días exactos de mora del documento más antiguo con saldo. */
+  /**
+   * Días exactos de mora del documento más antiguo con saldo, contados desde
+   * `fecha_pedido` (cuándo la venta entró a nuestro sistema) + `dias_pago` —
+   * la misma fecha que usa cada documento de `vencidos`. Sólo cae al estimado
+   * por `external_fecha` del ERP cuando no se pudo reconstruir ningún
+   * documento (cliente sin ventas cargadas en la app).
+   */
   diasMoraMaxima: number
   /** Fecha de emisión del documento más antiguo con saldo (dato del ERP). */
   fechaDocumentoAntiguo: string | null
@@ -372,11 +378,12 @@ export function reconstruirCobranza(
   const diasPago = Number(deudor.dias_pago) || 0
   const fechaDocumentoAntiguo = deudor.external_fecha ? deudor.external_fecha.slice(0, 10) : null
 
-  // Días de mora del documento más antiguo con saldo. Sale del ERP, no de la
-  // reconstrucción: `external_fecha` es la emisión de ese documento y vence a
-  // los `dias_pago`. Verificado contra los tramos — un cliente con 180 días acá
+  // Estimado de respaldo cuando no se pudo reconstruir ningún documento
+  // (cliente sin ventas cargadas en la app, o deuda anterior al histórico):
+  // `external_fecha` es la emisión del remito según el ERP y vence a los
+  // `dias_pago`. Verificado contra los tramos — un cliente con 180 días acá
   // tiene el 100% de su deuda en el tramo +90, como corresponde.
-  const diasMoraMaxima = fechaDocumentoAntiguo
+  const diasMoraMaximaERP = fechaDocumentoAntiguo
     ? Math.max(0, diasEntre(sumarDias(fechaDocumentoAntiguo, diasPago), hoy))
     : 0
 
@@ -467,6 +474,15 @@ export function reconstruirCobranza(
     exceso -= quita
   }
   const vencidosFinal = vencidos.filter(d => d.monto > 1)
+
+  // Días de mora del documento más antiguo con saldo. Preferimos el que sale
+  // de la propia reconstrucción (fecha_pedido + dias_pago, "cuándo entró la
+  // venta a nuestro sistema"): es la misma fecha con la que se arma cada
+  // documento de `vencidosFinal`, así que la cifra de arriba no puede
+  // contradecir el detalle de abajo. El estimado por `external_fecha` (el
+  // remito del ERP) queda sólo como respaldo para los clientes sin ninguna
+  // venta reconstruida (79 de 171 no tienen histórico cargado).
+  const diasMoraMaxima = vencidosFinal.length > 0 ? vencidosFinal[0].diasMora : diasMoraMaximaERP
 
   return {
     diasMoraMaxima,

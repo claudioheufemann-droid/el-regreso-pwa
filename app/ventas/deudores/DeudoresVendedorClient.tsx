@@ -307,21 +307,24 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
   const avatar = avatarColorDe(d.nombre_fantasia)
   const bucketColor = BUCKET_COLOR[bucket]
 
-  // Días exactos de mora del documento más antiguo. Se calculan de la propia
-  // fila (external_fecha + dias_pago), así que se pueden mostrar en la lista
-  // sin desplegar nada ni pedir datos al servidor.
-  const diasMora = diasMoraDe(d)
+  // Estimado rápido (external_fecha + dias_pago), calculado de la propia fila
+  // para poder mostrarlo en la lista sin desplegar nada ni pedir datos al
+  // servidor. Una vez desplegada la tarjeta y llegado el detalle real
+  // (fecha_pedido + dias_pago, la fecha en que la venta entró a nuestro
+  // sistema), ese manda — mismo criterio que ya usaba el mensaje de WhatsApp.
+  const diasMoraEstimado = diasMoraDe(d)
 
   // El detalle por factura llega cuando se despliega la tarjeta; el mensaje de
   // WhatsApp lo usa si ya está, y si no igual sale con días y monto.
   const [cobranza, setCobranza] = useState<DatosCobranza | null>(null)
+  const diasMora = cobranza?.detalle.diasMoraMaxima ?? diasMoraEstimado
 
   const waTarget: WATarget = {
     nombre: d.nombre_fantasia, telefono: d.telefono,
     contexto: 'cobranza', alertTipo: 'cobranza',
     subtitulo: d.localidad ?? undefined,
     contacto: cobranza?.contacto?.contacto ?? null,
-    diasVencida: cobranza?.detalle.diasMoraMaxima ?? diasMora,
+    diasVencida: diasMora,
     // Se le cobra la deuda comercial, no la maquila.
     montoVencido: d.deuda_comercial,
     documentos: cobranza ? documentosParaWA(cobranza.detalle) : undefined,
@@ -1140,7 +1143,14 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                 </tr>
               </thead>
               <tbody>
-                {filteredDeudores.map((deudor) => (
+                {filteredDeudores.map((deudor) => {
+                  // Mientras la fila no esté desplegada usamos el estimado
+                  // rápido (external_fecha); una vez llega el detalle real de
+                  // ESTA fila (fecha_pedido + dias_pago), ese manda.
+                  const diasFila = expandedRow === deudor.id && cobranza
+                    ? cobranza.detalle.diasMoraMaxima
+                    : diasMoraDe(deudor)
+                  return (
                   <>
                     <tr
                       key={deudor.id}
@@ -1167,8 +1177,8 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                       </td>
                       {/* Días exactos de mora del documento más antiguo impago. */}
                       <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap',
-                        color: diasMoraDe(deudor) >= 60 ? '#f87171' : diasMoraDe(deudor) > 0 ? '#fbbf24' : 'var(--muted)' }}>
-                        {diasMoraDe(deudor) > 0 ? `${diasMoraDe(deudor)} días` : '—'}
+                        color: diasFila >= 60 ? '#f87171' : diasFila > 0 ? '#fbbf24' : 'var(--muted)' }}>
+                        {diasFila > 0 ? `${diasFila} días` : '—'}
                       </td>
                       <td style={{ padding: '11px 14px', textAlign: 'right', color: 'var(--cream)', fontWeight: 600 }}>
                         {formatCurrency(deudor.saldo_comercial)}
@@ -1207,7 +1217,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                                   contexto: 'cobranza', alertTipo: 'cobranza',
                                   subtitulo: deudor.localidad ?? undefined,
                                   contacto: cobranza?.contacto?.contacto ?? null,
-                                  diasVencida: cobranza?.detalle.diasMoraMaxima ?? diasMoraDe(deudor),
+                                  diasVencida: diasFila,
                                   montoVencido: deudor.deuda_comercial,
                                   documentos: cobranza ? documentosParaWA(cobranza.detalle) : undefined,
                                 })
@@ -1290,7 +1300,8 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                       </tr>
                     )}
                   </>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

@@ -413,7 +413,9 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
               <tbody>
                 {filtrados.map(d => {
                   const abierto = expandedRow === d.id
-                  const dias = diasMoraDe(d)
+                  // Estimado rápido salvo que esta fila esté desplegada y ya
+                  // haya llegado el detalle real (fecha_pedido + dias_pago).
+                  const dias = abierto && cobranza ? cobranza.detalle.diasMoraMaxima : diasMoraDe(d)
                   return (
                     <Fragment key={d.id}>
                       <tr
