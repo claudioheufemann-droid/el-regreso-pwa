@@ -865,6 +865,10 @@ export default function ProduccionClient({
       const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
       let demandaProyectada = 0, demandaProyectadaMin = 0, demandaProyectadaMax = 0
       let disponibleTotal = 0
+      // Bodega (físico, contable, listo para despachar) vs. fermentando
+      // (todavía dentro del tanque, sin envasar) — ver el comentario largo
+      // en la UI de más abajo sobre por qué NO se pueden sumar sin más.
+      let disponibleBodegaTotal = 0, disponibleFermentandoTotal = 0
       let hayDisponible = false
       let necesidadNeta = 0, necesidadNetaMin = 0, necesidadNetaMax = 0
       let latasACubrir = 0
@@ -885,7 +889,12 @@ export default function ProduccionClient({
         demandaProyectada += demandaProducto
         demandaProyectadaMin += demandaProductoMin
         demandaProyectadaMax += demandaProductoMax
-        if (disponibleProducto != null) { disponibleTotal += disponibleProducto; hayDisponible = true }
+        if (disponibleProducto != null) {
+          disponibleTotal += disponibleProducto
+          disponibleBodegaTotal += filaStock?.stockActualLitros ?? 0
+          disponibleFermentandoTotal += filaStock?.litrosEnProduccion ?? 0
+          hayDisponible = true
+        }
         necesidadNeta += disponibleProducto != null ? Math.max(demandaProducto - disponibleProducto, 0) : 0
         necesidadNetaMin += disponibleProducto != null ? Math.max(demandaProductoMin - disponibleProducto, 0) : 0
         necesidadNetaMax += disponibleProducto != null ? Math.max(demandaProductoMax - disponibleProducto, 0) : 0
@@ -905,6 +914,8 @@ export default function ProduccionClient({
         demandaProyectadaMin: Math.round(demandaProyectadaMin),
         demandaProyectadaMax: Math.round(demandaProyectadaMax),
         disponible: hayDisponible ? disponibleTotal : null,
+        disponibleBodega: hayDisponible ? Math.round(disponibleBodegaTotal) : null,
+        disponibleFermentando: hayDisponible ? Math.round(disponibleFermentandoTotal) : null,
         necesidadNeta, necesidadNetaMin, necesidadNetaMax,
         categoria: null,
         latasACubrir: latasACubrir > 0 ? latasACubrir : null,
@@ -938,7 +949,10 @@ export default function ProduccionClient({
       demandaProyectada: Math.round(demandaProyectada),
       demandaProyectadaMin: Math.round(demandaProyectadaMin),
       demandaProyectadaMax: Math.round(demandaProyectadaMax),
-      disponible, necesidadNeta, necesidadNetaMin, necesidadNetaMax,
+      disponible,
+      disponibleBodega: filaStock ? filaStock.stockActualLitros ?? 0 : null,
+      disponibleFermentando: filaStock ? filaStock.litrosEnProduccion : null,
+      necesidadNeta, necesidadNetaMin, necesidadNetaMax,
       categoria: serie.categoria as 'cerveza' | 'kombucha' | null, latasACubrir, litrosPorLata,
     }
   }, [productoCobertura, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, productosDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
@@ -971,7 +985,10 @@ export default function ProduccionClient({
       return {
         envase, demandaProyectada: Math.round(demandaProyectada),
         demandaMin: Math.round(demandaMin), demandaMax: Math.round(demandaMax),
-        disponible, necesidadNeta, necesidadNetaMin, necesidadNetaMax, latasACubrir,
+        disponible,
+        disponibleBodega: filaStock ? filaStock.stockActualLitros ?? 0 : null,
+        disponibleFermentando: filaStock ? filaStock.litrosEnProduccion : null,
+        necesidadNeta, necesidadNetaMin, necesidadNetaMax, latasACubrir,
       }
     })
     if (filas.length === 0) return null
@@ -1025,7 +1042,10 @@ export default function ProduccionClient({
       return [{
         producto, demandaProyectada: Math.round(demandaProyectada),
         demandaMin: Math.round(demandaMin), demandaMax: Math.round(demandaMax),
-        disponible, necesidadNeta, necesidadNetaMin, necesidadNetaMax, latasACubrir,
+        disponible,
+        disponibleBodega: filaStock ? filaStock.stockActualLitros ?? 0 : null,
+        disponibleFermentando: filaStock ? filaStock.litrosEnProduccion : null,
+        necesidadNeta, necesidadNetaMin, necesidadNetaMax, latasACubrir,
       }]
     })
     if (filas.length === 0) return null
@@ -3622,6 +3642,21 @@ export default function ProduccionClient({
                       <p className="mt-1 text-2xl font-black tabular-nums text-gray-800">
                         {resultadoCobertura.disponible != null ? `${fNum(resultadoCobertura.disponible)} L` : 'Sin dato'}
                       </p>
+                      {/* Este total SUMA bodega (físico, contable) + lo que todavía está
+                          fermentando en el tanque, sin envasar — a propósito, para que el
+                          modelo no sugiera cocer de más cuando ya hay un lote en camino
+                          (ver el comentario largo en page.tsx sobre litrosEnProduccion). Pero
+                          mostrar sólo el total confunde "cuánto puedo despachar hoy" con
+                          "cuánto va a existir" — desglosado acá para que no vuelva a pasar
+                          (caso real: Aguas Blancas Lata mostraba 1.540 L acá cuando en bodega
+                          había 168 L reales; el resto era el tanque en curso, repartido por
+                          el Split de Envasado hacia el formato con más necesidad). */}
+                      {resultadoCobertura.disponibleFermentando != null && resultadoCobertura.disponibleFermentando > 0 && (
+                        <p className="mt-0.5 text-xs font-semibold text-gray-400">
+                          {fNum(resultadoCobertura.disponibleBodega ?? 0)} L en bodega
+                          <span className="text-purple-500"> + {fNum(resultadoCobertura.disponibleFermentando)} L fermentando (sin envasar)</span>
+                        </p>
+                      )}
                     </div>
                     <div className="bg-amber-50 p-4">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Necesidad neta a cubrir</p>
@@ -3679,7 +3714,12 @@ export default function ProduccionClient({
                                 <span className="block text-[11px] font-normal text-gray-400">{fNum(f.demandaMin)}–{fNum(f.demandaMax)}</span>
                               )}
                             </td>
-                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">
+                              {f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}
+                              {f.disponibleFermentando != null && f.disponibleFermentando > 0 && (
+                                <span className="block text-[11px] font-normal text-purple-500">{fNum(f.disponibleBodega ?? 0)} bodega + {fNum(f.disponibleFermentando)} fermentando</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">
                               {f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}
                               {f.necesidadNetaMin != null && f.necesidadNetaMax != null &&
@@ -3742,7 +3782,12 @@ export default function ProduccionClient({
                                 <span className="block text-[11px] font-normal text-gray-400">{fNum(f.demandaMin)}–{fNum(f.demandaMax)}</span>
                               )}
                             </td>
-                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">
+                              {f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}
+                              {f.disponibleFermentando != null && f.disponibleFermentando > 0 && (
+                                <span className="block text-[11px] font-normal text-purple-500">{fNum(f.disponibleBodega ?? 0)} bodega + {fNum(f.disponibleFermentando)} fermentando</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">
                               {f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}
                               {f.necesidadNetaMin != null && f.necesidadNetaMax != null &&
@@ -3781,9 +3826,12 @@ export default function ProduccionClient({
                   Suma el forecast mensual por ciclo entre hoy y la fecha elegida (prorateado por días en los ciclos
                   parciales); el ciclo en curso usa el ritmo de venta real de este ciclo, no el forecast. El total del
                   desglose es la suma de la necesidad neta de cada formato — lo que hay que cocer, ya que el lote se
-                  envasa después según ese reparto. El número chico debajo de cada litraje es la banda de confianza de
-                  Prophet (mínimo–máximo proyectado, no sólo el promedio) — el ciclo en curso no trae banda porque sale
-                  del ritmo de venta real, no del modelo.
+                  envasa después según ese reparto. El número chico debajo de cada litraje de demanda/necesidad es la
+                  banda de confianza de Prophet (mínimo–máximo proyectado, no sólo el promedio) — el ciclo en curso no
+                  trae banda porque sale del ritmo de venta real, no del modelo. El número chico debajo de “Disponible”
+                  es distinto: separa lo que ya está en bodega (físico, contable) de lo que todavía está fermentando en
+                  el tanque sin envasar — el total los suma para no sugerir cocer de más cuando ya hay un lote en
+                  camino, pero sólo la parte de bodega es lo que existe hoy como producto terminado.
                 </p>
               </div>
 
