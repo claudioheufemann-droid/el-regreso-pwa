@@ -34,7 +34,7 @@ export interface CierrePayload {
   metodoPago: MetodoPago | null
   diasCredito: number | null
   fechaPagoEstimada: string | null
-  /** null = no se agendó nada. Va a la Agenda del vendedor. */
+  /** null = no se agendó nada. Alimenta el panel de seguimiento del equipo (CRM Metrics). */
   seguimiento: { tipo: TipoSeguimiento; fecha: string } | null
 }
 
@@ -292,7 +292,7 @@ function HojaCierre({ modo, items, total, guardando, onCancelar, onConfirmar }: 
   const [obs, setObs] = useState('')
   // Seguimiento: plegado por defecto a propósito. Antes era un paso
   // obligatorio del cierre; ahora no cuesta ni un toque si no se usa, pero
-  // sigue alimentando la Agenda del vendedor cuando sí hace falta.
+  // sigue alimentando el panel de seguimiento del equipo (CRM Metrics) cuando sí hace falta.
   const [segTipo, setSegTipo] = useState<TipoSeguimiento | null>(null)
   const [segFecha, setSegFecha] = useState(() => {
     const d = new Date()

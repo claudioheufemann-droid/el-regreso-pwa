@@ -41,10 +41,6 @@
     {
       "path": "/api/cron/cartera-diaria",
       "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/cron/agenda-diaria",
-      "schedule": "0 12 * * 1-5"
     }
   ]
 }

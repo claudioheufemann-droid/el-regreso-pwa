@@ -15,7 +15,7 @@
  * huso de invierno, UTC-4). Vercel Cron no soporta zona horaria con nombre,
  * así que si Chile entra en horario de verano (UTC-3) esto va a disparar a
  * las 10:00 en vez de las 09:00 — mismo límite que ya tienen el resto de los
- * crons de este repo (agenda-diaria, task-alerts, etc.), no es nuevo acá.
+ * crons de este repo (task-alerts, etc.), no es nuevo acá.
  */
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'

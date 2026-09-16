@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { BarChart2, Users, ListChecks, Package, FileText, TrendingUp, Wallet, CircleDollarSign, Layers } from 'lucide-react'
+import { BarChart2, Users, Package, FileText, TrendingUp, Wallet, CircleDollarSign, Layers } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
@@ -15,6 +15,7 @@ import { NavPill, type NavItem } from '@/components/ui/NavPill'
 // sólo muestra los primeros 4 + Más — ver components/ui/NavPill.tsx,
 // MAX_VISIBLE=5) y Marion no lo encontraba. Deudores pasa a ser visible
 // directo, Cotizaciones se corre a "Más" (pedido explícito del usuario).
+// 01-sep-2026: se sacó Agenda (módulo dado de baja, incluyendo el cron de push diario).
 const VENDEDOR_ITEMS: NavItem[] = [
   { href: '/ventas',              icon: BarChart2,        label: 'Ventas',       exact: true },
   { href: '/ventas/stock',        icon: Package,          label: 'Stock'                     },
@@ -22,7 +23,6 @@ const VENDEDOR_ITEMS: NavItem[] = [
   { href: '/ventas/deudores',     icon: CircleDollarSign, label: 'Deudores'                  },
   { href: '/ventas/cotizaciones', icon: FileText,         label: 'Cotizaciones'              },
   { href: '/ventas/barriles',     icon: Layers,           label: 'Barriles'                  },
-  { href: '/ventas/agenda',       icon: ListChecks,       label: 'Agenda'                    },
 ]
 
 const ADMIN_ITEMS: NavItem[] = [
@@ -32,7 +32,6 @@ const ADMIN_ITEMS: NavItem[] = [
   { href: '/ventas/deudores',             icon: CircleDollarSign, label: 'Deudores'                  },
   { href: '/ventas/cotizaciones',         icon: FileText,         label: 'Cotizaciones'              },
   { href: '/ventas/barriles',             icon: Layers,           label: 'Barriles'                  },
-  { href: '/ventas/agenda',               icon: ListChecks,       label: 'Agenda'                    },
 ]
 
 // Rentabilidad: solo quienes tienen puede_ver_margenes (Claudio/Benja/Douglas).
