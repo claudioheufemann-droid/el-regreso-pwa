@@ -210,16 +210,28 @@ function diffDiasISO(desdeISO: string, hastaISO: string): number {
  *  (necesidad de producción anticipada) comparten esta única función para no
  *  arriesgarse a que las dos vistas den números distintos para la misma
  *  pregunta. */
-function demandaProyectadaEnPeriodo(serie: SerieForecast, avanceMes: AvanceMes, desdeISO: string, hastaISO: string): number {
+/** Demanda proyectada con su banda de confianza: media (yhat), mínimo y máximo
+ *  (yhat_lower/yhat_upper de Prophet), prorateados ciclo a ciclo igual que
+ *  `demandaProyectadaEnPeriodo`. El tramo del ciclo EN CURSO no tiene banda —
+ *  sale del ritmo de venta real, no de un modelo con incertidumbre — así que
+ *  ahí min=max=media; no se inventa un rango donde no hay uno. */
+interface DemandaConRango { media: number; min: number; max: number }
+
+function demandaProyectadaConRangoEnPeriodo(serie: SerieForecast, avanceMes: AvanceMes, desdeISO: string, hastaISO: string): DemandaConRango {
   const ritmoDiarioSerie = avanceMes.diasHabilesTranscurridos > 0 ? serie.litrosMesEnCurso / avanceMes.diasHabilesTranscurridos : 0
   const litrosCicloActualProyectado = ritmoDiarioSerie * avanceMes.diasHabilesEnCiclo
 
-  const ciclos: { mes: string; litros: number }[] = [
-    { mes: avanceMes.mes, litros: litrosCicloActualProyectado },
-    ...serie.puntos.filter(p => p.tipo === 'forecast').map(p => ({ mes: p.mes, litros: p.litros })),
+  const ciclos: { mes: string; media: number; min: number; max: number }[] = [
+    { mes: avanceMes.mes, media: litrosCicloActualProyectado, min: litrosCicloActualProyectado, max: litrosCicloActualProyectado },
+    ...serie.puntos.filter(p => p.tipo === 'forecast').map(p => ({
+      mes: p.mes,
+      media: p.litros,
+      min: p.litrosMin ?? p.litros,
+      max: p.litrosMax ?? p.litros,
+    })),
   ]
 
-  let demanda = 0
+  let media = 0, min = 0, max = 0
   for (const c of ciclos) {
     const ini = inicioDeCiclo(c.mes)
     const fin = finDeCiclo(c.mes)
@@ -228,9 +240,21 @@ function demandaProyectadaEnPeriodo(serie: SerieForecast, avanceMes: AvanceMes, 
     if (solapIni > solapFin) continue
     const totalDiasCiclo = diffDiasISO(ini, fin) + 1
     const diasSolapados = diffDiasISO(solapIni, solapFin) + 1
-    demanda += c.litros * (diasSolapados / totalDiasCiclo)
+    const frac = diasSolapados / totalDiasCiclo
+    media += c.media * frac
+    min += c.min * frac
+    max += c.max * frac
   }
-  return demanda
+  return { media, min, max }
+}
+
+/** Sólo la media — la mayoría de los call sites (Necesidad de Producción
+ *  Anticipada, alarmas, etc.) no necesitan la banda, así que se mantiene esta
+ *  función corta en vez de obligarlos a desestructurar `.media` en cada uno.
+ *  Implementada arriba de `demandaProyectadaConRangoEnPeriodo` para no
+ *  duplicar el prorrateo por ciclo en dos lugares. */
+function demandaProyectadaEnPeriodo(serie: SerieForecast, avanceMes: AvanceMes, desdeISO: string, hastaISO: string): number {
+  return demandaProyectadaConRangoEnPeriodo(serie, avanceMes, desdeISO, hastaISO).media
 }
 
 /** ¿Algún ciclo de forecast dentro de [desdeISO, hastaISO] trae un empuje
@@ -839,10 +863,10 @@ export default function ProduccionClient({
     // Formato esté elegido arriba — compras necesita ese total igual.
     if (productoCobertura === TODOS_PRODUCTOS) {
       const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
-      let demandaProyectada = 0
+      let demandaProyectada = 0, demandaProyectadaMin = 0, demandaProyectadaMax = 0
       let disponibleTotal = 0
       let hayDisponible = false
-      let necesidadNeta = 0
+      let necesidadNeta = 0, necesidadNetaMin = 0, necesidadNetaMax = 0
       let latasACubrir = 0
       for (const producto of productosDisponibles) {
         const envasesProducto = ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === producto && s.envaseBucket === b))
@@ -854,12 +878,17 @@ export default function ProduccionClient({
         const serie = series.find(s => s.nivel === nivelBuscado && s.clave === claveBuscada)
         if (!serie) continue
 
-        const demandaProducto = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
+        const { media: demandaProducto, min: demandaProductoMin, max: demandaProductoMax } =
+          demandaProyectadaConRangoEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
         const filaStock = stockSeguridad.find(s => s.nivel === nivelBuscado && s.mes === primerMesStock && s.producto === producto && (envaseSel ? s.envase === envaseSel : true))
         const disponibleProducto = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
         demandaProyectada += demandaProducto
+        demandaProyectadaMin += demandaProductoMin
+        demandaProyectadaMax += demandaProductoMax
         if (disponibleProducto != null) { disponibleTotal += disponibleProducto; hayDisponible = true }
         necesidadNeta += disponibleProducto != null ? Math.max(demandaProducto - disponibleProducto, 0) : 0
+        necesidadNetaMin += disponibleProducto != null ? Math.max(demandaProductoMin - disponibleProducto, 0) : 0
+        necesidadNetaMax += disponibleProducto != null ? Math.max(demandaProductoMax - disponibleProducto, 0) : 0
 
         const litrosPorLata = litrosPorLataPorProducto.get(producto) ?? null
         if (litrosPorLata != null && envasesProducto.includes('lata')) {
@@ -873,8 +902,10 @@ export default function ProduccionClient({
       }
       return {
         demandaProyectada: Math.round(demandaProyectada),
+        demandaProyectadaMin: Math.round(demandaProyectadaMin),
+        demandaProyectadaMax: Math.round(demandaProyectadaMax),
         disponible: hayDisponible ? disponibleTotal : null,
-        necesidadNeta,
+        necesidadNeta, necesidadNetaMin, necesidadNetaMax,
         categoria: null,
         latasACubrir: latasACubrir > 0 ? latasACubrir : null,
         litrosPorLata: null,
@@ -887,7 +918,8 @@ export default function ProduccionClient({
     const serie = series.find(s => s.nivel === nivelBuscado && s.clave === claveBuscada)
     if (!serie) return null
 
-    const demandaProyectada = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
+    const { media: demandaProyectada, min: demandaProyectadaMin, max: demandaProyectadaMax } =
+      demandaProyectadaConRangoEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
 
     const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
     const filaStock = stockSeguridad.find(s =>
@@ -896,11 +928,19 @@ export default function ProduccionClient({
     )
     const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
     const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
+    const necesidadNetaMin = disponible != null ? Math.max(demandaProyectadaMin - disponible, 0) : null
+    const necesidadNetaMax = disponible != null ? Math.max(demandaProyectadaMax - disponible, 0) : null
 
     const litrosPorLata = envaseSel === 'lata' ? litrosPorLataPorProducto.get(productoCobertura) ?? null : null
     const latasACubrir = litrosPorLata != null && necesidadNeta != null ? Math.ceil(necesidadNeta / litrosPorLata) : null
 
-    return { demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, categoria: serie.categoria as 'cerveza' | 'kombucha' | null, latasACubrir, litrosPorLata }
+    return {
+      demandaProyectada: Math.round(demandaProyectada),
+      demandaProyectadaMin: Math.round(demandaProyectadaMin),
+      demandaProyectadaMax: Math.round(demandaProyectadaMax),
+      disponible, necesidadNeta, necesidadNetaMin, necesidadNetaMax,
+      categoria: serie.categoria as 'cerveza' | 'kombucha' | null, latasACubrir, litrosPorLata,
+    }
   }, [productoCobertura, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, productosDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
 
   /* ── Desglose por formato de envasado ────────────────────────────────────
@@ -918,18 +958,28 @@ export default function ProduccionClient({
     const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
     const filas = envasesCoberturaDisponibles.map(envase => {
       const serie = series.find(s => s.nivel === 'producto_envase' && s.clave === claveProductoEnvase(productoCobertura, envase))
-      const demandaProyectada = serie ? demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha) : 0
+      const { media: demandaProyectada, min: demandaMin, max: demandaMax } = serie
+        ? demandaProyectadaConRangoEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
+        : { media: 0, min: 0, max: 0 }
       const filaStock = stockSeguridad.find(s => s.nivel === 'producto_envase' && s.mes === primerMesStock && s.producto === productoCobertura && s.envase === envase)
       const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
       const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
+      const necesidadNetaMin = disponible != null ? Math.max(demandaMin - disponible, 0) : null
+      const necesidadNetaMax = disponible != null ? Math.max(demandaMax - disponible, 0) : null
       const litrosPorLata = envase === 'lata' ? litrosPorLataPorProducto.get(productoCobertura) ?? null : null
       const latasACubrir = litrosPorLata != null && necesidadNeta != null ? Math.ceil(necesidadNeta / litrosPorLata) : null
-      return { envase, demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, latasACubrir }
+      return {
+        envase, demandaProyectada: Math.round(demandaProyectada),
+        demandaMin: Math.round(demandaMin), demandaMax: Math.round(demandaMax),
+        disponible, necesidadNeta, necesidadNetaMin, necesidadNetaMax, latasACubrir,
+      }
     })
     if (filas.length === 0) return null
 
     const totalNecesidad = filas.reduce((acc, f) => acc + (f.necesidadNeta ?? 0), 0)
-    return { filas, totalNecesidad }
+    const totalNecesidadMin = filas.reduce((acc, f) => acc + (f.necesidadNetaMin ?? 0), 0)
+    const totalNecesidadMax = filas.reduce((acc, f) => acc + (f.necesidadNetaMax ?? 0), 0)
+    return { filas, totalNecesidad, totalNecesidadMin, totalNecesidadMax }
   }, [productoCobertura, coberturaFecha, envasesCoberturaDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
 
   /* ── Desglose por producto (sólo con "Todos los productos" elegido) ─────
@@ -953,10 +1003,13 @@ export default function ProduccionClient({
       const serie = series.find(s => s.nivel === nivelBuscado && s.clave === claveBuscada)
       if (!serie) return []
 
-      const demandaProyectada = demandaProyectadaEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
+      const { media: demandaProyectada, min: demandaMin, max: demandaMax } =
+        demandaProyectadaConRangoEnPeriodo(serie, avanceMes, hoyISO, coberturaFecha)
       const filaStock = stockSeguridad.find(s => s.nivel === nivelBuscado && s.mes === primerMesStock && s.producto === producto && (envaseSel ? s.envase === envaseSel : true))
       const disponible = filaStock ? (filaStock.stockActualLitros ?? 0) + filaStock.litrosEnProduccion : null
       const necesidadNeta = disponible != null ? Math.max(demandaProyectada - disponible, 0) : null
+      const necesidadNetaMin = disponible != null ? Math.max(demandaMin - disponible, 0) : null
+      const necesidadNetaMax = disponible != null ? Math.max(demandaMax - disponible, 0) : null
 
       const litrosPorLata = litrosPorLataPorProducto.get(producto) ?? null
       let latasACubrir: number | null = null
@@ -969,14 +1022,20 @@ export default function ProduccionClient({
         latasACubrir = Math.ceil(necesidadLata / litrosPorLata)
       }
 
-      return [{ producto, demandaProyectada: Math.round(demandaProyectada), disponible, necesidadNeta, latasACubrir }]
+      return [{
+        producto, demandaProyectada: Math.round(demandaProyectada),
+        demandaMin: Math.round(demandaMin), demandaMax: Math.round(demandaMax),
+        disponible, necesidadNeta, necesidadNetaMin, necesidadNetaMax, latasACubrir,
+      }]
     })
     if (filas.length === 0) return null
 
     filas.sort((a, b) => (b.necesidadNeta ?? 0) - (a.necesidadNeta ?? 0))
     const totalNecesidad = filas.reduce((acc, f) => acc + (f.necesidadNeta ?? 0), 0)
+    const totalNecesidadMin = filas.reduce((acc, f) => acc + (f.necesidadNetaMin ?? 0), 0)
+    const totalNecesidadMax = filas.reduce((acc, f) => acc + (f.necesidadNetaMax ?? 0), 0)
     const totalLatas = filas.reduce((acc, f) => acc + (f.latasACubrir ?? 0), 0)
-    return { filas, totalNecesidad, totalLatas }
+    return { filas, totalNecesidad, totalNecesidadMin, totalNecesidadMax, totalLatas }
   }, [productoCobertura, coberturaEnvase, coberturaFecha, productosDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
 
   /* ── Serie seleccionada → filas para Recharts ─────────────────────────
@@ -3547,6 +3606,16 @@ export default function ProduccionClient({
                     <div className="bg-gray-50 p-4">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Demanda proyectada en el período</p>
                       <p className="mt-1 text-2xl font-black tabular-nums text-gray-800">{fNum(resultadoCobertura.demandaProyectada)} L</p>
+                      {/* Banda de confianza de Prophet (yhat_lower/yhat_upper), prorateada
+                          al mismo período — el ciclo en curso no trae banda (sale del ritmo
+                          real, no del modelo), así que el rango sólo se angosta si el período
+                          es corto o está cerca de hoy. */}
+                      {(resultadoCobertura.demandaProyectadaMin !== resultadoCobertura.demandaProyectada ||
+                        resultadoCobertura.demandaProyectadaMax !== resultadoCobertura.demandaProyectada) && (
+                        <p className="mt-0.5 text-xs font-semibold text-gray-400">
+                          rango {fNum(resultadoCobertura.demandaProyectadaMin)}–{fNum(resultadoCobertura.demandaProyectadaMax)} L
+                        </p>
+                      )}
                     </div>
                     <div className="bg-gray-50 p-4">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Disponible ahora</p>
@@ -3559,6 +3628,17 @@ export default function ProduccionClient({
                       <p className="mt-1 text-2xl font-black tabular-nums text-amber-800">
                         {resultadoCobertura.necesidadNeta != null ? `${fNum(resultadoCobertura.necesidadNeta)} L` : '—'}
                       </p>
+                      {/* Necesidad calculada con el mismo rango de arriba: si vendemos al
+                          límite bajo de la banda puede que no haga falta nada (mínimo se
+                          recorta en 0 como el resto de "necesidad neta"); si vendemos al
+                          límite alto, esto es lo que realmente haría falta cocer. */}
+                      {resultadoCobertura.necesidadNetaMin != null && resultadoCobertura.necesidadNetaMax != null &&
+                        (resultadoCobertura.necesidadNetaMin !== resultadoCobertura.necesidadNeta ||
+                          resultadoCobertura.necesidadNetaMax !== resultadoCobertura.necesidadNeta) && (
+                        <p className="mt-0.5 text-xs font-semibold text-amber-600">
+                          rango {fNum(resultadoCobertura.necesidadNetaMin)}–{fNum(resultadoCobertura.necesidadNetaMax)} L
+                        </p>
+                      )}
                       {resultadoCobertura.latasACubrir != null && (
                         <p className="mt-1 text-xs font-bold text-amber-700">
                           ≈ {fNum(resultadoCobertura.latasACubrir)} latas{resultadoCobertura.litrosPorLata != null ? ` de ${Math.round(resultadoCobertura.litrosPorLata * 1000)} ml` : ''} a comprar
@@ -3593,9 +3673,20 @@ export default function ProduccionClient({
                         {desgloseCoberturaFormatos.filas.map(f => (
                           <tr key={f.envase}>
                             <td className="px-4 py-2.5 font-semibold text-gray-700">{ENVASE_LABEL[f.envase] ?? f.envase}</td>
-                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fNum(f.demandaProyectada)} L</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">
+                              {fNum(f.demandaProyectada)} L
+                              {(f.demandaMin !== f.demandaProyectada || f.demandaMax !== f.demandaProyectada) && (
+                                <span className="block text-[11px] font-normal text-gray-400">{fNum(f.demandaMin)}–{fNum(f.demandaMax)}</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
-                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">{f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">
+                              {f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}
+                              {f.necesidadNetaMin != null && f.necesidadNetaMax != null &&
+                                (f.necesidadNetaMin !== f.necesidadNeta || f.necesidadNetaMax !== f.necesidadNeta) && (
+                                <span className="block text-[11px] font-normal text-amber-500">{fNum(f.necesidadNetaMin)}–{fNum(f.necesidadNetaMax)}</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-700">{f.latasACubrir != null ? fNum(f.latasACubrir) : '—'}</td>
                           </tr>
                         ))}
@@ -3605,7 +3696,15 @@ export default function ProduccionClient({
                           <td colSpan={3} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-amber-700">
                             Total a cocer (todos los formatos)
                           </td>
-                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">{fNum(desgloseCoberturaFormatos.totalNecesidad)} L</td>
+                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">
+                            {fNum(desgloseCoberturaFormatos.totalNecesidad)} L
+                            {(desgloseCoberturaFormatos.totalNecesidadMin !== desgloseCoberturaFormatos.totalNecesidad ||
+                              desgloseCoberturaFormatos.totalNecesidadMax !== desgloseCoberturaFormatos.totalNecesidad) && (
+                              <span className="block text-[11px] font-semibold text-amber-600">
+                                {fNum(desgloseCoberturaFormatos.totalNecesidadMin)}–{fNum(desgloseCoberturaFormatos.totalNecesidadMax)}
+                              </span>
+                            )}
+                          </td>
                           <td></td>
                         </tr>
                       </tfoot>
@@ -3637,9 +3736,20 @@ export default function ProduccionClient({
                         {desgloseCoberturaProductos.filas.map(f => (
                           <tr key={f.producto}>
                             <td className="px-4 py-2.5 font-semibold text-gray-700">{f.producto}</td>
-                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fNum(f.demandaProyectada)} L</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">
+                              {fNum(f.demandaProyectada)} L
+                              {(f.demandaMin !== f.demandaProyectada || f.demandaMax !== f.demandaProyectada) && (
+                                <span className="block text-[11px] font-normal text-gray-400">{fNum(f.demandaMin)}–{fNum(f.demandaMax)}</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{f.disponible != null ? `${fNum(f.disponible)} L` : 'Sin dato'}</td>
-                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">{f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-800">
+                              {f.necesidadNeta != null ? `${fNum(f.necesidadNeta)} L` : '—'}
+                              {f.necesidadNetaMin != null && f.necesidadNetaMax != null &&
+                                (f.necesidadNetaMin !== f.necesidadNeta || f.necesidadNetaMax !== f.necesidadNeta) && (
+                                <span className="block text-[11px] font-normal text-amber-500">{fNum(f.necesidadNetaMin)}–{fNum(f.necesidadNetaMax)}</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-700">{f.latasACubrir != null ? fNum(f.latasACubrir) : '—'}</td>
                           </tr>
                         ))}
@@ -3649,7 +3759,15 @@ export default function ProduccionClient({
                           <td colSpan={3} className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-amber-700">
                             Total ({desgloseCoberturaProductos.filas.length} productos)
                           </td>
-                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">{fNum(desgloseCoberturaProductos.totalNecesidad)} L</td>
+                          <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">
+                            {fNum(desgloseCoberturaProductos.totalNecesidad)} L
+                            {(desgloseCoberturaProductos.totalNecesidadMin !== desgloseCoberturaProductos.totalNecesidad ||
+                              desgloseCoberturaProductos.totalNecesidadMax !== desgloseCoberturaProductos.totalNecesidad) && (
+                              <span className="block text-[11px] font-semibold text-amber-600">
+                                {fNum(desgloseCoberturaProductos.totalNecesidadMin)}–{fNum(desgloseCoberturaProductos.totalNecesidadMax)}
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right text-lg font-black tabular-nums text-amber-800">
                             {desgloseCoberturaProductos.totalLatas > 0 ? fNum(desgloseCoberturaProductos.totalLatas) : '—'}
                           </td>
@@ -3663,7 +3781,9 @@ export default function ProduccionClient({
                   Suma el forecast mensual por ciclo entre hoy y la fecha elegida (prorateado por días en los ciclos
                   parciales); el ciclo en curso usa el ritmo de venta real de este ciclo, no el forecast. El total del
                   desglose es la suma de la necesidad neta de cada formato — lo que hay que cocer, ya que el lote se
-                  envasa después según ese reparto.
+                  envasa después según ese reparto. El número chico debajo de cada litraje es la banda de confianza de
+                  Prophet (mínimo–máximo proyectado, no sólo el promedio) — el ciclo en curso no trae banda porque sale
+                  del ritmo de venta real, no del modelo.
                 </p>
               </div>
 
