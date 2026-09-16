@@ -9,7 +9,10 @@ reemplazo día a día). NO escribe directo a Supabase: una sola fuente de verdad
 Ejecución local :  python extractor.py            (ventana visible)
                    HEADLESS=1 python extractor.py (sin ventana, como en CI)
 En producción   :  GitHub Actions (.github/workflows/erp-sync-ventas.yml), cada
-                   15 minutos en horario comercial (11:00-23:00 UTC).
+                   15 minutos en horario comercial (11:00-23:00 UTC) + un
+                   backfill diario (08:30 UTC) de los últimos 90 días para
+                   recoger facturas emitidas después del período de venta
+                   vigente (ver BACKFILL_DIAS más abajo).
 
 Variables de entorno (.env local / secrets en GitHub):
   ERP_URL          https://www.gestioncervecera.com/login
@@ -17,6 +20,7 @@ Variables de entorno (.env local / secrets en GitHub):
   ERP_PASSWORD     contraseña del ERP
   UPLOAD_URL       https://el-regreso-pwa-psi.vercel.app/api/upload-ventas
   UPLOAD_SECRET    mismo valor que CRON_SECRET en Vercel
+  BACKFILL_DIAS    opcional, sólo la usa el cron diario (ver workflow)
 """
 import os
 import re
@@ -41,6 +45,14 @@ HEADLESS      = os.getenv("HEADLESS", "0") == "1"
 FECHA_DESDE   = (os.getenv("FECHA_DESDE") or "").strip()
 FECHA_HASTA   = (os.getenv("FECHA_HASTA") or "").strip()
 SOLO_DESCARGAR = (os.getenv("SOLO_DESCARGAR") or "").strip().lower() == "true"
+# Backfill diario de facturas atrasadas (ver erp-sync-ventas.yml, segundo
+# cron): cuántos días hacia atrás desde hoy hay que re-descargar. 0 = apagado.
+# Por qué existe: periodo_actual() sólo re-sincroniza el período de
+# facturación vigente (24->hoy), así que un pedido que se factura DESPUÉS de
+# que su período quedó atrás nunca vuelve a pedirse — numero_factura se queda
+# en null para siempre aunque el ERP ya tenga el dato (detectado 16-sep-2026:
+# julio-2026 quedó con el 100% de sus 1.368 pedidos marcados "sin facturar").
+BACKFILL_DIAS = int(os.getenv("BACKFILL_DIAS") or "0")
 # Tope duro sobre el ancho de CADA tramo pedido al ERP: con rangos mas anchos
 # que esto el ERP deja de descargar y responde "se enviara por email". El
 # periodo completo (24->23, hasta ~32 dias) se parte en tramos de este ancho
@@ -97,8 +109,10 @@ def chunks_seguros(desde: date, hasta: date) -> list[tuple[date, date]]:
 
 def tramos_a_pedir() -> list[tuple[date, date]]:
     """Tramos a descargar en esta corrida. FECHA_DESDE/FECHA_HASTA (solo via
-    workflow_dispatch) acotan la ventana; por defecto se usa el periodo
-    vigente completo. En ambos casos se trocea con chunks_seguros.
+    workflow_dispatch) acotan la ventana; BACKFILL_DIAS (cron diario, ver
+    erp-sync-ventas.yml) pide los ultimos N dias para recoger facturas que se
+    emitieron tarde; por defecto se usa el periodo vigente completo. En los
+    tres casos se trocea con chunks_seguros.
 
     El rango manual ANTES se pedia entero, sin trocear: con eso cualquier
     ventana de mas de MAX_DIAS_RANGO dias fallaba siempre, porque el ERP deja
@@ -110,6 +124,9 @@ def tramos_a_pedir() -> list[tuple[date, date]]:
         desde = _parse_ddmmyyyy(FECHA_DESDE) if FECHA_DESDE else periodo_actual()[0]
         hasta = _parse_ddmmyyyy(FECHA_HASTA) if FECHA_HASTA else date.today()
         return chunks_seguros(desde, hasta)
+    if BACKFILL_DIAS > 0:
+        hoy = date.today()
+        return chunks_seguros(hoy - timedelta(days=BACKFILL_DIAS), hoy)
     return chunks_seguros(*periodo_actual())
 
 

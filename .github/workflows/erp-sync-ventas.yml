@@ -8,6 +8,15 @@ on:
     # lo omite menos y sigue dando datos frescos. Para exactitud real haría falta
     # un disparador externo (cron-job.org) llamando a workflow_dispatch.
     - cron: '*/15 11-23 * * *'
+    # Backfill diario de facturas atrasadas — una vez al día, fuera de horario
+    # comercial (08:30 UTC ≈ 04:30-05:30 Chile). El sync de arriba sólo vuelve
+    # a pedir el PERÍODO VIGENTE (24→hoy); un pedido facturado después de que
+    # su período quedó atrás nunca se vuelve a sincronizar y su N° de factura
+    # queda en null para siempre. Este cron re-pide los últimos 90 días (cubre
+    # de sobra el rezago típico de facturación) para que numero_factura se
+    # actualice apenas el ERP lo tenga. Detectado 16-sep-2026: julio-2026 llegó
+    # a tener el 100% de sus 1.368 pedidos marcados "sin facturar".
+    - cron: '30 8 * * *'
   workflow_dispatch:   # permite dispararlo a mano desde la pestaña Actions
     inputs:
       fecha_desde:
@@ -25,9 +34,9 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     # 15 min alcanza de sobra para el sync normal (~2 min). Una recarga
-    # histórica con fechas a mano se trocea en tramos de 18 días, así que un
-    # año son ~20 descargas seguidas y necesita mucho más margen.
-    timeout-minutes: ${{ inputs.fecha_desde && 60 || 15 }}
+    # histórica con fechas a mano (o el backfill diario, ~90 días = 5 tramos)
+    # se trocea en tramos de 18 días y necesita mucho más margen.
+    timeout-minutes: ${{ (inputs.fecha_desde || github.event.schedule == '30 8 * * *') && 60 || 15 }}
 
     steps:
       - name: Checkout
@@ -56,6 +65,7 @@ jobs:
           UPLOAD_SECRET: ${{ secrets.CRON_SECRET }}
           FECHA_DESDE: ${{ inputs.fecha_desde }}
           FECHA_HASTA: ${{ inputs.fecha_hasta }}
+          BACKFILL_DIAS: ${{ github.event.schedule == '30 8 * * *' && '90' || '' }}
           SOLO_DESCARGAR: ${{ inputs.solo_descargar }}
         run: python extractor.py
 
