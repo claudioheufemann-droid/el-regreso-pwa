@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { vendedorCanonico } from '@/lib/types'
-import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
+import { esLineaMaquila, maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
 import DeudoresVendedorClient from './DeudoresVendedorClient'
 
 // Apartado de Deudores dentro de Ventas (distinto de /ventas/admin/deudores,
@@ -39,7 +39,14 @@ export default async function DeudoresVentasPage() {
   // que descontarla de los totales por cartera. Se calcula acá y no en el
   // cliente porque los KPIs tienen que salir correctos sin desplegar ninguna
   // tarjeta. Barato: sólo 3 clientes de los 171 tienen maquila.
-  const maquilaPorCliente = await calcularMaquila(supabase, deudores ?? [])
+  const { maquilaPorCliente, soloMaquila } = await calcularMaquila(supabase, deudores ?? [])
+
+  // Clientes cuya ÚNICA venta registrada es maquila (co-packing, no cerveza ni
+  // kombucha) se sacan enteros de Deudores: no son cobranza del área comercial
+  // y su saldo/barriles sólo ensucian el número (pedido de Claudio, 2026-09-17,
+  // a raíz de El Growler). El día que también compren cerveza/kombucha,
+  // `soloMaquila` deja de incluirlos automáticamente.
+  const deudoresComerciales = (deudores ?? []).filter(d => !soloMaquila.has(d.nombre_fantasia))
 
   const clientesPorVendedor: Record<string, number> = {}
   for (const c of clientesRows ?? []) {
@@ -51,7 +58,7 @@ export default async function DeudoresVentasPage() {
 
   return (
     <DeudoresVendedorClient
-      initialDeudores={deudores ?? []}
+      initialDeudores={deudoresComerciales}
       isAdmin={esAdmin}
       clientesPorVendedor={clientesPorVendedor}
       totalClientesPropios={clientesPorVendedor[miVendedorCanonico] ?? 0}
@@ -62,26 +69,34 @@ export default async function DeudoresVentasPage() {
 
 type DeudorRow = { nombre_fantasia: string; deuda_vencida: number | null }
 
-/** { nombre_fantasia → plata vencida que es maquila }. Sólo los que tienen. */
+interface CalculoMaquila {
+  /** { nombre_fantasia → plata vencida que es maquila }. Sólo los que tienen. */
+  maquilaPorCliente: Record<string, number>
+  /** Clientes cuya venta reconstruida es 100% maquila (nunca compraron cerveza ni kombucha). */
+  soloMaquila: Set<string>
+}
+
 async function calcularMaquila(
   supabase: ReturnType<typeof createAdminClient>,
   deudores: DeudorRow[],
-): Promise<Record<string, number>> {
-  const conDeuda = deudores.filter(d => (Number(d.deuda_vencida) || 0) > 0)
-  if (conDeuda.length === 0) return {}
+): Promise<CalculoMaquila> {
+  if (deudores.length === 0) return { maquilaPorCliente: {}, soloMaquila: new Set() }
 
-  // Paso 1: qué deudores tienen alguna venta de maquila.
+  // Paso 1: qué deudores tienen alguna venta de maquila (sin filtrar por deuda:
+  // un cliente 100% maquila igual hay que detectarlo aunque su deuda no esté
+  // vencida todavía).
   const { data: filasMaquila } = await supabase
     .from('ventas')
     .select('nombre_fantasia')
     .or('producto.ilike.%maquila%,producto.ilike.%latas finales%')
-    .in('nombre_fantasia', conDeuda.map(d => d.nombre_fantasia))
+    .in('nombre_fantasia', deudores.map(d => d.nombre_fantasia))
 
   const clientes = [...new Set((filasMaquila ?? []).map(f => f.nombre_fantasia as string))]
-  if (clientes.length === 0) return {}
+  if (clientes.length === 0) return { maquilaPorCliente: {}, soloMaquila: new Set() }
 
-  // Paso 2: reconstruir sólo esos, para saber cuáles de sus facturas de
-  // maquila siguen impagas (no basta con sumarlas todas: muchas ya se pagaron).
+  // Paso 2: TODA su venta reconstruida — sirve para (a) saber cuáles facturas
+  // de maquila siguen impagas y (b) si alguna vez vendieron algo que no sea
+  // maquila (si no, el cliente entero se saca de Deudores).
   const { data: ventas } = await supabase
     .from('ventas')
     .select('nombre_fantasia, pedido, fecha_pedido, producto, envase, categoria_producto, litros, total_sin_impuesto')
@@ -94,14 +109,21 @@ async function calcularMaquila(
     else porCliente.set(v.nombre_fantasia, [v])
   }
 
-  const out: Record<string, number> = {}
-  for (const d of conDeuda) {
+  const soloMaquila = new Set<string>()
+  for (const nombre of clientes) {
+    const filas = porCliente.get(nombre) ?? []
+    if (filas.length > 0 && filas.every(f => esLineaMaquila(f.producto))) soloMaquila.add(nombre)
+  }
+
+  const maquilaPorCliente: Record<string, number> = {}
+  for (const d of deudores) {
+    if ((Number(d.deuda_vencida) || 0) <= 0) continue
     if (!porCliente.has(d.nombre_fantasia)) continue
     const monto = maquilaVencidaDe(
       d as Parameters<typeof maquilaVencidaDe>[0],
       porCliente.get(d.nombre_fantasia) ?? [],
     )
-    if (monto > 0) out[d.nombre_fantasia] = monto
+    if (monto > 0) maquilaPorCliente[d.nombre_fantasia] = monto
   }
-  return out
+  return { maquilaPorCliente, soloMaquila }
 }
