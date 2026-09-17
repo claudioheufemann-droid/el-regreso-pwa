@@ -665,7 +665,6 @@ export default function ProduccionClient({
   inicialesUsuario: string
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('resumen')
-  const [serieId, setSerieId] = useState<string>(series[0]?.id ?? '')
   const router = useRouter()
   // Estado local del Plan Maestro, sincronizado con la prop del servidor pero
   // actualizado optimistamente en cada acción (reordenar, agregar, cambiar
@@ -794,7 +793,86 @@ export default function ProduccionClient({
     : mesesSeguridad[0] ?? ''
 
   const serieGeneral = series.find(s => s.nivel === 'general') ?? null
-  const serieActual = series.find(s => s.id === serieId) ?? serieGeneral
+
+  const productosDisponibles = useMemo(
+    () => [...new Set(series.filter(s => s.nivel === 'producto' && s.producto).map(s => s.producto!))].sort((a, b) => a.localeCompare(b)),
+    [series]
+  )
+  /** Categoría de cada producto — para que las pastillas "Cerveza"/"Kombucha"
+   *  sepan qué productos mostrar, tanto en Forecasting como en la
+   *  Calculadora de Cobertura. Sale de la propia serie nivel='producto', que
+   *  ya trae la categoría resuelta (costos_precios.categoria). */
+  const categoriaPorProducto = useMemo(() => {
+    const m = new Map<string, 'cerveza' | 'kombucha'>()
+    for (const s of series) {
+      if (s.nivel === 'producto' && s.producto && (s.categoria === 'cerveza' || s.categoria === 'kombucha')) {
+        m.set(s.producto, s.categoria)
+      }
+    }
+    return m
+  }, [series])
+
+  /* ── Selector de Forecasting, por pastillas conectadas ───────────────────
+     Reemplaza el <select> único (difícil de buscar con ~90 combinaciones) por
+     tres filas de pastillas que se acotan entre sí: Categoría (filtra qué
+     productos/envases se ofrecen más abajo, no selecciona una serie por sí
+     sola — no existe un forecast agregado "toda la kombucha"), Envase
+     (Formato) y Producto. Decisión del usuario, 17-sep-2026.
+
+     Resolución de qué serie mostrar, de más a menos específica:
+       1) Producto + Envase → producto_envase (si esa combinación existe).
+       2) Producto solo → producto (todos los formatos juntos).
+       3) Envase solo (sin producto), con categoría en "Todas" → envase
+          (agregado de ese formato en todo el catálogo — sí existe esa serie).
+       4) Nada de lo anterior → general (consolidado). Cubre también el caso
+          "sólo elegí una categoría": esa pastilla filtra la lista de abajo,
+          pero como no hay serie agregada por categoría, el gráfico se queda
+          en el consolidado hasta que además se elige un producto o envase. */
+  const [filtroCategoriaForecast, setFiltroCategoriaForecast] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
+  const [filtroEnvaseForecast, setFiltroEnvaseForecast] = useState<'todos' | EnvaseBucket>('todos')
+  const [filtroProductoForecast, setFiltroProductoForecast] = useState<string | null>(null)
+
+  const productosForecastDisponibles = useMemo(
+    () => productosDisponibles.filter(p => {
+      if (filtroCategoriaForecast !== 'todas' && categoriaPorProducto.get(p) !== filtroCategoriaForecast) return false
+      if (filtroEnvaseForecast !== 'todos' && !series.some(s => s.nivel === 'producto_envase' && s.producto === p && s.envaseBucket === filtroEnvaseForecast)) return false
+      return true
+    }),
+    [productosDisponibles, categoriaPorProducto, filtroCategoriaForecast, filtroEnvaseForecast, series]
+  )
+  const envasesForecastDisponibles = useMemo(
+    () => ORDEN_ENVASE.filter(b => series.some(s =>
+      s.nivel === 'producto_envase' && s.envaseBucket === b &&
+      (!filtroProductoForecast || s.producto === filtroProductoForecast) &&
+      (filtroCategoriaForecast === 'todas' || s.categoria === filtroCategoriaForecast)
+    )),
+    [series, filtroProductoForecast, filtroCategoriaForecast]
+  )
+
+  const serieActual = useMemo(() => {
+    if (filtroProductoForecast && filtroEnvaseForecast !== 'todos') {
+      const s = series.find(s => s.nivel === 'producto_envase' && s.producto === filtroProductoForecast && s.envaseBucket === filtroEnvaseForecast)
+      if (s) return s
+    }
+    if (filtroProductoForecast) {
+      const s = series.find(s => s.nivel === 'producto' && s.producto === filtroProductoForecast)
+      if (s) return s
+    }
+    if (filtroEnvaseForecast !== 'todos' && filtroCategoriaForecast === 'todas') {
+      const s = series.find(s => s.nivel === 'envase' && s.envaseBucket === filtroEnvaseForecast)
+      if (s) return s
+    }
+    return serieGeneral
+  }, [series, filtroProductoForecast, filtroEnvaseForecast, filtroCategoriaForecast, serieGeneral])
+
+  // Elegir una categoría no filtra por sí sola una serie (no existe un
+  // agregado "toda la kombucha") — si el producto elegido queda fuera de la
+  // categoría nueva, se limpia para no dejar seleccionado algo que ya no
+  // aparece en la lista de pastillas de abajo.
+  const cambiarCategoriaForecast = useCallback((cat: 'todas' | 'cerveza' | 'kombucha') => {
+    setFiltroCategoriaForecast(cat)
+    setFiltroProductoForecast(prev => (prev && cat !== 'todas' && categoriaPorProducto.get(prev) !== cat ? null : prev))
+  }, [categoriaPorProducto])
 
   // Ritmo del mes en curso: si vendimos X en D días HÁBILES, a ese ritmo el
   // ciclo completo cierra en X/D*diasHabilesEnCiclo — la forma más simple de
@@ -817,14 +895,27 @@ export default function ProduccionClient({
      propósito por estar incompleto — ver generar_forecast.py), así que para
      su tramo se usa el ritmo de venta real de este ciclo, mismo criterio que
      "a este ritmo cerrarías con X L" de arriba. */
-  const productosDisponibles = useMemo(
-    () => [...new Set(series.filter(s => s.nivel === 'producto' && s.producto).map(s => s.producto!))].sort((a, b) => a.localeCompare(b)),
-    [series]
-  )
+  const [coberturaCategoria, setCoberturaCategoria] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
   const [coberturaProducto, setCoberturaProducto] = useState('')
   const [coberturaEnvase, setCoberturaEnvase] = useState<'todos' | EnvaseBucket>('todos')
   const [coberturaFecha, setCoberturaFecha] = useState(() => hoyLocalISO(new Date(Date.now() + 30 * 86400000)))
-  const productoCobertura = coberturaProducto || productosDisponibles[0] || ''
+  const productoCobertura = coberturaProducto || TODOS_PRODUCTOS
+  /** Pastillas de producto de la Calculadora de Cobertura — a diferencia de
+   *  Forecasting, acá "Todos los productos" SÍ es una opción real (suma el
+   *  catálogo completo, ver resultadoCobertura), así que no hace falta caer
+   *  a un consolidado por defecto: se puede dejar sin producto elegido. */
+  const productosCoberturaDisponibles = useMemo(
+    () => productosDisponibles.filter(p => {
+      if (coberturaCategoria !== 'todas' && categoriaPorProducto.get(p) !== coberturaCategoria) return false
+      if (coberturaEnvase !== 'todos' && !series.some(s => s.nivel === 'producto_envase' && s.producto === p && s.envaseBucket === coberturaEnvase)) return false
+      return true
+    }),
+    [productosDisponibles, categoriaPorProducto, coberturaCategoria, coberturaEnvase, series]
+  )
+  const cambiarCategoriaCobertura = useCallback((cat: 'todas' | 'cerveza' | 'kombucha') => {
+    setCoberturaCategoria(cat)
+    setCoberturaProducto(prev => (prev && prev !== TODOS_PRODUCTOS && cat !== 'todas' && categoriaPorProducto.get(prev) !== cat ? '' : prev))
+  }, [categoriaPorProducto])
 
   /* ── Litros por lata, por producto ───────────────────────────────────────
      El bucket 'lata' fusiona 354ml y 473ml (ver EnvaseBucket en reglas.ts),
@@ -881,9 +972,12 @@ export default function ProduccionClient({
 
   const envasesCoberturaDisponibles = useMemo(
     () => productoCobertura === TODOS_PRODUCTOS
-      ? ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.envaseBucket === b))
+      ? ORDEN_ENVASE.filter(b => series.some(s =>
+          s.nivel === 'producto_envase' && s.envaseBucket === b &&
+          (coberturaCategoria === 'todas' || s.categoria === coberturaCategoria)
+        ))
       : ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === productoCobertura && s.envaseBucket === b)),
-    [series, productoCobertura]
+    [series, productoCobertura, coberturaCategoria]
   )
 
   const resultadoCobertura = useMemo(() => {
@@ -909,6 +1003,7 @@ export default function ProduccionClient({
       let necesidadNeta = 0, necesidadNetaMin = 0, necesidadNetaMax = 0
       let latasACubrir = 0
       for (const producto of productosDisponibles) {
+        if (coberturaCategoria !== 'todas' && categoriaPorProducto.get(producto) !== coberturaCategoria) continue
         const envasesProducto = ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === producto && s.envaseBucket === b))
         if (coberturaEnvase !== 'todos' && !envasesProducto.includes(coberturaEnvase)) continue
 
@@ -991,7 +1086,7 @@ export default function ProduccionClient({
       necesidadNeta, necesidadNetaMin, necesidadNetaMax,
       categoria: serie.categoria as 'cerveza' | 'kombucha' | null, latasACubrir, litrosPorLata,
     }
-  }, [productoCobertura, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, productosDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
+  }, [productoCobertura, coberturaCategoria, coberturaEnvase, coberturaFecha, envasesCoberturaDisponibles, productosDisponibles, categoriaPorProducto, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
 
   /* ── Desglose por formato de envasado ────────────────────────────────────
      Se cuece por PRODUCTO (un solo lote), y ese lote se envasa después en
@@ -1047,6 +1142,7 @@ export default function ProduccionClient({
 
     const primerMesStock = [...new Set(stockSeguridad.map(s => s.mes))].sort()[0]
     const filas = productosDisponibles.flatMap(producto => {
+      if (coberturaCategoria !== 'todas' && categoriaPorProducto.get(producto) !== coberturaCategoria) return []
       const envasesProducto = ORDEN_ENVASE.filter(b => series.some(s => s.nivel === 'producto_envase' && s.producto === producto && s.envaseBucket === b))
       if (coberturaEnvase !== 'todos' && !envasesProducto.includes(coberturaEnvase)) return []
 
@@ -1092,7 +1188,7 @@ export default function ProduccionClient({
     const totalNecesidadMax = filas.reduce((acc, f) => acc + (f.necesidadNetaMax ?? 0), 0)
     const totalLatas = filas.reduce((acc, f) => acc + (f.latasACubrir ?? 0), 0)
     return { filas, totalNecesidad, totalNecesidadMin, totalNecesidadMax, totalLatas }
-  }, [productoCobertura, coberturaEnvase, coberturaFecha, productosDisponibles, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
+  }, [productoCobertura, coberturaCategoria, coberturaEnvase, coberturaFecha, productosDisponibles, categoriaPorProducto, series, stockSeguridad, avanceMes, litrosPorLataPorProducto])
 
   /* ── Serie seleccionada → filas para Recharts ─────────────────────────
      La proyección arranca repitiendo el último mes real, para que las dos
@@ -3213,60 +3309,102 @@ export default function ProduccionClient({
               />
 
 
-              {/* Filtros */}
-              <div className="flex flex-wrap items-end gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
-                  <label htmlFor="serie" className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Línea de Producto / Envase
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="serie"
-                      value={serieActual?.id ?? ''}
-                      onChange={e => setSerieId(e.target.value)}
-                      className="w-full appearance-none rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      {series.some(s => s.nivel === 'general') && (
-                        <optgroup label="Consolidado">
-                          {series.filter(s => s.nivel === 'general').map(s => (
-                            <option key={s.id} value={s.id}>{s.label}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {series.some(s => s.nivel === 'producto') && (
-                        <optgroup label="Por producto">
-                          {series.filter(s => s.nivel === 'producto').map(s => (
-                            <option key={s.id} value={s.id}>{s.label}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {series.some(s => s.nivel === 'envase') && (
-                        <optgroup label="Por envase">
-                          {series.filter(s => s.nivel === 'envase').map(s => (
-                            <option key={s.id} value={s.id}>{s.label}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {series.some(s => s.nivel === 'producto_envase') && (
-                        <optgroup label="Por producto y envase">
-                          {series.filter(s => s.nivel === 'producto_envase').map(s => (
-                            <option key={s.id} value={s.id}>{s.label}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                    <ChevronDown size={16} className="pointer-events-none absolute right-3 top-2.5 text-gray-400" />
+              {/* Filtros — pastillas conectadas en vez de un <select> único con
+                  ~90 combinaciones (producto × envase), donde buscar un
+                  producto puntual era tedioso. Categoría acota qué productos y
+                  envases se ofrecen; Producto y Envase se combinan entre sí
+                  para llegar a la serie exacta (ver la resolución de
+                  serieActual más arriba). */}
+              <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-20 shrink-0 text-xs font-bold uppercase tracking-wider text-gray-500">Categoría</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(['todas', 'cerveza', 'kombucha'] as const).map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => cambiarCategoriaForecast(c)}
+                        className={`prod-press rounded-full px-3 py-1.5 text-xs font-bold capitalize ${
+                          filtroCategoriaForecast === c ? 'text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                        style={filtroCategoriaForecast === c ? { backgroundColor: COLORS.darkGreen } : undefined}
+                      >
+                        {c === 'todas' ? 'Todas' : c}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Historial disponible</label>
-                  <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-600">
-                    <Filter size={16} className="text-gray-400" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-20 shrink-0 text-xs font-bold uppercase tracking-wider text-gray-500">Formato</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setFiltroEnvaseForecast('todos')}
+                      className={`prod-press rounded-full px-3 py-1.5 text-xs font-bold ${
+                        filtroEnvaseForecast === 'todos' ? 'text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                      }`}
+                      style={filtroEnvaseForecast === 'todos' ? { backgroundColor: COLORS.amber } : undefined}
+                    >
+                      Todos los formatos
+                    </button>
+                    {envasesForecastDisponibles.map(b => (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => setFiltroEnvaseForecast(b)}
+                        className={`prod-press rounded-full px-3 py-1.5 text-xs font-bold ${
+                          filtroEnvaseForecast === b ? 'text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                        style={filtroEnvaseForecast === b ? { backgroundColor: COLORS.amber } : undefined}
+                      >
+                        {ENVASE_LABEL[b]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-start gap-2">
+                  <span className="w-20 shrink-0 pt-1.5 text-xs font-bold uppercase tracking-wider text-gray-500">Producto</span>
+                  <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => setFiltroProductoForecast(null)}
+                      className={`prod-press rounded-full px-3 py-1.5 text-xs font-bold ${
+                        !filtroProductoForecast ? 'text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                      }`}
+                      style={!filtroProductoForecast ? { backgroundColor: '#374151' } : undefined}
+                    >
+                      Todos (consolidado)
+                    </button>
+                    {productosForecastDisponibles.map(p => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setFiltroProductoForecast(p)}
+                        className={`prod-press rounded-full px-3 py-1.5 text-xs font-bold ${
+                          filtroProductoForecast === p ? 'text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                        style={filtroProductoForecast === p ? { backgroundColor: '#374151' } : undefined}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                    {productosForecastDisponibles.length === 0 && (
+                      <span className="py-1.5 text-xs text-gray-400">Ningún producto tiene ese formato en esta categoría.</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 border-t border-gray-100 pt-3 text-xs text-gray-500">
+                  <Filter size={14} className="shrink-0 text-gray-400" />
+                  <span className="font-semibold text-gray-700">{serieActual?.label ?? 'Consolidado'}</span>
+                  <span className="text-gray-300">·</span>
+                  <span>
                     {serieActual?.mesesHistorial != null
                       ? `${serieActual.mesesHistorial} meses de ventas reales`
                       : `${chartData.filter(d => d.ventaReal != null).length} meses de ventas reales`}
-                  </div>
+                  </span>
                 </div>
               </div>
 
@@ -3649,34 +3787,96 @@ export default function ProduccionClient({
                 <p className="mt-1 text-sm text-gray-500">
                   Ej.: ¿cuántos litros de Fisura en Lata necesito para cubrir de aquí al 27 de marzo?
                 </p>
-                <div className="mt-4 flex flex-wrap items-end gap-3">
-                  <div className="flex min-w-[180px] flex-1 flex-col gap-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Producto</label>
-                    <select
-                      value={productoCobertura}
-                      onChange={e => { setCoberturaProducto(e.target.value); setCoberturaEnvase('todos') }}
-                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value={TODOS_PRODUCTOS}>Todos los productos</option>
-                      {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                {/* Mismas pastillas conectadas que Forecasting (Categoría → Formato →
+                    Producto), para no repetir el problema de "buscar el producto en un
+                    select gigante" acá también. A diferencia de Forecasting, "Todos los
+                    productos" SÍ es un resultado real (suma el catálogo completo). */}
+                <div className="mt-4 flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="w-20 shrink-0 text-xs font-bold uppercase tracking-wider text-gray-500">Categoría</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(['todas', 'cerveza', 'kombucha'] as const).map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => cambiarCategoriaCobertura(c)}
+                          className={`prod-press rounded-full px-3 py-1.5 text-xs font-bold capitalize ${
+                            coberturaCategoria === c ? 'text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}
+                          style={coberturaCategoria === c ? { backgroundColor: COLORS.darkGreen } : undefined}
+                        >
+                          {c === 'todas' ? 'Todas' : c}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex min-w-[160px] flex-col gap-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Formato</label>
-                    <select
-                      value={coberturaEnvase}
-                      onChange={e => setCoberturaEnvase(e.target.value as 'todos' | EnvaseBucket)}
-                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="todos">Todos los formatos</option>
-                      {envasesCoberturaDisponibles.map(b => <option key={b} value={b}>{ENVASE_LABEL[b]}</option>)}
-                    </select>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="w-20 shrink-0 text-xs font-bold uppercase tracking-wider text-gray-500">Formato</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setCoberturaEnvase('todos')}
+                        className={`prod-press rounded-full px-3 py-1.5 text-xs font-bold ${
+                          coberturaEnvase === 'todos' ? 'text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                        style={coberturaEnvase === 'todos' ? { backgroundColor: COLORS.amber } : undefined}
+                      >
+                        Todos los formatos
+                      </button>
+                      {envasesCoberturaDisponibles.map(b => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setCoberturaEnvase(b)}
+                          className={`prod-press rounded-full px-3 py-1.5 text-xs font-bold ${
+                            coberturaEnvase === b ? 'text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}
+                          style={coberturaEnvase === b ? { backgroundColor: COLORS.amber } : undefined}
+                        >
+                          {ENVASE_LABEL[b]}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex min-w-[160px] flex-col gap-1.5">
+
+                  <div className="flex flex-wrap items-start gap-2">
+                    <span className="w-20 shrink-0 pt-1.5 text-xs font-bold uppercase tracking-wider text-gray-500">Producto</span>
+                    <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto">
+                      <button
+                        type="button"
+                        onClick={() => { setCoberturaProducto(''); setCoberturaEnvase('todos') }}
+                        className={`prod-press rounded-full px-3 py-1.5 text-xs font-bold ${
+                          productoCobertura === TODOS_PRODUCTOS ? 'text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                        style={productoCobertura === TODOS_PRODUCTOS ? { backgroundColor: '#374151' } : undefined}
+                      >
+                        Todos los productos
+                      </button>
+                      {productosCoberturaDisponibles.map(p => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => { setCoberturaProducto(p); setCoberturaEnvase('todos') }}
+                          className={`prod-press rounded-full px-3 py-1.5 text-xs font-bold ${
+                            productoCobertura === p ? 'text-white' : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}
+                          style={productoCobertura === p ? { backgroundColor: '#374151' } : undefined}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                      {productosCoberturaDisponibles.length === 0 && (
+                        <span className="py-1.5 text-xs text-gray-400">Ningún producto tiene ese formato en esta categoría.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex min-w-[160px] flex-col gap-1.5 border-t border-gray-100 pt-3">
                     <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Cubrir hasta</label>
                     <input
                       type="date" value={coberturaFecha} onChange={e => setCoberturaFecha(e.target.value)}
-                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-48 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
                 </div>
