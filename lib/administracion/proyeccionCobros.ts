@@ -23,13 +23,47 @@
 import { brutoDeFila, lunesDe, esIngresoReal, normalizarNombreCliente, type FilaVentaFinanzas } from './finanzas'
 import { esClienteCobroInmediato } from '@/lib/types'
 
+/**
+ * Precisión medida de esta proyección, para poder mostrarla junto al número.
+ *
+ * Sale del backtest walk-forward sobre 26 semanas
+ * (scripts/analisis/backtest-cobranza.ts, corrida del 19-sep-2026), que simula
+ * qué habría proyectado el modelo con la información disponible en cada
+ * momento y lo compara contra lo que realmente entró:
+ *
+ *   estimador de días     MAE      MAPE   sesgo   corr
+ *   promedio (el que usa) $1,80M    32%     +3%   0,49
+ *   mediana (p50)         $2,16M    41%     -4%   0,39
+ *   plazo declarado       $2,49M    47%     +8%   0,23
+ *
+ * Dos conclusiones que valen la pena:
+ *
+ *   · El comportamiento medido le gana claro al plazo que declara la ficha
+ *     del cliente (0,49 vs 0,23 de correlación). Todo el trabajo de cargar
+ *     "Movimientos Cta. Cte." se paga acá.
+ *
+ *   · Para proyectar PLATA conviene el promedio y no la mediana, aunque para
+ *     describirle a una persona "cuánto se demora este cliente" la mediana
+ *     sea lo correcto. La caja de una semana es una suma, y ahí manda el
+ *     valor esperado: el que a veces paga a 60 días aporta su promedio.
+ *
+ * También se probó sumar un término de "recupero de lo atrasado". En una
+ * primera medición parecía mejorar mucho, pero esa medición tenía sesgo de
+ * supervivencia —el pool se había calculado sólo con facturas que terminaron
+ * pagándose— y al corregirlo el término empeora el modelo (sesgo +34%). Lo
+ * atrasado se muestra aparte, como lista para cobrar, y no se proyecta.
+ */
+export const BACKTEST_MAE_SEMANAL = 1_800_000
+
 /** De dónde salió el plazo que se usó para proyectar esta factura. */
 export type FuentePlazo = 'medido' | 'declarado' | 'estimado'
 
 export interface PlazoCliente {
-  /** Días que el cliente tarda habitualmente (mediana de sus pagos reales). */
-  p50: number
-  /** Su cuartil lento: 1 de cada 4 pagos suyos tarda al menos esto. */
+  /** PROMEDIO de días de sus pagos reales. Es el que se usa para proyectar
+   *  plata: el backtest lo dejó como el mejor estimador (ver BACKTEST_MAE_SEMANAL). */
+  promedio: number
+  /** Su cuartil lento: 1 de cada 4 pagos suyos tarda al menos esto. Da el
+   *  escenario "si se demoran". */
   p75: number
   fuente: FuentePlazo
 }
@@ -49,17 +83,22 @@ export interface FacturaPendiente {
 
 export interface SemanaProyectada {
   lunes: string
-  /** Si cada cliente paga como suele hacerlo (su mediana). */
+  /** Facturas que vencen esa semana, si el cliente paga como suele hacerlo. */
   base: number
-  /** Si cada cliente paga como en sus casos lentos (su cuartil 75). */
+  /** Lo mismo pero con el cuartil lento de cada cliente. */
   lento: number
+  /** Lo esperado esa semana. Hoy es igual a `base`; existe como campo propio
+   *  porque la UI y los totales lo consumen, y si algún día se suma otro
+   *  término (se probó uno de recupero del atraso y no mejoró — ver
+   *  BACKTEST_MAE_SEMANAL) no hay que tocar a los consumidores. */
+  total: number
   facturas: number
 }
 
 export interface ProyeccionCobros {
   hayDatos: boolean
   semanas: SemanaProyectada[]
-  proximaSemana: { lunes: string; base: number; lento: number; detalle: FacturaPendiente[] }
+  proximaSemana: { lunes: string; base: number; lento: number; total: number; detalle: FacturaPendiente[] }
   /** Facturas cuya fecha esperada de pago ya pasó y siguen sin aparecer
    *  pagadas. No se suman a ninguna semana futura a propósito: darlas por
    *  cobradas la próxima semana infla la proyección justo con la plata que
@@ -137,16 +176,16 @@ export function proyectarCobros({
 
   for (const [factura, v] of porFactura) {
     const plazo = plazoPorCliente.get(normalizarNombreCliente(v.cliente))
-      ?? { p50: plazoPorDefecto, p75: plazoPorDefecto, fuente: 'estimado' as FuentePlazo }
+      ?? { promedio: plazoPorDefecto, p75: plazoPorDefecto, fuente: 'estimado' as FuentePlazo }
 
-    const fechaEsperada = sumarDias(v.fechaEntrega, plazo.p50)
+    const fechaEsperada = sumarDias(v.fechaEntrega, plazo.promedio)
     const fechaEsperadaLenta = sumarDias(v.fechaEntrega, plazo.p75)
     const diasAtraso = Math.max(0, diffDias(fechaEsperada, hoyISO))
 
     cobertura[plazo.fuente] += v.bruto
     pendientes.push({
       cliente: v.cliente, factura, fechaEntrega: v.fechaEntrega, bruto: v.bruto,
-      dias: plazo.p50, fechaEsperada, fechaEsperadaLenta, fuente: plazo.fuente, diasAtraso,
+      dias: plazo.promedio, fechaEsperada, fechaEsperadaLenta, fuente: plazo.fuente, diasAtraso,
     })
   }
 
@@ -158,7 +197,7 @@ export function proyectarCobros({
   const lunesHoy = lunesDe(hoyISO)
   const semanas: SemanaProyectada[] = []
   for (let i = 0; i < semanasAdelante; i++) {
-    semanas.push({ lunes: sumarDias(lunesHoy, i * 7), base: 0, lento: 0, facturas: 0 })
+    semanas.push({ lunes: sumarDias(lunesHoy, i * 7), base: 0, lento: 0, total: 0, facturas: 0 })
   }
   const idxDe = (fecha: string) => semanas.findIndex(s => fecha >= s.lunes && fecha < sumarDias(s.lunes, 7))
 
@@ -176,6 +215,7 @@ export function proyectarCobros({
     if (iLento >= 0) semanas[iLento].lento += p.bruto
   }
   atrasado.detalle.sort((a, b) => b.bruto - a.bruto)
+  for (const s of semanas) s.total = s.base
 
   // "Próxima semana" es la que viene, no la que corre: de la que corre ya
   // pasaron días y su plata en parte entró.
@@ -192,6 +232,7 @@ export function proyectarCobros({
       lunes: proximaLunes,
       base: sem1?.base ?? 0,
       lento: sem1?.lento ?? 0,
+      total: sem1?.total ?? 0,
       detalle: detalleProxima,
     },
     atrasado,

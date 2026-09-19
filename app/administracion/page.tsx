@@ -119,10 +119,13 @@ export interface ComportamientoPago {
   cliente: string
   /** Pagos cruzados con su guía. Menos de 3 y la mediana es ruido. */
   muestras: number
-  /** Días de pago: mediana, y los percentiles 75/90 para el escenario malo. */
+  /** Días de pago: mediana (lo que se le muestra a una persona), percentiles
+   *  75/90 para el escenario malo, y el promedio, que es el que mejor proyecta
+   *  plata según el backtest — ver BACKTEST_MAE_SEMANAL. */
   p50: number
   p75: number
   p90: number
+  promedio: number
   montoCruzado: number
   ultimoPago: string
   /** Plazo declarado en el maestro de clientes — null si la ficha no lo trae. */
@@ -311,7 +314,7 @@ export default async function AdministracionPage() {
     admin.rpc('comportamiento_pago_clientes', { p_min_muestras: 3 })
       .then(r => (r.data ?? []) as {
         cliente: string; muestras: number; p50: number; p75: number; p90: number
-        monto_cruzado: number; ultimo_pago: string
+        promedio: number; monto_cruzado: number; ultimo_pago: string
       }[]),
     // Facturas despachadas que todavía no aparecen pagadas — la misma ventana
     // de 120 días que `ventasRaw`, porque la proyección se arma con esas filas.
@@ -348,6 +351,7 @@ export default async function AdministracionPage() {
     p50: Math.round(Number(c.p50)),
     p75: Math.round(Number(c.p75)),
     p90: Math.round(Number(c.p90)),
+    promedio: Math.round(Number(c.promedio)),
     montoCruzado: Number(c.monto_cruzado) || 0,
     ultimoPago: String(c.ultimo_pago).slice(0, 10),
     declarado: declaradoPorCliente.get(normalizarNombreCliente(c.cliente)) ?? null,
@@ -378,12 +382,12 @@ export default async function AdministracionPage() {
      inventar una dispersión que no se midió. */
   const plazoPorCliente = new Map<string, PlazoCliente>()
   for (const c of comportamiento) {
-    plazoPorCliente.set(normalizarNombreCliente(c.cliente), { p50: c.p50, p75: c.p75, fuente: 'medido' })
+    plazoPorCliente.set(normalizarNombreCliente(c.cliente), { promedio: c.promedio, p75: c.p75, fuente: 'medido' })
   }
   for (const c of clientesRaw) {
     const k = normalizarNombreCliente(c.nombre_fantasia)
     if (!k || plazoPorCliente.has(k) || c.dias_pago == null) continue
-    plazoPorCliente.set(k, { p50: c.dias_pago, p75: Math.round(c.dias_pago * 1.3), fuente: 'declarado' })
+    plazoPorCliente.set(k, { promedio: c.dias_pago, p75: Math.round(c.dias_pago * 1.3), fuente: 'declarado' })
   }
 
   const medianaCartera = medianaDe(comportamientoCredito.map(c => c.p50)) ?? 15

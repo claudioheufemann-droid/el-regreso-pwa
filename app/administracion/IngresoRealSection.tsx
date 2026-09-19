@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
 import {
   Banknote, ArrowUpRight, ArrowDownRight, Clock, Upload, Search, ArrowUpDown,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import type { DatosCobros, ComportamientoPago } from './page'
 import { LABEL_METODO, type MetodoPago } from '@/lib/administracion/movimientosCtaCte'
+import { BACKTEST_MAE_SEMANAL } from '@/lib/administracion/proyeccionCobros'
 
 /**
  * "Plata que entró" — la pestaña que responde cuánto dinero llegó de verdad
@@ -480,6 +481,17 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
   const [verAtrasados, setVerAtrasados] = useState(false)
   const p = datos.proyeccion
 
+  const datosProyeccion = useMemo(
+    () => p.semanas.map((s, i) => ({
+      lunes: s.lunes,
+      etiqueta: i === 0 ? 'Esta sem.' : i === 1 ? 'Próxima' : fFechaCorta(s.lunes),
+      base: Math.round(s.base),
+      mostrador: Math.round(p.mostradorSemanal),
+      facturas: s.facturas,
+    })),
+    [p.semanas, p.mostradorSemanal]
+  )
+
   if (!p.hayDatos) {
     return (
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20 }}>
@@ -492,7 +504,7 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
     )
   }
 
-  const totalBase = p.proximaSemana.base + p.mostradorSemanal
+  const totalBase = p.proximaSemana.total + p.mostradorSemanal
   const totalLento = p.proximaSemana.lento + p.mostradorSemanal
 
   return (
@@ -535,7 +547,7 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
         </div>
 
         <div style={{ background: C.blueSoft, border: '1px solid #BFDBFE', borderRadius: 11, padding: 14 }}>
-          <p style={{ fontSize: 11.5, fontWeight: 700, color: C.blue }}>Total identificado</p>
+          <p style={{ fontSize: 11.5, fontWeight: 700, color: C.blue }}>Total estimado</p>
           <p style={{ fontSize: 24, fontWeight: 900, color: C.text, marginTop: 5, fontVariantNumeric: 'tabular-nums' }}>
             {fMoney(totalBase)}
           </p>
@@ -547,25 +559,18 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
         </div>
       </div>
 
-      {/* Calibración contra la realidad. Va en la cara visible y no en una nota
-          al pie a propósito: la proyección sólo puede nombrar factura por
-          factura una parte de lo que entra, y presentarla sin este contraste
-          haría que Administración la lea como "va a entrar menos" cuando en
-          realidad es "esto es lo que puedo anticipar con nombre y apellido". */}
-      {datos.promedioSemanal > 0 && (
-        <div style={{ margin: '0 18px 18px', display: 'flex', gap: 9, alignItems: 'flex-start', background: C.bg, borderRadius: 11, padding: 13 }}>
-          <Info size={15} style={{ color: C.muted, flexShrink: 0, marginTop: 1 }} />
-          <p style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>
-            En las últimas 12 semanas entraron <strong>{fMoney(datos.promedioSemanal)}</strong> por semana en
-            promedio{totalBase < datos.promedioSemanal * 0.9 && (
-              <>, o sea <strong>{fMoney(datos.promedioSemanal - totalBase)}</strong> más de lo que se alcanza a
-              anticipar acá</>
-            )}. La diferencia es cobranza que no se puede rastrear factura por factura: pagos sin referencia
-            en el informe y deuda vieja que se va regularizando. Tomá el número de arriba como el piso, no
-            como el total.
-          </p>
-        </div>
-      )}
+      {/* Qué tan confiable es este número. Se muestra el error medido en el
+          backtest en vez de presentar la cifra como exacta: una proyección sin
+          su margen de error invita a tomar decisiones que no aguanta. */}
+      <div style={{ margin: '0 18px 18px', display: 'flex', gap: 9, alignItems: 'flex-start', background: C.bg, borderRadius: 11, padding: 13 }}>
+        <Info size={15} style={{ color: C.muted, flexShrink: 0, marginTop: 1 }} />
+        <p style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>
+          Probado contra las últimas 26 semanas reales: el modelo se equivoca en promedio{' '}
+          <strong>±{fMoney(BACKTEST_MAE_SEMANAL)}</strong> por semana, sin inclinarse a quedar corto ni largo.
+          Usar el comportamiento real de cada cliente en vez del plazo que dice su ficha baja ese error un
+          28%. Sirve para saber si viene una semana floja o cargada, no para cuadrar un pago al peso.
+        </p>
+      </div>
 
       {/* Atrasado: lo más accionable de toda la pestaña */}
       {p.atrasado.monto > 0 && (
@@ -579,7 +584,8 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
                 </p>
                 <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2, lineHeight: 1.5 }}>
                   {p.atrasado.facturas} {p.atrasado.facturas === 1 ? 'factura pasó' : 'facturas pasaron'} la fecha
-                  en que ese cliente suele pagar y siguen sin aparecer pagadas. No se cuentan en la próxima semana.
+                  en que ese cliente suele pagar y siguen sin aparecer pagadas. No se cuentan en la
+                  proyección de arriba: se probó estimarlas y el modelo empeoraba.
                 </p>
               </div>
             </div>
@@ -617,42 +623,67 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
         </div>
       )}
 
-      {/* Próximas semanas */}
-      <div style={{ borderTop: `1px solid ${C.line}`, padding: '14px 18px' }}>
-        <p style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 9 }}>Las próximas semanas</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {p.semanas.map((s, i) => {
-            const max = Math.max(...p.semanas.map(x => Math.max(x.base, x.lento)), 1)
-            const esProxima = i === 1
-            return (
-              <div key={s.lunes} style={{
-                display: 'grid', gridTemplateColumns: 'minmax(96px,110px) 1fr minmax(96px,auto)',
-                gap: 10, alignItems: 'center', padding: '6px 8px', borderRadius: 7,
-                background: esProxima ? C.blueSoft : 'transparent',
-              }}>
-                <span style={{ fontSize: 12, fontWeight: esProxima ? 800 : 600, color: esProxima ? C.blue : C.muted }}>
-                  {i === 0 ? 'Esta semana' : i === 1 ? 'Próxima' : fFechaCorta(s.lunes)}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 16 }}>
-                  <div style={{ width: `${(s.base / max) * 100}%`, height: 10, background: C.blue, borderRadius: 4, minWidth: s.base > 0 ? 3 : 0 }} />
-                  {s.lento > s.base && (
-                    <div
-                      title="Si los clientes pagan como en sus casos lentos"
-                      style={{ width: `${((s.lento - s.base) / max) * 100}%`, height: 10, background: '#BFDBFE', borderRadius: 4 }}
-                    />
-                  )}
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {s.base > 0 || s.lento > 0 ? fMoney(s.base) : '—'}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-        <p style={{ fontSize: 11, color: C.muted, marginTop: 9, lineHeight: 1.55 }}>
-          La barra azul oscura es lo que entra si cada cliente paga como suele hacerlo; la clara, lo que se
-          correría a esa semana si se demoran como en sus peores casos. No incluye la venta de mostrador.
+      {/* ── El calendario de la plata: qué semana entra qué ───────────────
+          Es la pregunta que la pestaña tiene que contestar de un vistazo, así
+          que va como gráfico y no como lista de números. Barras apiladas
+          porque las tres fuentes se suman (cobranza que vence + recupero del
+          atraso + mostrador), y línea de referencia con el promedio real de
+          las últimas semanas para saber si la semana viene floja o cargada. */}
+      <div style={{ borderTop: `1px solid ${C.line}`, padding: '16px 18px 8px' }}>
+        <p style={{ fontSize: 13, fontWeight: 800, color: C.text }}>Cuándo entra la plata</p>
+        <p style={{ fontSize: 12, color: C.muted, marginTop: 2, marginBottom: 10 }}>
+          Próximas {p.semanas.length} semanas. La línea punteada es lo que entró por semana en promedio
+          últimamente.
         </p>
+        <div style={{ height: 250 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={datosProyeccion} margin={{ top: 6, right: 8, left: 4, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
+              <XAxis
+                dataKey="etiqueta" tick={{ fontSize: 11, fill: C.muted }}
+                tickLine={false} axisLine={{ stroke: C.line }}
+              />
+              <YAxis tickFormatter={fCorto} tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={false} width={52} />
+              <Tooltip
+                cursor={{ fill: 'rgba(37,99,235,.05)' }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0].payload as (typeof datosProyeccion)[number]
+                  return (
+                    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: '11px 13px', boxShadow: '0 4px 14px rgba(0,0,0,.08)', minWidth: 210 }}>
+                      <p style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 7 }}>
+                        Semana del {fFechaCorta(d.lunes)}
+                      </p>
+                      <LineaTooltip color={C.blue} label="Facturas que vencen" valor={d.base} />
+                      <LineaTooltip color={C.green} label="Mostrador" valor={d.mostrador} />
+                      <p style={{ fontSize: 12.5, fontWeight: 800, color: C.text, display: 'flex', justifyContent: 'space-between', gap: 14, borderTop: `1px solid ${C.line}`, marginTop: 6, paddingTop: 5 }}>
+                        <span>Total</span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fMoney(d.base + d.mostrador)}</span>
+                      </p>
+                      {d.facturas > 0 && (
+                        <p style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                          {d.facturas} {d.facturas === 1 ? 'factura vence' : 'facturas vencen'} esa semana
+                        </p>
+                      )}
+                    </div>
+                  )
+                }}
+              />
+              <Legend
+                verticalAlign="bottom" height={30} iconType="circle" iconSize={8}
+                formatter={v => <span style={{ fontSize: 11.5, color: C.muted }}>{v}</span>}
+              />
+              {datos.promedioSemanal > 0 && (
+                <ReferenceLine
+                  y={datos.promedioSemanal} stroke={C.faint} strokeDasharray="5 4"
+                  label={{ value: 'promedio real', position: 'right', fontSize: 10, fill: C.faint }}
+                />
+              )}
+              <Bar dataKey="base" name="Facturas que vencen" stackId="p" fill={C.blue} />
+              <Bar dataKey="mostrador" name="Mostrador" stackId="p" fill={C.green} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Detalle de quién paga la próxima semana */}
@@ -717,6 +748,19 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
 }
 
 const pct = (parte: number, total: number) => (total > 0 ? Math.round((parte / total) * 100) : 0)
+
+function LineaTooltip({ color, label, valor }: { color: string; label: string; valor: number }) {
+  if (valor <= 0) return null
+  return (
+    <p style={{ fontSize: 12, display: 'flex', justifyContent: 'space-between', gap: 14, marginTop: 2 }}>
+      <span style={{ color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ width: 8, height: 8, borderRadius: 100, background: color, display: 'inline-block' }} />
+        {label}
+      </span>
+      <span style={{ color: C.text, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fMoney(valor)}</span>
+    </p>
+  )
+}
 
 /* ── Piezas chicas ──────────────────────────────────────────────────────── */
 
