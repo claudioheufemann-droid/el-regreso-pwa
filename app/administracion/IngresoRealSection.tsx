@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   Banknote, ArrowUpRight, ArrowDownRight, Clock, Upload, Search, ArrowUpDown,
-  TriangleAlert, Info, CalendarCheck,
+  TriangleAlert, Info, CalendarCheck, ArrowRight, Store, ChevronDown,
 } from 'lucide-react'
 import type { DatosCobros, ComportamientoPago } from './page'
 import { LABEL_METODO, type MetodoPago } from '@/lib/administracion/movimientosCtaCte'
@@ -237,6 +237,9 @@ export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
         </Tarjeta>
       </div>
 
+      {/* ── Proyección: lo que debería entrar ─────────────────────────────── */}
+      <ProyeccionProximaSemana datos={datos} />
+
       {/* ── Gráfico semanal ───────────────────────────────────────────────── */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: '18px 18px 8px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -459,6 +462,261 @@ export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
     </div>
   )
 }
+
+/* ── Proyección de lo que debería entrar ────────────────────────────────── */
+
+/**
+ * Responde "¿cuánta plata entra la próxima semana?" cruzando las facturas que
+ * siguen impagas con el comportamiento de pago real de cada cliente.
+ *
+ * Se muestran DOS escenarios en vez de un número solo porque el mismo cliente
+ * a veces paga a 10 días y a veces a 30: dar una cifra única sería fingir una
+ * precisión que los datos no tienen. Y la venta de mostrador va en su propia
+ * línea, no sumada a la cobranza, porque no es plata que se esté esperando —
+ * es venta nueva que se cobra en el momento.
+ */
+function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
+  const [verDetalle, setVerDetalle] = useState(false)
+  const [verAtrasados, setVerAtrasados] = useState(false)
+  const p = datos.proyeccion
+
+  if (!p.hayDatos) {
+    return (
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Lo que debería entrar</h3>
+        <p style={{ fontSize: 12.5, color: C.muted, marginTop: 6, lineHeight: 1.6 }}>
+          No hay facturas pendientes de cobro en la ventana analizada. Si esperabas ver algo acá,
+          puede que falte cargar ventas recientes o un informe de pagos más nuevo.
+        </p>
+      </div>
+    )
+  }
+
+  const totalBase = p.proximaSemana.base + p.mostradorSemanal
+  const totalLento = p.proximaSemana.lento + p.mostradorSemanal
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ padding: '18px 18px 0' }}>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>
+          Lo que debería entrar la próxima semana
+        </h3>
+        <p style={{ fontSize: 12.5, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
+          Semana del {fFechaCorta(p.proximaSemana.lunes)}. Se calcula mirando qué facturas siguen sin
+          pagarse y cuántos días suele demorarse cada cliente en pagar.
+        </p>
+      </div>
+
+      {/* Las dos fuentes de plata, separadas a propósito */}
+      <div style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 12 }}>
+        <div style={{ background: C.bg, borderRadius: 11, padding: 14 }}>
+          <p style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Banknote size={13} style={{ color: C.blue }} /> Cobranza de facturas
+          </p>
+          <p style={{ fontSize: 24, fontWeight: 900, color: C.text, marginTop: 5, fontVariantNumeric: 'tabular-nums' }}>
+            {fMoney(p.proximaSemana.base)}
+          </p>
+          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+            {p.proximaSemana.detalle.length} {p.proximaSemana.detalle.length === 1 ? 'factura' : 'facturas'} con
+            vencimiento esa semana
+          </p>
+        </div>
+
+        <div style={{ background: C.bg, borderRadius: 11, padding: 14 }}>
+          <p style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Store size={13} style={{ color: C.green }} /> Venta de mostrador
+          </p>
+          <p style={{ fontSize: 24, fontWeight: 900, color: C.text, marginTop: 5, fontVariantNumeric: 'tabular-nums' }}>
+            {fMoney(p.mostradorSemanal)}
+          </p>
+          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+            promedio semanal, se cobra al instante
+          </p>
+        </div>
+
+        <div style={{ background: C.blueSoft, border: '1px solid #BFDBFE', borderRadius: 11, padding: 14 }}>
+          <p style={{ fontSize: 11.5, fontWeight: 700, color: C.blue }}>Total identificado</p>
+          <p style={{ fontSize: 24, fontWeight: 900, color: C.text, marginTop: 5, fontVariantNumeric: 'tabular-nums' }}>
+            {fMoney(totalBase)}
+          </p>
+          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+            {totalLento < totalBase
+              ? <>si se demoran, bajaría a <strong>{fMoney(totalLento)}</strong></>
+              : <>podría llegar a <strong>{fMoney(totalLento)}</strong></>}
+          </p>
+        </div>
+      </div>
+
+      {/* Calibración contra la realidad. Va en la cara visible y no en una nota
+          al pie a propósito: la proyección sólo puede nombrar factura por
+          factura una parte de lo que entra, y presentarla sin este contraste
+          haría que Administración la lea como "va a entrar menos" cuando en
+          realidad es "esto es lo que puedo anticipar con nombre y apellido". */}
+      {datos.promedioSemanal > 0 && (
+        <div style={{ margin: '0 18px 18px', display: 'flex', gap: 9, alignItems: 'flex-start', background: C.bg, borderRadius: 11, padding: 13 }}>
+          <Info size={15} style={{ color: C.muted, flexShrink: 0, marginTop: 1 }} />
+          <p style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>
+            En las últimas 12 semanas entraron <strong>{fMoney(datos.promedioSemanal)}</strong> por semana en
+            promedio{totalBase < datos.promedioSemanal * 0.9 && (
+              <>, o sea <strong>{fMoney(datos.promedioSemanal - totalBase)}</strong> más de lo que se alcanza a
+              anticipar acá</>
+            )}. La diferencia es cobranza que no se puede rastrear factura por factura: pagos sin referencia
+            en el informe y deuda vieja que se va regularizando. Tomá el número de arriba como el piso, no
+            como el total.
+          </p>
+        </div>
+      )}
+
+      {/* Atrasado: lo más accionable de toda la pestaña */}
+      {p.atrasado.monto > 0 && (
+        <div style={{ margin: '0 18px 18px', background: C.amberSoft, border: `1px solid ${C.amberBorder}`, borderRadius: 11, padding: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 9 }}>
+              <TriangleAlert size={16} style={{ color: C.amber, flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 800, color: C.text }}>
+                  Ya debería haber entrado: {fMoney(p.atrasado.monto)}
+                </p>
+                <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2, lineHeight: 1.5 }}>
+                  {p.atrasado.facturas} {p.atrasado.facturas === 1 ? 'factura pasó' : 'facturas pasaron'} la fecha
+                  en que ese cliente suele pagar y siguen sin aparecer pagadas. No se cuentan en la próxima semana.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setVerAtrasados(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, background: C.card, border: `1px solid ${C.amberBorder}`, borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700, color: C.text, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              {verAtrasados ? 'Ocultar' : 'Ver quiénes'}
+              <ChevronDown size={13} style={{ transform: verAtrasados ? 'rotate(180deg)' : undefined }} />
+            </button>
+          </div>
+
+          {verAtrasados && (
+            <div style={{ marginTop: 12, maxHeight: 260, overflowY: 'auto', background: C.card, borderRadius: 9 }}>
+              {p.atrasado.detalle.slice(0, 40).map(f => (
+                <div key={f.factura} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 12px', borderBottom: `1px solid ${C.line}`, alignItems: 'baseline' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{f.cliente}</p>
+                    <p style={{ fontSize: 11, color: C.muted }}>
+                      factura {f.factura} · entregada {fFechaCorta(f.fechaEntrega)} · {f.diasAtraso} días de atraso
+                    </p>
+                  </div>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {fMoney(f.bruto)}
+                  </span>
+                </div>
+              ))}
+              {p.atrasado.detalle.length > 40 && (
+                <p style={{ fontSize: 11.5, color: C.muted, padding: '9px 12px' }}>
+                  y {p.atrasado.detalle.length - 40} facturas más.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Próximas semanas */}
+      <div style={{ borderTop: `1px solid ${C.line}`, padding: '14px 18px' }}>
+        <p style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 9 }}>Las próximas semanas</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {p.semanas.map((s, i) => {
+            const max = Math.max(...p.semanas.map(x => Math.max(x.base, x.lento)), 1)
+            const esProxima = i === 1
+            return (
+              <div key={s.lunes} style={{
+                display: 'grid', gridTemplateColumns: 'minmax(96px,110px) 1fr minmax(96px,auto)',
+                gap: 10, alignItems: 'center', padding: '6px 8px', borderRadius: 7,
+                background: esProxima ? C.blueSoft : 'transparent',
+              }}>
+                <span style={{ fontSize: 12, fontWeight: esProxima ? 800 : 600, color: esProxima ? C.blue : C.muted }}>
+                  {i === 0 ? 'Esta semana' : i === 1 ? 'Próxima' : fFechaCorta(s.lunes)}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 16 }}>
+                  <div style={{ width: `${(s.base / max) * 100}%`, height: 10, background: C.blue, borderRadius: 4, minWidth: s.base > 0 ? 3 : 0 }} />
+                  {s.lento > s.base && (
+                    <div
+                      title="Si los clientes pagan como en sus casos lentos"
+                      style={{ width: `${((s.lento - s.base) / max) * 100}%`, height: 10, background: '#BFDBFE', borderRadius: 4 }}
+                    />
+                  )}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {s.base > 0 || s.lento > 0 ? fMoney(s.base) : '—'}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        <p style={{ fontSize: 11, color: C.muted, marginTop: 9, lineHeight: 1.55 }}>
+          La barra azul oscura es lo que entra si cada cliente paga como suele hacerlo; la clara, lo que se
+          correría a esa semana si se demoran como en sus peores casos. No incluye la venta de mostrador.
+        </p>
+      </div>
+
+      {/* Detalle de quién paga la próxima semana */}
+      {p.proximaSemana.detalle.length > 0 && (
+        <div style={{ borderTop: `1px solid ${C.line}` }}>
+          <button
+            onClick={() => setVerDetalle(v => !v)}
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '13px 18px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+          >
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: C.blue, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <ArrowRight size={14} /> Quiénes deberían pagar la próxima semana
+            </span>
+            <ChevronDown size={15} style={{ color: C.muted, transform: verDetalle ? 'rotate(180deg)' : undefined }} />
+          </button>
+          {verDetalle && (
+            <div style={{ maxHeight: 300, overflowY: 'auto', borderTop: `1px solid ${C.line}` }}>
+              {p.proximaSemana.detalle.map(f => (
+                <div key={f.factura} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '9px 18px', borderBottom: `1px solid ${C.line}`, alignItems: 'baseline' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>
+                      {f.cliente}
+                      {f.fuente !== 'medido' && (
+                        <span
+                          title={f.fuente === 'declarado'
+                            ? 'Sin historial de pagos suficiente: se usó el plazo de su ficha.'
+                            : 'Sin plazo en la ficha ni historial: se usó el promedio de la cartera.'}
+                          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: C.muted, background: C.bg, borderRadius: 100, padding: '2px 7px', cursor: 'help' }}
+                        >
+                          {f.fuente === 'declarado' ? 'plazo de ficha' : 'estimado'}
+                        </span>
+                      )}
+                    </p>
+                    <p style={{ fontSize: 11, color: C.muted }}>
+                      entregada {fFechaCorta(f.fechaEntrega)} · paga a {f.dias} días · esperada {fFechaCorta(f.fechaEsperada)}
+                    </p>
+                  </div>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {fMoney(f.bruto)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Transparencia sobre la calidad del dato */}
+      <div style={{ background: C.bg, borderTop: `1px solid ${C.line}`, padding: '11px 18px' }}>
+        <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
+          Total pendiente de cobro: <strong>{fMoney(p.totalPendiente)}</strong>.
+          {' '}{pct(p.cobertura.medido, p.totalPendiente)}% se proyectó con el comportamiento real del cliente,
+          {' '}{pct(p.cobertura.declarado, p.totalPendiente)}% con el plazo de su ficha y
+          {' '}{pct(p.cobertura.estimado, p.totalPendiente)}% con el promedio de la cartera.
+          {p.sinRastreo.monto > 0 && (
+            <> Quedan fuera {fMoney(p.sinRastreo.monto)} de ventas despachadas sin número de factura, que no se
+            pueden cruzar contra los pagos.</>
+          )}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+const pct = (parte: number, total: number) => (total > 0 ? Math.round((parte / total) * 100) : 0)
 
 /* ── Piezas chicas ──────────────────────────────────────────────────────── */
 

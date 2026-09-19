@@ -12,6 +12,7 @@ import {
   type SemanaFlujo, type EntradaCompra, type FilaDeudorAging, type TramoAging,
   type ClienteRiesgo, type CicloConversion,
 } from '@/lib/administracion/flujoSemanal'
+import { proyectarCobros, type ProyeccionCobros, type PlazoCliente } from '@/lib/administracion/proyeccionCobros'
 import { esCamaraProduccion } from '@/lib/camaras'
 import { vendedorCanonico, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
@@ -147,6 +148,9 @@ export interface DatosCobros {
   /** Mediana del plazo DECLARADO, para contrastar con el real. */
   declaradaGlobal: number | null
   ultimaFecha: string | null
+  /** Cuánto debería entrar las próximas semanas, cruzando lo impago con el
+   *  comportamiento de pago real de cada cliente. */
+  proyeccion: ProyeccionCobros
 }
 
 const MS_POR_DIA = 86_400_000
@@ -235,7 +239,7 @@ export default async function AdministracionPage() {
       const lotes = await Promise.all(
         Array.from({ length: paginas }, (_, i) =>
           admin.from('ventas')
-            .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado')
+            .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado, numero_factura')
             .gte('fecha_pedido', desdeVentas)
             .order('id', { ascending: true })
             .range(i * PAGE, i * PAGE + PAGE - 1)
@@ -301,7 +305,7 @@ export default async function AdministracionPage() {
      pago no se muestra en ninguna pantalla, sólo el semanal y el resumen por
      cliente. */
   const desdeCobros = correrDias(hoyISO, -182)
-  const [cobrosSemanaRaw, comportamientoRaw] = await Promise.all([
+  const [cobrosSemanaRaw, comportamientoRaw, impagasRaw, mostradorRaw] = await Promise.all([
     admin.rpc('cobros_por_semana', { p_desde: desdeCobros })
       .then(r => (r.data ?? []) as { semana: string; metodo: string; monto: number; movimientos: number }[]),
     admin.rpc('comportamiento_pago_clientes', { p_min_muestras: 3 })
@@ -309,6 +313,11 @@ export default async function AdministracionPage() {
         cliente: string; muestras: number; p50: number; p75: number; p90: number
         monto_cruzado: number; ultimo_pago: string
       }[]),
+    // Facturas despachadas que todavía no aparecen pagadas — la misma ventana
+    // de 120 días que `ventasRaw`, porque la proyección se arma con esas filas.
+    admin.rpc('facturas_impagas', { p_desde: desdeVentas })
+      .then(r => (r.data ?? []) as { numero_factura: string }[]),
+    admin.rpc('cobro_mostrador_semanal', { p_semanas: 12 }).then(r => Number(r.data) || 0),
   ])
 
   const semanasCobroMap = new Map<string, SemanaCobro>()
@@ -362,8 +371,34 @@ export default async function AdministracionPage() {
   const ult4 = semanasCerradas.slice(-4)
   const prev4 = semanasCerradas.slice(-8, -4)
 
+  /* Plazo por cliente para proyectar: manda el MEDIDO (mediana de sus pagos
+     reales) y, si no lo hay, el declarado en la ficha. Para el escenario
+     lento se usa su p75; cuando sólo hay plazo declarado no existe tal
+     percentil, así que se le suma un margen proporcional (30%) en vez de
+     inventar una dispersión que no se midió. */
+  const plazoPorCliente = new Map<string, PlazoCliente>()
+  for (const c of comportamiento) {
+    plazoPorCliente.set(normalizarNombreCliente(c.cliente), { p50: c.p50, p75: c.p75, fuente: 'medido' })
+  }
+  for (const c of clientesRaw) {
+    const k = normalizarNombreCliente(c.nombre_fantasia)
+    if (!k || plazoPorCliente.has(k) || c.dias_pago == null) continue
+    plazoPorCliente.set(k, { p50: c.dias_pago, p75: Math.round(c.dias_pago * 1.3), fuente: 'declarado' })
+  }
+
+  const medianaCartera = medianaDe(comportamientoCredito.map(c => c.p50)) ?? 15
+  const proyeccion = proyectarCobros({
+    ventas: ventasRaw,
+    facturasImpagas: new Set(impagasRaw.map(f => f.numero_factura)),
+    plazoPorCliente,
+    plazoPorDefecto: medianaCartera,
+    hoyISO,
+    mostradorSemanal: mostradorRaw,
+  })
+
   const cobros: DatosCobros = {
     hayDatos: semanasCobro.length > 0,
+    proyeccion,
     semanas: semanasCobro,
     comportamiento,
     totalUltimas4: ult4.reduce((s, x) => s + x.total, 0),
