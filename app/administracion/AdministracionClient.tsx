@@ -9,9 +9,10 @@ import {
 } from 'recharts'
 import {
   TrendingUp, Wallet, AlertTriangle, Info, CalendarClock, Truck, HelpCircle, ChevronLeft, ChevronDown,
-  ChevronRight, Target, UserX, Sparkles,
+  ChevronRight, Target, UserX, Sparkles, Banknote,
 } from 'lucide-react'
-import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo, ForecastCliente } from './page'
+import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo, ForecastCliente, DatosCobros } from './page'
+import IngresoRealSection from './IngresoRealSection'
 import { lunesDe } from '@/lib/administracion/finanzas'
 import { NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import type { ProyeccionCaja, PrecisionCobro, ClienteEnPeriodo } from '@/lib/administracion/finanzas'
@@ -43,6 +44,10 @@ interface Props {
    *  proveedor cada uno, ordenados de mayor a menor gasto — filtrable desde
    *  un selector en vez de pestañas (son demasiados para pills). */
   forecastCompras: ForecastCliente[]
+  /** Plata efectivamente cobrada (tabla `cobros_erp`) y comportamiento de
+   *  pago real por cliente. Es la única fuente de caja REAL del módulo: el
+   *  resto trabaja con ventas despachadas y deuda, que son promesas. */
+  cobros: DatosCobros
 }
 
 /**
@@ -311,14 +316,14 @@ function VistaForecastSerie({ fc, hoyISO, subtitulo }: { fc: ForecastCliente; ho
 
 export default function AdministracionClient({
   series, avance, mtd, caja, deuda, precisionCobro, flujo, ultimaCorrida, clientesSinPlazo, hoyISO,
-  deudoresDetalle, clientesPorVendedor, maquilaPorCliente, forecastClientes, forecastCompras,
+  deudoresDetalle, clientesPorVendedor, maquilaPorCliente, forecastClientes, forecastCompras, cobros,
 }: Props) {
   const router = useRouter()
   // 'flujo' primero: es la pregunta operativa del día a día ("¿cuándo entra
   // la plata?"). 'ingresos' (el modelo de facturación) y 'cobranza' (estado
   // de deuda del ERP) son consulta más puntual. Reordenado sin fusionar
   // pestañas — decisión del usuario, 15-sep-2026.
-  const [tab, setTab] = useState<'flujo' | 'ingresos' | 'cobranza' | 'forecast'>('flujo')
+  const [tab, setTab] = useState<'flujo' | 'cobros' | 'ingresos' | 'cobranza' | 'forecast'>('flujo')
   const [clienteForecast, setClienteForecast] = useState(forecastClientes[0]?.nombre ?? null)
   const [proveedorCompras, setProveedorCompras] = useState(forecastCompras[0]?.nombre ?? null)
   const [serieId, setSerieId] = useState('general::')
@@ -422,6 +427,10 @@ export default function AdministracionClient({
         <div style={{ display: 'flex', gap: 2, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 4, width: 'fit-content', marginBottom: 24 }}>
           {([
             ['flujo', 'Flujo de Caja', Wallet],
+            // Va pegada a Flujo de Caja a propósito: una proyecta la plata que
+            // debería entrar, la otra muestra la que entró de verdad. Leerlas
+            // juntas es lo que permite calibrar si la proyección miente.
+            ['cobros', 'Plata que entró', Banknote],
             ['ingresos', 'Ingresos', TrendingUp],
             ['cobranza', 'Cobranza y Deuda', Target],
             ['forecast', 'Forecast', Sparkles],
@@ -442,6 +451,9 @@ export default function AdministracionClient({
             </button>
           ))}
         </div>
+
+        {/* ══════════════ PLATA QUE ENTRÓ ══════════════ */}
+        {tab === 'cobros' && <IngresoRealSection datos={cobros} />}
 
         {/* ══════════════ INGRESOS ══════════════ */}
         {tab === 'ingresos' && (
