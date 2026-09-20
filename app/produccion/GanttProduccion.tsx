@@ -68,6 +68,10 @@ interface Props {
   propsOrigen: (carga: CargaArrastre, habilitado?: boolean) => Record<string, unknown>
   onAbrirConfig: () => void
   onAbrirBloque?: (bloque: BloqueGantt, rect?: DOMRect) => void
+  /** id del bloque que se acaba de mover, para que aterrice con un latido.
+   *  Lo informa quien hizo el movimiento — comparar posiciones entre renders
+   *  obligaría a leer y escribir un ref durante el render, que React prohíbe. */
+  bloqueRecienMovido?: string | null
   /** Movimientos de esta sesión que todavía no se reflejan en el plan. */
   anclasEnSesion?: number
   onLimpiarAnclas?: () => void
@@ -111,11 +115,20 @@ function textoSobre(hex: string) {
 
 export default function GanttProduccion({
   fermentadores, bloques, config, arrastre, propsOrigen,
-  onAbrirConfig, onAbrirBloque, anclasEnSesion = 0, onLimpiarAnclas, semanas = 10,
+  onAbrirConfig, onAbrirBloque, bloqueRecienMovido = null,
+  anclasEnSesion = 0, onLimpiarAnclas, semanas = 10,
 }: Props) {
   const [zoom, setZoom] = useState<Zoom>('normal')
   const [offsetSemanas, setOffsetSemanas] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  /** Dirección del último salto de semanas, para que la grilla entre desde
+   *  el lado hacia el que se viaja en vez de aparecer sin más. */
+  const [sentido, setSentido] = useState<'izq' | 'der' | null>(null)
+  const irASemana = useCallback((delta: number) => {
+    setSentido(delta === 0 ? null : delta > 0 ? 'der' : 'izq')
+    setOffsetSemanas(o => (delta === 0 ? 0 : o + delta))
+  }, [])
 
   const anchoDia = ANCHOS[zoom]
   const hoy = hoyISO()
@@ -245,7 +258,7 @@ export default function GanttProduccion({
             {(['compacto', 'normal', 'amplio'] as Zoom[]).map(z => (
               <button
                 key={z} type="button" onClick={() => setZoom(z)}
-                className={`rounded-md px-2 py-1 text-[11px] font-bold capitalize transition ${
+                className={`prod-press rounded-md px-2 py-1 text-[11px] font-bold capitalize transition ${
                   zoom === z ? 'bg-[#2F6B4F] text-white' : 'text-gray-500 hover:bg-gray-50'
                 }`}
               >{z}</button>
@@ -253,22 +266,22 @@ export default function GanttProduccion({
           </div>
 
           <div className="flex items-center gap-0.5 rounded-lg border border-gray-200 bg-white p-0.5">
-            <button type="button" onClick={() => setOffsetSemanas(o => o - 2)}
-              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-50" title="Dos semanas atrás">
+            <button type="button" onClick={() => irASemana(-2)}
+              className="prod-press prod-hover-icon rounded-md p-1.5 text-gray-500 hover:bg-gray-50" title="Dos semanas atrás">
               <ChevronLeft size={15} />
             </button>
-            <button type="button" onClick={() => setOffsetSemanas(0)}
-              className="rounded-md px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-gray-50">
+            <button type="button" onClick={() => irASemana(0)}
+              className="prod-press rounded-md px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-gray-50">
               Hoy
             </button>
-            <button type="button" onClick={() => setOffsetSemanas(o => o + 2)}
-              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-50" title="Dos semanas adelante">
+            <button type="button" onClick={() => irASemana(2)}
+              className="prod-press prod-hover-icon rounded-md p-1.5 text-gray-500 hover:bg-gray-50" title="Dos semanas adelante">
               <ChevronRight size={15} />
             </button>
           </div>
 
           <button type="button" onClick={onAbrirConfig}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-600 hover:bg-gray-50">
+            className="prod-press flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-600 hover:bg-gray-50">
             <Settings2 size={14} />
             Configurar productos
           </button>
@@ -320,7 +333,7 @@ export default function GanttProduccion({
                 <div style={{ width: anchoGrilla, flexShrink: 0 }} className="bg-gray-50" />
               </div>
 
-              {grupo.tanques.map(t => {
+              {grupo.tanques.map((t, i) => {
                 const deEsteTanque = porTanque.get(t.nombre) ?? []
                 return (
                   <FilaTanque
@@ -329,6 +342,8 @@ export default function GanttProduccion({
                     colorPorProducto={colorPorProducto} solapes={solapes}
                     destinoActivo={destinoActivo} propsOrigen={propsOrigen}
                     cargaDe={cargaDe} onAbrirBloque={onAbrirBloque}
+                    fila={i} recienMovido={bloqueRecienMovido} sentido={sentido}
+                    cargaArrastrada={arrastre?.carga ?? null}
                   />
                 )
               })}
@@ -351,7 +366,8 @@ export default function GanttProduccion({
                 bloques={sinAsignar} dias={dias} anchoDia={anchoDia} inicioVentana={inicioVentana}
                 hoy={hoy} colorPorProducto={colorPorProducto} solapes={solapes}
                 destinoActivo={destinoActivo} propsOrigen={propsOrigen} cargaDe={cargaDe}
-                onAbrirBloque={onAbrirBloque} sinCapacidad
+                onAbrirBloque={onAbrirBloque} fila={0} recienMovido={bloqueRecienMovido}
+                sentido={sentido} cargaArrastrada={arrastre?.carga ?? null} sinCapacidad
               />
             </div>
           )}
@@ -379,6 +395,7 @@ export default function GanttProduccion({
 function FilaTanque({
   tanque, bloques, dias, anchoDia, inicioVentana, hoy, colorPorProducto,
   solapes, destinoActivo, propsOrigen, cargaDe, onAbrirBloque, sinCapacidad,
+  fila, recienMovido, sentido, cargaArrastrada,
 }: {
   tanque: FermentadorGantt
   bloques: BloqueGantt[]
@@ -393,9 +410,23 @@ function FilaTanque({
   cargaDe: (b: BloqueGantt) => CargaArrastre
   onAbrirBloque?: (b: BloqueGantt, rect?: DOMRect) => void
   sinCapacidad?: boolean
+  /** Índice dentro del grupo, para escalonar la entrada. */
+  fila: number
+  recienMovido: string | null
+  sentido: 'izq' | 'der' | null
+  cargaArrastrada: CargaArrastre | null
 }) {
+  // La fila entera se resalta mientras el puntero arrastra sobre ella: con
+  // 23 filas de 44px, acertarle al tanque correcto sin esa guía es difícil.
+  const filaActiva = !sinCapacidad && destinoActivo?.fermentador === tanque.nombre
+
   return (
-    <div className="flex border-b border-gray-100 last:border-b-0 hover:bg-gray-50/40">
+    <div
+      style={{ ['--fila' as string]: fila }}
+      className={`prod-gantt-fila flex border-b border-gray-100 last:border-b-0 ${
+        filaActiva ? 'bg-[#2F6B4F]/[0.07]' : 'hover:bg-gray-50/40'
+      }`}
+    >
       {/* Nombre del tanque */}
       <div style={{ width: ANCHO_TANQUE, flexShrink: 0 }}
         className="sticky left-0 z-10 flex flex-col justify-center border-r border-gray-100 bg-white px-3 py-2">
@@ -409,7 +440,11 @@ function FilaTanque({
       </div>
 
       {/* Pista de días + bloques encima */}
-      <div className="relative" style={{ width: dias.length * anchoDia, flexShrink: 0, minHeight: 44 }}>
+      <div
+        key={inicioVentana}
+        className={`relative ${sentido === 'der' ? 'prod-gantt-ventana-der' : sentido === 'izq' ? 'prod-gantt-ventana-izq' : ''}`}
+        style={{ width: dias.length * anchoDia, flexShrink: 0, minHeight: 44 }}
+      >
         <div className="absolute inset-0 flex">
           {dias.map(d => {
             const esDestino = destinoActivo?.fecha === d.iso &&
@@ -420,8 +455,8 @@ function FilaTanque({
                 data-dia-calendario={d.iso}
                 data-fermentador={sinCapacidad ? undefined : tanque.nombre}
                 style={{ width: anchoDia, flexShrink: 0 }}
-                className={`border-l ${
-                  esDestino ? 'border-[#2F6B4F] bg-[#2F6B4F]/25'
+                className={`border-l transition-colors duration-150 ${
+                  esDestino ? 'prod-gantt-destino border-[#2F6B4F] bg-[#2F6B4F]/25'
                   : d.esHoy ? 'border-[#C9A227] bg-[#C9A227]/10'
                   : d.finde ? 'border-gray-100 bg-gray-100/60'
                   : 'border-gray-100'
@@ -442,6 +477,11 @@ function FilaTanque({
           const choca = solapes.has(b.id)
           const noCabe = !sinCapacidad && tanque.capacidadLitros > 0 && b.litros > tanque.capacidadLitros
           const ancho = visibles * anchoDia
+          // Se compara por producto y no por id: la carga del arrastre no
+          // lleva el id del bloque, y dos bloques del mismo producto en el
+          // mismo tanque serían un choque que ya está marcado igual.
+          const arrastrandoEste = cargaArrastrada?.producto === b.producto
+            && (cargaArrastrada.tipo === 'coccion') === (b.tipo === 'confirmado')
 
           return (
             <button
@@ -466,7 +506,16 @@ function FilaTanque({
                 color: sugerido ? '#374151' : textoSobre(color),
                 touchAction: 'none',
               }}
-              className="prod-press flex items-center gap-1 overflow-hidden rounded-md px-1.5 text-left text-[10px] font-bold leading-none shadow-sm"
+              className={[
+                'prod-press prod-gantt-bloque flex items-center gap-1 overflow-hidden rounded-md px-1.5 text-left text-[10px] font-bold leading-none shadow-sm',
+                // Un plan imposible late hasta que alguien lo arregle.
+                (choca || noCabe) ? 'prod-gantt-alerta' : '',
+                // Acaba de cambiar de día o de tanque: un latido y listo.
+                recienMovido === b.id ? 'prod-gantt-aterriza' : '',
+                // Mientras se arrastra, el bloque de origen se apaga: el que
+                // manda es el ghost que sigue al puntero.
+                arrastrandoEste ? 'prod-gantt-bloque-fantasma' : '',
+              ].filter(Boolean).join(' ')}
             >
               {(choca || noCabe) && <AlertTriangle size={10} className="shrink-0 text-red-600" />}
               <span className="truncate">

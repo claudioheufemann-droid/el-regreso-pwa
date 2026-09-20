@@ -96,13 +96,13 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center"
+      className="animate-fade-in fixed inset-0 z-[80] flex items-end justify-center sm:items-center"
       style={{ background: 'rgba(17,19,22,.55)', backdropFilter: 'blur(2px)' }}
       onClick={onCerrar}
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="flex w-full flex-col overflow-hidden bg-white shadow-2xl sm:w-[min(880px,94vw)] sm:rounded-2xl"
+        className="animate-slide-up flex w-full flex-col overflow-hidden bg-white shadow-2xl sm:w-[min(880px,94vw)] sm:rounded-2xl"
         style={{ maxHeight: '88vh' }}
       >
         {/* Cabecera */}
@@ -173,7 +173,8 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
                   <tr key={base.producto} className="border-b border-gray-50 hover:bg-gray-50/50">
                     <td style={{ padding: '8px 20px' }}>
                       <div className="flex items-center" style={{ gap: 8 }}>
-                        <span className="inline-block rounded-sm" style={{ width: 10, height: 10, background: c.color }} />
+                        <span className="inline-block rounded-sm transition-colors duration-300"
+                          style={{ width: 10, height: 10, background: c.color }} />
                         <span className="font-semibold text-gray-800">{base.producto}</span>
                         {guardando === base.producto && <Loader2 size={12} className="animate-spin text-gray-400" />}
                         {!sucio && guardando !== base.producto && <Check size={12} className="text-transparent" />}
@@ -221,7 +222,7 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
                               void guardar(base.producto, { color: hex })
                             }}
                             title={hex}
-                            className={`rounded-full transition ${c.color.toLowerCase() === hex.toLowerCase() ? 'ring-2 ring-gray-900 ring-offset-1' : 'hover:scale-110'}`}
+                            className={`rounded-full transition-transform duration-150 ${c.color.toLowerCase() === hex.toLowerCase() ? 'ring-2 ring-gray-900 ring-offset-1' : 'hover:scale-125 active:scale-95'}`}
                             style={{ width: 16, height: 16, background: hex }}
                           />
                         ))}

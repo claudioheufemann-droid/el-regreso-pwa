@@ -1513,3 +1513,113 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
   from { opacity: 0; transform: scale(0.97); }
   to   { opacity: 1; transform: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Carta Gantt de ocupación de fermentadores
+   ───────────────────────────────────────────────────────────
+   Mismas reglas que el resto del módulo: sólo opacity, transform y
+   box-shadow, que el compositor resuelve sin reflow. Acá importa más que
+   en otras pantallas: la grilla llega a tener ~700 celdas y varias decenas
+   de bloques a la vez, así que animar `width` o `left` en el zoom o al
+   mover un bloque costaría un relayout completo por cuadro.
+
+   El guard de movimiento reducido ya está global más arriba (todo se
+   recorta a 0.01ms), por eso ninguna regla de acá lo repite.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Entrada de los bloques: crecen desde su día de inicio, no desde el
+   centro — el borde izquierdo es la fecha en que arranca la cocción, y
+   que ese borde se quede quieto mientras el bloque aparece es lo que hace
+   que se lea como "esto empieza acá" y no como un rectángulo que infla. */
+@keyframes prod-gantt-bloque-in {
+  from { opacity: 0; transform: scaleX(0.55); }
+  to   { opacity: 1; transform: none; }
+}
+.prod-root .prod-gantt-bloque {
+  transform-origin: left center;
+  animation: prod-gantt-bloque-in 0.32s var(--spring) both;
+  /* El color lo cambia el usuario desde la configuración: que transicione
+     hace visible qué bloques se repintaron sin tener que buscarlos. */
+  transition: transform 0.18s var(--spring), box-shadow 0.18s var(--spring),
+              background-color 0.35s ease-out, border-color 0.35s ease-out,
+              opacity 0.18s ease-out;
+}
+/* Escalonado por fila, con el mismo tope de 6 pasos que `prod-stagger`:
+   con 23 tanques, sin tope la última fila entraría casi un segundo
+   después y se leería como lentitud. */
+/* El :not() no es decorativo: `animation-delay` con un solo valor se aplica
+   a TODAS las animaciones de la lista, así que sin excluir a los bloques en
+   alerta o aterrizando, el escalonado les correría también su latido. */
+.prod-root .prod-gantt-fila > .prod-gantt-bloque:not(.prod-gantt-alerta):not(.prod-gantt-aterriza) {
+  animation-delay: calc(min(var(--fila, 0), 6) * 40ms);
+}
+.prod-root .prod-gantt-bloque:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -6px rgba(15, 61, 46, 0.45);
+  z-index: 5;
+}
+
+/* El bloque que se está arrastrando se queda en su lugar de origen, pero
+   apagado: el ghost que sigue al puntero es el que manda. Sin esto
+   parecen dos cocciones distintas. */
+.prod-root .prod-gantt-bloque-fantasma {
+  opacity: 0.32;
+  filter: saturate(0.4);
+}
+
+/* Aterrizaje: el bloque que acaba de cambiar de día o de tanque late una
+   vez. Es la confirmación de que el arrastre hizo algo — sobre todo
+   cuando cambió de fila y el ojo lo perdió de vista. */
+@keyframes prod-gantt-aterriza {
+  0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(47, 107, 79, 0.55); }
+  35%  { transform: scale(1.04); box-shadow: 0 0 0 6px rgba(47, 107, 79, 0.18); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(47, 107, 79, 0); }
+}
+.prod-root .prod-gantt-aterriza {
+  animation: prod-gantt-aterriza 0.7s var(--spring) both;
+}
+
+/* Choque de tanque o litraje que no cabe: late lento e indefinidamente.
+   Es el único latido infinito del Gantt a propósito — marca un plan que
+   no se puede ejecutar, y tiene que seguir molestando hasta que alguien
+   lo arregle. */
+@keyframes prod-gantt-alerta {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+  50%      { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.22); }
+}
+.prod-root .prod-gantt-alerta {
+  animation: prod-gantt-bloque-in 0.32s var(--spring) both,
+             prod-gantt-alerta 2.2s ease-in-out 0.32s infinite;
+}
+
+/* Navegación por semanas: la grilla entra desde el lado hacia el que se
+   viaja, para que el gesto tenga dirección. Sólo se mueve el contenido de
+   las pistas; la columna de tanques queda fija porque es el eje de
+   lectura. */
+@keyframes prod-gantt-ventana-der {
+  from { opacity: 0.35; transform: translateX(26px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes prod-gantt-ventana-izq {
+  from { opacity: 0.35; transform: translateX(-26px); }
+  to   { opacity: 1; transform: none; }
+}
+.prod-root .prod-gantt-ventana-der { animation: prod-gantt-ventana-der 0.3s var(--spring) both; }
+.prod-root .prod-gantt-ventana-izq { animation: prod-gantt-ventana-izq 0.3s var(--spring) both; }
+
+/* Celda destino bajo el puntero: reusa el latido dorado del calendario
+   (`prod-dia-activo`) pero en verde, porque acá el destino es una celda
+   de tanque y el dorado ya significa "hoy" en la misma grilla. */
+@keyframes prod-gantt-destino {
+  0%, 100% { box-shadow: inset 0 0 0 2px rgba(47, 107, 79, 0.55); }
+  50%      { box-shadow: inset 0 0 0 3px rgba(47, 107, 79, 0.28); }
+}
+.prod-root .prod-gantt-destino {
+  animation: prod-gantt-destino 0.9s ease-in-out infinite;
+}
+
+/* Fila completa resaltada mientras se arrastra sobre ella: ayuda a no
+   equivocarse de tanque en una grilla de 23 filas de 44px. */
+.prod-root .prod-gantt-fila {
+  transition: background-color 0.16s ease-out;
+}

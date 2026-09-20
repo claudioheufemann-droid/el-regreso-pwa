@@ -21,6 +21,7 @@ import { useArrastreCalendario, type CargaArrastre, type DestinoArrastre } from 
 import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, ConfigProductoProduccion, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, RecetaInsumoLinea, LoteSinReceta } from './page'
 import GanttProduccion, { type BloqueGantt, type ConfigProducto } from './GanttProduccion'
 import ConfigProductosGantt from './ConfigProductosGantt'
+import NecesidadMensual from './NecesidadMensual'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, LEAD_TIME_INSUMOS_SEMANAS, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -315,11 +316,17 @@ function fMinutosDesde(min: number) {
  *  nombre que describía sólo la primera, y había tres lugares distintos con
  *  números de compra. Si una sección no contesta la pregunta del `sub`, está
  *  en la pantalla equivocada. */
+/* El menú está ordenado como el trabajo, no como una lista de pantallas.
+   El flujo real es: se mira cuánto se va a vender, se decide cuántos litros
+   de cada producto hay que producir cada mes, y recién ahí se ordena en el
+   tiempo y en los tanques. Los tres pasos van numerados porque el orden
+   IMPORTA — el paso 3 no se puede armar sin haber cerrado el 2 — y el resto
+   queda abajo como consulta, que es como se usa. */
 const navItems = [
   { id: 'resumen', icon: LayoutDashboard, label: 'Resumen', sub: 'Cómo venimos' },
-  { id: 'forecasting', icon: TrendingUp, label: 'Forecasting', sub: 'Cuánto vamos a vender' },
-  { id: 'seguridad', icon: Package, label: 'Cuánto cocinar', sub: 'Colchón y punto de reorden' },
-  { id: 'calendario', icon: CalendarDays, label: 'Cuándo cocinar', sub: 'Calendario y tanques' },
+  { id: 'forecasting', icon: TrendingUp, label: '1 · Cuánto vamos a vender', sub: 'Forecast por producto' },
+  { id: 'seguridad', icon: Package, label: '2 · Cuánto hay que producir', sub: 'Litros por producto y mes' },
+  { id: 'calendario', icon: CalendarDays, label: '3 · Cuándo y en qué tanque', sub: 'Carta Gantt de fermentadores' },
   { id: 'plan', icon: CheckCircle2, label: 'Plan Maestro', sub: 'Cocciones confirmadas' },
   { id: 'insumos', icon: ShoppingCart, label: 'Qué comprar', sub: 'Insumos, cuánto y cuándo' },
   { id: 'presupuesto', icon: CircleDollarSign, label: 'Presupuesto', sub: 'Gasto proyectado' },
@@ -328,9 +335,9 @@ const navItems = [
 type TabId = (typeof navItems)[number]['id']
 
 const GRUPOS_NAV: { titulo: string; items: TabId[] }[] = [
-  { titulo: 'Demanda', items: ['resumen', 'forecasting'] },
-  { titulo: 'Producción', items: ['seguridad', 'calendario', 'plan'] },
-  { titulo: 'Abastecimiento', items: ['insumos', 'presupuesto'] },
+  { titulo: 'Dónde estamos', items: ['resumen'] },
+  { titulo: 'El plan, paso a paso', items: ['forecasting', 'seguridad', 'calendario'] },
+  { titulo: 'Consulta', items: ['plan', 'insumos', 'presupuesto'] },
 ]
 
 /** Encabezado de cada vista: la pregunta que contesta, en una línea. Es lo
@@ -2308,6 +2315,32 @@ export default function ProduccionClient({
     return { lotes, porMes, sinTanque }
   }, [stockSeguridad, alarmasPorProducto, sugerenciasPlan, splitFermentadores, ocupacionPlanta.tanques, anclasCoccion, anclasTanque, horizontePlanMeses])
 
+  /** Confirma la necesidad de un producto para un mes: crea las cocciones ya
+   *  partidas por tanque. Se agendan escalonadas dentro del mes, no todas el
+   *  día 1 — arrancar cinco cocciones el mismo día no es ejecutable, y dejarlas
+   *  amontonadas obligaría a separarlas a mano en el Gantt. Desde ahí se
+   *  arrastran a la fecha y el tanque definitivos. */
+  const confirmarNecesidad = useCallback(async (
+    lotes: { producto: string; categoria: 'cerveza' | 'kombucha'; litros: number; mes: string }[]
+  ) => {
+    const hoy = hoyLocalISO()
+    for (let i = 0; i < lotes.length; i++) {
+      const l = lotes[i]
+      // Una cocción cada 3 días dentro del mes; nunca en el pasado.
+      const base = new Date(Date.parse(`${l.mes}T00:00:00Z`) + i * 3 * 86400000)
+        .toISOString().slice(0, 10)
+      await agregarLote({
+        producto: l.producto,
+        categoria: l.categoria,
+        litrosPlanificados: l.litros,
+        fechaPlanificada: base < hoy ? hoy : base,
+        origen: 'sugerido',
+        motivo: `Confirmado desde la necesidad mensual de ${l.mes.slice(0, 7)}`,
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const bloquesGantt = useMemo<BloqueGantt[]>(() => {
     const hoy = hoyLocalISO()
     const confirmados: BloqueGantt[] = plan
@@ -4244,8 +4277,24 @@ export default function ProduccionClient({
           {activeTab === 'seguridad' && (
             <div className="prod-enter flex flex-col gap-6">
               <PreguntaDeLaVista
-                pregunta="¿Cuánto hay que cocinar de cada producto?"
-                detalle="El colchón de seguridad y el punto de reorden que salen del forecast, contra lo que hay hoy en bodega. Acá se decide el CUÁNTO; el cuándo está en la pantalla siguiente."
+                pregunta="¿Cuántos litros hay que producir de cada producto, mes a mes?"
+                detalle="Los litros proyectados por el modelo para los próximos meses, con el colchón de seguridad al lado. Se ajustan acá y al confirmarlos se crean las cocciones, partidas según los tanques de cada línea. El cuándo y en qué tanque es el paso 3."
+              />
+
+              {/* El paso que antes se hacía a ojo sobre el gráfico del forecast:
+                  filtrar un producto, leer los litros de cada mes, anotarlos y
+                  pasarlos a mano a la carta Gantt. */}
+              <NecesidadMensual
+                series={series}
+                stockSeguridad={stockSeguridad}
+                plan={plan}
+                tanques={ocupacionPlanta.tanques.map(t => ({
+                  tanque: t.tanque,
+                  categoria: t.categoria as 'cerveza' | 'kombucha',
+                  capacidadLitros: t.capacidadLitros,
+                }))}
+                config={configGantt}
+                onConfirmar={confirmarNecesidad}
               />
 
 
