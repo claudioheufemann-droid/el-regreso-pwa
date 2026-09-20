@@ -430,12 +430,32 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
     # alcanzó a medir (historia corta, o alta después de la última corrida):
     # sin ancla quedarían con k=1, o sea con el colchón viejo subestimado, que
     # es justo el caso que este cambio viene a arreglar.
-    k_por_serie = {(c["nivel"], c["clave"]): float(c["k"]) for c in (calibracion or [])}
-    k_por_nivel: dict[str, float] = {}
+    # Dos factores por serie, no uno: una combinación derivada no recibe su
+    # banda propia sino la del producto padre escalada (ver derivar_de_producto),
+    # así que el factor que la corrige es otro. El método con el que sale cada
+    # serie se decide corrida a corrida, por eso se elige acá y no al calibrar.
+    k_por_serie: dict[tuple[str, str], dict] = {
+        (c["nivel"], c["clave"]): c for c in (calibracion or [])
+    }
+    k_por_nivel: dict[tuple[str, bool], float] = {}
     for nivel_cal in ("producto", "producto_envase"):
-        ks = sorted(v for (n, _), v in k_por_serie.items() if n == nivel_cal)
-        if ks:
-            k_por_nivel[nivel_cal] = ks[len(ks) // 2]
+        for derivado in (False, True):
+            campo = "kDerivado" if derivado else "k"
+            ks = sorted(float(c[campo]) for (n, _), c in k_por_serie.items()
+                        if n == nivel_cal and c.get(campo) is not None)
+            if ks:
+                k_por_nivel[(nivel_cal, derivado)] = ks[len(ks) // 2]
+
+    def factor_sigma(nivel_s: str, clave_s: str, metodo_s: str) -> float:
+        derivado = metodo_s == "derivado"
+        cal = k_por_serie.get((nivel_s, clave_s))
+        if cal is not None:
+            propio = cal.get("kDerivado" if derivado else "k")
+            if propio is not None:
+                return float(propio)
+        # Sin medición propia: la mediana del nivel PARA ESE CAMINO. El último
+        # recurso es 1.0, que deja el colchón como antes de calibrar.
+        return k_por_nivel.get((nivel_s, derivado), k_por_nivel.get((nivel_s, False), 1.0))
 
     filas: list[dict] = []
     for f in forecast:
@@ -456,9 +476,11 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
         if lo is None or hi is None:
             continue
 
+        mape, meses_hist, metodo = mape_por_serie.get((nivel, f["clave"]), (None, None, "propio"))
+
         # La banda de Prophet es simétrica alrededor de yhat: ancho = 2·z·σ,
         # corregida por el factor medido contra la realidad (ver docstring).
-        k_sigma = k_por_serie.get((nivel, f["clave"]), k_por_nivel.get(nivel, 1.0))
+        k_sigma = factor_sigma(nivel, f["clave"], metodo)
         sigma_mensual = max((float(hi) - float(lo)) / (2 * Z_BANDA_PROPHET), 0.0) * k_sigma
         sigma_semanal = sigma_mensual / math.sqrt(SEMANAS_POR_MES)
         demanda_semanal = max(yhat, 0.0) / SEMANAS_POR_MES
@@ -470,7 +492,6 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
         ss = Z_SERVICIO * math.sqrt(ventana * sigma_semanal**2 + (demanda_semanal**2) * (sigma_lt**2))
         rop = demanda_semanal * ventana + ss
 
-        mape, meses_hist, metodo = mape_por_serie.get((nivel, f["clave"]), (None, None, "propio"))
         # Una serie derivada nunca se marca "alta": el número sale de repartir
         # el forecast del producto por una proporción reciente, no de un
         # modelo propio validado contra su propio backtest — igual de útil

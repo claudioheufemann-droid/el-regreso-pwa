@@ -59,6 +59,11 @@ MAX_FOLDS = 12               # cuántos meses de walk-forward pedirle a cada ser
 MIN_FOLDS_CONFIABLE = 6      # con menos residuales que esto, el k propio no manda solo
 Z_BANDA_PROPHET = 1.2816
 K_MIN, K_MAX = 1.0, 4.0      # ver acotar_k()
+# ESPEJO de generar_forecast.py::MESES_PROPORCION_DERIVADA — la ventana con la
+# que el pipeline calcula qué proporción del producto es cada formato. Tiene que
+# ser la misma o el camino derivado se mide contra un ratio que no es el que se
+# va a usar en producción.
+MESES_PROPORCION_DERIVADA = 6
 
 RAIZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 
@@ -122,6 +127,78 @@ def medir_serie(s: pd.DataFrame) -> dict | None:
             "sesgo": statistics.fmean(residuales)}
 
 
+def ajustar_padre(producto: str, s: pd.DataFrame, corte_ds: pd.Timestamp, cache: dict) -> dict | None:
+    """Ajuste del producto padre hasta `corte_ds`, cacheado.
+
+    Varios envases comparten padre, así que sin cache el mismo ajuste se
+    repetiría una vez por formato.
+    """
+    llave = (producto, corte_ds)
+    if llave in cache:
+        return cache[llave]
+    train = s[s["ds"] < corte_ds]
+    if len(train) < MIN_MESES_FORECAST:
+        cache[llave] = None
+        return None
+    m = Prophet(yearly_seasonality=len(train) >= 24, weekly_seasonality=False,
+                daily_seasonality=False, interval_width=0.8)
+    m.fit(train[["ds", "y"]])
+    fila = m.predict(pd.DataFrame({"ds": [corte_ds]})).iloc[-1]
+    out = {"yhat": float(fila["yhat"]),
+           "ancho": (float(fila["yhat_upper"]) - float(fila["yhat_lower"])) / (2 * Z_BANDA_PROPHET)}
+    cache[llave] = out
+    return out
+
+
+def medir_serie_derivada(s_combo: pd.DataFrame, producto: str, s_padre: pd.DataFrame,
+                         cache: dict) -> dict | None:
+    """Igual que medir_serie, pero por el camino que usa de verdad un combo derivado.
+
+    Un producto×envase marcado `derivado` NO tiene banda propia en producción:
+    generar_forecast.py::derivar_de_producto le da la del producto padre
+    escalada por la proporción reciente del formato. O sea que el k medido
+    sobre un ajuste propio corrige el ratio equivocado para esas series. Acá se
+    reproduce la derivación fold por fold — mismo ratio sobre los últimos
+    MESES_PROPORCION_DERIVADA meses de overlap que usa el pipeline — y se mide
+    el k contra la banda que esa serie realmente va a recibir.
+    """
+    n = len(s_combo)
+    folds = min(MAX_FOLDS, n - MIN_MESES_FORECAST)
+    if folds < 3:
+        return None
+
+    padre_por_mes = dict(zip(s_padre["ds"], s_padre["y"]))
+    residuales, anchos = [], []
+    for corte in range(n - folds, n):
+        corte_ds = s_combo.iloc[corte]["ds"]
+        p = ajustar_padre(producto, s_padre, corte_ds, cache)
+        if not p:
+            continue
+
+        # Ratio con los datos disponibles ANTES del corte, como en producción.
+        train_combo = s_combo.iloc[:corte]
+        meses = list(train_combo["ds"])[-MESES_PROPORCION_DERIVADA:]
+        meses = [m for m in meses if m in padre_por_mes]
+        total_padre = sum(float(padre_por_mes[m]) for m in meses)
+        if total_padre <= 0:
+            continue
+        total_combo = float(train_combo[train_combo["ds"].isin(meses)]["y"].sum())
+        ratio = max(total_combo, 0.0) / total_padre
+
+        residuales.append(float(s_combo.iloc[corte]["y"]) - p["yhat"] * ratio)
+        anchos.append(p["ancho"] * ratio)
+
+    if len(residuales) < 3:
+        return None
+    sigma_banda = statistics.fmean(anchos)
+    if sigma_banda <= 0:
+        return None
+    sigma_real = statistics.stdev(residuales)
+    return {"folds": len(residuales), "sigma_real": sigma_real,
+            "sigma_banda": sigma_banda, "k_crudo": sigma_real / sigma_banda,
+            "sesgo": statistics.fmean(residuales)}
+
+
 def acotar_k(k: float) -> float:
     """
     El piso en 1.0 es una decisión, no un detalle: si una serie midió que su banda
@@ -166,13 +243,32 @@ def main() -> int:
               for (n, c), g in df.groupby(["nivel", "clave"], dropna=False)
               if n in ("producto", "producto_envase")]
 
-    medidas, por_nivel = [], defaultdict(list)
+    series_producto = {c: s for (n, c, s) in series if n == "producto"}
+    cache_padre: dict = {}
+
+    medidas, por_nivel, por_nivel_der = [], defaultdict(list), defaultdict(list)
     for i, (nivel, clave, s) in enumerate(series, 1):
         print(f"  [{i}/{len(series)}] {nivel}/{clave}", flush=True)
         r = medir_serie(s)
         if not r:
             continue
         r.update(nivel=nivel, clave=clave)
+
+        # Para los combos, medir TAMBIÉN el camino derivado: en producción un
+        # combo puede recibir la banda del padre escalada en vez de la propia,
+        # y el pipeline elige método corrida a corrida. Se guardan los dos y
+        # generar_forecast.py toma el que corresponda al método de esa corrida.
+        if nivel == "producto_envase":
+            nombre_padre = (clave or "").split("::")[0]
+            padre = series_producto.get(nombre_padre)
+            rd = (medir_serie_derivada(s, nombre_padre, padre, cache_padre)
+                  if padre is not None else None)
+            if rd:
+                r["k_crudo_derivado"] = rd["k_crudo"]
+                r["folds_derivado"] = rd["folds"]
+                if rd["folds"] >= MIN_FOLDS_CONFIABLE:
+                    por_nivel_der[nivel].append(rd["k_crudo"])
+
         medidas.append(r)
         if r["folds"] >= MIN_FOLDS_CONFIABLE:
             por_nivel[nivel].append(r["k_crudo"])
@@ -180,21 +276,30 @@ def main() -> int:
     # Mediana por nivel: es el ancla contra la que se encoge cada serie, y el
     # valor que usan las series sin backtest propio suficiente.
     k_nivel = {n: statistics.median(v) for n, v in por_nivel.items() if v}
+    k_nivel_der = {n: statistics.median(v) for n, v in por_nivel_der.items() if v}
+
+    def encoger(k_crudo: float, n: int, ancla: float) -> float:
+        # Con pocos folds el k propio es ruido, así que se lo tira hacia la
+        # mediana del nivel. peso = n/(n+MIN_FOLDS_CONFIABLE) — con 6 folds
+        # pesa 50% lo propio, con 12 pesa 67%, con 3 sólo 33%.
+        w = n / (n + MIN_FOLDS_CONFIABLE)
+        return acotar_k(w * k_crudo + (1 - w) * ancla)
 
     filas = []
     for r in medidas:
-        n = r["folds"]
-        ancla = k_nivel.get(r["nivel"], 2.0)
-        # Shrinkage: con pocos folds el k propio es ruido, así que se lo tira
-        # hacia la mediana del nivel. peso = n/(n+MIN_FOLDS_CONFIABLE) — con 6
-        # folds pesa 50% lo propio, con 12 pesa 67%, con 3 sólo 33%.
-        w = n / (n + MIN_FOLDS_CONFIABLE)
-        k = acotar_k(w * r["k_crudo"] + (1 - w) * ancla)
-        filas.append({"nivel": r["nivel"], "clave": r["clave"], "k": round(k, 4),
-                      "k_crudo": round(r["k_crudo"], 4), "folds": n,
-                      "sigma_real": round(r["sigma_real"], 2),
-                      "sigma_banda": round(r["sigma_banda"], 2),
-                      "sesgo_litros": round(r["sesgo"], 2)})
+        fila = {"nivel": r["nivel"], "clave": r["clave"],
+                "k": round(encoger(r["k_crudo"], r["folds"], k_nivel.get(r["nivel"], 2.0)), 4),
+                "k_crudo": round(r["k_crudo"], 4), "folds": r["folds"],
+                "sigma_real": round(r["sigma_real"], 2),
+                "sigma_banda": round(r["sigma_banda"], 2),
+                "sesgo_litros": round(r["sesgo"], 2)}
+        if "k_crudo_derivado" in r:
+            nd = r["folds_derivado"]
+            fila["k_derivado"] = round(
+                encoger(r["k_crudo_derivado"], nd, k_nivel_der.get(r["nivel"], 2.0)), 4)
+            fila["k_crudo_derivado"] = round(r["k_crudo_derivado"], 4)
+            fila["folds_derivado"] = nd
+        filas.append(fila)
 
     print("\n" + "=" * 78)
     print("DISTRIBUCION DEL FACTOR k (sigma real / sigma que declara la banda)")
@@ -211,9 +316,18 @@ def main() -> int:
         print(f"  {nivel:<18}{len(ks):>8}{q(.10):>8.2f}{q(.25):>8.2f}"
               f"{statistics.median(ks):>10.2f}{q(.75):>8.2f}{q(.90):>8.2f}")
 
+    ks_der = sorted(f["k_crudo_derivado"] for f in filas if "k_crudo_derivado" in f)
+    if ks_der:
+        print(f"  {'por camino derivado':<18}{len(ks_der):>8}"
+              f"{ks_der[len(ks_der) // 10]:>8.2f}{ks_der[len(ks_der) // 4]:>8.2f}"
+              f"{statistics.median(ks_der):>10.2f}{ks_der[len(ks_der) * 3 // 4]:>8.2f}"
+              f"{ks_der[min(len(ks_der) * 9 // 10, len(ks_der) - 1)]:>8.2f}")
+
     print(f"\n  ancla por nivel (mediana, solo series con >= {MIN_FOLDS_CONFIABLE} folds):")
     for n, v in k_nivel.items():
         print(f"    {n:<18}{v:.2f}")
+    for n, v in k_nivel_der.items():
+        print(f"    {n + ' (derivado)':<18}{v:.2f}")
 
     bajo = sum(1 for f in filas if f["k_crudo"] < 1.0)
     topeadas = sum(1 for f in filas if f["k"] >= K_MAX)
