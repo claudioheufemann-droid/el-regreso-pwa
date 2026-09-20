@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Settings2, AlertTriangle, ChevronLeft, ChevronRight, CalendarRange } from 'lucide-react'
+import { Settings2, AlertTriangle, ChevronLeft, ChevronRight, CalendarRange, Eye, EyeOff } from 'lucide-react'
 import type { CargaArrastre, DestinoArrastre, EstadoArrastre } from './useArrastreCalendario'
 
 /**
@@ -75,14 +75,25 @@ interface Props {
   /** Movimientos de esta sesión que todavía no se reflejan en el plan. */
   anclasEnSesion?: number
   onLimpiarAnclas?: () => void
+  /** Necesidad del paso 2 contra lo que hay agendado, por mes. Es lo que
+   *  convierte al Gantt en tablero de control y no sólo en un calendario:
+   *  responde "¿lo agendado cubre lo que dije que necesito?". */
+  cobertura?: { mes: string; necesidad: number; planificado: number }[]
   /** Semanas visibles de una. */
   semanas?: number
 }
 
 const MS_DIA = 86_400_000
-const ANCHOS = { compacto: 16, normal: 26, amplio: 40 } as const
-type Zoom = keyof typeof ANCHOS
-const ANCHO_TANQUE = 172
+/* Dos densidades, no tres. El "amplio" de 40 px/día daba 2.800 px de ancho a
+   diez semanas: nadie planifica scrolleando cuatro pantallas. Cada densidad
+   define también el alto de fila — con 23 tanques, 44 px por fila eran mil
+   píxeles de grilla antes de ver nada más. */
+const DENSIDAD = {
+  compacto: { dia: 14, fila: 26, etiqueta: 10 },
+  normal: { dia: 24, fila: 34, etiqueta: 11 },
+} as const
+type Zoom = keyof typeof DENSIDAD
+const ANCHO_TANQUE = 168
 
 function isoADate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -105,6 +116,12 @@ function hoyISO() {
 /** Negro o blanco según qué contraste mejor sobre el color del bloque. La
  *  paleta la elige el usuario desde la configuración, así que el texto no
  *  puede asumir un fondo oscuro. */
+/** Litros abreviados para las cabeceras: con seis datos en una línea, los
+ *  miles completos empujan el resto fuera de pantalla. */
+function fLitros(n: number) {
+  return n >= 10000 ? `${(n / 1000).toFixed(1).replace('.', ',')}k` : Math.round(n).toLocaleString('es-CL')
+}
+
 function textoSobre(hex: string) {
   const r = parseInt(hex.slice(1, 3), 16)
   const g = parseInt(hex.slice(3, 5), 16)
@@ -116,9 +133,24 @@ function textoSobre(hex: string) {
 export default function GanttProduccion({
   fermentadores, bloques, config, arrastre, propsOrigen,
   onAbrirConfig, onAbrirBloque, bloqueRecienMovido = null,
-  anclasEnSesion = 0, onLimpiarAnclas, semanas = 10,
+  anclasEnSesion = 0, onLimpiarAnclas, cobertura = [], semanas = 10,
 }: Props) {
   const [zoom, setZoom] = useState<Zoom>('normal')
+  /** Grupos plegados. Plegar NO esconde información: la cabecera del grupo
+   *  lleva su propio resumen (ocupados, litros, % de capacidad), así que
+   *  cerrar Laboratorio deja de costar 4 filas y no cuesta saber cómo está. */
+  const [plegados, setPlegados] = useState<Set<string>>(new Set(['Laboratorio']))
+  /** Los tanques sin nada agendado en la ventana son la mitad de la grilla y
+   *  no aportan a leer el plan. Se esconden por defecto y se cuentan en la
+   *  cabecera del grupo, que es donde importan: "quedan 8 libres". */
+  const [ocultarLibres, setOcultarLibres] = useState(true)
+  const alternarGrupo = useCallback((titulo: string) => {
+    setPlegados(p => {
+      const n = new Set(p)
+      if (n.has(titulo)) n.delete(titulo); else n.add(titulo)
+      return n
+    })
+  }, [])
   const [offsetSemanas, setOffsetSemanas] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -130,7 +162,7 @@ export default function GanttProduccion({
     setOffsetSemanas(o => (delta === 0 ? 0 : o + delta))
   }, [])
 
-  const anchoDia = ANCHOS[zoom]
+  const { dia: anchoDia, fila: altoFila, etiqueta: tamEtiqueta } = DENSIDAD[zoom]
   const hoy = hoyISO()
 
   const colorPorProducto = useMemo(() => {
@@ -216,15 +248,33 @@ export default function GanttProduccion({
   }, [bloques, inicioVentana, finVentana, fermentadores])
 
   const grupos = useMemo(() => {
-    const cerveza = fermentadores.filter(f => f.categoria === 'cerveza' && !/lavoratorio|laboratorio/i.test(f.nombre))
-    const lab = fermentadores.filter(f => /lavoratorio|laboratorio/i.test(f.nombre))
-    const kombucha = fermentadores.filter(f => f.categoria === 'kombucha')
-    return [
-      { titulo: 'Tanques cerveza', tanques: cerveza },
-      { titulo: 'Tanques kombucha', tanques: kombucha },
-      { titulo: 'Laboratorio', tanques: lab },
+    const esLab = (n: string) => /lavoratorio|laboratorio/i.test(n)
+    const crudos = [
+      { titulo: 'Tanques cerveza', tanques: fermentadores.filter(f => f.categoria === 'cerveza' && !esLab(f.nombre)) },
+      { titulo: 'Tanques kombucha', tanques: fermentadores.filter(f => f.categoria === 'kombucha') },
+      { titulo: 'Laboratorio', tanques: fermentadores.filter(f => esLab(f.nombre)) },
     ].filter(g => g.tanques.length > 0)
-  }, [fermentadores])
+
+    // El resumen es lo que permite plegar sin perder nada: un encargado que
+    // cierra un grupo sigue sabiendo cuántos tanques tiene tomados, cuántos
+    // litros hay comprometidos y qué proporción de su capacidad es eso.
+    return crudos.map(g => {
+      const conBloques = g.tanques.filter(t => (porTanque.get(t.nombre) ?? []).length > 0)
+      const litros = g.tanques.reduce(
+        (a, t) => a + (porTanque.get(t.nombre) ?? []).reduce((x, b) => x + b.litros, 0), 0)
+      const capacidad = g.tanques.reduce((a, t) => a + t.capacidadLitros, 0)
+      const alertas = g.tanques.reduce((a, t) => a + (porTanque.get(t.nombre) ?? [])
+        .filter(b => solapes.has(b.id) || b.litros > t.capacidadLitros).length, 0)
+      return {
+        ...g,
+        ocupados: conBloques.length,
+        libres: g.tanques.length - conBloques.length,
+        litros, capacidad, alertas,
+        pct: capacidad > 0 ? Math.round((litros / capacidad) * 100) : 0,
+        visibles: ocultarLibres ? conBloques : g.tanques,
+      }
+    })
+  }, [fermentadores, porTanque, solapes, ocultarLibres])
 
   const anchoGrilla = dias.length * anchoDia
 
@@ -269,7 +319,7 @@ export default function GanttProduccion({
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-0.5 rounded-lg border border-gray-200 bg-white p-0.5">
-            {(['compacto', 'normal', 'amplio'] as Zoom[]).map(z => (
+            {(['compacto', 'normal'] as Zoom[]).map(z => (
               <button
                 key={z} type="button" onClick={() => setZoom(z)}
                 className={`prod-press rounded-md px-2 py-1 text-[11px] font-bold capitalize transition ${
@@ -294,6 +344,16 @@ export default function GanttProduccion({
             </button>
           </div>
 
+          <button type="button" onClick={() => setOcultarLibres(v => !v)}
+            title={ocultarLibres ? 'Mostrar todos los tanques' : 'Esconder los tanques sin carga'}
+            className={`prod-press flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition ${
+              ocultarLibres ? 'border-[#2F6B4F] bg-[#2F6B4F]/10 text-[#2F6B4F]'
+                            : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+            }`}>
+            {ocultarLibres ? <EyeOff size={14} /> : <Eye size={14} />}
+            Sólo con carga
+          </button>
+
           <button type="button" onClick={onAbrirConfig}
             className="prod-press flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-600 hover:bg-gray-50">
             <Settings2 size={14} />
@@ -301,6 +361,43 @@ export default function GanttProduccion({
           </button>
         </div>
       </div>
+
+      {/* ── Cobertura contra la necesidad ────────────────────────────────
+          Sin esto el Gantt dice dónde va cada cocción pero no si alcanzan.
+          Un encargado no necesita sumar litros a mano para saber que a
+          noviembre todavía le faltan 4.000 L por agendar. */}
+      {cobertura.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gray-100 bg-white px-4 py-2.5 lg:px-6">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
+            Agendado vs. necesidad
+          </span>
+          {cobertura.map(c => {
+            const pct = c.necesidad > 0 ? Math.round((c.planificado / c.necesidad) * 100) : 100
+            const falta = Math.max(0, c.necesidad - c.planificado)
+            return (
+              <div key={c.mes} className="flex items-center gap-1.5"
+                title={`${fLitros(c.planificado)} L agendados de ${fLitros(c.necesidad)} L necesarios`}>
+                <span className="text-[10.5px] font-bold uppercase text-gray-500">
+                  {new Date(c.mes + 'T00:00:00Z').toLocaleDateString('es-CL', { month: 'short', timeZone: 'UTC' }).replace('.', '')}
+                </span>
+                <span className="h-1.5 w-14 overflow-hidden rounded-full bg-gray-200">
+                  <span className="block h-full rounded-full transition-[width] duration-500"
+                    style={{
+                      width: `${Math.min(pct, 100)}%`,
+                      background: pct >= 100 ? '#2F6B4F' : pct >= 60 ? '#C9A227' : '#DC2626',
+                    }} />
+                </span>
+                <span className={`text-[10.5px] font-bold tabular-nums ${
+                  pct >= 100 ? 'text-[#2F6B4F]' : 'text-gray-600'
+                }`}>{pct}%</span>
+                {falta > 0 && (
+                  <span className="text-[10.5px] tabular-nums text-gray-400">falta {fLitros(falta)} L</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── Grilla ───────────────────────────────────────────────────── */}
       <div ref={scrollRef} className="overflow-x-auto">
@@ -321,7 +418,7 @@ export default function GanttProduccion({
           <div className="flex border-b border-gray-200 bg-white">
             <div style={{ width: ANCHO_TANQUE, flexShrink: 0 }}
               className="sticky left-0 z-20 flex items-center bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-              Fermentador
+              Fermentador <span className="ml-auto normal-case text-gray-300">cap. L</span>
             </div>
             {dias.map(d => (
               <div key={d.iso} style={{ width: anchoDia, flexShrink: 0 }}
@@ -337,32 +434,84 @@ export default function GanttProduccion({
           </div>
 
           {/* Filas por grupo */}
-          {grupos.map(grupo => (
-            <div key={grupo.titulo}>
-              <div className="flex border-b border-gray-100 bg-gray-50">
-                <div style={{ width: ANCHO_TANQUE, flexShrink: 0 }}
-                  className="sticky left-0 z-20 bg-gray-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-gray-500">
-                  {grupo.titulo}
-                </div>
-                <div style={{ width: anchoGrilla, flexShrink: 0 }} className="bg-gray-50" />
-              </div>
+          {grupos.map(grupo => {
+            const plegado = plegados.has(grupo.titulo)
+            return (
+              <div key={grupo.titulo}>
+                {/* Cabecera del grupo: es a la vez el control de plegado y el
+                    resumen. Va como <button> de ancho completo y no como un
+                    ícono chico — el objetivo es abrir y cerrar rápido, no
+                    apuntarle a una flecha de 12 px. */}
+                <button
+                  type="button"
+                  onClick={() => alternarGrupo(grupo.titulo)}
+                  className="prod-press sticky left-0 z-20 flex w-full items-center gap-2 border-b border-gray-200 bg-gray-100/80 px-3 py-1.5 text-left hover:bg-gray-100"
+                  style={{ width: ANCHO_TANQUE + anchoGrilla }}
+                >
+                  <ChevronRight size={13}
+                    className={`shrink-0 text-gray-500 transition-transform duration-200 ${plegado ? '' : 'rotate-90'}`} />
+                  <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-gray-600">
+                    {grupo.titulo}
+                  </span>
 
-              {grupo.tanques.map((t, i) => {
-                const deEsteTanque = porTanque.get(t.nombre) ?? []
-                return (
+                  <span className="shrink-0 text-[10.5px] font-semibold tabular-nums text-gray-500">
+                    {grupo.ocupados}/{grupo.tanques.length} con carga
+                  </span>
+
+                  {/* Barra de ocupación: es el dato que un encargado mira
+                      primero, y es lo que hace que plegar no cueste nada. */}
+                  <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-gray-300">
+                    <span className="block h-full rounded-full transition-[width] duration-300"
+                      style={{
+                        width: `${Math.min(grupo.pct, 100)}%`,
+                        background: grupo.pct >= 90 ? '#DC2626' : grupo.pct >= 70 ? '#C9A227' : '#2F6B4F',
+                      }} />
+                  </span>
+                  <span className="shrink-0 text-[10.5px] font-bold tabular-nums text-gray-600">
+                    {grupo.pct}%
+                  </span>
+                  <span className="shrink-0 text-[10.5px] tabular-nums text-gray-400">
+                    {fLitros(grupo.litros)} de {fLitros(grupo.capacidad)} L
+                  </span>
+
+                  {grupo.alertas > 0 && (
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-1.5 py-px text-[10px] font-bold text-red-700">
+                      <AlertTriangle size={9} />{grupo.alertas}
+                    </span>
+                  )}
+                  {plegado && grupo.libres > 0 && (
+                    <span className="shrink-0 text-[10.5px] text-gray-400">
+                      · {grupo.libres} {grupo.libres === 1 ? 'libre' : 'libres'}
+                    </span>
+                  )}
+                </button>
+
+                {!plegado && grupo.visibles.map((t, i) => (
                   <FilaTanque
-                    key={t.nombre} tanque={t} bloques={deEsteTanque} dias={dias}
-                    anchoDia={anchoDia} inicioVentana={inicioVentana} hoy={hoy}
+                    key={t.nombre} tanque={t} bloques={porTanque.get(t.nombre) ?? []} dias={dias}
+                    anchoDia={anchoDia} altoFila={altoFila} tamEtiqueta={tamEtiqueta}
+                    inicioVentana={inicioVentana} hoy={hoy}
                     colorPorProducto={colorPorProducto} solapes={solapes}
                     destinoActivo={destinoActivo} propsOrigen={propsOrigen}
                     cargaDe={cargaDe} onAbrirBloque={onAbrirBloque}
                     fila={i} recienMovido={bloqueRecienMovido} sentido={sentido}
                     cargaArrastrada={arrastre?.carga ?? null}
                   />
-                )
-              })}
-            </div>
-          ))}
+                ))}
+
+                {/* Los libres escondidos se anuncian, no desaparecen: si no,
+                    alguien buscaría un tanque que existe y no está en pantalla. */}
+                {!plegado && ocultarLibres && grupo.libres > 0 && (
+                  <button type="button" onClick={() => setOcultarLibres(false)}
+                    className="sticky left-0 z-10 flex w-full items-center gap-1.5 border-b border-gray-100 bg-white px-3 py-1 text-left text-[10.5px] text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+                    style={{ width: ANCHO_TANQUE + anchoGrilla }}>
+                    <Eye size={11} />
+                    {grupo.libres} {grupo.libres === 1 ? 'tanque libre' : 'tanques libres'} — mostrar
+                  </button>
+                )}
+              </div>
+            )
+          })}
 
           {/* Sin tanque asignado — no se esconden: si un lote quedó suelto hay
               que verlo, porque es trabajo que nadie agendó en ningún tanque. */}
@@ -377,7 +526,8 @@ export default function GanttProduccion({
               </div>
               <FilaTanque
                 tanque={{ nombre: '— sin asignar —', tipo: '', categoria: 'cerveza', capacidadLitros: 0, litrosActuales: 0 }}
-                bloques={sinAsignar} dias={dias} anchoDia={anchoDia} inicioVentana={inicioVentana}
+                bloques={sinAsignar} dias={dias} anchoDia={anchoDia}
+                altoFila={altoFila} tamEtiqueta={tamEtiqueta} inicioVentana={inicioVentana}
                 hoy={hoy} colorPorProducto={colorPorProducto} solapes={solapes}
                 destinoActivo={destinoActivo} propsOrigen={propsOrigen} cargaDe={cargaDe}
                 onAbrirBloque={onAbrirBloque} fila={0} recienMovido={bloqueRecienMovido}
@@ -388,16 +538,11 @@ export default function GanttProduccion({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-100 bg-gray-50/60 px-4 py-2.5 text-[11px] text-gray-500 lg:px-6">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-5 rounded-sm bg-[#2F6B4F]" /> En el plan
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-5 rounded-sm border border-dashed border-[#2F6B4F] bg-[#2F6B4F]/40" /> Sugerida — arrastrala para confirmarla
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-5 rounded-sm bg-gray-300" /> Fin de semana
-        </span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 bg-gray-50/60 px-4 py-1.5 text-[10.5px] text-gray-500 lg:px-6">
+        <span className="flex items-center gap-1"><span className="h-2 w-4 rounded-sm bg-[#2F6B4F]" /> en el plan</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-4 rounded-sm border border-dashed border-[#2F6B4F] bg-[#2F6B4F]/40" /> sugerida</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-4 rounded-sm bg-gray-300" /> finde</span>
+        <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-[#C9A227]" /> tanque con producto hoy</span>
         <span className="ml-auto">Arrastrá un bloque para cambiarle el día o el tanque.</span>
       </div>
     </div>
@@ -407,7 +552,7 @@ export default function GanttProduccion({
 /* ── Una fila = un tanque ─────────────────────────────────────────────── */
 
 function FilaTanque({
-  tanque, bloques, dias, anchoDia, inicioVentana, hoy, colorPorProducto,
+  tanque, bloques, dias, anchoDia, altoFila, tamEtiqueta, inicioVentana, hoy, colorPorProducto,
   solapes, destinoActivo, propsOrigen, cargaDe, onAbrirBloque, sinCapacidad,
   fila, recienMovido, sentido, cargaArrastrada,
 }: {
@@ -415,6 +560,8 @@ function FilaTanque({
   bloques: BloqueGantt[]
   dias: { iso: string; finde: boolean; esHoy: boolean }[]
   anchoDia: number
+  altoFila: number
+  tamEtiqueta: number
   inicioVentana: string
   hoy: string
   colorPorProducto: Map<string, string>
@@ -442,13 +589,22 @@ function FilaTanque({
       }`}
     >
       {/* Nombre del tanque */}
-      <div style={{ width: ANCHO_TANQUE, flexShrink: 0 }}
-        className="sticky left-0 z-10 flex flex-col justify-center border-r border-gray-100 bg-white px-3 py-2">
-        <span className="truncate text-[12px] font-bold text-gray-800">{tanque.nombre}</span>
+      <div style={{ width: ANCHO_TANQUE, flexShrink: 0, height: altoFila }}
+        className="sticky left-0 z-10 flex items-center gap-1.5 border-r border-gray-100 bg-white px-3"
+        title={!sinCapacidad && tanque.litrosActuales > 0
+          ? `${tanque.nombre} · ${tanque.capacidadLitros.toLocaleString('es-CL')} L · ${tanque.litrosActuales.toLocaleString('es-CL')} L ocupados hoy`
+          : tanque.nombre}>
+        {/* Punto lleno = el ERP dice que HOY tiene producto adentro. Es el
+            dato que antes ocupaba una segunda línea de texto entera. */}
         {!sinCapacidad && (
-          <span className="text-[10px] text-gray-400">
-            {tanque.capacidadLitros.toLocaleString('es-CL')} L
-            {tanque.litrosActuales > 0 && ` · ${tanque.litrosActuales.toLocaleString('es-CL')} L ocupados`}
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tanque.litrosActuales > 0 ? 'bg-[#C9A227]' : 'bg-gray-200'}`} />
+        )}
+        <span className="truncate font-bold text-gray-800" style={{ fontSize: tamEtiqueta + 1 }}>
+          {tanque.nombre.replace(/^Fermentador /, 'F. ').replace(/^Lavoratorio /, 'Lab. ')}
+        </span>
+        {!sinCapacidad && (
+          <span className="ml-auto shrink-0 tabular-nums text-gray-400" style={{ fontSize: tamEtiqueta - 1 }}>
+            {fLitros(tanque.capacidadLitros)}
           </span>
         )}
       </div>
@@ -457,7 +613,7 @@ function FilaTanque({
       <div
         key={inicioVentana}
         className={`relative ${sentido === 'der' ? 'prod-gantt-ventana-der' : sentido === 'izq' ? 'prod-gantt-ventana-izq' : ''}`}
-        style={{ width: dias.length * anchoDia, flexShrink: 0, minHeight: 44 }}
+        style={{ width: dias.length * anchoDia, flexShrink: 0, height: altoFila }}
       >
         <div className="absolute inset-0 flex">
           {dias.map(d => {
@@ -511,8 +667,8 @@ function FilaTanque({
                 position: 'absolute',
                 left: desdeIdx * anchoDia + 1,
                 width: Math.max(ancho - 2, 8),
-                top: 4,
-                height: 'calc(100% - 8px)',
+                top: 3,
+                height: 'calc(100% - 6px)',
                 // Los sugeridos van translúcidos para distinguirse de lo
                 // confirmado, pero a 18% el texto no se leía. 38% sobre blanco
                 // deja el color reconocible y el texto legible; el borde va al

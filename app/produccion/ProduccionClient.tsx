@@ -1777,6 +1777,13 @@ export default function ProduccionClient({
 
   const [configGantt, setConfigGantt] = useState<ConfigProducto[]>(configProductos)
   const [configAbierta, setConfigAbierta] = useState(false)
+  /** Bloque que acaba de moverse, para que el Gantt lo haga aterrizar con un
+   *  latido. Se limpia solo: es feedback de un gesto, no estado del plan. */
+  const [bloqueRecienMovido, setBloqueRecienMovido] = useState<string | null>(null)
+  const marcarMovido = useCallback((id: string) => {
+    setBloqueRecienMovido(id)
+    setTimeout(() => setBloqueRecienMovido(a => (a === id ? null : a)), 800)
+  }, [])
 
   /** Los callbacks del arrastre se crean una vez (deps vacías a propósito,
    *  para no re-suscribir listeners a mitad del gesto), así que leen el plan
@@ -1832,7 +1839,7 @@ export default function ProduccionClient({
       anclarCoccion(carga.producto, carga.loteNro, destino.fecha)
       if (destino.fermentador) anclarTanque(carga.producto, carga.loteNro, destino.fermentador)
       const lote = planRef.current.find(l => l.producto === carga.producto && l.estado !== 'cancelado')
-      if (lote) void moverLoteEnGantt(lote.id, destino)
+      if (lote) { marcarMovido(lote.id); void moverLoteEnGantt(lote.id, destino) }
       return
     }
     void agregarLote({
@@ -2379,6 +2386,31 @@ export default function ProduccionClient({
 
     return [...confirmados, ...sugeridos]
   }, [plan, planSugerido.lotes, diasDe])
+
+  /** Necesidad del paso 2 contra lo agendado, mes a mes. Se calcula con el
+   *  MISMO criterio que la tabla de necesidad (límite superior del forecast,
+   *  que es la base con la que se viene trabajando) para que las dos
+   *  pantallas no muestren dos verdades distintas del mismo mes. */
+  const coberturaGantt = useMemo(() => {
+    const meses = [...new Set(
+      series.filter(s => s.nivel === 'producto')
+        .flatMap(s => s.puntos.filter(p => p.tipo === 'forecast').map(p => p.mes))
+    )].sort().slice(0, 4)
+
+    return meses.map(mes => {
+      const necesidad = series
+        .filter(s => s.nivel === 'producto')
+        .reduce((a, s) => {
+          const p = s.puntos.find(x => x.mes === mes && x.tipo === 'forecast')
+          return a + (p?.litrosMax ?? p?.litros ?? 0)
+        }, 0)
+      const planificado = plan
+        .filter(l => l.estado !== 'cancelado' && l.estado !== 'completado'
+          && l.fechaPlanificada.slice(0, 8) + '01' === mes)
+        .reduce((a, l) => a + l.litrosPlanificados, 0)
+      return { mes, necesidad: Math.round(necesidad), planificado }
+    })
+  }, [series, plan])
 
   const fermentadoresGantt = useMemo(
     () => ocupacionPlanta.tanques.map(t => ({
@@ -5035,6 +5067,8 @@ export default function ProduccionClient({
                     },
                   }
                 }}
+                cobertura={coberturaGantt}
+                bloqueRecienMovido={bloqueRecienMovido}
                 anclasEnSesion={anclasCoccion.size + anclasTanque.size}
                 onLimpiarAnclas={limpiarAnclas}
                 onAbrirConfig={() => setConfigAbierta(true)}

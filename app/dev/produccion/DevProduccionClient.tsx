@@ -7,7 +7,7 @@ import NecesidadMensual from '@/app/produccion/NecesidadMensual'
 import { useArrastreCalendario, type DestinoArrastre } from '@/app/produccion/useArrastreCalendario'
 import {
   FERMENTADORES, CONFIG, SERIES, STOCK_SEGURIDAD, PLAN, HOY,
-  ESCENARIOS, bloquesDe, type Escenario,
+  ESCENARIOS, bloquesDe, COBERTURA, type Escenario,
 } from './fixtures'
 
 /**
@@ -118,6 +118,7 @@ export default function DevProduccionClient() {
               },
             }
           }}
+          cobertura={COBERTURA}
           bloqueRecienMovido={recienMovido}
           onAbrirConfig={() => setConfigAbierta(true)}
         />

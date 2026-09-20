@@ -196,3 +196,12 @@ export const PLAN: LotePlan[] = [
     fermentador: 'Fermentador K-2', diasOcupacion: 12,
   },
 ]
+
+/** Cobertura para la franja del Gantt: un mes cubierto, uno a medias y dos
+ *  cortos, para ver los tres colores de la barra de una sola pasada. */
+export const COBERTURA = [
+  { mes: mesDesde(0), necesidad: 14600, planificado: 15200 },
+  { mes: mesDesde(1), necesidad: 14400, planificado: 10100 },
+  { mes: mesDesde(2), necesidad: 14900, planificado: 4200 },
+  { mes: mesDesde(3), necesidad: 16900, planificado: 0 },
+]
