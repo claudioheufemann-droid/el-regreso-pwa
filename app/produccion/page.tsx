@@ -296,6 +296,21 @@ export interface LotePlan {
   /** Por qué se sugirió — sólo tiene contenido cuando origen='sugerido'. */
   motivo: string | null
   observaciones: string | null
+  /** Fermentador asignado en el Gantt. Null = todavía sin tanque. */
+  fermentador: string | null
+  /** Días corridos de ocupación del tanque. Null = hereda de la config del
+   *  producto (config_produccion_producto.dias_fermentacion). */
+  diasOcupacion: number | null
+}
+
+/** Configuración por producto del Gantt de ocupación de fermentadores. */
+export interface ConfigProductoProduccion {
+  producto: string
+  categoria: 'cerveza' | 'kombucha'
+  /** Días CORRIDOS — la fermentación no se detiene el fin de semana. */
+  diasFermentacion: number
+  litrosObjetivo: number | null
+  color: string
 }
 
 /**
@@ -1128,6 +1143,23 @@ export default async function ProduccionPage() {
     origen: p.origen as 'sugerido' | 'manual',
     motivo: (p.motivo as string | null) ?? null,
     observaciones: (p.observaciones as string | null) ?? null,
+    fermentador: (p.fermentador as string | null) ?? null,
+    diasOcupacion: p.dias_ocupacion == null ? null : Number(p.dias_ocupacion),
+  }))
+
+  // Configuración por producto del Gantt: días en tanque, litraje habitual y
+  // color del bloque. Se carga acá y no en el cliente para que la primera
+  // pintada del Gantt ya salga con los colores definitivos.
+  const { data: configRaw } = await admin
+    .from('config_produccion_producto')
+    .select('producto, categoria, dias_fermentacion, litros_objetivo, color')
+    .order('producto')
+  const configProductos: ConfigProductoProduccion[] = (configRaw ?? []).map(c => ({
+    producto: c.producto as string,
+    categoria: c.categoria as 'cerveza' | 'kombucha',
+    diasFermentacion: Number(c.dias_fermentacion),
+    litrosObjetivo: c.litros_objetivo == null ? null : Number(c.litros_objetivo),
+    color: c.color as string,
   }))
 
   /* ── Proyección de necesidad de insumos ──────────────────────────────────
@@ -1436,6 +1468,7 @@ export default async function ProduccionPage() {
       series={series}
       calidad={calidad}
       planProduccion={planProduccion}
+      configProductos={configProductos}
       sugerenciasPlan={sugerenciasPlan}
       splitFermentadores={splitFermentadores}
       ocupacionPlanta={ocupacionPlanta}

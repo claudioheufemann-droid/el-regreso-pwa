@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useMemo, useState, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -13,12 +13,14 @@ import {
 import {
   LayoutDashboard, TrendingUp, Package, CalendarDays, ShoppingCart,
   CircleDollarSign, Bell, Plus, AlertTriangle, Calendar as CalendarIcon,
-  TrendingDown, Beaker, Settings, Home, ChevronDown, Filter, Info, Sigma,
-  ArrowUp, ArrowDown, CheckCircle2, Trash2, X, GripVertical, Move,
+  TrendingDown, Beaker, Home, ChevronDown, Filter, Info, Sigma,
+  ArrowUp, ArrowDown, CheckCircle2, Trash2, X, Move,
 } from 'lucide-react'
 import PopoverCoccion from './PopoverCoccion'
-import { useArrastreCalendario, type CargaArrastre } from './useArrastreCalendario'
-import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, RecetaInsumoLinea, LoteSinReceta } from './page'
+import { useArrastreCalendario, type CargaArrastre, type DestinoArrastre } from './useArrastreCalendario'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, ConfigProductoProduccion, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, RecetaInsumoLinea, LoteSinReceta } from './page'
+import GanttProduccion, { type BloqueGantt, type ConfigProducto } from './GanttProduccion'
+import ConfigProductosGantt from './ConfigProductosGantt'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, LEAD_TIME_INSUMOS_SEMANAS, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -633,12 +635,14 @@ function ChipDesviacion({ mape, derivado = false }: { mape: number | null; deriv
 }
 
 export default function ProduccionClient({
-  series, calidad, planProduccion, sugerenciasPlan, splitFermentadores, ocupacionPlanta, necesidadInsumos, stockInsumos, recetaInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, planProduccion, configProductos, sugerenciasPlan, splitFermentadores, ocupacionPlanta, necesidadInsumos, stockInsumos, recetaInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
   /** Cola real del Plan Maestro (tabla plan_produccion), ya ordenada por prioridad. */
   planProduccion: LotePlan[]
+  /** Días en tanque, litraje habitual y color de cada producto en el Gantt. */
+  configProductos: ConfigProductoProduccion[]
   /** Sugerencias calculadas en vivo comparando disponible vs. punto de reorden — no persistidas hasta que el usuario las confirma. */
   sugerenciasPlan: SugerenciaPlan[]
   /** Cómo repartir entre formatos lo que está hoy en los fermentadores. */
@@ -719,6 +723,8 @@ export default function ProduccionClient({
   async function agregarLote(datos: {
     producto: string; categoria: 'cerveza' | 'kombucha'; litrosPlanificados: number; fechaPlanificada: string
     motivo?: string | null; origen?: 'sugerido' | 'manual'
+    /** Tanque donde se suelta en el Gantt. Null = queda sin asignar. */
+    fermentador?: string | null
     /** Sólo para el detalle del evento de Google Calendar. */
     necesidadCubrir?: number | null; cubreHasta?: string | null
   }) {
@@ -736,6 +742,8 @@ export default function ProduccionClient({
         litrosPlanificados: Number(nuevo.litros_planificados), fechaPlanificada: String(nuevo.fecha_planificada).slice(0, 10),
         prioridad: Number(nuevo.prioridad), estado: nuevo.estado, origen: nuevo.origen,
         motivo: nuevo.motivo, observaciones: nuevo.observaciones,
+        fermentador: (nuevo.fermentador as string | null) ?? datos.fermentador ?? null,
+        diasOcupacion: nuevo.dias_ocupacion == null ? null : Number(nuevo.dias_ocupacion),
       }])
       setMostrarFormLote(false)
       setSugerenciaModal(null)
@@ -1365,33 +1373,6 @@ export default function ProduccionClient({
     [series]
   )
 
-  /* ── Cronograma de Cocciones (mes calendario real, no ciclo de venta) ───
-     Antes usaba DEMO_calendario (31 días fijos, ni respetaba en qué día de
-     la semana cae el 1). Ahora sale del Plan Maestro real: un lote aparece
-     el día de su fecha planificada, con el grid alineado a los días de la
-     semana de verdad. */
-  const calendarioReal = useMemo(() => {
-    const hoy = new Date()
-    const anio = hoy.getFullYear(), mesIdx = hoy.getMonth()
-    const diasEnMesCal = new Date(anio, mesIdx + 1, 0).getDate()
-    const hoyISO = hoyLocalISO(hoy)
-    // Lunes=0 ... Domingo=6, para alinear con el header de la grilla.
-    const offsetPrimerDia = (new Date(anio, mesIdx, 1).getDay() + 6) % 7
-
-    const porDia = new Map<number, { id: string; estilo: string; tipo: 'cerveza' | 'kombucha'; urgente: boolean; detalle?: string }[]>()
-    for (const l of plan) {
-      const [y, m, d] = l.fechaPlanificada.split('-').map(Number)
-      if (y !== anio || m !== mesIdx + 1) continue
-      const atrasado = l.fechaPlanificada < hoyISO && l.estado === 'planificado'
-      if (!porDia.has(d)) porDia.set(d, [])
-      porDia.get(d)!.push({
-        id: l.id, estilo: l.producto, tipo: l.categoria, urgente: atrasado,
-        detalle: atrasado ? 'Debería haber empezado ya, según la fecha planificada.' : (l.motivo ?? undefined),
-      })
-    }
-    const dias = Array.from({ length: diasEnMesCal }, (_, i) => ({ dia: i + 1, cocciones: porDia.get(i + 1) ?? [] }))
-    return { dias, offsetPrimerDia }
-  }, [plan])
   const desviacionGeneral = serieGeneral?.mape ?? null
   const precisionSerie = serieActual?.mape != null ? Math.max(0, 100 - serieActual.mape) : null
 
@@ -1741,12 +1722,6 @@ export default function ProduccionClient({
   const cancelarCierrePreview = () => {
     if (cierrePreviewRef.current) { clearTimeout(cierrePreviewRef.current); cierrePreviewRef.current = null }
   }
-  const abrirPreview = (lote: (typeof planSugerido.lotes)[number], rect: DOMRect) => {
-    cancelarCierrePreview()
-    // Un panel ya fijado manda sobre el hover: pasar el cursor por otro chip
-    // no debe robarle el foco a lo que el usuario dejó abierto a propósito.
-    setDetalleCoccion(prev => (prev?.modo === 'fijado' ? prev : { lote, rect, modo: 'preview' }))
-  }
   const programarCierrePreview = () => {
     cancelarCierrePreview()
     cierrePreviewRef.current = setTimeout(() => {
@@ -1787,27 +1762,88 @@ export default function ProduccionClient({
    *                    Plan Maestro con esa fecha, sin pasar por el modal.
    *
    *  No se puede soltar en el pasado: una cocción no se agenda para ayer. */
-  const puedeSoltarEnDia = useCallback((fechaISO: string) => fechaISO >= hoyLocalISO(), [])
-  const alSoltarEnDia = useCallback((carga: CargaArrastre, fechaISO: string) => {
+  /* ── Gantt de ocupación de fermentadores ──────────────────────────────
+     Reemplaza a las dos grillas de calendario que había antes (una en
+     "Cuándo cocer" con las sugerencias y otra en Resumen con lo confirmado):
+     mostraban la misma planta en dos lugares con dos criterios distintos.
+     Acá hay una sola foto — filas = tanques, columnas = días corridos. */
+
+  const [configGantt, setConfigGantt] = useState<ConfigProducto[]>(configProductos)
+  const [configAbierta, setConfigAbierta] = useState(false)
+
+  /** Los callbacks del arrastre se crean una vez (deps vacías a propósito,
+   *  para no re-suscribir listeners a mitad del gesto), así que leen el plan
+   *  y la categoría en curso por ref en vez de por closure. */
+  const planRef = useRef(plan)
+  useEffect(() => { planRef.current = plan }, [plan])
+  const arrastreCategoriaRef = useRef<'cerveza' | 'kombucha' | null>(null)
+
+  const diasDe = useCallback((producto: string, categoria: 'cerveza' | 'kombucha') => {
+    const c = configGantt.find(x => x.producto === producto)
+    // Sin configuración propia, el default por línea: son los del Gantt que
+    // se llevaba en Excel, convertidos de días hábiles a corridos.
+    return c?.diasFermentacion ?? (categoria === 'cerveza' ? 24 : 12)
+  }, [configGantt])
+
+  /** Persiste el movimiento. El ancla de sesión ya movió el bloque en
+   *  pantalla, así que esto es confirmación: si falla, se avisa y se recarga
+   *  para no dejar la pantalla mostrando algo que la base no tiene. */
+  const moverLoteEnGantt = useCallback(async (id: string, destino: DestinoArrastre) => {
+    try {
+      const r = await fetch(`/api/produccion/plan/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fechaPlanificada: destino.fecha, fermentador: destino.fermentador }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo mover el lote')
+      setPlan(p => p.map(l => l.id === id
+        ? { ...l, fechaPlanificada: destino.fecha, fermentador: destino.fermentador }
+        : l))
+    } catch (e) {
+      setErrorPlan(e instanceof Error ? e.message : 'No se pudo mover el lote')
+      router.refresh()
+    }
+  }, [router])
+
+  const puedeSoltarEnCelda = useCallback((destino: DestinoArrastre) => {
+    if (destino.fecha < hoyLocalISO()) return false
+    // Un tanque de cerveza no fermenta kombucha y al revés: la celda de la
+    // otra línea no es un destino válido, y se apaga mientras se arrastra en
+    // vez de dejar soltar y avisar después.
+    if (destino.fermentador) {
+      const t = ocupacionPlanta.tanques.find(x => x.tanque === destino.fermentador)
+      const cat = arrastreCategoriaRef.current
+      if (t && cat && t.categoria !== cat) return false
+    }
+    return true
+  }, [ocupacionPlanta.tanques])
+
+  const alSoltarEnCelda = useCallback((carga: CargaArrastre, destino: DestinoArrastre) => {
     if (carga.tipo === 'coccion') {
-      anclarCoccion(carga.producto, carga.loteNro, fechaISO)
+      // Mover una cocción ya planificada: el ancla de sesión sigue existiendo
+      // para que el plan se re-simule al instante, pero además se persiste —
+      // antes esto se perdía al recargar y no lo veía nadie más.
+      anclarCoccion(carga.producto, carga.loteNro, destino.fecha)
+      if (destino.fermentador) anclarTanque(carga.producto, carga.loteNro, destino.fermentador)
+      const lote = planRef.current.find(l => l.producto === carga.producto && l.estado !== 'cancelado')
+      if (lote) void moverLoteEnGantt(lote.id, destino)
       return
     }
     void agregarLote({
       producto: carga.producto,
       categoria: carga.categoria,
       litrosPlanificados: carga.litros,
-      fechaPlanificada: fechaISO,
-      motivo: carga.motivo ?? 'Arrastrado al calendario desde las sugerencias del modelo',
+      fechaPlanificada: destino.fecha,
+      motivo: carga.motivo ?? 'Arrastrado al Gantt desde las sugerencias del modelo',
       origen: 'sugerido',
       necesidadCubrir: carga.necesidadCubrir ?? null,
       cubreHasta: carga.cubreHasta ?? null,
+      fermentador: destino.fermentador,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const { arrastre, propsOrigen, propsDestino } = useArrastreCalendario({
-    onSoltar: alSoltarEnDia,
-    puedeSoltarEn: puedeSoltarEnDia,
+  const { arrastre, propsOrigen } = useArrastreCalendario({
+    onSoltar: alSoltarEnCelda,
+    puedeSoltarEn: puedeSoltarEnCelda,
   })
 
   /** Cocciones que la sala puede sacar en un día POR LÍNEA (cervecería y
@@ -2272,10 +2308,62 @@ export default function ProduccionClient({
     return { lotes, porMes, sinTanque }
   }, [stockSeguridad, alarmasPorProducto, sugerenciasPlan, splitFermentadores, ocupacionPlanta.tanques, anclasCoccion, anclasTanque, horizontePlanMeses])
 
+  const bloquesGantt = useMemo<BloqueGantt[]>(() => {
+    const hoy = hoyLocalISO()
+    const confirmados: BloqueGantt[] = plan
+      .filter(l => l.estado === 'planificado' || l.estado === 'en_curso')
+      .map(l => ({
+        id: l.id,
+        tipo: 'confirmado' as const,
+        producto: l.producto,
+        categoria: l.categoria,
+        litros: l.litrosPlanificados,
+        inicioISO: l.fechaPlanificada,
+        dias: l.diasOcupacion ?? diasDe(l.producto, l.categoria),
+        fermentador: l.fermentador,
+        motivo: l.motivo,
+        atrasado: l.fechaPlanificada < hoy && l.estado === 'planificado',
+      }))
+
+    // Las sugerencias que YA existen como lote confirmado no se repiten: el
+    // plan manda, y ver el mismo producto dos veces en el mismo tanque haría
+    // pensar que hay que cocerlo dos veces.
+    const yaEnPlan = new Set(confirmados.map(b => `${b.producto}|${b.inicioISO}`))
+    const sugeridos: BloqueGantt[] = (planSugerido.lotes ?? [])
+      .filter(l => !yaEnPlan.has(`${l.producto}|${l.fechaInicio}`))
+      .map(l => ({
+        id: `sug:${l.id}`,
+        tipo: 'sugerido' as const,
+        producto: l.producto,
+        categoria: l.categoria,
+        litros: l.litros,
+        inicioISO: l.fechaInicio,
+        dias: diasDe(l.producto, l.categoria),
+        fermentador: l.tanque || null,
+        loteNro: l.loteNro,
+        motivo: l.llegaATiempo ? null : 'El stock se agota antes de que esta cocción esté lista.',
+      }))
+
+    return [...confirmados, ...sugeridos]
+  }, [plan, planSugerido.lotes, diasDe])
+
+  const fermentadoresGantt = useMemo(
+    () => ocupacionPlanta.tanques.map(t => ({
+      nombre: t.tanque, tipo: t.tipo, categoria: t.categoria as 'cerveza' | 'kombucha',
+      capacidadLitros: t.capacidadLitros, litrosActuales: t.litros,
+    })),
+    [ocupacionPlanta.tanques]
+  )
+
+
   /** Mes que muestra el calendario diario — 0 = mes actual, navegable con
    *  las flechas. Sólo cambia qué página del plan ya calculado se mira; el
    *  horizonte de planificación son siempre 3 meses. */
-  const [mesCoberturaOffset, setMesCoberturaOffset] = useState(0)
+  // El navegador de mes vivía en la cabecera del calendario que reemplazó el
+  // Gantt (que trae el suyo, por semanas). `calendarioCobertura` sigue
+  // alimentando las tarjetas de cocciones, así que el offset queda fijo en el
+  // mes en curso en vez de arrastrar un setter que ya nadie llama.
+  const mesCoberturaOffset = 0
 
   /* ── Calendario diario: proyección del plan sobre el mes visible ─────── */
   const calendarioCobertura = useMemo(() => {
@@ -3174,91 +3262,35 @@ export default function ProduccionClient({
               {/* Calendario + Alertas */}
               <div className="flex flex-col gap-6 xl:h-[600px] xl:flex-row">
 
-                {/* Calendario */}
-                <div className="flex flex-[3] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-4 lg:px-6">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="font-bold text-gray-800">Cronograma de Cocciones</h3>
-                      <span className="text-xs font-medium text-gray-400">
-                        {new Date().toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setActiveTab('plan')}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
-                    >
-                      Ver Plan Maestro →
-                    </button>
+                {/* El Cronograma de Cocciones que vivía acá se fusionó con el
+                    Calendario de Cocciones Sugeridas en un solo Gantt, en la
+                    pestaña "Cuándo cocer". Eran la misma planta mostrada en dos
+                    lugares con dos criterios distintos (confirmado vs. sugerido),
+                    y había que mirar los dos para entender qué tanque quedaba
+                    libre. Acá queda el atajo, no una tercera vista. */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('calendario')}
+                  className="prod-press flex flex-[3] flex-col items-start justify-center gap-2 overflow-hidden rounded-xl border border-gray-200 bg-white p-6 text-left shadow-sm hover:border-[#2F6B4F]/40 hover:bg-[#2F6B4F]/[0.03]"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <CalendarDays size={18} style={{ color: COLORS.darkGreen }} />
+                    <h3 className="font-bold tracking-tight text-gray-900">Ocupación de Fermentadores</h3>
                   </div>
-
-                  <div className="flex-1 overflow-auto p-4">
-                    <div className="grid min-w-[620px] grid-cols-7 gap-2">
-                      {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(dia => (
-                        <div key={dia} className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-gray-400">
-                          {dia}
-                        </div>
-                      ))}
-
-                      {Array.from({ length: calendarioReal.offsetPrimerDia }, (_, i) => <div key={`vacio-${i}`} />)}
-
-                      {calendarioReal.dias.map(dia => (
-                        <div
-                          key={dia.dia}
-                          className="relative flex min-h-[80px] flex-col gap-1 rounded-md border border-gray-100 bg-gray-50/30 p-1.5 transition-colors hover:bg-gray-50"
-                        >
-                          <span className="absolute right-2 top-1.5 text-xs font-medium text-gray-400">{dia.dia}</span>
-                          <div className="mt-4 flex flex-col gap-1">
-                            {dia.cocciones.map((coccion, cIdx) => (
-                              <div
-                                key={cIdx}
-                                className={`group relative truncate rounded-sm py-1 pl-1.5 pr-4 text-[10px] font-bold ${
-                                  coccion.urgente
-                                    ? 'border-[1.5px] border-red-500 bg-red-50 text-red-700 shadow-sm'
-                                    : 'text-white'
-                                }`}
-                                style={
-                                  coccion.urgente
-                                    ? undefined
-                                    : { backgroundColor: coccion.tipo === 'kombucha' ? COLORS.kombucha : COLORS.lightGreen }
-                                }
-                              >
-                                {coccion.estilo}
-                                {coccion.urgente && (
-                                  <div className="absolute -top-12 left-0 z-10 hidden w-40 flex-col rounded bg-gray-900 p-2 text-xs font-normal text-white shadow-xl group-hover:flex">
-                                    <span className="font-bold text-red-400">ATRASADO</span>
-                                    <span>{coccion.detalle || 'Requiere acción'}</span>
-                                  </div>
-                                )}
-                                {/* Quitar del plan directo desde el calendario — sin
-                                    esto había que ir a la tabla del Plan Maestro para
-                                    cancelar un lote. Al cancelar, el producto sale de
-                                    productosEnPlan (page.tsx) y su alarma de quiebre
-                                    de stock reaparece sola en Plan Maestro, si sigue
-                                    aplicando. */}
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); cambiarEstadoLote(coccion.id, 'cancelado') }}
-                                  title="Quitar del plan — reaparece en Alarmas de quiebre de stock si sigue aplicando"
-                                  className="absolute right-0.5 top-0.5 hidden rounded-sm p-0.5 text-current opacity-70 hover:bg-black/20 hover:opacity-100 group-hover:block"
-                                >
-                                  <X size={9} strokeWidth={3} />
-                                </button>
-                              </div>
-                            ))}
-                            {dia.cocciones.length === 0 && (
-                              <span className="text-[10px] text-gray-300">—</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {plan.length === 0 && (
-                      <p className="mt-4 text-center text-sm text-gray-400">
-                        Todavía no hay cocciones planificadas — agregalas desde{' '}
-                        <button onClick={() => setActiveTab('plan')} className="font-bold underline">Plan Maestro</button>.
-                      </p>
-                    )}
+                  <p className="max-w-md text-sm leading-relaxed text-gray-500">
+                    El cronograma ahora es una carta Gantt: cada fila es un tanque y cada bloque
+                    una cocción, que se arrastra para cambiarle el día o el fermentador.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="rounded-full bg-[#2F6B4F]/10 px-2.5 py-1 text-[11px] font-bold text-[#2F6B4F]">
+                      {bloquesGantt.filter(b => b.tipo === 'confirmado').length} cocciones en el plan
+                    </span>
+                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-500">
+                      {bloquesGantt.filter(b => b.tipo === 'sugerido').length} sugeridas
+                    </span>
+                    <span className="text-[12px] font-bold text-[#2F6B4F]">Abrir el Gantt →</span>
                   </div>
-                </div>
+                </button>
 
                 {/* Alertas — REALES, salen de forecast_calidad_datos */}
                 <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm xl:max-w-sm">
@@ -4508,7 +4540,7 @@ export default function ProduccionClient({
                 )}
                 <p className="mt-3 text-xs text-gray-400">
                   Demanda proyectada = forecast de Prophet ciclo a ciclo entre hoy y la fecha elegida (el ciclo en curso
-                  usa el ritmo de venta real, lun-vie). "Viene alta demanda" = el modelo ya identificó un empuje
+                  usa el ritmo de venta real, lun-vie). “Viene alta demanda” = el modelo ya identificó un empuje
                   estacional fuerte en algún mes dentro del período — anticiparse antes de que el punto de reorden lo
                   marque como crítico. “Punto reorden” ya suma {LEAD_TIME_INSUMOS_SEMANAS} semanas de gestión de
                   insumos con el proveedor al lead time de cocción — “Gestionar insumos antes del” es el límite real
@@ -4926,412 +4958,52 @@ export default function ProduccionClient({
                 </div>
               )}
 
-              {/* Calendario diario de cocciones SUGERIDAS — el "cuándo" del
-                  Plan de Cobertura, día por día. Distinto a propósito del
-                  Cronograma de Cocciones de Resumen: ahí sólo viven lotes YA
-                  CONFIRMADOS; acá se ve lo que el modelo sugiere ANTES de
-                  apretar "Agregar al plan", para poder armar el calendario
-                  completo de un vistazo antes de confirmar cada cocción. */}
+              {/* Carta Gantt de ocupación de fermentadores — reemplaza a las
+                  dos grillas de calendario que había antes (ésta, con las
+                  sugerencias, y el Cronograma de Cocciones de Resumen, con lo
+                  confirmado). Eran la misma planta contada dos veces: había
+                  que mirar las dos para saber si quedaba un tanque libre.
+
+                  Acá filas = tanques y columnas = días CORRIDOS. Lo confirmado
+                  va sólido y lo sugerido punteado; arrastrar un bloque cambia
+                  su día y su tanque, y eso se guarda en base. */}
+              <GanttProduccion
+                fermentadores={fermentadoresGantt}
+                bloques={bloquesGantt}
+                config={configGantt}
+                arrastre={arrastre}
+                propsOrigen={(carga, habilitado) => {
+                  // La categoría de lo que se está arrastrando se guarda acá
+                  // porque puedeSoltarEnCelda corre dentro de un listener
+                  // global que no puede leerla del closure.
+                  const base = propsOrigen(carga, habilitado) as Record<string, unknown>
+                  const onPointerDown = base.onPointerDown as ((e: React.PointerEvent) => void) | undefined
+                  return {
+                    ...base,
+                    onPointerDown: (e: React.PointerEvent) => {
+                      arrastreCategoriaRef.current = carga.categoria
+                      onPointerDown?.(e)
+                    },
+                  }
+                }}
+                anclasEnSesion={anclasCoccion.size + anclasTanque.size}
+                onLimpiarAnclas={limpiarAnclas}
+                onAbrirConfig={() => setConfigAbierta(true)}
+                onAbrirBloque={(b, rect) => {
+                  // El popover trabaja sobre la simulación de planSugerido
+                  // (litros, tanque, cuándo queda listo, hasta cuándo alcanza),
+                  // así que sólo se abre para bloques sugeridos: un lote ya
+                  // confirmado no tiene esa proyección detrás.
+                  const lote = planSugerido.lotes.find(l => `sug:${l.id}` === b.id)
+                  if (lote && rect) fijarDetalle(lote, rect)
+                }}
+              />
+
+              {/* Tarjetas de cocciones sugeridas — quedan como estaban: el
+                  Gantt responde "cuándo y en qué tanque", y estas tarjetas
+                  "por qué y con qué litraje", que es donde se confirman. */}
               <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gradient-to-b from-gray-50 to-white px-4 py-4 lg:px-6">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <CalendarDays size={17} style={{ color: COLORS.darkGreen }} />
-                    <h3 className="font-bold tracking-tight text-gray-900">Calendario de Cocciones Sugeridas</h3>
-                    <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-                      Sin confirmar
-                    </span>
-                    {/* Los ajustes manuales viven sólo en esta sesión: no se
-                        guardan en base. Hay que poder devolver el plan al
-                        original sin recargar la página. */}
-                    {anclasCoccion.size > 0 && (
-                      <button
-                        type="button"
-                        onClick={limpiarAnclas}
-                        className="prod-press flex items-center gap-1 rounded-full border border-[#C9A227] bg-[#C9A227]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#7a6216] hover:bg-[#C9A227]/20"
-                        title="Volver al plan que propone el modelo"
-                      >
-                        <X size={11} />
-                        {anclasCoccion.size} {anclasCoccion.size === 1 ? 'cocción movida' : 'cocciones movidas'} — deshacer
-                      </button>
-                    )}
-                  </div>
-                  {/* Navegación de mes: los dos controles y la etiqueta en un
-                      solo bloque, para que se lean como un control único en vez
-                      de tres botones sueltos. */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                      <button
-                        onClick={() => setMesCoberturaOffset(v => v - 1)}
-                        className="prod-press p-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                        aria-label="Mes anterior"
-                      >
-                        <ChevronDown size={16} className="rotate-90" />
-                      </button>
-                      <span className="min-w-[9rem] border-x border-gray-200 px-2 py-1.5 text-center text-sm font-bold capitalize text-gray-800">
-                        {calendarioCobertura.etiqueta}
-                      </span>
-                      <button
-                        onClick={() => setMesCoberturaOffset(v => v + 1)}
-                        className="prod-press p-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                        aria-label="Mes siguiente"
-                      >
-                        <ChevronDown size={16} className="-rotate-90" />
-                      </button>
-                    </div>
-                    {mesCoberturaOffset !== 0 && (
-                      <button
-                        onClick={() => setMesCoberturaOffset(0)}
-                        className="prod-press rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-600 shadow-sm hover:bg-gray-50"
-                      >
-                        Hoy
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* ══════════ BANDEJA DE SUGERENCIAS ══════════
-                    Los productos que el modelo pide cocer pero que todavía no
-                    son un lote confirmado. Antes sólo se podían mandar a
-                    producción desde otra pestaña ("Cuánto cocinar") y con un
-                    modal que pedía fecha a mano; acá se arrastran al día que
-                    corresponda y quedan creados con esa fecha, que es la
-                    forma natural de agendar cuando el calendario está a la
-                    vista. El botón sigue existiendo para quien prefiera el
-                    modal —y es el único camino con teclado—. */}
-                {anticipadasPorProducto.some(g => g.totalAProducir > 0) && (
-                  <div className="border-b border-gray-100 bg-gradient-to-b from-amber-50/60 to-transparent px-4 py-3 lg:px-6">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <GripVertical size={14} className="text-amber-600" />
-                      <h4 className="text-[13px] font-bold text-gray-800">Sugerencias sin programar</h4>
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                        {anticipadasPorProducto.filter(g => g.totalAProducir > 0).length}
-                      </span>
-                      <span className="text-[11px] text-gray-500">
-                        Arrastrá una al día en que querés cocerla — se agrega al Plan Maestro con esa fecha.
-                        <span className="hidden sm:inline"> En el teléfono, mantené apretado para levantarla.</span>
-                      </span>
-                    </div>
-                    <div className="flex gap-2 overflow-x-auto pb-1">
-                      {anticipadasPorProducto
-                        .filter(g => g.totalAProducir > 0)
-                        .map(g => {
-                          const yaEnPlan = plan.some(
-                            l => l.producto === g.producto && l.estado !== 'cancelado' && l.estado !== 'completado',
-                          )
-                          const arrastrandoEsta = arrastre?.carga.tipo === 'sugerencia' && arrastre.carga.producto === g.producto
-                          return (
-                            <div
-                              key={g.producto}
-                              {...propsOrigen({
-                                tipo: 'sugerencia',
-                                producto: g.producto,
-                                categoria: g.categoria,
-                                litros: Math.round(g.totalAProducir),
-                                motivo: `Sugerido por el modelo: faltan ${fNum(g.totalAProducir)} L para cubrir el colchón`,
-                              })}
-                              className={`prod-chip prod-press flex w-48 shrink-0 cursor-grab flex-col gap-1 rounded-lg border p-2.5 active:cursor-grabbing ${
-                                arrastrandoEsta ? 'opacity-25' : ''
-                              } ${
-                                yaEnPlan
-                                  ? 'border-gray-200 bg-white/70'
-                                  : g.categoria === 'kombucha'
-                                    ? 'border-amber-300 bg-white shadow-sm'
-                                    : 'border-emerald-300 bg-white shadow-sm'
-                              }`}
-                              title={`${g.producto} — arrastrá al calendario para programarla`}
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <GripVertical size={11} className="shrink-0 text-gray-300" />
-                                <ProductImage nombre={g.producto} categoria={g.categoria} size={20} radius={5} />
-                                <span className="truncate text-[11.5px] font-bold text-gray-800">{g.producto}</span>
-                              </div>
-                              <div className="flex items-baseline justify-between gap-2">
-                                <span className="text-[15px] font-black tabular-nums text-gray-900">{fNum(g.totalAProducir)} L</span>
-                                {g.fermentadorSugerido && (
-                                  <span className={`truncate rounded-full px-1.5 py-0.5 text-[9.5px] font-bold ${
-                                    g.fermentadorAjustado ? 'bg-red-50 text-red-700' : 'bg-purple-50 text-purple-700'
-                                  }`}>
-                                    {g.fermentadorSugerido.tanque}
-                                  </span>
-                                )}
-                              </div>
-                              {yaEnPlan && (
-                                <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
-                                  <CheckCircle2 size={10} /> Ya hay un lote en el plan
-                                </span>
-                              )}
-                            </div>
-                          )
-                        })}
-                    </div>
-                  </div>
-                )}
-
-                {/* La grilla mensual necesita 620px para no deformarse, así
-                    que en el teléfono se cambia por una agenda vertical (más
-                    abajo). Un mes de 7 columnas en 375px obliga a arrastrar
-                    de lado para leer cada semana. El detalle de cada cocción
-                    ya no depende del hover: se toca y se abre fijado. */}
                 <div className="hidden overflow-auto p-4 sm:block">
-                  <div className="grid min-w-[620px] grid-cols-7 gap-2">
-                    {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(dia => (
-                      <div key={dia} className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-gray-400">
-                        {dia}
-                      </div>
-                    ))}
-
-                    {Array.from({ length: calendarioCobertura.offsetPrimerDia }, (_, i) => <div key={`vacio-${i}`} />)}
-
-                    {calendarioCobertura.dias.map(dia => {
-                      const fechaDiaISO = `${calendarioCobertura.anio}-${String(calendarioCobertura.mesIdx + 1).padStart(2, '0')}-${String(dia.dia).padStart(2, '0')}`
-                      const esHoy = fechaDiaISO === calendarioCobertura.hoyISO
-                      const esFuturoOHoy = fechaDiaISO >= calendarioCobertura.hoyISO
-                      return (
-                      <div
-                        key={dia.dia}
-                        {...propsDestino(fechaDiaISO)}
-                        className={`prod-dia relative flex min-h-[86px] flex-col gap-1 rounded-lg border p-1.5 ${
-                          // Tres estados de destino durante un arrastre, en vez
-                          // del único borde dorado de antes: el día bajo el
-                          // puntero se resalta fuerte (es el que va a recibir
-                          // la cocción), los otros días válidos quedan apenas
-                          // insinuados, y el pasado se apaga — que no se pueda
-                          // soltar ahí tiene que verse, no sólo fallar.
-                          arrastre && arrastre.diaDestino === fechaDiaISO
-                            ? 'prod-dia-activo border-[#C9A227] bg-[#C9A227]/15 ring-2 ring-[#C9A227]/40'
-                            : arrastre && esFuturoOHoy
-                              ? 'border-dashed border-[#C9A227]/45 bg-[#C9A227]/[0.04]'
-                              : arrastre
-                                ? 'border-gray-100 bg-gray-50/30 opacity-40'
-                                : esHoy
-                                  ? 'border-[#0F3D2E]/40 bg-[#0F3D2E]/[0.06] ring-1 ring-[#0F3D2E]/15'
-                                  : 'border-gray-100 bg-gray-50/40 hover:border-gray-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        <span className={`absolute right-1.5 top-1 text-[11px] tabular-nums ${
-                          esHoy
-                            ? 'flex h-5 w-5 items-center justify-center rounded-full bg-[#0F3D2E] font-bold text-white'
-                            : 'font-medium text-gray-400'
-                        }`}>{dia.dia}</span>
-                        <div className="mt-4 flex flex-col gap-1">
-                          {dia.lotes.map(l => {
-                            // "No llega" lo decide la propia simulación: el stock
-                            // proyectado del producto cruzó cero mientras esta
-                            // cocción venía en camino. No es una comparación
-                            // contra el borde del mes (con eso TODO salía rojo
-                            // apenas el mes arrancaba y el tablero no informaba).
-                            const noLlega = !l.llegaATiempo
-                            // Marcado = entra al presupuesto de insumos de abajo.
-                            const marcado = !l.enCurso && estaSeleccionado(l)
-                            // La fecha que el ERP calculó ya pasó y el tanque
-                            // sigue con producto: el embarrilado se atrasó.
-                            const embarriladoVencido = l.enCurso && !!l.fechaEmbarriladoReal
-                              && l.fechaEmbarriladoReal < calendarioCobertura.hoyISO
-                            return (
-                            <div
-                              key={l.id}
-                              className="relative"
-                              onMouseEnter={ev => abrirPreview(l, ev.currentTarget.getBoundingClientRect())}
-                              onMouseLeave={programarCierrePreview}
-                              onFocus={ev => abrirPreview(l, ev.currentTarget.getBoundingClientRect())}
-                              onBlur={programarCierrePreview}
-                            >
-                              {/* Punto independiente de todo lo demás: un tanque elegido a
-                                  mano puede coincidir con cualquier otro estado (movida,
-                                  atrasada, no llega), así que no compite por el color del
-                                  borde — se marca aparte para no perder ninguna señal. */}
-                              {l.tanqueManual && (
-                                <span
-                                  className="absolute -right-0.5 -top-0.5 z-10 h-2 w-2 rounded-full border border-white bg-emerald-500"
-                                  title="Tanque elegido a mano"
-                                />
-                              )}
-                              <button
-                                type="button"
-                                {...propsOrigen(
-                                  { tipo: 'coccion', producto: l.producto, loteNro: l.loteNro, categoria: l.categoria, litros: l.litros },
-                                  !l.enCurso,
-                                )}
-                                // El clic ya no alterna el presupuesto: abre el
-                                // panel fijado, donde esa acción es un botón
-                                // con nombre. Alternar a ciegas con un clic en
-                                // un chip de 10px era fácil de disparar sin
-                                // querer y no decía qué había pasado.
-                                onClick={ev => fijarDetalle(l, ev.currentTarget.getBoundingClientRect())}
-                                title={l.enCurso
-                                  ? 'Ver detalle'
-                                  : `${marcado ? 'En el presupuesto' : 'Fuera del presupuesto'} · clic para abrir · arrastrala a otro día para moverla`}
-                                className={`prod-chip prod-press flex w-full items-center gap-1 truncate rounded-md border py-1 pl-1 pr-1.5 text-left text-[10px] font-bold ${
-                                  l.enCurso ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-                                } ${
-                                  arrastre?.carga.tipo === 'coccion'
-                                  && arrastre.carga.producto === l.producto
-                                  && arrastre.carga.loteNro === l.loteNro
-                                    ? 'opacity-25' : ''
-                                } ${
-                                  detalleCoccion?.modo === 'fijado' && detalleCoccion.lote.id === l.id
-                                    ? 'ring-2 ring-[#0F3D2E]/35' : ''
-                                } ${
-                                  l.enCurso
-                                    ? embarriladoVencido
-                                      ? 'border-red-500 bg-red-50 text-red-700'
-                                      : 'border-sky-500 bg-sky-500/10 text-sky-800'
-                                    : l.movidoManual && marcado
-                                      ? 'border-[1.5px] border-[#C9A227] bg-[#C9A227]/10 text-[#7a6216]'
-                                    : !marcado
-                                      ? 'border-gray-300 bg-white text-gray-400 opacity-60'
-                                      : noLlega
-                                        ? 'border-red-500 bg-red-50 text-red-700'
-                                        : l.categoria === 'kombucha'
-                                          ? 'border-dashed border-amber-400 bg-amber-50 text-amber-800'
-                                          : 'border-dashed border-emerald-400 bg-emerald-50 text-emerald-800'
-                                }`}
-                              >
-                                {/* Manija: sin esto no hay ninguna señal de que
-                                    el chip se puede arrastrar — el cursor grab
-                                    sólo aparece al pasar por encima, y en
-                                    táctil no existe. */}
-                                {!l.enCurso && (
-                                  <GripVertical size={9} className="prod-chip-grip -ml-0.5 shrink-0 text-current opacity-0" />
-                                )}
-                                {l.enCurso
-                                  ? embarriladoVencido
-                                    ? <AlertTriangle size={9} className="shrink-0 text-red-600" />
-                                    : <Beaker size={9} className="shrink-0 text-sky-600" />
-                                  : l.movidoManual
-                                    ? <ArrowDown size={9} className="shrink-0 -rotate-90 text-[#C9A227]" />
-                                    : l.diasTarde > 0 && !noLlega && <Beaker size={9} className="shrink-0 text-purple-600" />}
-                                <span className="truncate">{l.producto}</span>
-                              </button>
-                            </div>
-                            )
-                          })}
-                          {dia.lotes.length === 0 && (
-                            <span className="text-[10px] text-gray-300">—</span>
-                          )}
-                        </div>
-                      </div>
-                      )
-                    })}
-                  </div>
-                {/* Agenda de teléfono: los mismos lotes, sólo los días que
-                    tienen algo, y con el detalle a la vista en vez de escondido
-                    en un hover que en táctil no se puede invocar. */}
-                <div className="flex flex-col divide-y divide-gray-100 sm:hidden">
-                  {calendarioCobertura.dias.filter(d => d.lotes.length > 0).map(dia => {
-                    const fechaDiaISO = `${calendarioCobertura.anio}-${String(calendarioCobertura.mesIdx + 1).padStart(2, '0')}-${String(dia.dia).padStart(2, '0')}`
-                    const esHoy = fechaDiaISO === calendarioCobertura.hoyISO
-                    return (
-                      <div key={dia.dia} className="flex flex-col gap-2 p-4">
-                        <p className={`text-xs font-bold uppercase tracking-wide ${esHoy ? 'text-[#0F3D2E]' : 'text-gray-400'}`}>
-                          {new Date(fechaDiaISO + 'T00:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })}
-                          {esHoy && ' · hoy'}
-                        </p>
-                        {dia.lotes.map(l => {
-                          const marcado = !l.enCurso && estaSeleccionado(l)
-                          const embarriladoVencido = l.enCurso && !!l.fechaEmbarriladoReal
-                            && l.fechaEmbarriladoReal < calendarioCobertura.hoyISO
-                          return (
-                            // Ya no es un <button>: el selector de tanque vive adentro y un
-                            // <select> no puede anidarse dentro de un <button> (HTML inválido,
-                            // el navegador lo saca afuera y rompe el layout). role="button" +
-                            // teclado mantiene el mismo comportamiento accesible que tenía.
-                            <div
-                              key={l.id}
-                              role={l.enCurso ? undefined : 'button'}
-                              tabIndex={l.enCurso ? undefined : 0}
-                              onClick={() => { if (!l.enCurso) alternarLote(l) }}
-                              onKeyDown={ev => {
-                                if (l.enCurso || (ev.key !== 'Enter' && ev.key !== ' ')) return
-                                ev.preventDefault(); alternarLote(l)
-                              }}
-                              className={`prod-press relative flex flex-col gap-1 rounded-lg border p-3 text-left ${l.enCurso ? '' : 'cursor-pointer'} ${
-                                l.enCurso
-                                  ? embarriladoVencido ? 'border-red-500 bg-red-50' : 'border-sky-500 bg-sky-500/10'
-                                  : !marcado
-                                    ? 'border-gray-200 bg-white opacity-60'
-                                    : !l.llegaATiempo
-                                      ? 'border-red-500 bg-red-50'
-                                      : l.movidoManual
-                                        ? 'border-[#C9A227] bg-[#C9A227]/10'
-                                        : l.categoria === 'kombucha'
-                                          ? 'border-dashed border-amber-400 bg-amber-50'
-                                          : 'border-dashed border-emerald-400 bg-emerald-50'
-                              }`}
-                            >
-                              {l.tanqueManual && (
-                                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-emerald-500" title="Tanque elegido a mano" />
-                              )}
-                              <div className="flex items-baseline justify-between gap-2">
-                                <span className="truncate text-sm font-bold text-gray-800">{l.producto}</span>
-                                <span className="shrink-0 text-sm font-bold tabular-nums text-gray-700">{fNum(l.litros)} L</span>
-                              </div>
-                              {l.enCurso ? (
-                                <p className="text-xs text-gray-500">
-                                  Ya fermentando en {l.tanque}
-                                  <span className="text-gray-400"> ({fNum(l.capacidadTanque)} L)</span>
-                                  {' · '}
-                                  {l.fechaEmbarriladoReal ? 'embarrilado' : 'estimado'} el{' '}
-                                  {new Date((l.fechaEmbarriladoReal ?? l.fechaListo) + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
-                                </p>
-                              ) : (
-                                <>
-                                  <p className="text-xs text-gray-500">
-                                    Listo el{' '}
-                                    {new Date(l.fechaListo + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
-                                  </p>
-                                  {/* Mismo criterio que el tooltip de escritorio: elegir tanque
-                                      decide DÓNDE (coordina ocupación real) y CUÁNTO (se llena
-                                      entero, no sólo lo que pedía el reorden). */}
-                                  <label className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500" onClick={ev => ev.stopPropagation()}>
-                                    Tanque:
-                                    <select
-                                      value={l.tanqueManual ? l.tanque : ''}
-                                      onChange={ev => { ev.stopPropagation(); anclarTanque(l.producto, l.loteNro, ev.target.value) }}
-                                      onClick={ev => ev.stopPropagation()}
-                                      className="min-w-0 flex-1 rounded border border-gray-200 bg-white px-1.5 py-1 text-xs font-bold text-gray-700"
-                                    >
-                                      <option value="">Automático — {l.tanque} ({fNum(l.capacidadTanque)} L)</option>
-                                      {ocupacionPlanta.tanques
-                                        .filter(t => t.categoria === l.categoria)
-                                        .sort((a, b) => a.capacidadLitros - b.capacidadLitros)
-                                        .map(t => (
-                                          <option key={t.tanque} value={t.tanque}>{t.tanque} ({fNum(t.capacidadLitros)} L)</option>
-                                        ))}
-                                    </select>
-                                  </label>
-                                </>
-                              )}
-                              {!l.enCurso && (
-                                <p className="text-[11px] text-gray-400">
-                                  Alcanza hasta el{' '}
-                                  {new Date(l.cubreHasta + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
-                                  {' · '}{marcado ? 'en el presupuesto' : 'fuera del presupuesto'}
-                                </p>
-                              )}
-                              {!l.llegaATiempo && !l.enCurso && (
-                                <p className="text-[11px] font-bold text-red-600">
-                                  No llega: el stock se agota cerca del{' '}
-                                  {new Date(l.fechaAgotamiento + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}.
-                                </p>
-                              )}
-                              {embarriladoVencido && (
-                                <p className="text-[11px] font-bold text-red-600">Atraso de embarrilado</p>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                  {calendarioCobertura.lotesEnElMes === 0 && (
-                    <p className="p-4 text-sm text-gray-400">No hay cocciones este mes.</p>
-                  )}
-                  <p className="p-4 text-[11px] text-gray-400">
-                    Tocá una cocción para incluirla o sacarla del presupuesto. Para moverla de día, mantenela apretada
-                    un momento y arrastrala sobre la grilla del mes — o abrí su detalle y usá &quot;Mover a otro día&quot;.
-                  </p>
-                </div>
 
                 {/* Detalle de la cocción: preview al pasar el cursor, panel
                     fijado al hacer clic. Vive en un portal a document.body
@@ -6787,6 +6459,16 @@ export default function ProduccionClient({
             </div>
           )}
 
+          {/* Configuración del Gantt: días en tanque, litraje habitual y color
+              por producto. Vive fuera de los bloques por tab porque el Gantt
+              la abre desde "Cuándo cocinar" pero el panel es global. */}
+          <ConfigProductosGantt
+            abierto={configAbierta}
+            config={configGantt}
+            onCerrar={() => setConfigAbierta(false)}
+            onGuardado={fila => setConfigGantt(c => c.map(x => x.producto === fila.producto ? fila : x))}
+          />
+
           {/* Popup de confirmación de una alarma/necesidad — se puede abrir
               desde el Plan Maestro o desde Stock de Seguridad, así que vive
               fuera de los bloques por tab (si quedara dentro de uno, no
@@ -6827,19 +6509,20 @@ export default function ProduccionClient({
               style={{ left: arrastre.x, top: arrastre.y }}
             >
               <div className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold shadow-xl ring-1 ${
-                arrastre.diaDestino
+                arrastre.destino
                   ? 'bg-[#0F3D2E] text-white ring-white/20'
                   : 'bg-white text-gray-500 ring-gray-200'
               }`}>
                 <Move size={12} className="shrink-0" />
                 <span className="max-w-[170px] truncate">{arrastre.carga.producto}</span>
-                <span className={arrastre.diaDestino ? 'text-white/60' : 'text-gray-400'}>
+                <span className={arrastre.destino ? 'text-white/60' : 'text-gray-400'}>
                   {fNum(arrastre.carga.litros)} L
                 </span>
               </div>
-              {arrastre.diaDestino && (
+              {arrastre.destino && (
                 <p className="mt-1 text-center text-[10px] font-bold text-[#0F3D2E]">
-                  {new Date(arrastre.diaDestino + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                  {new Date(arrastre.destino.fecha + 'T00:00:00Z').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
+                  {arrastre.destino.fermentador ? ` · ${arrastre.destino.fermentador}` : ''}
                 </p>
               )}
             </div>,

@@ -43,6 +43,10 @@ interface CrearLotePlan {
   origen?: 'sugerido' | 'manual'
   motivo?: string | null
   observaciones?: string | null
+  /** Tanque donde se solto el bloque en el Gantt. Null = sin asignar. */
+  fermentador?: string | null
+  /** Días corridos de ocupación. Null = hereda de config_produccion_producto. */
+  diasOcupacion?: number | null
   /** Sólo para el detalle del evento de Google Calendar — no se persisten
    *  como columnas propias, son datos derivados del forecast en el momento
    *  de confirmar la sugerencia. */
@@ -92,6 +96,8 @@ export async function POST(req: Request) {
       origen: body.origen ?? 'manual',
       motivo: body.motivo ?? null,
       observaciones: body.observaciones ?? null,
+      fermentador: body.fermentador ?? null,
+      dias_ocupacion: body.diasOcupacion ?? null,
       creado_por: UUID_RE.test(user.id) ? user.id : null,
     })
     .select('*')
