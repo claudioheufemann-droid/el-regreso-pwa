@@ -387,6 +387,96 @@ def derivar_de_producto(
     return {"forecast": forecast_derivado, "ratio": round(ratio, 4), "mesesRatio": len(meses_con_dato_producto)}
 
 
+def indexar_calibracion(calibracion: list[dict] | None) -> tuple[dict, dict]:
+    """Índice por serie + mediana por (nivel, camino) para las que no se midieron.
+
+    Devuelve (por_serie, por_nivel). Cada factor tiene su propia mediana: el
+    sesgo del centro y la sub-cobertura de la banda no son el mismo fenómeno.
+    """
+    por_serie = {(c["nivel"], c["clave"]): c for c in (calibracion or [])}
+    por_nivel: dict[tuple[str, bool, str], float] = {}
+    for nivel in ("general", "envase", "producto", "producto_envase"):
+        for derivado in (False, True):
+            for base in ("k", "b"):
+                campo = base + ("Derivado" if derivado else "")
+                vals = sorted(float(c[campo]) for (n, _), c in por_serie.items()
+                              if n == nivel and c.get(campo) is not None)
+                if vals:
+                    por_nivel[(nivel, derivado, base)] = vals[len(vals) // 2]
+    return por_serie, por_nivel
+
+
+def hacer_factor(por_serie: dict, por_nivel: dict, neutro: float, base: str):
+    """Devuelve factor(nivel, clave, metodo) para `k` o para `b`."""
+    def factor(nivel: str, clave: str | None, metodo: str) -> float:
+        derivado = metodo == "derivado"
+        cal = por_serie.get((nivel, clave))
+        if cal is not None:
+            medido = cal.get(base + ("Derivado" if derivado else ""))
+            if medido is not None:
+                return float(medido)
+        # Sin medición propia: la mediana del nivel PARA ESE CAMINO; si tampoco
+        # hay, la del camino propio; y como último recurso el valor neutro, que
+        # deja la serie como si no hubiera calibración.
+        return por_nivel.get((nivel, derivado, base),
+                             por_nivel.get((nivel, False, base), neutro))
+    return factor
+
+
+def aplicar_correccion_sesgo(forecast: list[dict], validacion: list[dict],
+                             calibracion: list[dict] | None) -> dict:
+    """Corrige el CENTRO de cada serie proyectada por su sesgo medido.
+
+    Prophet sobre-pronostica (+42% producto / +35% producto×envase), y ese sesgo
+    entra lineal al punto de reorden vía demanda_semanal = yhat/4.33: venía
+    mandando a cocer de más. `b` es multiplicativo porque el sesgo es
+    proporcional al nivel de la serie, no una cantidad fija de litros.
+
+    LA BANDA SE DESPLAZA, NO SE ESCALA. El ancho de la banda es σ, y `k` se midió
+    contra ESE ancho; si al bajar el centro se escalara también la banda, el
+    colchón se achicaría en la misma proporción y la corrección del paso
+    anterior se perdería en silencio. Se conserva la semibanda superior
+    (hi - yhat), que es de donde calcular_stock_seguridad saca σ.
+
+    tendencia y estacionalidad se escalan por `b` igual que el centro: en el
+    modelo aditivo de Prophet yhat = tendencia + estacionalidad, así que
+    escalar las dos mantiene la descomposición consistente con el número que
+    muestra el gráfico en "Ver el modelo".
+    """
+    metodo_por_serie = {(v["nivel"], v.get("clave")): v.get("metodo", "propio") for v in validacion}
+    por_serie, por_nivel = indexar_calibracion(calibracion)
+    factor_b = hacer_factor(por_serie, por_nivel, 1.0, "b")
+
+    aplicadas, litros_antes, litros_despues = 0, 0.0, 0.0
+    for f in forecast:
+        if f["tipo"] != "forecast":
+            continue
+        metodo = metodo_por_serie.get((f["nivel"], f.get("clave")), "propio")
+        b = factor_b(f["nivel"], f.get("clave"), metodo)
+        yhat = float(f["litros"])
+        litros_antes += yhat
+        if b == 1.0:
+            litros_despues += yhat
+            continue
+
+        semi_sup = float(f["litrosMax"]) - yhat
+        semi_inf = yhat - float(f["litrosMin"])
+        corregido = max(yhat * b, 0.0)
+        f["litros"] = round(corregido, 2)
+        f["litrosMax"] = round(corregido + semi_sup, 2)
+        # El piso se vuelve a recortar en 0 como en procesar_serie. No afecta al
+        # colchón: σ sale de la semibanda superior justamente por esto.
+        f["litrosMin"] = round(max(corregido - semi_inf, 0.0), 2)
+        for campo in ("tendencia", "estacionalidad"):
+            if f.get(campo) is not None:
+                f[campo] = round(float(f[campo]) * b, 2)
+        f["factorSesgo"] = round(b, 4)
+        aplicadas += 1
+        litros_despues += corregido
+
+    return {"filas": aplicadas, "litrosAntes": litros_antes, "litrosDespues": litros_despues}
+
+
 def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categorias: dict,
                              calibracion: list[dict] | None = None) -> list[dict]:
     """Stock de seguridad y punto de reorden, derivados del forecast.
@@ -434,28 +524,8 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
     # banda propia sino la del producto padre escalada (ver derivar_de_producto),
     # así que el factor que la corrige es otro. El método con el que sale cada
     # serie se decide corrida a corrida, por eso se elige acá y no al calibrar.
-    k_por_serie: dict[tuple[str, str], dict] = {
-        (c["nivel"], c["clave"]): c for c in (calibracion or [])
-    }
-    k_por_nivel: dict[tuple[str, bool], float] = {}
-    for nivel_cal in ("producto", "producto_envase"):
-        for derivado in (False, True):
-            campo = "kDerivado" if derivado else "k"
-            ks = sorted(float(c[campo]) for (n, _), c in k_por_serie.items()
-                        if n == nivel_cal and c.get(campo) is not None)
-            if ks:
-                k_por_nivel[(nivel_cal, derivado)] = ks[len(ks) // 2]
-
-    def factor_sigma(nivel_s: str, clave_s: str, metodo_s: str) -> float:
-        derivado = metodo_s == "derivado"
-        cal = k_por_serie.get((nivel_s, clave_s))
-        if cal is not None:
-            propio = cal.get("kDerivado" if derivado else "k")
-            if propio is not None:
-                return float(propio)
-        # Sin medición propia: la mediana del nivel PARA ESE CAMINO. El último
-        # recurso es 1.0, que deja el colchón como antes de calibrar.
-        return k_por_nivel.get((nivel_s, derivado), k_por_nivel.get((nivel_s, False), 1.0))
+    # El neutro es 1.0: deja el colchón como antes de calibrar.
+    factor_sigma = hacer_factor(*indexar_calibracion(calibracion), 1.0, "k")
 
     filas: list[dict] = []
     for f in forecast:
@@ -478,10 +548,19 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
 
         mape, meses_hist, metodo = mape_por_serie.get((nivel, f["clave"]), (None, None, "propio"))
 
-        # La banda de Prophet es simétrica alrededor de yhat: ancho = 2·z·σ,
-        # corregida por el factor medido contra la realidad (ver docstring).
+        # σ sale de la SEMIBANDA SUPERIOR, no del ancho completo. Dos razones,
+        # las dos del mismo tipo — el ancho completo se achica por motivos que
+        # no son menos incertidumbre:
+        #   · procesar_serie recorta yhat_lower en 0 (`.clip(lower=0)`), así que
+        #     en las series chicas el piso guardado no es el que Prophet produjo.
+        #   · la corrección de sesgo desplaza el centro hacia abajo, y con un
+        #     piso recortado eso comprimiría la banda todavía más.
+        # La mitad de arriba no sufre ninguna de las dos, y la banda de Prophet
+        # es simétrica, así que (hi - yhat)/z es el mismo σ que la mitad de
+        # abajo declaraba antes de los recortes. `lo` se sigue leyendo sólo para
+        # descartar filas sin banda.
         k_sigma = factor_sigma(nivel, f["clave"], metodo)
-        sigma_mensual = max((float(hi) - float(lo)) / (2 * Z_BANDA_PROPHET), 0.0) * k_sigma
+        sigma_mensual = max((float(hi) - yhat) / Z_BANDA_PROPHET, 0.0) * k_sigma
         sigma_semanal = sigma_mensual / math.sqrt(SEMANAS_POR_MES)
         demanda_semanal = max(yhat, 0.0) / SEMANAS_POR_MES
 
@@ -715,6 +794,21 @@ def main() -> int:
                 n_sin_forecast += 1
     print(f"  producto_envase: {n_propio} con modelo propio, {n_derivado} derivadas del producto, {n_sin_forecast} sin forecast (ni el producto tiene)")
 
+    # La corrección de sesgo va ANTES de subir, no sólo antes del colchón: si
+    # el gráfico mostrara el forecast crudo y el punto de reorden saliera del
+    # corregido, la sección mostraría dos demandas distintas para el mismo mes.
+    calibracion = datos.get("calibracionSigma", [])
+    if not calibracion:
+        print("\n  AVISO: calibracion_sigma vacía — el forecast sale con el sesgo de Prophet "
+              "(+42%/+35%) y el colchón con la banda cruda, que mide ~2x menos de lo real. "
+              "Correr scripts/forecast/calibrar_sigma.py")
+    else:
+        res = aplicar_correccion_sesgo(forecast, validacion, calibracion)
+        delta = res["litrosDespues"] - res["litrosAntes"]
+        pct = 100 * delta / res["litrosAntes"] if res["litrosAntes"] else 0
+        print(f"\nCorrección de sesgo aplicada a {res['filas']} filas de forecast: "
+              f"{res['litrosAntes']:,.0f} L → {res['litrosDespues']:,.0f} L ({pct:+.1f}%)")
+
     print(f"\nSubiendo resultado: {len(forecast)} filas forecast, {len(validacion)} validaciones, {len(calidad)} notas de calidad ...")
     r = requests.post(
         f"{UPLOAD_URL_BASE}/api/produccion/forecast/upload",
@@ -732,10 +826,6 @@ def main() -> int:
     # del forecast, tenerlos separados sólo abría la puerta a que el colchón
     # quedara calculado sobre una corrida vieja del modelo.
     categorias = datos.get("categoriaPorProducto", {})
-    calibracion = datos.get("calibracionSigma", [])
-    if not calibracion:
-        print("  AVISO: calibracion_sigma vacía — el colchón sale de la banda cruda de "
-              "Prophet, que mide ~2x menos de lo real. Correr scripts/forecast/calibrar_sigma.py")
     filas_ss = calcular_stock_seguridad(forecast, validacion, categorias, calibracion)
     por_nivel = {}
     for f in filas_ss:

@@ -59,7 +59,7 @@ export async function GET(req: Request) {
   // se corrió la calibración) el script usa k=1 y el colchón queda como antes.
   const { data: calibracion } = await supabase
     .from('calibracion_sigma')
-    .select('nivel, clave, k, k_derivado, folds')
+    .select('nivel, clave, k, k_derivado, b, b_derivado, folds')
 
   // ventas puede tener >50k filas — PostgREST limita a 1000 por página.
   const PAGE = 1000
@@ -274,6 +274,9 @@ export async function GET(req: Request) {
       // null cuando la serie no pudo medirse por el camino derivado; el script
       // cae entonces a la mediana del nivel para ese camino.
       kDerivado: c.k_derivado === null ? null : Number(c.k_derivado),
+      // b corrige el centro del forecast; k, el ancho del colchón.
+      b: c.b === null ? null : Number(c.b),
+      bDerivado: c.b_derivado === null ? null : Number(c.b_derivado),
     })),
     calidadDatos: calidad,
     meta: {

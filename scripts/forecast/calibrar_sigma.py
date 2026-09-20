@@ -1,38 +1,41 @@
 """
-Mide cuánto miente la banda de Prophet, por serie, y guarda el factor de corrección.
+Calibra el forecast de Producción contra su error real, medido en walk-forward.
 
     scripts/forecast/.venv/Scripts/python.exe scripts/forecast/calibrar_sigma.py [--dry]
 
+Produce DOS factores por serie, que corrigen dos cosas distintas:
+
+    k  →  el ANCHO del colchón.  sigma_real / sigma_que_declara_la_banda
+    b  →  el CENTRO del forecast.  forecast_corregido = forecast * b
+
 POR QUÉ EXISTE
 --------------
-`calcular_stock_seguridad` en generar_forecast.py saca el sigma del colchón de la
-banda que Prophet declara:
+Prophet se autoevalúa mal en las dos dimensiones, y las dos se midieron contra la
+realidad el 19-sep-2026:
 
-    sigma_mensual = (litrosMax - litrosMin) / (2 * 1.2816)
+  · La banda (`interval_width=0.8`) debería cubrir el 80% de los meses. Cubre 28%
+    a nivel producto y 48% a nivel producto×envase. El sigma real es ~1.8x/~2.2x
+    el declarado, o sea que el colchón salía con la mitad de la incertidumbre que
+    corresponde.
+  · El centro sobre-pronostica sistemáticamente: +42% a nivel producto, +35% a
+    nivel producto×envase. Eso entra lineal al punto de reorden vía
+    demanda_semanal = yhat/4.33 — venía mandando a cocer de más.
 
-Esa banda es la autoevaluación del modelo sobre su propio ajuste, no su error fuera
-de muestra. Medida contra la realidad (19-sep-2026) cubre 28% de los meses a nivel
-producto y 48% a nivel producto×envase, cuando debería cubrir 80%. El sigma real es
-~1.8x / ~2.2x el declarado, o sea que el colchón está calculado con la mitad de la
-incertidumbre que corresponde.
+LOS DOS FACTORES SE MIDEN JUNTOS, Y NO ES UN DETALLE
+-----------------------------------------------------
+Los errores se compensaban: el sobre-forecast inflaba el punto de reorden justo lo
+suficiente para tapar el colchón chico. Corregir uno solo rompe el equilibrio — por
+eso `k` se implementó primero (sólo agrega colchón, es seguro aislado) y `b` después.
 
-Este script corre un walk-forward por serie, compara el sigma de los residuales
-REALES contra el que declaró la banda, y deja el cociente `k` en la tabla
-`calibracion_sigma`. generar_forecast.py lo lee y multiplica.
-
-QUÉ SIGMA SE MIDE, Y POR QUÉ ESE
----------------------------------
-Se usa el desvío estándar de los residuales ALREDEDOR DE SU MEDIA, no el RMSE.
-La diferencia importa: Prophet sobre-pronostica sistemáticamente (+42%/+35%), así
-que sus residuales tienen media distinta de cero. Ese sesgo YA infla el punto de
-reorden por el otro término (`demanda_semanal * ventana`); meterlo también en el
-sigma lo contaría dos veces. El desvío mide la DISPERSIÓN, que es lo que el colchón
-tiene que cubrir, y queda correcto tanto ahora como si más adelante se corrige el
-sesgo.
+Además `k` NO es independiente de `b`: al corregir el centro el residual pasa de
+(a - y) a (a - b·y) = (a - y) + (1-b)·y, y con b≈0.7 ese término pesa si `y` varía
+entre folds. Por eso `k` se calcula sobre los residuales ya corregidos por `b`, en
+la misma pasada. Medirlos por separado daría un colchón que no corresponde al
+forecast que se publica.
 
 SE CORRE APARTE, NO EN CADA FORECAST
 -------------------------------------
-Son hasta 12 ajustes de Prophet por serie (~1.100 en total) contra 1 por serie del
+Son hasta 12 ajustes de Prophet por serie (~1.400 en total) contra 1 por serie del
 pipeline normal. La calibración cambia lento — es una propiedad del modelo, no del
 mes — así que se recalcula de tanto en tanto y el forecast diario sólo lee la tabla.
 """
@@ -59,6 +62,7 @@ MAX_FOLDS = 12               # cuántos meses de walk-forward pedirle a cada ser
 MIN_FOLDS_CONFIABLE = 6      # con menos residuales que esto, el k propio no manda solo
 Z_BANDA_PROPHET = 1.2816
 K_MIN, K_MAX = 1.0, 4.0      # ver acotar_k()
+B_MIN, B_MAX = 0.5, 1.5      # ver acotar_b()
 # ESPEJO de generar_forecast.py::MESES_PROPORCION_DERIVADA — la ventana con la
 # que el pipeline calcula qué proporción del producto es cada formato. Tiene que
 # ser la misma o el camino derivado se mide contra un ratio que no es el que se
@@ -100,31 +104,72 @@ def traer_historico(url: str, key: str) -> pd.DataFrame:
     return df
 
 
+def semibanda(yhat: float, yhat_upper: float) -> float:
+    """σ declarado por la banda, medido SÓLO con la mitad de arriba.
+
+    generar_forecast.py recorta yhat_lower en 0 antes de guardar (`.clip(lower=0)`),
+    así que en las series chicas la banda guardada es más angosta que la que
+    Prophet produjo y (yhat_upper - yhat_lower)/2 subestima σ. La mitad de
+    arriba no sufre ese recorte — y tampoco se mueve cuando el factor `b`
+    desplaza el centro, que es lo que permite corregir el sesgo sin que el
+    colchón se achique solo. La banda de Prophet es simétrica, así que la
+    semibanda superior es σ·z igual que la inferior.
+    """
+    return max(yhat_upper - yhat, 0.0) / Z_BANDA_PROPHET
+
+
+def resumir(reales: list[float], predichos: list[float], anchos: list[float]) -> dict | None:
+    """Convierte los folds de un walk-forward en los dos factores de calibración.
+
+    `b` es multiplicativo, no aditivo: el sesgo de Prophet es proporcional al
+    nivel de la serie (sobre-pronostica ~40% sobre lo que venda, no ~400 litros
+    fijos), así que una razón generaliza cuando el nivel se mueve y una resta no.
+
+    `k` se mide sobre los residuales YA corregidos por `b`, y no sobre los
+    crudos: el residual pasa de (a - y) a (a - b·y) = (a - y) + (1-b)·y, y con
+    b≈0.7 ese segundo término no es despreciable si y varía entre folds. Medir
+    los dos por separado daría un k que no corresponde al forecast que se va a
+    publicar.
+
+    Y una vez corregido el sesgo se usa RMSE, no el desvío alrededor de la
+    media: antes la media de los residuales era el colchón accidental y había
+    que dejarla afuera para no contarla dos veces; ahora ese colchón ya no
+    existe, así que lo que quede de sesgo residual tiene que entrar al colchón.
+    """
+    sigma_banda = statistics.fmean(anchos)
+    total_pred = sum(predichos)
+    if sigma_banda <= 0 or total_pred <= 0:
+        return None
+
+    b_crudo = sum(reales) / total_pred
+    corregidos = [a - b_crudo * y for a, y in zip(reales, predichos)]
+    sigma_real = (sum(e * e for e in corregidos) / len(corregidos)) ** 0.5
+
+    return {"folds": len(reales), "sigma_real": sigma_real, "sigma_banda": sigma_banda,
+            "k_crudo": sigma_real / sigma_banda, "b_crudo": b_crudo,
+            # Sesgo de los residuales SIN corregir, sólo para poder mirarlo.
+            "sesgo": statistics.fmean([a - y for a, y in zip(reales, predichos)])}
+
+
 def medir_serie(s: pd.DataFrame) -> dict | None:
-    """Walk-forward sobre una serie. Devuelve sigma real vs. sigma declarado."""
+    """Walk-forward sobre una serie, con su propio ajuste de Prophet."""
     n = len(s)
     folds = min(MAX_FOLDS, n - MIN_MESES_FORECAST)
     if folds < 3:
         return None
 
-    residuales, anchos = [], []
+    reales, predichos, anchos = [], [], []
     for corte in range(n - folds, n):
         train = s.iloc[:corte]
         m = Prophet(yearly_seasonality=len(train) >= 24, weekly_seasonality=False,
                     daily_seasonality=False, interval_width=0.8)
         m.fit(train[["ds", "y"]])
         p = m.predict(m.make_future_dataframe(periods=1, freq="MS")).iloc[-1]
-        residuales.append(float(s.iloc[corte]["y"]) - float(p["yhat"]))
-        anchos.append((float(p["yhat_upper"]) - float(p["yhat_lower"])) / (2 * Z_BANDA_PROPHET))
+        reales.append(float(s.iloc[corte]["y"]))
+        predichos.append(float(p["yhat"]))
+        anchos.append(semibanda(float(p["yhat"]), float(p["yhat_upper"])))
 
-    sigma_banda = statistics.fmean(anchos)
-    if sigma_banda <= 0:
-        return None
-    # Desvío alrededor de la media, NO rmse: el sesgo no va acá (ver docstring).
-    sigma_real = statistics.stdev(residuales)
-    return {"folds": len(residuales), "sigma_real": sigma_real,
-            "sigma_banda": sigma_banda, "k_crudo": sigma_real / sigma_banda,
-            "sesgo": statistics.fmean(residuales)}
+    return resumir(reales, predichos, anchos)
 
 
 def ajustar_padre(producto: str, s: pd.DataFrame, corte_ds: pd.Timestamp, cache: dict) -> dict | None:
@@ -145,7 +190,7 @@ def ajustar_padre(producto: str, s: pd.DataFrame, corte_ds: pd.Timestamp, cache:
     m.fit(train[["ds", "y"]])
     fila = m.predict(pd.DataFrame({"ds": [corte_ds]})).iloc[-1]
     out = {"yhat": float(fila["yhat"]),
-           "ancho": (float(fila["yhat_upper"]) - float(fila["yhat_lower"])) / (2 * Z_BANDA_PROPHET)}
+           "ancho": semibanda(float(fila["yhat"]), float(fila["yhat_upper"]))}
     cache[llave] = out
     return out
 
@@ -168,7 +213,7 @@ def medir_serie_derivada(s_combo: pd.DataFrame, producto: str, s_padre: pd.DataF
         return None
 
     padre_por_mes = dict(zip(s_padre["ds"], s_padre["y"]))
-    residuales, anchos = [], []
+    reales, predichos, anchos = [], [], []
     for corte in range(n - folds, n):
         corte_ds = s_combo.iloc[corte]["ds"]
         p = ajustar_padre(producto, s_padre, corte_ds, cache)
@@ -185,18 +230,17 @@ def medir_serie_derivada(s_combo: pd.DataFrame, producto: str, s_padre: pd.DataF
         total_combo = float(train_combo[train_combo["ds"].isin(meses)]["y"].sum())
         ratio = max(total_combo, 0.0) / total_padre
 
-        residuales.append(float(s_combo.iloc[corte]["y"]) - p["yhat"] * ratio)
+        reales.append(float(s_combo.iloc[corte]["y"]))
+        predichos.append(p["yhat"] * ratio)
         anchos.append(p["ancho"] * ratio)
 
-    if len(residuales) < 3:
+    if len(reales) < 3:
         return None
-    sigma_banda = statistics.fmean(anchos)
-    if sigma_banda <= 0:
-        return None
-    sigma_real = statistics.stdev(residuales)
-    return {"folds": len(residuales), "sigma_real": sigma_real,
-            "sigma_banda": sigma_banda, "k_crudo": sigma_real / sigma_banda,
-            "sesgo": statistics.fmean(residuales)}
+    # El padre entra SIN corregir, igual que en producción: derivar_de_producto
+    # escala el forecast crudo del producto, y generar_forecast.py aplica la
+    # corrección a cada serie después de derivar. Si acá se midiera contra un
+    # padre ya corregido, el b derivado saldría medido contra otra cosa.
+    return resumir(reales, predichos, anchos)
 
 
 def acotar_k(k: float) -> float:
@@ -209,6 +253,18 @@ def acotar_k(k: float) -> float:
     dispare el colchón a un litraje que Producción no va a poder cocer igual.
     """
     return max(K_MIN, min(K_MAX, k))
+
+
+def acotar_b(b: float) -> float:
+    """
+    El tope evita que una serie con pocos folds raros mande el forecast a algo
+    que nadie reconocería. No hay asimetría deliberada acá, a diferencia de
+    acotar_k: el sesgo se corrige en la dirección que se midió, para arriba o
+    para abajo. Quien protege contra el quiebre es el colchón, no el centro —
+    dejar el centro alto "por las dudas" es justamente el colchón invisible que
+    este paso viene a sacar.
+    """
+    return max(B_MIN, min(B_MAX, b))
 
 
 def subir(url: str, key: str, filas: list[dict]) -> int:
@@ -247,7 +303,7 @@ def main() -> int:
     df = traer_historico(url, key)
     series = [(n, c, g.sort_values("ds")[["ds", "y"]].reset_index(drop=True))
               for (n, c), g in df.groupby(["nivel", "clave"], dropna=False)
-              if n in ("producto", "producto_envase")]
+              if n in ("general", "envase", "producto", "producto_envase")]
 
     series_producto = {c: s for (n, c, s) in series if n == "producto"}
     cache_padre: dict = {}
@@ -270,78 +326,86 @@ def main() -> int:
             rd = (medir_serie_derivada(s, nombre_padre, padre, cache_padre)
                   if padre is not None else None)
             if rd:
-                r["k_crudo_derivado"] = rd["k_crudo"]
-                r["folds_derivado"] = rd["folds"]
+                r["derivado"] = rd
                 if rd["folds"] >= MIN_FOLDS_CONFIABLE:
-                    por_nivel_der[nivel].append(rd["k_crudo"])
+                    por_nivel_der[nivel].append(rd)
 
         medidas.append(r)
         if r["folds"] >= MIN_FOLDS_CONFIABLE:
-            por_nivel[nivel].append(r["k_crudo"])
+            por_nivel[nivel].append(r)
 
     # Mediana por nivel: es el ancla contra la que se encoge cada serie, y el
-    # valor que usan las series sin backtest propio suficiente.
-    k_nivel = {n: statistics.median(v) for n, v in por_nivel.items() if v}
-    k_nivel_der = {n: statistics.median(v) for n, v in por_nivel_der.items() if v}
+    # valor que usan las series sin backtest propio suficiente. Cada factor
+    # tiene su propia ancla — el sesgo y la sub-cobertura de la banda no son
+    # el mismo fenómeno y no tienen por qué moverse juntos.
+    def anclas(agrupado: dict) -> dict:
+        return {n: {campo: statistics.median([m[campo] for m in v])
+                    for campo in ("k_crudo", "b_crudo")}
+                for n, v in agrupado.items() if v}
 
-    def encoger(k_crudo: float, n: int, ancla: float) -> float:
-        # Con pocos folds el k propio es ruido, así que se lo tira hacia la
+    ancla_propio, ancla_der = anclas(por_nivel), anclas(por_nivel_der)
+
+    def encoger(crudo: float, n: int, ancla: float, acotar) -> float:
+        # Con pocos folds el valor propio es ruido, así que se lo tira hacia la
         # mediana del nivel. peso = n/(n+MIN_FOLDS_CONFIABLE) — con 6 folds
         # pesa 50% lo propio, con 12 pesa 67%, con 3 sólo 33%.
         w = n / (n + MIN_FOLDS_CONFIABLE)
-        return acotar_k(w * k_crudo + (1 - w) * ancla)
+        return acotar(w * crudo + (1 - w) * ancla)
 
     filas = []
     for r in medidas:
-        fila = {"nivel": r["nivel"], "clave": r["clave"],
-                "k": round(encoger(r["k_crudo"], r["folds"], k_nivel.get(r["nivel"], 2.0)), 4),
-                "k_crudo": round(r["k_crudo"], 4), "folds": r["folds"],
+        a = ancla_propio.get(r["nivel"], {"k_crudo": 2.0, "b_crudo": 1.0})
+        fila = {"nivel": r["nivel"], "clave": r["clave"], "folds": r["folds"],
+                "k": round(encoger(r["k_crudo"], r["folds"], a["k_crudo"], acotar_k), 4),
+                "b": round(encoger(r["b_crudo"], r["folds"], a["b_crudo"], acotar_b), 4),
+                "k_crudo": round(r["k_crudo"], 4), "b_crudo": round(r["b_crudo"], 4),
                 "sigma_real": round(r["sigma_real"], 2),
                 "sigma_banda": round(r["sigma_banda"], 2),
                 "sesgo_litros": round(r["sesgo"], 2)}
-        if "k_crudo_derivado" in r:
-            nd = r["folds_derivado"]
+        rd = r.get("derivado")
+        if rd:
+            ad = ancla_der.get(r["nivel"], {"k_crudo": 2.0, "b_crudo": 1.0})
             fila["k_derivado"] = round(
-                encoger(r["k_crudo_derivado"], nd, k_nivel_der.get(r["nivel"], 2.0)), 4)
-            fila["k_crudo_derivado"] = round(r["k_crudo_derivado"], 4)
-            fila["folds_derivado"] = nd
+                encoger(rd["k_crudo"], rd["folds"], ad["k_crudo"], acotar_k), 4)
+            fila["b_derivado"] = round(
+                encoger(rd["b_crudo"], rd["folds"], ad["b_crudo"], acotar_b), 4)
+            fila["k_crudo_derivado"] = round(rd["k_crudo"], 4)
+            fila["b_crudo_derivado"] = round(rd["b_crudo"], 4)
+            fila["folds_derivado"] = rd["folds"]
         filas.append(fila)
 
-    print("\n" + "=" * 78)
-    print("DISTRIBUCION DEL FACTOR k (sigma real / sigma que declara la banda)")
-    print("=" * 78)
-    print(f"  {'nivel':<18}{'series':>8}{'p10':>8}{'p25':>8}{'mediana':>10}{'p75':>8}{'p90':>8}")
-    for nivel in ("producto", "producto_envase"):
-        ks = sorted(f["k_crudo"] for f in filas if f["nivel"] == nivel)
-        if not ks:
-            continue
+    def tabla(titulo: str, subtitulo: str, campo: str) -> None:
+        print("\n" + "=" * 78)
+        print(titulo)
+        print("=" * 78)
+        print(f"  {subtitulo}")
+        print(f"  {'':<22}{'series':>8}{'p10':>8}{'p25':>8}{'mediana':>10}{'p75':>8}{'p90':>8}")
+        grupos = [(n, [f[campo] for f in filas if f["nivel"] == n])
+                  for n in ("producto", "producto_envase")]
+        grupos.append(("producto_envase (der.)",
+                       [f[campo + "_derivado"] for f in filas if campo + "_derivado" in f]))
+        for nombre, vals in grupos:
+            if not vals:
+                continue
+            vs = sorted(vals)
+            def q(p, _vs=vs):
+                return _vs[min(int(p * len(_vs)), len(_vs) - 1)]
+            print(f"  {nombre:<22}{len(vs):>8}{q(.10):>8.2f}{q(.25):>8.2f}"
+                  f"{statistics.median(vs):>10.2f}{q(.75):>8.2f}{q(.90):>8.2f}")
 
-        def q(p, _ks=ks):
-            return _ks[min(int(p * len(_ks)), len(_ks) - 1)]
+    tabla("FACTOR k — colchon", "sigma real / sigma que declara la banda", "k_crudo")
+    tabla("FACTOR b — centro", "cuanto hay que multiplicar el forecast (b<1 = sobre-pronostica)",
+          "b_crudo")
 
-        print(f"  {nivel:<18}{len(ks):>8}{q(.10):>8.2f}{q(.25):>8.2f}"
-              f"{statistics.median(ks):>10.2f}{q(.75):>8.2f}{q(.90):>8.2f}")
-
-    ks_der = sorted(f["k_crudo_derivado"] for f in filas if "k_crudo_derivado" in f)
-    if ks_der:
-        print(f"  {'por camino derivado':<18}{len(ks_der):>8}"
-              f"{ks_der[len(ks_der) // 10]:>8.2f}{ks_der[len(ks_der) // 4]:>8.2f}"
-              f"{statistics.median(ks_der):>10.2f}{ks_der[len(ks_der) * 3 // 4]:>8.2f}"
-              f"{ks_der[min(len(ks_der) * 9 // 10, len(ks_der) - 1)]:>8.2f}")
-
-    print(f"\n  ancla por nivel (mediana, solo series con >= {MIN_FOLDS_CONFIABLE} folds):")
-    for n, v in k_nivel.items():
-        print(f"    {n:<18}{v:.2f}")
-    for n, v in k_nivel_der.items():
-        print(f"    {n + ' (derivado)':<18}{v:.2f}")
-
-    bajo = sum(1 for f in filas if f["k_crudo"] < 1.0)
-    topeadas = sum(1 for f in filas if f["k"] >= K_MAX)
-    print(f"\n  series cuya banda YA era suficiente (k<1): {bajo}/{len(filas)}")
-    print(f"  series topeadas en k={K_MAX}: {topeadas}")
+    sobre = sum(1 for f in filas if f["b_crudo"] < 1.0)
+    print(f"\n  series que SOBRE-pronostican (b<1): {sobre}/{len(filas)}")
+    print(f"  series topeadas en k={K_MAX}: {sum(1 for f in filas if f['k'] >= K_MAX)}")
+    print(f"  series topeadas en b={B_MIN}/{B_MAX}: "
+          f"{sum(1 for f in filas if f['b'] <= B_MIN or f['b'] >= B_MAX)}")
 
     with open(salida, "w", encoding="utf-8") as fh:
-        json.dump({"k_por_nivel": k_nivel, "series": filas}, fh, ensure_ascii=False, indent=2)
+        json.dump({"ancla_propio": ancla_propio, "ancla_derivado": ancla_der,
+                   "series": filas}, fh, ensure_ascii=False, indent=2)
     print(f"\n  detalle por serie -> {os.path.relpath(salida, RAIZ)}")
 
     if dry:
