@@ -271,8 +271,15 @@ def subir(url: str, key: str, filas: list[dict]) -> int:
     # PostgREST rechaza un insert masivo si las filas no tienen todas las mismas
     # claves ("All object keys must match"), y las de nivel producto no llevan
     # los campos del camino derivado. Se completan con None.
+    #
+    # Y los NaN se pasan a None: el nivel `general` no tiene clave, y el
+    # groupby(dropna=False) de pandas la trae como NaN, que no es JSON válido
+    # ("Out of range float values are not JSON compliant").
+    def limpio(v):
+        return None if isinstance(v, float) and v != v else v
+
     columnas = sorted({c for f in filas for c in f})
-    filas = [{c: f.get(c) for c in columnas} for f in filas]
+    filas = [{c: limpio(f.get(c)) for c in columnas} for f in filas]
 
     print(f"\nsubiendo {len(filas)} filas a calibracion_sigma ...", flush=True)
     h = {"apikey": key, "Authorization": f"Bearer {key}",
