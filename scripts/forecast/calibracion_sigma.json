@@ -1,0 +1,778 @@
+{
+  "k_por_nivel": {
+    "producto": 2.0242604025501416,
+    "producto_envase": 1.7924352693510337
+  },
+  "series": [
+    {
+      "nivel": "producto",
+      "clave": "Aguas Blancas",
+      "k": 1.3435,
+      "k_crudo": 1.0031,
+      "folds": 12,
+      "sigma_real": 246.23,
+      "sigma_banda": 245.46,
+      "sesgo_litros": -510.67
+    },
+    {
+      "nivel": "producto",
+      "clave": "Arboretum",
+      "k": 1.3094,
+      "k_crudo": 0.952,
+      "folds": 12,
+      "sigma_real": 272.03,
+      "sigma_banda": 285.75,
+      "sesgo_litros": -437.97
+    },
+    {
+      "nivel": "producto",
+      "clave": "Barley Wine",
+      "k": 3.3325,
+      "k_crudo": 3.9867,
+      "folds": 12,
+      "sigma_real": 71.39,
+      "sigma_banda": 17.91,
+      "sesgo_litros": -18.08
+    },
+    {
+      "nivel": "producto",
+      "clave": "Carrot Cake Stout",
+      "k": 1.9384,
+      "k_crudo": 1.8955,
+      "folds": 12,
+      "sigma_real": 102.95,
+      "sigma_banda": 54.31,
+      "sesgo_litros": -8.1
+    },
+    {
+      "nivel": "producto",
+      "clave": "Del Caribe Sour",
+      "k": 1.4903,
+      "k_crudo": 1.2233,
+      "folds": 12,
+      "sigma_real": 36.16,
+      "sigma_banda": 29.56,
+      "sesgo_litros": 11.32
+    },
+    {
+      "nivel": "producto",
+      "clave": "Descenso West Coast IPA",
+      "k": 1.7014,
+      "k_crudo": 1.5399,
+      "folds": 12,
+      "sigma_real": 254.27,
+      "sigma_banda": 165.12,
+      "sesgo_litros": -133.4
+    },
+    {
+      "nivel": "producto",
+      "clave": "Doble Hazy IPA",
+      "k": 1.7899,
+      "k_crudo": 1.6727,
+      "folds": 12,
+      "sigma_real": 247.45,
+      "sigma_banda": 147.93,
+      "sesgo_litros": -122.13
+    },
+    {
+      "nivel": "producto",
+      "clave": "Fisura",
+      "k": 2.5467,
+      "k_crudo": 2.8079,
+      "folds": 12,
+      "sigma_real": 203.32,
+      "sigma_banda": 72.41,
+      "sesgo_litros": -90.69
+    },
+    {
+      "nivel": "producto",
+      "clave": "Helles Colab",
+      "k": 2.1938,
+      "k_crudo": 2.321,
+      "folds": 8,
+      "sigma_real": 534.16,
+      "sigma_banda": 230.14,
+      "sesgo_litros": -91.28
+    },
+    {
+      "nivel": "producto",
+      "clave": "Imperial Stout",
+      "k": 3.4269,
+      "k_crudo": 4.1282,
+      "folds": 12,
+      "sigma_real": 104.42,
+      "sigma_banda": 25.29,
+      "sesgo_litros": -40.03
+    },
+    {
+      "nivel": "producto",
+      "clave": "Kombucha Berry Menta",
+      "k": 1.8414,
+      "k_crudo": 1.75,
+      "folds": 12,
+      "sigma_real": 247.31,
+      "sigma_banda": 141.32,
+      "sesgo_litros": -86.94
+    },
+    {
+      "nivel": "producto",
+      "clave": "Kombucha Detox",
+      "k": 4.0,
+      "k_crudo": 7.3305,
+      "folds": 12,
+      "sigma_real": 712.77,
+      "sigma_banda": 97.23,
+      "sesgo_litros": 60.21
+    },
+    {
+      "nivel": "producto",
+      "clave": "Kombucha Experimental Piña Albahaca",
+      "k": 2.1414,
+      "k_crudo": 2.1999,
+      "folds": 12,
+      "sigma_real": 352.05,
+      "sigma_banda": 160.03,
+      "sesgo_litros": 154.28
+    },
+    {
+      "nivel": "producto",
+      "clave": "Kombucha Lemon",
+      "k": 2.0744,
+      "k_crudo": 2.0995,
+      "folds": 12,
+      "sigma_real": 209.72,
+      "sigma_banda": 99.89,
+      "sesgo_litros": -234.56
+    },
+    {
+      "nivel": "producto",
+      "clave": "Kombucha Mango",
+      "k": 4.0,
+      "k_crudo": 6.1582,
+      "folds": 12,
+      "sigma_real": 531.3,
+      "sigma_banda": 86.27,
+      "sesgo_litros": -235.1
+    },
+    {
+      "nivel": "producto",
+      "clave": "Kombucha Maqui",
+      "k": 2.2089,
+      "k_crudo": 2.3012,
+      "folds": 12,
+      "sigma_real": 243.86,
+      "sigma_banda": 105.97,
+      "sesgo_litros": -119.91
+    },
+    {
+      "nivel": "producto",
+      "clave": "Kombucha Maracuyá Cardamomo",
+      "k": 1.9303,
+      "k_crudo": 1.8833,
+      "folds": 12,
+      "sigma_real": 286.71,
+      "sigma_banda": 152.24,
+      "sesgo_litros": -335.76
+    },
+    {
+      "nivel": "producto",
+      "clave": "Kombucha Natural",
+      "k": 3.1663,
+      "k_crudo": 3.7373,
+      "folds": 12,
+      "sigma_real": 112.32,
+      "sigma_banda": 30.05,
+      "sesgo_litros": 23.04
+    },
+    {
+      "nivel": "producto",
+      "clave": "La Barra APA",
+      "k": 2.2683,
+      "k_crudo": 2.3903,
+      "folds": 12,
+      "sigma_real": 197.15,
+      "sigma_banda": 82.48,
+      "sesgo_litros": -84.91
+    },
+    {
+      "nivel": "producto",
+      "clave": "Mocho English",
+      "k": 1.9741,
+      "k_crudo": 1.9491,
+      "folds": 12,
+      "sigma_real": 431.66,
+      "sigma_banda": 221.47,
+      "sesgo_litros": -323.99
+    },
+    {
+      "nivel": "producto",
+      "clave": "Red IPA",
+      "k": 1.4908,
+      "k_crudo": 1.2241,
+      "folds": 12,
+      "sigma_real": 123.65,
+      "sigma_banda": 101.01,
+      "sesgo_litros": 51.51
+    },
+    {
+      "nivel": "producto",
+      "clave": "Ámbar Lager",
+      "k": 1.8483,
+      "k_crudo": 1.731,
+      "folds": 9,
+      "sigma_real": 323.1,
+      "sigma_banda": 186.65,
+      "sesgo_litros": 47.2
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Aguas Blancas::barril_30",
+      "k": 1.7595,
+      "k_crudo": 1.7431,
+      "folds": 12,
+      "sigma_real": 310.59,
+      "sigma_banda": 178.18,
+      "sesgo_litros": -267.36
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Aguas Blancas::barril_50",
+      "k": 1.5851,
+      "k_crudo": 1.4814,
+      "folds": 12,
+      "sigma_real": 123.62,
+      "sigma_banda": 83.44,
+      "sesgo_litros": -5.91
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Aguas Blancas::lata",
+      "k": 1.4704,
+      "k_crudo": 1.3094,
+      "folds": 12,
+      "sigma_real": 91.85,
+      "sigma_banda": 70.15,
+      "sesgo_litros": -124.49
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Arboretum::barril_30",
+      "k": 1.2554,
+      "k_crudo": 0.9868,
+      "folds": 12,
+      "sigma_real": 218.72,
+      "sigma_banda": 221.64,
+      "sesgo_litros": -313.27
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Arboretum::barril_50",
+      "k": 2.0459,
+      "k_crudo": 2.1726,
+      "folds": 12,
+      "sigma_real": 152.66,
+      "sigma_banda": 70.27,
+      "sesgo_litros": 28.66
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Arboretum::lata",
+      "k": 2.3333,
+      "k_crudo": 2.6037,
+      "folds": 12,
+      "sigma_real": 128.82,
+      "sigma_banda": 49.47,
+      "sesgo_litros": -26.17
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Barley Wine::barril_30",
+      "k": 1.1129,
+      "k_crudo": 0.6598,
+      "folds": 9,
+      "sigma_real": 17.23,
+      "sigma_banda": 26.11,
+      "sesgo_litros": 5.28
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Barley Wine::lata",
+      "k": 2.3115,
+      "k_crudo": 2.571,
+      "folds": 12,
+      "sigma_real": 20.42,
+      "sigma_banda": 7.94,
+      "sesgo_litros": 8.3
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Carrot Cake Stout::barril_30",
+      "k": 1.3963,
+      "k_crudo": 1.1982,
+      "folds": 12,
+      "sigma_real": 48.13,
+      "sigma_banda": 40.17,
+      "sesgo_litros": 8.08
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Carrot Cake Stout::lata",
+      "k": 1.9306,
+      "k_crudo": 1.9997,
+      "folds": 12,
+      "sigma_real": 66.29,
+      "sigma_banda": 33.15,
+      "sesgo_litros": -13.56
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Del Caribe Sour::lata",
+      "k": 1.8606,
+      "k_crudo": 1.8947,
+      "folds": 12,
+      "sigma_real": 19.62,
+      "sigma_banda": 10.36,
+      "sesgo_litros": 5.39
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Descenso West Coast IPA::barril_30",
+      "k": 1.3801,
+      "k_crudo": 1.174,
+      "folds": 12,
+      "sigma_real": 172.69,
+      "sigma_banda": 147.1,
+      "sesgo_litros": -52.46
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Descenso West Coast IPA::barril_50",
+      "k": 1.6603,
+      "k_crudo": 1.5943,
+      "folds": 12,
+      "sigma_real": 119.62,
+      "sigma_banda": 75.03,
+      "sesgo_litros": 5.72
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Descenso West Coast IPA::lata",
+      "k": 2.529,
+      "k_crudo": 2.8972,
+      "folds": 12,
+      "sigma_real": 110.39,
+      "sigma_banda": 38.1,
+      "sesgo_litros": -22.84
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Doble Hazy IPA::barril_30",
+      "k": 1.419,
+      "k_crudo": 1.2323,
+      "folds": 12,
+      "sigma_real": 119.9,
+      "sigma_banda": 97.3,
+      "sesgo_litros": 6.83
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Doble Hazy IPA::barril_50",
+      "k": 1.6363,
+      "k_crudo": 1.5583,
+      "folds": 12,
+      "sigma_real": 77.38,
+      "sigma_banda": 49.66,
+      "sesgo_litros": 12.45
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Doble Hazy IPA::lata",
+      "k": 1.9708,
+      "k_crudo": 2.06,
+      "folds": 12,
+      "sigma_real": 80.7,
+      "sigma_banda": 39.18,
+      "sesgo_litros": -51.13
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Fisura::barril_30",
+      "k": 2.0418,
+      "k_crudo": 2.1665,
+      "folds": 12,
+      "sigma_real": 158.6,
+      "sigma_banda": 73.21,
+      "sesgo_litros": -90.82
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Fisura::barril_50",
+      "k": 2.7449,
+      "k_crudo": 3.2211,
+      "folds": 12,
+      "sigma_real": 104.95,
+      "sigma_banda": 32.58,
+      "sesgo_litros": 5.71
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Fisura::lata",
+      "k": 2.4053,
+      "k_crudo": 2.7117,
+      "folds": 12,
+      "sigma_real": 91.26,
+      "sigma_banda": 33.65,
+      "sesgo_litros": 6.57
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Helles Colab::barril_30",
+      "k": 1.3202,
+      "k_crudo": 0.7535,
+      "folds": 5,
+      "sigma_real": 27.6,
+      "sigma_banda": 36.63,
+      "sesgo_litros": -4.75
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Helles Colab::lata",
+      "k": 1.256,
+      "k_crudo": 0.1831,
+      "folds": 3,
+      "sigma_real": 25.0,
+      "sigma_banda": 136.55,
+      "sesgo_litros": -128.3
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Imperial Stout::barril_30",
+      "k": 1.6933,
+      "k_crudo": 1.6438,
+      "folds": 12,
+      "sigma_real": 32.96,
+      "sigma_banda": 20.05,
+      "sesgo_litros": 3.43
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Imperial Stout::barril_50",
+      "k": 1.243,
+      "k_crudo": 0.9683,
+      "folds": 12,
+      "sigma_real": 28.84,
+      "sigma_banda": 29.78,
+      "sesgo_litros": -6.64
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Imperial Stout::lata",
+      "k": 4.0,
+      "k_crudo": 5.702,
+      "folds": 12,
+      "sigma_real": 77.05,
+      "sigma_banda": 13.51,
+      "sesgo_litros": -0.9
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Berry Menta::barril_30",
+      "k": 4.0,
+      "k_crudo": 17.4494,
+      "folds": 12,
+      "sigma_real": 1122.26,
+      "sigma_banda": 64.31,
+      "sesgo_litros": 343.23
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Berry Menta::barril_50",
+      "k": 1.5442,
+      "k_crudo": 1.4201,
+      "folds": 12,
+      "sigma_real": 36.31,
+      "sigma_banda": 25.57,
+      "sesgo_litros": -6.23
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Berry Menta::lata",
+      "k": 1.8964,
+      "k_crudo": 1.9483,
+      "folds": 12,
+      "sigma_real": 180.22,
+      "sigma_banda": 92.5,
+      "sesgo_litros": -35.8
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Detox::barril_30",
+      "k": 1.2636,
+      "k_crudo": 0.4704,
+      "folds": 4,
+      "sigma_real": 14.15,
+      "sigma_banda": 30.07,
+      "sesgo_litros": -24.6
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Detox::barril_50",
+      "k": 2.3727,
+      "k_crudo": 2.6892,
+      "folds": 11,
+      "sigma_real": 27.47,
+      "sigma_banda": 10.22,
+      "sesgo_litros": -0.24
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Detox::lata",
+      "k": 4.0,
+      "k_crudo": 6.0002,
+      "folds": 12,
+      "sigma_real": 540.22,
+      "sigma_banda": 90.03,
+      "sesgo_litros": 65.99
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Experimental Piña Albahaca::lata",
+      "k": 1.2187,
+      "k_crudo": 0.9319,
+      "folds": 12,
+      "sigma_real": 142.25,
+      "sigma_banda": 152.65,
+      "sesgo_litros": 29.9
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Lemon::barril_30",
+      "k": 1.6088,
+      "k_crudo": 1.517,
+      "folds": 12,
+      "sigma_real": 42.33,
+      "sigma_banda": 27.91,
+      "sesgo_litros": -29.31
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Lemon::barril_50",
+      "k": 1.3928,
+      "k_crudo": 1.193,
+      "folds": 12,
+      "sigma_real": 27.35,
+      "sigma_banda": 22.92,
+      "sesgo_litros": 2.7
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Lemon::lata",
+      "k": 1.8,
+      "k_crudo": 1.8038,
+      "folds": 12,
+      "sigma_real": 169.3,
+      "sigma_banda": 93.86,
+      "sesgo_litros": -155.73
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Mango::lata",
+      "k": 4.0,
+      "k_crudo": 6.6664,
+      "folds": 12,
+      "sigma_real": 497.16,
+      "sigma_banda": 74.58,
+      "sesgo_litros": -227.13
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Maqui::barril_30",
+      "k": 1.5582,
+      "k_crudo": 1.402,
+      "folds": 9,
+      "sigma_real": 57.95,
+      "sigma_banda": 41.33,
+      "sesgo_litros": 31.86
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Maqui::barril_50",
+      "k": 1.6083,
+      "k_crudo": 1.4979,
+      "folds": 10,
+      "sigma_real": 30.81,
+      "sigma_banda": 20.57,
+      "sesgo_litros": -11.47
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Maqui::lata",
+      "k": 1.8878,
+      "k_crudo": 1.9355,
+      "folds": 12,
+      "sigma_real": 170.7,
+      "sigma_banda": 88.2,
+      "sesgo_litros": -63.87
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Maracuyá Cardamomo::barril_30",
+      "k": 2.6383,
+      "k_crudo": 3.0613,
+      "folds": 12,
+      "sigma_real": 99.99,
+      "sigma_banda": 32.66,
+      "sesgo_litros": -25.03
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Maracuyá Cardamomo::barril_50",
+      "k": 1.644,
+      "k_crudo": 1.5699,
+      "folds": 12,
+      "sigma_real": 46.41,
+      "sigma_banda": 29.56,
+      "sesgo_litros": -8.92
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Maracuyá Cardamomo::lata",
+      "k": 2.1439,
+      "k_crudo": 2.3196,
+      "folds": 12,
+      "sigma_real": 219.84,
+      "sigma_banda": 94.78,
+      "sesgo_litros": -200.59
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Natural::barril_50",
+      "k": 1.2514,
+      "k_crudo": 0.4399,
+      "folds": 4,
+      "sigma_real": 9.47,
+      "sigma_banda": 21.52,
+      "sesgo_litros": -10.99
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Kombucha Natural::lata",
+      "k": 3.9452,
+      "k_crudo": 5.0216,
+      "folds": 12,
+      "sigma_real": 128.57,
+      "sigma_banda": 25.6,
+      "sesgo_litros": -14.68
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "La Barra APA::barril_30",
+      "k": 1.7265,
+      "k_crudo": 1.6935,
+      "folds": 12,
+      "sigma_real": 117.54,
+      "sigma_banda": 69.4,
+      "sesgo_litros": -37.09
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "La Barra APA::barril_50",
+      "k": 1.3362,
+      "k_crudo": 1.1081,
+      "folds": 12,
+      "sigma_real": 53.73,
+      "sigma_banda": 48.49,
+      "sesgo_litros": -6.39
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "La Barra APA::lata",
+      "k": 2.3812,
+      "k_crudo": 2.6756,
+      "folds": 12,
+      "sigma_real": 110.68,
+      "sigma_banda": 41.37,
+      "sesgo_litros": 3.43
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Mocho English::barril_30",
+      "k": 3.0399,
+      "k_crudo": 3.6637,
+      "folds": 12,
+      "sigma_real": 359.44,
+      "sigma_banda": 98.11,
+      "sesgo_litros": -188.38
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Mocho English::barril_50",
+      "k": 1.861,
+      "k_crudo": 1.8953,
+      "folds": 12,
+      "sigma_real": 206.38,
+      "sigma_banda": 108.89,
+      "sesgo_litros": 33.99
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Mocho English::lata",
+      "k": 1.7924,
+      "k_crudo": 1.7924,
+      "folds": 12,
+      "sigma_real": 137.86,
+      "sigma_banda": 76.91,
+      "sesgo_litros": -11.42
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Red IPA::barril_30",
+      "k": 1.5588,
+      "k_crudo": 1.442,
+      "folds": 12,
+      "sigma_real": 82.39,
+      "sigma_banda": 57.14,
+      "sesgo_litros": 42.57
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Red IPA::barril_50",
+      "k": 1.5907,
+      "k_crudo": 1.3486,
+      "folds": 5,
+      "sigma_real": 59.66,
+      "sigma_banda": 44.24,
+      "sesgo_litros": 45.71
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Red IPA::lata",
+      "k": 1.423,
+      "k_crudo": 1.2382,
+      "folds": 12,
+      "sigma_real": 43.08,
+      "sigma_banda": 34.79,
+      "sesgo_litros": 1.54
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Ámbar Lager::barril_30",
+      "k": 1.4224,
+      "k_crudo": 0.9783,
+      "folds": 5,
+      "sigma_real": 81.92,
+      "sigma_banda": 83.73,
+      "sesgo_litros": -35.5
+    },
+    {
+      "nivel": "producto_envase",
+      "clave": "Ámbar Lager::lata",
+      "k": 1.2158,
+      "k_crudo": 0.7834,
+      "folds": 8,
+      "sigma_real": 57.89,
+      "sigma_banda": 73.9,
+      "sesgo_litros": -24.73
+    }
+  ]
+}

@@ -52,6 +52,15 @@ export async function GET(req: Request) {
   const codigoPorProducto = new Map((costosPrecios ?? []).map(c => [normalizarProducto(c.producto as string), c.codigo as string]))
   const categoriaPorProducto = new Map((costosPrecios ?? []).map(c => [normalizarProducto(c.producto as string), (c.categoria as string | null) ?? null]))
 
+  // Factor de corrección del σ del stock de seguridad, medido por
+  // scripts/forecast/calibrar_sigma.py. Viaja acá — y no por un endpoint
+  // propio — porque el único consumidor es generar_forecast.py, que ya pide
+  // este payload completo antes de correr. Si la tabla está vacía (todavía no
+  // se corrió la calibración) el script usa k=1 y el colchón queda como antes.
+  const { data: calibracion } = await supabase
+    .from('calibracion_sigma')
+    .select('nivel, clave, k, folds')
+
   // ventas puede tener >50k filas — PostgREST limita a 1000 por página.
   const PAGE = 1000
   type VentaRow = { fecha_pedido: string; nombre_fantasia: string | null; producto: string | null; envase: string | null; litros: number | null }
@@ -259,6 +268,10 @@ export async function GET(req: Request) {
       productoEnvase: productoEnvaseObj,
     },
     categoriaPorProducto: Object.fromEntries(categoriaPorProducto),
+    calibracionSigma: (calibracion ?? []).map(c => ({
+      nivel: c.nivel as string, clave: c.clave as string,
+      k: Number(c.k), folds: Number(c.folds),
+    })),
     calidadDatos: calidad,
     meta: {
       totalFilas: filas.length, excluidosCliente, excluidosProducto, excluidosMesEnCurso,

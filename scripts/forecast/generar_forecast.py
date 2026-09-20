@@ -387,7 +387,8 @@ def derivar_de_producto(
     return {"forecast": forecast_derivado, "ratio": round(ratio, 4), "mesesRatio": len(meses_con_dato_producto)}
 
 
-def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categorias: dict) -> list[dict]:
+def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categorias: dict,
+                             calibracion: list[dict] | None = None) -> list[dict]:
     """Stock de seguridad y punto de reorden, derivados del forecast.
 
     SS = Z · √( ventana · σ_semanal²  +  demanda_semanal² · σ_LT² )
@@ -403,11 +404,38 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
       · La ventana suma el período de revisión Y el lead time de gestión de
         insumos con proveedores, no sólo el lead time de cocción — ver
         LEAD_TIME_INSUMOS_SEMANAS arriba.
+
+    σ CALIBRADO (19-sep-2026) — leer antes de tocar esto:
+      La banda de Prophet es la autoevaluación del modelo sobre su propio
+      ajuste, no su error fuera de muestra, y medida contra la realidad resultó
+      MUY angosta: cubre 28% de los meses a nivel producto y 48% a nivel
+      producto×envase, cuando con interval_width=0.8 debería cubrir 80%. El σ
+      real es ~1.8x / ~2.2x el declarado. Por eso se multiplica por `k`, medido
+      por serie en scripts/forecast/calibrar_sigma.py (tabla calibracion_sigma,
+      llega en el payload de /api/produccion/datos).
+
+      CUIDADO AL CAMBIAR EL MOTOR DE FORECAST: Prophet además sobre-pronostica
+      (+42%/+35%), y ese sesgo venía inflando `demanda_semanal * ventana` lo
+      justo para tapar el colchón chico — los dos errores se cancelaban. O sea
+      que corregir el sesgo, o migrar a un método sin sesgo (ensemble baja el
+      WAPE de 54% a 36%), BAJA el punto de reorden ~21-25% y destapa el faltante
+      si este `k` no está aplicado. Este paso va primero, a propósito.
     """
     mape_por_serie = {
         (v["nivel"], v.get("clave")): (v.get("mape"), v.get("mesesHistorial"), v.get("metodo", "propio"))
         for v in validacion
     }
+
+    # k por serie + un ancla por nivel para las series que la calibración no
+    # alcanzó a medir (historia corta, o alta después de la última corrida):
+    # sin ancla quedarían con k=1, o sea con el colchón viejo subestimado, que
+    # es justo el caso que este cambio viene a arreglar.
+    k_por_serie = {(c["nivel"], c["clave"]): float(c["k"]) for c in (calibracion or [])}
+    k_por_nivel: dict[str, float] = {}
+    for nivel_cal in ("producto", "producto_envase"):
+        ks = sorted(v for (n, _), v in k_por_serie.items() if n == nivel_cal)
+        if ks:
+            k_por_nivel[nivel_cal] = ks[len(ks) // 2]
 
     filas: list[dict] = []
     for f in forecast:
@@ -428,8 +456,10 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
         if lo is None or hi is None:
             continue
 
-        # La banda de Prophet es simétrica alrededor de yhat: ancho = 2·z·σ
-        sigma_mensual = max((float(hi) - float(lo)) / (2 * Z_BANDA_PROPHET), 0.0)
+        # La banda de Prophet es simétrica alrededor de yhat: ancho = 2·z·σ,
+        # corregida por el factor medido contra la realidad (ver docstring).
+        k_sigma = k_por_serie.get((nivel, f["clave"]), k_por_nivel.get(nivel, 1.0))
+        sigma_mensual = max((float(hi) - float(lo)) / (2 * Z_BANDA_PROPHET), 0.0) * k_sigma
         sigma_semanal = sigma_mensual / math.sqrt(SEMANAS_POR_MES)
         demanda_semanal = max(yhat, 0.0) / SEMANAS_POR_MES
 
@@ -463,6 +493,7 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
             "demandaMensualProyectada": round(yhat, 2),
             "demandaEnVentana": round(demanda_semanal * ventana, 2),
             "sigmaSemanal": round(sigma_semanal, 2),
+            "kSigma": round(k_sigma, 3),
             "z": Z_SERVICIO,
             "stockSeguridadLitros": round(max(ss, 0), 2),
             "puntoReordenLitros": round(max(rop, 0), 2),
@@ -680,7 +711,11 @@ def main() -> int:
     # del forecast, tenerlos separados sólo abría la puerta a que el colchón
     # quedara calculado sobre una corrida vieja del modelo.
     categorias = datos.get("categoriaPorProducto", {})
-    filas_ss = calcular_stock_seguridad(forecast, validacion, categorias)
+    calibracion = datos.get("calibracionSigma", [])
+    if not calibracion:
+        print("  AVISO: calibracion_sigma vacía — el colchón sale de la banda cruda de "
+              "Prophet, que mide ~2x menos de lo real. Correr scripts/forecast/calibrar_sigma.py")
+    filas_ss = calcular_stock_seguridad(forecast, validacion, categorias, calibracion)
     por_nivel = {}
     for f in filas_ss:
         por_nivel[f["nivel"]] = por_nivel.get(f["nivel"], 0) + 1
