@@ -183,7 +183,7 @@ export default function GanttProduccion({
   /** Bloques por tanque, ya recortados a la ventana visible. Los que no tienen
    *  fermentador asignado van aparte, en una fila "sin asignar" — si no,
    *  desaparecerían del Gantt y nadie sabría que quedaron sueltos. */
-  const { porTanque, sinAsignar, solapes } = useMemo(() => {
+  const { porTanque, sinAsignar, solapes, noCaben } = useMemo(() => {
     const porTanque = new Map<string, BloqueGantt[]>()
     const sinAsignar: BloqueGantt[] = []
     for (const b of bloques) {
@@ -204,8 +204,16 @@ export default function GanttProduccion({
         if (orden[i].inicioISO <= prevFin) { solapes.add(orden[i].id); solapes.add(orden[i - 1].id) }
       }
     }
-    return { porTanque, sinAsignar, solapes }
-  }, [bloques, inicioVentana, finVentana])
+    // Un bloque cuyo litraje supera la capacidad del tanque tampoco es
+    // ejecutable. Se cuenta acá y no sólo se marca en la fila: con 23 filas,
+    // un aviso que vive dentro de una de ellas no se ve.
+    let noCaben = 0
+    for (const [nombre, lista] of porTanque) {
+      const cap = fermentadores.find(f => f.nombre === nombre)?.capacidadLitros ?? 0
+      if (cap > 0) noCaben += lista.filter(b => b.litros > cap).length
+    }
+    return { porTanque, sinAsignar, solapes, noCaben }
+  }, [bloques, inicioVentana, finVentana, fermentadores])
 
   const grupos = useMemo(() => {
     const cerveza = fermentadores.filter(f => f.categoria === 'cerveza' && !/lavoratorio|laboratorio/i.test(f.nombre))
@@ -249,6 +257,12 @@ export default function GanttProduccion({
             <span className="flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">
               <AlertTriangle size={11} />
               {solapes.size / 2} choque{solapes.size / 2 === 1 ? '' : 's'} de tanque
+            </span>
+          )}
+          {noCaben > 0 && (
+            <span className="flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">
+              <AlertTriangle size={11} />
+              {noCaben} no cabe{noCaben === 1 ? '' : 'n'} en su tanque
             </span>
           )}
         </div>
@@ -313,7 +327,7 @@ export default function GanttProduccion({
               <div key={d.iso} style={{ width: anchoDia, flexShrink: 0 }}
                 className={`border-l py-1 text-center text-[9px] font-semibold leading-tight ${
                   d.esHoy ? 'border-[#C9A227] bg-[#C9A227]/15 text-[#7a6216]'
-                  : d.finde ? 'border-gray-100 bg-gray-100/70 text-gray-400'
+                  : d.finde ? 'border-gray-200 bg-gray-200/70 text-gray-500'
                   : 'border-gray-100 text-gray-500'
                 }`}>
                 {anchoDia >= 26 && <div className="text-[8px] text-gray-400">{'LMXJVSD'[(d.dow + 6) % 7]}</div>}
@@ -379,10 +393,10 @@ export default function GanttProduccion({
           <span className="h-2.5 w-5 rounded-sm bg-[#2F6B4F]" /> En el plan
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-5 rounded-sm border border-dashed border-[#2F6B4F] bg-[#2F6B4F]/20" /> Sugerida — arrastrala para confirmarla
+          <span className="h-2.5 w-5 rounded-sm border border-dashed border-[#2F6B4F] bg-[#2F6B4F]/40" /> Sugerida — arrastrala para confirmarla
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-5 rounded-sm bg-gray-200" /> Fin de semana
+          <span className="h-2.5 w-5 rounded-sm bg-gray-300" /> Fin de semana
         </span>
         <span className="ml-auto">Arrastrá un bloque para cambiarle el día o el tanque.</span>
       </div>
@@ -458,7 +472,7 @@ function FilaTanque({
                 className={`border-l transition-colors duration-150 ${
                   esDestino ? 'prod-gantt-destino border-[#2F6B4F] bg-[#2F6B4F]/25'
                   : d.esHoy ? 'border-[#C9A227] bg-[#C9A227]/10'
-                  : d.finde ? 'border-gray-100 bg-gray-100/60'
+                  : d.finde ? 'border-gray-200 bg-gray-200/70'
                   : 'border-gray-100'
                 }`}
               />
@@ -499,11 +513,15 @@ function FilaTanque({
                 width: Math.max(ancho - 2, 8),
                 top: 4,
                 height: 'calc(100% - 8px)',
-                background: sugerido ? `${color}2e` : color,
+                // Los sugeridos van translúcidos para distinguirse de lo
+                // confirmado, pero a 18% el texto no se leía. 38% sobre blanco
+                // deja el color reconocible y el texto legible; el borde va al
+                // color pleno para que el punteado se vea.
+                background: sugerido ? `${color}61` : color,
                 borderColor: choca || noCabe ? '#DC2626' : color,
                 borderStyle: sugerido ? 'dashed' : 'solid',
                 borderWidth: choca || noCabe ? 2 : 1,
-                color: sugerido ? '#374151' : textoSobre(color),
+                color: sugerido ? '#1f2937' : textoSobre(color),
                 touchAction: 'none',
               }}
               className={[

@@ -98,6 +98,38 @@ export function partirEnCocciones(litros: number, tanques: TanqueDisponible[]): 
   return out
 }
 
+/**
+ * Campo de litros con separador de miles.
+ *
+ * Un `input type="number"` no muestra puntos de mil, y en esta tabla el número
+ * que se edita quedaba siendo el único sin formato — justo el más importante,
+ * con el total formateado a dos columnas de distancia. Acá se muestra
+ * formateado cuando no está enfocado y crudo mientras se escribe, así el
+ * separador no pelea con el cursor.
+ */
+function CampoLitros({ valor, onCambio, titulo }: {
+  valor: number
+  onCambio: (v: number) => void
+  titulo: string
+}) {
+  const [enfocado, setEnfocado] = useState(false)
+  const [crudo, setCrudo] = useState('')
+  return (
+    <input
+      type="text" inputMode="numeric" title={titulo}
+      value={enfocado ? crudo : fNum(valor)}
+      onFocus={() => { setCrudo(String(Math.round(valor))); setEnfocado(true) }}
+      onBlur={() => setEnfocado(false)}
+      onChange={e => {
+        const limpio = e.target.value.replace(/[^\d]/g, '')
+        setCrudo(limpio)
+        onCambio(limpio === '' ? 0 : Number(limpio))
+      }}
+      className="w-24 rounded-lg border border-gray-200 px-2 py-1 text-right text-[12px] font-bold tabular-nums text-gray-800 focus:border-[#2F6B4F] focus:outline-none"
+    />
+  )
+}
+
 export default function NecesidadMensual({
   series, stockSeguridad, plan, tanques, config, meses = 4, onConfirmar,
 }: Props) {
@@ -169,7 +201,13 @@ export default function NecesidadMensual({
           const centro = punto?.litros ?? 0
           const superior = punto?.litrosMax ?? centro
           const inferior = punto?.litrosMin ?? centro
-          const colchon = colchonPorSerie.get(`${producto}|${mes}`) ?? 0
+          // Si ese mes puntual no tiene fila de colchón, se usa el del mes
+          // más próximo en vez de 0: con 0, "Centro + colchón" daría lo mismo
+          // que "Centro" sin avisar, y la diferencia entre las dos bases —que
+          // es justamente lo que hay que comparar— desaparecería en silencio.
+          const colchon = colchonPorSerie.get(`${producto}|${mes}`)
+            ?? respaldoPorProducto.get(producto)?.colchon
+            ?? 0
           const candidatos = { superior, centro, centroColchon: centro + colchon }
           const sugerido = candidatos[base]
           const clave = `${producto}|${mes}`
@@ -307,11 +345,10 @@ export default function NecesidadMensual({
                   return (
                     <td key={c.mes} className="px-3 py-2 align-top">
                       <div className="flex flex-col items-end gap-1">
-                        <input
-                          type="number" min={0} step={50} value={c.objetivo}
-                          onChange={e => setAjustes(a => ({ ...a, [c.clave]: Number(e.target.value) }))}
-                          title={`Centro ${fNum(c.centro)} L · Superior ${fNum(c.superior)} L · Centro+colchón ${fNum(c.centro + c.colchon)} L`}
-                          className="w-24 rounded-lg border border-gray-200 px-2 py-1 text-right text-[12px] font-bold tabular-nums text-gray-800 focus:border-[#2F6B4F] focus:outline-none"
+                        <CampoLitros
+                          valor={c.objetivo}
+                          onCambio={v => setAjustes(a => ({ ...a, [c.clave]: v }))}
+                          titulo={`Centro ${fNum(c.centro)} L · Superior ${fNum(c.superior)} L · Centro+colchón ${fNum(c.centro + c.colchon)} L`}
                         />
                         {c.yaEnPlan > 0 && (
                           <span className="text-[10px] tabular-nums text-gray-400">
@@ -336,7 +373,7 @@ export default function NecesidadMensual({
                   )
                 })}
 
-                <td className="px-4 py-2 text-right align-top text-[12px] font-black tabular-nums text-gray-800">
+                <td className="whitespace-nowrap px-4 py-2 text-right align-top text-[12px] font-black tabular-nums text-gray-800">
                   {fNum(f.total)} L
                 </td>
               </tr>
