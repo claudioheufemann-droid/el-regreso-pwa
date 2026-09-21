@@ -18,6 +18,10 @@ export interface AppUser {
   puedeVerControlComercial: boolean
   /** Acceso a su propia remuneración variable (contrato). Ver lib/comisiones.ts. */
   veComisionGerente: boolean
+  /** Puede aprobar/rechazar/devolver planificaciones semanales de terreno (Claudio). Independiente de puedePagarPlanificacionTerreno — ver lib/terreno/planificacion. */
+  puedeAprobarPlanificacionTerreno: boolean
+  /** Puede registrar fondos entregados y revisar rendiciones de planificación de terreno (Mariel). Independiente de puedeAprobarPlanificacionTerreno. */
+  puedePagarPlanificacionTerreno: boolean
   /**
    * Nombres con que este usuario aparece en el ERP (ventas.vendedor_actual /
    * misiones.vendedor). Vacío = no es vendedor de terreno.
@@ -112,7 +116,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     // Primary lookup: by auth UUID
     let { data: profile } = await supabase
       .from('users')
-      .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente')
+      .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente, puede_aprobar_planificacion_terreno, puede_pagar_planificacion_terreno')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -124,7 +128,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     if (!profile && user.email) {
       const res = await supabase
         .from('users')
-        .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente')
+        .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente, puede_aprobar_planificacion_terreno, puede_pagar_planificacion_terreno')
         .eq('email', user.email)
         .maybeSingle()
       profile = res.data
@@ -156,6 +160,8 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
       puedeVerMargenes: vistaComo ? false : !!profile.puede_ver_margenes,
       puedeVerControlComercial: vistaComo ? false : !!profile.puede_ver_control_comercial,
       veComisionGerente: vistaComo ? false : !!profile.ve_comision_gerente,
+      puedeAprobarPlanificacionTerreno: vistaComo ? false : !!profile.puede_aprobar_planificacion_terreno,
+      puedePagarPlanificacionTerreno: vistaComo ? false : !!profile.puede_pagar_planificacion_terreno,
       esAdminReal,
       sesionReal: true,
       impersonando: vistaComo?.nombre ?? null,

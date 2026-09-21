@@ -4,13 +4,14 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Home, CalendarClock, Users, Map as MapIcon, FileCheck2, BarChart3, ChevronRight,
+  Home, CalendarClock, Users, Map as MapIcon, FileCheck2, BarChart3, ChevronRight, Wallet,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import { C } from '../theme'
 
-const NAV = [
+const NAV_ADMIN = [
   { href: '/terreno/admin', label: 'Resumen', Icon: Home, exact: true },
+  { href: '/terreno/admin/planificacion', label: 'Planificación', Icon: Wallet, exact: false },
   { href: '/terreno/admin/visitas', label: 'Visitas', Icon: CalendarClock, exact: false },
   { href: '/terreno/admin/clientes', label: 'Clientes', Icon: Users, exact: false },
   { href: '/terreno/admin/rutas', label: 'Rutas', Icon: MapIcon, exact: false },
@@ -18,11 +19,19 @@ const NAV = [
   { href: '/terreno/admin/reportes', label: 'Reportes', Icon: BarChart3, exact: false },
 ] as const
 
+/** Mariel/Claudio-como-pagador sin ser admin del resto del panel: sólo ven Planificación. */
+const NAV_SOLO_PLANIFICACION = [
+  { href: '/terreno/admin/planificacion', label: 'Planificación', Icon: Wallet, exact: false },
+] as const
+
 interface Props {
   nombre: string
   email: string
   avatarUrl: string | null
   pendientesRevision: number
+  isAdmin: boolean
+  puedeAprobarPlanificacion: boolean
+  puedePagarPlanificacion: boolean
   children: React.ReactNode
 }
 
@@ -34,9 +43,10 @@ interface Props {
  * (Panel/Viaje/Cercanos/Historial) no tiene nada que ver con la de un
  * admin revisando presencia de todo el equipo.
  */
-export default function AdminShell({ nombre, email, avatarUrl, pendientesRevision, children }: Props) {
+export default function AdminShell({ nombre, email, avatarUrl, pendientesRevision, isAdmin, children }: Props) {
   const pathname = usePathname()
   const [showSettings, setShowSettings] = useState(false)
+  const nav = isAdmin ? NAV_ADMIN : NAV_SOLO_PLANIFICACION
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, display: 'flex' }}>
@@ -51,7 +61,7 @@ export default function AdminShell({ nombre, email, avatarUrl, pendientesRevisio
             <p style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, letterSpacing: '0.12em', marginTop: 2 }}>TERRENO</p>
           </div>
           <nav style={{ padding: '4px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {NAV.map(({ href, label, Icon, exact }) => {
+            {nav.map(({ href, label, Icon, exact }) => {
               const activo = exact ? pathname === href : pathname?.startsWith(href)
               return (
                 <Link key={href} href={href} style={{ textDecoration: 'none' }}>
@@ -95,7 +105,7 @@ export default function AdminShell({ nombre, email, avatarUrl, pendientesRevisio
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</p>
-            <p style={{ fontSize: 11, color: C.muted }}>Administrador</p>
+            <p style={{ fontSize: 11, color: C.muted }}>{isAdmin ? 'Administrador' : 'Planificación de terreno'}</p>
           </div>
           <ChevronRight size={15} color={C.faint} />
         </button>

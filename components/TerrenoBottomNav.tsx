@@ -1,18 +1,21 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Route, Plus, Navigation, History } from 'lucide-react'
+import { LayoutDashboard, CalendarClock, Route, Plus, Navigation, History } from 'lucide-react'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
-// 5 destinos = los 5 slots del NavPill, sin botón "Más".
-// Orden = flujo de trabajo del vendedor: reviso mi día → planifico a dónde voy
-// → registro la visita (acción central) → veo qué tengo cerca → reviso lo hecho.
+// 6 destinos: NavPill muestra los primeros 4 y el resto en "Más" (sin scroll
+// horizontal, sin romper nada). "Planificación" se agrega de forma ADITIVA
+// (punto 8 del plan de planificación semanal) — Panel/Viaje/Visita se quedan
+// donde estaban para no romper el hábito diario; Cercanos/Historial pasan al
+// overflow porque se usan con menos frecuencia que planificar la semana.
 const ITEMS: NavItem[] = [
-  { href: '/terreno',              icon: LayoutDashboard, label: 'Panel',     exact: true },
-  { href: '/terreno/ruta',         icon: Route,           label: 'Viaje'                  },
-  { href: '/terreno/nueva-visita', icon: Plus,            label: 'Visita'                 },
-  { href: '/terreno/cercanos',     icon: Navigation,      label: 'Cercanos'               },
-  { href: '/terreno/historial',    icon: History,         label: 'Historial'              },
+  { href: '/terreno',              icon: LayoutDashboard, label: 'Panel',          exact: true },
+  { href: '/terreno/planificacion', icon: CalendarClock,  label: 'Planificación'               },
+  { href: '/terreno/nueva-visita', icon: Plus,            label: 'Visita'                      },
+  { href: '/terreno/ruta',         icon: Route,           label: 'Viaje'                       },
+  { href: '/terreno/cercanos',     icon: Navigation,      label: 'Cercanos'                    },
+  { href: '/terreno/historial',    icon: History,         label: 'Historial'                   },
 ]
 
 export default function TerrenoBottomNav() {

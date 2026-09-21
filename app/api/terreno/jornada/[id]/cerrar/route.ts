@@ -94,5 +94,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(cerrada)
+
+  // Si esta jornada viene de un día planificado (plan_dia_id), agregar la comparación
+  // planificado-vs-real a la respuesta. Puramente informativo: nunca cambia
+  // tarifa_aplicada/monto_reembolso (ese cálculo sigue siendo 100% por odómetro/GPS,
+  // como siempre) — jornadas_terreno y el fondo semanal aprobado son pagos distintos,
+  // ver comentario en la migración terreno_planificacion_fk_existentes_y_permisos.
+  let comparacionPlanificado: { kmPlanificadoM: number | null; kmDeclaradoM: number; diferenciaM: number | null } | null = null
+  if (jornada.plan_dia_id) {
+    const { data: rutaPlan } = await supabase
+      .from('plan_ruta_calculos_terreno')
+      .select('distancia_total_m')
+      .eq('plan_dia_id', jornada.plan_dia_id)
+      .eq('vigente', true)
+      .maybeSingle()
+    const kmPlanificadoM = rutaPlan?.distancia_total_m ?? null
+    const kmDeclaradoM = Math.round(kmDeclarados * 1000)
+    comparacionPlanificado = {
+      kmPlanificadoM,
+      kmDeclaradoM,
+      diferenciaM: kmPlanificadoM != null ? kmDeclaradoM - kmPlanificadoM : null,
+    }
+  }
+
+  return NextResponse.json({ ...cerrada, comparacion_planificado: comparacionPlanificado })
 }

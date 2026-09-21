@@ -66,10 +66,12 @@ interface Props {
   pendientes: ClienteResumen[]
   visitaRetomada?: VisitaRetomada | null
   clientePre?: string | null
+  /** Parada de la planificación semanal de la que se originó esta visita (opcional — ver /terreno/planificacion). No convierte visitas espontáneas en planificadas. */
+  planParadaId?: string | null
 }
 
 export default function NuevaVisitaClient({
-  vendedor, recientes, frecuentes, pendientes, visitaRetomada, clientePre = null,
+  vendedor, recientes, frecuentes, pendientes, visitaRetomada, clientePre = null, planParadaId = null,
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -175,6 +177,7 @@ export default function NuevaVisitaClient({
       estado: 'borrador', jornada_id: jornadaIdRef.current,
       ...(clienteTerrenoIdNuevo ? { cliente_terreno_id: clienteTerrenoIdNuevo } : {}),
       ...(erpId != null ? { cliente_erp_id: erpId } : {}),
+      ...(planParadaId ? { plan_parada_id: planParadaId } : {}),
     }
     setSyncPendiente(true)
     upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
@@ -287,6 +290,16 @@ export default function NuevaVisitaClient({
       }
 
       setSyncPendiente(!rVisita.ok || itemsPendientes)
+
+      // Vincula la visita a su parada planificada (best-effort: si falla o está offline,
+      // la visita ya quedó guardada igual — el vínculo se puede rehacer después a mano
+      // desde el admin, nunca bloquea el cierre de la visita).
+      if (planParadaId && rVisita.ok) {
+        fetch(`/api/terreno/planificacion/paradas/${planParadaId}/vincular-visita`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ visita_id: visitaId }),
+        }).catch(() => {})
+      }
 
       if (rVisita.sesionPerdida) {
         window.alert('Tu sesión expiró. Esta visita quedó guardada en el teléfono — vuelve a iniciar sesión ahora para terminar de cerrarla.')

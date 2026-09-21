@@ -41,6 +41,10 @@
     {
       "path": "/api/cron/cartera-diaria",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/terreno-planificacion-outbox",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

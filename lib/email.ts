@@ -509,3 +509,71 @@ export async function emailReporteComercial(params: {
   logResultado('informe comercial', params.destinatarios, result)
   return result
 }
+
+function planificacionPorAprobarHtml(params: {
+  vendedorNombre: string
+  semanaLunes: string
+  version: number
+  montoSolicitadoTotal: number
+  montoAlojamientoEstimado: number
+  tardia: boolean
+  algunDiaPendienteDeCalculo: boolean
+  enlace: string
+}): string {
+  const clp = (n: number) => `$${Math.round(n).toLocaleString('es-CL')}`
+  const content = `
+    <div style="border-bottom:1px solid rgba(255,255,255,0.06);padding:24px 0 20px;">
+      <p style="margin:0 0 6px;font-size:11px;color:${COLOR.gold};letter-spacing:1.5px;text-transform:uppercase;font-weight:700;">📋 Plan semanal por aprobar</p>
+      <h1 style="margin:0;font-size:22px;font-weight:900;color:${COLOR.text};line-height:1.2;">${params.vendedorNombre} · Semana ${params.semanaLunes}</h1>
+    </div>
+    <div style="padding:20px 0;">
+      ${params.tardia ? `<p style="margin:0 0 14px;font-size:12px;color:${COLOR.orange};font-weight:700;">⚠️ Entrega tardía (después del viernes límite)</p>` : ''}
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+        <tr>
+          <td style="padding:4px 0;">
+            <span style="font-size:10px;color:${COLOR.muted};text-transform:uppercase;letter-spacing:1px;">Fondo solicitado</span><br>
+            <strong style="font-size:20px;color:${COLOR.text};">${clp(params.montoSolicitadoTotal)}</strong>
+          </td>
+          ${params.montoAlojamientoEstimado > 0 ? `<td style="padding:4px 0;padding-left:24px;">
+            <span style="font-size:10px;color:${COLOR.muted};text-transform:uppercase;letter-spacing:1px;">Alojamiento (aparte)</span><br>
+            <strong style="font-size:16px;color:${COLOR.text};">${clp(params.montoAlojamientoEstimado)}</strong>
+          </td>` : ''}
+        </tr>
+      </table>
+      ${params.algunDiaPendienteDeCalculo ? `<p style="margin:0 0 16px;font-size:12px;color:${COLOR.muted};">Hay días con ruta pendiente de calcular — revisar antes de fijar el km aprobado.</p>` : ''}
+      <a href="${params.enlace}" style="display:inline-block;padding:13px 24px;background:${COLOR.gold};color:#0A0A0A;text-decoration:none;border-radius:10px;font-weight:800;font-size:13px;letter-spacing:0.5px;">
+        Revisar y decidir →
+      </a>
+      <p style="margin:16px 0 0;font-size:11px;color:${COLOR.muted};">Versión ${params.version}. Este enlace requiere iniciar sesión — no se puede aprobar sin autenticarse.</p>
+    </div>`
+  return baseTemplate(content, COLOR.gold)
+}
+
+/**
+ * Correo de "plan semanal por aprobar" — llamado por el worker del outbox
+ * (app/api/terreno/planificacion/outbox/procesar/route.ts), nunca directo desde una ruta
+ * de usuario. Igual patrón getResend()-null-safe que el resto de este archivo.
+ */
+export async function emailPlanificacionPorAprobar(params: {
+  toEmail: string
+  vendedorNombre: string
+  semanaLunes: string
+  version: number
+  montoSolicitadoTotal: number
+  montoAlojamientoEstimado: number
+  tardia: boolean
+  algunDiaPendienteDeCalculo: boolean
+  enlace: string
+}) {
+  const resend = getResend()
+  if (!resend) return { data: null, error: { message: 'RESEND_API_KEY no configurada' } }
+
+  const result = await resend.emails.send({
+    from: `El Regreso Control <${FROM}>`,
+    to: [params.toEmail],
+    subject: `📋 Plan por aprobar: ${params.vendedorNombre} · Semana ${params.semanaLunes}`,
+    html: planificacionPorAprobarHtml(params),
+  }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
+  logResultado('planificación por aprobar', [params.toEmail], result)
+  return result
+}

@@ -2,16 +2,18 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Route, Navigation, History, Plus } from 'lucide-react'
+import { LayoutDashboard, CalendarClock, Route, Navigation, History, Plus } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
-// Mismos destinos y nombres que el nav móvil y las tabs de desktop.
-// "Visita" no va en la lista: es la acción principal y vive en el CTA dorado.
+// Mismos destinos y nombres que el nav móvil. "Visita" no va en la lista: es
+// la acción principal y vive en el CTA dorado. "Planificación" agregada de
+// forma aditiva — ver nota en TerrenoBottomNav.tsx.
 const navItems: SidebarNavItem[] = [
-  { href: '/terreno',           icon: LayoutDashboard, label: 'Panel',     exact: true  },
-  { href: '/terreno/ruta',      icon: Route,           label: 'Viaje',     exact: false },
-  { href: '/terreno/cercanos',  icon: Navigation,      label: 'Cercanos',  exact: false },
-  { href: '/terreno/historial', icon: History,         label: 'Historial', exact: false },
+  { href: '/terreno',              icon: LayoutDashboard, label: 'Panel',          exact: true  },
+  { href: '/terreno/planificacion', icon: CalendarClock,  label: 'Planificación',  exact: false },
+  { href: '/terreno/ruta',         icon: Route,           label: 'Viaje',          exact: false },
+  { href: '/terreno/cercanos',     icon: Navigation,      label: 'Cercanos',       exact: false },
+  { href: '/terreno/historial',    icon: History,         label: 'Historial',      exact: false },
 ]
 
 const cta = (

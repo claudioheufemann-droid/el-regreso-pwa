@@ -37,6 +37,20 @@ export const C = {
   verdeLlegadaSoft: '#E7F3EE',
 } as const
 
+/**
+ * Tokens SOLO de Planificación semanal (`app/terreno/planificacion/**`,
+ * `app/terreno/admin/planificacion/**`) — el verde exacto de las 3 referencias que pidió
+ * Claudio para este módulo (#18583E), distinto del `C.green`/`C.verdeLlegada` que ya usan
+ * otras pantallas de Terreno en producción. Aditivo a propósito: no reemplaza ningún
+ * valor de `C` para no arriesgar una regresión visual en pantallas que ya funcionan.
+ */
+export const PLAN = {
+  primario: '#18583E',
+  primarioSoft: '#EAF3ED',
+  borde: '#E2E8E5',
+  textoFuerte: '#172B26',
+} as const
+
 /** Alto mínimo de cualquier control que se toque con el dedo en terreno. */
 export const TAP = 44
 

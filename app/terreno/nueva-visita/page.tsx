@@ -31,7 +31,7 @@ export const dynamic = 'force-dynamic'
  */
 
 interface Props {
-  searchParams: Promise<{ retomar?: string; cliente?: string }>
+  searchParams: Promise<{ retomar?: string; cliente?: string; plan_parada?: string }>
 }
 
 export default async function NuevaVisitaPage({ searchParams }: Props) {
@@ -39,7 +39,7 @@ export default async function NuevaVisitaPage({ searchParams }: Props) {
   if (!user) redirect('/login')
 
   const supabase = await createClient()
-  const { retomar, cliente: clientePre } = await searchParams
+  const { retomar, cliente: clientePre, plan_parada: planParadaId } = await searchParams
 
   // Si hay visita a retomar, cargarla — solo si es del vendedor actual (o admin).
   // Terreno es un módulo personal: nadie más debe poder ver/retomar una visita
@@ -70,6 +70,7 @@ export default async function NuevaVisitaPage({ searchParams }: Props) {
       pendientes={pendientes}
       visitaRetomada={visitaRetomada}
       clientePre={clientePre ?? null}
+      planParadaId={planParadaId ?? null}
     />
   )
 }
