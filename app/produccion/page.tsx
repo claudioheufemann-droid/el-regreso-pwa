@@ -627,6 +627,27 @@ export default async function ProduccionPage() {
     }
   }
 
+  /** Ritmo de venta REAL por producto — litros de las últimas 4 semanas
+   *  (informe de venta detallada, mismo `litrosTrailingPorSerie` de arriba)
+   *  sobre días HÁBILES, igual criterio que ya usan las Alarmas de quiebre.
+   *
+   *  El Gantt (fila "hasta cuándo alcanza") mostraba el ritmo del FORECAST
+   *  mensual sobre días CALENDARIO — auditado el 21-sep-2026 contra este
+   *  mismo informe: subestimaba la venta real entre 50% y 107% en 6 de 11
+   *  productos, sólo por dividir por 28 días calendario en vez de ~19
+   *  hábiles, más el propio desvío del forecast contra lo que se está
+   *  vendiendo. Decisión del usuario: el MES EN CURSO usa este ritmo real;
+   *  los meses futuros de la proyección siguen en el forecast, porque de
+   *  venta real todavía no hay dato — mismo criterio que "a este ritmo
+   *  cerrarías con X L" en Forecasting (ver avanceMes más abajo). */
+  const ritmoRealPorProducto = new Map<string, number>()
+  if (diasHabilesTrailing > 0) {
+    for (const [clave, litros] of litrosTrailingPorSerie) {
+      if (!clave.startsWith('producto::')) continue
+      ritmoRealPorProducto.set(clave.slice('producto::'.length), litros / diasHabilesTrailing)
+    }
+  }
+
   // Índice de validación por serie, para colgarle su MAPE a cada una.
   const validacionPorSerie = new Map(
     (validacionRaw ?? []).map(v => [`${v.nivel}::${v.clave ?? ''}`, v])
@@ -1471,6 +1492,7 @@ export default async function ProduccionPage() {
       configProductos={configProductos}
       sugerenciasPlan={sugerenciasPlan}
       splitFermentadores={splitFermentadores}
+      ritmoRealPorProducto={Object.fromEntries(ritmoRealPorProducto)}
       ajustesTanque={(ajustesTanqueRaw ?? []).map(a => ({
         tanque: a.tanque as string,
         codigoLote: a.codigo_lote as string,

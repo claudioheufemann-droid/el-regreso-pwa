@@ -119,9 +119,11 @@ export interface NecesidadProducto {
   categoria: 'cerveza' | 'kombucha'
   /** Litros disponibles hoy en cámara. */
   stockActual: number
-  /** Ritmo de venta proyectado por mes, en litros/día. Se toma del forecast,
-   *  así que respeta la estacionalidad: diciembre consume más rápido que
-   *  septiembre y la fecha de cobertura lo refleja. */
+  /** Ritmo de venta por mes, en litros/día. El mes EN CURSO es venta REAL de
+   *  las últimas 4 semanas (auditado 21-sep-2026 contra el informe de venta
+   *  detallada: el forecast subestimaba hasta 107%); los meses futuros de la
+   *  proyección siguen viniendo del forecast, que es lo único que puede
+   *  respetar la estacionalidad de un mes que todavía no pasó. */
   ritmo: { mes: string; litrosDia: number }[]
   /** Stock de seguridad del producto, en litros. Es el umbral bajo el cual la
    *  barra de cobertura pasa a ámbar. Opcional: sin él se usan siete días de

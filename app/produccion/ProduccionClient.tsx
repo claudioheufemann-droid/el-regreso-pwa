@@ -616,7 +616,7 @@ function ChipDesviacion({ mape, derivado = false }: { mape: number | null; deriv
 }
 
 export default function ProduccionClient({
-  series, calidad, planProduccion, configProductos, sugerenciasPlan, splitFermentadores, ajustesTanque: ajustesTanqueIniciales, ocupacionPlanta, necesidadInsumos, stockInsumos, recetaInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, planProduccion, configProductos, sugerenciasPlan, splitFermentadores, ritmoRealPorProducto, ajustesTanque: ajustesTanqueIniciales, ocupacionPlanta, necesidadInsumos, stockInsumos, recetaInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
@@ -628,6 +628,12 @@ export default function ProduccionClient({
   sugerenciasPlan: SugerenciaPlan[]
   /** Cómo repartir entre formatos lo que está hoy en los fermentadores. */
   splitFermentadores: SplitFermentador[]
+  /** Litros/día reales de las últimas 4 semanas por producto (informe de
+   *  venta detallada ÷ días hábiles) — mismo criterio que las Alarmas de
+   *  quiebre. Reemplaza al forecast SÓLO para el mes en curso en la fila
+   *  "hasta cuándo alcanza" del Gantt; los meses futuros siguen viniendo del
+   *  forecast, que es lo único que puede proyectarlos. */
+  ritmoRealPorProducto: Record<string, number>
   ajustesTanque: AjusteTanque[]
   /** Litros y tanques ocupados en la sala de fermentación. */
   ocupacionPlanta: OcupacionPlanta
@@ -2544,11 +2550,18 @@ export default function ProduccionClient({
     })
   }, [series, plan])
 
-  /** Stock de hoy y ritmo de venta proyectado por producto, para que el Gantt
-   *  calcule hasta cuándo alcanza. El ritmo sale del forecast mes a mes y no
-   *  de un promedio plano: diciembre consume más rápido que septiembre, y la
-   *  fecha de quiebre tiene que reflejarlo. */
+  /** Stock de hoy y ritmo de venta por producto, para que el Gantt calcule
+   *  hasta cuándo alcanza. El mes EN CURSO usa venta REAL de las últimas 4
+   *  semanas (`ritmoRealPorProducto`, mismo criterio que las Alarmas de
+   *  quiebre) — auditado 21-sep-2026: el forecast mensual ÷ días calendario
+   *  subestimaba la venta real hasta 107% en 6 de 11 productos, entre el
+   *  denominador (calendario en vez de hábiles) y el propio desvío del
+   *  modelo contra lo que se está vendiendo. Los meses FUTUROS siguen en el
+   *  forecast mes a mes, no un promedio plano: diciembre consume más rápido
+   *  que septiembre y la fecha de quiebre tiene que reflejarlo — de esos
+   *  meses no hay venta real todavía. */
   const necesidadGantt = useMemo(() => {
+    const mesHoy = hoyLocalISO().slice(0, 8) + '01'
     const stockPorProducto = new Map<string, number>()
     /* El colchón de cada producto, para que el Gantt sepa dónde poner el
        ámbar. Se toma la fila del mes más cercano (la primera, que es como ya
@@ -2565,9 +2578,16 @@ export default function ProduccionClient({
       // se agota porque dejó de producirse a propósito.
       .filter(s => s.nivel === 'producto' && s.producto && esLineaFija(s.producto))
       .map(s => {
+        const ritmoReal = ritmoRealPorProducto[s.producto as string]
         const ritmo = s.puntos
           .filter(p => p.tipo === 'forecast')
           .map(p => {
+            // El mes EN CURSO usa la venta real de las últimas 4 semanas, no
+            // el forecast — auditado contra el informe de venta detallada
+            // (21-sep-2026): el forecast mensual ÷ días calendario subestimaba
+            // la venta real hasta 107% en varios productos. Los meses
+            // FUTUROS siguen en forecast: de venta real todavía no hay dato.
+            if (p.mes === mesHoy && ritmoReal != null) return { mes: p.mes, litrosDia: ritmoReal }
             const d = new Date(Date.parse(p.mes + 'T00:00:00Z'))
             const diasDelMes = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
             return { mes: p.mes, litrosDia: p.litros / diasDelMes }
@@ -2581,7 +2601,7 @@ export default function ProduccionClient({
         }
       })
       .filter(n => n.ritmo.length > 0)
-  }, [series, stockSeguridad])
+  }, [series, stockSeguridad, ritmoRealPorProducto])
 
   /** Último mes proyectado: hasta ahí llega la grilla del Gantt. */
   const ultimoMesForecast = useMemo(() => {

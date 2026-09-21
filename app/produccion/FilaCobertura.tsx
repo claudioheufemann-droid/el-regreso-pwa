@@ -54,7 +54,8 @@ export interface CoberturaProducto {
   diasEnCero: number
   /** La trayectoria completa del stock, ya cortada en tramos de un color. */
   tramos: TramoCobertura[]
-  /** Litros/día que se venden este mes, según el forecast. */
+  /** Litros/día que se venden este mes — venta real de las últimas 4
+   *  semanas, no forecast (ver ProduccionClient.tsx: necesidadGantt). */
   velocidad: number
   /** Días de inventario: cuánto dura lo que hay HOY en cámara, sin contar
    *  ningún lote por llegar. Es distinto de `agota`, que sí los cuenta — ver
@@ -162,7 +163,7 @@ export default function FilaCobertura({
             dice si eso es mucho o poco para este producto. */}
         <div className="flex items-center gap-1.5 tabular-nums text-gray-400"
           style={{ fontSize: Math.max(tamEtiqueta - 2, 8) }}>
-          <span title={`Se venden ${fRitmo(c.velocidad)} litros por día de ${c.producto}, según el forecast de este mes`}>
+          <span title={`Se venden ${fRitmo(c.velocidad)} litros por día de ${c.producto} — venta real de las últimas 4 semanas para este mes, forecast para los meses siguientes de la proyección`}>
             {fRitmo(c.velocidad)} L/día
           </span>
           {c.doi != null && (
