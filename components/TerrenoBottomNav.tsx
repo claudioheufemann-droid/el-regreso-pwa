@@ -21,5 +21,9 @@ export default function TerrenoBottomNav() {
   // y botón Volver) — el nav flotante le tapaba el botón de confirmar al
   // final de cada paso.
   if (pathname?.startsWith('/terreno/nueva-visita')) return null
+  // El panel de administrador es su propio shell desktop (ver
+  // app/terreno/admin/layout.tsx) con su propia navegación — no es para
+  // vendedores, así que ni el nav flotante ni el sidebar de Terreno aplican ahí.
+  if (pathname?.startsWith('/terreno/admin')) return null
   return <NavPill items={ITEMS} pathname={pathname} />
 }

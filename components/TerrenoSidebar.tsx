@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Route, Navigation, History, Plus } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
@@ -34,6 +35,11 @@ const cta = (
 )
 
 export default function TerrenoSidebar() {
+  const pathname = usePathname()
+  // El panel de administrador (app/terreno/admin) es su propio shell desktop
+  // con su propia navegación (Resumen/Visitas/Clientes/Rutas/Revisión/
+  // Reportes) — no el de un vendedor. Mismo criterio que TerrenoBottomNav.
+  if (pathname?.startsWith('/terreno/admin')) return null
   return (
     <SidebarShell
       moduleName="Terreno"
