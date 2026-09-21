@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeft, Check, CloudOff, MessageCircle, Image as ImageIcon } from 'lucide-react'
 import { notificar } from '@/lib/notificar'
 import { upsertOrQueue } from '@/lib/offlineQueue'
+import { uploadConTimeout } from '@/lib/offlinePhotoQueue'
+import { comprimirFotoLlegada } from '@/lib/terreno/comprimirFoto'
 import { hapticExito } from '@/lib/haptics'
 import { createClient } from '@/lib/supabase/client'
 import { catalogoParaVendedor, fmtPrecioCLP } from '@/lib/catalogo-productos'
@@ -101,7 +103,6 @@ export default function NuevaVisitaClient({
     ...(visitaRetomada?.foto_exhibicion ? { exhibicion: visitaRetomada.foto_exhibicion } : {}),
     ...(visitaRetomada?.foto_competencia ? { competencia: visitaRetomada.foto_competencia } : {}),
   })
-  const [subiendoFoto] = useState<Partial<Record<SlotFoto, boolean>>>({})
   const [showCatalogoWA, setShowCatalogoWA] = useState(false)
   const [showImagen, setShowImagen] = useState(false)
   const [pendingFinal, setPendingFinal] = useState<{ payload: CierrePayloadLlegada; items: ItemCarrito[]; pago: PagoInfo | null } | null>(null)
@@ -329,16 +330,23 @@ export default function NuevaVisitaClient({
     router.push('/terreno')
   }
 
-  function subirFotoExtra(file: File, slot: SlotFoto) {
+  const [subiendoFotoExtra, setSubiendoFotoExtra] = useState<Partial<Record<SlotFoto, boolean>>>({})
+
+  async function subirFotoExtra(file: File, slot: SlotFoto) {
     if (!visitaId) return
     setFotos(prev => ({ ...prev, [slot]: URL.createObjectURL(file) }))
+    setSubiendoFotoExtra(prev => ({ ...prev, [slot]: true }))
     const campo = CAMPO_DE_SLOT[slot]
-    supabase.storage.from('terreno-fotos').upload(`${visitaId}/${slot}.jpg`, file, { upsert: true, contentType: file.type || 'image/jpeg' })
-      .then(({ error }) => {
-        if (error) return
-        const { data: { publicUrl } } = supabase.storage.from('terreno-fotos').getPublicUrl(`${visitaId}/${slot}.jpg`)
-        upsertOrQueue(supabase, 'visitas_terreno', { id: visitaId, [campo]: publicUrl })
-      })
+    const vId = visitaId
+    let blob: Blob = file
+    try { blob = await comprimirFotoLlegada(file) } catch { /* si falla la compresión, se sube el original igual */ }
+    const url = await uploadConTimeout(
+      supabase,
+      { bucket: 'terreno-fotos', path: `${vId}/${slot}.webp`, table: 'visitas_terreno', rowId: vId, campo },
+      new File([blob], `${slot}.webp`, { type: blob.type || 'image/webp' }),
+    )
+    setSubiendoFotoExtra(prev => ({ ...prev, [slot]: false }))
+    if (url) upsertOrQueue(supabase, 'visitas_terreno', { id: vId, [campo]: url })
   }
 
   function onFileElegido(e: React.ChangeEvent<HTMLInputElement>) {
@@ -503,7 +511,7 @@ export default function NuevaVisitaClient({
       {pendingFinal && (
         <HojaFotosVisita
           fotos={fotos}
-          subiendo={subiendoFoto}
+          subiendo={subiendoFotoExtra}
           onTomarCamara={slot => { slotPendienteRef.current = slot; fileGaleriaRef.current?.click() }}
           onSubirGaleria={slot => { slotPendienteRef.current = slot; fileGaleriaRef.current?.click() }}
           onContinuar={() => ejecutarCierre(pendingFinal.payload, pendingFinal.items, pendingFinal.pago)}
