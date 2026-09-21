@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react'
 import GanttProduccion, { type BloqueGantt } from '@/app/produccion/GanttProduccion'
 import ConfigProductosGantt from '@/app/produccion/ConfigProductosGantt'
 import NecesidadMensual from '@/app/produccion/NecesidadMensual'
+import MenuLateral, { type TabId } from '@/app/produccion/MenuLateral'
 import { useArrastreCalendario, type DestinoArrastre } from '@/app/produccion/useArrastreCalendario'
 import {
   FERMENTADORES, CONFIG, SERIES, STOCK_SEGURIDAD, PLAN, HOY,
@@ -26,6 +27,7 @@ export default function DevProduccionClient() {
   const [configAbierta, setConfigAbierta] = useState(false)
   const [recienMovido, setRecienMovido] = useState<string | null>(null)
   const [registro, setRegistro] = useState<string[]>([])
+  const [tab, setTab] = useState<TabId>('calendario')
 
   const cambiarEscenario = useCallback((e: Escenario) => {
     setEscenario(e)
@@ -67,8 +69,26 @@ export default function DevProduccionClient() {
   const pista = ESCENARIOS.find(e => e.id === escenario)?.pista
 
   return (
-    <div className="prod-root min-h-screen bg-gray-50">
-      <div className="mx-auto flex max-w-[1600px] flex-col gap-5 p-5">
+    <div className="prod-root flex h-[100dvh] w-full overflow-hidden bg-gray-50">
+      {/* El menú va acá y no dentro del contenedor centrado porque en la app
+          real es una columna de alto completo: verlo flotando en una caja no
+          probaría nada del riel. */}
+      <MenuLateral
+        activeTab={tab}
+        onCambiarTab={setTab}
+        alertasPorTab={{ calendario: 3, seguridad: 12, insumos: 1 }}
+        ultimaCorrida="2026-09-20T08:00:00Z"
+        nombreUsuario="Benjamín Alarcón"
+        inicialesUsuario="BA"
+      />
+
+      {/* MISMA estructura que la app: un scroller PLANO con flex-1, y el flex
+          column adentro. Si el scroller mismo es el flex column, sus hijos
+          heredan flex-shrink y el Gantt se aplasta a 75 px — pasó acá, y en
+          un banco que no copia la estructura real ese bug no se habría visto
+          nunca (o peor, se habría "arreglado" en el componente). */}
+      <div className="min-w-0 flex-1 overflow-auto p-5">
+        <div className="flex flex-col gap-5">
 
         {/* Barra del banco de pruebas — deliberadamente fea y distinta del
             módulo real, para que nadie confunda esta pantalla con la app. */}
@@ -147,6 +167,7 @@ export default function DevProduccionClient() {
           onCerrar={() => setConfigAbierta(false)}
           onGuardado={fila => setConfig(c => c.map(x => (x.producto === fila.producto ? fila : x)))}
         />
+        </div>
       </div>
 
       {/* Ghost del arrastre: en producción lo pinta ProduccionClient, así que
