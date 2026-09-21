@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Settings2, AlertTriangle, ChevronLeft, ChevronRight, CalendarRange, Eye, EyeOff } from 'lucide-react'
+import { Settings2, AlertTriangle, ChevronLeft, ChevronRight, CalendarRange, Eye, EyeOff, X } from 'lucide-react'
 import type { CargaArrastre, DestinoArrastre, EstadoArrastre } from './useArrastreCalendario'
 import FilaCobertura, { type NivelCobertura, type TramoCobertura } from './FilaCobertura'
 
@@ -69,6 +69,12 @@ interface Props {
   propsOrigen: (carga: CargaArrastre, habilitado?: boolean) => Record<string, unknown>
   onAbrirConfig: () => void
   onAbrirBloque?: (bloque: BloqueGantt, rect?: DOMRect) => void
+  /** Saca un lote YA CONFIRMADO de la programación. Antes de esto la única
+   *  forma era ir a buscar la fila en Plan Maestro — acá se puede hacer donde
+   *  se está mirando el problema, sin cambiar de pestaña. Sólo aplica a
+   *  bloques confirmados: uno sugerido no está en el plan, así que no hay
+   *  nada que "quitar" — simplemente no se confirma. */
+  onQuitarBloque?: (bloque: BloqueGantt) => void
   /** id del bloque que se acaba de mover, para que aterrice con un latido.
    *  Lo informa quien hizo el movimiento — comparar posiciones entre renders
    *  obligaría a leer y escribir un ref durante el render, que React prohíbe. */
@@ -157,7 +163,7 @@ function textoSobre(hex: string) {
 
 export default function GanttProduccion({
   fermentadores, bloques, config, arrastre, propsOrigen,
-  onAbrirConfig, onAbrirBloque, bloqueRecienMovido = null,
+  onAbrirConfig, onAbrirBloque, onQuitarBloque, bloqueRecienMovido = null,
   anclasEnSesion = 0, onLimpiarAnclas, cobertura = [],
   necesidad = [], hastaMes = null, semanas = 10,
 }: Props) {
@@ -176,7 +182,7 @@ export default function GanttProduccion({
   const [linea, setLinea] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
   /** Las sugerencias del modelo se pueden apagar: al ordenar el plan estorban,
    *  y al armarlo son justamente lo que se busca. */
-  const [mostrarSugerencias, setMostrarSugerencias] = useState(true)
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
   const alternarGrupo = useCallback((titulo: string) => {
     setPlegados(p => {
       const n = new Set(p)
@@ -719,7 +725,7 @@ export default function GanttProduccion({
                     inicioVentana={inicioVentana} hoy={hoy}
                     colorPorProducto={colorPorProducto} solapes={solapes}
                     destinoActivo={destinoActivo} propsOrigen={propsOrigen}
-                    cargaDe={cargaDe} onAbrirBloque={onAbrirBloque}
+                    cargaDe={cargaDe} onAbrirBloque={onAbrirBloque} onQuitarBloque={onQuitarBloque}
                     fila={i} recienMovido={bloqueRecienMovido} sentido={sentido}
                     cargaArrastrada={arrastre?.carga ?? null}
                   />
@@ -756,7 +762,7 @@ export default function GanttProduccion({
                 altoFila={altoFila} tamEtiqueta={tamEtiqueta} inicioVentana={inicioVentana}
                 hoy={hoy} colorPorProducto={colorPorProducto} solapes={solapes}
                 destinoActivo={destinoActivo} propsOrigen={propsOrigen} cargaDe={cargaDe}
-                onAbrirBloque={onAbrirBloque} fila={0} recienMovido={bloqueRecienMovido}
+                onAbrirBloque={onAbrirBloque} onQuitarBloque={onQuitarBloque} fila={0} recienMovido={bloqueRecienMovido}
                 sentido={sentido} cargaArrastrada={arrastre?.carga ?? null} sinCapacidad
               />
             </div>
@@ -779,7 +785,7 @@ export default function GanttProduccion({
 
 function FilaTanque({
   tanque, bloques, dias, anchoDia, altoFila, tamEtiqueta, inicioVentana, hoy, colorPorProducto,
-  solapes, destinoActivo, propsOrigen, cargaDe, onAbrirBloque, sinCapacidad,
+  solapes, destinoActivo, propsOrigen, cargaDe, onAbrirBloque, onQuitarBloque, sinCapacidad,
   fila, recienMovido, sentido, cargaArrastrada,
 }: {
   tanque: FermentadorGantt
@@ -796,6 +802,7 @@ function FilaTanque({
   propsOrigen: (carga: CargaArrastre, habilitado?: boolean) => Record<string, unknown>
   cargaDe: (b: BloqueGantt) => CargaArrastre
   onAbrirBloque?: (b: BloqueGantt, rect?: DOMRect) => void
+  onQuitarBloque?: (b: BloqueGantt) => void
   sinCapacidad?: boolean
   /** Índice dentro del grupo, para escalonar la entrada. */
   fila: number
@@ -869,7 +876,6 @@ function FilaTanque({
           if (visibles <= 0) return null
 
           const color = colorPorProducto.get(b.producto) ?? '#8C8C8C'
-          const sugerido = b.tipo === 'sugerido'
           const choca = solapes.has(b.id)
           const noCabe = !sinCapacidad && tanque.capacidadLitros > 0 && b.litros > tanque.capacidadLitros
           const ancho = visibles * anchoDia
@@ -880,52 +886,127 @@ function FilaTanque({
             && (cargaArrastrada.tipo === 'coccion') === (b.tipo === 'confirmado')
 
           return (
-            <button
+            <BloqueCoccion
               key={b.id}
-              type="button"
-              {...propsOrigen(cargaDe(b), b.inicioISO >= hoy || b.tipo === 'sugerido')}
-              onClick={e => onAbrirBloque?.(b, e.currentTarget.getBoundingClientRect())}
-              title={`${b.producto} · ${b.litros.toLocaleString('es-CL')} L · ${b.dias} días desde ${b.inicioISO}` +
-                (noCabe ? `\n⚠ No cabe: el tanque es de ${tanque.capacidadLitros.toLocaleString('es-CL')} L` : '') +
-                (choca ? '\n⚠ Se pisa con otra cocción en este mismo tanque' : '') +
-                (b.motivo ? `\n${b.motivo}` : '')}
-              style={{
-                position: 'absolute',
-                left: desdeIdx * anchoDia + 1,
-                width: Math.max(ancho - 2, 8),
-                top: 3,
-                height: 'calc(100% - 6px)',
-                // Los sugeridos van translúcidos para distinguirse de lo
-                // confirmado, pero a 18% el texto no se leía. 38% sobre blanco
-                // deja el color reconocible y el texto legible; el borde va al
-                // color pleno para que el punteado se vea.
-                background: sugerido ? `${color}61` : color,
-                borderColor: choca || noCabe ? '#DC2626' : color,
-                borderStyle: sugerido ? 'dashed' : 'solid',
-                borderWidth: choca || noCabe ? 2 : 1,
-                color: sugerido ? '#1f2937' : textoSobre(color),
-                touchAction: 'none',
-              }}
-              className={[
-                'prod-press prod-gantt-bloque flex items-center gap-1 overflow-hidden rounded-md px-1.5 text-left text-[10px] font-bold leading-none shadow-sm',
-                // Un plan imposible late hasta que alguien lo arregle.
-                (choca || noCabe) ? 'prod-gantt-alerta' : '',
-                // Acaba de cambiar de día o de tanque: un latido y listo.
-                recienMovido === b.id ? 'prod-gantt-aterriza' : '',
-                // Mientras se arrastra, el bloque de origen se apaga: el que
-                // manda es el ghost que sigue al puntero.
-                arrastrandoEste ? 'prod-gantt-bloque-fantasma' : '',
-              ].filter(Boolean).join(' ')}
-            >
-              {(choca || noCabe) && <AlertTriangle size={10} className="shrink-0 text-red-600" />}
-              <span className="truncate">
-                {b.producto}
-                {ancho > 90 && ` · ${b.litros.toLocaleString('es-CL')} L`}
-              </span>
-            </button>
+              bloque={b} color={color} choca={choca} noCabe={noCabe}
+              capacidadTanque={tanque.capacidadLitros}
+              desdeIdx={desdeIdx} anchoDia={anchoDia} ancho={ancho}
+              propsOrigen={propsOrigen} cargaDe={cargaDe} hoy={hoy}
+              onAbrirBloque={onAbrirBloque} onQuitarBloque={onQuitarBloque}
+              recienMovido={recienMovido === b.id} arrastrandoEste={arrastrandoEste}
+            />
           )
         })}
       </div>
     </div>
+  )
+}
+
+/* ── Un bloque de cocción dentro de una fila ─────────────────────────────
+ *
+ * Vive separado de FilaTanque porque necesita estado propio: el botón de
+ * "quitar" es de dos pasos (armar, después confirmar) para que un clic
+ * accidental no borre un lote del plan, y ese estado tiene que resetearse
+ * solo si el mouse se va del bloque. Meterlo en el .map() de FilaTanque
+ * habría significado un hook por iteración sin un componente que lo sostenga,
+ * que React no permite. */
+function BloqueCoccion({
+  bloque: b, color, choca, noCabe, capacidadTanque, desdeIdx, anchoDia, ancho,
+  propsOrigen, cargaDe, hoy, onAbrirBloque, onQuitarBloque, recienMovido, arrastrandoEste,
+}: {
+  bloque: BloqueGantt
+  color: string
+  choca: boolean
+  noCabe: boolean
+  capacidadTanque: number
+  desdeIdx: number
+  anchoDia: number
+  ancho: number
+  propsOrigen: (carga: CargaArrastre, habilitado?: boolean) => Record<string, unknown>
+  cargaDe: (b: BloqueGantt) => CargaArrastre
+  hoy: string
+  onAbrirBloque?: (b: BloqueGantt, rect?: DOMRect) => void
+  onQuitarBloque?: (b: BloqueGantt) => void
+  recienMovido: boolean
+  arrastrandoEste: boolean
+}) {
+  const sugerido = b.tipo === 'sugerido'
+  // Armado = el primer clic ya cayó; el segundo, sobre el mismo botón,
+  // confirma. Se desarma solo al sacar el mouse: no queda un "armado"
+  // colgado esperando un clic de otro día.
+  const [armado, setArmado] = useState(false)
+
+  return (
+    <button
+      type="button"
+      {...propsOrigen(cargaDe(b), b.inicioISO >= hoy || b.tipo === 'sugerido')}
+      onClick={e => onAbrirBloque?.(b, e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => armado && setArmado(false)}
+      title={`${b.producto} · ${b.litros.toLocaleString('es-CL')} L · ${b.dias} días desde ${b.inicioISO}` +
+        (noCabe ? `\n⚠ No cabe: el tanque es de ${capacidadTanque.toLocaleString('es-CL')} L` : '') +
+        (choca ? '\n⚠ Se pisa con otra cocción en este mismo tanque' : '') +
+        (b.motivo ? `\n${b.motivo}` : '')}
+      style={{
+        position: 'absolute',
+        left: desdeIdx * anchoDia + 1,
+        width: Math.max(ancho - 2, 8),
+        top: 3,
+        height: 'calc(100% - 6px)',
+        // Los sugeridos van translúcidos para distinguirse de lo
+        // confirmado, pero a 18% el texto no se leía. 38% sobre blanco
+        // deja el color reconocible y el texto legible; el borde va al
+        // color pleno para que el punteado se vea.
+        background: sugerido ? `${color}61` : color,
+        borderColor: choca || noCabe ? '#DC2626' : color,
+        borderStyle: sugerido ? 'dashed' : 'solid',
+        borderWidth: choca || noCabe ? 2 : 1,
+        color: sugerido ? '#1f2937' : textoSobre(color),
+        touchAction: 'none',
+      }}
+      className={[
+        'prod-press prod-gantt-bloque group/bloque relative flex items-center gap-1 overflow-hidden rounded-md px-1.5 text-left text-[10px] font-bold leading-none shadow-sm',
+        // Un plan imposible late hasta que alguien lo arregle.
+        (choca || noCabe) ? 'prod-gantt-alerta' : '',
+        // Acaba de cambiar de día o de tanque: un latido y listo.
+        recienMovido ? 'prod-gantt-aterriza' : '',
+        // Mientras se arrastra, el bloque de origen se apaga: el que
+        // manda es el ghost que sigue al puntero.
+        arrastrandoEste ? 'prod-gantt-bloque-fantasma' : '',
+      ].filter(Boolean).join(' ')}
+    >
+      {(choca || noCabe) && <AlertTriangle size={10} className="shrink-0 text-red-600" />}
+      <span className="truncate">
+        {b.producto}
+        {ancho > 90 && ` · ${b.litros.toLocaleString('es-CL')} L`}
+      </span>
+
+      {/* Quitar de la programación — sólo para lotes YA confirmados: un
+          sugerido no está en el plan, no hay nada que sacar de ahí. Se ve al
+          pasar el mouse para no ensuciar la lectura normal de la carta, y
+          exige un segundo clic para de verdad quitarlo. */}
+      {!sugerido && onQuitarBloque && ancho > 26 && (
+        <span
+          role="button"
+          tabIndex={-1}
+          // El botón exterior escucha pointerdown para arrancar el arrastre:
+          // sin cortar la propagación acá, apretar la X primero armaría un
+          // drag y el clic nunca llegaría a confirmar nada.
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => {
+            e.stopPropagation()
+            if (armado) { onQuitarBloque(b); setArmado(false) }
+            else setArmado(true)
+          }}
+          title={armado ? 'Confirmar: quitar de la programación' : 'Quitar de la programación'}
+          className={`prod-press absolute right-0.5 top-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded transition-opacity ${
+            armado
+              ? 'opacity-100 bg-red-600 text-white'
+              : 'opacity-0 group-hover/bloque:opacity-100 bg-black/20 text-white hover:bg-red-600'
+          }`}
+        >
+          <X size={10} strokeWidth={3} />
+        </span>
+      )}
+    </button>
   )
 }

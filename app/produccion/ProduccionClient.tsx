@@ -5004,6 +5004,14 @@ export default function ProduccionClient({
                   const lote = planSugerido.lotes.find(l => `sug:${l.id}` === b.id)
                   if (lote && rect) fijarDetalle(lote, rect)
                 }}
+                onQuitarBloque={b => {
+                  // El id de un bloque confirmado ES el id del lote (ver
+                  // bloquesGantt más arriba) — no hace falta buscarlo.
+                  // Cancelar y no borrar: `cambiarEstadoLote` ya trata
+                  // 'cancelado' como sacarlo del plan, y deja el registro en
+                  // base por si hay que auditar qué se quitó y cuándo.
+                  void cambiarEstadoLote(b.id, 'cancelado')
+                }}
               />
 
               {/* Tarjetas de cocciones sugeridas — quedan como estaban: el
