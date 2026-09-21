@@ -127,7 +127,8 @@ export function bloquesDe(escenario: Escenario): BloqueGantt[] {
         base({
           id: 'erp:Fermentador T2', producto: 'La Barra APA', categoria: 'cerveza', litros: 1700,
           inicioISO: masDias(-8), dias: 24, fermentador: 'Fermentador T2', tipo: 'en_tanque',
-          motivo: 'Detectado en el informe del ERP — inicio estimado hacia atrás desde el embarrilado que calculó el enólogo.',
+          codigoLote: '#439-T2',
+          motivo: 'Detectado en el informe del ERP — inicio estimado hacia atrás desde el embarrilado que calculó el enólogo. Clic para corregir.',
         }),
       ]
   }
