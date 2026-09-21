@@ -478,7 +478,11 @@ export default function GanttProduccion({
 
   const cargaDe = useCallback((b: BloqueGantt): CargaArrastre => (
     b.tipo === 'confirmado'
-      ? { tipo: 'coccion', producto: b.producto, loteNro: b.loteNro ?? 1, categoria: b.categoria, litros: b.litros }
+      // El id ES el de plan_produccion (ver bloquesGantt en ProduccionClient):
+      // es la clave que identifica ESTE lote sin ambigüedad, a diferencia del
+      // producto solo, que colisiona en cuanto hay dos cocciones confirmadas
+      // del mismo producto en la cola.
+      ? { tipo: 'coccion', id: b.id, producto: b.producto, loteNro: b.loteNro ?? 1, categoria: b.categoria, litros: b.litros }
       : { tipo: 'sugerencia', producto: b.producto, categoria: b.categoria, litros: b.litros, motivo: b.motivo ?? null }
   ), [])
 

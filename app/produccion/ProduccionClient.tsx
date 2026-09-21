@@ -1882,12 +1882,22 @@ export default function ProduccionClient({
 
   const alSoltarEnCelda = useCallback((carga: CargaArrastre, destino: DestinoArrastre) => {
     if (carga.tipo === 'coccion') {
-      // Mover una cocción ya planificada: el ancla de sesión sigue existiendo
-      // para que el plan se re-simule al instante, pero además se persiste —
-      // antes esto se perdía al recargar y no lo veía nadie más.
-      anclarCoccion(carga.producto, carga.loteNro, destino.fecha)
-      if (destino.fermentador) anclarTanque(carga.producto, carga.loteNro, destino.fermentador)
-      const lote = planRef.current.find(l => l.producto === carga.producto && l.estado !== 'cancelado')
+      // Mover una cocción YA CONFIRMADA. Se busca por `carga.id` — el id real
+      // de plan_produccion — y no por producto: dos lotes confirmados del
+      // mismo producto (agregar uno nuevo a mano cuando ya había otro en la
+      // cola) tienen el mismo `producto` y el mismo `loteNro` bobo (los
+      // lotes agregados a mano no traen numeración de cocción), así que
+      // buscar por nombre encontraba SIEMPRE el primero de la cola y
+      // arrastrar el segundo terminaba moviendo el primero.
+      //
+      // Tampoco se anclan `anclasCoccion`/`anclasTanque` acá: esas dos existen
+      // para que `planSugerido` — la SIMULACIÓN de lo que conviene cocer —
+      // respete una fecha o tanque que el usuario fijó a mano para una
+      // cocción SUGERIDA. Un lote ya confirmado no pasa por esa simulación
+      // (planSugerido nunca lee plan_produccion), así que anclarlo con su
+      // `loteNro` bobo sólo podía contaminar el ancla real de otra cocción
+      // sugerida del mismo producto que sí cayera en el slot "1".
+      const lote = planRef.current.find(l => l.id === carga.id && l.estado !== 'cancelado')
       if (lote) { marcarMovido(lote.id); void moverLoteEnGantt(lote.id, destino) }
       return
     }

@@ -38,6 +38,11 @@ const MS_LONG_PRESS = 320
 export type CargaArrastre =
   | {
       tipo: 'coccion'
+      /** id real de la fila en plan_produccion. Es la clave que hay que usar
+       *  para encontrar CUÁL lote se está moviendo — `producto` no alcanza
+       *  cuando hay dos cocciones confirmadas del mismo producto (arrastrar
+       *  la segunda movía la primera, por buscarla sólo por nombre). */
+      id: string
       producto: string
       loteNro: number
       categoria: 'cerveza' | 'kombucha'

@@ -114,6 +114,11 @@ export function bloquesDe(escenario: Escenario): BloqueGantt[] {
       return [
         base({ id: 'b1', producto: 'Red IPA', categoria: 'cerveza', litros: 3000, inicioISO: masDias(-2), dias: 24, fermentador: 'Fermentador T6' }),
         base({ id: 'b2', producto: 'Mocho English', categoria: 'cerveza', litros: 1500, inicioISO: masDias(3), dias: 24, fermentador: 'Fermentador T1' }),
+        // Segundo confirmado del MISMO producto, sin asignar — exactamente
+        // el caso que rompía el arrastre: dos bloques 'confirmado' con el
+        // mismo `producto` (arrastrar éste movía el de arriba en su lugar,
+        // por buscar el lote a mover por nombre en vez de por id).
+        base({ id: 'b2b', producto: 'Mocho English', categoria: 'cerveza', litros: 900, inicioISO: masDias(3), dias: 24, fermentador: null }),
         base({ id: 'b3', producto: 'Aguas Blancas', categoria: 'cerveza', litros: 1700, inicioISO: masDias(9), dias: 21, fermentador: 'Fermentador T13', tipo: 'sugerido' }),
         base({ id: 'b4', producto: 'La Barra APA', categoria: 'cerveza', litros: 1500, inicioISO: masDias(28), dias: 24, fermentador: 'Fermentador T3', tipo: 'sugerido' }),
         base({ id: 'b5', producto: 'Kombucha Berry Menta', categoria: 'kombucha', litros: 2000, inicioISO: masDias(1), dias: 12, fermentador: 'Fermentador K-2' }),

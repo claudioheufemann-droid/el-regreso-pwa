@@ -59,11 +59,17 @@ export default function DevProduccionClient() {
     return !t || !cargaCategoria.current || t.categoria === cargaCategoria.current
   }, [])
 
-  const alSoltarEnCelda = useCallback((carga: { producto: string }, destino: DestinoArrastre) => {
-    setBloques(bs => bs.map(b => (b.producto === carga.producto
+  const alSoltarEnCelda = useCallback((carga: { producto: string; id?: string }, destino: DestinoArrastre) => {
+    // Igual que ProduccionClient real: un confirmado se identifica por id,
+    // no por producto — dos bloques confirmados del mismo producto (agregar
+    // uno nuevo cuando ya había otro en la cola) tienen el mismo nombre, y
+    // matchear por nombre movía SIEMPRE el primero de la lista sin importar
+    // cuál se estaba arrastrando de verdad.
+    const coincide = (b: BloqueGantt) => (carga.id ? b.id === carga.id : b.producto === carga.producto)
+    setBloques(bs => bs.map(b => (coincide(b)
       ? { ...b, inicioISO: destino.fecha, fermentador: destino.fermentador }
       : b)))
-    const movido = bloques.find(b => b.producto === carga.producto)
+    const movido = bloques.find(coincide)
     if (movido) {
       setRecienMovido(movido.id)
       setTimeout(() => setRecienMovido(a => (a === movido.id ? null : a)), 800)
