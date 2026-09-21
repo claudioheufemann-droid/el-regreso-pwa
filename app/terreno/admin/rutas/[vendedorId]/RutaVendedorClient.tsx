@@ -16,6 +16,7 @@ const SecuenciaMapa = dynamic(() => import('../../SecuenciaMapa'), {
   loading: () => <div style={{ height: 600, borderRadius: 14, background: C.line }} />,
 })
 import { MOTIVO_LABEL, type MotivoRevision } from '@/lib/terreno/verificacion'
+import { fDistancia } from '@/lib/terreno/formato'
 
 export interface ParadaDetalle {
   id: string
@@ -191,7 +192,7 @@ export default function RutaVendedorClient({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                 <FilaEv icon={MapPin} label="Llegada" valor={fHora(seleccionada.iniciadaAt)} />
-                <FilaEv icon={Ruler} label="Distancia" valor={seleccionada.distanciaM != null ? `${seleccionada.distanciaM} m` : '—'} />
+                <FilaEv icon={Ruler} label="Distancia" valor={seleccionada.distanciaM != null ? fDistancia(seleccionada.distanciaM) : '—'} />
                 <FilaEv icon={Crosshair} label="Precisión" valor={seleccionada.precisionM != null ? `${Math.round(seleccionada.precisionM)} m` : '—'} />
                 <FilaEv icon={FileText} label="Foto" valor={seleccionada.fotoBytes != null ? `${Math.round(seleccionada.fotoBytes / 1024)} KB` : '—'} />
               </div>

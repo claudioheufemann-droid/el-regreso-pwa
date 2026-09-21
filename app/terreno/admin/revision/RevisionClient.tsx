@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Check, X, Camera, CloudOff } from 'lucide-react'
 import { C, cardStyle } from '../../theme'
 import { MOTIVO_LABEL, type MotivoRevision } from '@/lib/terreno/verificacion'
+import { fDistancia } from '@/lib/terreno/formato'
 
 export interface ItemRevision {
   id: string
@@ -84,7 +85,7 @@ export default function RevisionClient({ items }: { items: ItemRevision[] }) {
               </div>
 
               <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 12, color: C.muted, flexWrap: 'wrap' }}>
-                {item.distanciaM != null && <span>Distancia: <b style={{ color: C.text }}>{item.distanciaM} m</b></span>}
+                {item.distanciaM != null && <span>Distancia: <b style={{ color: C.text }}>{fDistancia(item.distanciaM)}</b></span>}
                 {item.precisionM != null && <span>Precisión: <b style={{ color: C.text }}>{Math.round(item.precisionM)} m</b></span>}
                 {item.fotoBytes != null && <span>Foto: <b style={{ color: C.text }}>{Math.round(item.fotoBytes / 1024)} KB</b></span>}
                 {item.capturaOffline && (

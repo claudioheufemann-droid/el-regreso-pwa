@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, MapPin, Ruler, Crosshair, Clock, RotateCcw, Loader2 } from 'lucide-react'
+import { ChevronLeft, MapPin, Ruler, Crosshair, Clock, RotateCcw, Loader2, AlertTriangle } from 'lucide-react'
 import { C, TAP, cardStyle, btnPrimario } from '../theme'
 import type { EvidenciaCapturada } from './MarcarLlegada'
 import { enviarLlegadaConTimeout } from '@/lib/terreno/colaLlegadaOffline'
 import { distanciaMetros } from '@/lib/geo'
+import { fDistancia } from '@/lib/terreno/formato'
 
 export interface ResultadoLlegada {
   estadoPresencia: string
@@ -117,12 +118,25 @@ export default function ConfirmarEvidencia({
         </span>
       </div>
 
-      <div style={{ ...cardStyle, padding: '4px 14px', marginBottom: 14 }}>
+      <div style={{ ...cardStyle, padding: '4px 14px', marginBottom: coincide === false ? 0 : 14 }}>
         <FilaEstado icon={MapPin} label="Ubicación" valor={coincide == null ? 'Sin referencia' : coincide ? 'Coincide' : 'Fuera de rango'} color={coincide == null ? C.muted : coincide ? C.verdeLlegada : C.amber} />
-        <FilaEstado icon={Ruler} label="Distancia al local" valor={distanciaEstimadaM != null ? `${distanciaEstimadaM} m` : '—'} />
+        <FilaEstado icon={Ruler} label="Distancia al local" valor={distanciaEstimadaM != null ? fDistancia(distanciaEstimadaM) : '—'} />
         <FilaEstado icon={Crosshair} label="Precisión" valor={evidencia.precisionM != null ? `${Math.round(evidencia.precisionM)} m` : '—'} />
-        <FilaEstado icon={Clock} label="Hora de captura" valor={horaCaptura} ultima />
+        <FilaEstado icon={Clock} label="Hora de captura" valor={horaCaptura} ultima={coincide !== false} />
       </div>
+
+      {coincide === false && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 9, background: C.amberSoft,
+          border: `1px solid #FDE68A`, borderRadius: '0 0 16px 16px', padding: '11px 14px', marginBottom: 14,
+        }}>
+          <AlertTriangle size={16} color={C.amber} style={{ flexShrink: 0, marginTop: 1 }} />
+          <p style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4 }}>
+            <b>Esta visita no va a quedar verificada automáticamente</b> — estás lejos del local registrado.
+            Un administrador va a tener que revisarla a mano antes de que cuente como una visita válida.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div style={{ ...cardStyle, border: '1px solid #FECACA', background: C.redSoft, padding: 12, marginBottom: 12 }}>

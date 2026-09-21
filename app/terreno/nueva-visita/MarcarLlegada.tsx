@@ -5,6 +5,7 @@ import { Camera, ChevronLeft, MapPin, Loader2 } from 'lucide-react'
 import { C, TAP, cardStyle } from '../theme'
 import { comprimirFotoLlegada } from '@/lib/terreno/comprimirFoto'
 import { distanciaMetros } from '@/lib/geo'
+import { fDistancia } from '@/lib/terreno/formato'
 
 export interface EvidenciaCapturada {
   blob: Blob
@@ -98,6 +99,7 @@ export default function MarcarLlegada({
   const distanciaEstimadaM = gps && clienteLat != null && clienteLng != null
     ? Math.round(distanciaMetros(gps.lat, gps.lng, clienteLat, clienteLng))
     : null
+  const lejosDelLocal = distanciaEstimadaM != null && distanciaEstimadaM > 100
 
   return (
     <div>
@@ -171,10 +173,10 @@ export default function MarcarLlegada({
         )}
         {gpsEstado === 'ok' && (
           <>
-            <MapPin size={16} color={C.verdeLlegada} style={{ flexShrink: 0 }} />
+            <MapPin size={16} color={lejosDelLocal ? C.amber : C.verdeLlegada} style={{ flexShrink: 0 }} />
             <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>
               {distanciaEstimadaM != null
-                ? `A ${distanciaEstimadaM} m del local · Precisión ${Math.round(gps!.precisionM)} m`
+                ? `A ${fDistancia(distanciaEstimadaM)} del local · Precisión ${Math.round(gps!.precisionM)} m`
                 : `Ubicación lista · Precisión ${Math.round(gps!.precisionM)} m`}
             </span>
           </>
