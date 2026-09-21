@@ -2,12 +2,19 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, MapPin, Ruler, Crosshair, Camera, Check, X, FileText, ExternalLink } from 'lucide-react'
 import { C, cardStyle } from '../../../theme'
 import PeriodoFiltro from '../../PeriodoFiltro'
-import SecuenciaMapa from '../../SecuenciaMapa'
 import type { TipoPeriodo } from '@/lib/terreno/tiempoChile'
+
+// Leaflet toca `window` al importarse — tiene que cargar sólo en el cliente
+// o rompe el render de servidor de toda la página (ver ResumenClient.tsx).
+const SecuenciaMapa = dynamic(() => import('../../SecuenciaMapa'), {
+  ssr: false,
+  loading: () => <div style={{ height: 600, borderRadius: 14, background: C.line }} />,
+})
 import { MOTIVO_LABEL, type MotivoRevision } from '@/lib/terreno/verificacion'
 
 export interface ParadaDetalle {

@@ -39,6 +39,16 @@ export default async function ResumenAdminPage({ searchParams }: { searchParams:
   const listaVisitas = visitas ?? []
   const listaSeguimientos = seguimientos ?? []
 
+  // "Últimas visitas" es global (todas las que registraron algo hoy), no sólo
+  // las de rol Vendedor — un admin que también visita clientes (ej. el gerente
+  // comercial) no debe aparecer como "—" sólo porque su rol no matchea el filtro
+  // de la tabla de "Vendedores" de más abajo.
+  const idsVendedorVisitas = [...new Set(listaVisitas.map(v => v.vendedor_id))]
+  const { data: autoresVisitas } = idsVendedorVisitas.length > 0
+    ? await supabase.from('users').select('id, nombre').in('id', idsVendedorVisitas)
+    : { data: [] as { id: string; nombre: string }[] }
+  const nombrePorIdAutor = new Map((autoresVisitas ?? []).map(u => [u.id, u.nombre]))
+
   const filas: FilaVendedor[] = listaVendedores.map(v => {
     const propias = listaVisitas.filter(x => x.vendedor_id === v.id)
     const verificadas = propias.filter(x => x.estado_presencia === 'verificada_auto' || x.estado_presencia === 'aprobada_manual').length
@@ -79,7 +89,7 @@ export default async function ResumenAdminPage({ searchParams }: { searchParams:
     listaVisitas.slice(0, 8).map(async v => ({
       id: v.id, clienteNombre: v.cliente_nombre, lat: v.lat != null ? Number(v.lat) : 0, lng: v.lng != null ? Number(v.lng) : 0,
       iniciadaAt: v.iniciada_at, estadoPresencia: v.estado_presencia, fotoUrl: await firmarFotoTerreno(supabase, v.foto_exterior),
-      vendedorNombre: listaVendedores.find(x => x.id === v.vendedor_id)?.nombre ?? '—',
+      vendedorNombre: nombrePorIdAutor.get(v.vendedor_id) ?? '—',
     }))
   )
 

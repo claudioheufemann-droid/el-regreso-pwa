@@ -1,11 +1,19 @@
 'use client'
 
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { CheckCircle2, Users, Clock3, Flag } from 'lucide-react'
 import { C, cardStyle } from '../theme'
 import PeriodoFiltro from './PeriodoFiltro'
-import SecuenciaMapa from './SecuenciaMapa'
 import type { TipoPeriodo } from '@/lib/terreno/tiempoChile'
+
+// Leaflet toca `window` al importarse — igual que MiniMapaCercanos, tiene que
+// cargar sólo en el cliente o rompe el render de servidor ("window is not
+// defined") y Next cae a client-rendering completo para toda la página.
+const SecuenciaMapa = dynamic(() => import('./SecuenciaMapa'), {
+  ssr: false,
+  loading: () => <div style={{ height: 260, borderRadius: 14, background: C.line }} />,
+})
 
 export interface FilaVendedor {
   id: string
