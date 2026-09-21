@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { FileSpreadsheet, FileText } from 'lucide-react'
+import { FileSpreadsheet, FileText, FileDown } from 'lucide-react'
 import { C, cardStyle, TAP } from '../../theme'
 import PeriodoFiltro from '../PeriodoFiltro'
 import type { TipoPeriodo } from '@/lib/terreno/tiempoChile'
@@ -52,7 +52,7 @@ function filaParaExport(f: FilaReporte) {
 export default function ReportesClient({ tipo, fecha, rangoTexto, filas }: {
   tipo: TipoPeriodo; fecha: string; rangoTexto: string; filas: FilaReporte[]
 }) {
-  const [exportando, setExportando] = useState<'xlsx' | 'csv' | null>(null)
+  const [exportando, setExportando] = useState<'xlsx' | 'csv' | 'pdf' | null>(null)
 
   const resumenPorVendedor = useMemo(() => {
     const mapa = new Map<string, { vendedor: string; visitas: number; verificadas: number; finalizadas: number; total: number }>()
@@ -66,6 +66,55 @@ export default function ReportesClient({ tipo, fecha, rangoTexto, filas }: {
     }
     return [...mapa.values()].sort((a, b) => b.visitas - a.visitas)
   }, [filas])
+
+  async function exportarPdf() {
+    setExportando('pdf')
+    try {
+      const { default: jsPDF } = await import('jspdf')
+      const { default: autoTable } = await import('jspdf-autotable')
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const mg = 12
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(16)
+      doc.text('El Regreso — Terreno', mg, 16)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.setTextColor(100)
+      doc.text(`Período: ${rangoTexto}  ·  Generado ${new Date().toLocaleString('es-CL')}`, mg, 22)
+      doc.setTextColor(0)
+
+      autoTable(doc, {
+        startY: 28,
+        margin: { left: mg, right: mg },
+        head: [['Vendedor', 'Visitas', 'Verificadas', 'Finalizadas', 'Total pedidos']],
+        body: resumenPorVendedor.map(r => [r.vendedor, String(r.visitas), String(r.verificadas), String(r.finalizadas), fmtPrecioCLP(r.total)]),
+        headStyles: { fillColor: [23, 107, 80] },
+        styles: { fontSize: 9 },
+      })
+
+      const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
+      autoTable(doc, {
+        startY: finalY,
+        margin: { left: mg, right: mg },
+        head: [['Cliente', 'Vendedor', 'Llegada', 'Presencia', 'Contacto', 'Resultado', 'Total']],
+        body: filas.map(f => [
+          f.cliente, f.vendedor, new Date(f.llegada).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+          f.presencia, f.contacto ?? '—', f.resultado ?? '—', f.totalPedido ? fmtPrecioCLP(f.totalPedido) : '—',
+        ]),
+        headStyles: { fillColor: [23, 107, 80] },
+        styles: { fontSize: 8 },
+      })
+
+      doc.setFontSize(7.5)
+      doc.setTextColor(120)
+      doc.text('Evidencia fotográfica disponible en la app (Rutas/Revisión) — no incluida en este PDF.', mg, doc.internal.pageSize.getHeight() - 8)
+
+      doc.save(`terreno_${fecha}_${tipo}.pdf`)
+    } finally {
+      setExportando(null)
+    }
+  }
 
   async function exportar(tipoArchivo: 'xlsx' | 'csv') {
     setExportando(tipoArchivo)
@@ -121,6 +170,17 @@ export default function ReportesClient({ tipo, fecha, rangoTexto, filas }: {
           }}
         >
           <FileText size={16} /> {exportando === 'csv' ? 'Generando…' : 'Exportar CSV'}
+        </button>
+        <button
+          onClick={exportarPdf}
+          disabled={exportando !== null || filas.length === 0}
+          style={{
+            minHeight: TAP, padding: '0 16px', borderRadius: 10, cursor: 'pointer',
+            border: `1px solid ${C.line}`, background: C.card, color: C.text, fontSize: 13.5, fontWeight: 700,
+            display: 'flex', alignItems: 'center', gap: 7, opacity: exportando || filas.length === 0 ? 0.6 : 1,
+          }}
+        >
+          <FileDown size={16} /> {exportando === 'pdf' ? 'Generando…' : 'Exportar PDF'}
         </button>
       </div>
 
