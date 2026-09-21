@@ -74,6 +74,13 @@ interface Props {
   onAlternar: () => void
   onAnclarTanque: (tanque: string) => void
   onMoverFecha: (fechaISO: string) => void
+  /** Convierte la sugerencia en un lote real del plan, con el tanque y la
+   *  fecha que se ven en el panel. Hasta ahora la única forma de confirmar era
+   *  arrastrar el bloque al Gantt, que exige un mouse y una mano firme sobre
+   *  una grilla de columnas de 24 px; esto hace lo mismo con un clic, sin
+   *  moverla de donde el modelo la puso. */
+  onConfirmar?: () => void
+  confirmando?: boolean
   onCerrar: () => void
   /** Sólo en modo preview: mantener abierto mientras el cursor está encima. */
   onMouseEnter?: () => void
@@ -85,7 +92,8 @@ const fFecha = (iso: string) =>
 
 export default function PopoverCoccion({
   lote: l, rect, modo, hoyISO, marcado, tanques, fNum,
-  onAlternar, onAnclarTanque, onMoverFecha, onCerrar, onMouseEnter, onMouseLeave,
+  onAlternar, onAnclarTanque, onMoverFecha, onConfirmar, confirmando = false,
+  onCerrar, onMouseEnter, onMouseLeave,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number; abreAbajo: boolean } | null>(null)
@@ -279,8 +287,24 @@ export default function PopoverCoccion({
 
       {fijado && !l.enCurso && (
         <div className="mt-3 flex flex-col gap-2.5 border-t border-white/10 pt-3">
-          {/* Presupuesto: la acción principal — es la que decide si esta
-              cocción suma a la compra de insumos de abajo. */}
+          {/* Confirmar: la acción principal. Es la que saca la cocción del
+              terreno de la sugerencia y la mete al plan, con el tanque y la
+              fecha que muestra este mismo panel — lo que se ve es lo que se
+              confirma. */}
+          {onConfirmar && (
+            <button
+              type="button"
+              onClick={onConfirmar}
+              disabled={confirmando}
+              className="prod-press flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#E6C34A] px-3 py-2 text-[12px] font-bold text-[#10201B] transition-colors hover:bg-[#F0D264] disabled:cursor-wait disabled:opacity-60"
+            >
+              <Check size={13} />
+              {confirmando ? 'Confirmando…' : `Confirmar en ${l.tanque} el ${fFecha(l.fechaInicio)}`}
+            </button>
+          )}
+
+          {/* Presupuesto: decide si esta cocción suma a la compra de insumos
+              de abajo. */}
           <button
             type="button"
             onClick={onAlternar}

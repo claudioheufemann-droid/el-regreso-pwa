@@ -2396,9 +2396,15 @@ export default function ProduccionClient({
    *  fecha de quiebre tiene que reflejarlo. */
   const necesidadGantt = useMemo(() => {
     const stockPorProducto = new Map<string, number>()
+    /* El colchón de cada producto, para que el Gantt sepa dónde poner el
+       ámbar. Se toma la fila del mes más cercano (la primera, que es como ya
+       se toma el stock actual): el stock de seguridad cambia mes a mes con la
+       estacionalidad, y el que importa para decidir hoy es el de hoy. */
+    const colchonPorProducto = new Map<string, number>()
     for (const ss of stockSeguridad) {
       if (ss.nivel !== 'producto' || ss.stockActualLitros == null) continue
       if (!stockPorProducto.has(ss.producto)) stockPorProducto.set(ss.producto, ss.stockActualLitros)
+      if (!colchonPorProducto.has(ss.producto)) colchonPorProducto.set(ss.producto, ss.stockSeguridadLitros)
     }
     return series
       // Sólo el catálogo estable. Un rotativo que se agota no es una alarma:
@@ -2416,6 +2422,7 @@ export default function ProduccionClient({
           producto: s.producto as string,
           categoria: (s.categoria === 'kombucha' ? 'kombucha' : 'cerveza') as 'cerveza' | 'kombucha',
           stockActual: stockPorProducto.get(s.producto as string) ?? 0,
+          colchon: colchonPorProducto.get(s.producto as string),
           ritmo,
         }
       })
@@ -5024,6 +5031,30 @@ export default function ProduccionClient({
                       anclarCoccion(detalleCoccion.lote.producto, detalleCoccion.lote.loteNro, f)
                       cerrarDetalle()
                     }}
+                    /* Confirmar la sugerencia tal como está. Antes la única
+                       forma era arrastrarla al Gantt, lo que obligaba a
+                       reubicarla para aceptarla: si el modelo ya la puso donde
+                       corresponde, mover es ruido. Los lotes sin tanque
+                       (`—`, los que nunca encontraron fermentador) se
+                       confirman igual pero sin asignar, para que queden
+                       visibles en la fila "sin asignar" en vez de perderse. */
+                    onConfirmar={detalleCoccion.lote.enCurso ? undefined : () => {
+                      const l = detalleCoccion.lote
+                      void agregarLote({
+                        producto: l.producto,
+                        categoria: l.categoria,
+                        litrosPlanificados: l.litros,
+                        fechaPlanificada: l.fechaInicio,
+                        motivo: l.conAlarma
+                          ? `Confirmado desde el Gantt — alarma de quiebre, cubre hasta el ${l.cubreHasta}`
+                          : `Confirmado desde el Gantt — punto de reorden, cubre hasta el ${l.cubreHasta}`,
+                        origen: 'sugerido',
+                        cubreHasta: l.cubreHasta,
+                        fermentador: l.tanque === '—' ? null : l.tanque,
+                      })
+                      cerrarDetalle()
+                    }}
+                    confirmando={guardandoPlan}
                     onCerrar={cerrarDetalle}
                     onMouseEnter={detalleCoccion.modo === 'preview' ? cancelarCierrePreview : undefined}
                     onMouseLeave={detalleCoccion.modo === 'preview' ? programarCierrePreview : undefined}

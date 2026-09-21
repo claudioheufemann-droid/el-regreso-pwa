@@ -221,6 +221,11 @@ export const NECESIDAD = CONFIG.map((c, i) => {
     categoria: c.categoria,
     // Los primeros de la lista arrancan con poco stock: son los que quiebran.
     stockActual: Math.round(litrosMes * (i < 2 ? 0.35 : i < 4 ? 0.9 : 2.2)),
+    /* Colchón ≈ 18 días de venta, que es donde la barra pasa a ámbar. Al
+       tercer producto se le deja sin colchón a propósito: es el caso real de
+       un producto que todavía no tiene stock de seguridad calculado, y sirve
+       para ver que el respaldo de siete días de venta funciona. */
+    colchon: i === 2 ? undefined : Math.round(litrosMes * 0.6),
     ritmo: Array.from({ length: 6 }, (_, m) => ({
       mes: mesDesde(m),
       litrosDia: (litrosMes * (1 + 0.06 * m)) / 30,

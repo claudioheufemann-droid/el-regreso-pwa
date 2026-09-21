@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Settings2, AlertTriangle, ChevronLeft, ChevronRight, CalendarRange, Eye, EyeOff } from 'lucide-react'
 import type { CargaArrastre, DestinoArrastre, EstadoArrastre } from './useArrastreCalendario'
-import FilaCobertura from './FilaCobertura'
+import FilaCobertura, { type NivelCobertura, type TramoCobertura } from './FilaCobertura'
 
 /**
  * Carta Gantt de ocupación de fermentadores.
@@ -102,6 +102,10 @@ export interface NecesidadProducto {
    *  así que respeta la estacionalidad: diciembre consume más rápido que
    *  septiembre y la fecha de cobertura lo refleja. */
   ritmo: { mes: string; litrosDia: number }[]
+  /** Stock de seguridad del producto, en litros. Es el umbral bajo el cual la
+   *  barra de cobertura pasa a ámbar. Opcional: sin él se usan siete días de
+   *  venta, que es lo mismo pero sin la σ del producto. */
+  colchon?: number
 }
 
 const MS_DIA = 86_400_000
@@ -308,9 +312,26 @@ export default function GanttProduccion({
     if (necesidad.length === 0) return []
     const finGrilla = dias[dias.length - 1]?.iso ?? hoy
 
+    const mesHoy = hoy.slice(0, 8) + '01'
+
     return necesidad.map(n => {
       const ritmoPorMes = new Map(n.ritmo.map(r => [r.mes, r.litrosDia]))
       const ultimoRitmo = n.ritmo[n.ritmo.length - 1]?.litrosDia ?? 0
+      const ritmoDe = (fecha: string) => ritmoPorMes.get(fecha.slice(0, 8) + '01') ?? ultimoRitmo
+
+      /* La velocidad que se muestra es la de ESTE mes, no el promedio del
+         horizonte: es la que sirve para decidir hoy. El promedio de cuatro
+         meses con estacionalidad adentro no describe ninguno de los cuatro. */
+      const velocidad = ritmoPorMes.get(mesHoy) ?? ultimoRitmo
+
+      /* Umbral del ámbar: el stock de seguridad que el propio modelo
+         dimensionó para este producto —con su σ y su nivel de servicio— y
+         siete días de venta cuando no hay uno cargado.
+
+         NO es un porcentaje del stock inicial. Un 30% fijo sería 150 días de
+         cobertura en un producto lento y 4 en uno rápido: el mismo color
+         significaría dos cosas opuestas según la fila que se esté mirando. */
+      const colchon = n.colchon != null && n.colchon > 0 ? n.colchon : velocidad * 7
 
       // Cuándo queda listo cada lote de este producto, con sus litros.
       const entradas = new Map<string, number>()
@@ -324,20 +345,40 @@ export default function GanttProduccion({
       let agota: string | null = null
       let minimo = stock
       const llegadas: { fecha: string; litros: number }[] = []
+      const tramos: TramoCobertura[] = []
 
       for (let i = 0; i <= diffDias(hoy, finGrilla); i++) {
         const fecha = sumarDias(hoy, i)
         const entra = entradas.get(fecha)
         if (entra) { stock += entra; llegadas.push({ fecha, litros: entra }) }
-        stock -= ritmoPorMes.get(fecha.slice(0, 8) + '01') ?? ultimoRitmo
+        stock -= ritmoDe(fecha)
         if (stock < minimo) minimo = stock
         if (stock <= 0 && !agota) agota = fecha
+
+        /* La simulación NO se corta en el primer cero: sigue hasta el final de
+           la grilla. Eso es lo que permite dibujar el tramo que existe sólo
+           gracias a un lote agendado después del quiebre — la respuesta a
+           "¿hasta cuándo me alcanza si dejo esta cocción acá?", que es la
+           pregunta que se hace arrastrando un bloque. */
+        const nivel: NivelCobertura = stock <= 0 ? 'cero' : stock <= colchon ? 'bajo' : 'ok'
+        // Un tramo en cero nunca es "rescatado": es el agujero, no el rescate.
+        const rescatado = nivel !== 'cero' && agota != null && fecha > agota
+        const ultimo = tramos[tramos.length - 1]
+        if (ultimo && ultimo.nivel === nivel && ultimo.rescatado === rescatado) {
+          ultimo.hasta = sumarDias(fecha, 1)
+        } else {
+          tramos.push({ desde: fecha, hasta: sumarDias(fecha, 1), nivel, rescatado })
+        }
       }
 
       // La primera llegada DESPUÉS del quiebre es la que habría que adelantar.
       const rescate = agota ? llegadas.find(l => l.fecha > agota!) ?? null : null
       return {
-        ...n, agota, minimo, llegadas, rescate,
+        ...n, agota, minimo, llegadas, rescate, tramos, velocidad, colchon,
+        /* Días de inventario: cuánto dura lo que hay HOY, ignorando todo lo
+           agendado. Junto a la fecha de quiebre —que sí lo cuenta— separa
+           "aguanta poco" de "aguanta poco y no viene nada". */
+        doi: velocidad > 0 ? Math.max(0, Math.floor(n.stockActual / velocidad)) : null,
         // Días que el producto pasaría en cero si nadie mueve nada.
         diasEnCero: agota && rescate ? diffDias(agota, rescate.fecha) : 0,
       }
@@ -629,18 +670,37 @@ export default function GanttProduccion({
                       style={{ width: ANCHO_TANQUE + anchoGrilla }}>
                       Hasta cuándo alcanza
                       {(() => {
-                        const n = grupo.cobertura.filter(c => c.agota && (!c.rescate || c.diasEnCero > 0)).length
-                        return n > 0 ? (
-                          <span className="flex items-center gap-1 rounded-full bg-red-100 px-1.5 text-[9.5px] font-bold text-red-700">
-                            <AlertTriangle size={8} />{n} sin lote a tiempo
-                          </span>
-                        ) : null
+                        // Dos problemas distintos, dos avisos distintos: uno se
+                        // arregla moviendo una cocción que ya existe, el otro
+                        // exige agendar una que no existe.
+                        const cruzados = grupo.cobertura.filter(c => c.agota && c.rescate && c.diasEnCero > 0).length
+                        const huerfanos = grupo.cobertura.filter(c => c.agota && !c.rescate).length
+                        return (
+                          <>
+                            {cruzados > 0 && (
+                              <span className="flex items-center gap-1 rounded-full bg-amber-100 px-1.5 text-[9.5px] font-bold text-amber-800"
+                                title="El stock se acaba antes de que llegue el lote que venía a reponerlo. Se arregla adelantando esa cocción.">
+                                <AlertTriangle size={8} />{cruzados} quiebre{cruzados === 1 ? '' : 's'} cruzado{cruzados === 1 ? '' : 's'}
+                              </span>
+                            )}
+                            {huerfanos > 0 && (
+                              <span className="flex items-center gap-1 rounded-full bg-red-100 px-1.5 text-[9.5px] font-bold text-red-700"
+                                title="Se agotan y no hay ninguna cocción agendada después.">
+                                <AlertTriangle size={8} />{huerfanos} sin lote
+                              </span>
+                            )}
+                          </>
+                        )
                       })()}
                     </div>
                     {grupo.cobertura.map((c, i) => (
                       <FilaCobertura
                         key={c.producto} cobertura={c} dias={dias} anchoDia={anchoDia}
-                        altoFila={altoFila} tamEtiqueta={tamEtiqueta} hoy={hoy}
+                        /* Las filas de cobertura llevan dos líneas (nombre, y
+                           velocidad + DOI debajo), así que no pueden usar el
+                           alto de una fila de tanque: en compacto son 26 px y
+                           la segunda línea quedaba cortada. */
+                        altoFila={Math.max(altoFila, 34)} tamEtiqueta={tamEtiqueta} hoy={hoy}
                         color={colorPorProducto.get(c.producto) ?? '#8C8C8C'} fila={i}
                         anchoEtiqueta={ANCHO_TANQUE}
                       />

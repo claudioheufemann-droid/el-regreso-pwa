@@ -4,16 +4,43 @@
  * Una fila de "hasta cuándo alcanza" un producto, sobre el mismo eje de tiempo
  * que las cocciones del Gantt.
  *
- * Es lo que permite decidir sin cruzar fechas a mano: la barra se corta el día
- * que el stock llega a cero, y los rombos marcan cuándo queda LISTO cada lote
- * de ese producto. Un rombo rojo a la derecha de la marca roja es exactamente
- * el caso que hay que resolver — adelantar esa cocción, o sacarle el tanque a
- * otro producto que aguanta más.
+ * Es lo que permite decidir sin cruzar fechas a mano: la barra cambia de color
+ * cuando el stock entra al colchón, se corta el día que llega a cero, y los
+ * rombos marcan cuándo queda LISTO cada lote de ese producto. Un rombo rojo a
+ * la derecha de la marca roja es exactamente el caso que hay que resolver —
+ * adelantar esa cocción, o sacarle el tanque a otro producto que aguanta más.
+ *
+ * La barra NO es de un solo color. Tiene tres estados, y el umbral entre ellos
+ * no es un porcentaje redondo sino el stock de seguridad que el propio modelo
+ * calculó para ese producto:
+ *
+ *   · color del producto  — sobra. Alcanza para más que el colchón.
+ *   · ámbar               — está comiéndose el colchón. Todavía hay stock,
+ *                           pero ya se entró al margen que existe justamente
+ *                           para absorber un atraso. Acá es donde hay que
+ *                           decidir, no cuando la barra se corta.
+ *   · rayado rojo         — cero. No hay qué vender.
+ *
+ * Y un cuarto estado, más claro y más delgado: el tramo RESCATADO. Es el stock
+ * que existe sólo porque hay un lote agendado que llega después del primer
+ * quiebre. Se dibuja distinto a propósito — es una proyección que depende de
+ * que esa cocción efectivamente salga, no stock que ya está en la cámara.
  *
  * Vive en su propio archivo y no dentro de GanttProduccion.tsx porque ese
- * archivo ya pasa las 600 líneas y esto es una pieza con su propia lógica de
+ * archivo ya pasa las 800 líneas y esto es una pieza con su propia lógica de
  * dibujo.
  */
+
+export type NivelCobertura = 'ok' | 'bajo' | 'cero'
+
+export interface TramoCobertura {
+  desde: string
+  /** Exclusivo: el tramo cubre [desde, hasta). */
+  hasta: string
+  nivel: NivelCobertura
+  /** El tramo existe sólo porque llega un lote DESPUÉS del primer quiebre. */
+  rescatado: boolean
+}
 
 export interface CoberturaProducto {
   producto: string
@@ -25,9 +52,46 @@ export interface CoberturaProducto {
   /** Primera llegada DESPUÉS del quiebre: la que habría que adelantar. */
   rescate: { fecha: string; litros: number } | null
   diasEnCero: number
+  /** La trayectoria completa del stock, ya cortada en tramos de un color. */
+  tramos: TramoCobertura[]
+  /** Litros/día que se venden este mes, según el forecast. */
+  velocidad: number
+  /** Días de inventario: cuánto dura lo que hay HOY en cámara, sin contar
+   *  ningún lote por llegar. Es distinto de `agota`, que sí los cuenta — ver
+   *  los dos juntos es lo que dice "aguanta poco, pero viene algo". */
+  doi: number | null
+  /** Colchón en litros bajo el cual la barra pasa a ámbar. */
+  colchon: number
 }
 
 const MS_DIA = 86_400_000
+const COLOR_BAJO = '#F59E0B'
+const COLOR_CERO = '#DC2626'
+/** Cuánto se aclara un tramo rescatado: 0 = igual, 1 = blanco. */
+const ACLARADO_RESCATE = 0.55
+/** Tope de días de rayado cuando el quiebre no tiene lote después. Sin tope,
+ *  un producto sin nada agendado pinta de rojo el último tercio de la grilla
+ *  —tres meses— y eso no informa nada: no es un agujero que se pueda cerrar
+ *  moviendo una cocción, es que el plan no llega hasta allá. La marca roja con
+ *  la fecha ya lo dice. */
+const MAX_DIAS_RAYADO_ABIERTO = 14
+
+/** Mezcla el color hacia el blanco.
+ *
+ *  Se aclara el color en vez de bajarle la opacidad porque la opacidad NO
+ *  sobrevive: `.prod-gantt-bloque` trae una animación de entrada con
+ *  `fill-mode: both` que termina en `opacity: 1`, y una animación gana contra
+ *  un estilo inline (está en un origen de cascada superior). El resultado era
+ *  un tramo rescatado idéntico a uno real. Aclarar el color lo deja fuera de
+ *  esa pelea y además es literalmente lo que se quería: un color más claro. */
+function aclarar(hex: string, factor: number) {
+  const n = parseInt(hex.slice(1), 16)
+  const mezcla = (c: number) => Math.round(c + (255 - c) * factor)
+  const r = mezcla((n >> 16) & 255)
+  const g = mezcla((n >> 8) & 255)
+  const b = mezcla(n & 255)
+  return `rgb(${r}, ${g}, ${b})`
+}
 
 function isoADate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -38,6 +102,12 @@ function diffDias(desdeISO: string, hastaISO: string) {
 }
 function fLitros(n: number) {
   return n >= 10000 ? `${(n / 1000).toFixed(1).replace('.', ',')}k` : Math.round(n).toLocaleString('es-CL')
+}
+/** El ritmo con un decimal cuando es chico: "0 L/día" en un producto que sí se
+ *  vende es peor que no mostrar nada. */
+function fRitmo(n: number) {
+  if (n <= 0) return '0'
+  return n < 10 ? n.toFixed(1).replace('.', ',') : Math.round(n).toLocaleString('es-CL')
 }
 function diaMes(iso: string) {
   return new Date(iso + 'T00:00:00Z')
@@ -60,25 +130,52 @@ export default function FilaCobertura({
 }) {
   const inicio = dias[0]?.iso ?? hoy
   const desdeHoy = Math.max(0, diffDias(inicio, hoy))
-  // Sin fecha de quiebre la barra llega al final de la grilla: que alcance
-  // para todo el horizonte es una respuesta, no un dato que falta.
   const hasta = c.agota ? diffDias(inicio, c.agota) : dias.length
-  const ancho = Math.max(0, hasta - desdeHoy) * anchoDia
+  const ejeY = altoFila / 2
+
+  /** Quiebre cruzado: el stock se acaba ANTES de que llegue el lote que venía
+   *  a reponerlo. No es lo mismo que "se agota" — acá hay una cocción
+   *  agendada, sólo que tarde, y eso se arregla moviéndola, no agregando
+   *  otra. */
+  const cruzado = !!c.agota && !!c.rescate && c.diasEnCero > 0
 
   return (
     <div className="prod-gantt-fila flex border-b border-gray-100 hover:bg-gray-50/40"
       style={{ ['--fila' as string]: fila }}>
 
       <div style={{ width: anchoEtiqueta, flexShrink: 0, height: altoFila }}
-        className="sticky left-0 z-10 flex items-center gap-1.5 border-r border-gray-100 bg-white px-3"
-        title={`${c.producto} · ${Math.round(c.stockActual).toLocaleString('es-CL')} L en cámara hoy`}>
-        <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: color }} />
-        <span className="truncate font-bold text-gray-800" style={{ fontSize: tamEtiqueta + 1 }}>
-          {c.producto}
-        </span>
-        <span className="ml-auto shrink-0 tabular-nums text-gray-400" style={{ fontSize: tamEtiqueta - 1 }}>
-          {fLitros(c.stockActual)}
-        </span>
+        className="sticky left-0 z-10 flex flex-col justify-center gap-0.5 border-r border-gray-100 bg-white px-3">
+
+        <div className="flex items-center gap-1.5">
+          <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: color }} />
+          <span className="truncate font-bold text-gray-800" style={{ fontSize: tamEtiqueta + 1 }}
+            title={`${c.producto} · ${Math.round(c.stockActual).toLocaleString('es-CL')} L en cámara hoy`}>
+            {c.producto}
+          </span>
+          <span className="ml-auto shrink-0 tabular-nums text-gray-400" style={{ fontSize: tamEtiqueta - 1 }}>
+            {fLitros(c.stockActual)}
+          </span>
+        </div>
+
+        {/* Velocidad y días de inventario. Los dos juntos, porque por separado
+            engañan: 40 L/día no dice nada sin saber cuánto hay, y "8 días" no
+            dice si eso es mucho o poco para este producto. */}
+        <div className="flex items-center gap-1.5 tabular-nums text-gray-400"
+          style={{ fontSize: Math.max(tamEtiqueta - 2, 8) }}>
+          <span title={`Se venden ${fRitmo(c.velocidad)} litros por día de ${c.producto}, según el forecast de este mes`}>
+            {fRitmo(c.velocidad)} L/día
+          </span>
+          {c.doi != null && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span
+                className={c.doi <= 7 ? 'font-bold text-red-500' : c.doi <= 21 ? 'font-bold text-amber-600' : ''}
+                title={`Días de inventario: lo que hay hoy en cámara alcanza ${c.doi} días a este ritmo, sin contar ningún lote por llegar`}>
+                DOI {c.doi} d
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="relative" style={{ width: dias.length * anchoDia, flexShrink: 0, height: altoFila }}>
@@ -92,46 +189,74 @@ export default function FilaCobertura({
           ))}
         </div>
 
-        {/* La barra se desvanece hacia el final: es una proyección, y un borde
-            duro se leería como una fecha comprometida. */}
-        {ancho > 0 && (
-          <div
-            className="prod-gantt-bloque absolute rounded-sm"
-            title={c.agota
-              ? `Alcanza hasta el ${c.agota}${c.rescate ? ` · el próximo lote llega el ${c.rescate.fecha}` : ' · no hay ningún lote agendado después'}`
-              : 'Alcanza para todo el horizonte proyectado'}
-            style={{
-              left: desdeHoy * anchoDia,
-              width: ancho,
-              top: altoFila / 2 - 4,
-              height: 8,
-              background: `linear-gradient(90deg, ${color} 70%, ${color}33 100%)`,
-            }}
-          />
-        )}
+        {/* La barra, tramo a tramo. Cada uno es un estado del stock, así que el
+            punto donde cambia de color es el dato: ahí entra al colchón. */}
+        {c.tramos.map(t => {
+          const x0 = Math.max(diffDias(inicio, t.desde), desdeHoy)
+          const x1 = Math.min(diffDias(inicio, t.hasta), dias.length)
+          if (x1 <= x0) return null
 
-        {/* Franja de quiebre: los días que el producto pasaría en cero. */}
-        {c.agota && c.rescate && (
-          <div className="absolute"
-            style={{
-              left: hasta * anchoDia,
-              width: Math.max(diffDias(c.agota, c.rescate.fecha) * anchoDia, 2),
-              top: altoFila / 2 - 5,
-              height: 10,
-              background: 'repeating-linear-gradient(45deg, #DC262633 0 4px, transparent 4px 8px)',
-              borderTop: '1px solid #DC262655',
-              borderBottom: '1px solid #DC262655',
-            }}
-            title={`${c.diasEnCero} días sin stock antes de que llegue el próximo lote`} />
-        )}
+          if (t.nivel === 'cero') {
+            const largo = x1 - x0
+            // Un tramo que muere en el borde de la grilla no tiene lote
+            // después: es un quiebre abierto, no un agujero medible.
+            const abierto = x1 >= dias.length
+            const dibujado = abierto ? Math.min(largo, MAX_DIAS_RAYADO_ABIERTO) : largo
+            return (
+              <div key={`${t.desde}-cero`} className="absolute"
+                style={{
+                  left: x0 * anchoDia,
+                  width: Math.max(dibujado * anchoDia, 2),
+                  top: ejeY - 5,
+                  height: 10,
+                  background: `repeating-linear-gradient(45deg, ${COLOR_CERO}33 0 4px, transparent 4px 8px)`,
+                  borderTop: `1px solid ${COLOR_CERO}55`,
+                  borderBottom: `1px solid ${COLOR_CERO}55`,
+                  // El rayado abierto se desvanece: no termina ahí, sólo deja
+                  // de dibujarse porque seguir no agrega nada.
+                  ...(abierto && largo > dibujado
+                    ? { maskImage: 'linear-gradient(90deg, #000 55%, transparent 100%)' }
+                    : {}),
+                }}
+                title={abierto
+                  ? `Sin stock desde el ${diaMes(t.desde)} y sin ninguna cocción agendada después`
+                  : `${largo} ${largo === 1 ? 'día' : 'días'} sin stock, desde el ${diaMes(t.desde)}`} />
+            )
+          }
 
+          const base = t.nivel === 'bajo' ? COLOR_BAJO : color
+          return (
+            <div key={`${t.desde}-${t.nivel}`} className="prod-gantt-bloque absolute"
+              style={{
+                left: x0 * anchoDia,
+                width: (x1 - x0) * anchoDia,
+                top: ejeY - (t.rescatado ? 3 : 4),
+                height: t.rescatado ? 6 : 8,
+                background: t.rescatado ? aclarar(base, ACLARADO_RESCATE) : base,
+                borderRadius: 2,
+              }}
+              title={
+                (t.rescatado ? 'Sólo gracias a un lote agendado: ' : '') +
+                (t.nivel === 'bajo'
+                  ? `bajo el colchón de ${fLitros(c.colchon)} L desde el ${diaMes(t.desde)}`
+                  : `stock holgado hasta el ${diaMes(t.hasta)}`)
+              } />
+          )
+        })}
+
+        {/* Marca del primer quiebre. Es la fecha que manda: lo que venga
+            después ya es "y además". */}
         {c.agota && (
           <div className="absolute flex items-center"
             style={{ left: hasta * anchoDia - 1, top: 0, height: '100%' }}>
             <span className="h-full w-0.5 bg-red-600" />
-            <span className="ml-1 whitespace-nowrap rounded bg-red-600 px-1 font-bold text-white"
-              style={{ fontSize: tamEtiqueta - 1 }}>
+            <span className="ml-1 flex items-center gap-0.5 whitespace-nowrap rounded bg-red-600 px-1 font-bold text-white"
+              style={{ fontSize: tamEtiqueta - 1 }}
+              title={cruzado
+                ? `Quiebre cruzado: el stock se acaba el ${c.agota} y el lote que venía a reponerlo recién queda listo el ${c.rescate!.fecha}. Son ${c.diasEnCero} días en cero — adelantá esa cocción.`
+                : `Alcanza hasta el ${c.agota}. No hay ningún lote agendado después.`}>
               {diaMes(c.agota)}
+              {cruzado && <span className="opacity-80">⤫{c.diasEnCero}d</span>}
             </span>
           </div>
         )}
@@ -147,10 +272,10 @@ export default function FilaCobertura({
               title={`Llegan ${Math.round(l.litros).toLocaleString('es-CL')} L el ${l.fecha}${tarde ? ' — después del quiebre' : ''}`}
               className="absolute"
               style={{
-                left: x * anchoDia - 4, top: altoFila / 2 - 4,
+                left: x * anchoDia - 4, top: ejeY - 4,
                 width: 8, height: 8, transform: 'rotate(45deg)',
-                background: tarde ? '#DC2626' : '#ffffff',
-                border: `2px solid ${tarde ? '#DC2626' : color}`,
+                background: tarde ? COLOR_CERO : '#ffffff',
+                border: `2px solid ${tarde ? COLOR_CERO : color}`,
               }} />
           )
         })}

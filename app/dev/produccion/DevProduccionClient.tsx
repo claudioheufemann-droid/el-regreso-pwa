@@ -5,6 +5,7 @@ import GanttProduccion, { type BloqueGantt } from '@/app/produccion/GanttProducc
 import ConfigProductosGantt from '@/app/produccion/ConfigProductosGantt'
 import NecesidadMensual from '@/app/produccion/NecesidadMensual'
 import MenuLateral, { type TabId } from '@/app/produccion/MenuLateral'
+import PopoverCoccion, { type LoteCalendario } from '@/app/produccion/PopoverCoccion'
 import { useArrastreCalendario, type DestinoArrastre } from '@/app/produccion/useArrastreCalendario'
 import {
   FERMENTADORES, CONFIG, SERIES, STOCK_SEGURIDAD, PLAN, HOY,
@@ -20,6 +21,9 @@ import {
  * cambia el estado local y dispara el mismo aterrizaje que en producción, así
  * que sirve para probar el gesto, no sólo el dibujo.
  */
+
+const sumarDias = (iso: string, n: number) =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10)
 export default function DevProduccionClient() {
   const [escenario, setEscenario] = useState<Escenario>('normal')
   const [bloques, setBloques] = useState<BloqueGantt[]>(() => bloquesDe('normal'))
@@ -28,6 +32,10 @@ export default function DevProduccionClient() {
   const [recienMovido, setRecienMovido] = useState<string | null>(null)
   const [registro, setRegistro] = useState<string[]>([])
   const [tab, setTab] = useState<TabId>('calendario')
+  /** Detalle de una cocción sugerida. En la app lo abre ProduccionClient; acá
+   *  se monta igual porque si no, el botón de confirmar no se puede probar en
+   *  ningún lado — y es la acción que crea un lote en base. */
+  const [detalle, setDetalle] = useState<{ lote: LoteCalendario; rect: DOMRect } | null>(null)
 
   const cambiarEscenario = useCallback((e: Escenario) => {
     setEscenario(e)
@@ -143,6 +151,29 @@ export default function DevProduccionClient() {
           hastaMes={HASTA_MES}
           bloqueRecienMovido={recienMovido}
           onAbrirConfig={() => setConfigAbierta(true)}
+          onAbrirBloque={(b, rect) => {
+            // Sólo las sugerencias tienen proyección detrás, igual que en la
+            // app: un lote confirmado ya está en el plan.
+            if (b.tipo !== 'sugerido' || !rect) return
+            setDetalle({
+              rect,
+              lote: {
+                id: b.id, producto: b.producto, loteNro: b.loteNro ?? 1, loteDe: 1,
+                categoria: b.categoria, litros: b.litros,
+                tanque: b.fermentador ?? '—',
+                capacidadTanque: FERMENTADORES.find(f => f.nombre === b.fermentador)?.capacidadLitros ?? b.litros,
+                tanqueManual: false, enCurso: false, leadTimeSemanas: 4,
+                fechaInicio: b.inicioISO,
+                fechaListo: sumarDias(b.inicioISO, b.dias),
+                fechaEmbarriladoReal: null,
+                cubreHasta: sumarDias(b.inicioISO, b.dias + 30),
+                llegaATiempo: !b.motivo,
+                fechaAgotamiento: sumarDias(b.inicioISO, b.dias - 3),
+                diasTarde: 0, fechaObjetivo: b.inicioISO,
+                movidoManual: false, conAlarma: !!b.motivo,
+              },
+            })
+          }}
         />
 
         <NecesidadMensual
@@ -169,6 +200,35 @@ export default function DevProduccionClient() {
         />
         </div>
       </div>
+
+      {/* Detalle de la cocción sugerida, con el botón de confirmar. Acá no
+          toca la base: sólo deja la línea en el registro, que es lo que hay
+          que poder verificar — que el clic llegue con el tanque y la fecha
+          correctos. */}
+      {detalle && (
+        <PopoverCoccion
+          lote={detalle.lote}
+          rect={detalle.rect}
+          modo="fijado"
+          hoyISO={HOY}
+          marcado={false}
+          tanques={FERMENTADORES.map(f => ({
+            tanque: f.nombre, categoria: f.categoria, capacidadLitros: f.capacidadLitros,
+          }))}
+          fNum={n => Math.round(n).toLocaleString('es-CL')}
+          onAlternar={() => setRegistro(r => [`presupuesto → ${detalle.lote.producto}`, ...r].slice(0, 8))}
+          onAnclarTanque={t => setRegistro(r => [`anclar tanque → ${t}`, ...r].slice(0, 8))}
+          onMoverFecha={f => setRegistro(r => [`mover fecha → ${f}`, ...r].slice(0, 8))}
+          onConfirmar={() => {
+            setRegistro(r => [
+              `CONFIRMAR → ${detalle.lote.producto} · ${detalle.lote.litros} L · ${detalle.lote.tanque} · ${detalle.lote.fechaInicio}`,
+              ...r,
+            ].slice(0, 8))
+            setDetalle(null)
+          }}
+          onCerrar={() => setDetalle(null)}
+        />
+      )}
 
       {/* Ghost del arrastre: en producción lo pinta ProduccionClient, así que
           acá va una versión mínima — sin él, arrastrar no muestra nada y
