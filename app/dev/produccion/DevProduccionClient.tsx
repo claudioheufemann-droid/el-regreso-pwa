@@ -174,6 +174,10 @@ export default function DevProduccionClient() {
               },
             })
           }}
+          onQuitarBloque={b => {
+            setBloques(bs => bs.filter(x => x.id !== b.id))
+            setRegistro(r => [`QUITAR → ${b.producto} · ${b.litros} L · ${b.fermentador ?? 'sin tanque'}`, ...r].slice(0, 8))
+          }}
         />
 
         <NecesidadMensual
