@@ -205,3 +205,25 @@ export const COBERTURA = [
   { mes: mesDesde(2), necesidad: 14900, planificado: 4200 },
   { mes: mesDesde(3), necesidad: 16900, planificado: 0 },
 ]
+
+/** Último mes proyectado: la grilla del Gantt llega hasta ahí. */
+export const HASTA_MES = mesDesde(5)
+
+/**
+ * Stock de hoy y ritmo de venta por producto. Calibrado a propósito para que
+ * se vean los tres casos de una sola pasada: uno que se queda corto y su lote
+ * llega tarde, uno justo, y varios que aguantan todo el horizonte.
+ */
+export const NECESIDAD = CONFIG.map((c, i) => {
+  const litrosMes = 900 + i * 260
+  return {
+    producto: c.producto,
+    categoria: c.categoria,
+    // Los primeros de la lista arrancan con poco stock: son los que quiebran.
+    stockActual: Math.round(litrosMes * (i < 2 ? 0.35 : i < 4 ? 0.9 : 2.2)),
+    ritmo: Array.from({ length: 6 }, (_, m) => ({
+      mes: mesDesde(m),
+      litrosDia: (litrosMes * (1 + 0.06 * m)) / 30,
+    })),
+  }
+})

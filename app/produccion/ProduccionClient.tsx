@@ -2412,6 +2412,44 @@ export default function ProduccionClient({
     })
   }, [series, plan])
 
+  /** Stock de hoy y ritmo de venta proyectado por producto, para que el Gantt
+   *  calcule hasta cuándo alcanza. El ritmo sale del forecast mes a mes y no
+   *  de un promedio plano: diciembre consume más rápido que septiembre, y la
+   *  fecha de quiebre tiene que reflejarlo. */
+  const necesidadGantt = useMemo(() => {
+    const stockPorProducto = new Map<string, number>()
+    for (const ss of stockSeguridad) {
+      if (ss.nivel !== 'producto' || ss.stockActualLitros == null) continue
+      if (!stockPorProducto.has(ss.producto)) stockPorProducto.set(ss.producto, ss.stockActualLitros)
+    }
+    return series
+      .filter(s => s.nivel === 'producto' && s.producto)
+      .map(s => {
+        const ritmo = s.puntos
+          .filter(p => p.tipo === 'forecast')
+          .map(p => {
+            const d = new Date(Date.parse(p.mes + 'T00:00:00Z'))
+            const diasDelMes = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
+            return { mes: p.mes, litrosDia: p.litros / diasDelMes }
+          })
+        return {
+          producto: s.producto as string,
+          categoria: (s.categoria === 'kombucha' ? 'kombucha' : 'cerveza') as 'cerveza' | 'kombucha',
+          stockActual: stockPorProducto.get(s.producto as string) ?? 0,
+          ritmo,
+        }
+      })
+      .filter(n => n.ritmo.length > 0)
+  }, [series, stockSeguridad])
+
+  /** Último mes proyectado: hasta ahí llega la grilla del Gantt. */
+  const ultimoMesForecast = useMemo(() => {
+    const meses = series
+      .filter(s => s.nivel === 'producto')
+      .flatMap(s => s.puntos.filter(p => p.tipo === 'forecast').map(p => p.mes))
+    return meses.length > 0 ? meses.sort()[meses.length - 1] : null
+  }, [series])
+
   const fermentadoresGantt = useMemo(
     () => ocupacionPlanta.tanques.map(t => ({
       nombre: t.tanque, tipo: t.tipo, categoria: t.categoria as 'cerveza' | 'kombucha',
@@ -5068,6 +5106,8 @@ export default function ProduccionClient({
                   }
                 }}
                 cobertura={coberturaGantt}
+                necesidad={necesidadGantt}
+                hastaMes={ultimoMesForecast}
                 bloqueRecienMovido={bloqueRecienMovido}
                 anclasEnSesion={anclasCoccion.size + anclasTanque.size}
                 onLimpiarAnclas={limpiarAnclas}

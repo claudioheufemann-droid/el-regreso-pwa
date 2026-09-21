@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Settings2, AlertTriangle, ChevronLeft, ChevronRight, CalendarRange, Eye, EyeOff } from 'lucide-react'
 import type { CargaArrastre, DestinoArrastre, EstadoArrastre } from './useArrastreCalendario'
+import FilaCobertura from './FilaCobertura'
 
 /**
  * Carta Gantt de ocupación de fermentadores.
@@ -79,8 +80,28 @@ interface Props {
    *  convierte al Gantt en tablero de control y no sólo en un calendario:
    *  responde "¿lo agendado cubre lo que dije que necesito?". */
   cobertura?: { mes: string; necesidad: number; planificado: number }[]
-  /** Semanas visibles de una. */
+  /** Lo que hace falta de cada producto y a qué ritmo se vende. Con esto el
+   *  Gantt calcula la FECHA DE COBERTURA — hasta cuándo alcanza el stock — y
+   *  la dibuja sobre el mismo eje que las cocciones, que es lo que permite ver
+   *  de un golpe si algo se acaba antes de que llegue su lote. */
+  necesidad?: NecesidadProducto[]
+  /** Último mes proyectado (yyyy-mm-01). La grilla llega hasta el final de ese
+   *  mes en vez de cortar en una ventana fija: planificar con el forecast
+   *  puesto y no poder verlo entero obliga a paginar a ciegas. */
+  hastaMes?: string | null
+  /** Mínimo de semanas a mostrar cuando no hay forecast cargado. */
   semanas?: number
+}
+
+export interface NecesidadProducto {
+  producto: string
+  categoria: 'cerveza' | 'kombucha'
+  /** Litros disponibles hoy en cámara. */
+  stockActual: number
+  /** Ritmo de venta proyectado por mes, en litros/día. Se toma del forecast,
+   *  así que respeta la estacionalidad: diciembre consume más rápido que
+   *  septiembre y la fecha de cobertura lo refleja. */
+  ritmo: { mes: string; litrosDia: number }[]
 }
 
 const MS_DIA = 86_400_000
@@ -94,6 +115,8 @@ const DENSIDAD = {
 } as const
 type Zoom = keyof typeof DENSIDAD
 const ANCHO_TANQUE = 168
+/** Clave del grupo de cobertura en el set de plegados — no es un tanque. */
+const CLAVE_COBERTURA = '__cobertura__'
 
 function isoADate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -133,7 +156,8 @@ function textoSobre(hex: string) {
 export default function GanttProduccion({
   fermentadores, bloques, config, arrastre, propsOrigen,
   onAbrirConfig, onAbrirBloque, bloqueRecienMovido = null,
-  anclasEnSesion = 0, onLimpiarAnclas, cobertura = [], semanas = 10,
+  anclasEnSesion = 0, onLimpiarAnclas, cobertura = [],
+  necesidad = [], hastaMes = null, semanas = 10,
 }: Props) {
   const [zoom, setZoom] = useState<Zoom>('normal')
   /** Grupos plegados. Plegar NO esconde información: la cabecera del grupo
@@ -180,7 +204,16 @@ export default function GanttProduccion({
   }, [hoy, offsetSemanas])
 
   const dias = useMemo(() => {
-    const total = semanas * 7
+    // Hasta el último día del último mes proyectado. Se redondea a semanas
+    // completas para que las columnas sigan cayendo siempre en el mismo día
+    // de la semana al paginar hacia atrás.
+    let total = semanas * 7
+    if (hastaMes) {
+      const d = isoADate(hastaMes)
+      const finMes = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))
+      const dias = diffDias(inicioVentana, dateAIso(finMes)) + 1
+      if (dias > total) total = Math.ceil(dias / 7) * 7
+    }
     return Array.from({ length: total }, (_, i) => {
       const iso = sumarDias(inicioVentana, i)
       const d = isoADate(iso)
@@ -196,7 +229,7 @@ export default function GanttProduccion({
         primeroDeMes: d.getUTCDate() === 1 || i === 0,
       }
     })
-  }, [inicioVentana, semanas, hoy])
+  }, [inicioVentana, semanas, hoy, hastaMes])
 
   const finVentana = dias[dias.length - 1]?.iso ?? inicioVentana
 
@@ -246,6 +279,66 @@ export default function GanttProduccion({
     }
     return { porTanque, sinAsignar, solapes, noCaben }
   }, [bloques, inicioVentana, finVentana, fermentadores])
+
+  /**
+   * Fecha de cobertura por producto: hasta cuándo alcanza lo que hay.
+   *
+   * Se simula día a día desde hoy: se descuenta el ritmo de venta proyectado
+   * de ese mes —por mes, no un promedio plano, así diciembre consume más
+   * rápido que septiembre— y se suma cada cocción el día que queda LISTA
+   * (inicio + días de ocupación), no el día que entra al tanque: mientras
+   * fermenta no se puede vender.
+   *
+   * Se calcula acá dentro y no se recibe ya resuelto a propósito: depende de
+   * dónde están los bloques, así que al arrastrar una cocción la fecha de
+   * cobertura se mueve en vivo. Eso es lo que responde "¿me conviene
+   * adelantarla?" sin tener que confirmar para ver qué pasa.
+   */
+  const coberturaProducto = useMemo(() => {
+    if (necesidad.length === 0) return []
+    const finGrilla = dias[dias.length - 1]?.iso ?? hoy
+
+    return necesidad.map(n => {
+      const ritmoPorMes = new Map(n.ritmo.map(r => [r.mes, r.litrosDia]))
+      const ultimoRitmo = n.ritmo[n.ritmo.length - 1]?.litrosDia ?? 0
+
+      // Cuándo queda listo cada lote de este producto, con sus litros.
+      const entradas = new Map<string, number>()
+      for (const b of bloques) {
+        if (b.producto !== n.producto) continue
+        const listo = sumarDias(b.inicioISO, b.dias)
+        entradas.set(listo, (entradas.get(listo) ?? 0) + b.litros)
+      }
+
+      let stock = n.stockActual
+      let agota: string | null = null
+      let minimo = stock
+      const llegadas: { fecha: string; litros: number }[] = []
+
+      for (let i = 0; i <= diffDias(hoy, finGrilla); i++) {
+        const fecha = sumarDias(hoy, i)
+        const entra = entradas.get(fecha)
+        if (entra) { stock += entra; llegadas.push({ fecha, litros: entra }) }
+        stock -= ritmoPorMes.get(fecha.slice(0, 8) + '01') ?? ultimoRitmo
+        if (stock < minimo) minimo = stock
+        if (stock <= 0 && !agota) agota = fecha
+      }
+
+      // La primera llegada DESPUÉS del quiebre es la que habría que adelantar.
+      const rescate = agota ? llegadas.find(l => l.fecha > agota!) ?? null : null
+      return {
+        ...n, agota, minimo, llegadas, rescate,
+        // Días que el producto pasaría en cero si nadie mueve nada.
+        diasEnCero: agota && rescate ? diffDias(agota, rescate.fecha) : 0,
+      }
+    }).sort((a, b) => {
+      // Primero lo que se agota antes: es el orden en que hay que decidir.
+      if (a.agota && b.agota) return a.agota.localeCompare(b.agota)
+      if (a.agota) return -1
+      if (b.agota) return 1
+      return a.producto.localeCompare(b.producto)
+    })
+  }, [necesidad, bloques, dias, hoy])
 
   const grupos = useMemo(() => {
     const esLab = (n: string) => /lavoratorio|laboratorio/i.test(n)
@@ -434,6 +527,51 @@ export default function GanttProduccion({
           </div>
 
           {/* Filas por grupo */}
+          {/* ── Cobertura por producto ───────────────────────────────────
+              Va ARRIBA de los tanques a propósito: primero qué falta y para
+              cuándo, después dónde meterlo. Comparte el eje de tiempo con las
+              cocciones, así que un producto cuya barra se corta antes del
+              rombo de su lote se lee sin cruzar fechas a mano. */}
+          {coberturaProducto.length > 0 && (() => {
+            const plegado = plegados.has(CLAVE_COBERTURA)
+            // Cuenta sólo lo ACCIONABLE. Que un producto se agote dentro de
+            // seis meses no dice nada — todos lo hacen. Lo que exige una
+            // decisión hoy es agotarse SIN un lote que llegue a tiempo: o se
+            // adelanta esa cocción, o se le cede el tanque a otro producto.
+            const enRiesgo = coberturaProducto.filter(c => c.agota && (!c.rescate || c.diasEnCero > 0)).length
+            return (
+              <div>
+                <button type="button" onClick={() => alternarGrupo(CLAVE_COBERTURA)}
+                  className="prod-press sticky left-0 z-20 flex w-full items-center gap-2 border-b border-gray-200 bg-gray-100/80 px-3 py-1.5 text-left hover:bg-gray-100"
+                  style={{ width: ANCHO_TANQUE + anchoGrilla }}>
+                  <ChevronRight size={13}
+                    className={`shrink-0 text-gray-500 transition-transform duration-200 ${plegado ? '' : 'rotate-90'}`} />
+                  <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-gray-600">
+                    Hasta cuándo alcanza
+                  </span>
+                  <span className="shrink-0 text-[10.5px] text-gray-500">
+                    {coberturaProducto.length} productos · stock de hoy contra el ritmo de venta proyectado
+                  </span>
+                  {enRiesgo > 0 && (
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-1.5 py-px text-[10px] font-bold text-red-700">
+                      <AlertTriangle size={9} />
+                      {enRiesgo} {enRiesgo === 1 ? 'queda' : 'quedan'} en cero sin lote a tiempo
+                    </span>
+                  )}
+                </button>
+
+                {!plegado && coberturaProducto.map((c, i) => (
+                  <FilaCobertura
+                    key={c.producto} cobertura={c} dias={dias} anchoDia={anchoDia}
+                    altoFila={altoFila} tamEtiqueta={tamEtiqueta} hoy={hoy}
+                    color={colorPorProducto.get(c.producto) ?? '#8C8C8C'} fila={i}
+                    anchoEtiqueta={ANCHO_TANQUE}
+                  />
+                ))}
+              </div>
+            )
+          })()}
+
           {grupos.map(grupo => {
             const plegado = plegados.has(grupo.titulo)
             return (
