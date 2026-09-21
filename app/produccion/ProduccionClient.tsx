@@ -22,6 +22,7 @@ import { COLORS } from './tema'
 import MenuLateral, { navItems, type TabId } from './MenuLateral'
 import GanttProduccion, { type BloqueGantt, type ConfigProducto } from './GanttProduccion'
 import ConfigProductosGantt from './ConfigProductosGantt'
+import ModalAgregarProducto from './ModalAgregarProducto'
 import NecesidadMensual from './NecesidadMensual'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, LEAD_TIME_INSUMOS_SEMANAS, esLineaFija, type EnvaseBucket } from '@/lib/produccion/reglas'
 
@@ -154,6 +155,14 @@ function recomendarFermentador(
 function hoyLocalISO(d: Date = new Date()): string {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
+}
+
+/** Suma (o resta, con `dias` negativo) días CORRIDOS a una fecha ISO — el
+ *  mismo criterio de días del Gantt (ver GanttProduccion.tsx: la fermentación
+ *  no para el fin de semana), a diferencia de sumarDiasHabilesISO de arriba,
+ *  que es para plazos de compra. */
+function sumarDiasCalISO(desdeISO: string, dias: number): string {
+  return new Date(Date.parse(`${desdeISO}T00:00:00Z`) + Math.round(dias) * 86400000).toISOString().slice(0, 10)
 }
 
 /** Suma `diasHabiles` días hábiles a `desdeISO`, saltando fin de semana y
@@ -732,6 +741,7 @@ export default function ProduccionClient({
       }])
       setMostrarFormLote(false)
       setSugerenciaModal(null)
+      setAgregarProductoAbierto(false)
       router.refresh()
     } catch (e) {
       setErrorPlan(e instanceof Error ? e.message : 'Error al agregar el lote')
@@ -1755,6 +1765,7 @@ export default function ProduccionClient({
 
   const [configGantt, setConfigGantt] = useState<ConfigProducto[]>(configProductos)
   const [configAbierta, setConfigAbierta] = useState(false)
+  const [agregarProductoAbierto, setAgregarProductoAbierto] = useState(false)
   /** Bloque que acaba de moverse, para que el Gantt lo haga aterrizar con un
    *  latido. Se limpia solo: es feedback de un gesto, no estado del plan. */
   const [bloqueRecienMovido, setBloqueRecienMovido] = useState<string | null>(null)
@@ -2362,8 +2373,50 @@ export default function ProduccionClient({
         motivo: l.llegaATiempo ? null : 'El stock se agota antes de que esta cocción esté lista.',
       }))
 
-    return [...confirmados, ...sugeridos]
-  }, [plan, planSugerido.lotes, diasDe])
+    /* Lo que el ERP dice que hay AHORA en los fermentadores, para los tanques
+     * que ningún lote 'en_curso' del plan ya cubre. Sin esto, un tanque
+     * físicamente ocupado —lo carga el enólogo directo en planta, sin pasar
+     * por esta app— sólo se veía como un puntito ámbar junto al nombre del
+     * tanque: ocupado, pero sin fecha, sin producto, sin saber desde cuándo.
+     *
+     * No hay fecha de INICIO en el informe del ERP, sólo la de embarrilado
+     * ESTIMADA (columna del enólogo). El inicio se retrocede desde ahí con la
+     * duración de fermentación del producto — la misma que usa el resto del
+     * Gantt — así que el rango es una reconstrucción, no un dato que el ERP
+     * entregó directamente. Si el ERP tampoco trajo la fecha de embarrilado,
+     * se asume que arrancó hoy: sigue siendo mejor que el punto sin fecha que
+     * había antes, y el motivo lo deja explícito para no confundirlo con un
+     * dato firme.
+     */
+    const tanquesConLoteEnCurso = new Set(
+      plan.filter(l => l.estado === 'en_curso' && l.fermentador).map(l => l.fermentador as string)
+    )
+    const enTanque: BloqueGantt[] = splitFermentadores.flatMap(sf => {
+      const categoria = sf.categoria ?? 'cerveza'
+      return sf.tanques
+        .filter(t => t.litros > 0 && !tanquesConLoteEnCurso.has(t.nombre))
+        .map(t => {
+          const dias = diasDe(sf.producto, categoria)
+          const conFecha = t.fechaEstimada != null
+          const inicioISO = conFecha ? sumarDiasCalISO(t.fechaEstimada as string, -dias) : hoy
+          return {
+            id: `erp:${t.nombre}`,
+            tipo: 'en_tanque' as const,
+            producto: sf.producto,
+            categoria,
+            litros: t.litros,
+            inicioISO,
+            dias,
+            fermentador: t.nombre,
+            motivo: conFecha
+              ? `Detectado en el informe del ERP — inicio estimado hacia atrás desde el embarrilado que calculó el enólogo (${t.fechaEstimada}).`
+              : 'Detectado en el informe del ERP — sin fecha de embarrilado en el informe, se asume que arrancó hoy.',
+          }
+        })
+    })
+
+    return [...confirmados, ...sugeridos, ...enTanque]
+  }, [plan, planSugerido.lotes, diasDe, splitFermentadores])
 
   /** Necesidad del paso 2 contra lo agendado, mes a mes. Se calcula con el
    *  MISMO criterio que la tabla de necesidad (límite superior del forecast,
@@ -4996,6 +5049,7 @@ export default function ProduccionClient({
                 anclasEnSesion={anclasCoccion.size + anclasTanque.size}
                 onLimpiarAnclas={limpiarAnclas}
                 onAbrirConfig={() => setConfigAbierta(true)}
+                onAgregarProducto={() => setAgregarProductoAbierto(true)}
                 onAbrirBloque={(b, rect) => {
                   // El popover trabaja sobre la simulación de planSugerido
                   // (litros, tanque, cuándo queda listo, hasta cuándo alcanza),
@@ -6506,6 +6560,19 @@ export default function ProduccionClient({
             config={configGantt}
             onCerrar={() => setConfigAbierta(false)}
             onGuardado={fila => setConfigGantt(c => c.map(x => x.producto === fila.producto ? fila : x))}
+          />
+
+          {/* "Agregar producto" desde el Gantt: mismo lote que el formulario
+              de Plan Maestro (agregarLote), sin fermentador — entra a "sin
+              asignar" y de ahí se arrastra a su tanque. Vive fuera de los
+              bloques por tab por la misma razón que ConfigProductosGantt. */}
+          <ModalAgregarProducto
+            abierto={agregarProductoAbierto}
+            config={configGantt}
+            guardando={guardandoPlan}
+            error={errorPlan}
+            onGuardar={datos => void agregarLote(datos)}
+            onCerrar={() => setAgregarProductoAbierto(false)}
           />
 
           {/* Popup de confirmación de una alarma/necesidad — se puede abrir

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Settings2, AlertTriangle, ChevronLeft, ChevronRight, CalendarRange, Eye, EyeOff, X } from 'lucide-react'
+import { Settings2, AlertTriangle, ChevronLeft, ChevronRight, CalendarRange, Eye, EyeOff, X, Beaker, PackagePlus } from 'lucide-react'
 import type { CargaArrastre, DestinoArrastre, EstadoArrastre } from './useArrastreCalendario'
 import FilaCobertura, { type NivelCobertura, type TramoCobertura } from './FilaCobertura'
 
@@ -36,9 +36,16 @@ export interface FermentadorGantt {
 }
 
 export interface BloqueGantt {
-  /** id del plan si está confirmado; una clave sintética si es sugerencia. */
+  /** id del plan si está confirmado; una clave sintética si es sugerencia o
+   *  detección de ERP. */
   id: string
-  tipo: 'confirmado' | 'sugerido'
+  /** 'en_tanque': el ERP dice que hay litros físicos en ese fermentador
+   *  ahora mismo, pero ningún lote del plan lo cubre — no hay id de lote que
+   *  editar, así que no se arrastra ni se puede quitar. Su fecha de inicio es
+   *  una ESTIMACIÓN (retrocedida desde el embarrilado estimado del ERP, o
+   *  desde hoy si el ERP no trajo esa fecha): existe para que la ocupación
+   *  real de la planta no quede invisible, no para reprogramar nada. */
+  tipo: 'confirmado' | 'sugerido' | 'en_tanque'
   producto: string
   categoria: 'cerveza' | 'kombucha'
   litros: number
@@ -68,6 +75,10 @@ interface Props {
   arrastre: EstadoArrastre | null
   propsOrigen: (carga: CargaArrastre, habilitado?: boolean) => Record<string, unknown>
   onAbrirConfig: () => void
+  /** Abre el modal de "Agregar producto" (ver ModalAgregarProducto.tsx) —
+   *  vive fuera de este componente porque necesita `agregarLote`, que ya
+   *  administra el estado de guardado/error de ProduccionClient. */
+  onAgregarProducto?: () => void
   onAbrirBloque?: (bloque: BloqueGantt, rect?: DOMRect) => void
   /** Saca un lote YA CONFIRMADO de la programación. Antes de esto la única
    *  forma era ir a buscar la fila en Plan Maestro — acá se puede hacer donde
@@ -163,7 +174,7 @@ function textoSobre(hex: string) {
 
 export default function GanttProduccion({
   fermentadores, bloques, config, arrastre, propsOrigen,
-  onAbrirConfig, onAbrirBloque, onQuitarBloque, bloqueRecienMovido = null,
+  onAbrirConfig, onAgregarProducto, onAbrirBloque, onQuitarBloque, bloqueRecienMovido = null,
   anclasEnSesion = 0, onLimpiarAnclas, cobertura = [],
   necesidad = [], hastaMes = null, semanas = 10,
 }: Props) {
@@ -540,6 +551,18 @@ export default function GanttProduccion({
             <Settings2 size={14} />
             Configurar productos
           </button>
+
+          {/* Crea un lote SIN tanque asignado — aparece en "sin asignar",
+              listo para arrastrarlo. Separada de "Configurar productos": esa
+              edita cómo se comporta un producto que ya existe, esto agrega
+              una cocción nueva a la cola. */}
+          {onAgregarProducto && (
+            <button type="button" onClick={onAgregarProducto}
+              className="prod-press flex items-center gap-1.5 rounded-lg border border-[#0F3D2E] bg-[#0F3D2E] px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-[#1A5441]">
+              <PackagePlus size={14} />
+              Agregar producto
+            </button>
+          )}
         </div>
       </div>
 
@@ -931,6 +954,10 @@ function BloqueCoccion({
   arrastrandoEste: boolean
 }) {
   const sugerido = b.tipo === 'sugerido'
+  // Detectado en el ERP, sin lote del plan detrás: no hay id que editar, así
+  // que no se arrastra y no hay nada que "quitar" — la única acción posible
+  // sería trackearlo como lote de verdad, que no es lo que este botón hace.
+  const enTanqueErp = b.tipo === 'en_tanque'
   // Armado = el primer clic ya cayó; el segundo, sobre el mismo botón,
   // confirma. Se desarma solo al sacar el mouse: no queda un "armado"
   // colgado esperando un clic de otro día.
@@ -939,7 +966,7 @@ function BloqueCoccion({
   return (
     <button
       type="button"
-      {...propsOrigen(cargaDe(b), b.inicioISO >= hoy || b.tipo === 'sugerido')}
+      {...propsOrigen(cargaDe(b), !enTanqueErp && (b.inicioISO >= hoy || b.tipo === 'sugerido'))}
       onClick={e => onAbrirBloque?.(b, e.currentTarget.getBoundingClientRect())}
       onMouseLeave={() => armado && setArmado(false)}
       title={`${b.producto} · ${b.litros.toLocaleString('es-CL')} L · ${b.dias} días desde ${b.inicioISO}` +
@@ -952,15 +979,23 @@ function BloqueCoccion({
         width: Math.max(ancho - 2, 8),
         top: 3,
         height: 'calc(100% - 6px)',
-        // Los sugeridos van translúcidos para distinguirse de lo
-        // confirmado, pero a 18% el texto no se leía. 38% sobre blanco
-        // deja el color reconocible y el texto legible; el borde va al
-        // color pleno para que el punteado se vea.
-        background: sugerido ? `${color}61` : color,
+        // Los sugeridos van translúcidos para distinguirse de lo confirmado,
+        // pero a 18% el texto no se leía. 38% sobre blanco deja el color
+        // reconocible y el texto legible; el borde va al color pleno para
+        // que el punteado se vea. Lo detectado en el ERP lleva un rayado
+        // diagonal sobre el color pleno — ni "confirmado por la app" (sólido)
+        // ni "propuesta del modelo" (punteado): es un HECHO que la app no
+        // registró, el tercer estado necesita su propia textura.
+        background: sugerido
+          ? `${color}61`
+          : enTanqueErp
+            ? `repeating-linear-gradient(45deg, ${color} 0 6px, ${color}CC 6px 12px)`
+            : color,
         borderColor: choca || noCabe ? '#DC2626' : color,
         borderStyle: sugerido ? 'dashed' : 'solid',
         borderWidth: choca || noCabe ? 2 : 1,
         color: sugerido ? '#1f2937' : textoSobre(color),
+        cursor: enTanqueErp ? 'default' : undefined,
         touchAction: 'none',
       }}
       className={[
@@ -975,16 +1010,18 @@ function BloqueCoccion({
       ].filter(Boolean).join(' ')}
     >
       {(choca || noCabe) && <AlertTriangle size={10} className="shrink-0 text-red-600" />}
+      {enTanqueErp && <Beaker size={9} className="shrink-0 opacity-80" />}
       <span className="truncate">
         {b.producto}
         {ancho > 90 && ` · ${b.litros.toLocaleString('es-CL')} L`}
       </span>
 
       {/* Quitar de la programación — sólo para lotes YA confirmados: un
-          sugerido no está en el plan, no hay nada que sacar de ahí. Se ve al
-          pasar el mouse para no ensuciar la lectura normal de la carta, y
-          exige un segundo clic para de verdad quitarlo. */}
-      {!sugerido && onQuitarBloque && ancho > 26 && (
+          sugerido no está en el plan y uno detectado en el ERP no tiene un
+          lote detrás, así que en ninguno de los dos hay nada que sacar de
+          ahí. Se ve al pasar el mouse para no ensuciar la lectura normal de
+          la carta, y exige un segundo clic para de verdad quitarlo. */}
+      {b.tipo === 'confirmado' && onQuitarBloque && ancho > 26 && (
         <span
           role="button"
           tabIndex={-1}
