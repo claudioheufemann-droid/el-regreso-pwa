@@ -27,6 +27,14 @@ export const C = {
   amberSoft: '#FFFBEB',
   red: '#DC2626',
   redSoft: '#FEF2F2',
+  /**
+   * Verde de la acción principal en el flujo de llegada (Marcar llegada /
+   * Confirmar evidencia / Finalizar visita) — color exacto pedido en el
+   * spec de verificación de terreno, distinto del `green` de KPIs/ventas
+   * que ya usaba el resto del módulo. Sólo esas tres pantallas lo usan.
+   */
+  verdeLlegada: '#176B50',
+  verdeLlegadaSoft: '#E7F3EE',
 } as const
 
 /** Alto mínimo de cualquier control que se toque con el dedo en terreno. */

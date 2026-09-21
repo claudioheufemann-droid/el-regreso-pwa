@@ -47,7 +47,7 @@ export interface CierrePayload {
  * de decidir si se le vende y cómo cobra.
  */
 export default function PasoVenta({
-  clienteNombre, catalogo, carrito, setCarrito, onCerrar, guardando,
+  clienteNombre, catalogo, carrito, setCarrito, onCerrar, guardando, ocultarSinVenta = false,
 }: {
   clienteNombre: string
   catalogo: Record<string, CatalogoInfo>
@@ -55,6 +55,8 @@ export default function PasoVenta({
   setCarrito: (f: (prev: Map<string, ItemCarrito>) => Map<string, ItemCarrito>) => void
   onCerrar: (p: CierrePayload) => void
   guardando: boolean
+  /** El flujo de llegada ya resolvió "¿hubo venta?" antes de entrar acá — no ofrecer una segunda salida que lo contradiga. */
+  ocultarSinVenta?: boolean
 }) {
   const [busca, setBusca] = useState('')
   const [esBarril, setEsBarril] = useState(false)
@@ -157,16 +159,18 @@ export default function PasoVenta({
         </p>
       )}
 
-      <button
-        onClick={() => setHoja('sin-venta')}
-        style={{
-          width: '100%', minHeight: TAP, borderRadius: 12, marginTop: 18, cursor: 'pointer',
-          border: `1px solid ${C.line}`, background: C.card, color: C.muted,
-          fontSize: 14, fontWeight: 700,
-        }}
-      >
-        Registrar visita sin venta
-      </button>
+      {!ocultarSinVenta && (
+        <button
+          onClick={() => setHoja('sin-venta')}
+          style={{
+            width: '100%', minHeight: TAP, borderRadius: 12, marginTop: 18, cursor: 'pointer',
+            border: `1px solid ${C.line}`, background: C.card, color: C.muted,
+            fontSize: 14, fontWeight: 700,
+          }}
+        >
+          Registrar visita sin venta
+        </button>
+      )}
 
       {/* Barra fija con el total */}
       {totalUnidades > 0 && (

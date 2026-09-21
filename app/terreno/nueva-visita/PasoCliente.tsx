@@ -7,6 +7,7 @@ import { formatLocalidad } from '@/lib/format'
 import { C, TAP, btnPrimario, cardStyle } from '../theme'
 
 export interface ClienteExistente {
+  id: number
   nombre_fantasia: string
   categoria_negocio: string | null
   localidad: string | null
@@ -17,6 +18,8 @@ export interface ClienteExistente {
 /** Cliente con su lat/lng — lo que ya calcula el servidor para cada lista corta. */
 export interface ClienteResumen {
   nombre: string
+  /** id en la tabla maestra `clientes` — ancla la visita al punto de referencia real. */
+  clienteErpId?: number | null
   categoria: string | null
   localidad: string | null
   lat: number | null
@@ -116,7 +119,7 @@ export default function PasoCliente({ recientes, frecuentes, pendientes, onConfi
   recientes: ClienteResumen[]
   frecuentes: ClienteResumen[]
   pendientes: ClienteResumen[]
-  onConfirmar: (nombre: string, esNuevo: boolean, canal: string, detalle?: NuevoClienteDetalle, coords?: { lat: number; lng: number }) => void
+  onConfirmar: (nombre: string, esNuevo: boolean, canal: string, detalle?: NuevoClienteDetalle, coords?: { lat: number; lng: number }, clienteErpId?: number | null) => void
 }) {
   const [busca, setBusca] = useState('')
   const [creando, setCreando] = useState(false)
@@ -137,7 +140,7 @@ export default function PasoCliente({ recientes, frecuentes, pendientes, onConfi
     const termino = q.replace(/[,()]/g, ' ').trim()
     const { data, error } = await supabase
       .from('clientes')
-      .select('nombre_fantasia, categoria, localidad, lat, lng')
+      .select('id, nombre_fantasia, categoria, localidad, lat, lng')
       .not('nombre_fantasia', 'is', null)
       .or(`nombre_fantasia.ilike.%${termino}%,localidad.ilike.%${termino}%,categoria.ilike.%${termino}%`)
       .order('nombre_fantasia')
@@ -148,6 +151,7 @@ export default function PasoCliente({ recientes, frecuentes, pendientes, onConfi
     } else {
       setErrorBusqueda(null)
       setResultados((data ?? []).map(c => ({
+        id: c.id as number,
         nombre_fantasia: c.nombre_fantasia as string,
         categoria_negocio: c.categoria as string | null,
         localidad: c.localidad as string | null,
@@ -183,7 +187,10 @@ export default function PasoCliente({ recientes, frecuentes, pendientes, onConfi
       pos => {
         fetch(`/api/clientes/cercanos?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}&limit=5`)
           .then(r => r.ok ? r.json() : Promise.reject())
-          .then((data: ClienteCercano[]) => { setCercanos(data); setCercaEstado('ok') })
+          .then((data: (ClienteCercano & { id: number })[]) => {
+            setCercanos(data.map(c => ({ ...c, clienteErpId: c.id })))
+            setCercaEstado('ok')
+          })
           .catch(() => setCercaEstado('error'))
       },
       () => setCercaEstado('error'),
@@ -303,7 +310,7 @@ export default function PasoCliente({ recientes, frecuentes, pendientes, onConfi
               <FilaCliente
                 key={c.nombre_fantasia}
                 c={{ nombre: c.nombre_fantasia, categoria: c.categoria_negocio, localidad: c.localidad, lat: c.lat ?? null, lng: c.lng ?? null }}
-                onClick={() => onConfirmar(c.nombre_fantasia, false, c.categoria_negocio ?? '', undefined, c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : undefined)}
+                onClick={() => onConfirmar(c.nombre_fantasia, false, c.categoria_negocio ?? '', undefined, c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : undefined, c.id)}
               />
             ))}
           </div>
@@ -312,7 +319,7 @@ export default function PasoCliente({ recientes, frecuentes, pendientes, onConfi
         // ── Sin búsqueda: las 4 secciones priorizadas ──
         <>
           <Seccion icon={Clock} titulo="Recientes" items={recientes} render={c => (
-            <FilaCliente key={c.nombre} c={c} onClick={() => onConfirmar(c.nombre, false, c.categoria ?? '', undefined, c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : undefined)} />
+            <FilaCliente key={c.nombre} c={c} onClick={() => onConfirmar(c.nombre, false, c.categoria ?? '', undefined, c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : undefined, c.clienteErpId)} />
           )} />
 
           <div style={{ marginBottom: 16 }}>
@@ -362,7 +369,7 @@ export default function PasoCliente({ recientes, frecuentes, pendientes, onConfi
                         {c.distancia < 1000 ? `${Math.round(c.distancia)} m` : `${(c.distancia / 1000).toFixed(1)} km`}
                       </span>
                     }
-                    onClick={() => onConfirmar(c.nombre, false, c.categoria ?? '', undefined, c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : undefined)}
+                    onClick={() => onConfirmar(c.nombre, false, c.categoria ?? '', undefined, c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : undefined, c.clienteErpId)}
                   />
                 ))}
               </div>
@@ -370,7 +377,7 @@ export default function PasoCliente({ recientes, frecuentes, pendientes, onConfi
           </div>
 
           <Seccion icon={Repeat} titulo="Frecuentes" items={frecuentes} render={c => (
-            <FilaCliente key={c.nombre} c={c} onClick={() => onConfirmar(c.nombre, false, c.categoria ?? '', undefined, c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : undefined)} />
+            <FilaCliente key={c.nombre} c={c} onClick={() => onConfirmar(c.nombre, false, c.categoria ?? '', undefined, c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : undefined, c.clienteErpId)} />
           )} />
 
           <Seccion icon={AlertTriangle} titulo="Pendientes de visita" items={pendientes} render={c => (
@@ -382,7 +389,7 @@ export default function PasoCliente({ recientes, frecuentes, pendientes, onConfi
                   {c.diasSinComprar}d sin comprar{c.ultimaCompra && <><br /><span style={{ color: C.faint, fontWeight: 500 }}>{fFecha(c.ultimaCompra)}</span></>}
                 </span>
               ) : undefined}
-              onClick={() => onConfirmar(c.nombre, false, c.categoria ?? '', undefined, c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : undefined)}
+              onClick={() => onConfirmar(c.nombre, false, c.categoria ?? '', undefined, c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : undefined, c.clienteErpId)}
             />
           )} />
 

@@ -47,9 +47,9 @@ export default async function NuevaVisitaPage({ searchParams }: Props) {
   if (retomar) {
     let query = supabase
       .from('visitas_terreno')
-      .select('id, cliente_nombre, es_cliente_nuevo, lat, lng, direccion_gps, estado, foto_exterior, foto_interior, foto_exhibicion, foto_competencia')
+      .select('id, cliente_nombre, es_cliente_nuevo, lat, lng, direccion_gps, estado, estado_presencia, cliente_erp_id, cliente_terreno_id, foto_exterior, foto_interior, foto_exhibicion, foto_competencia')
       .eq('id', retomar)
-      .eq('estado', 'en_progreso')
+      .in('estado', ['borrador', 'en_progreso'])
     if (!user.isAdmin) query = query.eq('vendedor_id', user.id)
     const { data } = await query.maybeSingle()
     visitaRetomada = data ?? null
@@ -102,7 +102,7 @@ async function cargarRecientes(
 
   const { data: clientesData } = await supabase
     .from('clientes')
-    .select('nombre_fantasia, categoria, localidad, lat, lng')
+    .select('id, nombre_fantasia, categoria, localidad, lat, lng')
     .in('nombre_fantasia', nombres)
 
   const porNombre = new Map((clientesData ?? []).map(c => [c.nombre_fantasia as string, c]))
@@ -110,6 +110,7 @@ async function cargarRecientes(
     const c = porNombre.get(n)
     return {
       nombre: n,
+      clienteErpId: (c?.id as number | null) ?? null,
       categoria: (c?.categoria as string | null) ?? null,
       localidad: (c?.localidad as string | null) ?? null,
       lat: c?.lat != null ? Number(c.lat) : null,
@@ -151,7 +152,7 @@ async function cargarPorScore(
   const nombres = filas.map(f => f.nombre_fantasia)
   const { data: clientesData } = await supabase
     .from('clientes')
-    .select('nombre_fantasia, categoria, localidad, lat, lng')
+    .select('id, nombre_fantasia, categoria, localidad, lat, lng')
     .in('nombre_fantasia', nombres)
   const porNombre = new Map((clientesData ?? []).map(c => [c.nombre_fantasia as string, c]))
 
@@ -159,6 +160,7 @@ async function cargarPorScore(
     const c = porNombre.get(f.nombre_fantasia)
     return {
       nombre: f.nombre_fantasia,
+      clienteErpId: (c?.id as number | null) ?? null,
       categoria: (c?.categoria as string | null) ?? null,
       localidad: (c?.localidad as string | null) ?? null,
       lat: c?.lat != null ? Number(c.lat) : null,

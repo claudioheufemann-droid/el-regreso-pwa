@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('clientes')
-    .select('nombre_fantasia, categoria, localidad, telefono, lat, lng')
+    .select('id, nombre_fantasia, categoria, localidad, telefono, lat, lng')
     .not('lat', 'is', null)
     .not('lng', 'is', null)
 
@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
 
   const cercanos = (data ?? [])
     .map(c => ({
+      id: c.id as number,
       nombre: c.nombre_fantasia as string,
       categoria: c.categoria as string | null,
       localidad: c.localidad as string | null,

@@ -2,20 +2,21 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Check, CloudOff, MessageCircle, Image as ImageIcon, MapPin, Loader2 } from 'lucide-react'
+import { ChevronLeft, Check, CloudOff, MessageCircle, Image as ImageIcon } from 'lucide-react'
 import { notificar } from '@/lib/notificar'
 import { upsertOrQueue } from '@/lib/offlineQueue'
-import { uploadConTimeout } from '@/lib/offlinePhotoQueue'
 import { hapticExito } from '@/lib/haptics'
 import { createClient } from '@/lib/supabase/client'
 import { catalogoParaVendedor, fmtPrecioCLP } from '@/lib/catalogo-productos'
-import { dentroDeGeofence } from '@/lib/geo'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import type { AppUser } from '@/lib/auth'
 import { C, TAP } from '../theme'
 import PasoCliente, { type ClienteResumen, type NuevoClienteDetalle } from './PasoCliente'
 import PasoVenta, { type CierrePayload } from './PasoVenta'
+import MarcarLlegada, { type EvidenciaCapturada } from './MarcarLlegada'
+import ConfirmarEvidencia, { type ResultadoLlegada } from './ConfirmarEvidencia'
+import FinalizarVisita, { type CierrePayloadLlegada } from './FinalizarVisita'
 import HojaFotosVisita from './HojaFotosVisita'
 import { SLOTS_FOTO, CAMPO_DE_SLOT, type SlotFoto } from '@/lib/fotosVisita'
 import {
@@ -24,27 +25,20 @@ import {
 } from './piezas'
 
 /**
- * Venta en terreno — flujo de DOS pasos: cliente → venta.
+ * Venta en terreno — flujo de CUATRO etapas: cliente → llegada (foto+GPS,
+ * obligatoria) → confirmar evidencia → finalizar (contacto/resultado/
+ * próximo paso, sin catálogo). El catálogo (PasoVenta) sólo aparece si el
+ * resultado elegido es "Pedido" — para cualquier otro resultado la visita
+ * se guarda directo, sin pasar por productos.
  *
- * Antes eran cuatro pantallas (cliente → check-in GPS → "Vista 360°" →
- * catálogo/cierre), y hasta el 2026-08-06 hubo una versión de TRES con un
- * check-in intermedio que exigía la foto de la fachada para poder vender.
- * Se revirtió el 2026-08-07 (pedido de Claudio): ahora NINGUNA foto frena
- * la venta — las 4 (frontis, interior, exhibición, competencia) se piden
- * recién al cerrar la visita, y son opcionales incluso ahí. Si el
- * vendedor cierra sin subirlas, puede completarlas después desde el
- * Historial; mientras falte alguna, un cron le recuerda cada hora
- * (app/api/cron/fotos-pendientes).
- *
- * La ubicación sigue siendo automática — no hay botón, se toma sola en
- * cuanto se confirma el cliente (capturarUbicacion) — así que sacar el
- * check-in como pantalla no le quita nada al GPS.
- *
- * Qué más se eliminó y por qué NO se perdió información:
- *  - "Vista 360°": mostraba deuda e historial antes de dejar vender. La
- *    deuda ahora es un aviso plegable arriba de la venta, que es donde
- *    realmente sirve — al decidir si se le vende y cómo cobra.
+ * Reemplaza el flujo anterior (cliente → venta directo, GPS silencioso en
+ * segundo plano, fotos opcionales al cerrar) por pedido explícito: la
+ * llegada verificada pasa a ser el gate obligatorio antes de cualquier
+ * otra cosa. Ver lib/terreno/verificacion.ts para la lógica de servidor
+ * que decide si una llegada quedó verificada o en revisión.
  */
+
+type Etapa = 'cliente' | 'llegada' | 'confirmar' | 'cierre' | 'venta'
 
 interface VisitaRetomada {
   id: string
@@ -54,6 +48,9 @@ interface VisitaRetomada {
   lng: number | null
   direccion_gps: string | null
   estado?: string
+  estado_presencia?: string
+  cliente_erp_id?: number | null
+  cliente_terreno_id?: string | null
   foto_exterior?: string | null
   foto_interior?: string | null
   foto_exhibicion?: string | null
@@ -75,41 +72,51 @@ export default function NuevaVisitaClient({
   const router = useRouter()
   const supabase = createClient()
 
-  // Lista de precios: Santiago tiene la suya (ver EMAIL_LISTA_PRECIOS_SANTIAGO).
   const catalogo = catalogoParaVendedor(vendedor.email)
   setCatalogo(catalogo)
 
-  const [cliente, setCliente] = useState<{ nombre: string; esNuevo: boolean } | null>(
+  const [cliente, setCliente] = useState<{ nombre: string; esNuevo: boolean; direccion?: string | null } | null>(
     visitaRetomada ? { nombre: visitaRetomada.cliente_nombre, esNuevo: visitaRetomada.es_cliente_nuevo } : null
   )
   const [visitaId, setVisitaId] = useState<string | null>(visitaRetomada?.id ?? null)
+  const [clienteErpId, setClienteErpId] = useState<number | null>(visitaRetomada?.cliente_erp_id ?? null)
+  const [clienteTerrenoId, setClienteTerrenoId] = useState<string | null>(visitaRetomada?.cliente_terreno_id ?? null)
+  const [etapa, setEtapa] = useState<Etapa>(() => {
+    if (!visitaRetomada) return 'cliente'
+    return visitaRetomada.estado === 'en_progreso' ? 'cierre' : 'llegada'
+  })
+  const [evidencia, setEvidencia] = useState<EvidenciaCapturada | null>(null)
+  const [resultadoLlegada, setResultadoLlegada] = useState<(ResultadoLlegada & { fotoUrl?: string; horaTexto: string }) | null>(
+    visitaRetomada?.estado === 'en_progreso'
+      ? { estadoPresencia: visitaRetomada.estado_presencia ?? 'historica_sin_verificacion', motivoRevision: null, distanciaM: null, precisionM: null, radioM: null, pendienteSync: false, horaTexto: '' }
+      : null
+  )
+  const [cierrePayloadGuardado, setCierrePayloadGuardado] = useState<CierrePayloadLlegada | null>(null)
   const [carrito, setCarrito] = useState<Map<string, ItemCarrito>>(new Map())
   const [guardando, setGuardando] = useState(false)
   const [syncPendiente, setSyncPendiente] = useState(false)
-  // Fotos por slot fijo — ninguna bloquea el paso a vender; se piden recién al cerrar.
   const [fotos, setFotos] = useState<Partial<Record<SlotFoto, string>>>({
     ...(visitaRetomada?.foto_exterior ? { exterior: visitaRetomada.foto_exterior } : {}),
     ...(visitaRetomada?.foto_interior ? { interior: visitaRetomada.foto_interior } : {}),
     ...(visitaRetomada?.foto_exhibicion ? { exhibicion: visitaRetomada.foto_exhibicion } : {}),
     ...(visitaRetomada?.foto_competencia ? { competencia: visitaRetomada.foto_competencia } : {}),
   })
-  const [subiendoFoto, setSubiendoFoto] = useState<Partial<Record<SlotFoto, boolean>>>({})
-  const [gpsEstado, setGpsEstado] = useState<'buscando' | 'ok' | 'error'>(visitaRetomada?.lat ? 'ok' : 'buscando')
+  const [subiendoFoto] = useState<Partial<Record<SlotFoto, boolean>>>({})
   const [showCatalogoWA, setShowCatalogoWA] = useState(false)
   const [showImagen, setShowImagen] = useState(false)
-  const [pendingCierre, setPendingCierre] = useState<CierrePayload | null>(null)
+  const [pendingFinal, setPendingFinal] = useState<{ payload: CierrePayloadLlegada; items: ItemCarrito[]; pago: PagoInfo | null } | null>(null)
 
-  const fileCameraRef = useRef<HTMLInputElement>(null)
   const fileGaleriaRef = useRef<HTMLInputElement>(null)
-  const slotPendienteRef = useRef<SlotFoto>('exterior')
+  const slotPendienteRef = useRef<SlotFoto>('interior')
   const jornadaIdRef = useRef<string | null>(null)
-  const clienteCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
+  const referenciaCoordsRef = useRef<{ lat: number; lng: number } | null>(
+    visitaRetomada?.lat != null && visitaRetomada?.lng != null ? { lat: visitaRetomada.lat, lng: visitaRetomada.lng } : null
+  )
   const visitaDraft = useRef<Record<string, unknown>>(
     visitaRetomada ? {
       id: visitaRetomada.id, vendedor_id: vendedor.id,
       cliente_nombre: visitaRetomada.cliente_nombre, es_cliente_nuevo: visitaRetomada.es_cliente_nuevo,
       estado: visitaRetomada.estado,
-      ...(visitaRetomada.lat ? { lat: visitaRetomada.lat, lng: visitaRetomada.lng, direccion_gps: visitaRetomada.direccion_gps } : {}),
     } : {}
   )
 
@@ -120,8 +127,6 @@ export default function NuevaVisitaClient({
       .catch(() => {})
   }, [])
 
-  /** Guarda el draft completo: cada escritura lleva TODOS los campos conocidos,
-   *  así un reintento offline en cualquier orden nunca pisa un campo con null. */
   function guardarDraft(extra: Record<string, unknown>) {
     visitaDraft.current = { ...visitaDraft.current, ...extra }
     setSyncPendiente(true)
@@ -129,53 +134,28 @@ export default function NuevaVisitaClient({
   }
 
   /**
-   * Ubicación en segundo plano — reemplaza al paso de check-in. Si el GPS
-   * falla o el usuario no da permiso, la visita sigue igual: perder la
-   * ubicación no puede impedir tomar un pedido.
+   * Cliente elegido → crea el borrador (excluido de estadísticas hasta que
+   * se confirme la llegada) y pasa directo a la cámara. Ya no se captura
+   * GPS en segundo plano acá: la ubicación se toma junto con la foto en
+   * MarcarLlegada/ConfirmarEvidencia, que es donde realmente se verifica.
    */
-  function capturarUbicacion(id: string) {
-    setGpsEstado('buscando')
-    if (typeof navigator === 'undefined' || !navigator.geolocation) { setGpsEstado('error'); return }
-    navigator.geolocation.getCurrentPosition(
-      async pos => {
-        const { latitude: lat, longitude: lng } = pos.coords
-        let addr = ''
-        try {
-          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
-          if (r.ok) addr = (await r.json())?.display_name ?? ''
-        } catch { /* sin dirección: se guardan igual las coordenadas */ }
-
-        let geofence: Record<string, unknown> = {}
-        if (clienteCoordsRef.current) {
-          const { dentro, distanciaM } = dentroDeGeofence(lat, lng, clienteCoordsRef.current.lat, clienteCoordsRef.current.lng)
-          geofence = { distancia_cliente_m: Math.round(distanciaM), dentro_geofence: dentro }
-        }
-        guardarDraft({ id, lat, lng, direccion_gps: addr, ...geofence })
-        setGpsEstado('ok')
-      },
-      () => setGpsEstado('error'),
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
-    )
-  }
-
-  // `coords` viene directo de la fila que el vendedor tocó en PasoCliente
-  // (recientes/cerca/frecuentes/pendientes/búsqueda ya traen su propio
-  // lat/lng) — antes esto se resolvía buscando en un arreglo con TODA la
-  // cartera cargada en memoria; ahora no existe ese arreglo, así que la
-  // coordenada la manda quien confirma, no se vuelve a buscar acá.
-  function onClienteConfirmado(nombre: string, esNuevo: boolean, canal: string, detalle?: NuevoClienteDetalle, coords?: { lat: number; lng: number }) {
-    setCliente({ nombre, esNuevo })
+  function onClienteConfirmado(
+    nombre: string, esNuevo: boolean, canal: string, detalle?: NuevoClienteDetalle,
+    coords?: { lat: number; lng: number }, erpId?: number | null,
+  ) {
+    setCliente({ nombre, esNuevo, direccion: detalle?.direccion })
     const id = crypto.randomUUID()
     setVisitaId(id)
 
-    clienteCoordsRef.current = coords
+    referenciaCoordsRef.current = coords
       ?? ((detalle?.lat != null && detalle?.lng != null) ? { lat: detalle.lat, lng: detalle.lng } : null)
 
-    let clienteTerrenoId: string | null = null
+    let clienteTerrenoIdNuevo: string | null = null
     if (esNuevo && detalle) {
-      clienteTerrenoId = crypto.randomUUID()
+      clienteTerrenoIdNuevo = crypto.randomUUID()
+      setClienteTerrenoId(clienteTerrenoIdNuevo)
       upsertOrQueue(supabase, 'clientes_terreno', {
-        id: clienteTerrenoId,
+        id: clienteTerrenoIdNuevo,
         nombre_fantasia: nombre,
         direccion: detalle.direccion || null,
         lat: detalle.lat, lng: detalle.lng,
@@ -185,29 +165,29 @@ export default function NuevaVisitaClient({
         canal,
         creado_por: vendedor.id,
       })
+    } else if (erpId != null) {
+      setClienteErpId(erpId)
     }
 
     visitaDraft.current = {
       id, vendedor_id: vendedor.id, cliente_nombre: nombre, es_cliente_nuevo: esNuevo,
-      estado: 'en_progreso', jornada_id: jornadaIdRef.current,
-      ...(clienteTerrenoId ? { cliente_terreno_id: clienteTerrenoId } : {}),
+      estado: 'borrador', jornada_id: jornadaIdRef.current,
+      ...(clienteTerrenoIdNuevo ? { cliente_terreno_id: clienteTerrenoIdNuevo } : {}),
+      ...(erpId != null ? { cliente_erp_id: erpId } : {}),
     }
     setSyncPendiente(true)
     upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current).then(r => setSyncPendiente(!r.ok))
-    capturarUbicacion(id)
+    setEtapa('llegada')
   }
 
-  // Pedido rápido: ?cliente=Nombre (desde misiones, cercanos o detalle de
-  // cliente). Antes se resolvía buscando en el arreglo con TODA la cartera;
-  // ahora es una consulta puntual por nombre exacto — un solo cliente, no
-  // los ~600.
+  // Pedido rápido: ?cliente=Nombre (desde misiones, cercanos o detalle de cliente).
   const pedidoRapidoRef = useRef(false)
   useEffect(() => {
     if (pedidoRapidoRef.current || !clientePre || visitaRetomada || cliente) return
     pedidoRapidoRef.current = true
     supabase
       .from('clientes')
-      .select('categoria, lat, lng')
+      .select('id, categoria, lat, lng')
       .eq('nombre_fantasia', clientePre)
       .maybeSingle()
       .then(({ data: c }) => {
@@ -215,74 +195,80 @@ export default function NuevaVisitaClient({
           clientePre, !c, (c?.categoria as string | null) ?? '',
           undefined,
           c?.lat != null && c?.lng != null ? { lat: Number(c.lat), lng: Number(c.lng) } : undefined,
+          (c?.id as number | null) ?? undefined,
         )
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientePre])
 
-  function subirFoto(file: File, slot: SlotFoto) {
-    if (!visitaId) return
-    setSubiendoFoto(prev => ({ ...prev, [slot]: true }))
-    setFotos(prev => ({ ...prev, [slot]: URL.createObjectURL(file) }))
-    const campo = CAMPO_DE_SLOT[slot]
-    const vId = visitaId
-    uploadConTimeout(
-      supabase,
-      { bucket: 'terreno-fotos', path: `${vId}/${slot}.jpg`, table: 'visitas_terreno', rowId: vId, campo },
-      file,
-    ).then(url => {
-      setSubiendoFoto(prev => ({ ...prev, [slot]: false }))
-      if (!url) return
-      visitaDraft.current = { ...visitaDraft.current, [campo]: url }
-      upsertOrQueue(supabase, 'visitas_terreno', { id: vId, [campo]: url })
-    })
+  function onLlegadaLista(ev: EvidenciaCapturada) {
+    setEvidencia(ev)
+    setEtapa('confirmar')
   }
 
-  function abrirCamaraPara(slot: SlotFoto) {
-    slotPendienteRef.current = slot
-    fileCameraRef.current?.click()
+  function onEvidenciaConfirmada(r: ResultadoLlegada & { fotoUrl?: string }) {
+    setResultadoLlegada({ ...r, horaTexto: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) })
+    if (r.fotoUrl) setFotos(prev => ({ ...prev, exterior: r.fotoUrl }))
+    guardarDraft({ id: visitaId, estado: 'en_progreso' })
+    setEtapa('cierre')
   }
 
-  function abrirGaleriaPara(slot: SlotFoto) {
-    slotPendienteRef.current = slot
-    fileGaleriaRef.current?.click()
-  }
+  interface PagoInfo { metodoPago: CierrePayload['metodoPago']; diasCredito: number | null; fechaPagoEstimada: string | null }
 
-  // Las 4 fotos son opcionales — ninguna bloquea el cierre, pero si falta
-  // alguna se le ofrece tomarla antes de cerrar (ver HojaFotosVisita).
   const fotosFaltantes = SLOTS_FOTO.filter(s => !fotos[s.key]).map(s => s.key)
 
-  function onCerrarIntentado(p: CierrePayload) {
-    if (fotosFaltantes.length > 0) { setPendingCierre(p); return }
-    ejecutarCierre(p)
+  function onFinalizarIntentado(payload: CierrePayloadLlegada) {
+    if (payload.resultado === 'pedido_confirmado') { setCierrePayloadGuardado(payload); setEtapa('venta'); return }
+    onCerrarIntentado(payload, [], null)
   }
 
-  async function ejecutarCierre(p: CierrePayload) {
+  function onVentaCerrada(p: CierrePayload) {
+    if (!cierrePayloadGuardado) return
+    onCerrarIntentado(cierrePayloadGuardado, p.items, { metodoPago: p.metodoPago, diasCredito: p.diasCredito, fechaPagoEstimada: p.fechaPagoEstimada })
+  }
+
+  function onCerrarIntentado(payload: CierrePayloadLlegada, items: ItemCarrito[], pago: PagoInfo | null) {
+    if (fotosFaltantes.length > 0) { setPendingFinal({ payload, items, pago }); return }
+    ejecutarCierre(payload, items, pago)
+  }
+
+  const RESULTADO_LABEL: Record<string, string> = {
+    tiene_stock: 'Tiene stock', pedido_confirmado: 'Pedido confirmado', cotizacion_solicitada: 'Cotización solicitada',
+    evaluar_propuesta: 'Evaluando propuesta', precio: 'Objeción de precio', deuda: 'Deuda pendiente',
+    no_interesado: 'No interesado', gestion_resuelta: 'Gestión resuelta', otro: 'Otro',
+  }
+
+  async function ejecutarCierre(payload: CierrePayloadLlegada, items: ItemCarrito[], pago: PagoInfo | null) {
     if (!visitaId) return
-    setPendingCierre(null)
+    setPendingFinal(null)
     setGuardando(true)
     try {
-      const total = p.items.reduce((s, i) => s + i.cantidad * i.precio, 0)
+      const total = items.reduce((s, i) => s + i.cantidad * i.precio, 0)
+      const tieneVenta = payload.resultado === 'pedido_confirmado'
 
       visitaDraft.current = {
         ...visitaDraft.current,
         id: visitaId,
-        tiene_venta: p.tienVenta,
-        motivo_sin_venta: p.tienVenta ? null : p.motivo,
-        observaciones: p.observaciones || null,
+        contacto: payload.contacto,
+        resultado_visita: payload.resultado,
+        proximo_paso: payload.proximoPaso,
+        proximo_paso_fecha: payload.proximoPasoFecha,
+        tiene_venta: tieneVenta,
+        motivo_sin_venta: tieneVenta ? null : (payload.resultado ? RESULTADO_LABEL[payload.resultado] ?? payload.resultado : 'Sin contacto comercial'),
+        observaciones: payload.nota || null,
         total_pedido: total,
         estado: 'completada',
         completada_at: new Date().toISOString(),
-        metodo_pago: p.metodoPago,
-        dias_credito: p.diasCredito,
-        fecha_pago_estimada: p.fechaPagoEstimada,
+        metodo_pago: pago?.metodoPago ?? null,
+        dias_credito: pago?.diasCredito ?? null,
+        fecha_pago_estimada: pago?.fechaPagoEstimada ?? null,
         fotos_status: SLOTS_FOTO.every(s => fotos[s.key]) ? 'COMPLETO' : 'PENDIENTE',
       }
       const rVisita = await upsertOrQueue(supabase, 'visitas_terreno', visitaDraft.current)
 
       let itemsPendientes = false
-      if (p.items.length > 0) {
-        const res = await Promise.all(p.items.map(i => upsertOrQueue(supabase, 'visitas_terreno_items', {
+      if (items.length > 0) {
+        const res = await Promise.all(items.map(i => upsertOrQueue(supabase, 'visitas_terreno_items', {
           id: crypto.randomUUID(), visita_id: visitaId,
           producto: i.producto, categoria: i.categoria, envase: i.envase,
           cantidad: i.cantidad, precio_unit: i.precio, subtotal: i.cantidad * i.precio,
@@ -290,49 +276,39 @@ export default function NuevaVisitaClient({
         itemsPendientes = res.some(r => r.queued)
       }
 
-      // CRM: alimenta la Agenda del vendedor. Sólo existe si lo agendó a
-      // mano — ya no es un paso obligatorio del cierre.
-      if (p.seguimiento) {
+      if (payload.proximoPaso !== 'sin_pendiente' && payload.proximoPasoFecha) {
         await upsertOrQueue(supabase, 'seguimientos', {
           id: crypto.randomUUID(), visita_id: visitaId, vendedor_id: vendedor.id,
-          cliente_nombre: cliente?.nombre ?? '', tipo_accion: p.seguimiento.tipo,
-          fecha_hora_compromiso: `${p.seguimiento.fecha}T09:00:00`,
-          nota: p.observaciones || null, estado: 'pendiente',
+          cliente_nombre: cliente?.nombre ?? '', tipo_accion: payload.proximoPaso,
+          fecha_hora_compromiso: `${payload.proximoPasoFecha}T09:00:00`,
+          nota: payload.nota || null, estado: 'pendiente',
         })
       }
 
       setSyncPendiente(!rVisita.ok || itemsPendientes)
 
-      // Sesión muerta (refresh token invalidado — típico tras horas en
-      // terreno con la app en segundo plano): reintentar la cola offline
-      // acá NUNCA va a funcionar sin volver a iniciar sesión. Antes esto
-      // navegaba igual a "/terreno" como si la visita hubiera cerrado bien
-      // — el vendedor creía que había quedado guardada y en realidad se
-      // perdía en silencio (el registro sigue guardado localmente y se
-      // sincroniza solo apenas vuelva a entrar, pero hay que avisarle YA,
-      // no dejar que el badge lo disimule).
       if (rVisita.sesionPerdida) {
         window.alert('Tu sesión expiró. Esta visita quedó guardada en el teléfono — vuelve a iniciar sesión ahora para terminar de cerrarla.')
         router.push('/login')
         return
       }
 
-      if (p.tienVenta) {
+      if (tieneVenta) {
         hapticExito()
-        const bodyPago = p.metodoPago === 'credito' && p.fechaPagoEstimada
-          ? ` · Crédito, cobrar el ${format(new Date(p.fechaPagoEstimada + 'T12:00:00'), "d 'de' MMMM", { locale: es })}`
+        const bodyPago = pago?.metodoPago === 'credito' && pago.fechaPagoEstimada
+          ? ` · Crédito, cobrar el ${format(new Date(pago.fechaPagoEstimada + 'T12:00:00'), "d 'de' MMMM", { locale: es })}`
           : ''
         notificar({
           event: 'visita_completada',
-          title: `✅ Venta en ${cliente?.nombre ?? 'local'}`,
-          body: `${fmtPrecioCLP(total)} · ${p.items.length} producto${p.items.length !== 1 ? 's' : ''}${bodyPago}`,
+          title: `✅ Pedido en ${cliente?.nombre ?? 'local'}`,
+          body: `${fmtPrecioCLP(total)} · ${items.length} producto${items.length !== 1 ? 's' : ''}${bodyPago}`,
           url: '/terreno/historial',
         })
-      } else if (p.motivo) {
+      } else {
         notificar({
           event: 'visita_sin_venta',
-          title: `📍 Visita sin venta — ${cliente?.nombre ?? 'local'}`,
-          body: p.motivo,
+          title: `📍 Visita registrada — ${cliente?.nombre ?? 'local'}`,
+          body: payload.resultado ? (RESULTADO_LABEL[payload.resultado] ?? payload.resultado) : 'Sin contacto comercial',
           url: '/terreno/historial',
         })
       }
@@ -353,138 +329,200 @@ export default function NuevaVisitaClient({
     router.push('/terreno')
   }
 
-  const items = Array.from(carrito.values())
-  const etapa = !cliente ? 'cliente' : 'venta'
+  function subirFotoExtra(file: File, slot: SlotFoto) {
+    if (!visitaId) return
+    setFotos(prev => ({ ...prev, [slot]: URL.createObjectURL(file) }))
+    const campo = CAMPO_DE_SLOT[slot]
+    supabase.storage.from('terreno-fotos').upload(`${visitaId}/${slot}.jpg`, file, { upsert: true, contentType: file.type || 'image/jpeg' })
+      .then(({ error }) => {
+        if (error) return
+        const { data: { publicUrl } } = supabase.storage.from('terreno-fotos').getPublicUrl(`${visitaId}/${slot}.jpg`)
+        upsertOrQueue(supabase, 'visitas_terreno', { id: visitaId, [campo]: publicUrl })
+      })
+  }
 
   function onFileElegido(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
-    if (f) subirFoto(f, slotPendienteRef.current)
+    if (f) subirFotoExtra(f, slotPendienteRef.current)
     e.target.value = ''
   }
 
+  const items = Array.from(carrito.values())
+
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(170px, calc(env(safe-area-inset-bottom, 0px) + 150px))' }}>
-      {/* Dos inputs — uno fuerza la cámara trasera, el otro abre el selector
-          normal del teléfono (galería). No hay atributo HTML que signifique
-          "solo galería", así que esto es lo más cerca que se puede llegar
-          a las dos opciones explícitas que pidió Claudio. */}
-      <input ref={fileCameraRef} type="file" accept="image/*" capture="environment" hidden onChange={onFileElegido} />
       <input ref={fileGaleriaRef} type="file" accept="image/*" hidden onChange={onFileElegido} />
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 16px' }}>
-        {/* Encabezado — sticky: en el paso de venta el catálogo es largo y
-            sin esto "Volver" desaparecía apenas se hacía scroll buscando
-            un producto. */}
-        <div style={{
-          position: 'sticky', top: 0, zIndex: 40,
-          background: C.bg, margin: '0 -16px', padding: '20px 16px 14px',
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <button
-            onClick={() => cliente ? cancelar() : router.push('/terreno')}
-            aria-label="Volver"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 38, cursor: 'pointer',
-              background: C.card, border: `1px solid ${C.line}`, borderRadius: 100,
-              padding: '7px 14px 7px 10px', color: C.blue, fontSize: 13, fontWeight: 700,
-            }}
-          >
-            <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
-            Volver
-          </button>
-
-          <div style={{ flex: 1 }} />
-
-          {etapa === 'venta' && (
-            <>
+        {etapa === 'venta' && (
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 40,
+            background: C.bg, margin: '0 -16px', padding: '20px 16px 14px',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <button
+              onClick={() => setEtapa('cierre')}
+              aria-label="Volver"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 38, cursor: 'pointer',
+                background: C.card, border: `1px solid ${C.line}`, borderRadius: 100,
+                padding: '7px 14px 7px 10px', color: C.blue, fontSize: 13, fontWeight: 700,
+              }}
+            >
+              <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
+              Volver
+            </button>
+            <div style={{ flex: 1 }} />
+            <button
+              onClick={() => setShowCatalogoWA(true)}
+              aria-label="Enviar catálogo por WhatsApp"
+              style={{
+                width: TAP, height: TAP, borderRadius: 12, cursor: 'pointer',
+                border: `1px solid ${C.line}`, background: C.card,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <MessageCircle size={18} color="#25D366" />
+            </button>
+            {items.length > 0 && (
               <button
-                onClick={() => setShowCatalogoWA(true)}
-                aria-label="Enviar catálogo por WhatsApp"
+                onClick={() => setShowImagen(true)}
+                aria-label="Imagen del pedido"
                 style={{
                   width: TAP, height: TAP, borderRadius: 12, cursor: 'pointer',
                   border: `1px solid ${C.line}`, background: C.card,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <MessageCircle size={18} color="#25D366" />
+                <ImageIcon size={18} color={C.muted} />
               </button>
-              {items.length > 0 && (
-                <button
-                  onClick={() => setShowImagen(true)}
-                  aria-label="Imagen del pedido"
-                  style={{
-                    width: TAP, height: TAP, borderRadius: 12, cursor: 'pointer',
-                    border: `1px solid ${C.line}`, background: C.card,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  <ImageIcon size={18} color={C.muted} />
-                </button>
-              )}
-            </>
-          )}
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>
-            {etapa === 'cliente' ? 'PASO 1 DE 2' : 'PASO 2 DE 2 · VENTA'}
-          </p>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.2 }}>
-            {cliente ? cliente.nombre : '¿A quién le vendes?'}
-          </h1>
-          {cliente && (
-            <p style={{ fontSize: 12.5, color: C.muted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              {cliente.esNuevo && (
-                <span style={{ background: C.blueSoft, color: C.blue, fontWeight: 700, borderRadius: 6, padding: '1px 6px', fontSize: 11 }}>
-                  Cliente nuevo
-                </span>
-              )}
-              {syncPendiente
-                ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: C.amber, fontWeight: 600 }}><CloudOff size={12} /> Guardando…</span>
-                : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: C.green, fontWeight: 600 }}><Check size={12} /> Guardado</span>}
-              {gpsEstado === 'buscando' && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: C.muted, fontWeight: 600 }}><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Ubicando…</span>
-              )}
-              {gpsEstado === 'ok' && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: C.green, fontWeight: 600 }}><MapPin size={12} /> Ubicación registrada</span>
-              )}
-            </p>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {etapa === 'cliente' && (
-          <PasoCliente recientes={recientes} frecuentes={frecuentes} pendientes={pendientes} onConfirmar={onClienteConfirmado} />
+          <div style={{ paddingTop: 20 }}>
+            <button
+              onClick={() => router.push('/terreno')}
+              aria-label="Volver"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 38, marginBottom: 16, cursor: 'pointer',
+                background: C.card, border: `1px solid ${C.line}`, borderRadius: 100,
+                padding: '7px 14px 7px 10px', color: C.blue, fontSize: 13, fontWeight: 700,
+              }}
+            >
+              <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} />
+              Volver
+            </button>
+            <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: '0.04em' }}>PASO 1 DE 3</p>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', lineHeight: 1.2, marginBottom: 16 }}>
+              ¿A quién visitas?
+            </h1>
+            <PasoCliente recientes={recientes} frecuentes={frecuentes} pendientes={pendientes} onConfirmar={onClienteConfirmado} />
+          </div>
         )}
-        {etapa === 'venta' && (
+
+        {etapa === 'llegada' && cliente && visitaId && (
+          <div style={{ paddingTop: 20 }}>
+            <MarcarLlegada
+              visitaId={visitaId}
+              clienteNombre={cliente.nombre}
+              direccionCliente={cliente.direccion}
+              clienteLat={referenciaCoordsRef.current?.lat}
+              clienteLng={referenciaCoordsRef.current?.lng}
+              onListo={onLlegadaLista}
+              onVolver={cancelar}
+            />
+          </div>
+        )}
+
+        {etapa === 'confirmar' && cliente && visitaId && evidencia && (
+          <div style={{ paddingTop: 20 }}>
+            <ConfirmarEvidencia
+              visitaId={visitaId}
+              evidencia={evidencia}
+              clienteNombre={cliente.nombre}
+              clienteLat={referenciaCoordsRef.current?.lat}
+              clienteLng={referenciaCoordsRef.current?.lng}
+              clienteErpId={clienteErpId}
+              clienteTerrenoId={clienteTerrenoId}
+              onConfirmado={onEvidenciaConfirmada}
+              onRepetir={() => { setEvidencia(null); setEtapa('llegada') }}
+            />
+          </div>
+        )}
+
+        {etapa === 'cierre' && cliente && (
+          <div style={{ paddingTop: 20 }}>
+            {resultadoLlegada?.pendienteSync && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6, background: C.amberSoft, color: C.amber,
+                borderRadius: 100, padding: '6px 12px', fontSize: 12, fontWeight: 700, marginBottom: 12, width: 'fit-content',
+              }}>
+                <CloudOff size={13} />
+                Llegada guardada en este teléfono · pendiente de sincronización
+              </div>
+            )}
+            <FinalizarVisita
+              clienteNombre={cliente.nombre}
+              horaLlegada={resultadoLlegada?.horaTexto || null}
+              guardando={guardando}
+              onVolver={() => setEtapa('confirmar')}
+              onFinalizar={onFinalizarIntentado}
+            />
+          </div>
+        )}
+
+        {etapa === 'venta' && cliente && (
           <PasoVenta
-            clienteNombre={cliente!.nombre}
+            clienteNombre={cliente.nombre}
             catalogo={catalogo}
             carrito={carrito}
             setCarrito={setCarrito}
-            onCerrar={onCerrarIntentado}
+            onCerrar={onVentaCerrada}
             guardando={guardando}
+            ocultarSinVenta
           />
         )}
       </div>
 
-      {showCatalogoWA && <WhatsAppCatalogoModal onClose={() => setShowCatalogoWA(false)} />}
-      {showImagen && (
-        <VentaImageModal
-          items={items}
-          clienteNombre={cliente?.nombre ?? ''}
-          vendedorNombre={vendedor.nombre}
-          onClose={() => setShowImagen(false)}
-        />
+      {etapa === 'venta' && (
+        <>
+          {showCatalogoWA && <WhatsAppCatalogoModal onClose={() => setShowCatalogoWA(false)} />}
+          {showImagen && (
+            <VentaImageModal
+              items={items}
+              clienteNombre={cliente?.nombre ?? ''}
+              vendedorNombre={vendedor.nombre}
+              onClose={() => setShowImagen(false)}
+            />
+          )}
+        </>
       )}
-      {pendingCierre && (
+
+      {pendingFinal && (
         <HojaFotosVisita
           fotos={fotos}
           subiendo={subiendoFoto}
-          onTomarCamara={abrirCamaraPara}
-          onSubirGaleria={abrirGaleriaPara}
-          onContinuar={() => ejecutarCierre(pendingCierre)}
-          onCancelar={() => setPendingCierre(null)}
+          onTomarCamara={slot => { slotPendienteRef.current = slot; fileGaleriaRef.current?.click() }}
+          onSubirGaleria={slot => { slotPendienteRef.current = slot; fileGaleriaRef.current?.click() }}
+          onContinuar={() => ejecutarCierre(pendingFinal.payload, pendingFinal.items, pendingFinal.pago)}
+          onCancelar={() => setPendingFinal(null)}
         />
+      )}
+
+      {syncPendiente && etapa !== 'cliente' && (
+        <div style={{
+          position: 'fixed', top: 'max(12px, env(safe-area-inset-top, 12px))', left: 0, right: 0,
+          display: 'flex', justifyContent: 'center', zIndex: 60, pointerEvents: 'none',
+        }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, background: C.text, color: '#fff',
+            borderRadius: 100, padding: '6px 12px', fontSize: 11.5, fontWeight: 700,
+          }}>
+            <Check size={12} /> Guardando…
+          </div>
+        </div>
       )}
     </div>
   )
