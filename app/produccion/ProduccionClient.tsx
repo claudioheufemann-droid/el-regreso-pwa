@@ -2674,10 +2674,63 @@ export default function ProduccionClient({
   const [vistaPresupuesto, setVistaPresupuesto] = useState<'insumo' | 'producto'>('insumo')
   const [descargando, setDescargando] = useState(false)
 
+  /** Lotes CONFIRMADOS (plan_produccion, estado 'planificado') que
+   *  planSugerido no generó por su cuenta — un producto agregado a mano
+   *  desde el Gantt ("Agregar producto"), o cualquiera fuera de las
+   *  LINEAS_FIJAS que la simulación no cubre (planSugerido sólo mira ésas).
+   *
+   *  Sin esto, confirmar algo en el Gantt no movía un peso el presupuesto:
+   *  esta sección leía sólo lo que el MODELO propone, nunca lo que el
+   *  usuario ya decidió cocer — que es justo lo que se supone que hay que
+   *  poder comprar. 'en_curso' queda afuera igual que en `lotesEnVentana`
+   *  más abajo: sus insumos ya se compraron.
+   *
+   *  Se dedupe contra planSugerido por producto+fecha para no mostrar dos
+   *  veces la misma cocción cuando la simulación ya la generó (mismo
+   *  criterio que `yaEnPlan` en bloquesGantt, más arriba). */
+  const lotesConfirmadosParaPresupuesto = useMemo(() => {
+    const yaSimulado = new Set(planSugerido.lotes.map(l => `${l.producto}|${l.fechaInicio}`))
+    return plan
+      .filter(l => l.estado === 'planificado' && !yaSimulado.has(`${l.producto}|${l.fechaPlanificada}`))
+      .map(l => {
+        const dias = l.diasOcupacion ?? diasDe(l.producto, l.categoria)
+        const fechaListo = sumarDiasCalISO(l.fechaPlanificada, dias)
+        const capacidadTanque = l.fermentador
+          ? ocupacionPlanta.tanques.find(t => t.tanque === l.fermentador)?.capacidadLitros ?? l.litrosPlanificados
+          : l.litrosPlanificados
+        const leadTimeSemanas = stockSeguridad.find(s => s.nivel === 'producto' && s.producto === l.producto)?.leadTimeSemanas ?? 4
+        return {
+          id: l.id, producto: l.producto, categoria: l.categoria,
+          litros: l.litrosPlanificados, tanque: l.fermentador ?? '—', capacidadTanque,
+          fechaInicio: l.fechaPlanificada, fechaListo, mes: l.fechaPlanificada.slice(0, 8) + '01',
+          fechaObjetivo: l.fechaPlanificada, diasTarde: 0,
+          leadTimeSemanas, conAlarma: false, loteNro: 1, loteDe: 1,
+          // No hay proyección de stock detrás de un lote agregado a mano —
+          // eso lo calcula planSugerido, y este lote quedó afuera de esa
+          // simulación a propósito. Se deja optimista (llega a tiempo, cubre
+          // hasta que sale) en vez de inventar un número.
+          fechaAgotamiento: fechaListo, cubreHasta: fechaListo,
+          llegaATiempo: true, enCurso: false,
+          movidoManual: l.fermentador != null, tanqueManual: l.fermentador != null,
+          fechaEmbarriladoReal: null,
+        }
+      })
+  }, [plan, planSugerido.lotes, diasDe, ocupacionPlanta.tanques, stockSeguridad])
+
+  const idsConfirmadosPresupuesto = useMemo(
+    () => new Set(lotesConfirmadosParaPresupuesto.map(l => l.id)),
+    [lotesConfirmadosParaPresupuesto]
+  )
+
+  const lotesPresupuestables = useMemo(
+    () => [...planSugerido.lotes, ...lotesConfirmadosParaPresupuesto],
+    [planSugerido.lotes, lotesConfirmadosParaPresupuesto]
+  )
+
   /** Meses que ofrece el selector de ventana: los que tienen cocciones. */
   const mesesPlan = useMemo(
-    () => [...new Set(planSugerido.lotes.filter(l => !l.enCurso).map(l => l.fechaInicio.slice(0, 7)))].sort(),
-    [planSugerido]
+    () => [...new Set(lotesPresupuestables.filter(l => !l.enCurso).map(l => l.fechaInicio.slice(0, 7)))].sort(),
+    [lotesPresupuestables]
   )
   const ventanaDesde = presupuestoDesde || mesesPlan[0] || ''
   const ventanaHasta = presupuestoHasta || mesesPlan[mesesPlan.length - 1] || ''
@@ -2685,12 +2738,19 @@ export default function ProduccionClient({
   /** Cocciones dentro de la ventana elegida. Una cocción EN CURSO no entra
    *  nunca: sus insumos ya se compraron y ya están en el tanque. */
   const lotesEnVentana = useMemo(
-    () => planSugerido.lotes.filter(l =>
+    () => lotesPresupuestables.filter(l =>
       !l.enCurso && l.fechaInicio.slice(0, 7) >= ventanaDesde && l.fechaInicio.slice(0, 7) <= ventanaHasta
     ),
-    [planSugerido, ventanaDesde, ventanaHasta]
+    [lotesPresupuestables, ventanaDesde, ventanaHasta]
   )
-  const estaSeleccionado = (l: { id: string }) => togglesPresupuesto.has(l.id)
+  /** Una SUGERENCIA arranca sin marcar (hay que activarla a mano, ver el
+   *  comentario de arriba); un lote ya CONFIRMADO arranca marcado — el
+   *  usuario ya decidió cocerlo, así que ya debería sumar al presupuesto sin
+   *  que haga falta un segundo clic para lo que ya es un hecho. El mismo Set
+   *  sirve para las dos cosas con sentido invertido según el caso: para un
+   *  confirmado, estar en el Set es haberlo EXCLUIDO a mano. */
+  const estaSeleccionado = (l: { id: string }) =>
+    idsConfirmadosPresupuesto.has(l.id) ? !togglesPresupuesto.has(l.id) : togglesPresupuesto.has(l.id)
   const alternarLote = (l: { id: string }) => {
     setTogglesPresupuesto(prev => {
       const siguiente = new Set(prev)
