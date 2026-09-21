@@ -5,6 +5,7 @@ import GanttProduccion, { type BloqueGantt } from '@/app/produccion/GanttProducc
 import ConfigProductosGantt from '@/app/produccion/ConfigProductosGantt'
 import NecesidadMensual from '@/app/produccion/NecesidadMensual'
 import MenuLateral, { type TabId } from '@/app/produccion/MenuLateral'
+import ModalAgregarProducto from '@/app/produccion/ModalAgregarProducto'
 import PopoverCoccion, { type LoteCalendario } from '@/app/produccion/PopoverCoccion'
 import { useArrastreCalendario, type DestinoArrastre } from '@/app/produccion/useArrastreCalendario'
 import {
@@ -29,6 +30,7 @@ export default function DevProduccionClient() {
   const [bloques, setBloques] = useState<BloqueGantt[]>(() => bloquesDe('normal'))
   const [config, setConfig] = useState(CONFIG)
   const [configAbierta, setConfigAbierta] = useState(false)
+  const [agregarProductoAbierto, setAgregarProductoAbierto] = useState(false)
   const [recienMovido, setRecienMovido] = useState<string | null>(null)
   const [registro, setRegistro] = useState<string[]>([])
   const [tab, setTab] = useState<TabId>('calendario')
@@ -151,6 +153,7 @@ export default function DevProduccionClient() {
           hastaMes={HASTA_MES}
           bloqueRecienMovido={recienMovido}
           onAbrirConfig={() => setConfigAbierta(true)}
+          onAgregarProducto={() => setAgregarProductoAbierto(true)}
           onAbrirBloque={(b, rect) => {
             // Sólo las sugerencias tienen proyección detrás, igual que en la
             // app: un lote confirmado ya está en el plan.
@@ -201,6 +204,26 @@ export default function DevProduccionClient() {
           config={config}
           onCerrar={() => setConfigAbierta(false)}
           onGuardado={fila => setConfig(c => c.map(x => (x.producto === fila.producto ? fila : x)))}
+        />
+
+        <ModalAgregarProducto
+          abierto={agregarProductoAbierto}
+          config={config}
+          guardando={false}
+          error={null}
+          onGuardar={datos => {
+            setBloques(bs => [...bs, {
+              id: `nuevo-${Date.now()}`, tipo: 'confirmado', producto: datos.producto,
+              categoria: datos.categoria, litros: datos.litrosPlanificados,
+              inicioISO: datos.fechaPlanificada,
+              dias: config.find(c => c.producto === datos.producto)?.diasFermentacion
+                ?? (datos.categoria === 'cerveza' ? 24 : 12),
+              fermentador: null,
+            }])
+            setRegistro(r => [`AGREGAR → ${datos.producto} · ${datos.litrosPlanificados} L · ${datos.fechaPlanificada} (sin asignar)`, ...r].slice(0, 8))
+            setAgregarProductoAbierto(false)
+          }}
+          onCerrar={() => setAgregarProductoAbierto(false)}
         />
         </div>
       </div>

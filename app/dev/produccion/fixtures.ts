@@ -121,6 +121,14 @@ export function bloquesDe(escenario: Escenario): BloqueGantt[] {
         base({ id: 'b7', producto: 'Kombucha Maracuyá Cardamomo', categoria: 'kombucha', litros: 1200, inicioISO: masDias(20), dias: 14, fermentador: 'Fermentador K-4', tipo: 'sugerido' }),
         // Uno que arranca antes de la ventana: prueba el recorte izquierdo.
         base({ id: 'b8', producto: 'Ámbar Lager', categoria: 'cerveza', litros: 2400, inicioISO: masDias(-18), dias: 28, fermentador: 'Fermentador T5' }),
+        // Detectado en el ERP: T2 tiene 1.700 L (litrosActuales, arriba) pero
+        // ningún lote del plan lo cubre — es justo el caso que 'en_tanque'
+        // existe para mostrar.
+        base({
+          id: 'erp:Fermentador T2', producto: 'La Barra APA', categoria: 'cerveza', litros: 1700,
+          inicioISO: masDias(-8), dias: 24, fermentador: 'Fermentador T2', tipo: 'en_tanque',
+          motivo: 'Detectado en el informe del ERP — inicio estimado hacia atrás desde el embarrilado que calculó el enólogo.',
+        }),
       ]
   }
 }
