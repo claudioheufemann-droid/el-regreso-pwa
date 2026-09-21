@@ -46,6 +46,20 @@ export async function proxy(request: NextRequest) {
   // propia: si el link de recuperación ya venció, la página misma muestra
   // "link inválido" en vez de que el proxy la mande a /login sin explicar
   // por qué.
+  // /dev/* es el banco de pruebas de componentes: renderiza el Gantt y la
+  // tabla de necesidad con datos ARMADOS, sin tocar la base ni mostrar nada
+  // real, para poder revisar estados que con datos de verdad no se pueden
+  // provocar a pedido (choques de tanque, bloques que no caben, tabla vacía).
+  //
+  // La condición de NODE_ENV no es decorativa y NO hay que sacarla: es lo que
+  // hace que en producción esta rama sea constante-falsa. La página además
+  // llama a notFound() por su cuenta si no está en desarrollo — dos capas, a
+  // propósito, porque una exención de auth sin condición ya se coló una vez en
+  // este archivo y hubo que revertirla.
+  if (process.env.NODE_ENV === 'development' && pathname.startsWith('/dev')) {
+    return response
+  }
+
   if (!user && pathname !== '/login' && pathname !== '/auth/callback' && pathname !== '/reset-password') {
     return NextResponse.redirect(new URL('/login', request.url))
   }

@@ -29,6 +29,8 @@ interface FilaStockSeguridad {
   demandaMensualProyectada: number
   demandaEnVentana: number
   sigmaSemanal: number
+  /** Factor por el que se corrigió la banda de Prophet — ver calibracion_sigma. */
+  kSigma?: number
   z: number
   stockSeguridadLitros: number
   puntoReordenLitros: number
@@ -90,7 +92,7 @@ export async function POST(req: Request) {
     sigma_lead_time_semanas: f.sigmaLeadTimeSemanas,
     demanda_mensual_proyectada: f.demandaMensualProyectada,
     demanda_en_ventana: f.demandaEnVentana,
-    sigma_semanal: f.sigmaSemanal, z: f.z,
+    sigma_semanal: f.sigmaSemanal, k_sigma: f.kSigma ?? 1, z: f.z,
     stock_seguridad_litros: f.stockSeguridadLitros, punto_reorden_litros: f.puntoReordenLitros,
     confianza: f.confianza, mape_backtest: f.mapeBacktest, meses_historial: f.mesesHistorial,
     metodo: f.metodo ?? 'propio',

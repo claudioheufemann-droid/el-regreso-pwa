@@ -53,24 +53,33 @@ export type CargaArrastre =
       motivo?: string | null
     }
 
+/** Dónde se está por soltar. El Gantt tiene DOS ejes — la celda dice qué día
+ *  y qué fermentador — pero una grilla de calendario común sólo marca el día,
+ *  y ahí `fermentador` viaja en null. */
+export interface DestinoArrastre {
+  fecha: string
+  fermentador: string | null
+}
+
 export interface EstadoArrastre {
   carga: CargaArrastre
   /** Coordenadas de pantalla del puntero, para pintar el ghost. */
   x: number
   y: number
-  /** Día (yyyy-mm-dd) que está bajo el puntero ahora mismo, si es soltable. */
-  diaDestino: string | null
+  /** Celda bajo el puntero ahora mismo, si es soltable. */
+  destino: DestinoArrastre | null
   /** true mientras el gesto todavía no superó el umbral / long-press: sirve
    *  para no pintar nada hasta que el arrastre es real. */
   pendiente: boolean
 }
 
 interface Opciones {
-  /** Se llama al soltar sobre un día válido. */
-  onSoltar: (carga: CargaArrastre, fechaISO: string) => void
-  /** Un día es destino válido sólo si esto devuelve true (p. ej. no permitir
-   *  el pasado). Se consulta en cada movimiento para pintar el resaltado. */
-  puedeSoltarEn: (fechaISO: string) => boolean
+  /** Se llama al soltar sobre una celda válida. */
+  onSoltar: (carga: CargaArrastre, destino: DestinoArrastre) => void
+  /** Una celda es destino válido sólo si esto devuelve true (p. ej. no
+   *  permitir el pasado, o un tanque de la otra línea). Se consulta en cada
+   *  movimiento para pintar el resaltado. */
+  puedeSoltarEn: (destino: DestinoArrastre) => boolean
 }
 
 export function useArrastreCalendario({ onSoltar, puedeSoltarEn }: Opciones) {
@@ -95,24 +104,27 @@ export function useArrastreCalendario({ onSoltar, puedeSoltarEn }: Opciones) {
   const puedeSoltarRef = useRef(puedeSoltarEn)
   useEffect(() => { onSoltarRef.current = onSoltar; puedeSoltarRef.current = puedeSoltarEn })
 
-  const diaBajoPuntero = useCallback((x: number, y: number): string | null => {
+  const celdaBajoPuntero = useCallback((x: number, y: number): DestinoArrastre | null => {
     const el = document.elementFromPoint(x, y)
     const celda = el?.closest<HTMLElement>('[data-dia-calendario]')
     const fecha = celda?.dataset.diaCalendario
     if (!fecha) return null
-    return puedeSoltarRef.current(fecha) ? fecha : null
+    // El fermentador es opcional: una grilla de calendario sin filas de tanque
+    // no lo declara y el destino queda con fermentador null.
+    const destino: DestinoArrastre = { fecha, fermentador: celda?.dataset.fermentador ?? null }
+    return puedeSoltarRef.current(destino) ? destino : null
   }, [])
 
   const terminar = useCallback((soltar: boolean, x?: number, y?: number) => {
     const g = gesto.current
     if (g?.timerLongPress) clearTimeout(g.timerLongPress)
     if (soltar && g?.activo && x != null && y != null) {
-      const destino = diaBajoPuntero(x, y)
+      const destino = celdaBajoPuntero(x, y)
       if (destino) onSoltarRef.current(g.carga, destino)
     }
     gesto.current = null
     setArrastre(null)
-  }, [diaBajoPuntero])
+  }, [celdaBajoPuntero])
 
   // Listeners globales: se registran una vez y viven mientras el hook exista.
   // Van en `document` y no en el elemento arrastrado porque el puntero sale de
@@ -143,7 +155,7 @@ export function useArrastreCalendario({ onSoltar, puedeSoltarEn }: Opciones) {
         carga: g.carga,
         x: ev.clientX,
         y: ev.clientY,
-        diaDestino: diaBajoPuntero(ev.clientX, ev.clientY),
+        destino: celdaBajoPuntero(ev.clientX, ev.clientY),
         pendiente: false,
       })
     }
@@ -174,7 +186,7 @@ export function useArrastreCalendario({ onSoltar, puedeSoltarEn }: Opciones) {
       document.removeEventListener('pointercancel', cancelar)
       document.removeEventListener('keydown', teclaEscape)
     }
-  }, [diaBajoPuntero, terminar])
+  }, [celdaBajoPuntero, terminar])
 
   /** Props para el elemento que se puede arrastrar. */
   const propsOrigen = useCallback((carga: CargaArrastre, habilitado = true) => {
@@ -204,7 +216,7 @@ export function useArrastreCalendario({ onSoltar, puedeSoltarEn }: Opciones) {
             // Vibración corta: en táctil no hay cursor que avise que el
             // elemento "se levantó", el háptico es el único feedback posible.
             navigator.vibrate?.(12)
-            setArrastre({ carga: g.carga, x: x0, y: y0, diaDestino: null, pendiente: false })
+            setArrastre({ carga: g.carga, x: x0, y: y0, destino: null, pendiente: false })
           }, MS_LONG_PRESS)
         }
       },

@@ -22,6 +22,8 @@ interface ForecastFila {
   litros: number; litrosMin?: number | null; litrosMax?: number | null
   /** Descomposición del modelo: litros = tendencia + estacionalidad. */
   tendencia?: number | null; estacionalidad?: number | null
+  /** Factor con el que se corrigió el sesgo de la serie — ver calibracion_sigma. */
+  factorSesgo?: number | null
 }
 interface ValidacionFila {
   nivel: string; clave: string | null; mae: number | null; mape: number | null; mesesEvaluados: number; mesesHistorial: number
@@ -77,6 +79,7 @@ export async function POST(req: Request) {
     nivel: f.nivel, clave: f.clave, mes: f.mes, tipo: f.tipo,
     litros: f.litros, litros_min: f.litrosMin ?? null, litros_max: f.litrosMax ?? null,
     tendencia: f.tendencia ?? null, estacionalidad: f.estacionalidad ?? null,
+    factor_sesgo: f.factorSesgo ?? null,
   }))
   const validacionRows = (validacion ?? []).map(v => ({
     nivel: v.nivel, clave: v.clave, mae: v.mae, mape: v.mape,

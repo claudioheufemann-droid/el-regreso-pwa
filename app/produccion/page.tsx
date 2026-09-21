@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getServerUser } from '@/lib/auth'
+import { LINEAS_FIJAS } from '@/lib/produccion/reglas'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { esClienteExcluidoProduccion } from '@/lib/types'
 import { esCamaraProduccion } from '@/lib/camaras'
@@ -296,6 +297,21 @@ export interface LotePlan {
   /** Por qué se sugirió — sólo tiene contenido cuando origen='sugerido'. */
   motivo: string | null
   observaciones: string | null
+  /** Fermentador asignado en el Gantt. Null = todavía sin tanque. */
+  fermentador: string | null
+  /** Días corridos de ocupación del tanque. Null = hereda de la config del
+   *  producto (config_produccion_producto.dias_fermentacion). */
+  diasOcupacion: number | null
+}
+
+/** Configuración por producto del Gantt de ocupación de fermentadores. */
+export interface ConfigProductoProduccion {
+  producto: string
+  categoria: 'cerveza' | 'kombucha'
+  /** Días CORRIDOS — la fermentación no se detiene el fin de semana. */
+  diasFermentacion: number
+  litrosObjetivo: number | null
+  color: string
 }
 
 /**
@@ -372,29 +388,6 @@ export interface SugerenciaPlan {
   /** true si `fechaLimiteGestion` ya pasó. */
   atrasadoGestion: boolean
 }
-
-/**
- * Catálogo ESTABLE (línea fija) — lo que la cervecería siempre debe tener
- * disponible, nunca puede quebrar stock. Todo lo demás (cervezas/kombuchas
- * fuera de esta lista) es "experimental": rotativo, de menor prioridad.
- * Definido por el usuario, 11-sep-2026.
- *
- * OJO con "Aguas Blancas" para la línea de Hazy IPA: hay DOS productos con
- * "Hazy" en el nombre ("Aguas Blancas Hazy IPA" y "Doble Hazy IPA"). Se
- * asumió "Aguas Blancas" por volumen y consistencia de venta real (verificado
- * contra 180 días de ventas: Aguas Blancas 6.949 L en 26/26 semanas vs. Doble
- * Hazy IPA 1.425 L en 24/26 — "Doble" es el patrón típico de release
- * puntual/experimental en este catálogo). Si la intención real era la otra,
- * corregir acá.
- */
-const LINEAS_FIJAS = new Set<string>([
-  // Kombucha
-  'Kombucha Berry Menta', 'Kombucha Maracuyá Cardamomo', 'Kombucha Maqui',
-  'Kombucha Lemon', 'Kombucha Lupulada', 'Kombucha Detox',
-  // Cerveza
-  'Mocho English', 'Fisura', 'La Barra APA', 'Arboretum',
-  'Descenso West Coast IPA', 'Aguas Blancas',
-])
 
 export default async function ProduccionPage() {
   const user = await getServerUser()
@@ -1128,6 +1121,23 @@ export default async function ProduccionPage() {
     origen: p.origen as 'sugerido' | 'manual',
     motivo: (p.motivo as string | null) ?? null,
     observaciones: (p.observaciones as string | null) ?? null,
+    fermentador: (p.fermentador as string | null) ?? null,
+    diasOcupacion: p.dias_ocupacion == null ? null : Number(p.dias_ocupacion),
+  }))
+
+  // Configuración por producto del Gantt: días en tanque, litraje habitual y
+  // color del bloque. Se carga acá y no en el cliente para que la primera
+  // pintada del Gantt ya salga con los colores definitivos.
+  const { data: configRaw } = await admin
+    .from('config_produccion_producto')
+    .select('producto, categoria, dias_fermentacion, litros_objetivo, color')
+    .order('producto')
+  const configProductos: ConfigProductoProduccion[] = (configRaw ?? []).map(c => ({
+    producto: c.producto as string,
+    categoria: c.categoria as 'cerveza' | 'kombucha',
+    diasFermentacion: Number(c.dias_fermentacion),
+    litrosObjetivo: c.litros_objetivo == null ? null : Number(c.litros_objetivo),
+    color: c.color as string,
   }))
 
   /* ── Proyección de necesidad de insumos ──────────────────────────────────
@@ -1436,6 +1446,7 @@ export default async function ProduccionPage() {
       series={series}
       calidad={calidad}
       planProduccion={planProduccion}
+      configProductos={configProductos}
       sugerenciasPlan={sugerenciasPlan}
       splitFermentadores={splitFermentadores}
       ocupacionPlanta={ocupacionPlanta}

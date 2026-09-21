@@ -58,6 +58,10 @@ export interface FilaVentaFinanzas {
   fecha_pedido: string
   fecha_entrega: string | null
   entregado: boolean | null
+  /** Número de factura del ERP. Es la llave que permite cruzar una venta
+   *  contra su pago en `cobros_erp` (ver proyeccionCobros.ts) — presente en
+   *  ~95% de las ventas despachadas. */
+  numero_factura?: string | null
 }
 
 /** ¿Esta fila es ingreso real de la empresa? Excluye consumo interno sin

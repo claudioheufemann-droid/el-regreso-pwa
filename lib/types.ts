@@ -360,12 +360,20 @@ export const NOMBRE_RESTAURANTE_FORECAST = 'Restaurante BaseCamp'
  *  este string o el nombre exacto de un proveedor de `compras_historico`. */
 export const NOMBRE_COMPRAS_TOTAL = 'Total compras'
 
+/** ¿Este cliente paga en el momento? (mostrador, ferias — ver
+ *  CLIENTES_COBRO_INMEDIATO). No deja factura esperando cobro, así que la
+ *  proyección de cobranza tiene que dejarlo fuera para no contar dos veces
+ *  la misma plata. */
+export function esClienteCobroInmediato(nombre: string | null | undefined): boolean {
+  const n = (nombre ?? '').toLowerCase().trim()
+  return CLIENTES_COBRO_INMEDIATO.some(inc => n.includes(inc))
+}
+
 /** Plazo de cobro a usar para un cliente, forzando 0 días para los de
  *  CLIENTES_COBRO_INMEDIATO sin importar lo que traiga `clientes` —
  *  ver el comentario de esa constante. */
 export function diasPagoEfectivo(nombre: string | null | undefined, diasPagoDelMaestro: number | null): number | null {
-  const n = (nombre ?? '').toLowerCase().trim()
-  if (CLIENTES_COBRO_INMEDIATO.some(inc => n.includes(inc))) return 0
+  if (esClienteCobroInmediato(nombre)) return 0
   return diasPagoDelMaestro
 }
 

@@ -20,6 +20,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     litrosPlanificados: number
     fechaPlanificada: string
     observaciones: string | null
+    /** Fermentador asignado desde el Gantt. null lo desasigna. */
+    fermentador: string | null
+    /** Días corridos de ocupación. null vuelve al default del producto. */
+    diasOcupacion: number | null
   }>
   try {
     body = await req.json()
@@ -32,6 +36,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.litrosPlanificados != null) cambios.litros_planificados = body.litrosPlanificados
   if (body.fechaPlanificada) cambios.fecha_planificada = body.fechaPlanificada
   if (body.observaciones !== undefined) cambios.observaciones = body.observaciones
+  // `undefined` = no se toca; `null` = se borra a propósito. Por eso se
+  // compara contra undefined y no con un truthy: arrastrar un bloque fuera de
+  // un tanque tiene que poder dejarlo sin asignar.
+  if (body.fermentador !== undefined) cambios.fermentador = body.fermentador
+  if (body.diasOcupacion !== undefined) {
+    const d = body.diasOcupacion
+    if (d !== null && (!Number.isInteger(d) || d < 1 || d > 120)) {
+      return NextResponse.json({ error: 'diasOcupacion fuera de rango (1-120)' }, { status: 400 })
+    }
+    cambios.dias_ocupacion = d
+  }
 
   const admin = createAdminClient()
   const { data, error } = await admin.from('plan_produccion').update(cambios).eq('id', id).select('*').single()

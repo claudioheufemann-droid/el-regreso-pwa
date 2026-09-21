@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cicloEnCursoISO, inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import {
-  proyectarCaja, esIngresoReal, normalizarNombreCliente, brutoDeFila,
+  proyectarCaja, esIngresoReal, normalizarNombreCliente, brutoDeFila, lunesDe,
   categoriaNormalizada, calcularPrecisionCobro, type FilaVentaFinanzas, type ProyeccionCaja, type PrecisionCobro,
 } from '@/lib/administracion/finanzas'
 import {
@@ -12,6 +12,7 @@ import {
   type SemanaFlujo, type EntradaCompra, type FilaDeudorAging, type TramoAging,
   type ClienteRiesgo, type CicloConversion,
 } from '@/lib/administracion/flujoSemanal'
+import { proyectarCobros, type ProyeccionCobros, type PlazoCliente } from '@/lib/administracion/proyeccionCobros'
 import { esCamaraProduccion } from '@/lib/camaras'
 import { vendedorCanonico, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
@@ -103,6 +104,58 @@ export interface DatosFlujo {
   hayCompras: boolean
 }
 
+/** Una semana de plata que EFECTIVAMENTE entró (tabla `cobros_erp`). */
+export interface SemanaCobro {
+  /** Lunes de la semana, yyyy-mm-dd. */
+  semana: string
+  total: number
+  /** metodo → monto. Los métodos vienen normalizados por el parser. */
+  porMetodo: Record<string, number>
+  movimientos: number
+}
+
+/** Cómo paga UN cliente, medido contra sus pagos reales cruzados con la guía. */
+export interface ComportamientoPago {
+  cliente: string
+  /** Pagos cruzados con su guía. Menos de 3 y la mediana es ruido. */
+  muestras: number
+  /** Días de pago: mediana (lo que se le muestra a una persona), percentiles
+   *  75/90 para el escenario malo, y el promedio, que es el que mejor proyecta
+   *  plata según el backtest — ver BACKTEST_MAE_SEMANAL. */
+  p50: number
+  p75: number
+  p90: number
+  promedio: number
+  montoCruzado: number
+  ultimoPago: string
+  /** Plazo declarado en el maestro de clientes — null si la ficha no lo trae. */
+  declarado: number | null
+}
+
+/**
+ * Ingreso real de caja y comportamiento de pago, ambos derivados de
+ * `cobros_erp` (informe "Movimientos Cta. Cte." del ERP). Es lo único que
+ * responde "cuánta plata entró de verdad" — el resto del módulo trabaja con
+ * ventas despachadas y deuda, que son promesas, no caja.
+ */
+export interface DatosCobros {
+  hayDatos: boolean
+  semanas: SemanaCobro[]
+  comportamiento: ComportamientoPago[]
+  /** Últimas 4 semanas cerradas vs. las 4 anteriores, para la variación. */
+  totalUltimas4: number
+  totalPrevias4: number
+  promedioSemanal: number
+  /** Mediana de días de pago de toda la cartera, ponderada por cliente. */
+  medianaGlobal: number | null
+  /** Mediana del plazo DECLARADO, para contrastar con el real. */
+  declaradaGlobal: number | null
+  ultimaFecha: string | null
+  /** Cuánto debería entrar las próximas semanas, cruzando lo impago con el
+   *  comportamiento de pago real de cada cliente. */
+  proyeccion: ProyeccionCobros
+}
+
 const MS_POR_DIA = 86_400_000
 
 function esFinDeSemanaISO(iso: string): boolean {
@@ -189,7 +242,7 @@ export default async function AdministracionPage() {
       const lotes = await Promise.all(
         Array.from({ length: paginas }, (_, i) =>
           admin.from('ventas')
-            .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado')
+            .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado, numero_factura')
             .gte('fecha_pedido', desdeVentas)
             .order('id', { ascending: true })
             .range(i * PAGE, i * PAGE + PAGE - 1)
@@ -246,6 +299,122 @@ export default async function AdministracionPage() {
   for (const c of clientesVendedorRaw ?? []) {
     const key = vendedorCanonico(c.vendedor) || '__sin_vendedor__'
     clientesPorVendedor[key] = (clientesPorVendedor[key] ?? 0) + 1
+  }
+
+  /* ── Ingreso REAL de caja y comportamiento de pago ────────────────────────
+     Sale de `cobros_erp` (informe "Movimientos Cta. Cte.", cargado desde
+     /administracion/cargar-cobros). Se agrega en la base con dos RPCs en vez
+     de traer las ~19 mil filas de pagos al servidor de Next: el detalle por
+     pago no se muestra en ninguna pantalla, sólo el semanal y el resumen por
+     cliente. */
+  const desdeCobros = correrDias(hoyISO, -182)
+  const [cobrosSemanaRaw, comportamientoRaw, impagasRaw, mostradorRaw] = await Promise.all([
+    admin.rpc('cobros_por_semana', { p_desde: desdeCobros })
+      .then(r => (r.data ?? []) as { semana: string; metodo: string; monto: number; movimientos: number }[]),
+    admin.rpc('comportamiento_pago_clientes', { p_min_muestras: 3 })
+      .then(r => (r.data ?? []) as {
+        cliente: string; muestras: number; p50: number; p75: number; p90: number
+        promedio: number; monto_cruzado: number; ultimo_pago: string
+      }[]),
+    // Facturas despachadas que todavía no aparecen pagadas — la misma ventana
+    // de 120 días que `ventasRaw`, porque la proyección se arma con esas filas.
+    admin.rpc('facturas_impagas', { p_desde: desdeVentas })
+      .then(r => (r.data ?? []) as { numero_factura: string }[]),
+    admin.rpc('cobro_mostrador_semanal', { p_semanas: 12 }).then(r => Number(r.data) || 0),
+  ])
+
+  const semanasCobroMap = new Map<string, SemanaCobro>()
+  for (const f of cobrosSemanaRaw) {
+    const semana = String(f.semana).slice(0, 10)
+    const acc = semanasCobroMap.get(semana) ?? { semana, total: 0, porMetodo: {}, movimientos: 0 }
+    const monto = Number(f.monto) || 0
+    acc.total += monto
+    acc.porMetodo[f.metodo] = (acc.porMetodo[f.metodo] ?? 0) + monto
+    acc.movimientos += Number(f.movimientos) || 0
+    semanasCobroMap.set(semana, acc)
+  }
+  const semanasCobro = [...semanasCobroMap.values()].sort((a, b) => a.semana.localeCompare(b.semana))
+
+  // El plazo declarado se saca del mismo maestro que ya está cargado arriba,
+  // para poder mostrar lado a lado "lo que dice la ficha" contra "lo que pasa
+  // en la realidad" — la brecha entre ambos es el hallazgo que justifica todo
+  // este informe (declarado ~9 días vs. real ~13).
+  const declaradoPorCliente = new Map<string, number | null>()
+  for (const c of clientesRaw) {
+    const k = normalizarNombreCliente(c.nombre_fantasia)
+    if (k && !declaradoPorCliente.has(k)) declaradoPorCliente.set(k, c.dias_pago)
+  }
+
+  const comportamiento: ComportamientoPago[] = comportamientoRaw.map(c => ({
+    cliente: c.cliente,
+    muestras: Number(c.muestras),
+    p50: Math.round(Number(c.p50)),
+    p75: Math.round(Number(c.p75)),
+    p90: Math.round(Number(c.p90)),
+    promedio: Math.round(Number(c.promedio)),
+    montoCruzado: Number(c.monto_cruzado) || 0,
+    ultimoPago: String(c.ultimo_pago).slice(0, 10),
+    declarado: declaradoPorCliente.get(normalizarNombreCliente(c.cliente)) ?? null,
+  }))
+
+  const medianaDe = (xs: number[]): number | null => {
+    if (xs.length === 0) return null
+    const s = [...xs].sort((a, b) => a - b)
+    const m = Math.floor(s.length / 2)
+    return Math.round(s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2)
+  }
+  // Se excluye PDV del resumen de plazos: cobra al contado por definición, y
+  // mezclarlo tira la mediana de toda la cartera a cero.
+  const comportamientoCredito = comportamiento.filter(c => !/pdv/i.test(c.cliente))
+
+  // "Últimas 4 semanas" toma sólo semanas CERRADAS: la semana en curso está a
+  // medias y compararla contra semanas completas siempre muestra una caída
+  // que no existe.
+  const lunesEstaSemana = lunesDe(hoyISO)
+  const semanasCerradas = semanasCobro.filter(s => s.semana < lunesEstaSemana)
+  const ult4 = semanasCerradas.slice(-4)
+  const prev4 = semanasCerradas.slice(-8, -4)
+
+  /* Plazo por cliente para proyectar: manda el MEDIDO (mediana de sus pagos
+     reales) y, si no lo hay, el declarado en la ficha. Para el escenario
+     lento se usa su p75; cuando sólo hay plazo declarado no existe tal
+     percentil, así que se le suma un margen proporcional (30%) en vez de
+     inventar una dispersión que no se midió. */
+  const plazoPorCliente = new Map<string, PlazoCliente>()
+  for (const c of comportamiento) {
+    plazoPorCliente.set(normalizarNombreCliente(c.cliente), { promedio: c.promedio, p75: c.p75, fuente: 'medido' })
+  }
+  for (const c of clientesRaw) {
+    const k = normalizarNombreCliente(c.nombre_fantasia)
+    if (!k || plazoPorCliente.has(k) || c.dias_pago == null) continue
+    plazoPorCliente.set(k, { promedio: c.dias_pago, p75: Math.round(c.dias_pago * 1.3), fuente: 'declarado' })
+  }
+
+  const medianaCartera = medianaDe(comportamientoCredito.map(c => c.p50)) ?? 15
+  const proyeccion = proyectarCobros({
+    ventas: ventasRaw,
+    facturasImpagas: new Set(impagasRaw.map(f => f.numero_factura)),
+    plazoPorCliente,
+    plazoPorDefecto: medianaCartera,
+    hoyISO,
+    mostradorSemanal: mostradorRaw,
+  })
+
+  const cobros: DatosCobros = {
+    hayDatos: semanasCobro.length > 0,
+    proyeccion,
+    semanas: semanasCobro,
+    comportamiento,
+    totalUltimas4: ult4.reduce((s, x) => s + x.total, 0),
+    totalPrevias4: prev4.reduce((s, x) => s + x.total, 0),
+    promedioSemanal: semanasCerradas.length > 0
+      ? semanasCerradas.slice(-12).reduce((s, x) => s + x.total, 0) / Math.min(12, semanasCerradas.length)
+      : 0,
+    medianaGlobal: medianaDe(comportamientoCredito.map(c => c.p50)),
+    declaradaGlobal: medianaDe(
+      comportamientoCredito.map(c => c.declarado).filter((d): d is number => d != null)
+    ),
+    ultimaFecha: semanasCobro.length > 0 ? semanasCobro[semanasCobro.length - 1].semana : null,
   }
 
   // ── Series del modelo ──────────────────────────────────────────────────────
@@ -653,6 +822,7 @@ export default async function AdministracionPage() {
       maquilaPorCliente={maquilaPorCliente}
       forecastClientes={forecastClientes}
       forecastCompras={forecastCompras}
+      cobros={cobros}
     />
   )
 }
