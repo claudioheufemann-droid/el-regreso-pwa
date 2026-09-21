@@ -57,6 +57,10 @@ export interface BloqueGantt {
   loteNro?: number
   motivo?: string | null
   atrasado?: boolean
+  /** Sólo en tipo 'en_tanque' — código de lote del informe del ERP. Identifica
+   *  esta cocción física, para poder guardar una corrección de fecha que le
+   *  pertenezca a ELLA y no al tanque en general (ver ajuste_lote_tanque). */
+  codigoLote?: string | null
 }
 
 export interface ConfigProducto {
@@ -1021,7 +1025,9 @@ function BloqueCoccion({
         borderStyle: sugerido ? 'dashed' : 'solid',
         borderWidth: choca || noCabe ? 2 : 1,
         color: sugerido ? '#1f2937' : textoSobre(color),
-        cursor: enTanqueErp ? 'default' : undefined,
+        // 'pointer' y no 'default': ya no es de sólo lectura — un clic abre
+        // el editor de fechas (ver onAbrirBloque en ProduccionClient).
+        cursor: enTanqueErp ? 'pointer' : undefined,
         touchAction: 'none',
       }}
       className={[

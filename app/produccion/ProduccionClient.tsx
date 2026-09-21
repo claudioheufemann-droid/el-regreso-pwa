@@ -17,12 +17,13 @@ import {
 } from 'lucide-react'
 import PopoverCoccion from './PopoverCoccion'
 import { useArrastreCalendario, type CargaArrastre, type DestinoArrastre } from './useArrastreCalendario'
-import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, ConfigProductoProduccion, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, RecetaInsumoLinea, LoteSinReceta } from './page'
+import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, ConfigProductoProduccion, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, RecetaInsumoLinea, LoteSinReceta, AjusteTanque } from './page'
 import { COLORS } from './tema'
 import MenuLateral, { navItems, type TabId } from './MenuLateral'
 import GanttProduccion, { type BloqueGantt, type ConfigProducto } from './GanttProduccion'
 import ConfigProductosGantt from './ConfigProductosGantt'
 import ModalAgregarProducto from './ModalAgregarProducto'
+import PopoverEditarTanque from './PopoverEditarTanque'
 import NecesidadMensual from './NecesidadMensual'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, LEAD_TIME_INSUMOS_SEMANAS, esLineaFija, type EnvaseBucket } from '@/lib/produccion/reglas'
 
@@ -615,7 +616,7 @@ function ChipDesviacion({ mape, derivado = false }: { mape: number | null; deriv
 }
 
 export default function ProduccionClient({
-  series, calidad, planProduccion, configProductos, sugerenciasPlan, splitFermentadores, ocupacionPlanta, necesidadInsumos, stockInsumos, recetaInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
+  series, calidad, planProduccion, configProductos, sugerenciasPlan, splitFermentadores, ajustesTanque: ajustesTanqueIniciales, ocupacionPlanta, necesidadInsumos, stockInsumos, recetaInsumos, lotesSinReceta, stock, stockSeguridad, ultimaCorrida, minutosDesdeSyncStock, avanceMes, nombreUsuario, inicialesUsuario,
 }: {
   series: SerieForecast[]
   calidad: CalidadItem[]
@@ -627,6 +628,7 @@ export default function ProduccionClient({
   sugerenciasPlan: SugerenciaPlan[]
   /** Cómo repartir entre formatos lo que está hoy en los fermentadores. */
   splitFermentadores: SplitFermentador[]
+  ajustesTanque: AjusteTanque[]
   /** Litros y tanques ocupados en la sala de fermentación. */
   ocupacionPlanta: OcupacionPlanta
   /** Insumos que hacen falta para cubrir la cola activa del Plan Maestro, escalando cada receta al litraje real de cada lote. */
@@ -711,6 +713,53 @@ export default function ProduccionClient({
     } catch (e) {
       setPlan(previo)
       setErrorPlan(e instanceof Error ? e.message : 'Error al actualizar el estado')
+    }
+  }
+
+  /** Guarda (o reemplaza) la corrección de fecha de un lote 'en_tanque'. El
+   *  estado local se actualiza antes de esperar la respuesta —igual que
+   *  mover un bloque en el Gantt— porque el usuario ya está mirando el
+   *  bloque y esperar el roundtrip para verlo moverse se siente lento. */
+  async function guardarAjusteTanque(fechas: { fechaInicioManual: string; fechaEmbarriladoManual: string | null }) {
+    if (!editarTanqueAbierto) return
+    const { tanque, codigoLote } = editarTanqueAbierto
+    setGuardandoAjusteTanque(true)
+    setErrorAjusteTanque(null)
+    try {
+      const r = await fetch('/api/produccion/ajuste-tanque', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tanque, codigoLote, ...fechas }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo guardar la corrección')
+      setAjustesTanque(prev => [
+        ...prev.filter(a => !(a.tanque === tanque && a.codigoLote === codigoLote)),
+        { tanque, codigoLote, fechaInicioManual: fechas.fechaInicioManual, fechaEmbarriladoManual: fechas.fechaEmbarriladoManual },
+      ])
+      setEditarTanqueAbierto(null)
+    } catch (e) {
+      setErrorAjusteTanque(e instanceof Error ? e.message : 'Error al guardar la corrección')
+    } finally {
+      setGuardandoAjusteTanque(false)
+    }
+  }
+
+  /** Vuelve a la fecha que calcula la app (ERP + duración del producto) —
+   *  borra el ajuste en vez de guardarlo vacío, para no confundir "nunca se
+   *  corrigió" con "se corrigió a nada". */
+  async function restablecerAjusteTanque() {
+    if (!editarTanqueAbierto) return
+    const { tanque, codigoLote } = editarTanqueAbierto
+    setGuardandoAjusteTanque(true)
+    setErrorAjusteTanque(null)
+    try {
+      const r = await fetch(`/api/produccion/ajuste-tanque?tanque=${encodeURIComponent(tanque)}&codigoLote=${encodeURIComponent(codigoLote)}`, { method: 'DELETE' })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo restablecer')
+      setAjustesTanque(prev => prev.filter(a => !(a.tanque === tanque && a.codigoLote === codigoLote)))
+      setEditarTanqueAbierto(null)
+    } catch (e) {
+      setErrorAjusteTanque(e instanceof Error ? e.message : 'Error al restablecer')
+    } finally {
+      setGuardandoAjusteTanque(false)
     }
   }
 
@@ -1766,6 +1815,17 @@ export default function ProduccionClient({
   const [configGantt, setConfigGantt] = useState<ConfigProducto[]>(configProductos)
   const [configAbierta, setConfigAbierta] = useState(false)
   const [agregarProductoAbierto, setAgregarProductoAbierto] = useState(false)
+  /** Correcciones de fecha para lotes 'en_tanque' — ver ajuste_lote_tanque.
+   *  En estado local (no derivado en cada render de la prop) para que
+   *  guardar una corrección se sienta al toque, igual que mover un lote en
+   *  el Gantt. */
+  const [ajustesTanque, setAjustesTanque] = useState<AjusteTanque[]>(ajustesTanqueIniciales)
+  const [editarTanqueAbierto, setEditarTanqueAbierto] = useState<{
+    tanque: string; codigoLote: string; producto: string; categoria: 'cerveza' | 'kombucha'
+    inicioISO: string; embarrilladoISO: string | null; rect: DOMRect
+  } | null>(null)
+  const [guardandoAjusteTanque, setGuardandoAjusteTanque] = useState(false)
+  const [errorAjusteTanque, setErrorAjusteTanque] = useState<string | null>(null)
   /** Bloque que acaba de moverse, para que el Gantt lo haga aterrizar con un
    *  latido. Se limpia solo: es feedback de un gesto, no estado del plan. */
   const [bloqueRecienMovido, setBloqueRecienMovido] = useState<string | null>(null)
@@ -2391,14 +2451,46 @@ export default function ProduccionClient({
     const tanquesConLoteEnCurso = new Set(
       plan.filter(l => l.estado === 'en_curso' && l.fermentador).map(l => l.fermentador as string)
     )
+    // Corrección manual por lote físico (tanque + código de lote del ERP) —
+    // ver ajuste_lote_tanque. Se cruza por las dos claves juntas para que un
+    // ajuste no se quede pegado al tanque cuando el lote real ya cambió.
+    const ajustePorTanqueYCodigo = new Map(
+      ajustesTanque.map(a => [`${a.tanque}|${a.codigoLote}`, a])
+    )
     const enTanque: BloqueGantt[] = splitFermentadores.flatMap(sf => {
       const categoria = sf.categoria ?? 'cerveza'
       return sf.tanques
         .filter(t => t.litros > 0 && !tanquesConLoteEnCurso.has(t.nombre))
         .map(t => {
-          const dias = diasDe(sf.producto, categoria)
+          const diasCalculados = diasDe(sf.producto, categoria)
           const conFecha = t.fechaEstimada != null
-          const inicioISO = conFecha ? sumarDiasCalISO(t.fechaEstimada as string, -dias) : hoy
+          // El ERP no siempre trae código de lote. Sin uno, se usa el nombre
+          // del tanque como clave — no identifica el lote físico tan bien
+          // (una corrección podría "heredarla" el próximo lote que ocupe ese
+          // mismo tanque), pero es mejor que dejar el bloque sin poder
+          // editarse nunca por faltarle un dato que el ERP no siempre trae.
+          const codigoLote = t.codigoLote ?? t.nombre
+          const ajuste = ajustePorTanqueYCodigo.get(`${t.nombre}|${codigoLote}`)
+
+          // La fecha de embarrilado que se usa para retroceder es la manual
+          // si existe, si no la del ERP. El inicio, en cambio, prioriza la
+          // fecha de cocción manual DIRECTA sobre la reconstrucción — es
+          // justo el dato que el usuario puede corregir con más certeza que
+          // cualquier cálculo hacia atrás.
+          const embarrilladoUsado = ajuste?.fechaEmbarriladoManual ?? (t.fechaEstimada as string | null)
+          let inicioISO: string
+          let dias: number
+          if (ajuste?.fechaInicioManual) {
+            inicioISO = ajuste.fechaInicioManual
+            dias = embarrilladoUsado ? Math.max(1, diffDiasISO(inicioISO, embarrilladoUsado)) : diasCalculados
+          } else if (embarrilladoUsado) {
+            dias = diasCalculados
+            inicioISO = sumarDiasCalISO(embarrilladoUsado, -dias)
+          } else {
+            dias = diasCalculados
+            inicioISO = hoy
+          }
+
           return {
             id: `erp:${t.nombre}`,
             tipo: 'en_tanque' as const,
@@ -2408,15 +2500,18 @@ export default function ProduccionClient({
             inicioISO,
             dias,
             fermentador: t.nombre,
-            motivo: conFecha
-              ? `Detectado en el informe del ERP — inicio estimado hacia atrás desde el embarrilado que calculó el enólogo (${t.fechaEstimada}).`
-              : 'Detectado en el informe del ERP — sin fecha de embarrilado en el informe, se asume que arrancó hoy.',
+            codigoLote,
+            motivo: ajuste
+              ? 'Fecha corregida a mano para este lote.'
+              : conFecha
+                ? `Detectado en el informe del ERP — inicio estimado hacia atrás desde el embarrilado que calculó el enólogo (${t.fechaEstimada}). Clic para corregir.`
+                : 'Detectado en el informe del ERP — sin fecha de embarrilado en el informe, se asume que arrancó hoy. Clic para corregir.',
           }
         })
     })
 
     return [...confirmados, ...sugeridos, ...enTanque]
-  }, [plan, planSugerido.lotes, diasDe, splitFermentadores])
+  }, [plan, planSugerido.lotes, diasDe, splitFermentadores, ajustesTanque])
 
   /** Necesidad del paso 2 contra lo agendado, mes a mes. Se calcula con el
    *  MISMO criterio que la tabla de necesidad (límite superior del forecast,
@@ -5051,12 +5146,28 @@ export default function ProduccionClient({
                 onAbrirConfig={() => setConfigAbierta(true)}
                 onAgregarProducto={() => setAgregarProductoAbierto(true)}
                 onAbrirBloque={(b, rect) => {
+                  if (!rect) return
+                  // Detectado en el ERP: no hay lote de plan detrás, así que
+                  // no hay un popover de cocción que abrir — se abre el editor
+                  // de fechas, que es la única acción que tiene sentido acá.
+                  if (b.tipo === 'en_tanque') {
+                    if (!b.codigoLote || !b.fermentador) return
+                    setErrorAjusteTanque(null)
+                    setEditarTanqueAbierto({
+                      tanque: b.fermentador, codigoLote: b.codigoLote,
+                      producto: b.producto, categoria: b.categoria,
+                      inicioISO: b.inicioISO,
+                      embarrilladoISO: sumarDiasCalISO(b.inicioISO, b.dias),
+                      rect,
+                    })
+                    return
+                  }
                   // El popover trabaja sobre la simulación de planSugerido
                   // (litros, tanque, cuándo queda listo, hasta cuándo alcanza),
                   // así que sólo se abre para bloques sugeridos: un lote ya
                   // confirmado no tiene esa proyección detrás.
                   const lote = planSugerido.lotes.find(l => `sug:${l.id}` === b.id)
-                  if (lote && rect) fijarDetalle(lote, rect)
+                  if (lote) fijarDetalle(lote, rect)
                 }}
                 onQuitarBloque={b => {
                   // El id de un bloque confirmado ES el id del lote (ver
@@ -6574,6 +6685,20 @@ export default function ProduccionClient({
             onGuardar={datos => void agregarLote(datos)}
             onCerrar={() => setAgregarProductoAbierto(false)}
           />
+
+          {/* Editor de fecha para un lote 'en_tanque' — detectado en el ERP,
+              sin lote de plan detrás. Se abre con un clic sobre el bloque. */}
+          {editarTanqueAbierto && (
+            <PopoverEditarTanque
+              datos={editarTanqueAbierto}
+              tieneAjuste={ajustesTanque.some(a => a.tanque === editarTanqueAbierto.tanque && a.codigoLote === editarTanqueAbierto.codigoLote)}
+              guardando={guardandoAjusteTanque}
+              error={errorAjusteTanque}
+              onGuardar={guardarAjusteTanque}
+              onRestablecer={restablecerAjusteTanque}
+              onCerrar={() => setEditarTanqueAbierto(null)}
+            />
+          )}
 
           {/* Popup de confirmación de una alarma/necesidad — se puede abrir
               desde el Plan Maestro o desde Stock de Seguridad, así que vive

@@ -153,6 +153,17 @@ export interface OcupacionPlanta {
  * de su punto de reorden (necesidad del forecast), no según un porcentaje
  * fijo. Se calcula en page.tsx y lo consume el Plan Maestro.
  */
+/** Corrección manual de fecha para un lote físico puntual, ya en el
+ *  fermentador — ver la migración ajuste_lote_tanque_fechas_manuales. Se
+ *  cruza con `SplitFermentador.tanques` por tanque + código de lote al armar
+ *  los bloques 'en_tanque' del Gantt. */
+export interface AjusteTanque {
+  tanque: string
+  codigoLote: string
+  fechaInicioManual: string | null
+  fechaEmbarriladoManual: string | null
+}
+
 export interface SplitFermentador {
   producto: string
   categoria: 'cerveza' | 'kombucha' | null
@@ -161,8 +172,10 @@ export interface SplitFermentador {
   /** Fermentadores donde está este producto, con su fecha estimada de
    *  embarrilado (columna "Fecha embarrilado (estimada)" del informe de
    *  stock, sección Tanques) — la fecha que calcula el enólogo, no una
-   *  fecha ya ocurrida. Null si el ERP no trajo fecha para ese tanque. */
-  tanques: { nombre: string; litros: number; fechaEstimada: string | null }[]
+   *  fecha ya ocurrida. Null si el ERP no trajo fecha para ese tanque.
+   *  `codigoLote` es la columna "Lote" del mismo informe — identifica esta
+   *  cocción física frente a la siguiente que ocupe el mismo tanque. */
+  tanques: { nombre: string; litros: number; fechaEstimada: string | null; codigoLote: string | null }[]
   /** La MÁS TARDÍA de las fechas estimadas entre los tanques de este
    *  producto — el lote completo (litrosEnFermentador) no está listo hasta
    *  que sale el último tanque, no el primero. Null si ningún tanque trae
@@ -424,7 +437,7 @@ export default async function ProduccionPage() {
     { data: validacionRaw }, { data: calidadRaw }, { data: stockRaw }, { data: costosPrecios },
     { data: stockSeguridadRaw }, { data: ultimoSyncStockRaw },
     { data: recetasRaw }, { data: recetaInsumosRaw }, { data: stockInsumosRaw }, { data: insumosRaw },
-    { data: fermentadoresRaw },
+    { data: fermentadoresRaw }, { data: ajustesTanqueRaw },
   ] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial, metodo'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
@@ -451,6 +464,10 @@ export default async function ProduccionPage() {
     // máximo), así que vive en esta tabla cargada a mano. Ver el comentario
     // largo en OcupacionPlanta.
     admin.from('fermentadores').select('nombre, tipo, categoria, capacidad_litros').eq('activo', true),
+    // Correcciones manuales de fecha para un lote físico puntual (ver la
+    // migración ajuste_lote_tanque_fechas_manuales) — se cruzan por tanque +
+    // código de lote al armar los bloques 'en_tanque' del Gantt.
+    admin.from('ajuste_lote_tanque').select('tanque, codigo_lote, fecha_inicio_manual, fecha_embarrillado_manual'),
   ])
   const ultimoSyncStock = (ultimoSyncStockRaw as { creado_at?: string } | null)?.creado_at ?? null
   // Se calcula server-side (comparado contra la hora del request, no la del
@@ -823,7 +840,7 @@ export default async function ProduccionPage() {
   }
 
   const litrosEnProduccionPorProducto = new Map<string, number>()
-  const tanquesPorProducto = new Map<string, { nombre: string; litros: number; fechaEstimada: string | null }[]>()
+  const tanquesPorProducto = new Map<string, { nombre: string; litros: number; fechaEstimada: string | null; codigoLote: string | null }[]>()
   for (const s of stockRaw ?? []) {
     if (s.tipo !== 'tanque' || s.litros == null) continue
     const nombre = resolverProductoStock(s.producto as string)
@@ -835,8 +852,13 @@ export default async function ProduccionPage() {
       // comentario extenso ahí — no es una fecha ya ocurrida).
       const lotesTanque = (s.lotes as { codigo: string; cantidad: number; fechaEmbarrilado: string | null }[] | null) ?? []
       const fechaEstimada = lotesTanque[0]?.fechaEmbarrilado ?? null
+      // El código de lote es lo que identifica ESTA cocción física frente a
+      // la siguiente que ocupe el mismo tanque — es la clave de
+      // `ajuste_lote_tanque`, para que una corrección de fecha no se quede
+      // pegada al tanque cuando el lote real ya cambió.
+      const codigoLote = lotesTanque[0]?.codigo ?? null
       const lista = tanquesPorProducto.get(nombre) ?? []
-      lista.push({ nombre: tanque, litros: Math.round(Number(s.litros)), fechaEstimada })
+      lista.push({ nombre: tanque, litros: Math.round(Number(s.litros)), fechaEstimada, codigoLote })
       tanquesPorProducto.set(nombre, lista)
     }
   }
@@ -1449,6 +1471,12 @@ export default async function ProduccionPage() {
       configProductos={configProductos}
       sugerenciasPlan={sugerenciasPlan}
       splitFermentadores={splitFermentadores}
+      ajustesTanque={(ajustesTanqueRaw ?? []).map(a => ({
+        tanque: a.tanque as string,
+        codigoLote: a.codigo_lote as string,
+        fechaInicioManual: a.fecha_inicio_manual as string | null,
+        fechaEmbarriladoManual: a.fecha_embarrillado_manual as string | null,
+      }))}
       ocupacionPlanta={ocupacionPlanta}
       necesidadInsumos={necesidadInsumos}
       stockInsumos={stockInsumos}

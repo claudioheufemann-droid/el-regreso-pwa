@@ -7,6 +7,7 @@ import NecesidadMensual from '@/app/produccion/NecesidadMensual'
 import MenuLateral, { type TabId } from '@/app/produccion/MenuLateral'
 import ModalAgregarProducto from '@/app/produccion/ModalAgregarProducto'
 import PopoverCoccion, { type LoteCalendario } from '@/app/produccion/PopoverCoccion'
+import PopoverEditarTanque, { type DatosTanqueEditar } from '@/app/produccion/PopoverEditarTanque'
 import { useArrastreCalendario, type DestinoArrastre } from '@/app/produccion/useArrastreCalendario'
 import {
   FERMENTADORES, CONFIG, SERIES, STOCK_SEGURIDAD, PLAN, HOY,
@@ -31,6 +32,8 @@ export default function DevProduccionClient() {
   const [config, setConfig] = useState(CONFIG)
   const [configAbierta, setConfigAbierta] = useState(false)
   const [agregarProductoAbierto, setAgregarProductoAbierto] = useState(false)
+  const [editarTanque, setEditarTanque] = useState<DatosTanqueEditar | null>(null)
+  const [ajustesTanque, setAjustesTanque] = useState<{ tanque: string; codigoLote: string }[]>([])
   const [recienMovido, setRecienMovido] = useState<string | null>(null)
   const [registro, setRegistro] = useState<string[]>([])
   const [tab, setTab] = useState<TabId>('calendario')
@@ -155,9 +158,20 @@ export default function DevProduccionClient() {
           onAbrirConfig={() => setConfigAbierta(true)}
           onAgregarProducto={() => setAgregarProductoAbierto(true)}
           onAbrirBloque={(b, rect) => {
+            if (!rect) return
+            if (b.tipo === 'en_tanque') {
+              if (!b.codigoLote || !b.fermentador) return
+              setEditarTanque({
+                tanque: b.fermentador, codigoLote: b.codigoLote,
+                producto: b.producto, categoria: b.categoria,
+                inicioISO: b.inicioISO, embarrilladoISO: sumarDias(b.inicioISO, b.dias),
+                rect,
+              })
+              return
+            }
             // Sólo las sugerencias tienen proyección detrás, igual que en la
             // app: un lote confirmado ya está en el plan.
-            if (b.tipo !== 'sugerido' || !rect) return
+            if (b.tipo !== 'sugerido') return
             setDetalle({
               rect,
               lote: {
@@ -225,6 +239,38 @@ export default function DevProduccionClient() {
           }}
           onCerrar={() => setAgregarProductoAbierto(false)}
         />
+
+        {editarTanque && (
+          <PopoverEditarTanque
+            datos={editarTanque}
+            tieneAjuste={ajustesTanque.some(a => a.tanque === editarTanque.tanque && a.codigoLote === editarTanque.codigoLote)}
+            guardando={false}
+            error={null}
+            onGuardar={fechas => {
+              // En el banco no hay API: se aplica directo al bloque, igual
+              // que haría el estado optimista de la app real.
+              setBloques(bs => bs.map(b => (b.id === `erp:${editarTanque.tanque}`
+                ? {
+                    ...b,
+                    inicioISO: fechas.fechaInicioManual,
+                    dias: fechas.fechaEmbarriladoManual
+                      ? Math.max(1, Math.round((Date.parse(fechas.fechaEmbarriladoManual) - Date.parse(fechas.fechaInicioManual)) / 86_400_000))
+                      : b.dias,
+                    motivo: 'Fecha corregida a mano para este lote.',
+                  }
+                : b)))
+              setAjustesTanque(a => [...a.filter(x => !(x.tanque === editarTanque.tanque && x.codigoLote === editarTanque.codigoLote)), { tanque: editarTanque.tanque, codigoLote: editarTanque.codigoLote }])
+              setRegistro(r => [`AJUSTAR FECHA → ${editarTanque.producto} · ${fechas.fechaInicioManual} → ${fechas.fechaEmbarriladoManual ?? '—'}`, ...r].slice(0, 8))
+              setEditarTanque(null)
+            }}
+            onRestablecer={() => {
+              setAjustesTanque(a => a.filter(x => !(x.tanque === editarTanque.tanque && x.codigoLote === editarTanque.codigoLote)))
+              setRegistro(r => [`RESTABLECER FECHA → ${editarTanque.producto}`, ...r].slice(0, 8))
+              setEditarTanque(null)
+            }}
+            onCerrar={() => setEditarTanque(null)}
+          />
+        )}
         </div>
       </div>
 
