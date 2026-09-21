@@ -26,12 +26,14 @@ interface Props {
   clienteLng?: number | null
   clienteErpId?: number | null
   clienteTerrenoId?: string | null
+  /** Un admin revisando/probando el módulo no queda bloqueado por el punto de referencia — ver /api/terreno/visitas/[id]/llegada. */
+  esAdmin?: boolean
   onConfirmado: (r: ResultadoLlegada) => void
   onRepetir: () => void
 }
 
 export default function ConfirmarEvidencia({
-  visitaId, evidencia, clienteNombre, clienteLat, clienteLng, clienteErpId, clienteTerrenoId, onConfirmado, onRepetir,
+  visitaId, evidencia, clienteNombre, clienteLat, clienteLng, clienteErpId, clienteTerrenoId, esAdmin = false, onConfirmado, onRepetir,
 }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -132,8 +134,13 @@ export default function ConfirmarEvidencia({
         }}>
           <AlertTriangle size={16} color={C.amber} style={{ flexShrink: 0, marginTop: 1 }} />
           <p style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4 }}>
-            <b>Esta visita no va a quedar verificada automáticamente</b> — estás lejos del local registrado.
-            Un administrador va a tener que revisarla a mano antes de que cuente como una visita válida.
+            {esAdmin ? (
+              <>Estás lejos del local registrado, pero como administrador esta llegada se registra igual —
+                sirve para revisar el flujo sin tener que estar en terreno.</>
+            ) : (
+              <><b>Esta visita no va a quedar verificada automáticamente</b> — estás lejos del local registrado.
+                Un administrador va a tener que revisarla a mano antes de que cuente como una visita válida.</>
+            )}
           </p>
         </div>
       )}

@@ -77,6 +77,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .maybeSingle()
   if (!visita) return NextResponse.json({ error: 'Visita no encontrada' }, { status: 404 })
 
+  // Un admin revisando/probando el módulo no está físicamente en cada
+  // cliente — pidió explícito no bloquearlo por el punto de referencia. La
+  // foto sigue siendo obligatoria y validada igual; lo único que se salta
+  // es el gate de ubicación (distancia/radio/sesión/referencia validada).
+  // Un vendedor de terreno real (is_admin=false) nunca pasa por acá.
+  const { data: perfil } = await supabase.from('users').select('is_admin').eq('id', user.id).maybeSingle()
+  const esAdmin = !!perfil?.is_admin
+
   // Si el POST trae un id de cliente que la visita todavía no tenía (primer
   // enlace), se persiste acá — no hace falta un round-trip aparte para eso.
   const erpIdFinal = visita.cliente_erp_id ?? clienteErpId ?? null
@@ -115,18 +123,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     && !!visita.sesion_captura_iniciada_at
     && (ahora - new Date(visita.sesion_captura_iniciada_at).getTime()) <= SESION_CAPTURA_MAX_MS
 
-  const resultado = evaluarPresencia({
-    referenciaValidada: referencia.validada,
-    radioM: referencia.radioM,
-    distanciaM,
-    precisionM,
-    edadLecturaS,
-    sesionValida,
-    capturaOffline,
-    fotoValida,
-    relojIncoherente,
-    incidenciaDeclarada,
-  })
+  const resultado = esAdmin
+    ? { estado: 'verificada_auto' as const, motivo: null }
+    : evaluarPresencia({
+      referenciaValidada: referencia.validada,
+      radioM: referencia.radioM,
+      distanciaM,
+      precisionM,
+      edadLecturaS,
+      sesionValida,
+      capturaOffline,
+      fotoValida,
+      relojIncoherente,
+      incidenciaDeclarada,
+    })
 
   // Subida de la foto procesada — mismo bucket y convención de path que el resto de terreno-fotos.
   const path = `${id}/exterior.webp`

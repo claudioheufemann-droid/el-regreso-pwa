@@ -454,6 +454,7 @@ export default function NuevaVisitaClient({
               clienteLng={referenciaCoordsRef.current?.lng}
               clienteErpId={clienteErpId}
               clienteTerrenoId={clienteTerrenoId}
+              esAdmin={vendedor.isAdmin}
               onConfirmado={onEvidenciaConfirmada}
               onRepetir={() => { setEvidencia(null); setEtapa('llegada') }}
             />
