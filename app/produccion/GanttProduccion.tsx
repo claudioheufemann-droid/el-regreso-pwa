@@ -201,7 +201,33 @@ export default function GanttProduccion({
       return n
     })
   }, [])
-  const [offsetSemanas, setOffsetSemanas] = useState(0)
+  /** Arranca mostrando ENTERO lo que ya está en curso. Antes la ventana
+   *  siempre partía en la semana de hoy, así que una cocción o una detección
+   *  del ERP que empezó antes quedaba recortada por el borde izquierdo — se
+   *  veía que el tanque estaba ocupado, pero no desde cuándo. Ahora el punto
+   *  de partida es el lunes de la semana de hoy O el lunes de la semana del
+   *  bloque real más antiguo, el que sea anterior.
+   *
+   *  Sólo bloques REALES (confirmado o detectado en el ERP) mueven el punto
+   *  de partida — un sugerido es una propuesta del modelo, nunca arranca
+   *  antes de hoy, así que no puede ser el más antiguo.
+   *
+   *  Se calcula una sola vez al montar (useState perezoso), no con un
+   *  useEffect que lo recalcule: si el usuario navega semanas y después
+   *  llega un dato nuevo, no tiene que saltar de vuelta — eso pelearía
+   *  contra la navegación en vez de ayudarla. */
+  const [offsetSemanas, setOffsetSemanas] = useState(() => {
+    const hoy0 = hoyISO()
+    const reales = bloques.filter(b => b.tipo !== 'sugerido').map(b => b.inicioISO)
+    if (reales.length === 0) return 0
+    const masAntiguo = reales.reduce((a, b) => (b < a ? b : a))
+    if (masAntiguo >= hoy0) return 0
+    const lunesDe = (iso: string) => {
+      const d = isoADate(iso)
+      return sumarDias(iso, -((d.getUTCDay() + 6) % 7))
+    }
+    return Math.floor(diffDias(lunesDe(hoy0), lunesDe(masAntiguo)) / 7)
+  })
   const scrollRef = useRef<HTMLDivElement>(null)
 
   /** Dirección del último salto de semanas, para que la grilla entre desde
