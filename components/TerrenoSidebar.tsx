@@ -2,18 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, CalendarClock, Route, Navigation, History, Plus } from 'lucide-react'
+import { ClipboardList, CalendarClock, Plus } from 'lucide-react'
 import SidebarShell, { SidebarNavItem } from './SidebarShell'
 
-// Mismos destinos y nombres que el nav móvil. "Visita" no va en la lista: es
-// la acción principal y vive en el CTA dorado. "Planificación" agregada de
-// forma aditiva — ver nota en TerrenoBottomNav.tsx.
+// EXACTAMENTE 2 entradas (mismo criterio que TerrenoBottomNav.tsx): Visitas y
+// Planificación. "Nueva Visita" sigue sin ir en la lista de nav — es la acción
+// principal y vive en el CTA dorado, no un tercer módulo.
 const navItems: SidebarNavItem[] = [
-  { href: '/terreno',              icon: LayoutDashboard, label: 'Panel',          exact: true  },
-  { href: '/terreno/planificacion', icon: CalendarClock,  label: 'Planificación',  exact: false },
-  { href: '/terreno/ruta',         icon: Route,           label: 'Viaje',          exact: false },
-  { href: '/terreno/cercanos',     icon: Navigation,      label: 'Cercanos',       exact: false },
-  { href: '/terreno/historial',    icon: History,         label: 'Historial',      exact: false },
+  { href: '/terreno',               icon: ClipboardList, label: 'Visitas',       exact: true  },
+  { href: '/terreno/planificacion', icon: CalendarClock, label: 'Planificación', exact: false },
 ]
 
 const cta = (
@@ -39,8 +36,8 @@ const cta = (
 export default function TerrenoSidebar() {
   const pathname = usePathname()
   // El panel de administrador (app/terreno/admin) es su propio shell desktop
-  // con su propia navegación (Resumen/Visitas/Clientes/Rutas/Revisión/
-  // Reportes) — no el de un vendedor. Mismo criterio que TerrenoBottomNav.
+  // con su propia navegación (Resumen/Planificación/Visitas/Clientes/Rutas/
+  // Revisión/Reportes) — no el de un vendedor. Mismo criterio que TerrenoBottomNav.
   if (pathname?.startsWith('/terreno/admin')) return null
   return (
     <SidebarShell

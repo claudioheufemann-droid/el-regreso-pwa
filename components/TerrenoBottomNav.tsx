@@ -1,21 +1,19 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, CalendarClock, Route, Plus, Navigation, History } from 'lucide-react'
+import { ClipboardList, CalendarClock } from 'lucide-react'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
-// 6 destinos: NavPill muestra los primeros 4 y el resto en "Más" (sin scroll
-// horizontal, sin romper nada). "Planificación" se agrega de forma ADITIVA
-// (punto 8 del plan de planificación semanal) — Panel/Viaje/Visita se quedan
-// donde estaban para no romper el hábito diario; Cercanos/Historial pasan al
-// overflow porque se usan con menos frecuencia que planificar la semana.
+// EXACTAMENTE 2 entradas (punto 1 del prompt de planificación semanal): Planificación
+// semanal y Visitas. Nueva visita/Jornada/Mi ruta/Cercanos/Historial dejaron de ser
+// destinos de nav de primer nivel — viven como accesos dentro del hub de Visitas
+// (app/terreno/TerrenoHubClient.tsx ya los tenía como tarjetas, y "Nueva visita" como
+// CTA principal), así que nada quedó inalcanzable, sólo se sacó del nav flotante.
+// Consolidación hecha una vez que el flujo de planificación se probó en producción
+// (antes se había agregado sólo de forma aditiva para no arriesgar el hábito diario).
 const ITEMS: NavItem[] = [
-  { href: '/terreno',              icon: LayoutDashboard, label: 'Panel',          exact: true },
-  { href: '/terreno/planificacion', icon: CalendarClock,  label: 'Planificación'               },
-  { href: '/terreno/nueva-visita', icon: Plus,            label: 'Visita'                      },
-  { href: '/terreno/ruta',         icon: Route,           label: 'Viaje'                       },
-  { href: '/terreno/cercanos',     icon: Navigation,      label: 'Cercanos'                    },
-  { href: '/terreno/historial',    icon: History,         label: 'Historial'                   },
+  { href: '/terreno',               icon: ClipboardList, label: 'Visitas',       exact: true },
+  { href: '/terreno/planificacion', icon: CalendarClock, label: 'Planificación'              },
 ]
 
 export default function TerrenoBottomNav() {
