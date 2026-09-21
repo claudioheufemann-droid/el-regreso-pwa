@@ -14,6 +14,9 @@ export default async function HistorialPage() {
   let query = supabase
     .from('visitas_terreno')
     .select('id, cliente_nombre, tiene_venta, motivo_sin_venta, total_pedido, estado, iniciada_at, completada_at, vendedor_id, es_cliente_nuevo, observaciones, direccion_gps, lat, lng, foto_exterior, foto_interior, foto_exhibicion, foto_competencia, fotos_status')
+    // 'borrador' = cliente elegido, llegada nunca confirmada — no es una visita
+    // que haya pasado, no tiene nada que mostrar en el historial.
+    .neq('estado', 'borrador')
     .order('iniciada_at', { ascending: false })
     .limit(300)
 

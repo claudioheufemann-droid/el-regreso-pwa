@@ -11,8 +11,10 @@ export default async function CRMMetricsPage() {
     supabase.from('clientes').select('nombre_fantasia, vendedor'),
     supabase.from('frequencias').select('nombre, segmento, alert_level, ciclo_promedio_dias, dias_sin_compra'),
     supabase.from('followups').select('id, cliente_nombre_fantasia, estado, fecha_recordatorio, vendedor'),
-    // Últimos 30 días: base para Efectividad de Visitas y Apertura/Contacto
-    supabase.from('visitas_terreno').select('id, vendedor_id, tiene_venta, estado, iniciada_at').gte('iniciada_at', desde30d).neq('estado', 'cancelada'),
+    // Últimos 30 días: base para Efectividad de Visitas y Apertura/Contacto.
+    // 'borrador' (cliente elegido, llegada nunca confirmada — ver
+    // app/terreno/nueva-visita) tampoco cuenta como visita real, igual que 'cancelada'.
+    supabase.from('visitas_terreno').select('id, vendedor_id, tiene_venta, estado, iniciada_at').gte('iniciada_at', desde30d).not('estado', 'in', '(cancelada,borrador)'),
     supabase.from('seguimientos').select('id, vendedor_id, tipo_accion, estado, fecha_hora_compromiso, visita_id'),
     supabase.from('users').select('id, nombre'),
   ])

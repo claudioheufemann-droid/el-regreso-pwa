@@ -31,8 +31,11 @@ export default async function TerrenoPage() {
 
   // Canceladas quedan registradas en BD (auditoría) pero no cuentan como
   // "visita del día" — no se mostraron al cliente, no aportan a KPIs activos.
+  // 'borrador' tampoco cuenta: es sólo un cliente elegido cuya llegada aún no
+  // se confirmó (ver app/terreno/nueva-visita/NuevaVisitaClient.tsx) — contarla
+  // acá sumaría una "visita" antes de que exista evidencia de que pasó algo.
   const todasHoy   = visitas ?? []
-  const lista      = todasHoy.filter(v => v.estado !== 'cancelada')
+  const lista      = todasHoy.filter(v => v.estado !== 'cancelada' && v.estado !== 'borrador')
   const canceladas = todasHoy.filter(v => v.estado === 'cancelada').length
   const totalHoy   = lista.length
   const conVenta   = lista.filter(v => v.tiene_venta === true).length

@@ -82,7 +82,7 @@ async function cargarRecientes(
   let query = supabase
     .from('visitas_terreno')
     .select('cliente_nombre, iniciada_at')
-    .neq('estado', 'cancelada')
+    .not('estado', 'in', '(cancelada,borrador)')
     .order('iniciada_at', { ascending: false })
     .limit(40) // suficiente para deducir 5 nombres distintos aunque se repitan
 
