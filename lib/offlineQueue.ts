@@ -74,25 +74,69 @@ export function queuedCount(): number {
  * reintentándose cada 20s hasta descartarse silenciosamente a los ~10min,
  * perdiendo el pedido/jornada sin avisar. getSession() refresca sola si el
  * token está vencido o a punto de vencer.
+ *
+ * Hallazgo 2026-09-21: cuando el refresh token queda invalidado (uso
+ * concurrente entre pestañas/PWA reabierta, revocación, etc.), supabase-js
+ * no reintenta — BORRA la sesión local por completo (`_removeSession`).
+ * Desde ahí, TODO upsert sale con auth.uid()=null: RLS lo rechaza siempre,
+ * nunca por azar de red, así que reintentar cada 20s es inútil — y como
+ * upsertOrQueue trataba ese rechazo igual que un corte de señal, se
+ * encolaba y se perdía en silencio a los ~10min sin avisar al vendedor.
+ * Por eso acá se intenta un refreshSession() explícito como último recurso
+ * y se devuelve si quedó una sesión utilizable, para que el llamador pueda
+ * distinguir "sin señal, se sincroniza solo" de "sesión muerta, hay que
+ * volver a iniciar sesión".
  */
-export async function ensureFreshSession(supabase: SupabaseClient): Promise<void> {
-  try { await supabase.auth.getSession() } catch {}
+export async function ensureFreshSession(supabase: SupabaseClient): Promise<boolean> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) return true
+    const { data } = await supabase.auth.refreshSession()
+    return !!data.session
+  } catch {
+    return false
+  }
+}
+
+type SesionListener = (perdida: boolean) => void
+const sesionListeners = new Set<SesionListener>()
+
+/** Avisa a la UI (ver OfflineBadge) que la sesión murió y hay que re-loguearse. */
+function notificarSesionPerdida(perdida: boolean) {
+  sesionListeners.forEach(fn => fn(perdida))
+}
+
+export function onSesionPerdida(fn: SesionListener): () => void {
+  sesionListeners.add(fn)
+  return () => sesionListeners.delete(fn)
 }
 
 /**
  * Intenta escribir de inmediato. Si falla por red, encola para reintento
  * automático y no lanza — el flujo de la UI sigue sin bloquearse.
+ *
+ * `sesionPerdida: true` en el resultado significa que reintentar es inútil
+ * sin volver a iniciar sesión (ver ensureFreshSession) — el llamador debe
+ * avisarle al vendedor en vez de asumir que "ya se va a sincronizar sola".
  */
 export async function upsertOrQueue(
   supabase: SupabaseClient,
   table: string,
   payload: Record<string, unknown>,
   onConflict = 'id',
-): Promise<{ ok: boolean; queued: boolean }> {
+): Promise<{ ok: boolean; queued: boolean; sesionPerdida?: boolean }> {
+  const haySesion = await ensureFreshSession(supabase)
+  if (!haySesion) {
+    const queue = readQueue()
+    queue.push({ qid: crypto.randomUUID(), table, payload, onConflict, createdAt: Date.now() })
+    writeQueue(queue)
+    notificarSesionPerdida(true)
+    return { ok: false, queued: true, sesionPerdida: true }
+  }
   try {
-    await ensureFreshSession(supabase)
     const { error } = await supabase.from(table).upsert(payload, { onConflict })
     if (error) throw error
+    notificarSesionPerdida(false)
     return { ok: true, queued: false }
   } catch {
     const queue = readQueue()
@@ -114,7 +158,13 @@ export async function upsertOrQueue(
 export async function flushQueue(supabase: SupabaseClient): Promise<void> {
   const queue = readQueue()
   if (queue.length === 0) return
-  await ensureFreshSession(supabase)
+  const haySesion = await ensureFreshSession(supabase)
+  notificarSesionPerdida(!haySesion)
+  // Sin sesión, cada intento va a fallar por RLS sin importar cuántas veces
+  // se reintente — no tiene sentido gastar el cupo de MAX_INTENTOS de cada
+  // ítem en algo que solo se arregla volviendo a iniciar sesión. Se deja la
+  // cola intacta (nada se pierde) y se reintenta solo cuando haya sesión.
+  if (!haySesion) return
   const remaining: QueuedOp[] = []
   const muertos: QueuedOp[] = []
   for (const op of queue) {

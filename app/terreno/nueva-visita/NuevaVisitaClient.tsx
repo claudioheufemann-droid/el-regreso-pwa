@@ -303,6 +303,20 @@ export default function NuevaVisitaClient({
 
       setSyncPendiente(!rVisita.ok || itemsPendientes)
 
+      // Sesión muerta (refresh token invalidado — típico tras horas en
+      // terreno con la app en segundo plano): reintentar la cola offline
+      // acá NUNCA va a funcionar sin volver a iniciar sesión. Antes esto
+      // navegaba igual a "/terreno" como si la visita hubiera cerrado bien
+      // — el vendedor creía que había quedado guardada y en realidad se
+      // perdía en silencio (el registro sigue guardado localmente y se
+      // sincroniza solo apenas vuelva a entrar, pero hay que avisarle YA,
+      // no dejar que el badge lo disimule).
+      if (rVisita.sesionPerdida) {
+        window.alert('Tu sesión expiró. Esta visita quedó guardada en el teléfono — vuelve a iniciar sesión ahora para terminar de cerrarla.')
+        router.push('/login')
+        return
+      }
+
       if (p.tienVenta) {
         hapticExito()
         const bodyPago = p.metodoPago === 'credito' && p.fechaPagoEstimada

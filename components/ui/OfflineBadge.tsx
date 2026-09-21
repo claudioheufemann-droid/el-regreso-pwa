@@ -6,15 +6,16 @@
  * un banner discreto cuando hay datos guardados localmente esperando subir.
  */
 import { useEffect, useState } from 'react'
-import { WifiOff, RefreshCw } from 'lucide-react'
+import { WifiOff, RefreshCw, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { startAutoFlush, onQueueChange } from '@/lib/offlineQueue'
+import { startAutoFlush, onQueueChange, onSesionPerdida } from '@/lib/offlineQueue'
 import { startPhotoAutoFlush, onPhotoQueueChange } from '@/lib/offlinePhotoQueue'
 
 export default function OfflineBadge() {
   const [online, setOnline] = useState(true)
   const [pendientesDatos, setPendientesDatos] = useState(0)
   const [pendientesFotos, setPendientesFotos] = useState(0)
+  const [sesionPerdida, setSesionPerdida] = useState(false)
   const pendientes = pendientesDatos + pendientesFotos
 
   useEffect(() => {
@@ -41,6 +42,11 @@ export default function OfflineBadge() {
 
     const unsub1 = onQueueChange(setPendientesDatos)
     const unsub2 = onPhotoQueueChange(setPendientesFotos)
+    // Sesión muerta (refresh token invalidado): antes esto era indistinguible
+    // de un corte de red — se reintentaba en silencio, se descartaba a los
+    // ~10min y el badge de "sincronizando" desaparecía como si todo hubiera
+    // quedado guardado, aunque la visita/jornada nunca se cerró de verdad.
+    const unsub3 = onSesionPerdida(setSesionPerdida)
 
     return () => {
       window.removeEventListener('online', onOnline)
@@ -48,10 +54,31 @@ export default function OfflineBadge() {
       document.removeEventListener('visibilitychange', onVisible)
       unsub1()
       unsub2()
+      unsub3()
     }
   }, [])
 
-  if (online && pendientes === 0) return null
+  if (!sesionPerdida && online && pendientes === 0) return null
+
+  if (sesionPerdida) {
+    return (
+      <button
+        onClick={() => { window.location.href = '/login' }}
+        style={{
+          position: 'fixed', top: 'max(10px, var(--safe-top))', left: '50%',
+          transform: 'translateX(-50%)', zIndex: 9500, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 7,
+          padding: '7px 14px', borderRadius: 20, border: '1px solid rgba(248,113,113,0.5)',
+          background: 'rgba(127,29,29,0.95)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+          backdropFilter: 'blur(8px)', fontSize: 11, fontWeight: 700,
+          color: '#FEE2E2', whiteSpace: 'nowrap',
+        }}
+      >
+        <AlertTriangle size={12} />
+        Tu sesión expiró{pendientes > 0 ? ` · ${pendientes} sin guardar` : ''} · Toca para volver a entrar
+      </button>
+    )
+  }
 
   return (
     <div style={{
