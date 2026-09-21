@@ -58,9 +58,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const puntos = (visitas ?? []).map(v => ({ lat: Number(v.lat), lng: Number(v.lng) }))
   const kmGps = puntos.length >= 2 ? distanciaTotalRutaKm(puntos) : 0
 
+  // Ruta GPS casi nula (dos visitas a metros de distancia, o error de
+  // redondeo) hace que el % de diferencia se dispare a millones —
+  // 'diferencia_pct' es numeric(6,2), tope real 9999.99. Nicol lo gatilló:
+  // 328 km declarados contra una ruta GPS de ~0 km. Bajo el umbral se trata
+  // igual que "sin ruta real" (mismo criterio que kmGps=0); el clamp de
+  // abajo es la red de seguridad para que esto no vuelva a tumbar el cierre
+  // sin importar qué combinación de números aparezca.
+  const UMBRAL_GPS_MIN_KM = 0.05
   const kmDeclarados = body.km_fin - jornada.km_inicio
   const diferenciaKm = kmDeclarados - kmGps
-  const diferenciaPct = kmGps > 0 ? (Math.abs(diferenciaKm) / kmGps) * 100 : (kmDeclarados > 0 ? 100 : 0)
+  const diferenciaPctCruda = kmGps > UMBRAL_GPS_MIN_KM ? (Math.abs(diferenciaKm) / kmGps) * 100 : (kmDeclarados > 0 ? 100 : 0)
+  const diferenciaPct = Math.min(diferenciaPctCruda, 9999.99)
   const toleranciaPct = jornada.tolerancia_pct ?? 15
   const requiereRevision = diferenciaPct > toleranciaPct
   const montoReembolso = Math.round(kmDeclarados * tarifaAplicada)
