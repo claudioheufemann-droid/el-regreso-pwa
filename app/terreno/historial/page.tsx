@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import HistorialClient from './HistorialClient'
+import { firmarFotosVisita } from '@/lib/terreno/fotosFirmadas'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,8 @@ export default async function HistorialPage() {
 
   if (!user.isAdmin) query = query.eq('vendedor_id', user.id)
 
-  const { data: visitas } = await query
+  const { data: visitasCrudas } = await query
+  const visitas = await firmarFotosVisita(supabase, visitasCrudas ?? [])
 
   const visitaIds = (visitas ?? []).map(v => v.id)
   const clienteNombres = [...new Set((visitas ?? []).map(v => v.cliente_nombre).filter(Boolean))]

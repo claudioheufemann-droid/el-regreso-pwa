@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { firmarFotoTerreno, firmarFotosVisita } from '@/lib/terreno/fotosFirmadas'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +41,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq('jornada_id', id)
     .order('registrado_at', { ascending: true })
 
-  return NextResponse.json({ jornada, visitas: visitas ?? [], cargas: cargas ?? [] })
+  const jornadaFirmada = {
+    ...jornada,
+    foto_odometro_inicio: await firmarFotoTerreno(supabase, jornada.foto_odometro_inicio),
+    foto_odometro_fin: await firmarFotoTerreno(supabase, jornada.foto_odometro_fin),
+  }
+  const visitasFirmadas = await firmarFotosVisita(supabase, visitas ?? [])
+
+  return NextResponse.json({ jornada: jornadaFirmada, visitas: visitasFirmadas, cargas: cargas ?? [] })
 }
 
 // PATCH /api/admin/jornadas/[id] — aprobar o rechazar la jornada con nota

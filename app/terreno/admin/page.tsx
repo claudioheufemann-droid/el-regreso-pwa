@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { calcularRango, hoySantiagoISO, type TipoPeriodo } from '@/lib/terreno/tiempoChile'
+import { firmarFotoTerreno } from '@/lib/terreno/fotosFirmadas'
 import ResumenClient, { type FilaVendedor, type VisitaResumen } from './ResumenClient'
 
 export const dynamic = 'force-dynamic'
@@ -63,20 +64,24 @@ export default async function ResumenAdminPage({ searchParams }: { searchParams:
     ?? filas.slice().sort((a, b) => b.verificadas - a.verificadas)[0]?.id
     ?? null
 
-  const paradasVendedor: VisitaResumen[] = listaVisitas
-    .filter(v => v.vendedor_id === vendedorSeleccionadoId && v.lat != null && v.lng != null)
-    .slice()
-    .sort((a, b) => a.iniciada_at.localeCompare(b.iniciada_at))
-    .map(v => ({
-      id: v.id, clienteNombre: v.cliente_nombre, lat: Number(v.lat), lng: Number(v.lng),
-      iniciadaAt: v.iniciada_at, estadoPresencia: v.estado_presencia, fotoUrl: v.foto_exterior,
-    }))
+  const paradasVendedor: VisitaResumen[] = await Promise.all(
+    listaVisitas
+      .filter(v => v.vendedor_id === vendedorSeleccionadoId && v.lat != null && v.lng != null)
+      .slice()
+      .sort((a, b) => a.iniciada_at.localeCompare(b.iniciada_at))
+      .map(async v => ({
+        id: v.id, clienteNombre: v.cliente_nombre, lat: Number(v.lat), lng: Number(v.lng),
+        iniciadaAt: v.iniciada_at, estadoPresencia: v.estado_presencia, fotoUrl: await firmarFotoTerreno(supabase, v.foto_exterior),
+      }))
+  )
 
-  const ultimasVisitas: (VisitaResumen & { vendedorNombre: string })[] = listaVisitas.slice(0, 8).map(v => ({
-    id: v.id, clienteNombre: v.cliente_nombre, lat: v.lat != null ? Number(v.lat) : 0, lng: v.lng != null ? Number(v.lng) : 0,
-    iniciadaAt: v.iniciada_at, estadoPresencia: v.estado_presencia, fotoUrl: v.foto_exterior,
-    vendedorNombre: listaVendedores.find(x => x.id === v.vendedor_id)?.nombre ?? '—',
-  }))
+  const ultimasVisitas: (VisitaResumen & { vendedorNombre: string })[] = await Promise.all(
+    listaVisitas.slice(0, 8).map(async v => ({
+      id: v.id, clienteNombre: v.cliente_nombre, lat: v.lat != null ? Number(v.lat) : 0, lng: v.lng != null ? Number(v.lng) : 0,
+      iniciadaAt: v.iniciada_at, estadoPresencia: v.estado_presencia, fotoUrl: await firmarFotoTerreno(supabase, v.foto_exterior),
+      vendedorNombre: listaVendedores.find(x => x.id === v.vendedor_id)?.nombre ?? '—',
+    }))
+  )
 
   return (
     <ResumenClient

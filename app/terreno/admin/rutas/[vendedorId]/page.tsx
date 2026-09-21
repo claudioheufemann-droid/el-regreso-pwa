@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { calcularRango, hoySantiagoISO, type TipoPeriodo } from '@/lib/terreno/tiempoChile'
+import { firmarFotoTerreno } from '@/lib/terreno/fotosFirmadas'
 import RutaVendedorClient, { type ParadaDetalle } from './RutaVendedorClient'
 
 export const dynamic = 'force-dynamic'
@@ -47,7 +48,7 @@ export default async function RutaVendedorPage({
     : { data: [] as { id: number; direccion: string | null; localidad: string | null }[] }
   const dirPorId = new Map((direccionesErp ?? []).map(d => [d.id, d]))
 
-  const paradas: ParadaDetalle[] = (visitas ?? []).map(v => ({
+  const paradas: ParadaDetalle[] = await Promise.all((visitas ?? []).map(async v => ({
     id: v.id,
     clienteNombre: v.cliente_nombre,
     direccion: v.cliente_erp_id != null ? dirPorId.get(v.cliente_erp_id)?.direccion ?? null : null,
@@ -61,13 +62,13 @@ export default async function RutaVendedorPage({
     motivoRevision: v.motivo_revision,
     distanciaM: v.distancia_cliente_m != null ? Number(v.distancia_cliente_m) : null,
     precisionM: v.precision_m != null ? Number(v.precision_m) : null,
-    fotoUrl: v.foto_exterior,
+    fotoUrl: await firmarFotoTerreno(supabase, v.foto_exterior),
     fotoBytes: v.foto_exterior_bytes,
     contacto: v.contacto,
     resultadoVisita: v.resultado_visita,
     proximoPaso: v.proximo_paso,
     proximoPasoFecha: v.proximo_paso_fecha,
-  }))
+  })))
 
   return (
     <RutaVendedorClient

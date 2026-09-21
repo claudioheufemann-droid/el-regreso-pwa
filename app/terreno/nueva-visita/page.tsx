@@ -3,6 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import NuevaVisitaClient from './NuevaVisitaClient'
 import type { ClienteResumen } from './PasoCliente'
+import { firmarFotosVisita } from '@/lib/terreno/fotosFirmadas'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,7 +53,7 @@ export default async function NuevaVisitaPage({ searchParams }: Props) {
       .in('estado', ['borrador', 'en_progreso'])
     if (!user.isAdmin) query = query.eq('vendedor_id', user.id)
     const { data } = await query.maybeSingle()
-    visitaRetomada = data ?? null
+    visitaRetomada = data ? (await firmarFotosVisita(supabase, [data]))[0] : null
   }
 
   const [recientes, frecuentes, pendientes] = await Promise.all([
