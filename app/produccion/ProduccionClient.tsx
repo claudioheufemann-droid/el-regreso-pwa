@@ -22,7 +22,7 @@ import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadIt
 import GanttProduccion, { type BloqueGantt, type ConfigProducto } from './GanttProduccion'
 import ConfigProductosGantt from './ConfigProductosGantt'
 import NecesidadMensual from './NecesidadMensual'
-import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, LEAD_TIME_INSUMOS_SEMANAS, type EnvaseBucket } from '@/lib/produccion/reglas'
+import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, LEAD_TIME_INSUMOS_SEMANAS, esLineaFija, type EnvaseBucket } from '@/lib/produccion/reglas'
 
 /* ────────────────────────────────────────────────────────────────────────
    Paleta corporativa. Tailwind cubre el resto; estos tres colores van
@@ -2370,7 +2370,7 @@ export default function ProduccionClient({
     // pensar que hay que cocerlo dos veces.
     const yaEnPlan = new Set(confirmados.map(b => `${b.producto}|${b.inicioISO}`))
     const sugeridos: BloqueGantt[] = (planSugerido.lotes ?? [])
-      .filter(l => !yaEnPlan.has(`${l.producto}|${l.fechaInicio}`))
+      .filter(l => !yaEnPlan.has(`${l.producto}|${l.fechaInicio}`) && esLineaFija(l.producto))
       .map(l => ({
         id: `sug:${l.id}`,
         tipo: 'sugerido' as const,
@@ -2423,7 +2423,9 @@ export default function ProduccionClient({
       if (!stockPorProducto.has(ss.producto)) stockPorProducto.set(ss.producto, ss.stockActualLitros)
     }
     return series
-      .filter(s => s.nivel === 'producto' && s.producto)
+      // Sólo el catálogo estable. Un rotativo que se agota no es una alarma:
+      // se agota porque dejó de producirse a propósito.
+      .filter(s => s.nivel === 'producto' && s.producto && esLineaFija(s.producto))
       .map(s => {
         const ritmo = s.puntos
           .filter(p => p.tipo === 'forecast')
@@ -5543,14 +5545,14 @@ export default function ProduccionClient({
                   </p>
                   <div className="prod-stagger flex flex-col gap-3">
                     {alarmasPorProducto.map((grupo, idxGrupo) => {
-                      const esLineaFija = grupo.items[0]?.lineaFija ?? false
+                      const grupoEsLineaFija = grupo.items[0]?.lineaFija ?? false
                       const totalGrupo = grupo.items.reduce((s, i) => s + i.litrosSugeridos, 0)
                       return (
-                      <div key={grupo.producto} style={{ '--i': idxGrupo } as React.CSSProperties} className={`prod-hover-card overflow-hidden rounded-lg border bg-white shadow-sm ${esLineaFija ? 'border-red-300' : 'border-amber-200'}`}>
-                        <div className={`flex flex-wrap items-center gap-2.5 border-b px-4 py-2.5 ${esLineaFija ? 'border-red-100 bg-red-50/60' : 'border-amber-100 bg-amber-50/60'}`}>
+                      <div key={grupo.producto} style={{ '--i': idxGrupo } as React.CSSProperties} className={`prod-hover-card overflow-hidden rounded-lg border bg-white shadow-sm ${grupoEsLineaFija ? 'border-red-300' : 'border-amber-200'}`}>
+                        <div className={`flex flex-wrap items-center gap-2.5 border-b px-4 py-2.5 ${grupoEsLineaFija ? 'border-red-100 bg-red-50/60' : 'border-amber-100 bg-amber-50/60'}`}>
                           <ProductImage nombre={grupo.producto} categoria={grupo.categoria} size={30} radius={7} />
                           <span className="font-semibold text-gray-800">{grupo.producto}</span>
-                          {esLineaFija && (
+                          {grupoEsLineaFija && (
                             <span className="rounded-full bg-red-200/70 px-2 py-0.5 text-xs font-bold text-red-800" title="Línea fija del catálogo — no puede quebrar stock.">
                               Línea fija
                             </span>

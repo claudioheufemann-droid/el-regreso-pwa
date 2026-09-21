@@ -302,3 +302,32 @@ export function esDiaHabilISO(iso: string): boolean {
   if (dow === 0 || dow === 6) return false
   return !feriadosChile(Number(iso.slice(0, 4))).has(iso)
 }
+
+
+/**
+ * Catálogo ESTABLE (línea fija) — lo que la cervecería siempre debe tener
+ * disponible, nunca puede quebrar stock. Todo lo demás (cervezas/kombuchas
+ * fuera de esta lista) es "experimental": rotativo, de menor prioridad.
+ * Definido por el usuario, 11-sep-2026.
+ *
+ * OJO con "Aguas Blancas" para la línea de Hazy IPA: hay DOS productos con
+ * "Hazy" en el nombre ("Aguas Blancas Hazy IPA" y "Doble Hazy IPA"). Se
+ * asumió "Aguas Blancas" por volumen y consistencia de venta real (verificado
+ * contra 180 días de ventas: Aguas Blancas 6.949 L en 26/26 semanas vs. Doble
+ * Hazy IPA 1.425 L en 24/26 — "Doble" es el patrón típico de release
+ * puntual/experimental en este catálogo). Si la intención real era la otra,
+ * corregir acá.
+ */
+export const LINEAS_FIJAS = new Set<string>([
+  // Kombucha
+  'Kombucha Berry Menta', 'Kombucha Maracuyá Cardamomo', 'Kombucha Maqui',
+  'Kombucha Lemon', 'Kombucha Lupulada', 'Kombucha Detox',
+  // Cerveza
+  'Mocho English', 'Fisura', 'La Barra APA', 'Arboretum',
+  'Descenso West Coast IPA', 'Aguas Blancas',
+])
+
+/** Azúcar sobre LINEAS_FIJAS, para leerlo como pregunta en los filtros. */
+export function esLineaFija(producto: string): boolean {
+  return LINEAS_FIJAS.has(producto)
+}

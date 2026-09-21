@@ -115,8 +115,6 @@ const DENSIDAD = {
 } as const
 type Zoom = keyof typeof DENSIDAD
 const ANCHO_TANQUE = 168
-/** Clave del grupo de cobertura en el set de plegados — no es un tanque. */
-const CLAVE_COBERTURA = '__cobertura__'
 
 function isoADate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -168,6 +166,13 @@ export default function GanttProduccion({
    *  no aportan a leer el plan. Se esconden por defecto y se cuentan en la
    *  cabecera del grupo, que es donde importan: "quedan 8 libres". */
   const [ocultarLibres, setOcultarLibres] = useState(true)
+  /** Filtro de línea. Cervecería y kombuchería son procesos separados con
+   *  tanques que no se intercambian: mirar una sola a la vez es cómo se
+   *  planifica de verdad. */
+  const [linea, setLinea] = useState<'todas' | 'cerveza' | 'kombucha'>('todas')
+  /** Las sugerencias del modelo se pueden apagar: al ordenar el plan estorban,
+   *  y al armarlo son justamente lo que se busca. */
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(true)
   const alternarGrupo = useCallback((titulo: string) => {
     setPlegados(p => {
       const n = new Set(p)
@@ -248,10 +253,15 @@ export default function GanttProduccion({
   /** Bloques por tanque, ya recortados a la ventana visible. Los que no tienen
    *  fermentador asignado van aparte, en una fila "sin asignar" — si no,
    *  desaparecerían del Gantt y nadie sabría que quedaron sueltos. */
+  const bloquesVisibles = useMemo(
+    () => (mostrarSugerencias ? bloques : bloques.filter(b => b.tipo !== 'sugerido')),
+    [bloques, mostrarSugerencias]
+  )
+
   const { porTanque, sinAsignar, solapes, noCaben } = useMemo(() => {
     const porTanque = new Map<string, BloqueGantt[]>()
     const sinAsignar: BloqueGantt[] = []
-    for (const b of bloques) {
+    for (const b of bloquesVisibles) {
       const fin = sumarDias(b.inicioISO, b.dias - 1)
       if (fin < inicioVentana || b.inicioISO > finVentana) continue
       if (!b.fermentador) { sinAsignar.push(b); continue }
@@ -278,7 +288,7 @@ export default function GanttProduccion({
       if (cap > 0) noCaben += lista.filter(b => b.litros > cap).length
     }
     return { porTanque, sinAsignar, solapes, noCaben }
-  }, [bloques, inicioVentana, finVentana, fermentadores])
+  }, [bloquesVisibles, inicioVentana, finVentana, fermentadores])
 
   /**
    * Fecha de cobertura por producto: hasta cuándo alcanza lo que hay.
@@ -304,7 +314,7 @@ export default function GanttProduccion({
 
       // Cuándo queda listo cada lote de este producto, con sus litros.
       const entradas = new Map<string, number>()
-      for (const b of bloques) {
+      for (const b of bloquesVisibles) {
         if (b.producto !== n.producto) continue
         const listo = sumarDias(b.inicioISO, b.dias)
         entradas.set(listo, (entradas.get(listo) ?? 0) + b.litros)
@@ -338,14 +348,14 @@ export default function GanttProduccion({
       if (b.agota) return 1
       return a.producto.localeCompare(b.producto)
     })
-  }, [necesidad, bloques, dias, hoy])
+  }, [necesidad, bloquesVisibles, dias, hoy])
 
   const grupos = useMemo(() => {
     const esLab = (n: string) => /lavoratorio|laboratorio/i.test(n)
-    const crudos = [
-      { titulo: 'Tanques cerveza', tanques: fermentadores.filter(f => f.categoria === 'cerveza' && !esLab(f.nombre)) },
-      { titulo: 'Tanques kombucha', tanques: fermentadores.filter(f => f.categoria === 'kombucha') },
-      { titulo: 'Laboratorio', tanques: fermentadores.filter(f => esLab(f.nombre)) },
+    const crudos: { titulo: string; categoria: 'cerveza' | 'kombucha' | null; tanques: FermentadorGantt[] }[] = [
+      { titulo: 'Cervecería', categoria: 'cerveza' as const, tanques: fermentadores.filter(f => f.categoria === 'cerveza' && !esLab(f.nombre)) },
+      { titulo: 'Kombuchería', categoria: 'kombucha' as const, tanques: fermentadores.filter(f => f.categoria === 'kombucha') },
+      { titulo: 'Laboratorio', categoria: null, tanques: fermentadores.filter(f => esLab(f.nombre)) },
     ].filter(g => g.tanques.length > 0)
 
     // El resumen es lo que permite plegar sin perder nada: un encargado que
@@ -365,9 +375,16 @@ export default function GanttProduccion({
         litros, capacidad, alertas,
         pct: capacidad > 0 ? Math.round((litros / capacidad) * 100) : 0,
         visibles: ocultarLibres ? conBloques : g.tanques,
+        // La cobertura de los productos de ESTA línea vive dentro del grupo:
+        // los tanques de cerveza no fermentan kombucha, así que mezclar las
+        // dos en una lista única obligaba a leer 23 filas para encontrar las
+        // 6 que importan cuando estás ordenando una sola línea.
+        cobertura: g.categoria
+          ? coberturaProducto.filter(c => c.categoria === g.categoria)
+          : [],
       }
-    })
-  }, [fermentadores, porTanque, solapes, ocultarLibres])
+    }).filter(g => linea === 'todas' || g.categoria === linea || g.categoria === null)
+  }, [fermentadores, porTanque, solapes, ocultarLibres, coberturaProducto, linea])
 
   const anchoGrilla = dias.length * anchoDia
 
@@ -387,7 +404,10 @@ export default function GanttProduccion({
           <CalendarRange size={17} className="text-[#2F6B4F]" />
           <h3 className="font-bold tracking-tight text-gray-900">Ocupación de Fermentadores</h3>
           <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-            {bloques.filter(b => b.tipo === 'confirmado').length} en plan · {bloques.filter(b => b.tipo === 'sugerido').length} sugeridas
+            {bloques.filter(b => b.tipo === 'confirmado').length} en plan
+            {' · '}
+            {bloques.filter(b => b.tipo === 'sugerido').length} sugeridas
+            {!mostrarSugerencias && ' (ocultas)'}
           </span>
           {anclasEnSesion > 0 && onLimpiarAnclas && (
             <button type="button" onClick={onLimpiarAnclas}
@@ -436,6 +456,27 @@ export default function GanttProduccion({
               <ChevronRight size={15} />
             </button>
           </div>
+
+          <div className="flex items-center gap-0.5 rounded-lg border border-gray-200 bg-white p-0.5">
+            {([['todas', 'Todas'], ['cerveza', 'Cerveza'], ['kombucha', 'Kombucha']] as const).map(([v, etiqueta]) => (
+              <button key={v} type="button" onClick={() => setLinea(v)}
+                className={`prod-press rounded-md px-2 py-1 text-[11px] font-bold transition ${
+                  linea === v ? 'bg-[#2F6B4F] text-white' : 'text-gray-500 hover:bg-gray-50'
+                }`}>{etiqueta}</button>
+            ))}
+          </div>
+
+          <button type="button" onClick={() => setMostrarSugerencias(v => !v)}
+            title={mostrarSugerencias
+              ? 'Esconder lo que propone el modelo y dejar sólo el plan confirmado'
+              : 'Volver a mostrar las cocciones sugeridas'}
+            className={`prod-press flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition ${
+              mostrarSugerencias ? 'border-[#2F6B4F] bg-[#2F6B4F]/10 text-[#2F6B4F]'
+                                 : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+            }`}>
+            {mostrarSugerencias ? <Eye size={14} /> : <EyeOff size={14} />}
+            Sugerencias
+          </button>
 
           <button type="button" onClick={() => setOcultarLibres(v => !v)}
             title={ocultarLibres ? 'Mostrar todos los tanques' : 'Esconder los tanques sin carga'}
@@ -527,51 +568,6 @@ export default function GanttProduccion({
           </div>
 
           {/* Filas por grupo */}
-          {/* ── Cobertura por producto ───────────────────────────────────
-              Va ARRIBA de los tanques a propósito: primero qué falta y para
-              cuándo, después dónde meterlo. Comparte el eje de tiempo con las
-              cocciones, así que un producto cuya barra se corta antes del
-              rombo de su lote se lee sin cruzar fechas a mano. */}
-          {coberturaProducto.length > 0 && (() => {
-            const plegado = plegados.has(CLAVE_COBERTURA)
-            // Cuenta sólo lo ACCIONABLE. Que un producto se agote dentro de
-            // seis meses no dice nada — todos lo hacen. Lo que exige una
-            // decisión hoy es agotarse SIN un lote que llegue a tiempo: o se
-            // adelanta esa cocción, o se le cede el tanque a otro producto.
-            const enRiesgo = coberturaProducto.filter(c => c.agota && (!c.rescate || c.diasEnCero > 0)).length
-            return (
-              <div>
-                <button type="button" onClick={() => alternarGrupo(CLAVE_COBERTURA)}
-                  className="prod-press sticky left-0 z-20 flex w-full items-center gap-2 border-b border-gray-200 bg-gray-100/80 px-3 py-1.5 text-left hover:bg-gray-100"
-                  style={{ width: ANCHO_TANQUE + anchoGrilla }}>
-                  <ChevronRight size={13}
-                    className={`shrink-0 text-gray-500 transition-transform duration-200 ${plegado ? '' : 'rotate-90'}`} />
-                  <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-gray-600">
-                    Hasta cuándo alcanza
-                  </span>
-                  <span className="shrink-0 text-[10.5px] text-gray-500">
-                    {coberturaProducto.length} productos · stock de hoy contra el ritmo de venta proyectado
-                  </span>
-                  {enRiesgo > 0 && (
-                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-1.5 py-px text-[10px] font-bold text-red-700">
-                      <AlertTriangle size={9} />
-                      {enRiesgo} {enRiesgo === 1 ? 'queda' : 'quedan'} en cero sin lote a tiempo
-                    </span>
-                  )}
-                </button>
-
-                {!plegado && coberturaProducto.map((c, i) => (
-                  <FilaCobertura
-                    key={c.producto} cobertura={c} dias={dias} anchoDia={anchoDia}
-                    altoFila={altoFila} tamEtiqueta={tamEtiqueta} hoy={hoy}
-                    color={colorPorProducto.get(c.producto) ?? '#8C8C8C'} fila={i}
-                    anchoEtiqueta={ANCHO_TANQUE}
-                  />
-                ))}
-              </div>
-            )
-          })()}
-
           {grupos.map(grupo => {
             const plegado = plegados.has(grupo.titulo)
             return (
@@ -623,6 +619,38 @@ export default function GanttProduccion({
                     </span>
                   )}
                 </button>
+
+                {/* Primero qué falta y para cuándo; después dónde meterlo.
+                    Comparten el eje de tiempo, así que un producto cuya barra
+                    muere antes del rombo de su lote se lee sin cruzar fechas. */}
+                {!plegado && grupo.cobertura.length > 0 && (
+                  <>
+                    <div className="sticky left-0 z-10 flex items-center gap-1.5 border-b border-gray-100 bg-white/90 px-3 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-gray-400"
+                      style={{ width: ANCHO_TANQUE + anchoGrilla }}>
+                      Hasta cuándo alcanza
+                      {(() => {
+                        const n = grupo.cobertura.filter(c => c.agota && (!c.rescate || c.diasEnCero > 0)).length
+                        return n > 0 ? (
+                          <span className="flex items-center gap-1 rounded-full bg-red-100 px-1.5 text-[9.5px] font-bold text-red-700">
+                            <AlertTriangle size={8} />{n} sin lote a tiempo
+                          </span>
+                        ) : null
+                      })()}
+                    </div>
+                    {grupo.cobertura.map((c, i) => (
+                      <FilaCobertura
+                        key={c.producto} cobertura={c} dias={dias} anchoDia={anchoDia}
+                        altoFila={altoFila} tamEtiqueta={tamEtiqueta} hoy={hoy}
+                        color={colorPorProducto.get(c.producto) ?? '#8C8C8C'} fila={i}
+                        anchoEtiqueta={ANCHO_TANQUE}
+                      />
+                    ))}
+                    <div className="sticky left-0 z-10 border-b border-gray-100 bg-white/90 px-3 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-gray-400"
+                      style={{ width: ANCHO_TANQUE + anchoGrilla }}>
+                      Tanques
+                    </div>
+                  </>
+                )}
 
                 {!plegado && grupo.visibles.map((t, i) => (
                   <FilaTanque
