@@ -63,6 +63,11 @@ export interface CoberturaProducto {
   doi: number | null
   /** Colchón en litros bajo el cual la barra pasa a ámbar. */
   colchon: number
+  /** true = este producto no tiene stock de seguridad calculado todavía, y
+   *  el colchón de arriba es el respaldo (7 días de venta) — no el número
+   *  con σ y nivel de servicio detrás. Se muestra distinto para no hacerlo
+   *  pasar por un dato tan firme como el real. */
+  colchonEstimado: boolean
 }
 
 const MS_DIA = 86_400_000
@@ -153,8 +158,15 @@ export default function FilaCobertura({
             title={`${c.producto} · ${Math.round(c.stockActual).toLocaleString('es-CL')} L en cámara hoy`}>
             {c.producto}
           </span>
-          <span className="ml-auto shrink-0 tabular-nums text-gray-400" style={{ fontSize: tamEtiqueta - 1 }}>
+          <span className="ml-auto shrink-0 tabular-nums text-gray-400" style={{ fontSize: tamEtiqueta - 1 }}
+            title={c.colchonEstimado
+              ? `Colchón: sin stock de seguridad calculado todavía para este producto — se usa un respaldo de 7 días de venta (${fLitros(c.colchon)} L)`
+              : `Colchón: ${fLitros(c.colchon)} L — el stock de seguridad calculado para este producto (con su σ y nivel de servicio). Por debajo de esto la barra pasa a ámbar.`}>
             {fLitros(c.stockActual)}
+            <span className="text-gray-300"> / </span>
+            <span className={c.colchonEstimado ? 'italic text-gray-300' : 'text-gray-400'}>
+              {c.colchonEstimado && '~'}{fLitros(c.colchon)}
+            </span>
           </span>
         </div>
 

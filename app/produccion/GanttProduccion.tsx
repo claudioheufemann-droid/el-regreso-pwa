@@ -141,7 +141,15 @@ const DENSIDAD = {
   normal: { dia: 24, fila: 34, etiqueta: 11 },
 } as const
 type Zoom = keyof typeof DENSIDAD
-const ANCHO_TANQUE = 168
+// 168 alcanzaba de sobra para "F. T13", pero en la fila de cobertura dejaba
+// ~144px útiles para el nombre completo del producto MÁS el número de stock
+// — con nombres largos ("Kombucha Maracuyá Cardamomo") el truncado cortaba
+// justo donde todos empiezan igual ("Kombucha Ma...") y quedaban
+// indistinguibles entre sí sin pasar el mouse. Se comparte una sola
+// constante entre las dos secciones (cobertura y tanques) a propósito: son
+// columnas sticky una debajo de la otra, y si tuvieran anchos distintos la
+// grilla de días de una quedaría corrida contra la de la otra.
+const ANCHO_TANQUE = 240
 
 function isoADate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -380,7 +388,8 @@ export default function GanttProduccion({
          NO es un porcentaje del stock inicial. Un 30% fijo sería 150 días de
          cobertura en un producto lento y 4 en uno rápido: el mismo color
          significaría dos cosas opuestas según la fila que se esté mirando. */
-      const colchon = n.colchon != null && n.colchon > 0 ? n.colchon : velocidad * 7
+      const colchonEstimado = !(n.colchon != null && n.colchon > 0)
+      const colchon = colchonEstimado ? velocidad * 7 : (n.colchon as number)
 
       // Cuándo queda listo cada lote de este producto, con sus litros.
       const entradas = new Map<string, number>()
@@ -423,7 +432,7 @@ export default function GanttProduccion({
       // La primera llegada DESPUÉS del quiebre es la que habría que adelantar.
       const rescate = agota ? llegadas.find(l => l.fecha > agota!) ?? null : null
       return {
-        ...n, agota, minimo, llegadas, rescate, tramos, velocidad, colchon,
+        ...n, agota, minimo, llegadas, rescate, tramos, velocidad, colchon, colchonEstimado,
         /* Días de inventario: cuánto dura lo que hay HOY, ignorando todo lo
            agendado. Junto a la fecha de quiebre —que sí lo cuenta— separa
            "aguanta poco" de "aguanta poco y no viene nada". */
