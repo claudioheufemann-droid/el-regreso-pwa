@@ -580,3 +580,65 @@ export async function emailPlanificacionPorAprobar(params: {
   logResultado('planificación por aprobar', [params.toEmail], result)
   return result
 }
+
+// ── Reporte de vendedor (en pruebas, 22-sep-2026) ───────────────────────
+//
+// Primer paso de "enviarle reportes a los vendedores por correo": valida que
+// Resend entrega y que la plantilla se ve bien, antes de conectarlo a datos
+// reales de ventas. Los números de acá son de EJEMPLO — se marca explícito
+// en el correo para que nadie los confunda con un cierre de semana real.
+function reporteVendedorPruebaHtml(params: { vendedorNombre: string }): string {
+  const content = `
+    <div style="border-bottom:1px solid rgba(255,255,255,0.06);padding:24px 0 20px;">
+      <p style="margin:0 0 6px;font-size:11px;color:${COLOR.gold};letter-spacing:1.5px;text-transform:uppercase;font-weight:700;">🧪 Correo de prueba</p>
+      <h1 style="margin:0;font-size:22px;font-weight:900;color:${COLOR.text};line-height:1.2;">Reporte semanal — vista previa</h1>
+    </div>
+    <div style="padding:20px 0;">
+      <p style="margin:0 0 16px;font-size:14px;color:${COLOR.muted};line-height:1.6;">
+        Hola <strong style="color:${COLOR.text};">${params.vendedorNombre}</strong>, así se va a ver el reporte semanal
+        que le va a llegar a cada vendedor. Los números de abajo son de <strong style="color:${COLOR.orange};">ejemplo</strong>
+        — todavía no está conectado a la venta real.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+            <span style="font-size:10px;color:${COLOR.muted};text-transform:uppercase;letter-spacing:1px;">Ventas de la semana (ejemplo)</span><br>
+            <strong style="font-size:22px;color:${COLOR.text};">$1.240.000</strong>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+            <span style="font-size:10px;color:${COLOR.muted};text-transform:uppercase;letter-spacing:1px;">Clientes visitados (ejemplo)</span><br>
+            <strong style="font-size:18px;color:${COLOR.text};">14</strong>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;">
+            <span style="font-size:10px;color:${COLOR.muted};text-transform:uppercase;letter-spacing:1px;">Meta del mes (ejemplo)</span><br>
+            <strong style="font-size:18px;color:${COLOR.green};">62% cumplido</strong>
+          </td>
+        </tr>
+      </table>
+      <a href="${APP_URL}" style="display:inline-block;padding:13px 24px;background:${COLOR.gold};color:#0A0A0A;text-decoration:none;border-radius:10px;font-weight:800;font-size:13px;letter-spacing:0.5px;">
+        Ver en la app →
+      </a>
+      <p style="margin:16px 0 0;font-size:11px;color:${COLOR.muted};">
+        Si este correo llegó bien formateado y a tiempo, el siguiente paso es conectarlo a los datos reales de venta.
+      </p>
+    </div>`
+  return baseTemplate(content, COLOR.gold)
+}
+
+export async function emailReporteVendedorPrueba(params: { toEmail: string; vendedorNombre: string }) {
+  const resend = getResend()
+  if (!resend) { console.error('emailReporteVendedorPrueba: RESEND_API_KEY no configurada'); return { data: null, error: { message: 'RESEND_API_KEY no configurada' } } }
+
+  const result = await resend.emails.send({
+    from: `El Regreso Control <${FROM}>`,
+    to: [params.toEmail],
+    subject: '🧪 Prueba — Reporte semanal de vendedor',
+    html: reporteVendedorPruebaHtml({ vendedorNombre: params.vendedorNombre }),
+  }).catch(e => ({ data: null, error: e }) as Awaited<ReturnType<Resend['emails']['send']>>)
+  logResultado('reporte vendedor (prueba)', [params.toEmail], result)
+  return result
+}
