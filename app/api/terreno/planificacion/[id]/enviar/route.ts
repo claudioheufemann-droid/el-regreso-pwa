@@ -6,6 +6,7 @@ import { construirSnapshotPlan } from '@/lib/terreno/planificacion/snapshotPlan'
 import { requiereAutorizacionPrevia } from '@/lib/terreno/planificacion/validarUmbrales'
 import { esEntregaTardia } from '@/lib/terreno/planificacion/semana'
 import { encolarCorreo } from '@/lib/terreno/planificacion/outbox'
+import { procesarOutboxPendiente } from '@/lib/terreno/planificacion/procesarOutbox'
 import type { DiaPresupuesto } from '@/lib/terreno/planificacion/types'
 import { sendPushToUsers } from '@/lib/push'
 
@@ -144,6 +145,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ),
   )
   resultadosOutbox.forEach(r => { if (r.status === 'rejected') console.error('enviar a aprobación: no se pudo encolar un correo:', r.reason) })
+
+  // Fire-and-forget: intenta enviar el correo YA, sin esperar (ni bloquear la respuesta
+  // ni caerse si falla — el cron diario es la red de seguridad, ver procesarOutbox.ts).
+  // En Vercel Hobby el cron es diario nomás, así que sin esto Claudio/Mariel se
+  // enterarían recién al otro día de que hay un plan por aprobar.
+  procesarOutboxPendiente().catch(err => console.error('enviar a aprobación: fallo el envío inmediato del outbox:', err))
 
   await sendPushToUsers((destinatarios ?? []).map(d => d.id), {
     title: 'Plan semanal por aprobar',
