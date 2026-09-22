@@ -3,7 +3,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { SUPABASE_URL } from '@/lib/supabase/config'
 import { emailPlanificacionPorAprobar } from '@/lib/email'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://control.elregresobeer.com'
+// Mismo fallback que lib/email.ts: 'control.elregresobeer.com' nunca tuvo DNS conectado.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://el-regreso-pwa.vercel.app'
 const MAX_INTENTOS = 5
 const LOTE_DEFECTO = 25
 

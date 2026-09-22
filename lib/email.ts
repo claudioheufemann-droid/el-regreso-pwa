@@ -7,7 +7,10 @@ import { Resend } from 'resend'
 import { buildIcs } from './ics'
 
 const FROM = process.env.RESEND_FROM_EMAIL ?? 'notificaciones@elregresobeer.com'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://control.elregresobeer.com'
+// Fallback al dominio real del proyecto en Vercel: 'control.elregresobeer.com' nunca se
+// conectó (sin DNS), así que si falta NEXT_PUBLIC_APP_URL los links de los correos
+// terminaban en un dominio inexistente (DNS_PROBE_FINISHED_NXDOMAIN).
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://el-regreso-pwa.vercel.app'
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY
