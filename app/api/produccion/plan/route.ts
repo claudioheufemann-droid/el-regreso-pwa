@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { crearEventoLote } from '@/lib/google-calendar'
+import { normalizarProducto } from '@/lib/produccion/reglas'
 
 /**
  * GET/POST /api/produccion/plan
@@ -85,10 +86,19 @@ export async function POST(req: Request) {
     .maybeSingle()
   const prioridad = (maxRow?.prioridad ?? -1) + 1
 
+  // Normalizado acá, no confiado al que lo llama: el resto de Producción
+  // (forecast, stock de seguridad, alarmas) trabaja con el nombre SIN el
+  // calificador entre paréntesis del catálogo ERP — "Kombucha Maqui", no
+  // "Kombucha Maqui (Hop)". Dos lotes quedaron con el nombre crudo porque el
+  // autocompletar de "Agregar producto" ofrecía en su momento el nombre tal
+  // cual de config_produccion_producto (sembrada sin pasar por esta función),
+  // y eso los dejaba sin color en el Gantt y sin cruzar con el forecast.
+  const productoNormalizado = normalizarProducto(body.producto)
+
   const { data, error } = await admin
     .from('plan_produccion')
     .insert({
-      producto: body.producto,
+      producto: productoNormalizado,
       categoria: body.categoria,
       litros_planificados: body.litrosPlanificados,
       fecha_planificada: body.fechaPlanificada,
