@@ -11,7 +11,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ChevronLeft, ChevronUp, ChevronDown, X, Search, Plus, MapPin,
-  Loader2, RefreshCw, Building2, Sparkles,
+  Loader2, RefreshCw, Building2, Sparkles, LocateFixed,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { C, PLAN, TAP, cardStyle, btnPrimario, fPeso } from '../../../theme'
@@ -141,6 +141,46 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
       if (geocodeSeqRef.current[key] !== seq) return
       if (res.ok) setResultados(await res.json())
     }, 400)
+  }
+
+  // ── Usar mi ubicación actual (GPS) como Salida/Término ──
+  const [ubicando, setUbicando] = useState<'origen' | 'destino' | null>(null)
+  const [errorUbicacion, setErrorUbicacion] = useState<Record<string, string>>({})
+
+  function usarUbicacionActual(key: 'origen' | 'destino') {
+    if (!navigator.geolocation) {
+      setErrorUbicacion(e => ({ ...e, [key]: 'Tu dispositivo no soporta geolocalización' }))
+      return
+    }
+    setUbicando(key)
+    setErrorUbicacion(e => ({ ...e, [key]: '' }))
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude
+        // Coords primero: habilitan "Calcular ruta" de inmediato aunque el
+        // reverse geocoding (sólo texto para mostrar) demore o falle.
+        if (key === 'origen') setOrigenCoords({ lat, lng })
+        else setDestinoCoords({ lat, lng })
+
+        let texto = 'Mi ubicación actual'
+        try {
+          const res = await fetch(`/api/geocode?lat=${lat}&lon=${lng}`)
+          const resultados: GeoResult[] = res.ok ? await res.json() : []
+          if (resultados[0]?.display_name) texto = resultados[0].display_name
+        } catch { /* se deja el texto de respaldo */ }
+
+        if (key === 'origen') setOrigenTexto(texto); else setDestinoTexto(texto)
+        setUbicando(null)
+      },
+      err => {
+        setErrorUbicacion(e => ({
+          ...e,
+          [key]: err.code === 1 ? 'Permiso de ubicación denegado. Actívalo en la configuración del navegador.' : 'No se pudo obtener la ubicación.',
+        }))
+        setUbicando(null)
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    )
   }
 
   // ── Buscador de clientes ──
@@ -364,6 +404,9 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
             resultados={origenResultados}
             onElegir={r => { setOrigenTexto(r.display_name); setOrigenCoords({ lat: Number(r.lat), lng: Number(r.lon) }); setOrigenResultados([]) }}
             disabled={!editable}
+            onUsarUbicacion={() => usarUbicacionActual('origen')}
+            ubicando={ubicando === 'origen'}
+            errorUbicacion={errorUbicacion.origen}
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0' }}>
             <input type="checkbox" id="regreso" checked={dia.regreso_mismo_dia} disabled={!editable}
@@ -381,6 +424,9 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
                 resultados={destinoResultados}
                 onElegir={r => { setDestinoTexto(r.display_name); setDestinoCoords({ lat: Number(r.lat), lng: Number(r.lon) }); setDestinoResultados([]) }}
                 disabled={!editable}
+                onUsarUbicacion={() => usarUbicacionActual('destino')}
+                ubicando={ubicando === 'destino'}
+                errorUbicacion={errorUbicacion.destino}
               />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0' }}>
                 <input type="checkbox" id="pernocta" checked={dia.pernocta} disabled={!editable}
@@ -571,18 +617,35 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
   )
 }
 
-function CampoDireccion({ label, placeholder, valor, onChange, resultados, onElegir, disabled }: {
+function CampoDireccion({
+  label, placeholder, valor, onChange, resultados, onElegir, disabled, onUsarUbicacion, ubicando, errorUbicacion,
+}: {
   label: string; placeholder: string; valor: string; onChange: (v: string) => void
   resultados: GeoResult[]; onElegir: (r: GeoResult) => void; disabled: boolean
+  onUsarUbicacion?: () => void; ubicando?: boolean; errorUbicacion?: string
 }) {
   return (
     <div style={{ marginBottom: 4 }}>
-      <p style={{ fontSize: 11, color: C.muted, fontWeight: 700, marginBottom: 4 }}>{label}</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <p style={{ fontSize: 11, color: C.muted, fontWeight: 700 }}>{label}</p>
+        {onUsarUbicacion && (
+          <button type="button" onClick={onUsarUbicacion} disabled={disabled || ubicando}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
+              color: PLAN.primario, background: 'transparent', border: 'none', padding: '2px 0',
+              cursor: disabled || ubicando ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
+            }}>
+            {ubicando ? <Loader2 size={13} className="animate-spin" /> : <LocateFixed size={13} />}
+            {ubicando ? 'Ubicando…' : 'Usar mi ubicación'}
+          </button>
+        )}
+      </div>
       <div style={{ position: 'relative' }}>
         <MapPin size={14} color={C.faint} style={{ position: 'absolute', left: 10, top: 12 }} />
         <input value={valor} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
           style={{ width: '100%', minHeight: 40, borderRadius: 10, border: `1px solid ${C.line}`, padding: '0 10px 0 30px', fontSize: 13, boxSizing: 'border-box', background: disabled ? C.bg : '#fff', color: C.text }} />
       </div>
+      {errorUbicacion && <p style={{ fontSize: 11, color: C.red, marginTop: 4 }}>{errorUbicacion}</p>}
       {resultados.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
           {resultados.map((r, i) => (
