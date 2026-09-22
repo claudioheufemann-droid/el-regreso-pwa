@@ -67,6 +67,72 @@ MIN_MESES_MODELO_PROPIO = 12   # menos que esto: ni se intenta confiar en el mod
 MAPE_MAXIMO_MODELO_PROPIO = 100.0   # backtest peor que esto (con historia "suficiente"): se deriva igual
 MESES_PROPORCION_DERIVADA = 6   # ventana reciente para calcular qué % del producto es este formato
 
+# ── Respaldo ingenuo: cuando el modelo pierde contra "lo que vendió hace poco" ──
+# Prophet ajusta una tendencia con changepoints, y cuando una serie SUBE fuerte
+# y después se da vuelta, la tendencia ajustada sigue apuntando hacia arriba
+# meses después de que la realidad cambió de dirección. No es un bug del
+# modelo: es lo que hace un modelo de tendencia cuando el quiebre es reciente y
+# todavía no tiene suficientes puntos del otro lado para detectarlo.
+#
+# Caso real que lo destapó (22-sep-2026, Kombucha Detox): subió de 63 L/mes en
+# ene-2025 a 948 en ene-2026 (15x) y después bajó todo 2026 hasta ~430. El
+# modelo seguía proyectando 1.371 L/mes — 2,8 veces la venta real de 489. Y el
+# daño no se quedaba ahí: como el stock de seguridad es proporcional a la
+# VARIABILIDAD, un modelo que le erra tanto genera un sigma enorme y el colchón
+# se infla junto con el error. Detox terminaba con un colchón de 1.245 L contra
+# los 694 de Berry Menta, que vende 2,7 VECES MÁS y tiene el mejor backtest del
+# sistema. El sistema le daba más colchón justo al producto que peor entendía.
+#
+# La compuerta que ya existía (MAPE_MAXIMO_MODELO_PROPIO) no lo agarra: sólo
+# aplica a producto_envase, y lo que hace es derivar del producto padre — a
+# nivel producto no hay padre del cual derivar, así que no había red.
+#
+# El respaldo es deliberadamente tonto: el promedio de los últimos meses,
+# plano, sin tendencia ni estacionalidad. No pretende ser mejor que Prophet —
+# sólo existe para las series donde Prophet YA demostró, en su propio
+# backtest, que es peor que no modelar nada.
+VENTANA_INGENUA_MESES = 3
+# Cuánto mejor tiene que ser el ingenuo para desplazar al modelo. Con margen
+# (no con un simple "<") para no alternar de método por ruido entre corridas:
+# una serie que va a la par se queda con Prophet, que sí aporta estacionalidad.
+MARGEN_INGENUO = 0.8
+# …pero ganarle a Prophet NO alcanza por sí solo: hace falta además que Prophet
+# esté roto en términos absolutos (el mismo umbral que ya se usa para derivar,
+# MAPE_MAXIMO_MODELO_PROPIO).
+#
+# El motivo es un desajuste entre lo que mide el backtest y para qué se usa el
+# forecast: el backtest evalúa el error a UN mes, pero la proyección se publica
+# a HORIZONTE_MESES. Un respaldo plano acierta el mes que viene y se equivoca
+# fuerte en un peak estacional, así que en una serie con estacionalidad real
+# puede ganar el backtest y aun así ser peor donde importa.
+#
+# Caso real, detectado probando este mismo cambio antes de subirlo (22-sep-2026):
+# Aguas Blancas tenía MAPE 47,4% contra 33,3% del ingenuo — lo hubiera
+# reemplazado. Pero su forecast ya era bueno (1,04x la venta real) y la serie
+# oscila entre 2.263 L en diciembre y 881 en julio. Proyectarla plana en 1.022
+# la dejaba a menos de la mitad de la demanda de verano: cambiaba un modelo
+# sano por un quiebre en la temporada alta. Con el umbral absoluto se queda con
+# Prophet, y Detox (120%) y Mango (398%) igual se corrigen.
+MAPE_MINIMO_PARA_INGENUO = MAPE_MAXIMO_MODELO_PROPIO
+
+# Segunda puerta de entrada al respaldo, para un modo de falla que el MAPE no
+# alcanza a marcar: la TENDENCIA SE DESPLOMÓ A CERO en un producto que sigue
+# vendiendo. Es la variante peligrosa, porque falla hacia el lado del quiebre y
+# además se esconde: un forecast de 0 genera un colchón de 0, y un colchón de 0
+# no dispara ninguna alarma de reposición — el producto simplemente desaparece
+# del radar en vez de aparecer en rojo.
+#
+# Caso real (22-sep-2026): Kombucha Experimental Piña Albahaca proyectaba 0
+# L/mes mientras vendía ~458. Su historia tiene huecos y meses en casi cero
+# (2024-2025), y Prophet ajustó una tendencia que cruza el cero justo cuando el
+# producto volvió a venderse. Su MAPE era 74% — malo, pero por debajo del
+# umbral absoluto, así que la primera puerta no lo agarraba.
+#
+# Se compara contra el nivel del ingenuo (no contra cero absoluto) para no
+# castigar a un producto que de verdad se está apagando: si la venta reciente
+# también viene en cero, el ingenuo da cero y no hay diferencia que disparar.
+FRACCION_COLAPSO_TENDENCIA = 0.3
+
 # ── Parámetros del stock de seguridad ───────────────────────────────────
 Z_SERVICIO = 1.645          # 95% de nivel de servicio (normal, una cola)
 Z_BANDA_PROPHET = 1.2816    # interval_width=0.8 en Prophet ⇒ banda = ±1.2816σ
@@ -208,6 +274,13 @@ def backtest(df: pd.DataFrame) -> dict | None:
     n = len(df)
     reales: list[float] = []
     estimados: list[float] = []
+    # Referencia ingenua, medida en LOS MISMOS pliegues y con la misma regla de
+    # "entrená sólo con lo anterior al mes que vas a predecir": el promedio de
+    # los últimos VENTANA_INGENUA_MESES del tramo de entrenamiento. Comparar
+    # contra ella en otra ventana (o peor, contra la serie completa) haría
+    # trampa a favor del ingenuo, porque estaría mirando datos que Prophet no
+    # tuvo.
+    ingenuos: list[float] = []
     for corte in range(n - MESES_BACKTEST, n):
         train = df.iloc[:corte]
         if len(train) < MIN_MESES_FORECAST:
@@ -218,19 +291,38 @@ def backtest(df: pd.DataFrame) -> dict | None:
         pred = m.predict(futuro).iloc[-1]
         reales.append(float(df.iloc[corte]["y"]))
         estimados.append(max(float(pred["yhat"]), 0.0))
+        ingenuos.append(max(float(train["y"].tail(VENTANA_INGENUA_MESES).mean()), 0.0))
 
     if not reales:
         return None
 
-    mae = sum(abs(r - e) for r, e in zip(reales, estimados)) / len(reales)
-    # MAPE ignora meses reales en 0 (división por cero no tiene sentido ahí).
-    # abs() también en el denominador: algunas series (ej. "otros formatos",
-    # que mezcla devoluciones/notas de crédito) pueden tener un mes con litros
-    # netos negativos — sin el abs() el signo del error se invertía y mostraba
-    # desvíos negativos sin sentido (confirmado con una corrida real: -108%).
-    pares_no_cero = [(r, e) for r, e in zip(reales, estimados) if r != 0]
-    mape = (sum(abs(r - e) / abs(r) for r, e in pares_no_cero) / len(pares_no_cero) * 100) if pares_no_cero else None
+    def errores(pred: list[float]) -> tuple[float, float | None]:
+        mae_ = sum(abs(r - e) for r, e in zip(reales, pred)) / len(reales)
+        # MAPE ignora meses reales en 0 (división por cero no tiene sentido ahí).
+        # abs() también en el denominador: algunas series (ej. "otros formatos",
+        # que mezcla devoluciones/notas de crédito) pueden tener un mes con litros
+        # netos negativos — sin el abs() el signo del error se invertía y mostraba
+        # desvíos negativos sin sentido (confirmado con una corrida real: -108%).
+        pares = [(r, e) for r, e in zip(reales, pred) if r != 0]
+        mape_ = (sum(abs(r - e) / abs(r) for r, e in pares) / len(pares) * 100) if pares else None
+        return mae_, mape_
+
+    mae, mape = errores(estimados)
+    mae_ing, mape_ing = errores(ingenuos)
+
+    # Desvío de los residuos del ingenuo, para poder armarle una banda propia
+    # si termina reemplazando al modelo. Es sigma MEDIDA sobre predicciones
+    # fuera de muestra, no la banda que Prophet infiere de su propio ajuste.
+    res = [r - i for r, i in zip(reales, ingenuos)]
+    if len(res) >= 2:
+        media_res = sum(res) / len(res)
+        sigma_ing = (sum((x - media_res) ** 2 for x in res) / (len(res) - 1)) ** 0.5
+    else:
+        sigma_ing = abs(res[0]) if res else 0.0
+
     return {"mae": round(mae, 2), "mape": round(mape, 1) if mape is not None else None,
+            "maeIngenuo": round(mae_ing, 2), "mapeIngenuo": round(mape_ing, 1) if mape_ing is not None else None,
+            "sigmaIngenua": round(sigma_ing, 2),
             "mesesEvaluados": len(reales), "mesesHistorial": len(df)}
 
 
@@ -326,9 +418,57 @@ def procesar_serie(nivel: str, clave: str | None, puntos: list[dict], mes_base: 
         })
 
     bt = backtest(df)
+    metodo = "propio"
     if bt:
-        resultado["validacion"] = {"nivel": nivel, "clave": clave, "metodo": "propio", **bt}
-    print(f"  {nivel}/{etiqueta}: {len(df)} meses historial, backtest={'ok' if bt else 'sin datos suficientes'}")
+        # ¿El modelo le gana a no modelar nada? Si no, se lo reemplaza por el
+        # promedio reciente, plano. Ver el bloque VENTANA_INGENUA_MESES arriba:
+        # esto agarra las series cuya tendencia se dio vuelta hace poco, donde
+        # Prophet sigue extrapolando la dirección vieja.
+        nivel_plano = max(float(df["y"].tail(VENTANA_INGENUA_MESES).mean()), 0.0)
+        # Promedio de TODO el horizonte, no del primer mes: una serie estacional
+        # puede tener un primer mes bajo sin que la tendencia esté rota.
+        nivel_modelo = (sum(float(f["litros"]) for f in resultado["forecast"])
+                        / len(resultado["forecast"])) if resultado["forecast"] else 0.0
+        colapso = nivel_plano > 0 and nivel_modelo < nivel_plano * FRACCION_COLAPSO_TENDENCIA
+
+        if (bt["mape"] is not None and bt["mapeIngenuo"] is not None
+                and (bt["mape"] > MAPE_MINIMO_PARA_INGENUO or colapso)
+                and bt["mapeIngenuo"] < bt["mape"] * MARGEN_INGENUO):
+            metodo = "ingenuo"
+            sigma = float(bt["sigmaIngenua"])
+            for fila in resultado["forecast"]:
+                fila["litros"] = round(nivel_plano, 2)
+                fila["litrosMin"] = round(max(nivel_plano - Z_BANDA_PROPHET * sigma, 0.0), 2)
+                fila["litrosMax"] = round(nivel_plano + Z_BANDA_PROPHET * sigma, 2)
+                # Sin tendencia ni estacionalidad: el respaldo no las modela, y
+                # dejar las de Prophet acá haría que el gráfico "Ver el modelo"
+                # dibujara la descomposición de un modelo que ya no se está
+                # usando. None es la respuesta honesta — no hay descomposición.
+                fila["tendencia"] = None
+                fila["estacionalidad"] = None
+            if not silencioso:
+                resultado["calidad"].append({
+                    "tipo": "respaldo_ingenuo", "clave": clave,
+                    "detalle": (f'"{etiqueta}": el modelo erraba {bt["mape"]}% en el backtest y el promedio '
+                                f'de los últimos {VENTANA_INGENUA_MESES} meses erraba {bt["mapeIngenuo"]}%, '
+                                f'así que se proyectan {round(nivel_plano)} L/mes planos en vez del modelo. '
+                                + (f'El modelo venía proyectando {round(nivel_modelo)} L/mes para un producto '
+                                   f'que sigue vendiendo: su tendencia se desplomó a cero.'
+                                   if colapso else
+                                   'Suele pasar cuando la tendencia se dio vuelta hace poco.')),
+                    "severidad": "advertencia",
+                })
+        # El MAPE que se reporta es el del método que EFECTIVAMENTE se usó — si
+        # se publicara el de Prophet mientras se proyecta el ingenuo, la
+        # confianza y el panel de calidad estarían describiendo un modelo que no
+        # generó estos números. Los del modelo descartado quedan igual, con
+        # sufijo, para poder auditar la decisión después.
+        if metodo == "ingenuo":
+            bt = {**bt, "mae": bt["maeIngenuo"], "mape": bt["mapeIngenuo"],
+                  "maeModelo": bt["mae"], "mapeModelo": bt["mape"]}
+        resultado["validacion"] = {"nivel": nivel, "clave": clave, "metodo": metodo, **bt}
+    print(f"  {nivel}/{etiqueta}: {len(df)} meses historial, backtest={'ok' if bt else 'sin datos suficientes'}"
+          + (" · RESPALDO INGENUO" if metodo == "ingenuo" else ""))
     return resultado
 
 
@@ -409,7 +549,22 @@ def indexar_calibracion(calibracion: list[dict] | None) -> tuple[dict, dict]:
 def hacer_factor(por_serie: dict, por_nivel: dict, neutro: float, base: str):
     """Devuelve factor(nivel, clave, metodo) para `k` o para `b`."""
     def factor(nivel: str, clave: str | None, metodo: str) -> float:
-        derivado = metodo == "derivado"
+        # El respaldo ingenuo no pasa por Prophet, así que NINGUNA de las dos
+        # calibraciones le corresponde y las dos lo dañarían:
+        #   · `b` corrige que Prophet sobre-pronostica (~+42%). El promedio de
+        #     los últimos meses no tiene ese sesgo — aplicárselo lo dejaría
+        #     ~30% por debajo de la venta real, cambiando una sobreestimación
+        #     por una subestimación, que es el error peligroso (quiebre).
+        #   · `k` se midió contra el ANCHO DE BANDA de Prophet. La banda del
+        #     ingenuo ya viene de sigmaIngenua, el desvío real de sus residuos
+        #     fuera de muestra, así que escalarla otra vez sería contarlo dos
+        #     veces.
+        # El neutro deja la serie tal como la dejó procesar_serie().
+        # Incluye "derivado_ingenuo": es el reparto por formato de un producto
+        # cuyo número tampoco salió de Prophet.
+        if "ingenuo" in metodo:
+            return neutro
+        derivado = metodo.startswith("derivado")
         cal = por_serie.get((nivel, clave))
         if cal is not None:
             medido = cal.get(base + ("Derivado" if derivado else ""))
@@ -575,7 +730,16 @@ def calcular_stock_seguridad(forecast: list[dict], validacion: list[dict], categ
         # el forecast del producto por una proporción reciente, no de un
         # modelo propio validado contra su propio backtest — igual de útil
         # para decidir reposición, pero no equivalente a un ajuste directo.
-        if metodo == "derivado":
+        if metodo.startswith("derivado"):
+            confianza = "media" if (mape is not None and mape <= 60) else "baja"
+        # El respaldo ingenuo tampoco llega a "alta", aunque su MAPE dé bajo:
+        # es una proyección PLANA. Acierta mientras la serie se quede quieta y
+        # no tiene cómo anticipar un peak estacional — y además sólo se usa en
+        # series donde el modelo ya falló, o sea justamente las que se están
+        # moviendo de forma difícil de predecir. Marcarla "alta" invitaría a
+        # confiar en ella para planificar meses adelante, que es lo único que
+        # este respaldo no sabe hacer.
+        elif metodo == "ingenuo":
             confianza = "media" if (mape is not None and mape <= 60) else "baja"
         elif meses_hist and meses_hist >= 24 and mape is not None and mape <= 30:
             confianza = "alta"
@@ -782,8 +946,17 @@ def main() -> int:
                 # derivado) — es lo que calcular_stock_seguridad usa para
                 # decidir confianza cuando metodo="propio" no aplica.
                 bt_producto = next((v for v in validacion if v["nivel"] == "producto" and v.get("clave") == producto), None)
+                # Si el padre terminó usando el respaldo ingenuo, el hijo hereda
+                # ese origen en el nombre del método. No es cosmético: las
+                # calibraciones `b` y `k` son de Prophet, y este número ya no
+                # viene de Prophet — sin la marca, hacer_factor le aplicaría la
+                # corrección de sobre-pronóstico a una serie que no sobre-
+                # pronostica, justo en los formatos de los productos que
+                # estamos arreglando.
+                metodo_padre = bt_producto.get("metodo") if bt_producto else "propio"
                 validacion.append({
-                    "nivel": "producto_envase", "clave": clave, "metodo": "derivado",
+                    "nivel": "producto_envase", "clave": clave,
+                    "metodo": "derivado_ingenuo" if metodo_padre == "ingenuo" else "derivado",
                     "mae": None,
                     "mape": bt_producto.get("mape") if bt_producto else None,
                     "mesesEvaluados": bt_producto.get("mesesEvaluados") if bt_producto else MESES_BACKTEST,
