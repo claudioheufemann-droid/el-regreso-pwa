@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useState, useRef, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -34,6 +34,32 @@ const CATEGORIA_INSUMO: Record<string, { label: string; badge: string }> = {
   lupulo: { label: 'Lúpulo', badge: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
   levadura: { label: 'Levadura', badge: 'border-purple-200 bg-purple-50 text-purple-700' },
   otros: { label: 'Otros', badge: 'border-gray-200 bg-gray-50 text-gray-600' },
+}
+
+/* ── Preferencia del usuario: Proyección de carga plegada o abierta ──────
+   Arranca PLEGADA por decisión del usuario (22-sep-2026): la tarjeta le
+   agregaba una fila entera de tarjetas mensuales encima del Gantt, y ese es
+   el elemento que de verdad se usa día a día — la proyección es de consulta
+   ocasional, no algo para tener siempre a la vista. Se guarda en
+   localStorage y no en useState a secas por el mismo motivo que el menú
+   lateral (ver MenuLateral.tsx): localStorage es un store externo, y
+   useSyncExternalStore evita el desajuste de hidratación de leerlo dentro de
+   un efecto (el snapshot del servidor es siempre `false`, así que la carga
+   inicial coincide en server y cliente; recién en el cliente se corrige a lo
+   que el usuario haya elegido antes). */
+const CLAVE_PROYECCION_ABIERTA = 'prod-proyeccion-carga-abierta'
+const oyentesProyeccionAbierta = new Set<() => void>()
+function suscribirProyeccionAbierta(alCambiar: () => void) {
+  oyentesProyeccionAbierta.add(alCambiar)
+  window.addEventListener('storage', alCambiar)
+  return () => { oyentesProyeccionAbierta.delete(alCambiar); window.removeEventListener('storage', alCambiar) }
+}
+function leerProyeccionAbierta(): boolean {
+  try { return localStorage.getItem(CLAVE_PROYECCION_ABIERTA) === '1' } catch { return false }
+}
+function guardarProyeccionAbierta(v: boolean) {
+  try { localStorage.setItem(CLAVE_PROYECCION_ABIERTA, v ? '1' : '0') } catch { /* modo privado */ }
+  oyentesProyeccionAbierta.forEach(f => f())
 }
 
 /* ── Utilidades de formato ─────────────────────────────────────────────── */
@@ -1817,6 +1843,9 @@ export default function ProduccionClient({
 
   const [configGantt, setConfigGantt] = useState<ConfigProducto[]>(configProductos)
   const [configAbierta, setConfigAbierta] = useState(false)
+  /** Ver el comentario de leerProyeccionAbierta/guardarProyeccionAbierta:
+   *  arranca plegada y se recuerda entre sesiones. */
+  const proyeccionCargaAbierta = useSyncExternalStore(suscribirProyeccionAbierta, leerProyeccionAbierta, () => false)
   const [agregarProductoAbierto, setAgregarProductoAbierto] = useState(false)
   /** Correcciones de fecha para lotes 'en_tanque' — ver ajuste_lote_tanque.
    *  En estado local (no derivado en cada render de la prop) para que
@@ -5135,8 +5164,13 @@ export default function ProduccionClient({
                   decisión ya tomada y qué es una propuesta. Ver
                   resumenCargaMeses arriba. */}
               {planSugerido.porMes.length > 0 && (
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+                <div className={`rounded-xl border bg-white shadow-sm transition-shadow duration-300 ${proyeccionCargaAbierta ? 'border-emerald-200 shadow-md' : 'border-gray-200'}`}>
+                  <button
+                    type="button"
+                    onClick={() => guardarProyeccionAbierta(!proyeccionCargaAbierta)}
+                    aria-expanded={proyeccionCargaAbierta}
+                    className="prod-press flex w-full flex-wrap items-center justify-between gap-3 p-5 text-left transition-colors hover:bg-gray-50/60"
+                  >
                     <div className="flex flex-wrap items-center gap-2">
                       <CalendarIcon size={18} style={{ color: COLORS.darkGreen }} />
                       <h3 className="font-bold text-gray-800">Proyección de carga — {horizontePlanMeses} {horizontePlanMeses === 1 ? 'mes' : 'meses'}</h3>
@@ -5158,11 +5192,27 @@ export default function ProduccionClient({
                           en {planSugerido.lotes.filter(l => l.enCurso).length} {planSugerido.lotes.filter(l => l.enCurso).length === 1 ? 'tanque' : 'tanques'}
                         </span>
                       )}
+                      {/* Visible aunque la tarjeta esté plegada: un volumen sin
+                          dónde ponerlo es un problema real, y plegar la sección
+                          no debería poder esconderlo sin dejar rastro. */}
+                      {planSugerido.sinTanque.length > 0 && (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
+                          {planSugerido.sinTanque.length} sin tanque
+                        </span>
+                      )}
                     </div>
+                    <ChevronDown
+                      size={20}
+                      className={`shrink-0 text-gray-400 transition-transform duration-300 ${proyeccionCargaAbierta ? 'rotate-180 text-emerald-600' : ''}`}
+                    />
+                  </button>
+                  <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${proyeccionCargaAbierta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                  <div className="overflow-hidden">
+                  <div className="px-5 pb-5">
                     {/* Cuánto simula el motor hacia adelante. Tope real: no hay
                         forecast más allá de horizontePlanMax, así que no tiene
                         sentido ofrecer más — sería un horizonte vacío. */}
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="mb-3 flex flex-wrap items-center gap-1.5">
                       {[3, 6, 9, 12]
                         .filter(n => n <= horizontePlanMax)
                         .map(n => (
@@ -5191,7 +5241,6 @@ export default function ProduccionClient({
                         </button>
                       )}
                     </div>
-                  </div>
                   <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     <Info size={13} className="mt-0.5 shrink-0" />
                     Todas las cocciones sugeridas —de este mes o de más adelante— entran{' '}
@@ -5301,6 +5350,9 @@ export default function ProduccionClient({
                         </div>
                       ))}
                     </div>
+                  </div>
+                  </div>
+                  </div>
                   </div>
                 </div>
               )}
