@@ -210,7 +210,6 @@ export default function DevProduccionClient() {
           tanques={FERMENTADORES.map(f => ({
             tanque: f.nombre, categoria: f.categoria, capacidadLitros: f.capacidadLitros,
           }))}
-          config={config}
           onConfirmar={async lotes => {
             setRegistro(r => [
               `confirmar → ${lotes.length} cocciones: ${lotes.map(l => `${l.litros}L`).join(', ')}`,

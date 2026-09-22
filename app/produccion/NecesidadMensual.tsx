@@ -2,8 +2,8 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { Plus, Check, Loader2, Info, TriangleAlert } from 'lucide-react'
+import ProductImage from '@/components/ui/ProductImage'
 import type { SerieForecast, StockSeguridadItem, LotePlan } from './page'
-import type { ConfigProducto } from './GanttProduccion'
 
 /**
  * Paso 2 del flujo: cuántos litros hay que producir de cada producto, mes a mes.
@@ -67,7 +67,6 @@ interface Props {
   stockSeguridad: StockSeguridadItem[]
   plan: LotePlan[]
   tanques: TanqueDisponible[]
-  config: ConfigProducto[]
   /** Cuántos meses hacia adelante se planifican de una. */
   meses?: number
   onConfirmar: (lotes: { producto: string; categoria: 'cerveza' | 'kombucha'; litros: number; mes: string }[]) => Promise<void>
@@ -144,7 +143,7 @@ function CampoLitros({ valor, onCambio, titulo }: {
 }
 
 export default function NecesidadMensual({
-  series, stockSeguridad, plan, tanques, config, meses = 4, onConfirmar,
+  series, stockSeguridad, plan, tanques, meses = 4, onConfirmar,
 }: Props) {
   const [base, setBase] = useState<BaseCantidad>('superior')
   /** Ajustes a mano, por `producto|mes`. Pisan a la base elegida. */
@@ -152,11 +151,6 @@ export default function NecesidadMensual({
   const [guardando, setGuardando] = useState<string | null>(null)
   const [filtro, setFiltro] = useState<'todos' | 'cerveza' | 'kombucha'>('todos')
   const [soloFaltantes, setSoloFaltantes] = useState(false)
-
-  const colorDe = useMemo(() => {
-    const m = new Map(config.map(c => [c.producto, c.color]))
-    return (p: string) => m.get(p) ?? '#8C8C8C'
-  }, [config])
 
   /** Los meses salen del propio forecast, no del calendario: así la tabla
    *  arranca donde arranca la proyección y nunca muestra un mes vacío. */
@@ -376,9 +370,13 @@ export default function NecesidadMensual({
               <tr key={f.producto} style={{ ['--i' as string]: i }}
                 className="prod-hover-row border-b border-gray-50">
                 <td className="sticky left-0 z-10 bg-white px-4 py-2">
+                  {/* La foto reemplaza al punto de color de antes —mismo
+                      criterio que ya usan Split de Envasado y Necesidad
+                      Anticipada (ver ProduccionClient.tsx): es la lata que
+                      se usa en el resto de la app, no un color arbitrario
+                      que hay que aprenderse. */}
                   <div className="flex items-center gap-2">
-                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
-                      style={{ background: colorDe(f.producto) }} />
+                    <ProductImage nombre={f.producto} categoria={f.categoria} size={28} radius={7} />
                     <span className="font-semibold text-gray-800">{f.producto}</span>
                   </div>
                 </td>

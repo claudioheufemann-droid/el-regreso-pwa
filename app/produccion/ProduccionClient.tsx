@@ -4582,7 +4582,6 @@ export default function ProduccionClient({
                   categoria: t.categoria as 'cerveza' | 'kombucha',
                   capacidadLitros: t.capacidadLitros,
                 }))}
-                config={configGantt}
                 onConfirmar={confirmarNecesidad}
               />
 
