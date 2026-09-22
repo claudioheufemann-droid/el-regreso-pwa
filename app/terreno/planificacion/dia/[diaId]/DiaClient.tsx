@@ -383,9 +383,12 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
               <input
                 value={busqueda} onChange={e => setBusqueda(e.target.value)}
                 placeholder="Buscar cliente, RUT o comuna"
+                autoComplete="off"
+                className="buscador-cliente-input"
                 style={{
                   width: '100%', minHeight: TAP, borderRadius: 10, border: `1px solid ${C.line}`,
                   padding: '10px 12px 10px 36px', fontSize: 14, boxSizing: 'border-box',
+                  background: '#fff', color: C.text,
                 }}
               />
               {buscando && <Loader2 size={16} className="animate-spin" style={{ position: 'absolute', right: 12, top: 13, color: C.faint }} />}
@@ -412,9 +415,9 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <input value={prospectoNombre} onChange={e => setProspectoNombre(e.target.value)} placeholder="Nombre del local"
-                  style={{ minHeight: TAP, borderRadius: 10, border: `1px solid ${C.line}`, padding: '0 12px', fontSize: 14 }} />
+                  style={{ minHeight: TAP, borderRadius: 10, border: `1px solid ${C.line}`, padding: '0 12px', fontSize: 14, background: '#fff', color: C.text }} />
                 <input value={prospectoDireccion} onChange={e => setProspectoDireccion(e.target.value)} placeholder="Dirección (opcional)"
-                  style={{ minHeight: TAP, borderRadius: 10, border: `1px solid ${C.line}`, padding: '0 12px', fontSize: 14 }} />
+                  style={{ minHeight: TAP, borderRadius: 10, border: `1px solid ${C.line}`, padding: '0 12px', fontSize: 14, background: '#fff', color: C.text }} />
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setMostrarProspecto(false)} style={{ flex: 1, minHeight: TAP, borderRadius: 10, border: `1px solid ${C.line}`, background: '#fff', cursor: 'pointer' }}>Cancelar</button>
                   <button onClick={crearProspecto} disabled={creandoProspecto || !prospectoNombre.trim()}
@@ -460,7 +463,7 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
                   </div>
                   {editable && (
                     <select value={p.objetivo_visita ?? ''} onChange={e => cambiarObjetivo(p.id, e.target.value)}
-                      style={{ marginTop: 8, width: '100%', minHeight: 36, borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 12, padding: '0 8px' }}>
+                      style={{ marginTop: 8, width: '100%', minHeight: 36, borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 12, padding: '0 8px', background: '#fff', color: C.text }}>
                       <option value="">Objetivo de la visita…</option>
                       {OBJETIVOS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
@@ -516,7 +519,7 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
             editor={editable ? (
               <input type="number" min={0} value={dia.peajes_estimados_clp}
                 onChange={e => setDia(d => ({ ...d, peajes_estimados_clp: Math.max(0, Number(e.target.value) || 0) }))}
-                style={{ width: 90, textAlign: 'right', border: `1px solid ${C.line}`, borderRadius: 8, padding: '4px 6px', fontSize: 13 }} />
+                style={{ width: 90, textAlign: 'right', border: `1px solid ${C.line}`, borderRadius: 8, padding: '4px 6px', fontSize: 13, background: '#fff', color: C.text }} />
             ) : undefined}
           />
           {almuerzos > 0 && <FilaPresupuesto label={`Almuerzo × ${almuerzos}`} valor={almuerzos * (politica?.monto_almuerzo_clp ?? 0)} />}
@@ -552,7 +555,7 @@ function CampoDireccion({ label, placeholder, valor, onChange, resultados, onEle
       <div style={{ position: 'relative' }}>
         <MapPin size={14} color={C.faint} style={{ position: 'absolute', left: 10, top: 12 }} />
         <input value={valor} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
-          style={{ width: '100%', minHeight: 40, borderRadius: 10, border: `1px solid ${C.line}`, padding: '0 10px 0 30px', fontSize: 13, boxSizing: 'border-box', background: disabled ? C.bg : '#fff' }} />
+          style={{ width: '100%', minHeight: 40, borderRadius: 10, border: `1px solid ${C.line}`, padding: '0 10px 0 30px', fontSize: 13, boxSizing: 'border-box', background: disabled ? C.bg : '#fff', color: C.text }} />
       </div>
       {resultados.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
@@ -572,7 +575,7 @@ function CampoNumero({ label, valor, onChange, disabled }: { label: string; valo
     <div>
       <p style={{ fontSize: 11, color: C.muted, fontWeight: 700, marginBottom: 4 }}>{label}</p>
       <input type="number" min={0} value={valor} disabled={disabled} onChange={e => onChange(Math.max(0, Number(e.target.value) || 0))}
-        style={{ width: '100%', minHeight: 40, borderRadius: 10, border: `1px solid ${C.line}`, padding: '0 10px', fontSize: 13, boxSizing: 'border-box' }} />
+        style={{ width: '100%', minHeight: 40, borderRadius: 10, border: `1px solid ${C.line}`, padding: '0 10px', fontSize: 13, boxSizing: 'border-box', background: disabled ? C.bg : '#fff', color: C.text }} />
     </div>
   )
 }

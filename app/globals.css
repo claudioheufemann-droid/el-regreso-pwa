@@ -487,7 +487,7 @@
   color: #1C1510;
 }
 
-[data-theme="light"] input,
+[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
 [data-theme="light"] textarea,
 [data-theme="light"] select {
   background: var(--input-bg) !important;
@@ -498,6 +498,22 @@
 [data-theme="light"] input::placeholder,
 [data-theme="light"] textarea::placeholder {
   color: #9A8A7A !important;
+}
+
+/* Buscador de clientes en Planificación (Terreno) — tema claro hardcodeado
+ * vía inline style (ver app/terreno/theme.ts), pero el reset global de
+ * inputs y el override [data-theme="light"] de arriba pueden pisar ese
+ * color según el tema activo, y el autofill del navegador pinta el texto
+ * con su propio color ignorando cualquier `color` de autor. Regla dedicada
+ * con !important + selector doblado para ganarle a ambos casos siempre. */
+input.buscador-cliente-input.buscador-cliente-input {
+  color: #0F172A !important;
+  background: #fff !important;
+  -webkit-text-fill-color: #0F172A !important;
+}
+input.buscador-cliente-input.buscador-cliente-input:-webkit-autofill {
+  -webkit-text-fill-color: #0F172A !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
 }
 
 [data-theme="light"] .app-shell { background: #F2EDE4 !important; }
@@ -708,7 +724,9 @@ html { height: 100%; }
  * contraste, no se sabe qué se está eligiendo"). Producción nunca declara
  * data-theme="light" (ese override sólo aplica al resto de la app), así que
  * tampoco heredaba el contraste correcto por ese lado. */
-input:not(.prod-root *), select:not(.prod-root *), textarea:not(.prod-root *) {
+input:not(.prod-root *):not([type="checkbox"]):not([type="radio"]),
+select:not(.prod-root *),
+textarea:not(.prod-root *) {
   background: var(--input-bg);
   color: var(--cream);
   border: 1px solid var(--input-border);
@@ -721,11 +739,26 @@ input:not(.prod-root *), select:not(.prod-root *), textarea:not(.prod-root *) {
   transition: border-color 0.15s, background 0.15s;
   -webkit-appearance: none;
 }
-input:focus:not(.prod-root *), select:focus:not(.prod-root *), textarea:focus:not(.prod-root *) {
+input:focus:not(.prod-root *):not([type="checkbox"]):not([type="radio"]),
+select:focus:not(.prod-root *),
+textarea:focus:not(.prod-root *) {
   border-color: rgba(212, 175, 55, 0.5);
   background: rgba(255, 255, 255, 0.07);
 }
 input::placeholder, textarea::placeholder { color: #5A5248; }
+
+/* Checkboxes y radios quedaban con -webkit-appearance:none heredado del
+ * reset genérico de arriba, sin ningún estilo de reemplazo para el estado
+ * `:checked` — el cuadro se veía idéntico marcado o vacío (bug real:
+ * "marco el checkbox y no se marca"). Se excluyen del reset y se les
+ * devuelve su apariencia nativa + accent-color de marca, así el check
+ * se ve en cualquier navegador sin tener que dibujar un checkmark custom. */
+input[type="checkbox"]:not(.prod-root *),
+input[type="radio"]:not(.prod-root *) {
+  width: auto;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
 
 /* input[type=date/time] necesita su appearance nativo para poder desplegar
    el selector del sistema (WebKit no abre el picker si se le quita el appearance) */
