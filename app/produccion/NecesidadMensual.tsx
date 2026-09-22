@@ -33,6 +33,19 @@ import type { ConfigProducto } from './GanttProduccion'
  * Se arranca en "límite superior" para no cambiar el hábito de golpe, pero las
  * tres cifras se muestran siempre para que el cambio pueda hacerse mirando la
  * diferencia.
+ *
+ * DEL OBJETIVO A LA NECESIDAD REAL
+ * ------------------------------
+ * `objetivo` (la base elegida arriba, editable a mano) es cuánto se estima
+ * que se va a VENDER ese mes — no cuánto hay que COCER. Antes de decidir eso
+ * se descuentan, en este orden, dos cosas que ya cubren parte de esa venta:
+ *   1. Lo ya comprometido en el Plan Maestro para ese mes (`yaEnPlan`).
+ *   2. El stock que hoy hay en cámara (`stockUsado`), que se va consumiendo
+ *      mes a mes en cascada — lo que no hace falta gastar este mes queda
+ *      disponible para el siguiente, no se pierde en el cálculo.
+ * Lo que sobra después de las dos es `faltante`: recién eso es lo que el
+ * botón de confirmar convierte en cocciones nuevas. Ver stockActualPorProducto
+ * más abajo para el porqué de no sumar también lo que está fermentando.
  */
 
 export type BaseCantidad = 'superior' | 'centro' | 'centroColchon'
@@ -190,12 +203,40 @@ export default function NecesidadMensual({
     return m
   }, [stockSeguridad])
 
+  /** Litros HOY en cámara — antes esta tabla ignoraba por completo lo que ya
+   *  había en bodega: un producto con 2.000 L guardados pedía el mismo
+   *  objetivo mensual que uno en cero, y "faltante" mandaba a cocer de más.
+   *  `stockActualLitros` es el mismo valor repetido en todas las filas de
+   *  mes de un producto (es una FOTO de hoy, no depende del mes — ver cómo
+   *  se arma en page.tsx), así que basta tomarlo de la primera que aparezca,
+   *  igual que ya hace respaldoPorProducto con colchón/reorden.
+   *
+   *  A propósito NO se suma `litrosEnProduccion` (lo que está fermentando):
+   *  esta tabla es mensual y no tiene una fecha estimada de cuándo ese
+   *  volumen se embarrila, a diferencia de la simulación día a día de la
+   *  carta Gantt (ver splitFermentadores/necesidadGantt) — sumarlo acá
+   *  supondría disponibilidad con más precisión de la que este cálculo
+   *  puede sostener. Sólo cuenta lo ya envasado y contable. */
+  const stockActualPorProducto = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const s of stockSeguridad) {
+      if (s.nivel !== 'producto') continue
+      if (!m.has(s.producto)) m.set(s.producto, s.stockActualLitros ?? 0)
+    }
+    return m
+  }, [stockSeguridad])
+
   const filas = useMemo(() => {
     const out = series
       .filter(s => s.nivel === 'producto' && s.producto && (filtro === 'todos' || s.categoria === filtro))
       .map(s => {
         const producto = s.producto as string
         const categoria = (s.categoria === 'kombucha' ? 'kombucha' : 'cerveza') as 'cerveza' | 'kombucha'
+        // El stock de hoy se va CONSUMIENDO mes a mes, en orden — no se
+        // descuenta el mismo litro dos veces. mesesVisibles ya viene
+        // ordenado ascendente, así que basta una variable que .map() va
+        // mutando a medida que recorre los meses en secuencia.
+        let saldoStock = stockActualPorProducto.get(producto) ?? 0
         const porMes = mesesVisibles.map(mes => {
           const punto = s.puntos.find(p => p.mes === mes && p.tipo === 'forecast')
           const centro = punto?.litros ?? 0
@@ -213,9 +254,16 @@ export default function NecesidadMensual({
           const clave = `${producto}|${mes}`
           const objetivo = ajustes[clave] ?? Math.round(sugerido)
           const yaEnPlan = planificado.get(clave) ?? 0
+          // El stock cubre lo que el plan todavía no cubre de este mes —no
+          // el objetivo bruto— así que no se "gasta" stock en un mes donde
+          // el plan ya alcanza por sí solo, y ese stock sigue disponible
+          // para el mes siguiente en vez de perderse en el cálculo.
+          const necesidadTrasPlan = Math.max(0, objetivo - yaEnPlan)
+          const stockUsado = Math.min(necesidadTrasPlan, saldoStock)
+          saldoStock -= stockUsado
           return {
             mes, clave, centro, superior, inferior, colchon, candidatos,
-            objetivo, yaEnPlan, faltante: Math.max(0, objetivo - yaEnPlan),
+            objetivo, yaEnPlan, stockUsado, faltante: necesidadTrasPlan - stockUsado,
           }
         })
         const respaldo = respaldoPorProducto.get(producto)
@@ -223,19 +271,21 @@ export default function NecesidadMensual({
           producto, categoria, porMes,
           colchon: respaldo?.colchon ?? null,
           reorden: respaldo?.reorden ?? null,
+          stockHoy: stockActualPorProducto.get(producto) ?? null,
           total: porMes.reduce((a, c) => a + c.objetivo, 0),
         }
       })
       .filter(f => f.total > 0)
       .sort((a, b) => b.total - a.total)
     return soloFaltantes ? out.filter(f => f.porMes.some(c => c.faltante > 0)) : out
-  }, [series, filtro, mesesVisibles, colchonPorSerie, respaldoPorProducto, base, ajustes, planificado, soloFaltantes])
+  }, [series, filtro, mesesVisibles, colchonPorSerie, respaldoPorProducto, stockActualPorProducto, base, ajustes, planificado, soloFaltantes])
 
   const totalesPorMes = useMemo(
     () => mesesVisibles.map((mes, i) => ({
       mes,
       objetivo: filas.reduce((a, f) => a + f.porMes[i].objetivo, 0),
       yaEnPlan: filas.reduce((a, f) => a + f.porMes[i].yaEnPlan, 0),
+      stockUsado: filas.reduce((a, f) => a + f.porMes[i].stockUsado, 0),
     })),
     [filas, mesesVisibles]
   )
@@ -312,6 +362,7 @@ export default function NecesidadMensual({
           <thead>
             <tr className="border-b border-gray-200 bg-white text-[10px] uppercase tracking-wide text-gray-400">
               <th className="sticky left-0 z-10 bg-white px-4 py-2 text-left font-bold">Producto</th>
+              <th className="px-3 py-2 text-right font-bold" title="Litros ya envasados en cámara hoy — se descuentan de la necesidad mes a mes antes de proponer una cocción nueva">Stock hoy</th>
               <th className="px-3 py-2 text-right font-bold" title="Stock de seguridad calibrado que respalda estos litros">Colchón</th>
               <th className="px-3 py-2 text-right font-bold" title="Litros a los que hay que volver a cocer">Pto. reorden</th>
               {mesesVisibles.map(m => (
@@ -332,6 +383,9 @@ export default function NecesidadMensual({
                   </div>
                 </td>
 
+                <td className="px-3 py-2 text-right align-top text-[11px] font-semibold tabular-nums text-gray-600">
+                  {f.stockHoy != null ? `${fNum(f.stockHoy)} L` : '—'}
+                </td>
                 <td className="px-3 py-2 text-right align-top text-[11px] tabular-nums text-gray-500">
                   {f.colchon != null ? `${fNum(f.colchon)} L` : '—'}
                 </td>
@@ -340,7 +394,7 @@ export default function NecesidadMensual({
                 </td>
 
                 {f.porMes.map(c => {
-                  const cubierto = c.yaEnPlan >= c.objetivo && c.objetivo > 0
+                  const cubierto = c.objetivo > 0 && c.faltante === 0
                   const cargando = guardando === c.clave
                   return (
                     <td key={c.mes} className="px-3 py-2 align-top">
@@ -353,6 +407,11 @@ export default function NecesidadMensual({
                         {c.yaEnPlan > 0 && (
                           <span className="text-[10px] tabular-nums text-gray-400">
                             {fNum(c.yaEnPlan)} L en plan
+                          </span>
+                        )}
+                        {c.stockUsado > 0 && (
+                          <span className="text-[10px] tabular-nums text-gray-400">
+                            {fNum(c.stockUsado)} L de stock
                           </span>
                         )}
                         {c.faltante > 0 ? (
@@ -382,12 +441,15 @@ export default function NecesidadMensual({
           <tfoot>
             <tr className="border-t-2 border-gray-200 bg-gray-50 text-[11px] font-black text-gray-700">
               <td className="sticky left-0 z-10 bg-gray-50 px-4 py-2.5 text-left uppercase tracking-wide">Total del mes</td>
-              <td /><td />
+              <td /><td /><td />
               {totalesPorMes.map(t => (
                 <td key={t.mes} className="px-3 py-2.5 text-right tabular-nums">
                   <div>{fNum(t.objetivo)} L</div>
                   {t.yaEnPlan > 0 && (
                     <div className="text-[10px] font-semibold text-gray-400">{fNum(t.yaEnPlan)} en plan</div>
+                  )}
+                  {t.stockUsado > 0 && (
+                    <div className="text-[10px] font-semibold text-gray-400">{fNum(t.stockUsado)} de stock</div>
                   )}
                 </td>
               ))}
