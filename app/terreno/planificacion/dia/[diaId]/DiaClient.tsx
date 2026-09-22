@@ -121,10 +121,26 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
     dia.destino_lat != null ? { lat: Number(dia.destino_lat), lng: Number(dia.destino_lng) } : null,
   )
 
-  async function buscarDireccion(q: string, setResultados: (r: GeoResult[]) => void) {
+  // Sin debounce, cada tecla disparaba un fetch a Nominatim: además de violar
+  // su política de uso (bloquea IPs que hacen autocompletado sin límite),
+  // las respuestas podían llegar desordenadas y una más vieja (de un texto
+  // más corto, con menos o ningún resultado) pisaba a una más nueva —
+  // "escribo la dirección completa y no aparece ninguna sugerencia para
+  // elegir", lo que dejaba el origen sin definir y el botón de calcular
+  // ruta bloqueado para siempre.
+  const geocodeDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const geocodeSeqRef = useRef<Record<string, number>>({})
+
+  function buscarDireccion(key: string, q: string, setResultados: (r: GeoResult[]) => void) {
+    if (geocodeDebounceRef.current[key]) clearTimeout(geocodeDebounceRef.current[key])
     if (q.trim().length < 3) { setResultados([]); return }
-    const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}&bias=cl`)
-    if (res.ok) setResultados(await res.json())
+    const seq = (geocodeSeqRef.current[key] ?? 0) + 1
+    geocodeSeqRef.current[key] = seq
+    geocodeDebounceRef.current[key] = setTimeout(async () => {
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}&bias=cl`)
+      if (geocodeSeqRef.current[key] !== seq) return
+      if (res.ok) setResultados(await res.json())
+    }, 400)
   }
 
   // ── Buscador de clientes ──
@@ -334,7 +350,7 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
             label="Salida"
             placeholder="Casa autorizada, bodega..."
             valor={origenTexto}
-            onChange={v => { setOrigenTexto(v); buscarDireccion(v, setOrigenResultados) }}
+            onChange={v => { setOrigenTexto(v); buscarDireccion('origen', v, setOrigenResultados) }}
             resultados={origenResultados}
             onElegir={r => { setOrigenTexto(r.display_name); setOrigenCoords({ lat: Number(r.lat), lng: Number(r.lon) }); setOrigenResultados([]) }}
             disabled={!editable}
@@ -351,7 +367,7 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
                 label="Término"
                 placeholder="Alojamiento u otra ubicación autorizada"
                 valor={destinoTexto}
-                onChange={v => { setDestinoTexto(v); buscarDireccion(v, setDestinoResultados) }}
+                onChange={v => { setDestinoTexto(v); buscarDireccion('destino', v, setDestinoResultados) }}
                 resultados={destinoResultados}
                 onElegir={r => { setDestinoTexto(r.display_name); setDestinoCoords({ lat: Number(r.lat), lng: Number(r.lon) }); setDestinoResultados([]) }}
                 disabled={!editable}
