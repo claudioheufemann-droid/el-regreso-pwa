@@ -273,10 +273,35 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
     ))
   }
 
+  async function guardarCambiosDia() {
+    await fetch(`/api/terreno/planificacion/${plan.id}/dias/${dia.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        origen: origenTexto || null,
+        origen_lat: origenCoords?.lat ?? null,
+        origen_lng: origenCoords?.lng ?? null,
+        destino: dia.regreso_mismo_dia ? null : (destinoTexto || null),
+        destino_lat: dia.regreso_mismo_dia ? null : (destinoCoords?.lat ?? null),
+        destino_lng: dia.regreso_mismo_dia ? null : (destinoCoords?.lng ?? null),
+        regreso_mismo_dia: dia.regreso_mismo_dia,
+        pernocta: dia.pernocta,
+        hotel_estimado_clp: dia.hotel_estimado_clp,
+        peajes_estimados_clp: dia.peajes_estimados_clp,
+        desayuno_incluido_alojamiento: dia.desayuno_incluido_alojamiento,
+      }),
+    })
+  }
+
   async function calcularRuta() {
     setCalculando(true)
     setMensajeRuta(null)
     try {
+      // El botón se habilita con el origen elegido en el estado local (origenCoords),
+      // pero el cálculo de ruta lee origen_lat/origen_lng ya guardados en la BD — si el
+      // vendedor elige la dirección y toca "Calcular ruta" sin haber tocado antes
+      // "Guardar día", el servidor respondía "Falta el origen del día" aunque la
+      // dirección estuviera elegida. Se guarda primero para que ambos queden en sync.
+      await guardarCambiosDia()
       const res = await fetch(`/api/terreno/planificacion/${plan.id}/dias/${dia.id}/calcular-ruta`, { method: 'POST' })
       const data = await res.json()
       if (!data.ok) { setMensajeRuta(data.motivo ?? 'No se pudo calcular la ruta'); return }
@@ -290,22 +315,7 @@ export default function DiaClient({ dia: diaInicial, plan, paradasIniciales, rut
   async function guardarDia() {
     setGuardando(true)
     try {
-      await fetch(`/api/terreno/planificacion/${plan.id}/dias/${dia.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origen: origenTexto || null,
-          origen_lat: origenCoords?.lat ?? null,
-          origen_lng: origenCoords?.lng ?? null,
-          destino: dia.regreso_mismo_dia ? null : (destinoTexto || null),
-          destino_lat: dia.regreso_mismo_dia ? null : (destinoCoords?.lat ?? null),
-          destino_lng: dia.regreso_mismo_dia ? null : (destinoCoords?.lng ?? null),
-          regreso_mismo_dia: dia.regreso_mismo_dia,
-          pernocta: dia.pernocta,
-          hotel_estimado_clp: dia.hotel_estimado_clp,
-          peajes_estimados_clp: dia.peajes_estimados_clp,
-          desayuno_incluido_alojamiento: dia.desayuno_incluido_alojamiento,
-        }),
-      })
+      await guardarCambiosDia()
       if (origenCoords && paradas.length > 0) await calcularRuta()
       router.push('/terreno/planificacion')
     } finally {
