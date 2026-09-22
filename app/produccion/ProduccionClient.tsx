@@ -25,7 +25,7 @@ import ConfigProductosGantt from './ConfigProductosGantt'
 import ModalAgregarProducto from './ModalAgregarProducto'
 import PopoverEditarTanque from './PopoverEditarTanque'
 import NecesidadMensual from './NecesidadMensual'
-import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, LEAD_TIME_INSUMOS_SEMANAS, esLineaFija, type EnvaseBucket } from '@/lib/produccion/reglas'
+import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, LEAD_TIME_INSUMOS_SEMANAS, esLineaFija, familiaEnvase, type EnvaseBucket, type FamiliaEnvase } from '@/lib/produccion/reglas'
 
 /** Etiqueta + color por categoría de insumo — mismas 4 del Excel de recetas
  *  (malta/lúpulo/levadura/otros), reutilizado en la tabla de Insumos y Compras. */
@@ -52,6 +52,7 @@ function fCantidadInsumo(cantidad: number, unidadBase: 'gr' | 'ml'): string {
 /** Orden fijo de formato — evita que un mismo producto se vea disperso al
  *  ordenar por otro criterio (Stock de Seguridad, calculadora de cobertura). */
 const ORDEN_ENVASE: EnvaseBucket[] = ['barril_30', 'barril_50', 'lata', 'otros']
+const ORDEN_FAMILIA: FamiliaEnvase[] = ['barril', 'lata']
 
 /** Valor sentinela del selector de Producto en la Calculadora de Cobertura
  *  para la opción agregada "Todos los productos" (compras necesita el total
@@ -2573,6 +2574,37 @@ export default function ProduccionClient({
       if (!stockPorProducto.has(ss.producto)) stockPorProducto.set(ss.producto, ss.stockActualLitros)
       if (!colchonPorProducto.has(ss.producto)) colchonPorProducto.set(ss.producto, ss.stockSeguridadLitros)
     }
+
+    /* Lo mismo, pero partido en BARRIL vs LATA — la única frontera que no se
+       puede cruzar al servir un pedido (ver familiaEnvase en reglas.ts). El
+       número por producto, solo, esconde el caso que más duele: un producto
+       con el barril al día y la lata en cero se ve "bien" en el agregado.
+
+       Los dos tamaños de barril se SUMAN acá (30 + 50) porque son
+       intercambiables. Sumar sus colchones es conservador — al juntar dos
+       formatos la variabilidad real baja, así que el colchón correcto sería
+       algo menor que la suma. Se prefiere pecar de exigente mientras el
+       script de forecast no calcule la familia con su propia σ.
+
+       Sólo el mes más cercano, igual que el stock y el colchón de arriba. */
+    const familiasPorProducto = new Map<string, Map<FamiliaEnvase, { stockActual: number; colchon: number }>>()
+    const mesFamilia = new Map<string, string>()
+    for (const ss of stockSeguridad) {
+      if (ss.nivel !== 'producto_envase') continue
+      const familia = familiaEnvase(ss.envase)
+      if (!familia) continue
+      // La primera fila que aparece de cada producto fija el mes; el resto de
+      // los meses proyectados se ignora.
+      if (!mesFamilia.has(ss.producto)) mesFamilia.set(ss.producto, ss.mes)
+      if (mesFamilia.get(ss.producto) !== ss.mes) continue
+
+      let porFamilia = familiasPorProducto.get(ss.producto)
+      if (!porFamilia) { porFamilia = new Map(); familiasPorProducto.set(ss.producto, porFamilia) }
+      const acum = porFamilia.get(familia) ?? { stockActual: 0, colchon: 0 }
+      acum.stockActual += ss.stockActualLitros ?? 0
+      acum.colchon += ss.stockSeguridadLitros
+      porFamilia.set(familia, acum)
+    }
     return series
       // Sólo el catálogo estable. Un rotativo que se agota no es una alarma:
       // se agota porque dejó de producirse a propósito.
@@ -2597,6 +2629,10 @@ export default function ProduccionClient({
           categoria: (s.categoria === 'kombucha' ? 'kombucha' : 'cerveza') as 'cerveza' | 'kombucha',
           stockActual: stockPorProducto.get(s.producto as string) ?? 0,
           colchon: colchonPorProducto.get(s.producto as string),
+          familias: ORDEN_FAMILIA.flatMap(f => {
+            const d = familiasPorProducto.get(s.producto as string)?.get(f)
+            return d ? [{ familia: f, stockActual: d.stockActual, colchon: d.colchon }] : []
+          }),
           ritmo,
         }
       })

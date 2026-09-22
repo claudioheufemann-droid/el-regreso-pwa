@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Settings2, AlertTriangle, ChevronLeft, ChevronRight, CalendarRange, Eye, EyeOff, X, Beaker, PackagePlus } from 'lucide-react'
 import type { CargaArrastre, DestinoArrastre, EstadoArrastre } from './useArrastreCalendario'
 import FilaCobertura, { type NivelCobertura, type TramoCobertura } from './FilaCobertura'
+import type { FamiliaEnvase } from '@/lib/produccion/reglas'
 
 /**
  * Carta Gantt de ocupación de fermentadores.
@@ -129,6 +130,17 @@ export interface NecesidadProducto {
    *  barra de cobertura pasa a ámbar. Opcional: sin él se usan siete días de
    *  venta, que es lo mismo pero sin la σ del producto. */
   colchon?: number
+  /** Estado de HOY partido por familia de envase (barril vs lata) — ver
+   *  familiaEnvase en reglas.ts. Vacío si el producto no tiene stock de
+   *  seguridad por formato todavía.
+   *
+   *  Es deliberadamente una FOTO de hoy y no una curva proyectada como el
+   *  resto de la fila: los litros que están fermentando no tienen formato
+   *  asignado (eso se decide recién al envasar, en el Split de Envasado), así
+   *  que proyectar una cobertura por familia hacia adelante sería inventar un
+   *  reparto que nadie decidió todavía. La barra del calendario sigue siendo
+   *  a granel, que es lo correcto — una cocción es a granel. */
+  familias: { familia: FamiliaEnvase; stockActual: number; colchon: number }[]
 }
 
 const MS_DIA = 86_400_000

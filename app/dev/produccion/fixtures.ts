@@ -240,6 +240,16 @@ export const NECESIDAD = CONFIG.map((c, i) => {
        un producto que todavía no tiene stock de seguridad calculado, y sirve
        para ver que el respaldo de siete días de venta funciona. */
     colchon: i === 2 ? undefined : Math.round(litrosMes * 0.6),
+    /* Barril y lata por separado, con los tres casos que hay que poder
+       distinguir de un vistazo: el primero con la lata en cero y el barril
+       al día (el quiebre que el número del producto entero escondía), el
+       segundo con las dos familias bajo el colchón, y del tercero en adelante
+       ambas holgadas. Al índice 2 se le dejan vacías a propósito — es el
+       producto sin stock de seguridad por formato, que cae al total. */
+    familias: i === 2 ? [] : [
+      { familia: 'barril' as const, stockActual: Math.round(litrosMes * (i === 0 ? 0.5 : i === 1 ? 0.2 : 1.4)), colchon: Math.round(litrosMes * 0.4) },
+      { familia: 'lata' as const, stockActual: i === 0 ? 0 : Math.round(litrosMes * (i === 1 ? 0.1 : 0.9)), colchon: Math.round(litrosMes * 0.3) },
+    ],
     ritmo: Array.from({ length: 6 }, (_, m) => ({
       mes: mesDesde(m),
       litrosDia: (litrosMes * (1 + 0.06 * m)) / 30,

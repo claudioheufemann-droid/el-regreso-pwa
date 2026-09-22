@@ -31,6 +31,8 @@
  * dibujo.
  */
 
+import { FAMILIA_LABEL, FAMILIA_AYUDA, type FamiliaEnvase } from '@/lib/produccion/reglas'
+
 export type NivelCobertura = 'ok' | 'bajo' | 'cero'
 
 export interface TramoCobertura {
@@ -68,6 +70,9 @@ export interface CoberturaProducto {
    *  con σ y nivel de servicio detrás. Se muestra distinto para no hacerlo
    *  pasar por un dato tan firme como el real. */
   colchonEstimado: boolean
+  /** Estado de HOY por familia de envase — foto, no proyección. Ver el
+   *  comentario en NecesidadProducto (GanttProduccion.tsx). */
+  familias: { familia: FamiliaEnvase; stockActual: number; colchon: number }[]
 }
 
 const MS_DIA = 86_400_000
@@ -150,15 +155,68 @@ export default function FilaCobertura({
       style={{ ['--fila' as string]: fila }}>
 
       <div style={{ width: anchoEtiqueta, flexShrink: 0, height: altoFila }}
-        className="sticky left-0 z-10 flex flex-col justify-center gap-0.5 border-r border-gray-100 bg-white px-3">
+        className="sticky left-0 z-10 flex items-center gap-2 border-r border-gray-100 bg-white px-3">
 
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: color }} />
-          <span className="truncate font-bold text-gray-800" style={{ fontSize: tamEtiqueta + 1 }}
-            title={`${c.producto} · ${Math.round(c.stockActual).toLocaleString('es-CL')} L en cámara hoy`}>
-            {c.producto}
-          </span>
-          <span className="ml-auto shrink-0 tabular-nums text-gray-400" style={{ fontSize: tamEtiqueta - 1 }}
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: color }} />
+            <span className="truncate font-bold text-gray-800" style={{ fontSize: tamEtiqueta + 1 }}
+              title={`${c.producto} · ${Math.round(c.stockActual).toLocaleString('es-CL')} L en cámara hoy`}>
+              {c.producto}
+            </span>
+          </div>
+
+          {/* Velocidad y días de inventario. Los dos juntos, porque por separado
+              engañan: 40 L/día no dice nada sin saber cuánto hay, y "8 días" no
+              dice si eso es mucho o poco para este producto. */}
+          <div className="flex items-center gap-1.5 tabular-nums text-gray-400"
+            style={{ fontSize: Math.max(tamEtiqueta - 2, 8) }}>
+            <span title={`Se venden ${fRitmo(c.velocidad)} litros por día de ${c.producto} — venta real de las últimas 4 semanas para este mes, forecast para los meses siguientes de la proyección`}>
+              {fRitmo(c.velocidad)} L/día
+            </span>
+            {c.doi != null && (
+              <>
+                <span className="text-gray-300">·</span>
+                <span
+                  className={c.doi <= 7 ? 'font-bold text-red-500' : c.doi <= 21 ? 'font-bold text-amber-600' : ''}
+                  title={`Días de inventario: lo que hay hoy en cámara alcanza ${c.doi} días a este ritmo, sin contar ningún lote por llegar`}>
+                  DOI {c.doi} d
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Stock de HOY contra su colchón, partido en barril y lata. Un pedido
+            de barril no se sirve con latas, así que el número del producto
+            entero —que los promedia— puede mostrar verde con un formato en
+            cero. Los dos tamaños de barril ya vienen sumados de necesidadGantt:
+            son intercambiables entre sí (ver familiaEnvase en reglas.ts).
+
+            Se cae al total del producto sólo si el forecast todavía no calculó
+            el stock de seguridad por formato para este producto. */}
+        {c.familias.length > 0 ? (
+          <div className="flex shrink-0 flex-col items-end justify-center gap-px tabular-nums"
+            style={{ fontSize: Math.max(tamEtiqueta - 2, 8) }}>
+            {c.familias.map(f => {
+              const falta = f.stockActual < f.colchon
+              const enCero = f.stockActual <= 0
+              return (
+                <span key={f.familia}
+                  className={enCero ? 'font-bold text-red-600' : falta ? 'font-bold text-amber-600' : 'text-gray-400'}
+                  title={`${FAMILIA_LABEL[f.familia]}: ${fLitros(f.stockActual)} L en cámara hoy contra un colchón de ${fLitros(f.colchon)} L. `
+                    + (enCero ? 'Sin stock de este formato. ' : falta ? `Faltan ${fLitros(f.colchon - f.stockActual)} L para el colchón. ` : 'Sobre el colchón. ')
+                    + FAMILIA_AYUDA[f.familia]}>
+                  <span className="mr-0.5 font-normal text-gray-300">{FAMILIA_LABEL[f.familia][0]}</span>
+                  {fLitros(f.stockActual)}
+                  <span className="font-normal text-gray-300">/</span>
+                  {fLitros(f.colchon)}
+                </span>
+              )
+            })}
+          </div>
+        ) : (
+          <span className="shrink-0 tabular-nums text-gray-400" style={{ fontSize: tamEtiqueta - 1 }}
             title={c.colchonEstimado
               ? `Colchón: sin stock de seguridad calculado todavía para este producto — se usa un respaldo de 7 días de venta (${fLitros(c.colchon)} L)`
               : `Colchón: ${fLitros(c.colchon)} L — el stock de seguridad calculado para este producto (con su σ y nivel de servicio). Por debajo de esto la barra pasa a ámbar.`}>
@@ -168,27 +226,7 @@ export default function FilaCobertura({
               {c.colchonEstimado && '~'}{fLitros(c.colchon)}
             </span>
           </span>
-        </div>
-
-        {/* Velocidad y días de inventario. Los dos juntos, porque por separado
-            engañan: 40 L/día no dice nada sin saber cuánto hay, y "8 días" no
-            dice si eso es mucho o poco para este producto. */}
-        <div className="flex items-center gap-1.5 tabular-nums text-gray-400"
-          style={{ fontSize: Math.max(tamEtiqueta - 2, 8) }}>
-          <span title={`Se venden ${fRitmo(c.velocidad)} litros por día de ${c.producto} — venta real de las últimas 4 semanas para este mes, forecast para los meses siguientes de la proyección`}>
-            {fRitmo(c.velocidad)} L/día
-          </span>
-          {c.doi != null && (
-            <>
-              <span className="text-gray-300">·</span>
-              <span
-                className={c.doi <= 7 ? 'font-bold text-red-500' : c.doi <= 21 ? 'font-bold text-amber-600' : ''}
-                title={`Días de inventario: lo que hay hoy en cámara alcanza ${c.doi} días a este ritmo, sin contar ningún lote por llegar`}>
-                DOI {c.doi} d
-              </span>
-            </>
-          )}
-        </div>
+        )}
       </div>
 
       <div className="relative" style={{ width: dias.length * anchoDia, flexShrink: 0, height: altoFila }}>

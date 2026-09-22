@@ -49,6 +49,55 @@ export function bucketEnvase(envase: string | null, litros: number): EnvaseBucke
 }
 
 /**
+ * FAMILIA de envase — la única frontera que de verdad NO se puede cruzar al
+ * servir un pedido. Decisión del usuario, 22-sep-2026.
+ *
+ * Los dos tamaños de barril son INTERCAMBIABLES y por eso cuentan como uno
+ * solo: el barril de 50L se usa únicamente para el movimiento interno a
+ * BaseCamp (el local propio), no se le vende a clientes, y cuando se acaban
+ * los de 50 el traslado se cubre con barriles de 30. Verificado contra las
+ * ventas reales (jun–sep 2026): los clientes externos compraron 8.040 L en
+ * barril 30 y CERO litros en barril 50; los 7.200 L de barril 50 del período
+ * son todos BaseCamp, que además ya tomó 1.830 L en barril 30 en paralelo —
+ * o sea, la sustitución no es teórica, ya está ocurriendo.
+ *
+ * La lata, en cambio, no la cubre nada: un pedido de latas no se sirve con
+ * barriles ni al revés.
+ *
+ * Por qué importa: mirar barril_30 y barril_50 por separado genera alarmas
+ * FALSAS. Al 22-sep-2026, Doble IPA y Carrot Cake Stout figuraban bajo su
+ * punto de reorden en barril 50 (ambos en 0 L) teniendo barril 30 de sobra
+ * — un quiebre que en la práctica no existe, porque ese 50 se cubre con 30.
+ * Agregar los dos formatos al nivel de PRODUCTO tampoco sirve: ahí la lata
+ * entra al mismo promedio y esconde el quiebre real (Kombucha Detox tiene el
+ * barril casi al día y la lata en 24 L contra 2.762 de punto de reorden).
+ *
+ * 'otros' (growler, pinta, recargas) se queda fuera a propósito: ya está
+ * excluido del forecast por envase y del stock de seguridad.
+ */
+export type FamiliaEnvase = 'barril' | 'lata'
+
+export const FAMILIA_LABEL: Record<FamiliaEnvase, string> = {
+  barril: 'Barril',
+  lata: 'Lata',
+}
+
+/** Por qué los dos barriles van juntos — para tooltips y ayudas en pantalla,
+ *  así la regla se explica sola donde se usa y nadie tiene que recordarla. */
+export const FAMILIA_AYUDA: Record<FamiliaEnvase, string> = {
+  barril: 'Barril 30L y 50L se cuentan juntos: el de 50L es traslado interno al BaseCamp, no se vende a clientes, y si se acaba se cubre con barriles de 30L.',
+  lata: 'La lata va aparte: un pedido de latas no se puede servir con barriles.',
+}
+
+/** Familia a la que pertenece un bucket de envase. `null` para 'otros', que
+ *  no participa de la cobertura por formato. */
+export function familiaEnvase(bucket: EnvaseBucket | string | null): FamiliaEnvase | null {
+  if (bucket === 'barril_30' || bucket === 'barril_50') return 'barril'
+  if (bucket === 'lata') return 'lata'
+  return null
+}
+
+/**
  * Redondea un objetivo en litros (stock de seguridad, punto de reorden) HACIA
  * ARRIBA al múltiplo entero de barril más cercano — decisión del usuario,
  * 11-sep-2026: un barril no se llena a medias, así que un colchón de "14 L"
