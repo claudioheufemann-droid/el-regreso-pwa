@@ -2384,6 +2384,42 @@ export default function ProduccionClient({
     return { lotes, porMes, sinTanque }
   }, [stockSeguridad, alarmasPorProducto, sugerenciasPlan, splitFermentadores, ocupacionPlanta.tanques, anclasCoccion, anclasTanque, horizontePlanMeses])
 
+  /** Fusiona el plan SUGERIDO (planSugerido, una simulación que nunca lee
+   *  plan_produccion) con los lotes ya CONFIRMADOS (plan, la cola real) en un
+   *  solo resumen mensual — antes eran dos números que convivían en la misma
+   *  pantalla sin hablarse: esta tarjeta sólo contaba la simulación, y la
+   *  franja "Agendado vs. necesidad" del Gantt (más abajo) sólo contaba lo
+   *  confirmado. Con 13 lotes reales ya en la cola, la tarjeta decía "0
+   *  cocciones" para un mes que el Gantt mostraba lleno — cierto en su propio
+   *  término (no había NADA sugerido pendiente) pero leído como "no hay nada
+   *  agendado", que es lo contrario de lo que pasaba.
+   *
+   *  No se suman a `planSugerido.lotes` porque esa simulación parte de la
+   *  planta real (bloquea el tanque de un confirmado) y ya los descuenta del
+   *  cálculo de necesidad — sumarlos de nuevo acá sería contarlos dos veces.
+   *  Esto es sólo el RESUMEN visual: confirmado + sugerido, lado a lado. */
+  const resumenCargaMeses = useMemo(() => {
+    const mesDe = (iso: string) => iso.slice(0, 8) + '01'
+    const confirmadosPorMes = new Map<string, { litrosCerveza: number; litrosKombucha: number; lotesCerveza: number; lotesKombucha: number }>()
+    for (const l of plan) {
+      if (l.estado !== 'planificado' && l.estado !== 'en_curso') continue
+      const mes = mesDe(l.fechaPlanificada)
+      const acc = confirmadosPorMes.get(mes) ?? { litrosCerveza: 0, litrosKombucha: 0, lotesCerveza: 0, lotesKombucha: 0 }
+      if (l.categoria === 'cerveza') { acc.litrosCerveza += l.litrosPlanificados; acc.lotesCerveza += 1 }
+      else { acc.litrosKombucha += l.litrosPlanificados; acc.lotesKombucha += 1 }
+      confirmadosPorMes.set(mes, acc)
+    }
+    return planSugerido.porMes.map(f => {
+      const c = confirmadosPorMes.get(f.mes) ?? { litrosCerveza: 0, litrosKombucha: 0, lotesCerveza: 0, lotesKombucha: 0 }
+      return {
+        ...f,
+        litrosCervezaConfirmado: c.litrosCerveza, litrosKombuchaConfirmado: c.litrosKombucha,
+        lotesCervezaConfirmado: c.lotesCerveza, lotesKombuchaConfirmado: c.lotesKombucha,
+      }
+    })
+  }, [plan, planSugerido.porMes])
+
+
   /** Confirma la necesidad de un producto para un mes: crea las cocciones ya
    *  partidas por tanque. Se agendan escalonadas dentro del mes, no todas el
    *  día 1 — arrancar cinco cocciones el mismo día no es ejecutable, y dejarlas
@@ -5081,19 +5117,37 @@ export default function ProduccionClient({
                 pregunta="¿Cuándo vamos a cocinar, y en qué tanque?"
                 detalle="El plan sale del forecast y del punto de reorden de cada producto, acotado a los fermentadores que existen de verdad. Arrastrá una cocción para moverla: se replanifica todo lo que viene después."
               />
-              {/* ══════════ PLAN DE COBERTURA ══════════
-                  Resumen mensual del MISMO plan que muestra el calendario de
-                  abajo — no un cálculo aparte. Cada cifra de acá es la suma
-                  de lotes reales ya asignados a un tanque concreto, así que
-                  las dos vistas no pueden contradecirse. */}
+              {/* ══════════ PROYECCIÓN DE CARGA ══════════
+                  Antes se llamaba "Plan de Cobertura" y sólo contaba la
+                  SIMULACIÓN (planSugerido) — con lotes ya confirmados en la
+                  cola real, esta tarjeta podía decir "0 cocciones" para un
+                  mes que el propio Gantt de abajo mostraba lleno. Cierto en
+                  su propio término (no había nada SUGERIDO pendiente ahí)
+                  pero leído como "no hay nada agendado", que es lo contrario
+                  de lo que pasaba — dos resúmenes del mismo módulo
+                  contradiciéndose (encontrado 22-sep-2026, con 13 lotes
+                  confirmados y la tarjeta en cero).
+
+                  Ahora cada mes muestra CONFIRMADO (de `plan`, la cola real)
+                  y PROPUESTO (de planSugerido, lo que el modelo sugeriría si
+                  nada más se confirma) por separado — sin sumarlos en un
+                  solo total, para no perder la distinción de qué es una
+                  decisión ya tomada y qué es una propuesta. Ver
+                  resumenCargaMeses arriba. */}
               {planSugerido.porMes.length > 0 && (
                 <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                   <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <CalendarIcon size={18} style={{ color: COLORS.darkGreen }} />
-                      <h3 className="font-bold text-gray-800">Plan de Cobertura — {horizontePlanMeses} {horizontePlanMeses === 1 ? 'mes' : 'meses'}</h3>
+                      <h3 className="font-bold text-gray-800">Proyección de carga — {horizontePlanMeses} {horizontePlanMeses === 1 ? 'mes' : 'meses'}</h3>
+                      {/* Confirmadas: ya están en la cola real (plan_produccion).
+                          Propuestas: el modelo las sugeriría si no se confirma nada
+                          más — no son una decisión tomada, por eso van aparte. */}
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                        {resumenCargaMeses.reduce((s, f) => s + f.lotesCervezaConfirmado + f.lotesKombuchaConfirmado, 0)} confirmadas
+                      </span>
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
-                        {planSugerido.lotes.filter(l => !l.enCurso).length} {planSugerido.lotes.filter(l => !l.enCurso).length === 1 ? 'cocción' : 'cocciones'} programadas
+                        {planSugerido.lotes.filter(l => !l.enCurso).length} {planSugerido.lotes.filter(l => !l.enCurso).length === 1 ? 'propuesta' : 'propuestas'}
                       </span>
                       {/* El plan arranca de la planta real: lo que hoy está en los
                           tanques no se vuelve a cocer, y esos fermentadores no se
@@ -5146,12 +5200,12 @@ export default function ProduccionClient({
                     Lo que ya está fermentando no necesita esto — sus insumos ya se compraron.
                   </p>
                   <p className="mb-4 text-sm text-gray-500">
-                    Simulación día a día del inventario de cada producto: el stock baja al ritmo del forecast y se
-                    programa una cocción cada vez que toca su punto de reorden, arrancando por la fecha que ya propone
-                    el Plan Maestro. Cada cocción se acota al tamaño de un tanque que existe de verdad, con su
-                    fermentador asignado. Parte de la planta como está hoy: lo que ya se está fermentando no se vuelve
-                    a cocer, suma a stock recién el día que se embarrila, y mantiene su tanque ocupado hasta entonces
-                    — el detalle día por día está en el calendario de abajo.
+                    Cada mes cruza dos números: lo <strong>confirmado</strong> (la cola real de cocciones, la misma
+                    que ejecuta el Gantt de abajo) y lo <strong>propuesto</strong> — una simulación día a día del
+                    inventario de cada producto que agrega una cocción cada vez que el stock tocaría su punto de
+                    reorden, si nada más se confirma primero. Cada propuesta se acota al tamaño de un tanque que
+                    existe de verdad. Parte de la planta como está hoy: lo que ya se está fermentando no se vuelve a
+                    cocer, suma a stock recién el día que se embarrila, y mantiene su tanque ocupado hasta entonces.
                   </p>
 
                   {planSugerido.sinTanque.length > 0 && (
@@ -5164,7 +5218,7 @@ export default function ProduccionClient({
                         <p className="mt-0.5 text-red-700">
                           {planSugerido.sinTanque.map(s => `${s.producto} (${fNum(s.litros)} L)`).join(', ')} — no alcanzan
                           los fermentadores de esa línea dentro del horizonte. Hay que sumar capacidad, correr la
-                          cobertura, o aceptar el quiebre.
+                          proyección, o aceptar el quiebre.
                         </p>
                       </div>
                     </div>
@@ -5172,10 +5226,10 @@ export default function ProduccionClient({
 
                   <div className="overflow-x-auto">
                     <div className="flex min-w-max gap-3 pb-1">
-                      {planSugerido.porMes.map(f => (
+                      {resumenCargaMeses.map(f => (
                         <div
                           key={f.mes}
-                          className={`prod-hover-card w-60 shrink-0 rounded-lg border p-3 ${
+                          className={`prod-hover-card w-64 shrink-0 rounded-lg border p-3 ${
                             f.severidad === 'critico' ? 'border-red-300 bg-red-50/60'
                               : f.severidad === 'ajustado' ? 'border-amber-300 bg-amber-50/60'
                               : 'border-emerald-200 bg-emerald-50/40'
@@ -5188,38 +5242,58 @@ export default function ProduccionClient({
                                 f.severidad === 'critico' ? 'bg-red-500' : f.severidad === 'ajustado' ? 'bg-amber-500' : 'bg-emerald-500'
                               }`}
                               title={
-                                f.severidad === 'critico' ? 'Hay cocciones que no alcanzan a estar listas antes de que el producto se agote.'
-                                  : f.severidad === 'ajustado' ? 'Alguna cocción tuvo que correrse de su fecha ideal por falta de tanque libre.'
+                                f.severidad === 'critico' ? 'Hay propuestas que no alcanzan a estar listas antes de que el producto se agote.'
+                                  : f.severidad === 'ajustado' ? 'Alguna propuesta tuvo que correrse de su fecha ideal por falta de tanque libre.'
                                   : 'Todo entra en fecha con los tanques disponibles.'
                               }
                             />
                           </div>
 
+                          {/* Cervecería: confirmado (cola real) y propuesto
+                              (simulación) lado a lado — nunca sumados en un
+                              solo número, para no borrar la diferencia entre
+                              "ya decidido" y "el modelo lo sugeriría". */}
                           <div className="mt-2.5 border-t border-gray-200/70 pt-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Cervecería (T)</span>
-                              <span className="text-xs font-bold tabular-nums text-gray-800">{fNum(f.litrosCerveza)} L</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Cervecería (T)</span>
+                            <div className="mt-1 flex items-center justify-between">
+                              <span className="text-[11px] text-emerald-700">Confirmado</span>
+                              <span className="text-xs font-bold tabular-nums text-gray-800">{fNum(f.litrosCervezaConfirmado)} L</span>
                             </div>
-                            <p className="mt-0.5 text-[11px] text-gray-500">
-                              {f.lotesCerveza === 0 ? 'Sin cocciones' : `${f.lotesCerveza} ${f.lotesCerveza === 1 ? 'cocción' : 'cocciones'}`}
+                            <p className="text-[10.5px] text-gray-400">
+                              {f.lotesCervezaConfirmado === 0 ? 'Ninguna en la cola' : `${f.lotesCervezaConfirmado} en la cola`}
+                            </p>
+                            <div className="mt-1 flex items-center justify-between">
+                              <span className="text-[11px] text-gray-500">Propuesto</span>
+                              <span className="text-xs font-bold tabular-nums text-gray-600">{fNum(f.litrosCerveza)} L</span>
+                            </div>
+                            <p className="text-[10.5px] text-gray-400">
+                              {f.lotesCerveza === 0 ? 'Sin propuestas' : `${f.lotesCerveza} ${f.lotesCerveza === 1 ? 'propuesta' : 'propuestas'}`}
                             </p>
                           </div>
 
                           <div className="mt-2 border-t border-gray-200/70 pt-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Kombuchería (K)</span>
-                              <span className="text-xs font-bold tabular-nums text-gray-800">{fNum(f.litrosKombucha)} L</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Kombuchería (K)</span>
+                            <div className="mt-1 flex items-center justify-between">
+                              <span className="text-[11px] text-emerald-700">Confirmado</span>
+                              <span className="text-xs font-bold tabular-nums text-gray-800">{fNum(f.litrosKombuchaConfirmado)} L</span>
                             </div>
-                            <p className="mt-0.5 text-[11px] text-gray-500">
-                              {f.lotesKombucha === 0 ? 'Sin cocciones' : `${f.lotesKombucha} ${f.lotesKombucha === 1 ? 'cocción' : 'cocciones'}`}
+                            <p className="text-[10.5px] text-gray-400">
+                              {f.lotesKombuchaConfirmado === 0 ? 'Ninguna en la cola' : `${f.lotesKombuchaConfirmado} en la cola`}
+                            </p>
+                            <div className="mt-1 flex items-center justify-between">
+                              <span className="text-[11px] text-gray-500">Propuesto</span>
+                              <span className="text-xs font-bold tabular-nums text-gray-600">{fNum(f.litrosKombucha)} L</span>
+                            </div>
+                            <p className="text-[10.5px] text-gray-400">
+                              {f.lotesKombucha === 0 ? 'Sin propuestas' : `${f.lotesKombucha} ${f.lotesKombucha === 1 ? 'propuesta' : 'propuestas'}`}
                             </p>
                           </div>
 
                           {f.lotesTarde > 0 ? (
                             <p className="mt-2.5 border-t border-gray-200/70 pt-2 text-[11px] font-bold text-red-600">
-                              {f.lotesTarde} {f.lotesTarde === 1 ? 'cocción no llega' : 'cocciones no llegan'} antes de que se agote el producto.
+                              {f.lotesTarde} {f.lotesTarde === 1 ? 'propuesta no llega' : 'propuestas no llegan'} antes de que se agote el producto.
                             </p>
-                          ) : f.lotesCerveza + f.lotesKombucha === 0 ? (
+                          ) : f.lotesCerveza + f.lotesKombucha + f.lotesCervezaConfirmado + f.lotesKombuchaConfirmado === 0 ? (
                             <p className="mt-2.5 border-t border-gray-200/70 pt-2 text-[11px] text-emerald-600">
                               Cubierto con stock + colchón, sin cocer nada nuevo.
                             </p>
