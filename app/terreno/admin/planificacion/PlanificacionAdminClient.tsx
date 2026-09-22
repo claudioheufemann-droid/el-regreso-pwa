@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Loader2, AlertTriangle, Wallet, ClipboardCheck, Download } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, AlertTriangle, Wallet, ClipboardCheck, Download, Trash2 } from 'lucide-react'
 import { C, cardStyle, fPeso } from '../../theme'
 import type { PlanCompleto } from '@/lib/terreno/planificacion/cargarPlanCompleto'
 
@@ -41,6 +41,7 @@ interface Props {
   vendedorSeleccionadoId: string | null
   puedeAprobar: boolean
   puedePagar: boolean
+  isAdmin: boolean
 }
 
 interface FondoRow { id: string; tipo: string; monto_entregado_clp: number; metodo: string | null; entregado_at: string }
@@ -48,7 +49,7 @@ interface RendicionRow { id: string; estado: string; enviada_at: string | null }
 interface RendicionItemRow { id: string; tipo: string; monto_clp: number; estado: string; comprobante_url: string | null }
 interface VinculoVentaRow { id: string; visita_id: string; venta_id: number; tipo_vinculo: string; score_heuristica: number | null }
 
-export default function PlanificacionAdminClient({ semana, vendedores, vendedorSeleccionadoId, puedeAprobar, puedePagar }: Props) {
+export default function PlanificacionAdminClient({ semana, vendedores, vendedorSeleccionadoId, puedeAprobar, puedePagar, isAdmin }: Props) {
   const router = useRouter()
   const [vendedorId, setVendedorId] = useState(vendedorSeleccionadoId)
   const [completo, setCompleto] = useState<PlanCompleto | null>(null)
@@ -60,6 +61,7 @@ export default function PlanificacionAdminClient({ semana, vendedores, vendedorS
   const [procesando, setProcesando] = useState<string | null>(null)
   const [montoFondo, setMontoFondo] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false)
 
   const vendedorActivo = vendedores.find(v => v.id === vendedorId)
   const planId = vendedorActivo?.plan?.id ?? null
@@ -171,6 +173,23 @@ export default function PlanificacionAdminClient({ semana, vendedores, vendedorS
     }
   }
 
+  async function borrarPlan() {
+    if (!planId) return
+    setProcesando('borrar')
+    setError(null)
+    try {
+      const res = await fetch(`/api/terreno/planificacion/${planId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo borrar el plan')
+      setConfirmandoBorrado(false)
+      router.refresh() // vendedores llega sin plan para este vendedor; el useEffect de recargar reacciona solo
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setProcesando(null)
+    }
+  }
+
   async function decidirVinculo(linkId: string, tipo: 'confirmado' | 'descartado') {
     setProcesando(`vinculo-${linkId}`)
     try {
@@ -195,17 +214,51 @@ export default function PlanificacionAdminClient({ semana, vendedores, vendedorS
           <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: '0.08em' }}>CONTROL SEMANAL</p>
           <h1 style={{ fontSize: 26, fontWeight: 900, color: C.text, marginBottom: 16 }}>Planificación semanal</h1>
         </div>
-        <a
-          href={`/api/terreno/planificacion/export?semana=${semana}`}
-          style={{
-            ...cardStyle, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px',
-            border: `1px solid ${C.line}`, background: '#fff', color: C.text, fontSize: 13, fontWeight: 700,
-            textDecoration: 'none', marginTop: 2,
-          }}
-        >
-          <Download size={14} /> Descargar Excel
-        </a>
+        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+          {isAdmin && planId && (
+            <button
+              onClick={() => setConfirmandoBorrado(true)}
+              style={{
+                ...cardStyle, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px',
+                border: `1px solid ${C.red}`, background: '#fff', color: C.red, fontSize: 13, fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={14} /> Borrar plan
+            </button>
+          )}
+          <a
+            href={`/api/terreno/planificacion/export?semana=${semana}`}
+            style={{
+              ...cardStyle, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px',
+              border: `1px solid ${C.line}`, background: '#fff', color: C.text, fontSize: 13, fontWeight: 700,
+              textDecoration: 'none',
+            }}
+          >
+            <Download size={14} /> Descargar Excel
+          </a>
+        </div>
       </div>
+
+      {confirmandoBorrado && (
+        <div style={{ ...cardStyle, padding: 16, marginBottom: 20, border: `1px solid ${C.red}`, background: '#FEF2F2' }}>
+          <p style={{ fontSize: 13, fontWeight: 800, color: '#991B1B', marginBottom: 4 }}>
+            ¿Borrar este plan por completo?
+          </p>
+          <p style={{ fontSize: 12, color: '#991B1B', marginBottom: 12 }}>
+            Se eliminan días, paradas, fondos, rendición y aprobaciones de esta semana para {vendedorActivo?.nombre}.
+            No se borran las visitas ni jornadas ya registradas, sólo quedan desvinculadas del plan. Esta acción no se puede deshacer.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={borrarPlan} disabled={!!procesando} style={{ flex: 1, minHeight: 40, borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+              {procesando === 'borrar' ? 'Borrando…' : 'Sí, borrar'}
+            </button>
+            <button onClick={() => setConfirmandoBorrado(false)} disabled={!!procesando} style={{ flex: 1, minHeight: 40, borderRadius: 8, border: `1px solid ${C.line}`, background: '#fff', color: C.text, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
         <button onClick={() => irASemana(-1)} style={{ ...cardStyle, width: 36, height: 36, border: `1px solid ${C.line}`, background: '#fff', cursor: 'pointer' }}><ChevronLeft size={16} /></button>

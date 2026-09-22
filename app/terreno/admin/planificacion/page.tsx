@@ -60,6 +60,7 @@ export default async function PlanificacionAdminPage({ searchParams }: { searchP
       vendedorSeleccionadoId={vendedorSeleccionado}
       puedeAprobar={user.puedeAprobarPlanificacionTerreno}
       puedePagar={user.puedePagarPlanificacionTerreno}
+      isAdmin={user.isAdmin}
     />
   )
 }

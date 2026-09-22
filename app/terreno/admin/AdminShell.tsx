@@ -7,6 +7,7 @@ import {
   Home, CalendarClock, Users, Map as MapIcon, FileCheck2, BarChart3, ChevronRight, Wallet,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
+import AdminBottomNav from './AdminBottomNav'
 import { C } from '../theme'
 
 const NAV_ADMIN = [
@@ -111,15 +112,21 @@ export default function AdminShell({ nombre, email, avatarUrl, pendientesRevisio
         </button>
       </aside>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="terreno-admin-content" style={{ flex: 1, minWidth: 0 }}>
         {children}
       </div>
+
+      <AdminBottomNav isAdmin={isAdmin} />
 
       {showSettings && (
         <SettingsPanel onClose={() => setShowSettings(false)} userName={nombre} userEmail={email} avatarUrl={avatarUrl ?? undefined} />
       )}
 
-      <style>{`@media (min-width: 1024px) { .terreno-admin-sidebar { display: flex !important; } }`}</style>
+      <style>{`
+        @media (min-width: 1024px) { .terreno-admin-sidebar { display: flex !important; } }
+        .terreno-admin-content { padding-bottom: max(96px, calc(env(safe-area-inset-bottom, 0px) + 80px)); }
+        @media (min-width: 1024px) { .terreno-admin-content { padding-bottom: 0; } }
+      `}</style>
     </div>
   )
 }

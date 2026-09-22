@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getServerUser } from '@/lib/auth'
 import { cargarPlanCompleto } from '@/lib/terreno/planificacion/cargarPlanCompleto'
 
 // GET /api/terreno/planificacion/[id] — detalle completo: cabecera + días + paradas +
@@ -45,4 +46,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(actualizado)
+}
+
+// DELETE /api/terreno/planificacion/[id] — sólo admin. Borra el plan completo (días,
+// paradas, fondos, rendición, aprobaciones) para poder re-probar el flujo desde cero.
+// Nunca borra jornadas ni visitas reales: la función de DB sólo las desvincula.
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const user = await getServerUser()
+  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  if (!user.isAdmin) return NextResponse.json({ error: 'Sólo un administrador puede borrar un plan' }, { status: 403 })
+
+  const supabase = await createClient()
+  const { data: plan } = await supabase.from('planes_semanales_terreno').select('*').eq('id', id).maybeSingle()
+  if (!plan) return NextResponse.json({ error: 'Plan no encontrado' }, { status: 404 })
+
+  const { error } = await supabase.rpc('borrar_plan_semanal_terreno', { p_plan_id: id })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await supabase.from('terreno_auditoria').insert({
+    entidad: 'plan_semanal_terreno', entidad_id: id, accion: 'plan_borrado', admin_id: user.id,
+    datos_previos: plan,
+  })
+
+  return NextResponse.json({ ok: true })
 }
