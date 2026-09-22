@@ -587,7 +587,7 @@ export async function emailPlanificacionPorAprobar(params: {
 // Resend entrega y que la plantilla se ve bien, antes de conectarlo a datos
 // reales de ventas. Los números de acá son de EJEMPLO — se marca explícito
 // en el correo para que nadie los confunda con un cierre de semana real.
-function reporteVendedorPruebaHtml(params: { vendedorNombre: string }): string {
+export function reporteVendedorPruebaHtml(params: { vendedorNombre: string }): string {
   const content = `
     <div style="border-bottom:1px solid rgba(255,255,255,0.06);padding:24px 0 20px;">
       <p style="margin:0 0 6px;font-size:11px;color:${COLOR.gold};letter-spacing:1.5px;text-transform:uppercase;font-weight:700;">🧪 Correo de prueba</p>
