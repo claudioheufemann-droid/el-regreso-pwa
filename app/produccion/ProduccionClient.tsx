@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState, useRef, useSyncExternalStore } from 'react'
+import dynamic from 'next/dynamic'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -15,17 +16,25 @@ import {
   TrendingDown, Beaker, Home, ChevronDown, Filter, Info, Sigma,
   ArrowUp, ArrowDown, CheckCircle2, Trash2, X, Move,
 } from 'lucide-react'
-import PopoverCoccion from './PopoverCoccion'
 import { useArrastreCalendario, type CargaArrastre, type DestinoArrastre } from './useArrastreCalendario'
 import type { SerieForecast, CalidadItem, StockItem, AvanceMes, StockSeguridadItem, LotePlan, ConfigProductoProduccion, SugerenciaPlan, SplitFermentador, OcupacionPlanta, NecesidadInsumo, StockInsumoItem, RecetaInsumoLinea, LoteSinReceta, AjusteTanque } from './page'
 import { COLORS } from './tema'
 import MenuLateral, { navItems, type TabId } from './MenuLateral'
-import GanttProduccion, { type BloqueGantt, type ConfigProducto } from './GanttProduccion'
-import ConfigProductosGantt from './ConfigProductosGantt'
-import ModalAgregarProducto from './ModalAgregarProducto'
-import PopoverEditarTanque from './PopoverEditarTanque'
-import NecesidadMensual from './NecesidadMensual'
+import type { BloqueGantt, ConfigProducto } from './GanttProduccion'
 import { ENVASE_LABEL, inicioDeCiclo, finDeCiclo, claveProductoEnvase, esDiaHabilISO, LEAD_TIME_INSUMOS_SEMANAS, esLineaFija, familiaEnvase, type EnvaseBucket, type FamiliaEnvase } from '@/lib/produccion/reglas'
+
+const GanttProduccion = dynamic(() => import('./GanttProduccion'), {
+  loading: () => <div className="h-64 flex items-center justify-center text-sm text-gray-400">Cargando Gantt de producción...</div>,
+  ssr: false,
+})
+const ConfigProductosGantt = dynamic(() => import('./ConfigProductosGantt'), { ssr: false })
+const ModalAgregarProducto = dynamic(() => import('./ModalAgregarProducto'), { ssr: false })
+const PopoverEditarTanque = dynamic(() => import('./PopoverEditarTanque'), { ssr: false })
+const NecesidadMensual = dynamic(() => import('./NecesidadMensual'), {
+  loading: () => <div className="h-48 flex items-center justify-center text-sm text-gray-400">Cargando proyección mensual...</div>,
+  ssr: false,
+})
+const PopoverCoccion = dynamic(() => import('./PopoverCoccion'), { ssr: false })
 
 /** Etiqueta + color por categoría de insumo — mismas 4 del Excel de recetas
  *  (malta/lúpulo/levadura/otros), reutilizado en la tabla de Insumos y Compras. */

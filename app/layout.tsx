@@ -60,23 +60,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="apple-touch-startup-image" media="(device-width:375px) and (device-height:667px) and (-webkit-device-pixel-ratio:2)" href="/api/splash?w=750&h=1334" />
       </head>
       <body className="min-h-screen">
-        {/* Forzar actualización del SW antes de que React monte */}
+        {/* Gestión limpia del SW sin forzar reloads de navegador en transiciones de ruta */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             if (!('serviceWorker' in navigator)) return;
-            // Recargar automáticamente cuando un nuevo SW toma control — PERO
-            // como máximo una vez por sesión de pestaña. Sin este freno, un
-            // reload dispara este mismo script de nuevo, que puede volver a
-            // detectar "hay SW nuevo" y recargar otra vez: un módulo que se
-            // toca justo cuando esto dispara se queda en loop de recarga y
-            // nunca llega a cargar la pantalla de destino — eso reportaron
-            // los vendedores como "toco y no carga" en el celular.
-            navigator.serviceWorker.addEventListener('controllerchange', function() {
-              if (sessionStorage.getItem('sw-reloaded') === '1') return;
-              sessionStorage.setItem('sw-reloaded', '1');
-              window.location.reload();
-            });
-            // Forzar búsqueda de nueva versión inmediatamente
             navigator.serviceWorker.ready.then(function(reg) {
               reg.update().catch(function(){});
             }).catch(function(){});
