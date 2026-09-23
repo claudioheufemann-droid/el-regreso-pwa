@@ -12,6 +12,20 @@ function getAdminClient() {
   return createSupabaseClient(url, key)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function logSync(supabase: any, params: {
+  origen: 'automatico' | 'manual'; ok: boolean; mensaje?: string; total?: number
+}) {
+  try {
+    await supabase.from('erp_sync_log').insert({ fuente: 'cobros', ...params })
+  } catch {
+    // El log es informativo — nunca debe tumbar la carga real. Este informe
+    // en particular ya se quedó atrás 5 días sin que nadie lo notara (hasta
+    // el 18-sep-2026, con la carga manual): que quede en el mismo panel que
+    // ventas/clientes/deudores es justamente para que eso no se repita.
+  }
+}
+
 /**
  * POST /api/administracion/cobros/upload
  *
@@ -32,9 +46,23 @@ function getAdminClient() {
  * que ya estaba cargado.
  */
 export async function POST(req: Request) {
-  const user = await getServerUser()
-  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  if (!user.isAdmin) return NextResponse.json({ error: 'Sólo administradores' }, { status: 403 })
+  // ── Autenticación dual ────────────────────────────────────────────────
+  // a) UI admin: sesión por cookies, y además tiene que ser admin (a
+  //    diferencia de otros uploads del módulo, éste reescribe comportamiento
+  //    de pago de TODOS los clientes). b) Cron ERP: Bearer UPLOAD_SECRET_COBROS
+  //    — secret DEDICADO, no CRON_SECRET compartido: se detectó con el sync
+  //    de ventas/clientes que process.env.CRON_SECRET podía leer valores
+  //    distintos entre funciones del mismo deployment (ver la nota larga en
+  //    app/api/clientes/upload/route.ts). Mismo criterio acá para no repetir
+  //    ese dolor de cabeza.
+  const auth = req.headers.get('authorization')
+  const secret = process.env.UPLOAD_SECRET_COBROS
+  const esCron = !!secret && auth === `Bearer ${secret}`
+  if (!esCron) {
+    const user = await getServerUser()
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    if (!user.isAdmin) return NextResponse.json({ error: 'Sólo administradores' }, { status: 403 })
+  }
 
   const formData = await req.formData()
   const file = formData.get('file') as File | null
@@ -51,7 +79,10 @@ export async function POST(req: Request) {
   }) as unknown[][]
 
   const parseado = parsearMovimientos(filas)
-  if ('error' in parseado) return NextResponse.json({ error: parseado.error }, { status: 400 })
+  if ('error' in parseado) {
+    await logSync(getAdminClient(), { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: parseado.error })
+    return NextResponse.json({ error: parseado.error }, { status: 400 })
+  }
 
   const { cobros, diagnostico } = parseado
   const admin = getAdminClient()
@@ -63,7 +94,10 @@ export async function POST(req: Request) {
     .delete()
     .gte('fecha', diagnostico.desde!)
     .lte('fecha', diagnostico.hasta!)
-  if (errBorrado) return NextResponse.json({ error: errBorrado.message }, { status: 500 })
+  if (errBorrado) {
+    await logSync(admin, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: errBorrado.message })
+    return NextResponse.json({ error: errBorrado.message }, { status: 500 })
+  }
 
   const filasInsert = cobros.map(c => ({
     fecha: c.fecha,
@@ -78,7 +112,10 @@ export async function POST(req: Request) {
 
   for (let i = 0; i < filasInsert.length; i += 500) {
     const { error } = await admin.from('cobros_erp').insert(filasInsert.slice(i, i + 500))
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      await logSync(admin, { origen: esCron ? 'automatico' : 'manual', ok: false, mensaje: error.message })
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
   }
 
   /* ── Refresco del comportamiento de pago real ───────────────────────────
@@ -110,6 +147,8 @@ export async function POST(req: Request) {
       dias_pago_real_actualizado: hoy,
     }).eq('id', a.id)
   }
+
+  await logSync(admin, { origen: esCron ? 'automatico' : 'manual', ok: true, total: cobros.length })
 
   return NextResponse.json({
     ok: true,
