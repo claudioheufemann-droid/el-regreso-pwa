@@ -74,22 +74,25 @@ Ingreso Real empezó a mostrar $0 en caja. Ver el comentario largo en
 `lib/administracion/proyeccionCobros.ts` sobre por qué este dato es crítico
 para la proyección de cobranza.
 
-**PENDIENTE (bloqueante):** a diferencia de Clientes/Deudores, la navegación
-real del ERP para este informe todavía NO está mapeada —
-`navegar_y_descargar()` en `extractor_cobros.py` tira `NotImplementedError` a
-propósito en vez de descargar cualquier cosa por error. Para completarla:
+**Navegación mapeada y probada en vivo el 23-sep-2026** (login → filtro de
+fechas → Generar → Exportar a excel → upload real a producción — 946 cobros
+insertados, `cobros_erp` quedó al día). Informe:
+`https://www.gestioncervecera.com/Informes/Ver?informe=MovimientosCtaCte`,
+mismo botón `a.generarInforme[data-formato='excel']` que ya usa Deudores,
+campos de fecha `#fechaDesde`/`#fechaHasta` (mismos IDs que Ventas Detalladas).
 
-```bash
-python -m playwright codegen https://www.gestioncervecera.com/login
-```
+**Ojo con el rango de fechas — no es un número libre.** Por encima de cierto
+volumen de filas, el ERP deja de bajar el Excel directo: en su lugar abre un
+modal ("Se enviará la información solicitada por email") y lo genera de forma
+asíncrona, sin ningún evento de descarga que Playwright pueda esperar.
+Probado: 3/7/15/20 días bajan directo (hasta 4.389 filas); 45 días se cuelga
+en el modal indefinidamente. `DIAS_VENTANA = 20` en `extractor_cobros.py`
+queda con margen bajo ese límite sin medir con precisión — si algún día hace
+falta ampliarlo, volver a probar de a poco y no asumir que un rango mayor
+seguirá bajando directo.
 
-Grabar: login → la misma página/menú de donde hoy se descarga el Excel para
-la carga manual en `/administracion/cargar-cobros` → el filtro de fechas que
-se use → Exportar. Pegar el código generado en `navegar_y_descargar()`,
-mismo contrato que `descargar_deudores()` en `extractor_clientes_deudores.py`
-(termina con `download.save_as(...)` y `return` de la ruta).
-
-Secret adicional necesario en GitHub: `UPLOAD_SECRET_COBROS` (dedicado, no
-reusar `UPLOAD_SECRET` ni `UPLOAD_SECRET_CLIENTES` — mismo motivo que el resto:
-ver la nota en `app/api/clientes/upload/route.ts`). Debe existir también en
-Vercel con el mismo valor.
+Secret necesario en GitHub: `UPLOAD_SECRET_COBROS` (dedicado, no reusar
+`UPLOAD_SECRET` ni `UPLOAD_SECRET_CLIENTES` — mismo motivo que el resto: ver
+la nota en `app/api/clientes/upload/route.ts`). Ya creado en Vercel
+producción (23-sep-2026); falta agregarlo también como secret en GitHub
+(Settings → Secrets and variables → Actions) para que el workflow corra solo.
