@@ -11,4 +11,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ### Módulos Documentados:
 - **Producción (`app/produccion`)**: Consulta los documentos en `docs/memoria/produccion/` para conocer el dominio de negocio (cerveza/kombucha, ciclo 24 al 23), modelos de Supabase, algoritmos de Stock de Seguridad / MRP y modelos de ML Prophet.
+- **Administración y Finanzas (`app/administracion`)**: Consulta los documentos en `docs/memoria/administracion/` para conocer el flujo de caja semanal (13s), algoritmos de proyección de cobranza (neto vs bruto), aging de cartera, comportamiento de pago ERP y modelos Prophet en $.
 
