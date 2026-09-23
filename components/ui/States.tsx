@@ -24,15 +24,20 @@ export function Skeleton({
   width = '100%',
   radius = 8,
   style,
+  className,
 }: {
   height?: number | string
   width?: number | string
   radius?: number
   style?: React.CSSProperties
+  /** Para fondos oscuros (ej. loading.tsx de un módulo con tema dark): pisa el
+   *  `background` por defecto vía clase de Tailwind en vez de un `style` fijo. */
+  className?: string
 }) {
   return (
     <div
       aria-hidden
+      className={className}
       style={{
         height, width, borderRadius: radius,
         background: 'var(--surface2)',
