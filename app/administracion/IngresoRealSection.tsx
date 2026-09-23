@@ -495,6 +495,7 @@ function ResumenTresSemanas({ datos }: { datos: DatosCobros }) {
   // llamarse a veces sí y a veces no según el render.
   const filas = useMemo(() => p.semanas.slice(0, 3).map((s, i) => {
     const proyectado = Math.round(s.base + p.mostradorSemanal)
+    const optimista = Math.round(s.optimista + p.mostradorSemanal)
     const lento = Math.round(s.lento + p.mostradorSemanal)
     const confirmado = i === 0 ? Math.round(datos.confirmadoEstaSemana) : 0
     return {
@@ -503,11 +504,13 @@ function ResumenTresSemanas({ datos }: { datos: DatosCobros }) {
       subetiqueta: fFechaCorta(s.lunes),
       confirmado,
       proyectado,
-      // El "whisker" de arriba (± en Recharts) es asimétrico: no baja, sólo
-      // sube hasta `lento` — no existe un escenario "más rápido que su
-      // comportamiento habitual" que valga la pena mostrar.
-      rango: [0, Math.max(0, lento - proyectado)] as [number, number],
+      // El "whisker" (± en Recharts) es asimétrico para abajo y para arriba:
+      // baja hasta `optimista` (si pagan mejor de lo habitual) y sube hasta
+      // `lento` (si se atrasan). Los dos son el MISMO dinero de `proyectado`
+      // repartido en una fecha distinta, no plata extra ni faltante.
+      rango: [Math.max(0, proyectado - optimista), Math.max(0, lento - proyectado)] as [number, number],
       total: confirmado + proyectado,
+      totalOptimista: confirmado + optimista,
       totalLento: confirmado + lento,
     }
   }), [p.semanas, p.mostradorSemanal, datos.confirmadoEstaSemana])
@@ -528,8 +531,8 @@ function ResumenTresSemanas({ datos }: { datos: DatosCobros }) {
       </h3>
       <p style={{ fontSize: 12.5, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
         Lo oscuro ya está en caja. Lo claro es lo que falta cobrar, calculado con cuánto se demora en pagar
-        cada cliente. La rayita arriba de cada barra es cuánto podría bajar el total si se atrasan más de lo
-        habitual.
+        cada cliente. La rayita sobre cada barra marca el rango completo: desde si pagan más rápido de lo
+        habitual hasta si se atrasan.
       </p>
 
       {datosDesactualizados && (
@@ -563,7 +566,16 @@ function ResumenTresSemanas({ datos }: { datos: DatosCobros }) {
                   : datosDesactualizados
                     ? 'informe de pagos desactualizado, ver aviso arriba'
                     : 'nada cobrado todavía esta semana'
-                : <>si se atrasan, podría bajar a <strong>{fMoney(f.totalLento)}</strong></>}
+                : (() => {
+                    // No se asume que optimista siempre sea menor y lento
+                    // siempre mayor: la plata que "gana" una semana porque se
+                    // adelanta desde la siguiente puede pesar más que la que
+                    // "pierde" porque se adelanta hacia la anterior — son
+                    // sumas de facturas distintas, no un slider parejo.
+                    const lo = Math.min(f.totalOptimista, f.total, f.totalLento)
+                    const hi = Math.max(f.totalOptimista, f.total, f.totalLento)
+                    return <>entre {fMoney(lo)} y {fMoney(hi)}, según cuánto se demoren los clientes</>
+                  })()}
             </p>
           </div>
         ))}
@@ -589,9 +601,11 @@ function ResumenTresSemanas({ datos }: { datos: DatosCobros }) {
                       <span>Total esperado</span>
                       <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fMoney(d.total)}</span>
                     </p>
-                    <p style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                      si se atrasan: hasta {fMoney(d.totalLento)}
-                    </p>
+                    {d.confirmado === 0 && (
+                      <p style={{ fontSize: 11, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                        si pagan rápido: {fMoney(d.totalOptimista)} · si se atrasan: {fMoney(d.totalLento)}
+                      </p>
+                    )}
                   </div>
                 )
               }}

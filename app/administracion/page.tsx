@@ -119,9 +119,10 @@ export interface ComportamientoPago {
   cliente: string
   /** Pagos cruzados con su guía. Menos de 3 y la mediana es ruido. */
   muestras: number
-  /** Días de pago: mediana (lo que se le muestra a una persona), percentiles
-   *  75/90 para el escenario malo, y el promedio, que es el que mejor proyecta
-   *  plata según el backtest — ver BACKTEST_MAE_SEMANAL. */
+  /** Días de pago: mediana (lo que se le muestra a una persona), percentil 25
+   *  para el escenario optimista y 75/90 para el malo, y el promedio, que es
+   *  el que mejor proyecta plata según el backtest — ver BACKTEST_MAE_SEMANAL. */
+  p25: number
   p50: number
   p75: number
   p90: number
@@ -320,7 +321,7 @@ export default async function AdministracionPage() {
       .then(r => (r.data ?? []) as { semana: string; metodo: string; monto: number; movimientos: number }[]),
     admin.rpc('comportamiento_pago_clientes', { p_min_muestras: 3 })
       .then(r => (r.data ?? []) as {
-        cliente: string; muestras: number; p50: number; p75: number; p90: number
+        cliente: string; muestras: number; p25: number; p50: number; p75: number; p90: number
         promedio: number; monto_cruzado: number; ultimo_pago: string
       }[]),
     // Facturas despachadas que todavía no aparecen pagadas — la misma ventana
@@ -355,6 +356,7 @@ export default async function AdministracionPage() {
   const comportamiento: ComportamientoPago[] = comportamientoRaw.map(c => ({
     cliente: c.cliente,
     muestras: Number(c.muestras),
+    p25: Math.round(Number(c.p25)),
     p50: Math.round(Number(c.p50)),
     p75: Math.round(Number(c.p75)),
     p90: Math.round(Number(c.p90)),
@@ -384,17 +386,23 @@ export default async function AdministracionPage() {
 
   /* Plazo por cliente para proyectar: manda el MEDIDO (mediana de sus pagos
      reales) y, si no lo hay, el declarado en la ficha. Para el escenario
-     lento se usa su p75; cuando sólo hay plazo declarado no existe tal
-     percentil, así que se le suma un margen proporcional (30%) en vez de
-     inventar una dispersión que no se midió. */
+     lento se usa su p75 y para el optimista su p25; cuando sólo hay plazo
+     declarado no existen esos percentiles, así que se les aplica un margen
+     proporcional (30% más lento / 30% más rápido) en vez de inventar una
+     dispersión que no se midió. */
   const plazoPorCliente = new Map<string, PlazoCliente>()
   for (const c of comportamiento) {
-    plazoPorCliente.set(normalizarNombreCliente(c.cliente), { promedio: c.promedio, p75: c.p75, fuente: 'medido' })
+    plazoPorCliente.set(normalizarNombreCliente(c.cliente), { promedio: c.promedio, p25: c.p25, p75: c.p75, fuente: 'medido' })
   }
   for (const c of clientesRaw) {
     const k = normalizarNombreCliente(c.nombre_fantasia)
     if (!k || plazoPorCliente.has(k) || c.dias_pago == null) continue
-    plazoPorCliente.set(k, { promedio: c.dias_pago, p75: Math.round(c.dias_pago * 1.3), fuente: 'declarado' })
+    plazoPorCliente.set(k, {
+      promedio: c.dias_pago,
+      p25: Math.max(1, Math.round(c.dias_pago * 0.7)),
+      p75: Math.round(c.dias_pago * 1.3),
+      fuente: 'declarado',
+    })
   }
 
   const medianaCartera = medianaDe(comportamientoCredito.map(c => c.p50)) ?? 15

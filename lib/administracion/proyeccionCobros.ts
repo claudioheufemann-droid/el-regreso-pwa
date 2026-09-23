@@ -62,6 +62,14 @@ export interface PlazoCliente {
   /** PROMEDIO de días de sus pagos reales. Es el que se usa para proyectar
    *  plata: el backtest lo dejó como el mejor estimador (ver BACKTEST_MAE_SEMANAL). */
   promedio: number
+  /** Su cuartil rápido: 1 de cada 4 pagos suyos entra en este plazo o menos.
+   *  Da el escenario "si pagan mejor de lo habitual" — pedido explícitamente
+   *  por Administración (23-sep-2026, la fila "Cobranza Optimista" de su
+   *  planilla). Es el espejo de `p75`, no un dato con validación propia: no
+   *  hay backtest específico para el escenario optimista, sólo para
+   *  `promedio` (ver BACKTEST_MAE_SEMANAL) — se muestra como rango, igual
+   *  que `p75`, nunca como una cifra con la misma certeza. */
+  p25: number
   /** Su cuartil lento: 1 de cada 4 pagos suyos tarda al menos esto. Da el
    *  escenario "si se demoran". */
   p75: number
@@ -75,6 +83,7 @@ export interface FacturaPendiente {
   bruto: number
   dias: number
   fechaEsperada: string
+  fechaEsperadaOptimista: string
   fechaEsperadaLenta: string
   fuente: FuentePlazo
   /** Días transcurridos desde que se esperaba el pago. 0 si todavía no vence. */
@@ -85,6 +94,11 @@ export interface SemanaProyectada {
   lunes: string
   /** Facturas que vencen esa semana, si el cliente paga como suele hacerlo. */
   base: number
+  /** Lo mismo pero con el cuartil RÁPIDO de cada cliente — "si pagan mejor
+   *  de lo habitual". Al ser más rápido, esta plata puede caer en una
+   *  semana ANTERIOR a la de `base`: la suma de `optimista` en todas las
+   *  semanas da lo mismo que la de `base`, sólo que corrida hacia atrás. */
+  optimista: number
   /** Lo mismo pero con el cuartil lento de cada cliente. */
   lento: number
   /** Lo esperado esa semana. Hoy es igual a `base`; existe como campo propio
@@ -98,7 +112,7 @@ export interface SemanaProyectada {
 export interface ProyeccionCobros {
   hayDatos: boolean
   semanas: SemanaProyectada[]
-  proximaSemana: { lunes: string; base: number; lento: number; total: number; detalle: FacturaPendiente[] }
+  proximaSemana: { lunes: string; base: number; optimista: number; lento: number; total: number; detalle: FacturaPendiente[] }
   /** Facturas cuya fecha esperada de pago ya pasó y siguen sin aparecer
    *  pagadas. No se suman a ninguna semana futura a propósito: darlas por
    *  cobradas la próxima semana infla la proyección justo con la plata que
@@ -176,28 +190,30 @@ export function proyectarCobros({
 
   for (const [factura, v] of porFactura) {
     const plazo = plazoPorCliente.get(normalizarNombreCliente(v.cliente))
-      ?? { promedio: plazoPorDefecto, p75: plazoPorDefecto, fuente: 'estimado' as FuentePlazo }
+      ?? { promedio: plazoPorDefecto, p25: plazoPorDefecto, p75: plazoPorDefecto, fuente: 'estimado' as FuentePlazo }
 
     const fechaEsperada = sumarDias(v.fechaEntrega, plazo.promedio)
+    const fechaEsperadaOptimista = sumarDias(v.fechaEntrega, plazo.p25)
     const fechaEsperadaLenta = sumarDias(v.fechaEntrega, plazo.p75)
     const diasAtraso = Math.max(0, diffDias(fechaEsperada, hoyISO))
 
     cobertura[plazo.fuente] += v.bruto
     pendientes.push({
       cliente: v.cliente, factura, fechaEntrega: v.fechaEntrega, bruto: v.bruto,
-      dias: plazo.promedio, fechaEsperada, fechaEsperadaLenta, fuente: plazo.fuente, diasAtraso,
+      dias: plazo.promedio, fechaEsperada, fechaEsperadaOptimista, fechaEsperadaLenta, fuente: plazo.fuente, diasAtraso,
     })
   }
 
   /* ── Reparto a semanas ──────────────────────────────────────────────────
-     El escenario base usa la fecha esperada habitual; el lento, la del
-     cuartil 75. Son dos repartos del MISMO dinero, no dos montos distintos:
-     por eso la suma de `lento` a lo largo de todas las semanas da lo mismo
-     que la de `base`, sólo que corrida hacia adelante. */
+     El escenario base usa la fecha esperada habitual; el optimista, la del
+     cuartil 25; el lento, la del cuartil 75. Son tres repartos del MISMO
+     dinero, no montos distintos: por eso la suma de `optimista`/`lento` a lo
+     largo de todas las semanas da lo mismo que la de `base`, sólo que
+     corrida hacia atrás o hacia adelante. */
   const lunesHoy = lunesDe(hoyISO)
   const semanas: SemanaProyectada[] = []
   for (let i = 0; i < semanasAdelante; i++) {
-    semanas.push({ lunes: sumarDias(lunesHoy, i * 7), base: 0, lento: 0, total: 0, facturas: 0 })
+    semanas.push({ lunes: sumarDias(lunesHoy, i * 7), base: 0, optimista: 0, lento: 0, total: 0, facturas: 0 })
   }
   const idxDe = (fecha: string) => semanas.findIndex(s => fecha >= s.lunes && fecha < sumarDias(s.lunes, 7))
 
@@ -211,6 +227,11 @@ export function proyectarCobros({
     }
     const iBase = idxDe(p.fechaEsperada)
     if (iBase >= 0) { semanas[iBase].base += p.bruto; semanas[iBase].facturas++ }
+    // El optimista puede caer ANTES de la primera semana de la ventana (un
+    // pago que hoy mismo se adelantaría) — idxDe da -1 y ese monto queda
+    // fuera, igual que ya le pasa al lento en la punta final de la ventana.
+    const iOptimista = idxDe(p.fechaEsperadaOptimista)
+    if (iOptimista >= 0) semanas[iOptimista].optimista += p.bruto
     const iLento = idxDe(p.fechaEsperadaLenta)
     if (iLento >= 0) semanas[iLento].lento += p.bruto
   }
@@ -231,6 +252,7 @@ export function proyectarCobros({
     proximaSemana: {
       lunes: proximaLunes,
       base: sem1?.base ?? 0,
+      optimista: sem1?.optimista ?? 0,
       lento: sem1?.lento ?? 0,
       total: sem1?.total ?? 0,
       detalle: detalleProxima,
