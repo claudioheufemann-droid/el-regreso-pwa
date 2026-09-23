@@ -154,6 +154,13 @@ export interface DatosCobros {
   /** Cuánto debería entrar las próximas semanas, cruzando lo impago con el
    *  comportamiento de pago real de cada cliente. */
   proyeccion: ProyeccionCobros
+  /** Plata YA cobrada esta semana (lunes a hoy), de `semanasCobro` — a
+   *  diferencia de `totalUltimas4`, que a propósito excluye la semana en
+   *  curso por estar a medias, esto SÍ la incluye: es justo lo que hace
+   *  falta para responder "¿cuánto entra esta semana?" sumando lo ya
+   *  cobrado más lo que `proyeccion.semanas[0]` todavía espera para el
+   *  resto de la semana. */
+  confirmadoEstaSemana: number
 }
 
 const MS_POR_DIA = 86_400_000
@@ -415,6 +422,7 @@ export default async function AdministracionPage() {
       comportamientoCredito.map(c => c.declarado).filter((d): d is number => d != null)
     ),
     ultimaFecha: semanasCobro.length > 0 ? semanasCobro[semanasCobro.length - 1].semana : null,
+    confirmadoEstaSemana: semanasCobro.find(s => s.semana === lunesEstaSemana)?.total ?? 0,
   }
 
   // ── Series del modelo ──────────────────────────────────────────────────────
