@@ -4,7 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { cicloEnCursoISO, inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import {
   proyectarCaja, esIngresoReal, normalizarNombreCliente, brutoDeFila, lunesDe,
-  categoriaNormalizada, calcularPrecisionCobro, type FilaVentaFinanzas, type ProyeccionCaja, type PrecisionCobro,
+  categoriaNormalizada, calcularPrecisionCobro, BANCOS, type FilaVentaFinanzas, type ProyeccionCaja,
+  type PrecisionCobro, type BancoId,
 } from '@/lib/administracion/finanzas'
 import {
   construirFlujoSemanal, semanasRodantes, calcularAging, semaforoClientes,
@@ -82,13 +83,35 @@ export interface ResumenDeuda {
   ultimaCarga: string | null
 }
 
+/** Saldo de un banco a una fecha — ver BancoId/BANCOS en finanzas.ts. */
+export interface SaldoBanco {
+  banco: BancoId
+  fecha: string
+  saldo: number
+}
+
 /** Todo lo que consume el dashboard de flujo de caja semanal. */
 export interface DatosFlujo {
   semanas: SemanaFlujo[]
-  /** Saldo bancario cargado a mano (null = todavía no se carga ninguno). */
-  saldoActual: { fecha: string; saldo: number } | null
-  /** El anterior, para la variación % de la tarjeta. */
-  saldoPrevio: { fecha: string; saldo: number } | null
+  /** Suma del saldo MÁS RECIENTE de cada uno de los 3 bancos (null = ninguno
+   *  tiene saldo cargado todavía). `fecha` es la más VIEJA entre los saldos
+   *  sumados: si un banco lleva más tiempo sin actualizarse que los otros,
+   *  el total es sólo tan fresco como el más atrasado — no tiene sentido
+   *  mostrar una fecha optimista para un número que en parte es viejo.
+   *  `porBanco` trae el detalle para mostrar cada cuenta por separado, como
+   *  ya hace la planilla de Administración. */
+  saldoActual: { fecha: string; total: number; porBanco: SaldoBanco[] } | null
+  /** Sólo para la etiqueta "vs. DD/MM" de la tarjeta — la fecha más vieja
+   *  entre los bancos que SÍ tienen una lectura anterior con la que
+   *  comparar. null si ninguno la tiene todavía. */
+  saldoPrevio: { fecha: string } | null
+  /** % de variación del saldo, comparando sólo los bancos que ya tienen 2+
+   *  lecturas — a propósito NO es (saldoActual.total vs. un total previo
+   *  cualquiera): si Itaú recién se carga por primera vez, sumarlo al total
+   *  de HOY pero no tener nada que restarle del total de AYER inflaría la
+   *  variación con la incorporación de una cuenta nueva, no con un cambio
+   *  real de saldo. null si ningún banco tiene aún un punto de comparación. */
+  variacionSaldoPct: number | null
   aging: { tramos: TramoAging[]; total: number }
   riesgo: ClienteRiesgo[]
   ciclo: CicloConversion
@@ -274,8 +297,11 @@ export default async function AdministracionPage() {
     admin.from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total, updated_at, ultimo_pago, deuda_menor_14_dias, deuda_entre_15_29_dias, deuda_entre_30_44_dias, deuda_entre_45_59_dias, deuda_entre_60_89_dias, deuda_mas_90_dias').then(r => r.data ?? []),
     admin.from('erp_sync_log').select('creado_at').eq('fuente', 'forecast_finanzas').eq('ok', true)
       .order('creado_at', { ascending: false }).limit(1).maybeSingle().then(r => r.data),
-    admin.from('caja_saldos').select('fecha, saldo')
-      .order('fecha', { ascending: false }).limit(2).then(r => r.data ?? []),
+    // Sin límite: son 3 cuentas con carga manual/semanal, nunca va a ser una
+    // tabla grande, y hace falta más de 2 filas totales para poder sacar
+    // "el más reciente" Y "el anterior" de CADA banco por separado.
+    admin.from('caja_saldos').select('fecha, saldo, banco')
+      .order('fecha', { ascending: false }).then(r => r.data ?? []),
     admin.from('compras_comprometidas').select('monto, fecha_pago, fecha_documento, estado')
       .then(r => r.data ?? []),
     // Litros de producto terminado propio, para los días de inventario del
@@ -648,8 +674,55 @@ export default async function AdministracionPage() {
   }
 
   const compras = comprasRaw as unknown as EntradaCompra[]
-  const saldoActual = saldosRaw[0] ? { fecha: String(saldosRaw[0].fecha), saldo: Number(saldosRaw[0].saldo) } : null
-  const saldoPrevio = saldosRaw[1] ? { fecha: String(saldosRaw[1].fecha), saldo: Number(saldosRaw[1].saldo) } : null
+
+  // saldosRaw ya viene ordenado por fecha desc (ver la query arriba). Agrupar
+  // por banco y tomar las 2 primeras filas de cada uno da "el más reciente" y
+  // "el anterior" SIN asumir que los 3 bancos se cargan el mismo día — cada
+  // cuenta puede tener su propia fecha de última carga.
+  const filasPorBanco = new Map<BancoId, { fecha: string; saldo: number }[]>()
+  for (const s of saldosRaw as { fecha: string; saldo: number; banco: string }[]) {
+    if (!BANCOS.includes(s.banco as BancoId)) continue
+    const arr = filasPorBanco.get(s.banco as BancoId) ?? []
+    arr.push({ fecha: String(s.fecha), saldo: Number(s.saldo) })
+    filasPorBanco.set(s.banco as BancoId, arr)
+  }
+
+  const masRecientePorBanco: SaldoBanco[] = []
+  let totalActual = 0
+  let fechaMasVieja: string | null = null
+  for (const banco of BANCOS) {
+    const fila = filasPorBanco.get(banco)?.[0]
+    if (!fila) continue
+    masRecientePorBanco.push({ banco, fecha: fila.fecha, saldo: fila.saldo })
+    totalActual += fila.saldo
+    if (fechaMasVieja == null || fila.fecha < fechaMasVieja) fechaMasVieja = fila.fecha
+  }
+  const saldoActual = masRecientePorBanco.length > 0
+    ? { fecha: fechaMasVieja!, total: totalActual, porBanco: masRecientePorBanco }
+    : null
+
+  // Comparación PAREADA: un banco sólo entra a la variación % si tiene TANTO
+  // la lectura actual como la anterior — si Itaú recién se carga por primera
+  // vez, no tiene par y queda fuera de este cálculo (aunque sí suma al total
+  // de HOY en saldoActual). Sin este cuidado, incorporar una cuenta nueva se
+  // leería como "subió el saldo" en vez de "se agregó una cuenta".
+  let totalActualPareado = 0
+  let totalPrevioPareado = 0
+  let fechaPrevMasVieja: string | null = null
+  let hayPar = false
+  for (const banco of BANCOS) {
+    const actual = filasPorBanco.get(banco)?.[0]
+    const previo = filasPorBanco.get(banco)?.[1]
+    if (!actual || !previo) continue
+    hayPar = true
+    totalActualPareado += actual.saldo
+    totalPrevioPareado += previo.saldo
+    if (fechaPrevMasVieja == null || previo.fecha < fechaPrevMasVieja) fechaPrevMasVieja = previo.fecha
+  }
+  const saldoPrevio = hayPar ? { fecha: fechaPrevMasVieja! } : null
+  const variacionSaldoPct = hayPar && totalPrevioPareado !== 0
+    ? ((totalActualPareado - totalPrevioPareado) / Math.abs(totalPrevioPareado)) * 100
+    : null
 
   // Promedio semanal de gasto real de los últimos 90 días — sirve de estimado
   // por defecto para semanas futuras sin ningún pago cargado a mano (ver
@@ -672,7 +745,7 @@ export default async function AdministracionPage() {
     factorBruto,
     compras,
     promedioSemanalHistorico,
-    saldoInicial: saldoActual?.saldo ?? null,
+    saldoInicial: saldoActual?.total ?? null,
     diasCobroPromedio,
     hoyISO,
     semanas,
@@ -705,6 +778,7 @@ export default async function AdministracionPage() {
     semanas: semanasFlujo,
     saldoActual,
     saldoPrevio,
+    variacionSaldoPct,
     aging: calcularAging(deudoresReales),
     riesgo: semaforoClientes(deudoresReales, plazosPorCliente, normalizarNombreCliente),
     ciclo: cicloConversionEfectivo(

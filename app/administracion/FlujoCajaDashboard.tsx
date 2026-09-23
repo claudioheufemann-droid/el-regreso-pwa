@@ -9,8 +9,9 @@ import {
   Wallet, TrendingUp, TrendingDown, ArrowDownCircle, Beaker, RotateCcw,
   Info, Timer, Plus, Check,
 } from 'lucide-react'
-import type { DatosFlujo } from './page'
+import type { DatosFlujo, SaldoBanco } from './page'
 import type { SemanaFlujo } from '@/lib/administracion/flujoSemanal'
+import { BANCOS, BANCO_LABEL, type BancoId } from '@/lib/administracion/finanzas'
 
 /**
  * Paleta cálida (dorados/naranjos) sobre fondo claro, pedida explícitamente
@@ -153,9 +154,10 @@ export default function FlujoCajaDashboard({ flujo, hoyISO }: Props) {
     return idx >= 0 && idx + 1 < semanas.length ? semanas[idx + 1] : semanas.find(s => !s.pasada && !s.actual) ?? null
   }, [semanas])
 
-  const variacionSaldo = flujo.saldoActual && flujo.saldoPrevio && flujo.saldoPrevio.saldo !== 0
-    ? ((flujo.saldoActual.saldo - flujo.saldoPrevio.saldo) / Math.abs(flujo.saldoPrevio.saldo)) * 100
-    : null
+  // Ya viene calculado del servidor (page.tsx): compara sólo bancos con 2+
+  // lecturas, para que agregar una cuenta nueva no se lea como "subió el
+  // saldo" — ver el comentario largo en DatosFlujo.variacionSaldoPct.
+  const variacionSaldo = flujo.variacionSaldoPct
 
   const datosChart = semanas.map(s => ({
     etiqueta: `S${semanaISO(s.inicio)}`,
@@ -239,13 +241,34 @@ export default function FlujoCajaDashboard({ flujo, hoyISO }: Props) {
           {flujo.saldoActual ? (
             <>
               <p style={{ fontSize: 28, fontWeight: 800, color: P.text, marginTop: 8, letterSpacing: '-0.02em' }}>
-                {fMoney(flujo.saldoActual.saldo)}
+                {fMoney(flujo.saldoActual.total)}
               </p>
               <p style={{ fontSize: 12, color: variacionSaldo == null ? P.faint : variacionSaldo >= 0 ? P.green : P.red, marginTop: 4, fontWeight: 600 }}>
                 {variacionSaldo == null
                   ? `Al ${fDia(flujo.saldoActual.fecha)} · sin saldo anterior para comparar`
                   : `${variacionSaldo >= 0 ? '▲' : '▼'} ${Math.abs(variacionSaldo).toFixed(1)}% vs. ${fDia(flujo.saldoPrevio!.fecha)}`}
               </p>
+              {/* Detalle por banco: la suma sola no dice si falta cargar
+                  alguna cuenta, ni de cuándo es cada dato — dos bancos
+                  actualizados hoy y uno de hace 2 semanas dan un total que
+                  parece fresco sin serlo del todo. */}
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {BANCOS.map(b => {
+                  const fila = flujo.saldoActual!.porBanco.find(x => x.banco === b)
+                  return (
+                    <div key={b} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5 }}>
+                      <span style={{ color: P.muted }}>{BANCO_LABEL[b]}</span>
+                      {fila ? (
+                        <span style={{ color: P.text, fontWeight: 600 }} title={`Al ${fDia(fila.fecha)}`}>
+                          {fMoney(fila.saldo)}
+                        </span>
+                      ) : (
+                        <span style={{ color: P.faint, fontStyle: 'italic' }}>sin cargar</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </>
           ) : (
             <p style={{ fontSize: 13, color: P.faint, marginTop: 10, lineHeight: 1.5 }}>
@@ -613,9 +636,10 @@ export default function FlujoCajaDashboard({ flujo, hoyISO }: Props) {
  */
 function CargaDatos({ hayCompras, saldoActual, hoyISO }: {
   hayCompras: boolean
-  saldoActual: { fecha: string; saldo: number } | null
+  saldoActual: { fecha: string; total: number; porBanco: SaldoBanco[] } | null
   hoyISO: string
 }) {
+  const [banco, setBanco] = useState<BancoId>('chile')
   const [saldo, setSaldo] = useState('')
   const [fechaSaldo, setFechaSaldo] = useState(hoyISO)
   const [proveedor, setProveedor] = useState('')
@@ -632,7 +656,7 @@ function CargaDatos({ hayCompras, saldoActual, hoyISO }: {
     try {
       const url = tipo === 'saldo' ? '/api/administracion/caja-saldo' : '/api/administracion/compras'
       const body = tipo === 'saldo'
-        ? { fecha: fechaSaldo, saldo: Number(saldo.replace(/[^\d-]/g, '')) }
+        ? { fecha: fechaSaldo, banco, saldo: Number(saldo.replace(/[^\d-]/g, '')) }
         : {
           proveedor, monto: Number(monto.replace(/[^\d]/g, '')),
           fecha_pago: fechaPago, fecha_documento: fechaDoc || null, estado,
@@ -658,8 +682,8 @@ function CargaDatos({ hayCompras, saldoActual, hoyISO }: {
     <Card>
       <Etiqueta><Plus size={12} /> Datos que carga Administración</Etiqueta>
       <p style={{ fontSize: 12, color: P.muted, marginTop: 6, lineHeight: 1.5 }}>
-        El ERP no entrega saldo bancario ni compras a proveedores por ningún informe, así que estos dos se cargan a
-        mano. {!hayCompras && <strong>Todavía no hay ningún pago a proveedor cargado</strong>}
+        Ningún sync automático entrega todavía el saldo de las 3 cuentas (Chile/Santander/Itaú) ni los pagos a
+        proveedores, así que estos dos se cargan a mano. {!hayCompras && <strong>Todavía no hay ningún pago a proveedor cargado</strong>}
         {!hayCompras && ', por eso las series de compras del gráfico están en cero.'}
       </p>
 
@@ -667,6 +691,9 @@ function CargaDatos({ hayCompras, saldoActual, hoyISO }: {
         <div>
           <p style={{ fontSize: 13, fontWeight: 700, color: P.text, marginBottom: 10 }}>Saldo de caja</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+            <select value={banco} onChange={e => setBanco(e.target.value as BancoId)} style={inputStyle}>
+              {BANCOS.map(b => <option key={b} value={b}>{BANCO_LABEL[b]}</option>)}
+            </select>
             <input value={saldo} onChange={e => setSaldo(e.target.value)} placeholder="Saldo en la cuenta" inputMode="numeric" style={inputStyle} />
             <input type="date" value={fechaSaldo} onChange={e => setFechaSaldo(e.target.value)} style={inputStyle} />
             <button
@@ -682,11 +709,20 @@ function CargaDatos({ hayCompras, saldoActual, hoyISO }: {
               {ok === 'saldo' ? <><Check size={14} /> Guardado</> : guardando === 'saldo' ? 'Guardando…' : 'Guardar saldo'}
             </button>
           </div>
-          {saldoActual && (
-            <p style={{ fontSize: 11.5, color: P.muted, marginTop: 8 }}>
-              Último cargado: {fMoney(saldoActual.saldo)} al {fDia(saldoActual.fecha)}.
-            </p>
-          )}
+          {/* Último cargado DEL BANCO ELEGIDO, no el total — guardar Santander
+              no tiene que hacer parecer que Chile también se actualizó. */}
+          {(() => {
+            const ultimo = saldoActual?.porBanco.find(x => x.banco === banco)
+            return ultimo ? (
+              <p style={{ fontSize: 11.5, color: P.muted, marginTop: 8 }}>
+                Último cargado de {BANCO_LABEL[banco]}: {fMoney(ultimo.saldo)} al {fDia(ultimo.fecha)}.
+              </p>
+            ) : (
+              <p style={{ fontSize: 11.5, color: P.faint, marginTop: 8, fontStyle: 'italic' }}>
+                {BANCO_LABEL[banco]} todavía no tiene ningún saldo cargado.
+              </p>
+            )
+          })()}
         </div>
 
         <div>

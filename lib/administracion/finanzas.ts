@@ -25,6 +25,21 @@
 import { brutoLinea, sumarDias } from '@/lib/cobranza'
 import { esClienteExcluidoFinanzas } from '@/lib/types'
 
+/**
+ * Cuentas bancarias reales de la empresa (23-sep-2026). Antes `caja_saldos`
+ * asumía una sola cuenta (Banco de Chile) — la planilla que usa
+ * Administración trackea las 3 por separado, cada una con su propio saldo e
+ * informe descargable, así que el saldo de caja del dashboard de flujo tiene
+ * que sumar las 3, no reemplazarlas por un número único.
+ */
+export type BancoId = 'chile' | 'santander' | 'itau'
+export const BANCOS: BancoId[] = ['chile', 'santander', 'itau']
+export const BANCO_LABEL: Record<BancoId, string> = {
+  chile: 'Banco de Chile',
+  santander: 'Banco Santander',
+  itau: 'Banco Itaú',
+}
+
 /** Mirror exacto de la función SQL `_categoria_normalizada`, para que la
  *  apertura por categoría dé lo mismo acá que en los RPC de Ventas. Si cambia
  *  una, hay que cambiar la otra. */
