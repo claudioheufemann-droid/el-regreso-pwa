@@ -294,10 +294,21 @@ function Esqueleto() {
 
 type Vista = 'resumen' | 'clientes' | 'productos'
 
-function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose, isDesktop = false }: {
+function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose, isDesktop: isDesktopProp = false }: {
   data: Payload; desde: string; hasta: string; nombrePeriodo: string; onClose: () => void
   isDesktop?: boolean
 }) {
+  // /ventas/comisiones no pasa isDesktop: sin esto, en pantalla ancha la hoja
+  // se estiraba a todo el ancho y el texto quedaba perdido en los bordes.
+  const [anchoGrande, setAnchoGrande] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const sync = () => setAnchoGrande(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+  const isDesktop = isDesktopProp || anchoGrande
   const [vista, setVista] = useState<Vista>('resumen')
   const [busca, setBusca] = useState('')
   const { resumen, clientes, productos, cartera, porEntregar } = data
@@ -338,8 +349,8 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose, isDesktop = f
       <div style={{
         background: C.bg, display: 'flex', flexDirection: 'column',
         ...(isDesktop
-          ? { borderRadius: 20, maxHeight: '85vh', width: '640px', maxWidth: '92vw', boxShadow: '0 24px 60px rgba(15,23,42,.35)' }
-          : { borderRadius: '20px 20px 0 0', maxHeight: '90vh' }),
+          ? { borderRadius: 22, maxHeight: '88vh', width: '720px', maxWidth: '94vw', boxShadow: '0 24px 60px rgba(15,23,42,.35)' }
+          : { borderRadius: '20px 20px 0 0', maxHeight: '92vh' }),
       }}>
         {!isDesktop && (
         <div style={{ padding: '10px 0 6px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
@@ -347,49 +358,49 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose, isDesktop = f
         </div>
         )}
 
-        <div style={{ padding: isDesktop ? '16px 20px 12px' : '4px 16px 12px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ padding: isDesktop ? '20px 24px 16px' : '6px 16px 14px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 17, fontWeight: 800, color: C.text }}>Lo que gano yo</p>
-              <p style={{ fontSize: 12, color: C.muted }}>{nombrePeriodo} · {desde} a {hasta}</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.3px' }}>Lo que gano yo</p>
+              <p style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>{nombrePeriodo} · {desde} a {hasta}</p>
             </div>
             <button onClick={onClose} aria-label="Cerrar"
-              style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#E2E8F0', color: C.text, cursor: 'pointer', flexShrink: 0, fontSize: 15 }}>
-              <X size={16} />
+              style={{ width: 40, height: 40, borderRadius: '50%', border: 'none', background: '#E2E8F0', color: C.text, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={20} />
             </button>
           </div>
 
           {/* Sólo el variable: el sueldo base y la gratificación quedan fuera
               a propósito (pedido de Claudio, ya los tiene claros). */}
-          <div style={{ background: C.hero, borderRadius: 14, padding: '12px 14px', marginTop: 12 }}>
-            <p style={{ fontSize: 11, color: '#94A3B8' }}>Variable bruto del período</p>
-            <p style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: '-0.8px', lineHeight: 1.1 }}>
+          <div style={{ background: C.hero, borderRadius: 16, padding: '16px 18px', marginTop: 14 }}>
+            <p style={{ fontSize: 13.5, color: '#94A3B8' }}>Variable bruto del período</p>
+            <p style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-1px', lineHeight: 1.1, marginTop: 2 }}>
               {fComision(resumen.variableTotal)}
             </p>
-            <p style={{ fontSize: 11.5, color: '#CBD5E1', marginTop: 3 }}>
+            <p style={{ fontSize: 14, color: '#CBD5E1', marginTop: 4 }}>
               comisión + bonos por venta y cobranza
             </p>
-            <p style={{ fontSize: 12, color: '#F59E0B', fontWeight: 600, marginTop: 10 }}>
+            <p style={{ fontSize: 14.5, color: '#F59E0B', fontWeight: 600, marginTop: 12 }}>
               +{fComision(comisionPipeline)} si se entrega el pipeline → {fComision(totalConPipeline)} en total
             </p>
-            <div style={{ display: 'flex', gap: 14, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.1)' }}>
-              <span style={{ fontSize: 11.5, color: '#CBD5E1' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 18px', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.1)' }}>
+              <span style={{ fontSize: 14, color: '#CBD5E1' }}>
                 Entregado <b style={{ color: '#fff' }}>{fComision(resumen.ventaNeta)}</b>
               </span>
-              <span style={{ fontSize: 11.5, color: '#CBD5E1' }}>
+              <span style={{ fontSize: 14, color: '#CBD5E1' }}>
                 Por entregar <b style={{ color: '#F59E0B' }}>{fComision(porEntregar.ventaNeta)}</b>
               </span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 4, background: '#E2E8F0', borderRadius: 11, padding: 3, marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 4, background: '#E2E8F0', borderRadius: 12, padding: 4, marginTop: 14 }}>
             {([['resumen', 'Resumen'], ['clientes', 'Por cliente'], ['productos', 'Por producto']] as [Vista, string][]).map(([k, l]) => {
               const on = vista === k
               return (
                 <button key={k} onClick={() => { setVista(k); setBusca('') }} style={{
-                  flex: 1, padding: '8px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
+                  flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', cursor: 'pointer',
                   background: on ? C.card : 'transparent', color: on ? C.text : C.muted,
-                  fontSize: 12.5, fontWeight: on ? 700 : 600, minHeight: 36,
+                  fontSize: 15, fontWeight: on ? 700 : 600, minHeight: 44,
                   boxShadow: on ? '0 1px 3px rgba(15,23,42,.12)' : 'none',
                 }}>{l}</button>
               )
@@ -402,40 +413,40 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose, isDesktop = f
               onChange={e => setBusca(e.target.value)}
               placeholder={vista === 'clientes' ? 'Buscar cliente o vendedor…' : 'Buscar producto…'}
               style={{
-                marginTop: 10, width: '100%', padding: '10px 12px', borderRadius: 10,
-                border: `1px solid ${C.line}`, background: C.card, fontSize: 13, color: C.text, outline: 'none',
+                marginTop: 12, width: '100%', padding: '12px 14px', borderRadius: 12,
+                border: `1px solid ${C.line}`, background: C.card, fontSize: 16, color: C.text, outline: 'none',
               }}
             />
           )}
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 24px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isDesktop ? '16px 24px 28px' : '14px 16px 28px' }}>
           {vista === 'resumen' && <Resumen resumen={resumen} cartera={cartera} porCategoria={porCategoria} />}
 
           {vista === 'clientes' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {clientesVisibles.map(c => (
                 <div key={c.cliente} style={{
-                  background: C.card, borderRadius: 12, padding: '11px 13px',
+                  background: C.card, borderRadius: 14, padding: '14px 16px',
                   border: `1px solid ${c.comisiona ? C.line : '#FDE68A'}`,
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{c.cliente}</p>
-                      <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+                      <p style={{ fontSize: 16.5, fontWeight: 700, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{c.cliente}</p>
+                      <p style={{ fontSize: 14, color: C.muted, marginTop: 3 }}>
                         {c.vendedor} · {fL(c.litros)} · {c.pedidos} {c.pedidos === 1 ? 'pedido' : 'pedidos'}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 15, fontWeight: 800, color: c.comisiona ? C.green : C.amber, whiteSpace: 'nowrap' }}>
+                      <p style={{ fontSize: 18, fontWeight: 800, color: c.comisiona ? C.green : C.amber, whiteSpace: 'nowrap' }}>
                         {fComision(c.ventaNeta * TASA_COMISION)}
                       </p>
-                      <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>de {fComision(c.ventaNeta)}</p>
+                      <p style={{ fontSize: 13.5, color: C.muted, whiteSpace: 'nowrap', marginTop: 2 }}>de {fComision(c.ventaNeta)}</p>
                     </div>
                   </div>
                   {!c.comisiona && (
-                    <p style={{ fontSize: 11.5, color: C.amber, fontWeight: 600, marginTop: 7, display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <AlertTriangle size={12} />
+                    <p style={{ fontSize: 14, color: C.amber, fontWeight: 600, marginTop: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <AlertTriangle size={15} />
                       Debe {fComision(c.deudaVencida)} vencido — igual comisiona, cóbraselo
                     </p>
                   )}
@@ -448,21 +459,21 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, onClose, isDesktop = f
           )}
 
           {vista === 'productos' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {productosVisibles.map(p => (
-                <div key={`${p.producto}|${p.envase}`} style={{ background: C.card, borderRadius: 12, padding: '11px 13px', border: `1px solid ${C.line}` }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div key={`${p.producto}|${p.envase}`} style={{ background: C.card, borderRadius: 14, padding: '14px 16px', border: `1px solid ${C.line}` }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{p.producto}</p>
-                      <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+                      <p style={{ fontSize: 16.5, fontWeight: 700, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{p.producto}</p>
+                      <p style={{ fontSize: 14, color: C.muted, marginTop: 3 }}>
                         {[p.envase, p.categoria, `${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}`].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 15, fontWeight: 800, color: p.ventaNeta >= 0 ? C.green : C.red, whiteSpace: 'nowrap' }}>
+                      <p style={{ fontSize: 18, fontWeight: 800, color: p.ventaNeta >= 0 ? C.green : C.red, whiteSpace: 'nowrap' }}>
                         {fComision(p.ventaNeta * TASA_COMISION)}
                       </p>
-                      <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>de {fComision(p.ventaNeta)} · {fL(p.litros)}</p>
+                      <p style={{ fontSize: 13.5, color: C.muted, whiteSpace: 'nowrap', marginTop: 2 }}>de {fComision(p.ventaNeta)} · {fL(p.litros)}</p>
                     </div>
                   </div>
                 </div>
@@ -484,14 +495,14 @@ function Resumen({ resumen, cartera, porCategoria }: {
   porCategoria: [string, { venta: number; litros: number }][]
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Comisión */}
       <Bloque titulo="COMISIÓN 1% SOBRE VENTA ENTREGADA" monto={resumen.comision} color={C.green}>
         <Linea label="Venta neta entregada del equipo" valor={fComision(resumen.ventaNeta)} destacado />
         {resumen.ventaEnRiesgo > 0 && (
           <Linea label="De la cual, con deuda vencida" valor={fComision(resumen.ventaEnRiesgo)} color={C.amber} />
         )}
-        <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+        <p style={nota}>
           El 1% se calcula sobre TODA la venta neta entregada a los clientes (cláusula
           novena). La deuda vencida no descuenta de tu comisión — queda marcada arriba
           sólo como alerta para que la gestiones con esos clientes.
@@ -500,8 +511,8 @@ function Resumen({ resumen, cartera, porCategoria }: {
 
       {/* Mix */}
       {porCategoria.length > 0 && (
-        <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.line}`, padding: 14 }}>
-          <p style={{ fontSize: 11.5, fontWeight: 800, color: C.muted, letterSpacing: '0.04em', marginBottom: 10 }}>
+        <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 18 }}>
+          <p style={{ fontSize: 13.5, fontWeight: 800, color: C.muted, letterSpacing: '0.04em', marginBottom: 14 }}>
             DE DÓNDE SALE TU COMISIÓN
           </p>
           {porCategoria.map(([cat, v]) => {
@@ -510,22 +521,22 @@ function Resumen({ resumen, cartera, porCategoria }: {
             const total = porCategoria.reduce((s, [, x]) => s + Math.max(0, x.venta), 0)
             const pct = total > 0 ? (Math.max(0, v.venta) / total) * 100 : 0
             return (
-              <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9 }}>
-                <span style={{ fontSize: 15, flexShrink: 0 }}>{emoji}</span>
+              <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{emoji}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{nombreCategoria(cat, v.venta)}</span>
-                    {v.venta >= 0 && <span style={{ fontSize: 11.5, fontWeight: 700, color }}>{Math.round(pct)}%</span>}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{nombreCategoria(cat, v.venta)}</span>
+                    {v.venta >= 0 && <span style={{ fontSize: 14, fontWeight: 700, color }}>{Math.round(pct)}%</span>}
                   </div>
-                  <div style={{ height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3 }} />
+                  <div style={{ height: 7, borderRadius: 4, background: C.line, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4 }} />
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <p style={{ fontSize: 13.5, fontWeight: 800, color: C.text, whiteSpace: 'nowrap' }}>
+                  <p style={{ fontSize: 17, fontWeight: 800, color: C.text, whiteSpace: 'nowrap' }}>
                     {fComision(v.venta * TASA_COMISION)}
                   </p>
-                  <p style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{fL(v.litros)}</p>
+                  <p style={{ fontSize: 13.5, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>{fL(v.litros)}</p>
                 </div>
               </div>
             )
@@ -553,7 +564,7 @@ function Resumen({ resumen, cartera, porCategoria }: {
             color={C.green}
           />
         )}
-        <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+        <p style={nota}>
           Los bonos de escala no se suman entre sí: el de un peldaño reemplaza al
           anterior. Además el contrato los condiciona a margen mínimo por canal y al
           plan de crecimiento acordado con gerencia — eso lo valida gerencia, no la app.
@@ -597,7 +608,7 @@ function Resumen({ resumen, cartera, porCategoria }: {
             </>
           )
         })()}
-        <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+        <p style={nota}>
           Cartera = clientes del área que compraron en los últimos 90 días (sin OnLine).
           Un cliente está activo si tiene 2 o más visitas registradas en Terreno y 1 pedido
           en el período. Bono: {ESCALAS_ACTIVACION[1].minimoPct}% → {fComision(ESCALAS_ACTIVACION[1].bono)},{' '}
@@ -606,22 +617,27 @@ function Resumen({ resumen, cartera, porCategoria }: {
         </p>
       </Bloque>
 
-      <p style={{ fontSize: 11, color: C.faint, textAlign: 'center', lineHeight: 1.6, padding: '4px 8px 0' }}>
+      <p style={{ fontSize: 13, color: C.faint, textAlign: 'center', lineHeight: 1.6, padding: '4px 8px 0' }}>
         Montos brutos, antes de imposiciones.
       </p>
     </div>
   )
 }
 
+/** Texto explicativo al pie de cada bloque. */
+const nota: React.CSSProperties = {
+  fontSize: 14, color: C.muted, marginTop: 10, lineHeight: 1.55, paddingTop: 10, borderTop: `1px solid ${C.line}`,
+}
+
 function Bloque({ titulo, monto, color, children }: {
   titulo: string; monto: number; color: string; children: React.ReactNode
 }) {
   return (
-    <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.line}`, padding: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <p style={{ fontSize: 11.5, fontWeight: 800, color: C.muted, letterSpacing: '0.04em' }}>{titulo}</p>
-        <p style={{ fontSize: 17, fontWeight: 800, color, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
-          {monto > 0 && <Check size={15} />}
+    <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <p style={{ fontSize: 13.5, fontWeight: 800, color: C.muted, letterSpacing: '0.04em' }}>{titulo}</p>
+        <p style={{ fontSize: 22, fontWeight: 800, color, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+          {monto > 0 && <Check size={19} />}
           {fComision(monto)}
         </p>
       </div>
@@ -634,9 +650,9 @@ function Linea({ label, valor, destacado = false, color }: {
   label: string; valor: string; destacado?: boolean; color?: string
 }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 5 }}>
-      <span style={{ fontSize: 12.5, color: C.muted }}>{label}</span>
-      <span style={{ fontSize: 12.5, fontWeight: destacado ? 800 : 600, color: color ?? C.text, whiteSpace: 'nowrap' }}>{valor}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+      <span style={{ fontSize: 15.5, color: C.muted }}>{label}</span>
+      <span style={{ fontSize: 15.5, fontWeight: destacado ? 800 : 600, color: color ?? C.text, whiteSpace: 'nowrap' }}>{valor}</span>
     </div>
   )
 }
