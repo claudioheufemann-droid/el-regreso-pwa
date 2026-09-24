@@ -20,7 +20,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveCo
 import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, FileDown, MessageCircle, Phone, Info, X, Users } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCorto } from '@/lib/types'
-import { diasMoraDeudor } from '@/lib/cobranza'
+import { diasMoraDeudor, severidadMora, type SeveridadMora } from '@/lib/cobranza'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import PanelCobranza, { documentosParaWA, type DatosCobranza } from '@/components/deudores/PanelCobranza'
 
@@ -28,7 +28,11 @@ const C = {
   card: '#FFFFFF', bg: '#F1F5F9', text: '#0F172A', muted: '#64748B',
   line: '#E2E8F0', gold: '#B45309', goldSoft: '#FFFBEB',
   red: '#DC2626', redSoft: '#FEF2F2', green: '#059669', purple: '#7C3AED',
+  amber: '#D97706',
 }
+
+// Semáforo por crédito del cliente (ver severidadMora en lib/cobranza).
+const COLOR_MORA: Record<SeveridadMora, string> = { 'al-dia': C.green, vencida: C.amber, critica: C.red }
 
 export interface DeudorRaw {
   id: string
@@ -471,6 +475,7 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
                   // Estimado rápido salvo que esta fila esté desplegada y ya
                   // haya llegado el detalle real (fecha_pedido + dias_pago).
                   const dias = abierto && cobranza ? cobranza.detalle.diasMoraMaxima : diasMoraDe(d)
+                  const colorMora = COLOR_MORA[severidadMora(d.deuda_comercial, dias, d.dias_pago)]
                   return (
                     <Fragment key={d.id}>
                       <tr
@@ -479,13 +484,13 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
                       >
                         <td style={{ padding: '11px 14px', fontWeight: 700, color: C.text, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.nombre_fantasia}</td>
                         <td style={{ padding: '11px 14px', color: C.muted }}>{vendedorCanonico(d.vendedor) || '—'}</td>
-                        <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: d.deuda_comercial > 0 ? C.red : C.green }}>
+                        <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: colorMora }}>
                           {formatCurrency(d.deuda_comercial)}
                           {d.maquila_vencida > 0 && (
                             <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: C.muted }}>+ {formatCurrency(Math.round(d.maquila_vencida))} maquila</span>
                           )}
                         </td>
-                        <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap', color: dias >= 60 ? C.red : dias > 0 ? '#D97706' : C.muted }}>
+                        <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap', color: dias > 0 ? colorMora : C.muted }}>
                           {dias > 0 ? `${dias} días` : '—'}
                         </td>
                         <td style={{ padding: '11px 14px', textAlign: 'right', color: C.text, fontWeight: 600 }}>{formatCurrency(d.saldo_comercial)}</td>

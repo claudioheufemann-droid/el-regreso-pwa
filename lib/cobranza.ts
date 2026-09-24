@@ -156,6 +156,25 @@ export function diasMoraDeudor(
   return Math.max(0, diasEntre(vence, hoy))
 }
 
+/**
+ * Semáforo de una deuda según el crédito del propio cliente (regla de Claudio,
+ * 2026-09-24): verde si no hay nada vencido; naranja mientras los días de mora
+ * no superen sus `dias_pago`; rojo desde el día siguiente. Un cliente a 15
+ * días de crédito queda naranja hasta 15 días vencido y pasa a rojo en el 16.
+ */
+export type SeveridadMora = 'al-dia' | 'vencida' | 'critica'
+
+export function severidadMora(
+  deudaVencida: number,
+  diasMora: number,
+  diasPago: number | null | undefined,
+): SeveridadMora {
+  if (deudaVencida <= 0) return 'al-dia'
+  // Todos los deudores traen dias_pago del ERP; 30 es sólo red de seguridad.
+  const credito = Number(diasPago) > 0 ? Number(diasPago) : 30
+  return diasMora > credito ? 'critica' : 'vencida'
+}
+
 // ── Tipos de salida ──────────────────────────────────────────────────────────
 export interface ItemDocumento {
   producto: string

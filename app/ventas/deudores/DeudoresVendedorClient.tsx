@@ -16,7 +16,7 @@ import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import PanelCobranza, {
   documentosParaWA, FilaDocumento, CLARO as PALETA_DOC_CLARO, OSCURO as PALETA_DOC_OSCURO, type DatosCobranza,
 } from '@/components/deudores/PanelCobranza'
-import { diasMoraDeudor, type DocumentoVencido } from '@/lib/cobranza'
+import { diasMoraDeudor, severidadMora, type DocumentoVencido, type SeveridadMora } from '@/lib/cobranza'
 
 interface Deudor {
   id: string
@@ -97,11 +97,12 @@ const MC = {
 
 type Bucket = 'al-dia' | '1-30' | '31-60' | '+60'
 
-const BUCKET_COLOR: Record<Bucket, { fg: string; bg: string }> = {
-  'al-dia': { fg: MC.green, bg: MC.greenSoft },
-  '1-30':   { fg: MC.amber, bg: MC.amberSoft },
-  '31-60':  { fg: MC.amber, bg: MC.amberSoft },
-  '+60':    { fg: MC.red,   bg: MC.redSoft },
+// Semáforo por crédito del cliente (ver severidadMora en lib/cobranza): es lo
+// que pinta montos y días. Los buckets de abajo sólo agrupan para los filtros.
+const COLOR_MORA: Record<SeveridadMora, { fg: string; bg: string }> = {
+  'al-dia':  { fg: MC.green, bg: MC.greenSoft },
+  vencida:   { fg: MC.amber, bg: MC.amberSoft },
+  critica:   { fg: MC.red,   bg: MC.redSoft },
 }
 
 // Los 6 buckets granulares que trae el ERP se consolidan en 3 (el criterio
@@ -365,9 +366,7 @@ function ResumenCarteras({ filas, total, activo, onSelect }: {
 function DeudorCard({ d, abierto, onToggle, onWA }: {
   d: Deudor; abierto: boolean; onToggle: () => void; onWA: (t: WATarget) => void
 }) {
-  const bucket = bucketDe(d)
   const avatar = avatarColorDe(d.nombre_fantasia)
-  const bucketColor = BUCKET_COLOR[bucket]
 
   // Estimado rápido (external_fecha + dias_pago), calculado de la propia fila
   // para poder mostrarlo en la lista sin desplegar nada ni pedir datos al
@@ -380,6 +379,7 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
   // WhatsApp lo usa si ya está, y si no igual sale con días y monto.
   const [cobranza, setCobranza] = useState<DatosCobranza | null>(null)
   const diasMora = cobranza?.detalle.diasMoraMaxima ?? diasMoraEstimado
+  const colorMora = COLOR_MORA[severidadMora(d.deuda_comercial, diasMora, d.dias_pago)]
 
   const waTarget: WATarget = {
     nombre: d.nombre_fantasia, telefono: d.telefono,
@@ -421,7 +421,7 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
           {/* Días exactos, no el rango: "153 días" le sirve al vendedor para
               cobrar; "+60 días" no le dice nada por teléfono. */}
           {diasMora > 0 && (
-            <span style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 20, flexShrink: 0, color: bucketColor.fg, background: bucketColor.bg, whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 20, flexShrink: 0, color: colorMora.fg, background: colorMora.bg, whiteSpace: 'nowrap' }}>
               {diasMora} {diasMora === 1 ? 'día' : 'días'}
             </span>
           )}
@@ -431,7 +431,7 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10 }}>
           <div>
             <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>DEUDA VENCIDA</p>
-            <p style={{ fontSize: 17, fontWeight: 800, color: d.deuda_comercial > 0 ? bucketColor.fg : MC.green }}>
+            <p style={{ fontSize: 17, fontWeight: 800, color: colorMora.fg }}>
               {formatCurrency(d.deuda_comercial)}
             </p>
             {/* La maquila se nombra, pero fuera del número: si no, el vendedor
@@ -1405,6 +1405,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                   const diasFila = expandedRow === deudor.id && cobranza
                     ? cobranza.detalle.diasMoraMaxima
                     : diasMoraDe(deudor)
+                  const colorMora = COLOR_MORA[severidadMora(deudor.deuda_comercial, diasFila, deudor.dias_pago)].fg
                   const abierta = expandedRow === deudor.id
                   return (
                   <Fragment key={deudor.id}>
@@ -1422,7 +1423,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                         {deudor.nombre_fantasia}
                       </td>
                       {isAdmin && <td style={{ padding: '12px 14px', color: TD.muted }}>{vendedorCanonico(deudor.vendedor) || '—'}</td>}
-                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: deudor.deuda_comercial > 0 ? TD.red : TD.green }}>
+                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: colorMora }}>
                         {formatCurrency(deudor.deuda_comercial)}
                         {deudor.maquila_vencida > 0 && (
                           <span style={{ display: 'block', fontSize: 11.5, fontWeight: 500, color: TD.muted }}>
@@ -1432,7 +1433,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                       </td>
                       {/* Días exactos de mora del documento más antiguo impago. */}
                       <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap',
-                        color: diasFila >= 60 ? TD.red : diasFila > 0 ? TD.amber : TD.faint }}>
+                        color: diasFila > 0 ? colorMora : TD.faint }}>
                         {diasFila > 0 ? `${diasFila} días` : '—'}
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'right', color: TD.text, fontWeight: 600 }}>
