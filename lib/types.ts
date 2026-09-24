@@ -122,8 +122,20 @@ export const VENDEDORES_AREA_VENTAS = [
   'OnLine',
 ] as const
 
+/**
+ * Marcador para los RPC de /ventas: además de los vendedores, cuentan los
+ * clientes de la tabla `ventas_clientes_extra_area` (desde su fecha), aunque
+ * el ERP los tenga bajo un vendedor de fuera del área — ej. Cliente Birra
+ * (CERVECERÍA) y La Confluencia SUP (Douglas Koenig), pedido de Claudio del
+ * 24-sep-2026. Ver supabase/migrations/ventas_clientes_extra_area.sql.
+ */
+export const MARCADOR_CLIENTES_EXTRA_AREA = '@area_ventas'
+
 /** Listo para pasar como `p_vendedores` a los RPC de /ventas. */
-export const VENDEDORES_AREA_VENTAS_ERP: string[] = erpNamesDeGrupo(VENDEDORES_AREA_VENTAS)
+export const VENDEDORES_AREA_VENTAS_ERP: string[] = [
+  ...erpNamesDeGrupo(VENDEDORES_AREA_VENTAS),
+  MARCADOR_CLIENTES_EXTRA_AREA,
+]
 
 // Scope completo: todos los nombres de BD aceptados en consultas y reportes
 export const VENDEDORES_SCOPE: string[] = Object.values(VENDEDOR_GRUPOS).flat()
