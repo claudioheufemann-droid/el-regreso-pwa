@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Droplet, Users, ShoppingBag,
   DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar, CheckCircle2, Truck, RefreshCw,
-  Building2, Boxes, Loader2,
+  Building2, Boxes, Loader2, Search, X,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import { Skeleton } from '@/components/ui/States'
@@ -938,6 +938,9 @@ function FilaMixHero({ nombre, litros, total, pct, color, colorSoft, emoji, onCl
 
 // ── Ranking ──────────────────────────────────────────────────────────────────
 const COLOR_VEND = ['#0F172A', C.green, C.purple, '#EA580C', C.blue, '#0891B2']
+function sinTildes(s: string) {
+  return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+}
 function iniciales(nombre: string) {
   return nombre.split(/\s+/).filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase()
 }
@@ -953,6 +956,7 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
   const [error, setError] = useState<string | null>(null)
   const [abierto, setAbierto] = useState<string | null>(null)
   const [reintento, setReintento] = useState(0)
+  const [busca, setBusca] = useState('')
 
   useEffect(() => {
     let vivo = true
@@ -974,10 +978,44 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
   if (!clientes) return <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{[0, 1, 2].map(i => <Skeleton key={i} height={48} radius={10} />)}</div>
   if (clientes.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin locales en este rango.</p>
 
+  // Sin tildes ni mayúsculas: "cafeteria" encuentra "Cafetería".
+  const q = sinTildes(busca.trim())
+  const visibles = q
+    ? clientes.filter(c => sinTildes(c.cliente).includes(q) || sinTildes(c.localidad ?? '').includes(q))
+    : clientes
+
   return (
     <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>LOCALES · {clientes.length}</p>
-      {clientes.map(c => {
+      <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>
+        LOCALES · {q ? `${visibles.length} de ${clientes.length}` : clientes.length}
+      </p>
+      <div style={{ position: 'relative' }}>
+        <Search size={14} color={C.faint} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+        <input
+          type="text"
+          enterKeyHint="search"
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          placeholder="Buscar cliente o comuna…"
+          style={{
+            width: '100%', minHeight: 40, padding: '9px 34px 9px 32px', borderRadius: 10,
+            border: `1px solid ${C.line}`, background: C.card, fontSize: 13, color: C.text, outline: 'none',
+          }}
+        />
+        {busca && (
+          <button
+            onClick={() => setBusca('')}
+            aria-label="Limpiar búsqueda"
+            style={{ position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <X size={14} color={C.faint} />
+          </button>
+        )}
+      </div>
+      {visibles.length === 0 && (
+        <p style={{ fontSize: 12, color: C.muted, padding: '4px 0 2px' }}>Ningún local coincide con &quot;{busca.trim()}&quot;.</p>
+      )}
+      {visibles.map(c => {
         const abiertoAqui = abierto === c.cliente
         const soloPendiente = c.litros === 0 && !!c.litrosPorEntregar && c.litrosPorEntregar > 0
         return (
