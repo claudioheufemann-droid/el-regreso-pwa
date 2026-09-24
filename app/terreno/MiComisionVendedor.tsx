@@ -166,11 +166,22 @@ function Esqueleto() {
 
 // ─── Detalle ────────────────────────────────────────────────────────────────
 
-function HojaDetalle({ data, desde, hasta, nombrePeriodo, titulo, onClose, isDesktop = false }: {
+function HojaDetalle({ data, desde, hasta, nombrePeriodo, titulo, onClose, isDesktop: isDesktopProp = false }: {
   data: Payload; desde: string; hasta: string; nombrePeriodo: string; titulo: string; onClose: () => void
   isDesktop?: boolean
 }) {
   const { resumen } = data
+  // /ventas/comisiones no pasa isDesktop: sin esto, en pantalla ancha la hoja
+  // se estiraba a todo el ancho y el texto quedaba perdido en los bordes.
+  const [anchoGrande, setAnchoGrande] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const sync = () => setAnchoGrande(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+  const isDesktop = isDesktopProp || anchoGrande
 
   return (
     <div
@@ -184,8 +195,8 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, titulo, onClose, isDes
       <div style={{
         background: C.bg, display: 'flex', flexDirection: 'column',
         ...(isDesktop
-          ? { borderRadius: 20, maxHeight: '85vh', width: '640px', maxWidth: '92vw', boxShadow: '0 24px 60px rgba(15,23,42,.35)' }
-          : { borderRadius: '20px 20px 0 0', maxHeight: '90vh' }),
+          ? { borderRadius: 22, maxHeight: '88vh', width: '720px', maxWidth: '94vw', boxShadow: '0 24px 60px rgba(15,23,42,.35)' }
+          : { borderRadius: '20px 20px 0 0', maxHeight: '92vh' }),
       }}>
         {!isDesktop && (
         <div style={{ padding: '10px 0 6px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
@@ -193,30 +204,30 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, titulo, onClose, isDes
         </div>
         )}
 
-        <div style={{ padding: isDesktop ? '16px 20px 12px' : '4px 16px 12px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ padding: isDesktop ? '20px 24px 16px' : '6px 16px 14px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{titulo}</p>
-              <p style={{ fontSize: 12, color: C.muted }}>{nombrePeriodo} · {desde} a {hasta}</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.3px' }}>{titulo}</p>
+              <p style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>{nombrePeriodo} · {desde} a {hasta}</p>
             </div>
             <button onClick={onClose} aria-label="Cerrar"
-              style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#E2E8F0', color: C.text, cursor: 'pointer', flexShrink: 0, fontSize: 15 }}>
-              <X size={16} />
+              style={{ width: 40, height: 40, borderRadius: '50%', border: 'none', background: '#E2E8F0', color: C.text, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={20} />
             </button>
           </div>
 
-          <div style={{ background: C.hero, borderRadius: 14, padding: '12px 14px', marginTop: 12 }}>
-            <p style={{ fontSize: 11, color: '#94A3B8' }}>Variable bruto del período</p>
-            <p style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: '-0.8px', lineHeight: 1.1 }}>
+          <div style={{ background: C.hero, borderRadius: 16, padding: '16px 18px', marginTop: 14 }}>
+            <p style={{ fontSize: 13.5, color: '#94A3B8' }}>Variable bruto del período</p>
+            <p style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-1px', lineHeight: 1.1, marginTop: 2 }}>
               {fComision(resumen.variableTotal)}
             </p>
-            <p style={{ fontSize: 11.5, color: '#CBD5E1', marginTop: 3 }}>
+            <p style={{ fontSize: 14, color: '#CBD5E1', marginTop: 4 }}>
               comisión + bonos por venta, apertura, recompra y cartera
             </p>
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 24px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isDesktop ? '16px 24px 28px' : '14px 16px 28px' }}>
           <Resumen resumen={resumen} cartera={data.cartera} />
         </div>
       </div>
@@ -226,14 +237,14 @@ function HojaDetalle({ data, desde, hasta, nombrePeriodo, titulo, onClose, isDes
 
 function Resumen({ resumen, cartera }: { resumen: ResumenComisionVendedor; cartera: CarteraVendedor }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Comisión escalonada */}
       <Bloque titulo={`COMISIÓN ESCALONADA · ${resumen.tramo}`} monto={resumen.comision} color={C.green}>
         <Linea label="Venta HORECA + Tradicional" valor={fComision(resumen.ventaHorecaTradicional)} />
         <Linea label={`Tasa HORECA + Tradicional`} valor={`${(resumen.tasaHorecaTradicional * 100).toLocaleString('es-CL', { minimumFractionDigits: 2 })}%`} />
         <Linea label="Venta Retail + Distribuidor" valor={fComision(resumen.ventaRetailDistribuidor)} />
         <Linea label="Tasa Retail + Distribuidor" valor={`${(resumen.tasaRetailDistribuidor * 100).toLocaleString('es-CL', { minimumFractionDigits: 2 })}%`} />
-        <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+        <p style={nota}>
           El tramo lo determina la venta neta total del período (ambos canales
           sumados); dentro del tramo, cada canal comisiona a su propia tasa.
         </p>
@@ -246,7 +257,7 @@ function Resumen({ resumen, cartera }: { resumen: ResumenComisionVendedor; carte
           : resumen.aperturas.map((e, i) => (
             <Linea key={i} label={`${e.cliente} · ${fFecha(e.fecha)}`} valor={fComision(e.monto)} />
           ))}
-        <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+        <p style={nota}>
           Se paga por la primera venta a un cliente nuevo, o que no compraba
           hace más de 2 años. Ventas bajo $100.000 no tienen tramo asignado en
           el contrato, así que no generan bono.
@@ -260,7 +271,7 @@ function Resumen({ resumen, cartera }: { resumen: ResumenComisionVendedor; carte
           : resumen.recompras.map((e, i) => (
             <Linea key={i} label={`${e.cliente} · ${fFecha(e.fecha)}`} valor={fComision(e.monto)} />
           ))}
-        <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+        <p style={nota}>
           Se paga cuando un cliente que gatilló un Bono Apertura vuelve a
           comprar dentro de los 30 días siguientes.
         </p>
@@ -277,7 +288,7 @@ function Resumen({ resumen, cartera }: { resumen: ResumenComisionVendedor; carte
             destacado color={C.green}
           />
         )}
-        <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+        <p style={nota}>
           Sobre la cartera con venta en el período: {BONO_COBRANZA_TIERS.map(t => `${t.minimoPct}%+ → ${fComision(t.bono)}`).join(' · ')}.
         </p>
       </Bloque>
@@ -287,18 +298,18 @@ function Resumen({ resumen, cartera }: { resumen: ResumenComisionVendedor; carte
         <Linea label="Clientes activos" valor={`${cartera.clientesActivos} de ${cartera.clientesCartera}`} />
         <Linea label="Activación" valor={fPct(resumen.pctActivacion)} destacado color={resumen.bonoRetencion > 0 ? C.green : C.amber} />
         <Linea label="Interacciones registradas" valor={String(cartera.interacciones)} />
-        <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+        <p style={nota}>
           {fComision(BONO_RETENCION.monto)} si al menos el {BONO_RETENCION.minimoPct}% de la
           cartera está activa (≥2 interacciones + ≥1 pedido en el período,
           entregado dentro del mes). Las interacciones salen de las visitas en Terreno.
         </p>
       </Bloque>
 
-      <div style={{ background: C.amberSoft, borderRadius: 14, border: '1px solid #FDE68A', padding: 14 }}>
-        <p style={{ fontSize: 11.5, fontWeight: 800, color: C.amber, letterSpacing: '0.04em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <AlertTriangle size={13} /> BONO APERTURA CADENA RETAIL
+      <div style={{ background: C.amberSoft, borderRadius: 16, border: '1px solid #FDE68A', padding: 18 }}>
+        <p style={{ fontSize: 13.5, fontWeight: 800, color: C.amber, letterSpacing: '0.04em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 7 }}>
+          <AlertTriangle size={16} /> BONO APERTURA CADENA RETAIL
         </p>
-        <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>
+        <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.55 }}>
           Al abrir una cadena retail de 6 o más salas, el contrato contempla un
           bono único de $1.000.000 a $2.000.000, sujeto a evaluación y
           aprobación de la Gerencia Comercial. No es una regla automática — se
@@ -306,7 +317,7 @@ function Resumen({ resumen, cartera }: { resumen: ResumenComisionVendedor; carte
         </p>
       </div>
 
-      <p style={{ fontSize: 11, color: C.faint, textAlign: 'center', lineHeight: 1.6, padding: '4px 8px 0' }}>
+      <p style={{ fontSize: 13, color: C.faint, textAlign: 'center', lineHeight: 1.6, padding: '4px 8px 0' }}>
         Montos brutos, antes de imposiciones.
       </p>
     </div>
@@ -319,15 +330,20 @@ function fFecha(iso: string) {
 
 const fPct = (n: number) => `${n.toLocaleString('es-CL', { maximumFractionDigits: 1 })}%`
 
+/** Texto explicativo al pie de cada bloque. */
+const nota: React.CSSProperties = {
+  fontSize: 14, color: C.muted, marginTop: 10, lineHeight: 1.55, paddingTop: 10, borderTop: `1px solid ${C.line}`,
+}
+
 function Bloque({ titulo, monto, color, children }: {
   titulo: string; monto: number; color: string; children: React.ReactNode
 }) {
   return (
-    <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.line}`, padding: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <p style={{ fontSize: 11.5, fontWeight: 800, color: C.muted, letterSpacing: '0.04em' }}>{titulo}</p>
-        <p style={{ fontSize: 17, fontWeight: 800, color, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
-          {monto > 0 && <Check size={15} />}
+    <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <p style={{ fontSize: 13.5, fontWeight: 800, color: C.muted, letterSpacing: '0.04em' }}>{titulo}</p>
+        <p style={{ fontSize: 22, fontWeight: 800, color, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+          {monto > 0 && <Check size={19} />}
           {fComision(monto)}
         </p>
       </div>
@@ -340,9 +356,9 @@ function Linea({ label, valor, destacado = false, color }: {
   label: string; valor: string; destacado?: boolean; color?: string
 }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 5 }}>
-      <span style={{ fontSize: 12.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-      <span style={{ fontSize: 12.5, fontWeight: destacado ? 800 : 600, color: color ?? C.text, whiteSpace: 'nowrap', flexShrink: 0 }}>{valor}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+      <span style={{ fontSize: 15.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontSize: 15.5, fontWeight: destacado ? 800 : 600, color: color ?? C.text, whiteSpace: 'nowrap', flexShrink: 0 }}>{valor}</span>
     </div>
   )
 }
